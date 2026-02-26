@@ -4,6 +4,36 @@ import { Repository, SelectQueryBuilder } from 'typeorm';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { ListingRecord } from './listing-record.entity';
 
+/* ── Simple in-memory cache ───────────────────────────────── */
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+class MemCache {
+  private store = new Map<string, CacheEntry<unknown>>();
+  private maxSize = 200;
+
+  get<T>(key: string): T | undefined {
+    const entry = this.store.get(key);
+    if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return undefined;
+    }
+    return entry.data as T;
+  }
+
+  set<T>(key: string, data: T, ttlMs: number): void {
+    // Evict oldest entries if over limit
+    if (this.store.size >= this.maxSize) {
+      const firstKey = this.store.keys().next().value;
+      if (firstKey) this.store.delete(firstKey);
+    }
+    this.store.set(key, { data, expiresAt: Date.now() + ttlMs });
+  }
+}
+
 /* ── Types ────────────────────────────────────────────────── */
 
 export interface SearchResult {
@@ -95,6 +125,8 @@ const SAFE_PRICE = `NULLIF(REPLACE(r."startPrice", ',', '.'), '')::numeric`;
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
+  private readonly facetCache = new MemCache();
+  private readonly searchCache = new MemCache();
 
   constructor(
     @InjectRepository(ListingRecord)
@@ -267,79 +299,42 @@ export class SearchService {
     /* -- Pagination -------------------------------------------- */
     qb.offset(offset).limit(limit);
 
-    /* -- Execute ----------------------------------------------- */
-    const { raw, entities } = await qb.getRawAndEntities();
+    /* -- Execute with window-function count -------------------- */
+    // Add COUNT(*) OVER() to get total in the same query — eliminates duplicate count query
+    qb.addSelect('COUNT(*) OVER()', 'totalCount');
 
-    // Merge raw scores into entity-like objects
-    const items: SearchItem[] = entities.map((e, i) => ({
-      id: e.id,
-      customLabelSku: e.customLabelSku,
-      title: e.title,
-      cBrand: e.cBrand,
-      cType: e.cType,
-      categoryId: e.categoryId,
-      categoryName: e.categoryName,
-      startPrice: e.startPrice,
-      quantity: e.quantity,
-      conditionId: e.conditionId,
-      itemPhotoUrl: e.itemPhotoUrl,
-      cManufacturerPartNumber: e.cManufacturerPartNumber,
-      cOeOemPartNumber: e.cOeOemPartNumber,
-      location: e.location,
-      format: e.format,
-      sourceFileName: e.sourceFileName,
-      importedAt: String(e.importedAt),
-      description: e.description,
-      cFeatures: e.cFeatures,
-      pEpid: e.pEpid,
-      pUpc: e.pUpc,
+    const raw = await qb.getRawMany();
+
+    const total = raw.length > 0 ? parseInt(raw[0].totalCount, 10) : 0;
+
+    // Map raw results into typed items
+    const items: SearchItem[] = raw.map((row) => ({
+      id: row.r_id,
+      customLabelSku: row.r_customLabelSku ?? null,
+      title: row.r_title ?? null,
+      cBrand: row.r_cBrand ?? null,
+      cType: row.r_cType ?? null,
+      categoryId: row.r_categoryId ?? null,
+      categoryName: row.r_categoryName ?? null,
+      startPrice: row.r_startPrice ?? null,
+      quantity: row.r_quantity ?? null,
+      conditionId: row.r_conditionId ?? null,
+      itemPhotoUrl: row.r_itemPhotoUrl ?? null,
+      cManufacturerPartNumber: row.r_cManufacturerPartNumber ?? null,
+      cOeOemPartNumber: row.r_cOeOemPartNumber ?? null,
+      location: row.r_location ?? null,
+      format: row.r_format ?? null,
+      sourceFileName: row.r_sourceFileName ?? null,
+      importedAt: String(row.r_importedAt ?? ''),
+      description: row.r_description ?? null,
+      cFeatures: row.r_cFeatures ?? null,
+      pEpid: row.r_pEpid ?? null,
+      pUpc: row.r_pUpc ?? null,
       relevanceScore: hasQuery
-        ? parseFloat(raw[i]?.relevanceScore ?? '0')
+        ? parseFloat(row.relevanceScore ?? '0')
         : null,
-      titleHighlight: hasQuery ? (raw[i]?.titleHighlight ?? null) : null,
+      titleHighlight: hasQuery ? (row.titleHighlight ?? null) : null,
     }));
-
-    // Get total count (separate lightweight query)
-    const countQb = this.repo.createQueryBuilder('r');
-    if (hasQuery) {
-      const prefixTerms = q
-        .replace(/[^\w\s-]/g, '')
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((t) => `${t}:*`)
-        .join(' & ');
-
-      countQb.where(
-        `(
-          r."searchVector" @@ websearch_to_tsquery('english', :q)
-          OR r."searchVector" @@ to_tsquery('english', :prefixQ)
-          OR LOWER(r."customLabelSku") = LOWER(:q)
-          OR LOWER(r."customLabelSku") LIKE LOWER(:qPrefix)
-          OR similarity(r.title, :q) > 0.15
-          OR similarity(r."customLabelSku", :q) > 0.3
-        )`,
-      );
-      countQb.setParameters({ q, prefixQ: prefixTerms || q, qPrefix: `${q}%` });
-    }
-    if (dto.exactSku?.trim()) {
-      countQb.andWhere('LOWER(r."customLabelSku") = LOWER(:exactSku)', {
-        exactSku: dto.exactSku.trim(),
-      });
-    }
-    this.applyMultiFilters(countQb, dto);
-    if (dto.minPrice != null) {
-      countQb.andWhere(`${SAFE_PRICE} >= :minPrice`, { minPrice: dto.minPrice });
-    }
-    if (dto.maxPrice != null) {
-      countQb.andWhere(`${SAFE_PRICE} <= :maxPrice`, { maxPrice: dto.maxPrice });
-    }
-    if (dto.hasImage === '1') {
-      countQb.andWhere(`r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != ''`);
-    }
-    if (dto.hasPrice === '1') {
-      countQb.andWhere(`r."startPrice" IS NOT NULL AND r."startPrice" != ''`);
-    }
-    const total = await countQb.getCount();
 
     // Next cursor for infinite scroll
     const nextCursor = items.length === limit
@@ -508,13 +503,20 @@ export class SearchService {
 
   /* ──────────────────────────────────────────────────────────
    * DYNAMIC FACETS — counts that reflect current filters/query
+   * Cached for 30s per unique query to avoid repeated heavy queries
    * ──────────────────────────────────────────────────────── */
   async dynamicFacets(dto: SearchQueryDto): Promise<DynamicFacets> {
+    // Check facet cache first (30s TTL)
+    const cacheKey = `facets:${JSON.stringify(dto)}`;
+    const cached = this.facetCache.get<DynamicFacets>(cacheKey);
+    if (cached) return { ...cached, queryTimeMs: 0 };
+
     const start = Date.now();
     const q = dto.q?.trim() || '';
     const hasQuery = q.length > 0;
 
-    // Build base WHERE clause (same as search, minus the facet being computed)
+    // Build base WHERE clause — OPTIMIZED: use only FTS (skip expensive similarity)
+    // similarity() is O(n) and forces sequential scan; FTS uses GIN index
     const buildBaseQb = () => {
       const base = this.repo.createQueryBuilder('r');
       if (hasQuery) {
@@ -525,14 +527,13 @@ export class SearchService {
           .map((t) => `${t}:*`)
           .join(' & ');
 
+        // Facets use FTS only (not similarity) for speed — GIN indexed
         base.where(
           `(
             r."searchVector" @@ websearch_to_tsquery('english', :q)
             OR r."searchVector" @@ to_tsquery('english', :prefixQ)
             OR LOWER(r."customLabelSku") = LOWER(:q)
             OR LOWER(r."customLabelSku") LIKE LOWER(:qPrefix)
-            OR similarity(r.title, :q) > 0.15
-            OR similarity(r."customLabelSku", :q) > 0.3
           )`,
         );
         base.setParameters({ q, prefixQ: prefixTerms || q, qPrefix: `${q}%` });
@@ -693,7 +694,7 @@ export class SearchService {
         })(),
       ]);
 
-    return {
+    const result: DynamicFacets = {
       brands: brandsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       categories: catsRaw.map((r) => ({ value: r.value, id: r.id, count: Number(r.count) })),
       conditions: condsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
@@ -709,6 +710,10 @@ export class SearchService {
       totalFiltered,
       queryTimeMs: Date.now() - start,
     };
+
+    // Cache the result for 30s
+    this.facetCache.set(cacheKey, result, 30_000);
+    return result;
   }
 
   /* ── Private: apply multi-select filters to any QueryBuilder ── */

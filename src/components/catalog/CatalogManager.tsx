@@ -309,7 +309,7 @@ export default function CatalogManager() {
               {error && (
                 <div className="rounded-xl border border-red-800 bg-red-950/40 p-5 text-center text-red-400 text-sm mb-4">
                   <p className="font-medium mb-1">Failed to load results</p>
-                  <p className="text-xs text-red-500">{error}. Make sure the backend is running on port 3000.</p>
+                  <p className="text-xs text-red-500">{error}. Make sure the backend is running.</p>
                 </div>
               )}
 

@@ -1,5 +1,6 @@
 /* ─── Search API Hooks ─────────────────────────────────────
  *  React hooks for the advanced search engine API.
+ *  Optimized: debouncing, stable refs, abort on unmount.
  * ────────────────────────────────────────────────────────── */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,6 +31,17 @@ async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Stable serialization of a query object for dependency tracking */
+function stableKey(query: Record<string, unknown>): string {
+  const keys = Object.keys(query).sort();
+  const parts: string[] = [];
+  for (const k of keys) {
+    const v = query[k];
+    if (v != null && v !== '' && v !== undefined) parts.push(`${k}=${v}`);
+  }
+  return parts.join('&');
+}
+
 /* ── useSearch ────────────────────────────────────────────── */
 
 export function useSearch(query: SearchQuery) {
@@ -37,6 +49,9 @@ export function useSearch(query: SearchQuery) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Stable key so we only refetch when actual values change
+  const queryKey = stableKey(query as Record<string, unknown>);
 
   const doFetch = useCallback(async () => {
     abortRef.current?.abort();
@@ -55,7 +70,8 @@ export function useSearch(query: SearchQuery) {
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }
-  }, [query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryKey]);
 
   useEffect(() => {
     doFetch();
@@ -65,12 +81,13 @@ export function useSearch(query: SearchQuery) {
   return { data, loading, error, refetch: doFetch };
 }
 
-/* ── useSuggest ───────────────────────────────────────────── */
+/* ── useSuggest (debounced 200ms) ──────────────────────────── */
 
 export function useSuggest(q: string, enabled = true) {
   const [data, setData] = useState<SuggestResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!enabled || !q.trim()) {
@@ -78,46 +95,66 @@ export function useSuggest(q: string, enabled = true) {
       return;
     }
 
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
+    if (timerRef.current) clearTimeout(timerRef.current);
 
-    setLoading(true);
-    fetchJson<SuggestResponse>(
-      `/listings/search/suggest?q=${encodeURIComponent(q.trim())}&limit=10`,
-      ac.signal,
-    )
-      .then((json) => { if (!ac.signal.aborted) setData(json); })
-      .catch(() => {})
-      .finally(() => { if (!ac.signal.aborted) setLoading(false); });
+    timerRef.current = setTimeout(() => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
 
-    return () => ac.abort();
+      setLoading(true);
+      fetchJson<SuggestResponse>(
+        `/listings/search/suggest?q=${encodeURIComponent(q.trim())}&limit=10`,
+        ac.signal,
+      )
+        .then((json) => { if (!ac.signal.aborted) setData(json); })
+        .catch(() => {})
+        .finally(() => { if (!ac.signal.aborted) setLoading(false); });
+    }, 200);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      abortRef.current?.abort();
+    };
   }, [q, enabled]);
 
   return { data, loading };
 }
 
-/* ── useDynamicFacets ─────────────────────────────────────── */
+/* ── useDynamicFacets (debounced 300ms) ──────────────────── */
 
 export function useDynamicFacets(query: SearchQuery) {
   const [data, setData] = useState<DynamicFacets | null>(null);
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stable key — only refetch when actual query values change
+  const queryKey = stableKey(query as Record<string, unknown>);
 
   useEffect(() => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
+    // Debounce facet requests by 300ms to prevent rapid-fire calls
+    if (timerRef.current) clearTimeout(timerRef.current);
 
-    setLoading(true);
-    const q = qs(query as Record<string, string | number | undefined>);
-    fetchJson<DynamicFacets>(`/listings/search/facets${q}`, ac.signal)
-      .then((json) => { if (!ac.signal.aborted) setData(json); })
-      .catch(() => {})
-      .finally(() => { if (!ac.signal.aborted) setLoading(false); });
+    timerRef.current = setTimeout(() => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
 
-    return () => ac.abort();
-  }, [query]);
+      setLoading(true);
+      const q = qs(query as Record<string, string | number | undefined>);
+      fetchJson<DynamicFacets>(`/listings/search/facets${q}`, ac.signal)
+        .then((json) => { if (!ac.signal.aborted) setData(json); })
+        .catch(() => {})
+        .finally(() => { if (!ac.signal.aborted) setLoading(false); });
+    }, 300);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      abortRef.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryKey]);
 
   return { data, loading };
 }
