@@ -1,5 +1,8 @@
 /* ── Types matching the NestJS ListingRecord entity ──────── */
 
+/** Listing lifecycle status */
+export type ListingStatus = 'draft' | 'ready' | 'published' | 'sold' | 'delisted' | 'archived';
+
 /** A listing record as returned by GET /api/listings */
 export interface ListingRecord {
   id: string;
@@ -20,6 +23,14 @@ export interface ListingRecord {
   sourceFileName: string | null;
   importedAt: string;
   description: string | null;
+  /* lifecycle columns */
+  status?: ListingStatus;
+  version?: number;
+  updatedAt?: string;
+  updatedBy?: string | null;
+  publishedAt?: string | null;
+  ebayListingId?: string | null;
+  shopifyProductId?: string | null;
 }
 
 /** Full listing detail (all 76 columns) from GET /api/listings/:id */
@@ -102,4 +113,44 @@ export interface ListingsQuery {
   conditionId?: string;
   sourceFile?: string;
   hasImage?: string;
+}
+
+/* ── Revision Types ───────────────────────────────────────── */
+
+export interface ListingRevision {
+  id: string;
+  listingId: string;
+  version: number;
+  statusBefore: string | null;
+  statusAfter: string;
+  snapshot: Record<string, unknown>;
+  changeReason: string | null;
+  changedBy: string | null;
+  createdAt: string;
+}
+
+/* ── CRUD Response Types ──────────────────────────────────── */
+
+export interface CreateListingResponse {
+  listing: ListingRecordFull;
+  revision: ListingRevision;
+}
+
+export interface UpdateListingResponse {
+  listing: ListingRecordFull;
+  revision: ListingRevision;
+}
+
+export interface PatchStatusResponse {
+  listing: ListingRecordFull;
+  revision: ListingRevision;
+}
+
+export interface BulkUpdateResponse {
+  updated: number;
+  failed: { id: string; error: string }[];
+}
+
+export interface RevisionsResponse {
+  revisions: ListingRevision[];
 }

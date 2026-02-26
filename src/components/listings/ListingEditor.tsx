@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Sparkles,
     Save,
@@ -6,13 +6,23 @@ import {
     CheckCircle,
     Monitor,
     ShoppingBag,
-    Plus
+    Plus,
+    ArrowLeft,
+    Loader2,
+    AlertTriangle,
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { loadJson, saveJson, STORAGE_KEYS } from '../../lib/persistence';
+import {
+    createListing,
+    updateListing,
+    isApiError,
+} from '../../lib/listingsApi';
+import { useListingDetail } from '../../lib/searchApi';
 import type { IngestionListingSeed, ProductCondition } from '../../types/platform';
+import type { ListingStatus } from '../../types/listings';
 
 type ListingEditorRouteState = {
     ingestionSeed?: IngestionListingSeed;
@@ -47,6 +57,10 @@ Fast shipping via UPS Ground.`;
 
 export default function ListingEditor() {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { id: routeId } = useParams<{ id: string }>();
+    const isEditMode = Boolean(routeId);
+
     const routeState = location.state as ListingEditorRouteState | null;
     const persistedSeed = loadJson<IngestionListingSeed | null>(STORAGE_KEYS.ingestionListingSeed, null);
     const ingestionSeed = routeState?.ingestionSeed ?? persistedSeed ?? undefined;
@@ -55,7 +69,20 @@ export default function ListingEditor() {
         saveJson(STORAGE_KEYS.ingestionListingSeed, routeState.ingestionSeed);
     }
 
+    // Fetch existing listing for edit mode
+    const { data: existingListing, loading: fetchLoading } = useListingDetail(routeId ?? null);
+
     const initial = useMemo(() => {
+        if (isEditMode && existingListing) {
+            return {
+                title: existingListing.title ?? '',
+                mpn: existingListing.cManufacturerPartNumber ?? '',
+                brand: existingListing.cBrand ?? '',
+                condition: (existingListing.conditionId ?? 'used') as ProductCondition,
+                price: existingListing.startPrice ?? '',
+                description: existingListing.description ?? '',
+            };
+        }
         const inferredBrand =
             (typeof ingestionSeed?.generatedData.itemSpecifics.brand === 'string' && ingestionSeed.generatedData.itemSpecifics.brand) ||
             ingestionSeed?.recognition.brand ||
@@ -71,7 +98,7 @@ export default function ListingEditor() {
             price: '129.99',
             description: ingestionSeed?.generatedData.description ?? defaultDescription,
         };
-    }, [ingestionSeed]);
+    }, [ingestionSeed, isEditMode, existingListing]);
 
     const [title, setTitle] = useState(initial.title);
     const [mpn, setMpn] = useState(initial.mpn);
@@ -79,27 +106,128 @@ export default function ListingEditor() {
     const [condition, setCondition] = useState<ProductCondition>(initial.condition);
     const [price, setPrice] = useState(initial.price);
     const [description, setDescription] = useState(initial.description);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+
+    // Sync form when existing listing loads in edit mode
+    useEffect(() => {
+        if (isEditMode && existingListing) {
+            setTitle(existingListing.title ?? '');
+            setMpn(existingListing.cManufacturerPartNumber ?? '');
+            setBrand(existingListing.cBrand ?? '');
+            setCondition((existingListing.conditionId ?? 'used') as ProductCondition);
+            setPrice(existingListing.startPrice ?? '');
+            setDescription(existingListing.description ?? '');
+        }
+    }, [isEditMode, existingListing]);
 
     const confidence = ingestionSeed?.recognition.confidence ?? 94;
     const galleryImages = ingestionSeed?.images ?? [];
 
+    const currentVersion = (existingListing as { version?: number } | null)?.version ?? 1;
+    const currentStatus = ((existingListing as { status?: ListingStatus } | null)?.status ?? 'draft') as ListingStatus;
+
+    const handleSave = async (status: 'draft' | 'ready' = 'draft') => {
+        setSaving(true);
+        setSaveError(null);
+        setSaveSuccess(false);
+        try {
+            const body = {
+                title,
+                cManufacturerPartNumber: mpn,
+                cBrand: brand,
+                conditionId: condition,
+                startPrice: price,
+                description,
+                status,
+            };
+
+            if (isEditMode && routeId) {
+                await updateListing(routeId, { ...body, version: currentVersion });
+            } else {
+                await createListing(body);
+            }
+            setSaveSuccess(true);
+            setTimeout(() => navigate('/catalog'), 1200);
+        } catch (err) {
+            if (isApiError(err) && err.status === 409) {
+                setSaveError('Version conflict — someone else edited this listing. Please refresh and try again.');
+            } else {
+                setSaveError(err instanceof Error ? err.message : 'Failed to save listing');
+            }
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (isEditMode && fetchLoading) {
+        return (
+            <div className="flex items-center justify-center py-24">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col gap-4 sm:gap-6 pb-8">
+            {/* Save feedback */}
+            {saveError && (
+                <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 flex items-center gap-2 text-sm text-red-400">
+                    <AlertTriangle size={16} className="shrink-0" />
+                    {saveError}
+                </div>
+            )}
+            {saveSuccess && (
+                <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3 flex items-center gap-2 text-sm text-emerald-400">
+                    <CheckCircle size={16} className="shrink-0" />
+                    Listing saved successfully! Redirecting…
+                </div>
+            )}
+
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex flex-wrap items-center gap-2 sm:gap-3">
-                        New Listing
-                        <Badge variant="outline" className="text-base sm:text-lg">Draft</Badge>
-                        {ingestionSeed && <Badge variant="success">Imported from Ingestion</Badge>}
-                    </h2>
-                    <p className="text-slate-500 text-sm mt-1">AI Analysis complete. Please review before publishing.</p>
+                <div className="min-w-0 flex items-center gap-3">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors shrink-0"
+                    >
+                        <ArrowLeft size={16} />
+                    </button>
+                    <div>
+                        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex flex-wrap items-center gap-2 sm:gap-3">
+                            {isEditMode ? 'Edit Listing' : 'New Listing'}
+                            <Badge variant="outline" className="text-base sm:text-lg capitalize">{currentStatus}</Badge>
+                            {ingestionSeed && <Badge variant="success">Imported from Ingestion</Badge>}
+                        </h2>
+                        <p className="text-slate-500 text-sm mt-1">
+                            {isEditMode
+                                ? `Editing · v${currentVersion}`
+                                : 'AI Analysis complete. Please review before publishing.'}
+                        </p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <button className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                        <Eye size={16} /> Preview
+                    <button
+                        onClick={() => navigate(`/listings/${routeId}/history`)}
+                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm ${!isEditMode ? 'hidden' : ''}`}
+                    >
+                        <Eye size={16} /> History
                     </button>
-                    <button className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm">
-                        <Save size={16} /> Save & Publish
+                    <button
+                        onClick={() => handleSave('draft')}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        Save Draft
+                    </button>
+                    <button
+                        onClick={() => handleSave('ready')}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        Save & Publish
                     </button>
                 </div>
             </div>

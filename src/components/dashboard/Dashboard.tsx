@@ -123,14 +123,20 @@ export default function Dashboard() {
                     <CardContent>
                         <div className="space-y-4">
                             {[
-                                { channel: 'eBay Motors', status: 'Operational', latency: '45ms', color: 'emerald' },
-                                { channel: 'Shopify Store', status: 'Syncing...', latency: '120ms', color: 'blue' },
-                                { channel: 'Amazon Automotive', status: 'Degraded', latency: '850ms', color: 'amber' },
-                                { channel: 'WHI Solutions', status: 'Operational', latency: '32ms', color: 'emerald' },
-                            ].map((c) => (
+                                { channel: 'eBay Motors', status: 'Operational', latency: '45ms', color: 'emerald' as const },
+                                { channel: 'Shopify Store', status: 'Syncing...', latency: '120ms', color: 'blue' as const },
+                                { channel: 'Amazon Automotive', status: 'Degraded', latency: '850ms', color: 'amber' as const },
+                                { channel: 'WHI Solutions', status: 'Operational', latency: '32ms', color: 'emerald' as const },
+                            ].map((c) => {
+                                const colorClasses = {
+                                    emerald: 'bg-emerald-500/10 text-emerald-500',
+                                    blue: 'bg-blue-500/10 text-blue-500',
+                                    amber: 'bg-amber-500/10 text-amber-500',
+                                } as const;
+                                return (
                                 <div key={c.channel} className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-md bg-${c.color}-500/10 text-${c.color}-500`}>
+                                        <div className={`p-2 rounded-md ${colorClasses[c.color]}`}>
                                             <RefreshCw size={14} className={c.status === 'Syncing...' ? 'animate-spin' : ''} />
                                         </div>
                                         <div>
@@ -142,7 +148,8 @@ export default function Dashboard() {
                                         {c.latency}
                                     </Badge>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>

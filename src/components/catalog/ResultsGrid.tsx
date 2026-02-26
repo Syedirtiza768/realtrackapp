@@ -31,6 +31,7 @@ interface Props {
   onViewModeChange: (mode: ViewMode) => void;
   onPageChange: (page: number) => void;
   onQuickView: (id: string) => void;
+  onDelete?: (id: string) => void;
   /** For infinite scroll: call to load more items */
   onLoadMore?: () => void;
   hasMore?: boolean;
@@ -54,6 +55,7 @@ export default function ResultsGrid({
   onViewModeChange,
   onPageChange,
   onQuickView,
+  onDelete,
   onLoadMore,
   hasMore,
   infiniteScroll,
@@ -124,7 +126,7 @@ export default function ResultsGrid({
       {viewMode === 'grid' && items.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
           {items.map((item) => (
-            <ListingCard key={item.id} item={item} onQuickView={onQuickView} />
+            <ListingCard key={item.id} item={item} onQuickView={onQuickView} onDelete={onDelete} />
           ))}
         </div>
       )}

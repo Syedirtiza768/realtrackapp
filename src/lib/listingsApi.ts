@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  BulkUpdateResponse,
+  CreateListingResponse,
   ListingRecord,
   ListingRecordFull,
+  ListingRevision,
   ListingsFacets,
   ListingsQuery,
   ListingsResponse,
   ListingsSummary,
+  ListingStatus,
+  PatchStatusResponse,
+  RevisionsResponse,
+  UpdateListingResponse,
 } from '../types/listings';
 
 const API_BASE = '/api';
@@ -29,6 +36,37 @@ async function apiFetch<T>(path: string): Promise<T> {
     throw new Error(`API ${res.status}: ${res.statusText}`);
   }
   return res.json() as Promise<T>;
+}
+
+async function apiMutate<T>(
+  path: string,
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  body?: unknown,
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    const err = new Error(`API ${res.status}: ${res.statusText}`);
+    (err as ApiError).status = res.status;
+    (err as ApiError).body = errorBody;
+    throw err;
+  }
+  // 204 No Content
+  if (res.status === 204) return undefined as unknown as T;
+  return res.json() as Promise<T>;
+}
+
+export interface ApiError extends Error {
+  status: number;
+  body: unknown;
+}
+
+export function isApiError(err: unknown): err is ApiError {
+  return err instanceof Error && 'status' in err;
 }
 
 /* ── useListings ──────────────────────────────────────────── */
@@ -154,3 +192,80 @@ export function getAllImageUrls(itemPhotoUrl: string | null | undefined): string
 
 /** Re-export types for convenience */
 export type { ListingRecord, ListingRecordFull, ListingsFacets, ListingsQuery, ListingsResponse, ListingsSummary };
+
+/* ── CRUD Operations ──────────────────────────────────────── */
+
+/** Create a new listing (POST /api/listings) */
+export async function createListing(
+  data: Partial<ListingRecordFull> & { status?: 'draft' | 'ready' },
+): Promise<CreateListingResponse> {
+  return apiMutate<CreateListingResponse>('/listings', 'POST', data);
+}
+
+/** Update an existing listing with optimistic locking (PUT /api/listings/:id) */
+export async function updateListing(
+  id: string,
+  data: Partial<ListingRecordFull> & { version: number },
+): Promise<UpdateListingResponse> {
+  return apiMutate<UpdateListingResponse>(`/listings/${id}`, 'PUT', data);
+}
+
+/** Change listing status (PATCH /api/listings/:id/status) */
+export async function patchListingStatus(
+  id: string,
+  status: ListingStatus,
+  reason?: string,
+): Promise<PatchStatusResponse> {
+  return apiMutate<PatchStatusResponse>(`/listings/${id}/status`, 'PATCH', { status, reason });
+}
+
+/** Soft-delete a listing (DELETE /api/listings/:id) */
+export async function deleteListing(id: string): Promise<void> {
+  return apiMutate<void>(`/listings/${id}`, 'DELETE');
+}
+
+/** Restore a soft-deleted listing (POST /api/listings/:id/restore) */
+export async function restoreListing(id: string): Promise<{ listing: ListingRecordFull }> {
+  return apiMutate<{ listing: ListingRecordFull }>(`/listings/${id}/restore`, 'POST');
+}
+
+/** Bulk update listings (POST /api/listings/bulk) */
+export async function bulkUpdateListings(
+  ids: string[],
+  changes: Partial<ListingRecordFull>,
+): Promise<BulkUpdateResponse> {
+  return apiMutate<BulkUpdateResponse>('/listings/bulk', 'POST', { ids, changes });
+}
+
+/** Fetch revision history for a listing */
+export async function fetchRevisions(
+  id: string,
+  limit = 20,
+  offset = 0,
+): Promise<RevisionsResponse> {
+  return apiFetch<RevisionsResponse>(`/listings/${id}/revisions?limit=${limit}&offset=${offset}`);
+}
+
+/* ── useRevisions Hook ────────────────────────────────────── */
+
+export function useRevisions(id: string | null, limit = 20) {
+  const [data, setData] = useState<ListingRevision[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) { setData([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetchRevisions(id, limit)
+      .then((res) => { if (!cancelled) setData(res.revisions); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Unknown error'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [id, limit]);
+
+  return { data, loading, error };
+}

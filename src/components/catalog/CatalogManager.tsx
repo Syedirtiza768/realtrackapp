@@ -11,7 +11,10 @@ import {
   Zap,
   ChevronRight,
   Home,
+  PlusCircle,
+  Trash2,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '../ui/card';
 import SearchBar from './SearchBar';
 import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
@@ -19,6 +22,7 @@ import ActiveFilterTags from './ActiveFilterTags';
 import ResultsGrid from './ResultsGrid';
 import DetailModal from './DetailModal';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
+import { deleteListing } from '../../lib/listingsApi';
 import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
 import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
 
@@ -38,6 +42,7 @@ function saveRecent(terms: string[]) {
 }
 
 export default function CatalogManager() {
+  const navigate = useNavigate();
   /* ── State ─────────────────────────────────────────────── */
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +53,8 @@ export default function CatalogManager() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent());
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // For infinite scroll mode
   const [infiniteScroll, setInfiniteScroll] = useState(false);
@@ -77,7 +84,7 @@ export default function CatalogManager() {
     [searchQuery, sortMode, filters, accumulatedItems.length],
   );
 
-  const { data, loading, error } = useSearch(infiniteScroll ? infiniteQuery : apiQuery);
+  const { data, loading, error, refetch } = useSearch(infiniteScroll ? infiniteQuery : apiQuery);
   const { data: facets, loading: facetsLoading } = useDynamicFacets(apiQuery);
   const summary = useSummary();
 
@@ -133,6 +140,24 @@ export default function CatalogManager() {
     // Trigger re-fetch with new offset
     setAccumulatedItems((prev) => prev); // force update
   }, []);
+
+  const handleDelete = useCallback(async (id: string) => {
+    setDeleteConfirmId(id);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirmId) return;
+    setDeleting(true);
+    try {
+      await deleteListing(deleteConfirmId);
+      setDeleteConfirmId(null);
+      refetch();
+    } catch {
+      // keep modal open on error
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteConfirmId, refetch]);
 
   const activeFilterCount = countActiveFilters(filters);
 
@@ -191,6 +216,13 @@ export default function CatalogManager() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* New Listing */}
+          <button
+            onClick={() => navigate('/listings/new')}
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            <PlusCircle size={14} /> New Listing
+          </button>
           {/* Toggle infinite scroll */}
           <button
             onClick={() => {
@@ -323,6 +355,7 @@ export default function CatalogManager() {
                 onViewModeChange={setViewMode}
                 onPageChange={setPage}
                 onQuickView={setDetailId}
+                onDelete={handleDelete}
                 infiniteScroll={infiniteScroll}
                 hasMore={hasMore}
                 onLoadMore={loadMore}
@@ -348,6 +381,38 @@ export default function CatalogManager() {
 
       {/* Detail modal */}
       <DetailModal id={detailId} onClose={() => setDetailId(null)} />
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDeleteConfirmId(null)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-500/10">
+                <Trash2 size={20} className="text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-100">Delete Listing</h3>
+            </div>
+            <p className="text-sm text-slate-400 mb-6">
+              Are you sure you want to delete this listing? It will be soft-deleted and can be restored later.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

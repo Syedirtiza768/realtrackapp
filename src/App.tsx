@@ -6,6 +6,7 @@ import Shell from './components/layout/Shell';
 import Dashboard from './components/dashboard/Dashboard';
 
 import ListingEditor from './components/listings/ListingEditor';
+import RevisionHistory from './components/listings/RevisionHistory';
 
 import FitmentManager from './components/fitment/FitmentManager';
 
@@ -20,6 +21,8 @@ function App() {
                 <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/listings/new" element={<ListingEditor />} />
+                    <Route path="/listings/:id/edit" element={<ListingEditor />} />
+                    <Route path="/listings/:id/history" element={<RevisionHistory />} />
                     <Route path="/ingestion" element={<IngestionManager />} />
                     <Route path="/fitment" element={<FitmentManager />} />
                     <Route path="/catalog" element={<CatalogManager />} />

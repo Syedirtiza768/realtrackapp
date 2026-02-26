@@ -5,7 +5,8 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useState } from 'react';
-import { Eye, Image as ImageIcon } from 'lucide-react';
+import { Eye, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Badge } from '../ui/badge';
 import { getFirstImageUrl } from '../../lib/searchApi';
 import type { SearchItem } from '../../types/search';
@@ -14,6 +15,7 @@ import { conditionLabel } from '../../types/search';
 interface Props {
   item: SearchItem;
   onQuickView: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
 const formatPrice = (raw: string | null) => {
@@ -22,10 +24,11 @@ const formatPrice = (raw: string | null) => {
   return isNaN(n) ? null : n;
 };
 
-export default function ListingCard({ item, onQuickView }: Props) {
+export default function ListingCard({ item, onQuickView, onDelete }: Props) {
   const imageUrl = getFirstImageUrl(item.itemPhotoUrl);
   const price = formatPrice(item.startPrice);
   const [imgErr, setImgErr] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <article className="border border-slate-700/60 rounded-xl bg-slate-900/50 overflow-hidden flex flex-col group hover:border-slate-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200">
@@ -124,6 +127,24 @@ export default function ListingCard({ item, onQuickView }: Props) {
           >
             <Eye size={12} /> View
           </button>
+        </div>
+
+        {/* Edit / Delete actions */}
+        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60">
+          <button
+            onClick={() => navigate(`/listings/${item.id}/edit`)}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-slate-800 hover:text-blue-400 transition-colors"
+          >
+            <Pencil size={11} /> Edit
+          </button>
+          {onDelete && (
+            <button
+              onClick={() => onDelete(item.id)}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={11} /> Delete
+            </button>
+          )}
         </div>
       </div>
     </article>
