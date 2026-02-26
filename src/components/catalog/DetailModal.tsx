@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
-  ExternalLink,
   Copy,
   Check,
 } from 'lucide-react';

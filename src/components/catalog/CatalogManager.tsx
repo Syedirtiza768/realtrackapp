@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUpDown,
   Download,
   SlidersHorizontal,
   Zap,
@@ -136,7 +135,6 @@ export default function CatalogManager() {
   }, []);
 
   const activeFilterCount = countActiveFilters(filters);
-  const hasActiveFilters = activeFilterCount > 0 || searchQuery.trim().length > 0;
 
   /* ── Breadcrumbs ────────────────────────────────────────── */
   const breadcrumbs = useMemo(() => {

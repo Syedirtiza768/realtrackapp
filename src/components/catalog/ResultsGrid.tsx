@@ -3,7 +3,7 @@
  *  support, loading skeletons, and empty state.
  * ────────────────────────────────────────────────────────── */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,7 +17,7 @@ import {
 import ListingCard from './ListingCard';
 import { getFirstImageUrl } from '../../lib/searchApi';
 import type { SearchItem } from '../../types/search';
-import { conditionLabel } from '../../types/search';
+
 
 type ViewMode = 'grid' | 'list';
 
