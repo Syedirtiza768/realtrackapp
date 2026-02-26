@@ -1,0 +1,112 @@
+2026-02-26T21:10:40: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:40:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:40:   errno: -3008,
+2026-02-26T21:10:40:   code: 'ENOTFOUND',
+2026-02-26T21:10:40:   syscall: 'getaddrinfo',
+2026-02-26T21:10:40:   hostname: '4191'
+2026-02-26T21:10:40: }
+2026-02-26T21:10:40: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:40:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:40:   errno: -3008,
+2026-02-26T21:10:40:   code: 'ENOTFOUND',
+2026-02-26T21:10:40:   syscall: 'getaddrinfo',
+2026-02-26T21:10:40:   hostname: '4191'
+2026-02-26T21:10:40: }
+2026-02-26T21:10:41: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:41:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:41:   errno: -3008,
+2026-02-26T21:10:41:   code: 'ENOTFOUND',
+2026-02-26T21:10:41:   syscall: 'getaddrinfo',
+2026-02-26T21:10:41:   hostname: '4191'
+2026-02-26T21:10:41: }
+2026-02-26T21:10:41: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:41:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:41:   errno: -3008,
+2026-02-26T21:10:41:   code: 'ENOTFOUND',
+2026-02-26T21:10:41:   syscall: 'getaddrinfo',
+2026-02-26T21:10:41:   hostname: '4191'
+2026-02-26T21:10:41: }
+2026-02-26T21:10:41: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:41:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:41:   errno: -3008,
+2026-02-26T21:10:41:   code: 'ENOTFOUND',
+2026-02-26T21:10:41:   syscall: 'getaddrinfo',
+2026-02-26T21:10:41:   hostname: '4191'
+2026-02-26T21:10:41: }
+2026-02-26T21:10:42: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:42:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:42:   errno: -3008,
+2026-02-26T21:10:42:   code: 'ENOTFOUND',
+2026-02-26T21:10:42:   syscall: 'getaddrinfo',
+2026-02-26T21:10:42:   hostname: '4191'
+2026-02-26T21:10:42: }
+2026-02-26T21:10:42: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:42:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:42:   errno: -3008,
+2026-02-26T21:10:42:   code: 'ENOTFOUND',
+2026-02-26T21:10:42:   syscall: 'getaddrinfo',
+2026-02-26T21:10:42:   hostname: '4191'
+2026-02-26T21:10:42: }
+2026-02-26T21:10:42: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:42:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:42:   errno: -3008,
+2026-02-26T21:10:42:   code: 'ENOTFOUND',
+2026-02-26T21:10:42:   syscall: 'getaddrinfo',
+2026-02-26T21:10:42:   hostname: '4191'
+2026-02-26T21:10:42: }
+2026-02-26T21:10:43: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:43:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:43:   errno: -3008,
+2026-02-26T21:10:43:   code: 'ENOTFOUND',
+2026-02-26T21:10:43:   syscall: 'getaddrinfo',
+2026-02-26T21:10:43:   hostname: '4191'
+2026-02-26T21:10:43: }
+2026-02-26T21:10:43: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:43:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:43:   errno: -3008,
+2026-02-26T21:10:43:   code: 'ENOTFOUND',
+2026-02-26T21:10:43:   syscall: 'getaddrinfo',
+2026-02-26T21:10:43:   hostname: '4191'
+2026-02-26T21:10:43: }
+2026-02-26T21:10:43: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:43:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:43:   errno: -3008,
+2026-02-26T21:10:43:   code: 'ENOTFOUND',
+2026-02-26T21:10:43:   syscall: 'getaddrinfo',
+2026-02-26T21:10:43:   hostname: '4191'
+2026-02-26T21:10:43: }
+2026-02-26T21:10:43: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:43:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:43:   errno: -3008,
+2026-02-26T21:10:43:   code: 'ENOTFOUND',
+2026-02-26T21:10:43:   syscall: 'getaddrinfo',
+2026-02-26T21:10:43:   hostname: '4191'
+2026-02-26T21:10:43: }
+2026-02-26T21:10:44: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:44:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:44:   errno: -3008,
+2026-02-26T21:10:44:   code: 'ENOTFOUND',
+2026-02-26T21:10:44:   syscall: 'getaddrinfo',
+2026-02-26T21:10:44:   hostname: '4191'
+2026-02-26T21:10:44: }
+2026-02-26T21:10:44: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:44:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:44:   errno: -3008,
+2026-02-26T21:10:44:   code: 'ENOTFOUND',
+2026-02-26T21:10:44:   syscall: 'getaddrinfo',
+2026-02-26T21:10:44:   hostname: '4191'
+2026-02-26T21:10:44: }
+2026-02-26T21:10:44: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:44:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:44:   errno: -3008,
+2026-02-26T21:10:44:   code: 'ENOTFOUND',
+2026-02-26T21:10:44:   syscall: 'getaddrinfo',
+2026-02-26T21:10:44:   hostname: '4191'
+2026-02-26T21:10:44: }
+2026-02-26T21:10:45: Error: getaddrinfo ENOTFOUND 4191
+2026-02-26T21:10:45:     at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:111:26) {
+2026-02-26T21:10:45:   errno: -3008,
+2026-02-26T21:10:45:   code: 'ENOTFOUND',
+2026-02-26T21:10:45:   syscall: 'getaddrinfo',
+2026-02-26T21:10:45:   hostname: '4191'
+2026-02-26T21:10:45: }
