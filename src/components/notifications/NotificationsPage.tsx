@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     Bell,
     Check,
@@ -13,7 +13,7 @@ import {
     ChevronRight,
     Filter,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent } from '../ui/card';
 
 const API = '/api/notifications';
 
