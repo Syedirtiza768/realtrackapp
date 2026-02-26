@@ -14,7 +14,7 @@ import { NotificationsService } from './notifications.service.js';
 import { NotificationsQueryDto } from './dto/notifications-query.dto.js';
 
 @ApiTags('Notifications')
-@Controller('api/notifications')
+@Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 

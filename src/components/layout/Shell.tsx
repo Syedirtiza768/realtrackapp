@@ -21,6 +21,7 @@ const NAV_ITEMS = [
     { icon: ScanLine, label: 'Fitment', path: '/fitment' },
     { icon: Database, label: 'Catalog', path: '/catalog' },
     { icon: Package, label: 'Orders', path: '/orders' },
+    { icon: Bell, label: 'Notifications', path: '/notifications' },
     { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 

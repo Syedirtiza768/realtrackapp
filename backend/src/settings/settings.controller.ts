@@ -20,7 +20,7 @@ import {
 } from './dto/settings.dto.js';
 
 @ApiTags('Settings')
-@Controller('api/settings')
+@Controller('settings')
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 

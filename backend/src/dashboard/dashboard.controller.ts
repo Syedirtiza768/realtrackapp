@@ -4,7 +4,7 @@ import { DashboardService } from './dashboard.service.js';
 import { AuditLogQueryDto, SalesQueryDto } from './dto/dashboard.dto.js';
 
 @ApiTags('Dashboard')
-@Controller('api/dashboard')
+@Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
@@ -46,7 +46,7 @@ export class DashboardController {
 }
 
 @ApiTags('Audit Logs')
-@Controller('api/audit-logs')
+@Controller('audit-logs')
 export class AuditLogController {
   constructor(private readonly dashboardService: DashboardService) {}
 
