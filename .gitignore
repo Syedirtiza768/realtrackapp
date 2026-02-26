@@ -6,3 +6,6 @@ dist
 
 # Data files (large spreadsheets)
 files/
+
+# PM2 logs
+logs/
