@@ -55,9 +55,9 @@ export class DashboardService {
       this.salesRepo
         .createQueryBuilder('s')
         .select('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.sale_price), 0)', 'revenue')
-        .addSelect('COALESCE(AVG(s.sale_price), 0)', 'avgPrice')
-        .where('s.sold_at >= :since', {
+        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
+        .addSelect('COALESCE(AVG(s.salePrice), 0)', 'avgPrice')
+        .where('s.soldAt >= :since', {
           since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
         })
         .getRawOne(),
@@ -65,7 +65,7 @@ export class DashboardService {
         .createQueryBuilder('s')
         .select('s.channel', 'channel')
         .addSelect('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.sale_price), 0)', 'revenue')
+        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
         .groupBy('s.channel')
         .getRawMany(),
     ]);
@@ -95,31 +95,31 @@ export class DashboardService {
     const [salesByDay, salesByChannel, topItems] = await Promise.all([
       this.salesRepo
         .createQueryBuilder('s')
-        .select("DATE_TRUNC('day', s.sold_at)", 'day')
+        .select("DATE_TRUNC('day', s.soldAt)", 'day')
         .addSelect('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.sale_price), 0)', 'revenue')
-        .where('s.sold_at >= :since AND s.sold_at <= :until', { since, until })
-        .groupBy("DATE_TRUNC('day', s.sold_at)")
-        .orderBy("DATE_TRUNC('day', s.sold_at)", 'ASC')
+        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
+        .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
+        .groupBy("DATE_TRUNC('day', s.soldAt)")
+        .orderBy("DATE_TRUNC('day', s.soldAt)", 'ASC')
         .getRawMany(),
 
       this.salesRepo
         .createQueryBuilder('s')
         .select('s.channel', 'channel')
         .addSelect('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.sale_price), 0)', 'revenue')
-        .where('s.sold_at >= :since AND s.sold_at <= :until', { since, until })
+        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
+        .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
         .groupBy('s.channel')
         .getRawMany(),
 
       this.salesRepo
         .createQueryBuilder('s')
-        .select('s.listing_id', 'listingId')
+        .select('s.listingId', 'listingId')
         .addSelect('COUNT(*)', 'salesCount')
-        .addSelect('COALESCE(SUM(s.sale_price), 0)', 'totalRevenue')
-        .where('s.sold_at >= :since AND s.sold_at <= :until', { since, until })
-        .groupBy('s.listing_id')
-        .orderBy('COALESCE(SUM(s.sale_price), 0)', 'DESC')
+        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'totalRevenue')
+        .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
+        .groupBy('s.listingId')
+        .orderBy('COALESCE(SUM(s.salePrice), 0)', 'DESC')
         .limit(dto.topN ?? 10)
         .getRawMany(),
     ]);
@@ -189,10 +189,10 @@ export class DashboardService {
       this.salesRepo.count(),
       this.salesRepo.manager
         .query(`
-          SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (sr.sold_at - lr.updated_at)) / 86400), 0) AS "avgDays"
+          SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (sr."soldAt" - lr."updatedAt")) / 86400), 0) AS "avgDays"
           FROM sales_records sr
-          JOIN listing_records lr ON lr.id = sr.listing_id
-          WHERE sr.sold_at >= NOW() - INTERVAL '90 days'
+          JOIN listing_records lr ON lr.id = sr."listingId"
+          WHERE sr."soldAt" >= NOW() - INTERVAL '90 days'
         `)
         .then((r: Array<{ avgDays: string }>) => Number(r[0]?.avgDays ?? 0)),
     ]);
@@ -216,13 +216,13 @@ export class DashboardService {
       SELECT
         il.listing_id AS "listingId",
         lr.title,
-        lr.custom_label_sku AS "sku",
+        lr."customLabelSku" AS "sku",
         il.quantity_total AS "total",
         il.quantity_reserved AS "reserved",
         (il.quantity_total - il.quantity_reserved) AS "available",
         il.low_stock_threshold AS "threshold"
       FROM inventory_ledger il
-      JOIN listing_records lr ON lr.id = il.listing_id AND lr.deleted_at IS NULL
+      JOIN listing_records lr ON lr.id = il.listing_id AND lr."deletedAt" IS NULL
       ORDER BY (il.quantity_total - il.quantity_reserved) ASC
       LIMIT 100
     `);
