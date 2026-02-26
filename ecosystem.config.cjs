@@ -22,7 +22,7 @@ module.exports = {
       name: 'realtrackapp-frontend',
       cwd: './',
       script: 'serve',
-      args: 'dist -l tcp://0.0.0.0:4191 -s',
+      args: 'dist -s -p 4191',
       instances: 1,
       exec_mode: 'fork',
       env: {
