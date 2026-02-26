@@ -6,9 +6,9 @@ async function bootstrap() {
   app.enableCors({
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(',')
-      : ['http://localhost:4191', 'https://mhn.realtrackapp.com'],
+      : ['http://localhost:3191', 'https://mhn.realtrackapp.com'],
   });
   app.setGlobalPrefix('api');
-  await app.listen(process.env.PORT ?? 3191);
+  await app.listen(process.env.PORT ?? 4191);
 }
 bootstrap();
