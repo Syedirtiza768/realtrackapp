@@ -12,11 +12,11 @@ import { Badge } from '../ui/badge';
 
 export default function Dashboard() {
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h2>
                 <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500">Last sync: Just now</span>
+                    <span className="text-xs sm:text-sm text-slate-500">Last sync: Just now</span>
                     <button className="p-2 hover:bg-slate-800 rounded-full transition-colors">
                         <RefreshCw size={16} className="text-slate-400" />
                     </button>
@@ -24,14 +24,14 @@ export default function Dashboard() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-slate-400">Total Catalog</CardTitle>
                         <Package className="h-4 w-4 text-slate-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">12,345</div>
+                        <div className="text-xl sm:text-2xl font-bold">12,345</div>
                         <p className="text-xs text-slate-500 flex items-center mt-1">
                             <ArrowUpRight className="h-3 w-3 text-emerald-500 mr-1" />
                             <span className="text-emerald-500">+180</span> from last week
@@ -45,7 +45,7 @@ export default function Dashboard() {
                         <Activity className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-emerald-500">8,902</div>
+                        <div className="text-xl sm:text-2xl font-bold text-emerald-500">8,902</div>
                         <p className="text-xs text-slate-500 flex items-center mt-1">
                             <span className="text-slate-400">Across 3 channels</span>
                         </p>
@@ -58,7 +58,7 @@ export default function Dashboard() {
                         <AlertTriangle className="h-4 w-4 text-amber-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-amber-500">24</div>
+                        <div className="text-xl sm:text-2xl font-bold text-amber-500">24</div>
                         <p className="text-xs text-slate-500 flex items-center mt-1">
                             <span className="text-slate-400">Low confidence fitments</span>
                         </p>
@@ -71,7 +71,7 @@ export default function Dashboard() {
                         <BarChart3 className="h-4 w-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">$4,231</div>
+                        <div className="text-xl sm:text-2xl font-bold">$4,231</div>
                         <p className="text-xs text-slate-500 flex items-center mt-1">
                             <ArrowUpRight className="h-3 w-3 text-emerald-500 mr-1" />
                             <span className="text-emerald-500">+12%</span> vs yesterday
@@ -80,9 +80,9 @@ export default function Dashboard() {
                 </Card>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-7">
                 {/* Recent Activity */}
-                <Card className="col-span-4">
+                <Card className="lg:col-span-4">
                     <CardHeader>
                         <CardTitle>Recent Activity</CardTitle>
                     </CardHeader>
@@ -116,7 +116,7 @@ export default function Dashboard() {
                 </Card>
 
                 {/* Sync Status */}
-                <Card className="col-span-3">
+                <Card className="lg:col-span-3">
                     <CardHeader>
                         <CardTitle>Channel Sync Health</CardTitle>
                     </CardHeader>

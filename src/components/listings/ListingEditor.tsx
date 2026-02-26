@@ -84,28 +84,28 @@ export default function ListingEditor() {
     const galleryImages = ingestionSeed?.images ?? [];
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+        <div className="flex flex-col gap-4 sm:gap-6 pb-8">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex flex-wrap items-center gap-2 sm:gap-3">
                         New Listing
-                        <Badge variant="outline" className="text-lg">Draft</Badge>
+                        <Badge variant="outline" className="text-base sm:text-lg">Draft</Badge>
                         {ingestionSeed && <Badge variant="success">Imported from Ingestion</Badge>}
                     </h2>
-                    <p className="text-slate-500">AI Analysis complete. Please review before publishing.</p>
+                    <p className="text-slate-500 text-sm mt-1">AI Analysis complete. Please review before publishing.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <button className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
                         <Eye size={16} /> Preview
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">
+                    <button className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm">
                         <Save size={16} /> Save & Publish
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
-                <div className="col-span-12 lg:col-span-7 flex flex-col gap-6 overflow-y-auto pr-4 scrollbar-thin">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+                <div className="lg:col-span-7 flex flex-col gap-4 sm:gap-6 overflow-y-auto lg:pr-4 scrollbar-thin">
 
                     <div className="bg-blue-900/10 border border-blue-500/20 rounded-lg p-4 flex gap-3">
                         <Sparkles className="text-blue-400 shrink-0" size={20} />
@@ -133,7 +133,7 @@ export default function ListingEditor() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-slate-400 mb-1">Part Number (MPN)</label>
                                         <input
@@ -154,7 +154,7 @@ export default function ListingEditor() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-slate-400 mb-1">Condition</label>
                                         <select
@@ -197,7 +197,7 @@ export default function ListingEditor() {
                         <CardContent className="p-6">
                             <h3 className="font-medium text-slate-200 mb-4">Gallery</h3>
                             {galleryImages.length > 0 ? (
-                                <div className="grid grid-cols-4 gap-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                     {galleryImages.slice(0, 4).map((image, index) => (
                                         <div key={image.id} className={`aspect-square rounded-lg overflow-hidden relative ${index === 0 ? 'border-2 border-blue-500' : 'border border-slate-700'}`}>
                                             <img src={image.uri} alt={image.angle ?? 'Part image'} className="w-full h-full object-cover" />
@@ -209,7 +209,7 @@ export default function ListingEditor() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-4 gap-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                     <div className="aspect-square bg-slate-800 rounded-lg flex items-center justify-center border-2 border-blue-500 relative overflow-hidden group">
                                         <span className="text-slate-600">Main Image</span>
                                         <div className="absolute top-2 right-2 bg-blue-600/80 text-white text-[10px] px-1.5 rounded">AI Validated</div>
@@ -229,7 +229,7 @@ export default function ListingEditor() {
                     </Card>
                 </div>
 
-                <div className="col-span-12 lg:col-span-5 h-full flex flex-col bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+                <div className="lg:col-span-5 flex flex-col bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-2xl min-h-[400px] lg:min-h-0">
                     <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
                         <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Live Preview</span>
                         <div className="flex bg-slate-800 rounded-lg p-1">
@@ -246,15 +246,15 @@ export default function ListingEditor() {
                         <div className="w-full bg-[#f8f8f8] h-full p-4 font-sans text-black">
                             <div className="h-8 w-24 bg-[#e53238] mb-4"></div>
 
-                            <div className="flex gap-4">
-                                <div className="w-1/3 aspect-square bg-gray-200"></div>
-                                <div className="w-2/3">
-                                    <h1 className="text-xl font-bold leading-tight mb-2">{title}</h1>
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <div className="w-full sm:w-1/3 aspect-square bg-gray-200"></div>
+                                <div className="w-full sm:w-2/3">
+                                    <h1 className="text-base sm:text-xl font-bold leading-tight mb-2">{title}</h1>
                                     <div className="text-sm font-semibold mb-2">Condition: <span className="font-normal">{toConditionLabel(condition)}</span></div>
 
                                     <div className="text-2xl font-bold mb-4">US ${price}</div>
 
-                                    <div className="bg-blue-600 text-white text-center py-2 font-bold rounded-full w-48 mb-2">Buy It Now</div>
+                                    <div className="bg-blue-600 text-white text-center py-2 font-bold rounded-full w-36 sm:w-48 mb-2">Buy It Now</div>
                                     <div className="text-sm text-gray-500">Free 3 day shipping</div>
                                 </div>
                             </div>

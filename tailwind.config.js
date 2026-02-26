@@ -9,6 +9,9 @@ export default {
             fontFamily: {
                 sans: ['Inter', 'sans-serif'],
             },
+            screens: {
+                '3xl': '1920px',
+            },
             colors: {
                 background: '#0f172a', // slate-900
                 surface: '#1e293b', // slate-800

@@ -310,12 +310,12 @@ export default function IngestionManager() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Image Ingestion</h2>
-                    <p className="text-slate-500">Capture or upload part images, then run AI recognition and product enrichment.</p>
-                    <div className="mt-2 flex items-center gap-2">
+        <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Image Ingestion</h2>
+                    <p className="text-slate-500 text-sm">Capture or upload part images, then run AI recognition and product enrichment.</p>
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <Badge variant="outline">Provider: {runtimeConfig.provider}</Badge>
                         <Badge
                             variant={
@@ -340,20 +340,20 @@ export default function IngestionManager() {
                         </p>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
                     <button
-                        className="flex items-center gap-2 px-3 py-2 border border-slate-700 text-slate-300 hover:bg-slate-800 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 py-2 border border-slate-700 text-slate-300 hover:bg-slate-800 rounded-lg text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={() => void runHealthCheck()}
                         disabled={healthLoading}
                     >
-                        <RefreshCw size={14} className={healthLoading ? 'animate-spin' : ''} /> Re-check health
+                        <RefreshCw size={14} className={healthLoading ? 'animate-spin' : ''} /> Re-check
                     </button>
                     <button
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={processAllQueued}
                         disabled={!queue.some((entry) => entry.job.status === 'queued') || !ingestionService || !!(runtimeConfig.provider === 'api' && !healthLoading && !health?.healthy)}
                     >
-                        <Play size={16} /> Process queued jobs
+                        <Play size={16} /> Process queued
                     </button>
                 </div>
             </div>
@@ -413,25 +413,25 @@ export default function IngestionManager() {
                         </label>
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="text-sm text-slate-400">
                             {mode === 'single' && 'Single mode expects one image.'}
                             {mode === 'bulk' && 'Bulk mode accepts multiple images across many parts.'}
                             {mode === 'bundle' && 'Bundle mode groups multi-angle images for one part.'}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                             <button
-                                className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800"
+                                className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-sm"
                                 onClick={() => setStagedImages([])}
                             >
                                 Clear staged
                             </button>
                             <button
-                                className="px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 disabled={!canCreateJob}
                                 onClick={createJob}
                             >
-                                Create ingestion job
+                                Create job
                             </button>
                         </div>
                     </div>
@@ -453,9 +453,9 @@ export default function IngestionManager() {
             </Card>
 
             <Card>
-                <CardHeader className="border-b border-slate-800 flex flex-row items-center justify-between">
+                <CardHeader className="border-b border-slate-800 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <CardTitle>Ingestion Job Queue</CardTitle>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-2 border border-slate-700 rounded-lg px-2 py-1.5 bg-slate-900">
                             <Filter size={14} className="text-slate-500" />
                             <select
@@ -509,8 +509,8 @@ export default function IngestionManager() {
                         <div className="space-y-3">
                             {filteredQueue.map((entry) => (
                                 <div key={entry.job.id} className="rounded-lg border border-slate-700 p-4 bg-slate-900/60">
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                                             <input
                                                 type="checkbox"
                                                 className="rounded border-slate-700 bg-slate-800"
@@ -521,16 +521,16 @@ export default function IngestionManager() {
                                             <span className="text-sm text-slate-300">{entry.images.length} images</span>
                                             <Badge variant={statusVariant(entry.job.status)}>{entry.job.status}</Badge>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             <button
-                                                className="px-3 py-1.5 rounded-lg text-sm border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                                                className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
                                                 onClick={() => processJob(entry.job.id)}
                                                 disabled={entry.job.status !== 'queued' || !ingestionService || !!(runtimeConfig.provider === 'api' && !healthLoading && !health?.healthy)}
                                             >
                                                 Run AI
                                             </button>
                                             <button
-                                                className="px-3 py-1.5 rounded-lg text-sm border border-blue-500/40 text-blue-400 hover:bg-blue-600/10 disabled:opacity-50"
+                                                className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border border-blue-500/40 text-blue-400 hover:bg-blue-600/10 disabled:opacity-50"
                                                 onClick={() => createListingDraft(entry)}
                                                 disabled={entry.job.status !== 'completed' || !entry.recognition || !entry.generatedData}
                                             >

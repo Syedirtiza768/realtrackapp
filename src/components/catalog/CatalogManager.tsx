@@ -160,13 +160,13 @@ export default function CatalogManager() {
 
   /* ── Render ────────────────────────────────────────────── */
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-3 sm:space-y-4 pb-24">
       {/* Breadcrumbs */}
-      <nav className="flex items-center gap-1 text-xs text-slate-500">
+      <nav className="flex items-center gap-1 text-xs text-slate-500 overflow-x-auto scrollbar-none">
         {breadcrumbs.map((crumb, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight size={11} className="text-slate-700" />}
-            {i === 0 && <Home size={11} />}
+          <span key={i} className="flex items-center gap-1 whitespace-nowrap">
+            {i > 0 && <ChevronRight size={11} className="text-slate-700 shrink-0" />}
+            {i === 0 && <Home size={11} className="shrink-0" />}
             {crumb.onClick ? (
               <button onClick={crumb.onClick} className="hover:text-slate-300 transition-colors">
                 {crumb.label}
@@ -180,17 +180,17 @@ export default function CatalogManager() {
         ))}
       </nav>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-100">Catalog</h2>
-          <p className="text-sm text-slate-500 mt-1">
+      {/* Header — stacks on mobile, side-by-side on sm+ */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100">Catalog</h2>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 truncate">
             {summary
               ? `${summary.totalRecords.toLocaleString()} listings · ${summary.uniqueSkus.toLocaleString()} unique SKUs · ${summary.files} source files`
               : 'Loading…'}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {/* Toggle infinite scroll */}
           <button
             onClick={() => {
@@ -207,7 +207,7 @@ export default function CatalogManager() {
             <Zap size={13} />
             {infiniteScroll ? 'Infinite Scroll' : 'Pagination'}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-xs transition-colors">
+          <button className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-xs transition-colors">
             <Download size={14} /> Export
           </button>
         </div>
@@ -231,7 +231,7 @@ export default function CatalogManager() {
       />
 
       {/* Main content layout: sidebar + results */}
-      <div className="flex gap-5">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-5">
         {/* Desktop filter sidebar */}
         <aside className="hidden lg:block w-64 shrink-0">
           <FilterSidebar
@@ -245,8 +245,8 @@ export default function CatalogManager() {
         {/* Results area */}
         <div className="flex-1 min-w-0">
           <Card>
-            <CardHeader className="border-b border-slate-800 py-3 px-5">
-              <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardHeader className="border-b border-slate-800 py-3 px-3 sm:px-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 {/* Left: result info */}
                 <div className="flex items-center gap-3">
                   {/* Mobile filter button */}

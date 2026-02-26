@@ -66,11 +66,11 @@ export default function DetailModal({ id, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm p-4 flex items-center justify-center"
+      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm p-0 sm:p-4 flex items-end sm:items-center justify-center"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl max-h-[90vh] bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-2xl shadow-black/50"
+        className="w-full sm:max-w-2xl lg:max-w-5xl h-[95dvh] sm:h-auto sm:max-h-[90vh] bg-slate-900 border-0 sm:border border-slate-700 rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl shadow-black/50"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -101,7 +101,7 @@ export default function DetailModal({ id, onClose }: Props) {
 
         {data && !loading && (
           <div className="overflow-y-auto flex-1">
-            <div className="grid md:grid-cols-2 gap-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
               {/* Image gallery */}
               <div className="bg-slate-950 relative group">
                 {images.length > 0 ? (
@@ -110,7 +110,7 @@ export default function DetailModal({ id, onClose }: Props) {
                       <img
                         src={images[activeImg] ?? images[0]}
                         alt={data.title ?? ''}
-                        className="w-full h-80 object-contain"
+                        className="w-full h-52 sm:h-64 lg:h-80 object-contain"
                       />
                       {/* Nav arrows */}
                       {images.length > 1 && (
@@ -159,19 +159,19 @@ export default function DetailModal({ id, onClose }: Props) {
                     )}
                   </>
                 ) : (
-                  <div className="h-80 flex items-center justify-center text-slate-700">
+                  <div className="h-52 sm:h-64 lg:h-80 flex items-center justify-center text-slate-700">
                     <ImageIcon size={60} />
                   </div>
                 )}
               </div>
 
               {/* Detail fields */}
-              <div className="p-5 space-y-4">
+              <div className="p-4 sm:p-5 space-y-3 sm:space-y-4">
                 {/* Title */}
-                <h4 className="text-lg font-bold text-slate-100 leading-tight">{data.title}</h4>
+                <h4 className="text-base sm:text-lg font-bold text-slate-100 leading-tight">{data.title}</h4>
 
                 {/* Price & condition */}
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   {price !== null && (
                     <span className="text-2xl font-bold text-slate-100">${price.toFixed(2)}</span>
                   )}
@@ -183,9 +183,9 @@ export default function DetailModal({ id, onClose }: Props) {
                   )}
                 </div>
 
-                {/* Specs grid */}
-                <div className="border border-slate-800 rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
+                {/* Specs grid — scrollable on mobile */}
+                <div className="border border-slate-800 rounded-lg overflow-hidden overflow-x-auto">
+                  <table className="w-full text-xs min-w-[320px]">
                     <tbody className="divide-y divide-slate-800">
                       <DetailRow label="SKU" value={data.customLabelSku} mono />
                       <DetailRow label="Brand" value={data.cBrand} />

@@ -30,7 +30,7 @@ export default function ListingCard({ item, onQuickView }: Props) {
   return (
     <article className="border border-slate-700/60 rounded-xl bg-slate-900/50 overflow-hidden flex flex-col group hover:border-slate-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200">
       {/* Image */}
-      <div className="relative h-44 bg-slate-800 overflow-hidden">
+      <div className="relative aspect-[4/3] sm:h-44 sm:aspect-auto bg-slate-800 overflow-hidden">
         {imageUrl && !imgErr ? (
           <img
             src={imageUrl}

@@ -111,7 +111,7 @@ export default function ResultsGrid({
       {/* Loading skeleton */}
       {loading && items.length === 0 && (
         <div className={viewMode === 'grid'
-          ? 'grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+          ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'
           : 'space-y-2'
         }>
           {Array.from({ length: 12 }).map((_, i) => (
@@ -122,7 +122,7 @@ export default function ResultsGrid({
 
       {/* Grid view */}
       {viewMode === 'grid' && items.length > 0 && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
           {items.map((item) => (
             <ListingCard key={item.id} item={item} onQuickView={onQuickView} />
           ))}
@@ -131,17 +131,17 @@ export default function ResultsGrid({
 
       {/* List view */}
       {viewMode === 'list' && items.length > 0 && (
-        <div className="border border-slate-800 rounded-xl overflow-hidden">
-          <table className="w-full text-sm text-left">
+        <div className="border border-slate-800 rounded-xl overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm text-left min-w-[480px]">
             <thead className="text-xs uppercase bg-slate-900/80 text-slate-500 font-medium sticky top-0">
               <tr>
-                <th className="p-3 w-16">Image</th>
-                <th className="p-3">Product</th>
-                <th className="p-3 hidden md:table-cell">Brand</th>
-                <th className="p-3 hidden lg:table-cell">Category</th>
-                <th className="p-3 text-right">Price</th>
-                <th className="p-3 hidden sm:table-cell text-center">Qty</th>
-                <th className="p-3 w-16"></th>
+                <th className="p-2 sm:p-3 w-12 sm:w-16">Image</th>
+                <th className="p-2 sm:p-3">Product</th>
+                <th className="p-2 sm:p-3 hidden md:table-cell">Brand</th>
+                <th className="p-2 sm:p-3 hidden lg:table-cell">Category</th>
+                <th className="p-2 sm:p-3 text-right">Price</th>
+                <th className="p-2 sm:p-3 hidden sm:table-cell text-center">Qty</th>
+                <th className="p-2 sm:p-3 w-12 sm:w-16"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
