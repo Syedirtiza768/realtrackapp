@@ -2,12 +2,14 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { ChannelsModule } from './channels/channels.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { FitmentModule } from './fitment/fitment.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
@@ -15,12 +17,15 @@ import { InventoryModule } from './inventory/inventory.module';
 import { ListingRecord } from './listings/listing-record.entity';
 import { ListingRevision } from './listings/listing-revision.entity';
 import { ListingsModule } from './listings/listings.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { OrdersModule } from './orders/orders.module';
+import { SettingsModule } from './settings/settings.module';
 import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
     ThrottlerModule.forRoot([
       { name: 'short', ttl: 1000, limit: 10 },
       { name: 'medium', ttl: 60000, limit: 100 },
@@ -63,6 +68,9 @@ import { StorageModule } from './storage/storage.module';
     ChannelsModule,
     InventoryModule,
     OrdersModule,
+    DashboardModule,
+    SettingsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
