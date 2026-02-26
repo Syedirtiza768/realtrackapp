@@ -7,6 +7,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { ChannelsModule } from './channels/channels.module';
+import { FitmentModule } from './fitment/fitment.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { ListingRecord } from './listings/listing-record.entity';
@@ -55,6 +57,8 @@ import { StorageModule } from './storage/storage.module';
     AuthModule,
     StorageModule,
     IngestionModule,
+    FitmentModule,
+    ChannelsModule,
   ],
   controllers: [AppController],
   providers: [

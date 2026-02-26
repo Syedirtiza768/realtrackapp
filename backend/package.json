@@ -38,6 +38,8 @@
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.0",
+    "@shopify/shopify-api": "^12.3.0",
+    "axios": "^1.13.5",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.70.1",
     "class-transformer": "^0.5.1",
