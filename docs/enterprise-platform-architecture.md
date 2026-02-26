@@ -1,4 +1,4 @@
-# ListingPro Enterprise Platform Architecture
+# RealTrackApp Enterprise Platform Architecture
 
 ## Objective
 Deliver an AI-first automotive parts platform that supports image-based ingestion, fitment intelligence, centralized catalog control, and multi-channel commerce with enterprise-grade reliability.

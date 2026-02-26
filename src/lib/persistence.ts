@@ -1,6 +1,6 @@
 export const STORAGE_KEYS = {
-    ingestionQueue: 'listingpro.ingestion.queue.v1',
-    ingestionListingSeed: 'listingpro.ingestion.seed.v1',
+    ingestionQueue: 'realtrackapp.ingestion.queue.v1',
+    ingestionListingSeed: 'realtrackapp.ingestion.seed.v1',
 } as const;
 
 export function loadJson<T>(key: string, fallback: T): T {

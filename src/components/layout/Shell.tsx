@@ -32,9 +32,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <div className="p-6">
                     <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
                         <div className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center font-mono text-lg">
-                            LP
+                            RT
                         </div>
-                        ListingPro<span className="text-blue-500">.ai</span>
+                        RealTrack<span className="text-blue-500">App</span>
                     </h1>
                 </div>
 
