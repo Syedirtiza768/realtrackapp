@@ -8,7 +8,7 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
+        PORT: 3191,
       },
       env_file: './backend/.env',
       watch: false,
@@ -22,7 +22,7 @@ module.exports = {
       name: 'realtrackapp-frontend',
       cwd: './',
       script: 'node_modules/.bin/serve',
-      args: 'dist -l 5173 -s',
+      args: 'dist -l 4191 -s',
       instances: 1,
       exec_mode: 'fork',
       env: {
