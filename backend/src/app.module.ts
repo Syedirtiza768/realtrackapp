@@ -11,9 +11,11 @@ import { ChannelsModule } from './channels/channels.module';
 import { FitmentModule } from './fitment/fitment.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
+import { InventoryModule } from './inventory/inventory.module';
 import { ListingRecord } from './listings/listing-record.entity';
 import { ListingRevision } from './listings/listing-revision.entity';
 import { ListingsModule } from './listings/listings.module';
+import { OrdersModule } from './orders/orders.module';
 import { StorageModule } from './storage/storage.module';
 
 @Module({
@@ -59,6 +61,8 @@ import { StorageModule } from './storage/storage.module';
     IngestionModule,
     FitmentModule,
     ChannelsModule,
+    InventoryModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [
