@@ -1,11 +1,21 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
+import { BulkUpdateDto } from './dto/bulk-update.dto';
+import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingsQueryDto } from './dto/listings-query.dto';
+import { PatchStatusDto } from './dto/patch-status.dto';
+import { UpdateListingDto } from './dto/update-listing.dto';
 import { ListingRecord } from './listing-record.entity';
+import { ListingRevision } from './listing-revision.entity';
 
 /**
  * Maps each Excel header text (normalized to lowercase) to the
@@ -187,6 +197,9 @@ export class ListingsService {
   constructor(
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectRepository(ListingRevision)
+    private readonly revisionRepo: Repository<ListingRevision>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /* ── Query methods ──────────────────────────────────────── */
@@ -285,6 +298,146 @@ export class ListingsService {
       throw new NotFoundException(`Listing ${id} not found`);
     }
     return record;
+  }
+
+  /* ── CRUD operations (Module 1) ─────────────────────────── */
+
+  async create(dto: CreateListingDto) {
+    return this.dataSource.transaction(async (em) => {
+      const listing = em.create(ListingRecord, {
+        ...dto,
+        status: dto.status ?? 'draft',
+        sourceFileName: 'manual',
+        sourceFilePath: 'manual',
+        sheetName: 'manual',
+        sourceRowNumber: 0,
+      } as Partial<ListingRecord>);
+      const saved = await em.save(ListingRecord, listing);
+
+      const revision = em.create(ListingRevision, {
+        listingId: saved.id,
+        version: saved.version,
+        statusBefore: null,
+        statusAfter: saved.status,
+        snapshot: { ...saved } as unknown as Record<string, unknown>,
+        changeReason: 'create',
+        changedBy: null,
+      });
+      await em.save(ListingRevision, revision);
+
+      return { listing: saved, revision };
+    });
+  }
+
+  async update(id: string, dto: UpdateListingDto) {
+    return this.dataSource.transaction(async (em) => {
+      const listing = await em.findOne(ListingRecord, { where: { id } });
+      if (!listing) throw new NotFoundException(`Listing ${id} not found`);
+
+      if (listing.version !== dto.version) {
+        throw new ConflictException({
+          message: 'This listing was modified since you loaded it.',
+          currentVersion: listing.version,
+          yourVersion: dto.version,
+        });
+      }
+
+      const oldStatus = listing.status;
+      const { version: _v, ...changes } = dto;
+      Object.assign(listing, changes);
+
+      const saved = await em.save(ListingRecord, listing);
+
+      const revision = em.create(ListingRevision, {
+        listingId: id,
+        version: saved.version,
+        statusBefore: oldStatus,
+        statusAfter: saved.status,
+        snapshot: { ...saved } as unknown as Record<string, unknown>,
+        changeReason: 'manual_edit',
+        changedBy: null,
+      });
+      await em.save(ListingRevision, revision);
+
+      return { listing: saved, revision };
+    });
+  }
+
+  async patchStatus(id: string, dto: PatchStatusDto) {
+    return this.dataSource.transaction(async (em) => {
+      const listing = await em.findOne(ListingRecord, { where: { id } });
+      if (!listing) throw new NotFoundException(`Listing ${id} not found`);
+
+      const oldStatus = listing.status;
+      listing.status = dto.status;
+      if (dto.status === 'published' && !listing.publishedAt) {
+        listing.publishedAt = new Date();
+      }
+
+      const saved = await em.save(ListingRecord, listing);
+
+      const revision = em.create(ListingRevision, {
+        listingId: id,
+        version: saved.version,
+        statusBefore: oldStatus,
+        statusAfter: dto.status,
+        snapshot: { ...saved } as unknown as Record<string, unknown>,
+        changeReason: dto.reason ?? 'status_change',
+        changedBy: null,
+      });
+      await em.save(ListingRevision, revision);
+
+      return { listing: saved, revision };
+    });
+  }
+
+  async softDelete(id: string) {
+    const listing = await this.listingRepo.findOne({ where: { id } });
+    if (!listing) throw new NotFoundException(`Listing ${id} not found`);
+    await this.listingRepo.softRemove(listing);
+    return { success: true };
+  }
+
+  async restore(id: string) {
+    const listing = await this.listingRepo.findOne({
+      where: { id },
+      withDeleted: true,
+    });
+    if (!listing) throw new NotFoundException(`Listing ${id} not found`);
+    await this.listingRepo.recover(listing);
+    return { listing };
+  }
+
+  async bulkUpdate(dto: BulkUpdateDto) {
+    const BATCH_SIZE = 50;
+    const updated: string[] = [];
+    const failed: { id: string; error: string }[] = [];
+
+    for (let i = 0; i < dto.ids.length; i += BATCH_SIZE) {
+      const batch = dto.ids.slice(i, i + BATCH_SIZE);
+      for (const id of batch) {
+        try {
+          await this.listingRepo.update(id, dto.changes as Partial<ListingRecord>);
+          updated.push(id);
+        } catch (err) {
+          failed.push({
+            id,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+      }
+    }
+    return { updated: updated.length, failed };
+  }
+
+  async getRevisions(listingId: string, limit: number, offset: number) {
+    const [revisions, total] = await this.revisionRepo.findAndCount({
+      where: { listingId },
+      order: { version: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+    return { total, revisions };
   }
 
   async getSummary() {

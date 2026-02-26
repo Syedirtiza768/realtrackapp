@@ -1,6 +1,20 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { BulkUpdateDto } from './dto/bulk-update.dto';
+import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingsQueryDto } from './dto/listings-query.dto';
+import { PatchStatusDto } from './dto/patch-status.dto';
 import { SearchQueryDto } from './dto/search-query.dto';
+import { UpdateListingDto } from './dto/update-listing.dto';
 import { ListingsService } from './listings.service';
 import { SearchService } from './search.service';
 
@@ -29,6 +43,51 @@ export class ListingsController {
   @Get('search/facets')
   dynamicFacets(@Query() query: SearchQueryDto) {
     return this.searchService.dynamicFacets(query);
+  }
+
+  /* ── CRUD endpoints (Module 1) ── */
+
+  @Post()
+  create(@Body() dto: CreateListingDto) {
+    return this.listingsService.create(dto);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateListingDto) {
+    return this.listingsService.update(id, dto);
+  }
+
+  @Patch(':id/status')
+  patchStatus(@Param('id') id: string, @Body() dto: PatchStatusDto) {
+    return this.listingsService.patchStatus(id, dto);
+  }
+
+  @Delete(':id')
+  softDelete(@Param('id') id: string) {
+    return this.listingsService.softDelete(id);
+  }
+
+  @Post(':id/restore')
+  restore(@Param('id') id: string) {
+    return this.listingsService.restore(id);
+  }
+
+  @Post('bulk')
+  bulkUpdate(@Body() dto: BulkUpdateDto) {
+    return this.listingsService.bulkUpdate(dto);
+  }
+
+  @Get(':id/revisions')
+  getRevisions(
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.listingsService.getRevisions(
+      id,
+      Number(limit) || 20,
+      Number(offset) || 0,
+    );
   }
 
   /* ── Legacy endpoints (kept for backward compatibility) ─ */

@@ -1,10 +1,13 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   PrimaryGeneratedColumn,
   Unique,
+  UpdateDateColumn,
+  VersionColumn,
 } from 'typeorm';
 
 @Entity({ name: 'listing_records' })
@@ -270,6 +273,32 @@ export class ListingRecord {
 
   @Column({ type: 'text', nullable: true })
   responsiblePerson1ContactUrl: string | null;
+
+  /* ── Lifecycle columns (Module 1 — Listing CRUD) ──────── */
+
+  @Column({ type: 'varchar', length: 20, default: 'draft' })
+  status: 'draft' | 'ready' | 'published' | 'sold' | 'delisted' | 'archived';
+
+  @VersionColumn()
+  version: number;
+
+  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
+
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt: Date;
+
+  @Column({ type: 'uuid', nullable: true })
+  updatedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  publishedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  ebayListingId: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  shopifyProductId: string | null;
 
   /* ── Full-text search vector (managed by DB trigger) ──── */
   @Column({
