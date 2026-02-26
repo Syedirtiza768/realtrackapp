@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -7,9 +8,11 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { IngestionModule } from './ingestion/ingestion.module';
 import { ListingRecord } from './listings/listing-record.entity';
 import { ListingRevision } from './listings/listing-revision.entity';
 import { ListingsModule } from './listings/listings.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -36,9 +39,22 @@ import { ListingsModule } from './listings/listings.module';
         migrationsTableName: 'typeorm_migrations',
       }),
     }),
+    // ─── BullMQ (Redis) for background job queues ───
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get<string>('REDIS_HOST', 'localhost'),
+          port: Number(config.get<string>('REDIS_PORT', '6379')),
+          password: config.get<string>('REDIS_PASSWORD', '') || undefined,
+        },
+      }),
+    }),
     ListingsModule,
     HealthModule,
     AuthModule,
+    StorageModule,
+    IngestionModule,
   ],
   controllers: [AppController],
   providers: [
