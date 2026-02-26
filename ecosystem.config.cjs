@@ -18,22 +18,5 @@ module.exports = {
       merge_logs: true,
       time: true,
     },
-    {
-      name: 'realtrackapp-frontend',
-      cwd: './',
-      script: 'serve',
-      args: 'dist -s -p 4191',
-      instances: 1,
-      exec_mode: 'fork',
-      env: {
-        NODE_ENV: 'production',
-      },
-      watch: false,
-      max_memory_restart: '200M',
-      error_file: './logs/frontend-error.log',
-      out_file: './logs/frontend-out.log',
-      merge_logs: true,
-      time: true,
-    },
   ],
 };
