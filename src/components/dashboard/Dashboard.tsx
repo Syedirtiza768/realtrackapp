@@ -78,11 +78,26 @@ export default function Dashboard() {
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
+            const safeFetch = async <T,>(url: string, fallback: T): Promise<T> => {
+                try {
+                    const r = await fetch(url);
+                    if (!r.ok) return fallback;
+                    return await r.json() as T;
+                } catch {
+                    return fallback;
+                }
+            };
+
+            const defaultSummary: DashboardSummary = {
+                totalListings: 0, activeListings: 0, totalSales: 0,
+                revenue: 0, avgPrice: 0, channelBreakdown: [], computedAt: new Date().toISOString(),
+            };
+
             const [sumRes, actRes, chRes, invRes] = await Promise.all([
-                fetch(`${API}/dashboard/summary`).then(r => r.json()),
-                fetch(`${API}/dashboard/activity?limit=8`).then(r => r.json()),
-                fetch(`${API}/dashboard/channel-health`).then(r => r.json()).catch(() => ({ channels: [] })),
-                fetch(`${API}/dashboard/inventory-alerts`).then(r => r.json()).catch(() => ({ lowStock: [], outOfStock: [] })),
+                safeFetch<DashboardSummary>(`${API}/dashboard/summary`, defaultSummary),
+                safeFetch<{ items?: AuditLogItem[] }>(`${API}/dashboard/activity?limit=8`, { items: [] }),
+                safeFetch<{ channels?: ChannelHealthRow[] }>(`${API}/dashboard/channel-health`, { channels: [] }),
+                safeFetch<{ lowStock?: InventoryAlert[]; outOfStock?: InventoryAlert[] }>(`${API}/dashboard/inventory-alerts`, { lowStock: [], outOfStock: [] }),
             ]);
             setSummary(sumRes);
             setActivity(actRes.items ?? []);
@@ -146,7 +161,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
-                            {summary ? summary.totalListings.toLocaleString() : '—'}
+                            {summary?.totalListings != null ? summary.totalListings.toLocaleString() : '—'}
                         </div>
                         <p className="text-xs text-slate-500 mt-1">All listings</p>
                     </CardContent>
@@ -159,7 +174,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold text-emerald-500">
-                            {summary ? summary.activeListings.toLocaleString() : '—'}
+                            {summary?.activeListings != null ? summary.activeListings.toLocaleString() : '—'}
                         </div>
                         <p className="text-xs text-slate-500 mt-1">
                             {summary?.channelBreakdown?.length
@@ -176,7 +191,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
-                            {summary ? fmtCurrency(summary.revenue) : '—'}
+                            {summary?.revenue != null ? fmtCurrency(summary.revenue) : '—'}
                         </div>
                         <p className="text-xs text-slate-500 flex items-center mt-1">
                             <ArrowUpRight className="h-3 w-3 text-emerald-500 mr-1" />
