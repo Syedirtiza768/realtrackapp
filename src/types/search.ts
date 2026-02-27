@@ -20,6 +20,8 @@ export interface SearchQuery {
   formats?: string;
   locations?: string;
   mpns?: string;
+  makes?: string;         // comma-separated fitment make IDs
+  models?: string;        // comma-separated fitment model IDs
   minPrice?: number;
   maxPrice?: number;
   hasImage?: string;
@@ -100,6 +102,8 @@ export interface DynamicFacets {
   formats: FacetBucket[];
   locations: FacetBucket[];
   mpns: FacetBucket[];
+  makes: FacetBucket[];
+  models: FacetBucket[];
   priceRange: { min: number | null; max: number | null };
   totalFiltered: number;
   queryTimeMs: number;
@@ -108,6 +112,7 @@ export interface DynamicFacets {
 export interface FacetBucket {
   value: string;
   count: number;
+  label?: string;  // display label (e.g. make/model name when value is an ID)
 }
 
 export interface CategoryFacetBucket extends FacetBucket {
@@ -184,6 +189,10 @@ export interface ActiveFilters {
   formats: string[];
   locations: string[];
   mpns: string[];
+  makes: string[];            // fitment make IDs
+  makeNames: string[];        // for display
+  models: string[];           // fitment model IDs
+  modelNames: string[];       // for display
   minPrice: number | null;
   maxPrice: number | null;
   hasImage: boolean;
@@ -200,6 +209,10 @@ export const EMPTY_FILTERS: ActiveFilters = {
   formats: [],
   locations: [],
   mpns: [],
+  makes: [],
+  makeNames: [],
+  models: [],
+  modelNames: [],
   minPrice: null,
   maxPrice: null,
   hasImage: false,
@@ -216,6 +229,8 @@ export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
     formats: f.formats.length ? f.formats.join(',') : undefined,
     locations: f.locations.length ? f.locations.join(',') : undefined,
     mpns: f.mpns.length ? f.mpns.join(',') : undefined,
+    makes: f.makes.length ? f.makes.join(',') : undefined,
+    models: f.models.length ? f.models.join(',') : undefined,
     minPrice: f.minPrice ?? undefined,
     maxPrice: f.maxPrice ?? undefined,
     hasImage: f.hasImage ? '1' : undefined,
@@ -233,6 +248,8 @@ export function countActiveFilters(f: ActiveFilters): number {
   count += f.formats.length;
   count += f.locations.length;
   count += f.mpns.length;
+  count += f.makes.length;
+  count += f.models.length;
   if (f.minPrice != null) count++;
   if (f.maxPrice != null) count++;
   if (f.hasImage) count++;

@@ -6,14 +6,16 @@
  *  Filter sections (in order):
  *  1. Availability toggles (Has Image, Has Price)
  *  2. Price Range (min/max inputs)
- *  3. Brand (multi-select with counts)
- *  4. Category (multi-select, hierarchical path display)
- *  5. Condition (multi-select with labels)
- *  6. Type (multi-select)
- *  7. Format (multi-select — FixedPrice, etc.)
- *  8. Location (multi-select)
- *  9. MPN (multi-select, searchable)
- *  10. Source File (multi-select)
+ *  3. Make (vehicle make from fitment, multi-select)
+ *  4. Model (vehicle model from fitment, cascading)
+ *  5. Brand (multi-select with counts)
+ *  6. Category (multi-select, hierarchical path display)
+ *  7. Condition (multi-select with labels)
+ *  8. Type (multi-select)
+ *  9. Format (multi-select — FixedPrice, etc.)
+ *  10. Location (multi-select)
+ *  11. MPN (multi-select, searchable)
+ *  12. Source File (multi-select)
  *
  *  Each section: collapsible, quick-filter search, show all,
  *  selected count badge, dynamic counts from facets API.
@@ -156,7 +158,42 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         onChange={(min, max) => onChange({ ...filters, minPrice: min, maxPrice: max })}
       />
 
-      {/* ── 3. Brand ──────────────────────────────────────── */}
+      {/* ── 3. Make (vehicle make from fitment) ───────────── */}
+      <MultiSelectFacet
+        title="Make"
+        buckets={facets?.makes ?? []}
+        selected={filters.makes}
+        onChange={(vals) => {
+          const names = vals.map((id) => {
+            const m = facets?.makes.find((b) => b.value === id);
+            return m?.label ?? id;
+          });
+          // When makes change, reset models to avoid stale selections
+          onChange({ ...filters, makes: vals, makeNames: names, models: [], modelNames: [] });
+        }}
+        getLabel={(b) => b.label ?? b.value}
+        loading={loading}
+        defaultExpanded
+      />
+
+      {/* ── 4. Model (vehicle model from fitment) ─────────── */}
+      <MultiSelectFacet
+        title="Model"
+        buckets={facets?.models ?? []}
+        selected={filters.models}
+        onChange={(vals) => {
+          const names = vals.map((id) => {
+            const m = facets?.models.find((b) => b.value === id);
+            return m?.label ?? id;
+          });
+          onChange({ ...filters, models: vals, modelNames: names });
+        }}
+        getLabel={(b) => b.label ?? b.value}
+        loading={loading}
+        defaultExpanded={filters.makes.length > 0}
+      />
+
+      {/* ── 5. Brand ──────────────────────────────────────── */}
       <MultiSelectFacet
         title="Brand"
         buckets={facets?.brands ?? []}
@@ -166,7 +203,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         defaultExpanded
       />
 
-      {/* ── 4. Category ───────────────────────────────────── */}
+      {/* ── 6. Category ───────────────────────────────────── */}
       <MultiSelectFacet
         title="Category"
         buckets={facets?.categories ?? []}
@@ -188,7 +225,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         defaultExpanded
       />
 
-      {/* ── 5. Condition ──────────────────────────────────── */}
+      {/* ── 7. Condition ──────────────────────────────────── */}
       <MultiSelectFacet
         title="Condition"
         buckets={facets?.conditions ?? []}
@@ -199,7 +236,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         defaultExpanded
       />
 
-      {/* ── 6. Type ───────────────────────────────────────── */}
+      {/* ── 8. Type ───────────────────────────────────────── */}
       <MultiSelectFacet
         title="Type"
         buckets={facets?.types ?? []}
@@ -208,7 +245,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         loading={loading}
       />
 
-      {/* ── 7. Format ─────────────────────────────────────── */}
+      {/* ── 9. Format ─────────────────────────────────────── */}
       <MultiSelectFacet
         title="Format"
         buckets={facets?.formats ?? []}
@@ -217,7 +254,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         loading={loading}
       />
 
-      {/* ── 8. Location ───────────────────────────────────── */}
+      {/* ── 10. Location ───────────────────────────────────── */}
       <MultiSelectFacet
         title="Location"
         buckets={facets?.locations ?? []}
@@ -226,7 +263,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         loading={loading}
       />
 
-      {/* ── 9. MPN (Manufacturer Part Number) ─────────────── */}
+      {/* ── 11. MPN (Manufacturer Part Number) ─────────────── */}
       <MultiSelectFacet
         title="MPN"
         buckets={facets?.mpns ?? []}
@@ -236,7 +273,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         initialShowCount={6}
       />
 
-      {/* ── 10. Source File ───────────────────────────────── */}
+      {/* ── 12. Source File ───────────────────────────────── */}
       <MultiSelectFacet
         title="Source File"
         buckets={facets?.sourceFiles ?? []}

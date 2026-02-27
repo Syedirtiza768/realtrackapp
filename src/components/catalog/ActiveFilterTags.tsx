@@ -40,6 +40,42 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     });
   }
 
+  // Make tags
+  for (let i = 0; i < filters.makes.length; i++) {
+    const makeId = filters.makes[i];
+    const makeName = filters.makeNames[i] ?? makeId;
+    tags.push({
+      key: `make:${makeId}`,
+      label: `Make: ${makeName}`,
+      onRemove: () => {
+        const idx = filters.makes.indexOf(makeId);
+        onChange({
+          ...filters,
+          makes: filters.makes.filter((_, j) => j !== idx),
+          makeNames: filters.makeNames.filter((_, j) => j !== idx),
+        });
+      },
+    });
+  }
+
+  // Model tags
+  for (let i = 0; i < filters.models.length; i++) {
+    const modelId = filters.models[i];
+    const modelName = filters.modelNames[i] ?? modelId;
+    tags.push({
+      key: `model:${modelId}`,
+      label: `Model: ${modelName}`,
+      onRemove: () => {
+        const idx = filters.models.indexOf(modelId);
+        onChange({
+          ...filters,
+          models: filters.models.filter((_, j) => j !== idx),
+          modelNames: filters.modelNames.filter((_, j) => j !== idx),
+        });
+      },
+    });
+  }
+
   // Category tags
   for (let i = 0; i < filters.categories.length; i++) {
     const catId = filters.categories[i];

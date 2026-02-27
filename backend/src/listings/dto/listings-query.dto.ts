@@ -34,4 +34,10 @@ export class ListingsQueryDto {
 
   @IsOptional() @IsString()
   hasImage?: string; // '1' = only with images
+
+  @IsOptional() @IsString()
+  makes?: string;   // fitment make IDs (comma-separated)
+
+  @IsOptional() @IsString()
+  models?: string;  // fitment model IDs (comma-separated)
 }
