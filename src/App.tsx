@@ -15,6 +15,7 @@ import IngestionManager from './components/ingestion/IngestionManager';
 import OrdersPage from './components/orders/OrdersPage';
 import SettingsPage from './components/settings/SettingsPage';
 import NotificationsPage from './components/notifications/NotificationsPage';
+import SkuDetailPage from './components/sku/SkuDetailPage';
 
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
                     <Route path="/orders" element={<OrdersPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/notifications" element={<NotificationsPage />} />
+                    <Route path="/sku/:id" element={<SkuDetailPage />} />
                     <Route path="*" element={<div className="p-10 text-center text-slate-500">Page not found</div>} />
                 </Routes>
             </Shell>

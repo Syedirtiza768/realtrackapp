@@ -15,10 +15,12 @@ import {
 import { Badge } from '../ui/badge';
 import { getAllImageUrls, useListingDetail } from '../../lib/searchApi';
 import { conditionLabel } from '../../types/search';
+import ChannelListingPanel from '../channels/ChannelListingPanel';
 
 interface Props {
   id: string | null;
   onClose: () => void;
+  onPublish?: (listingId: string) => void;
 }
 
 const formatPrice = (raw: string | null) => {
@@ -32,7 +34,7 @@ function stripHtml(html: string): string {
   return doc.body.textContent ?? '';
 }
 
-export default function DetailModal({ id, onClose }: Props) {
+export default function DetailModal({ id, onClose, onPublish }: Props) {
   const { data, loading } = useListingDetail(id);
   const images = data ? getAllImageUrls(data.itemPhotoUrl) : [];
   const [activeImg, setActiveImg] = useState(0);
@@ -213,6 +215,9 @@ export default function DetailModal({ id, onClose }: Props) {
                     </p>
                   </div>
                 )}
+
+                {/* Channel listing panel */}
+                <ChannelListingPanel listingId={data.id} onPublish={onPublish} />
               </div>
             </div>
           </div>

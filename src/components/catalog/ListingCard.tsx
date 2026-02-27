@@ -5,7 +5,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useState } from 'react';
-import { Eye, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
+import { Eye, Image as ImageIcon, Pencil, Send, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '../ui/badge';
 import { getFirstImageUrl } from '../../lib/searchApi';
@@ -16,6 +16,7 @@ interface Props {
   item: SearchItem;
   onQuickView: (id: string) => void;
   onDelete?: (id: string) => void;
+  onPublish?: (id: string) => void;
 }
 
 const formatPrice = (raw: string | null) => {
@@ -24,7 +25,7 @@ const formatPrice = (raw: string | null) => {
   return isNaN(n) ? null : n;
 };
 
-export default function ListingCard({ item, onQuickView, onDelete }: Props) {
+export default function ListingCard({ item, onQuickView, onDelete, onPublish }: Props) {
   const imageUrl = getFirstImageUrl(item.itemPhotoUrl);
   const price = formatPrice(item.startPrice);
   const [imgErr, setImgErr] = useState(false);
@@ -122,14 +123,14 @@ export default function ListingCard({ item, onQuickView, onDelete }: Props) {
             )}
           </div>
           <button
-            onClick={() => onQuickView(item.id)}
+            onClick={() => navigate(`/sku/${item.id}`)}
             className="px-2 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 hover:text-slate-100 inline-flex items-center gap-1 transition-colors"
           >
-            <Eye size={12} /> View
+            <Eye size={12} /> Details
           </button>
         </div>
 
-        {/* Edit / Delete actions */}
+        {/* Edit / Publish / Delete actions */}
         <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60">
           <button
             onClick={() => navigate(`/listings/${item.id}/edit`)}
@@ -137,6 +138,14 @@ export default function ListingCard({ item, onQuickView, onDelete }: Props) {
           >
             <Pencil size={11} /> Edit
           </button>
+          {onPublish && (
+            <button
+              onClick={() => onPublish(item.id)}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-blue-900/30 hover:text-blue-400 transition-colors"
+            >
+              <Send size={11} /> Channels
+            </button>
+          )}
           {onDelete && (
             <button
               onClick={() => onDelete(item.id)}

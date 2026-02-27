@@ -11,6 +11,7 @@ import {
   LayoutList,
   Eye,
   Package,
+  Send,
   Sparkles,
   ArrowDown,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ interface Props {
   onPageChange: (page: number) => void;
   onQuickView: (id: string) => void;
   onDelete?: (id: string) => void;
+  onPublish?: (id: string) => void;
   /** For infinite scroll: call to load more items */
   onLoadMore?: () => void;
   hasMore?: boolean;
@@ -56,6 +58,7 @@ export default function ResultsGrid({
   onPageChange,
   onQuickView,
   onDelete,
+  onPublish,
   onLoadMore,
   hasMore,
   infiniteScroll,
@@ -126,7 +129,7 @@ export default function ResultsGrid({
       {viewMode === 'grid' && items.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
           {items.map((item) => (
-            <ListingCard key={item.id} item={item} onQuickView={onQuickView} onDelete={onDelete} />
+            <ListingCard key={item.id} item={item} onQuickView={onQuickView} onDelete={onDelete} onPublish={onPublish} />
           ))}
         </div>
       )}
@@ -189,12 +192,23 @@ export default function ResultsGrid({
                       {item.quantity ?? '—'}
                     </td>
                     <td className="p-3">
-                      <button
-                        onClick={() => onQuickView(item.id)}
-                        className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-                      >
-                        <Eye size={14} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => onQuickView(item.id)}
+                          className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        {onPublish && (
+                          <button
+                            onClick={() => onPublish(item.id)}
+                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 transition-colors"
+                            title="List on Channels"
+                          >
+                            <Send size={14} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

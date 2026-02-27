@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Home,
   PlusCircle,
+  Send,
   Trash2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +22,7 @@ import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
 import ActiveFilterTags from './ActiveFilterTags';
 import ResultsGrid from './ResultsGrid';
 import DetailModal from './DetailModal';
+import PublishModal from '../channels/PublishModal';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
 import { deleteListing } from '../../lib/listingsApi';
 import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
@@ -55,6 +57,10 @@ export default function CatalogManager() {
   const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishTargetId, setPublishTargetId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkPublishOpen, setBulkPublishOpen] = useState(false);
 
   // For infinite scroll mode
   const [infiniteScroll, setInfiniteScroll] = useState(false);
@@ -145,6 +151,24 @@ export default function CatalogManager() {
     setDeleteConfirmId(id);
   }, []);
 
+  const handlePublish = useCallback((id: string) => {
+    setPublishTargetId(id);
+    setPublishModalOpen(true);
+  }, []);
+
+  const handleBulkPublish = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setBulkPublishOpen(true);
+  }, [selectedIds]);
+
+  const handlePublishComplete = useCallback(() => {
+    setPublishModalOpen(false);
+    setPublishTargetId(null);
+    setBulkPublishOpen(false);
+    setSelectedIds(new Set());
+    refetch();
+  }, [refetch]);
+
   const confirmDelete = useCallback(async () => {
     if (!deleteConfirmId) return;
     setDeleting(true);
@@ -169,12 +193,6 @@ export default function CatalogManager() {
     ];
     if (searchQuery.trim()) {
       crumbs.push({ label: `"${searchQuery}"` });
-    }
-    if (filters.brands.length === 1) {
-      crumbs.push({
-        label: filters.brands[0],
-        onClick: () => setFilters({ ...EMPTY_FILTERS, brands: filters.brands }),
-      });
     }
     if (filters.categoryNames.length === 1) {
       const parts = filters.categoryNames[0].split('/').filter(Boolean);
@@ -356,6 +374,7 @@ export default function CatalogManager() {
                 onPageChange={setPage}
                 onQuickView={setDetailId}
                 onDelete={handleDelete}
+                onPublish={handlePublish}
                 infiniteScroll={infiniteScroll}
                 hasMore={hasMore}
                 onLoadMore={loadMore}
@@ -380,7 +399,7 @@ export default function CatalogManager() {
       </MobileFilterDrawer>
 
       {/* Detail modal */}
-      <DetailModal id={detailId} onClose={() => setDetailId(null)} />
+      <DetailModal id={detailId} onClose={() => setDetailId(null)} onPublish={handlePublish} />
 
       {/* Delete confirmation modal */}
       {deleteConfirmId && (
@@ -411,6 +430,47 @@ export default function CatalogManager() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Single-item publish modal */}
+      {publishTargetId && (
+        <PublishModal
+          mode="single"
+          listing={displayItems.find((i) => i.id === publishTargetId) ?? { id: publishTargetId, title: null } as any}
+          open={publishModalOpen}
+          onClose={() => { setPublishModalOpen(false); setPublishTargetId(null); }}
+          onComplete={handlePublishComplete}
+        />
+      )}
+
+      {/* Bulk publish modal */}
+      <PublishModal
+        mode="bulk"
+        listingIds={Array.from(selectedIds)}
+        open={bulkPublishOpen}
+        onClose={() => setBulkPublishOpen(false)}
+        onComplete={handlePublishComplete}
+      />
+
+      {/* Bulk action bar (floating) */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-800 border border-slate-700 rounded-xl px-5 py-3 shadow-2xl shadow-black/50 flex items-center gap-4">
+          <span className="text-sm text-slate-300">
+            <span className="font-semibold text-blue-400">{selectedIds.size}</span> selected
+          </span>
+          <button
+            onClick={handleBulkPublish}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            <Send size={12} /> List on Channels
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            Clear
+          </button>
         </div>
       )}
     </div>

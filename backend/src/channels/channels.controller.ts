@@ -16,7 +16,12 @@ import type { RawBodyRequest } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ChannelsService } from './channels.service.js';
-import { PublishListingDto, SyncInventoryDto } from './dto/channel.dto.js';
+import {
+  PublishListingDto,
+  SyncInventoryDto,
+  PublishMultiDto,
+  BulkPublishDto,
+} from './dto/channel.dto.js';
 
 @ApiTags('channels')
 @Controller('channels')
@@ -83,6 +88,44 @@ export class ChannelsController {
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
   ) {
     return this.channelsService.getChannelListings(connectionId);
+  }
+
+  // ─── Per-SKU channel endpoints ───
+
+  @Get('listings/:listingId/channels')
+  @ApiOperation({ summary: 'Get channel statuses for a specific listing/SKU' })
+  getListingChannels(@Param('listingId') listingId: string) {
+    return this.channelsService.getListingChannelStatuses(listingId);
+  }
+
+  @Post('publish-multi')
+  @ApiOperation({ summary: 'Publish a listing to multiple channels at once' })
+  publishMulti(@Body() dto: PublishMultiDto) {
+    return this.channelsService.publishMulti(dto.listingId, dto.channels, dto.overrides);
+  }
+
+  @Post('listings/:listingId/channel/:channel/update')
+  @ApiOperation({ summary: 'Update a listing on a specific channel' })
+  updateChannelListing(
+    @Param('listingId') listingId: string,
+    @Param('channel') channel: string,
+  ) {
+    return this.channelsService.updateChannelListing(listingId, channel);
+  }
+
+  @Post('listings/:listingId/channel/:channel/end')
+  @ApiOperation({ summary: 'End/delist a listing on a specific channel' })
+  endChannelListing(
+    @Param('listingId') listingId: string,
+    @Param('channel') channel: string,
+  ) {
+    return this.channelsService.endChannelListing(listingId, channel);
+  }
+
+  @Post('bulk-publish')
+  @ApiOperation({ summary: 'Publish multiple listings to multiple channels' })
+  bulkPublish(@Body() dto: BulkPublishDto) {
+    return this.channelsService.bulkPublish(dto.listingIds, dto.channels);
   }
 
   // ─── Webhooks ───

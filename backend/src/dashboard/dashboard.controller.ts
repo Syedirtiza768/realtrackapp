@@ -43,6 +43,12 @@ export class DashboardController {
   getInventoryAlerts() {
     return this.dashboardService.getInventoryAlerts();
   }
+
+  @Get('multi-store')
+  @ApiOperation({ summary: 'Get multi-store, AI enhancement, and demo simulation metrics' })
+  getMultiStoreMetrics() {
+    return this.dashboardService.getMultiStoreMetrics();
+  }
 }
 
 @ApiTags('Audit Logs')

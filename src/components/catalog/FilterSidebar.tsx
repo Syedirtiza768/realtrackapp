@@ -193,17 +193,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         defaultExpanded={filters.makes.length > 0}
       />
 
-      {/* ── 5. Brand ──────────────────────────────────────── */}
-      <MultiSelectFacet
-        title="Brand"
-        buckets={facets?.brands ?? []}
-        selected={filters.brands}
-        onChange={(vals) => onChange({ ...filters, brands: vals })}
-        loading={loading}
-        defaultExpanded
-      />
-
-      {/* ── 6. Category ───────────────────────────────────── */}
+      {/* ── 5. Category ───────────────────────────────────── */}
       <MultiSelectFacet
         title="Category"
         buckets={facets?.categories ?? []}

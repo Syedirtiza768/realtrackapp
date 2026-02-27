@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUrl, IsArray, IsObject, ArrayMinSize } from 'class-validator';
 
 export class ConnectChannelDto {
   @IsString()
@@ -28,6 +28,33 @@ export class PublishListingDto {
   @IsString()
   @IsNotEmpty()
   listingId!: string;
+}
+
+export class PublishMultiDto {
+  @IsString()
+  @IsNotEmpty()
+  listingId!: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  channels!: string[];
+
+  @IsOptional()
+  @IsObject()
+  overrides?: Record<string, { price?: number; title?: string; quantity?: number }>;
+}
+
+export class BulkPublishDto {
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  listingIds!: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  channels!: string[];
 }
 
 export class SyncInventoryDto {

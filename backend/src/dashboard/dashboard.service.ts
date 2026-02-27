@@ -262,4 +262,76 @@ export class DashboardService {
     });
     return this.auditRepo.save(log);
   }
+
+  /* ─── Multi-Store & AI Metrics ─── */
+
+  async getMultiStoreMetrics() {
+    const cached = await this.getCache<Record<string, unknown>>('dashboard:multi-store', 120_000);
+    if (cached) return cached;
+
+    const [storeData, instanceData, aiData, demoData] = await Promise.all([
+      // Stores by channel
+      this.listingRepo.manager.query(`
+        SELECT
+          s.channel,
+          COUNT(DISTINCT s.id) AS "storeCount",
+          SUM(s.listing_count) AS "totalListings",
+          COUNT(DISTINCT s.connection_id) AS "connectionCount"
+        FROM stores s
+        WHERE s.status = 'active'
+        GROUP BY s.channel
+        ORDER BY s.channel
+      `).catch(() => []),
+
+      // Instance sync statuses
+      this.listingRepo.manager.query(`
+        SELECT
+          lci.channel,
+          lci.sync_status AS "syncStatus",
+          COUNT(*) AS "count",
+          COUNT(DISTINCT lci.listing_id) AS "uniqueListings",
+          COUNT(DISTINCT lci.store_id) AS "uniqueStores"
+        FROM listing_channel_instances lci
+        GROUP BY lci.channel, lci.sync_status
+        ORDER BY lci.channel, lci.sync_status
+      `).catch(() => []),
+
+      // AI enhancement stats
+      this.listingRepo.manager.query(`
+        SELECT
+          ae.enhancement_type AS "type",
+          ae.status,
+          COUNT(*) AS "count",
+          AVG(ae.confidence_score) AS "avgConfidence",
+          SUM(ae.tokens_used) AS "totalTokens"
+        FROM ai_enhancements ae
+        GROUP BY ae.enhancement_type, ae.status
+        ORDER BY ae.enhancement_type, ae.status
+      `).catch(() => []),
+
+      // Demo simulation summary
+      this.listingRepo.manager.query(`
+        SELECT
+          d.operation_type AS "operationType",
+          d.channel,
+          COUNT(*) AS "count",
+          AVG(d.simulated_latency_ms) AS "avgLatency",
+          SUM(CASE WHEN d.simulated_success THEN 1 ELSE 0 END) AS "successCount"
+        FROM demo_simulation_logs d
+        GROUP BY d.operation_type, d.channel
+        ORDER BY d.operation_type, d.channel
+      `).catch(() => []),
+    ]);
+
+    const result = {
+      stores: storeData,
+      instances: instanceData,
+      aiEnhancements: aiData,
+      demoSimulations: demoData,
+      computedAt: new Date().toISOString(),
+    };
+
+    await this.setCache('dashboard:multi-store', result);
+    return result;
+  }
 }

@@ -177,6 +177,187 @@ export class ChannelsService {
     });
   }
 
+  // ─── Per-SKU channel statuses ───
+
+  async getListingChannelStatuses(listingId: string): Promise<
+    Array<{
+      channel: string;
+      connectionId: string;
+      status: string;
+      externalId: string | null;
+      externalUrl: string | null;
+      lastSyncedAt: Date | null;
+      lastError: string | null;
+    }>
+  > {
+    const listings = await this.listingRepo.find({
+      where: { listingId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (listings.length === 0) return [];
+
+    // Resolve the channel name via the connection
+    const connectionIds = [...new Set(listings.map((l) => l.connectionId))];
+    const connections = await this.connectionRepo.findByIds(connectionIds);
+    const connMap = new Map(connections.map((c) => [c.id, c]));
+
+    return listings.map((l) => {
+      const conn = connMap.get(l.connectionId);
+      return {
+        channel: conn?.channel ?? 'unknown',
+        connectionId: l.connectionId,
+        status: l.syncStatus,
+        externalId: l.externalId,
+        externalUrl: l.externalUrl,
+        lastSyncedAt: l.lastSyncedAt,
+        lastError: l.lastError,
+      };
+    });
+  }
+
+  // ─── Multi-channel publish ───
+
+  async publishMulti(
+    listingId: string,
+    channels: string[],
+    overrides?: Record<string, { price?: number; title?: string; quantity?: number }>,
+  ): Promise<{ results: Array<{ channel: string; jobId?: string; error?: string }> }> {
+    const results: Array<{ channel: string; jobId?: string; error?: string }> = [];
+
+    for (const channel of channels) {
+      try {
+        // Find an active connection for this channel
+        const connection = await this.connectionRepo.findOne({
+          where: { channel, status: 'active' },
+          order: { createdAt: 'DESC' },
+        });
+
+        if (!connection) {
+          results.push({ channel, error: `No active ${channel} connection found` });
+          continue;
+        }
+
+        const job = await this.channelsQueue.add(
+          'publish',
+          { connectionId: connection.id, listingId, overrides: overrides?.[channel] },
+          {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 10_000 },
+            removeOnComplete: 100,
+            removeOnFail: 50,
+          },
+        );
+
+        // Create a pending channel_listing record
+        const existing = await this.listingRepo.findOne({
+          where: { connectionId: connection.id, listingId },
+        });
+        if (!existing) {
+          await this.listingRepo.save(
+            this.listingRepo.create({
+              connectionId: connection.id,
+              listingId,
+              syncStatus: 'pending',
+            }),
+          );
+        } else {
+          existing.syncStatus = 'pending';
+          existing.lastError = null;
+          await this.listingRepo.save(existing);
+        }
+
+        results.push({ channel, jobId: job.id! });
+      } catch (error: any) {
+        results.push({ channel, error: error.message });
+      }
+    }
+
+    return { results };
+  }
+
+  // ─── Update listing on a channel ───
+
+  async updateChannelListing(
+    listingId: string,
+    channel: string,
+  ): Promise<{ jobId: string }> {
+    const listing = await this.listingRepo
+      .createQueryBuilder('cl')
+      .innerJoin(ChannelConnection, 'cc', 'cc.id = cl."connectionId"')
+      .where('cl."listingId" = :listingId', { listingId })
+      .andWhere('cc.channel = :channel', { channel })
+      .getOne();
+
+    if (!listing) {
+      throw new NotFoundException(
+        `No channel listing found for listing ${listingId} on ${channel}`,
+      );
+    }
+
+    const job = await this.channelsQueue.add(
+      'update',
+      { connectionId: listing.connectionId, listingId, channelListingId: listing.id },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 10_000 },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    );
+
+    listing.syncStatus = 'pending';
+    await this.listingRepo.save(listing);
+    return { jobId: job.id! };
+  }
+
+  // ─── End listing on a channel ───
+
+  async endChannelListing(
+    listingId: string,
+    channel: string,
+  ): Promise<{ success: boolean }> {
+    const listing = await this.listingRepo
+      .createQueryBuilder('cl')
+      .innerJoin(ChannelConnection, 'cc', 'cc.id = cl."connectionId"')
+      .where('cl."listingId" = :listingId', { listingId })
+      .andWhere('cc.channel = :channel', { channel })
+      .getOne();
+
+    if (!listing) {
+      throw new NotFoundException(
+        `No channel listing found for listing ${listingId} on ${channel}`,
+      );
+    }
+
+    listing.syncStatus = 'ended';
+    await this.listingRepo.save(listing);
+    return { success: true };
+  }
+
+  // ─── Bulk publish (multiple SKUs × multiple channels) ───
+
+  async bulkPublish(
+    listingIds: string[],
+    channels: string[],
+  ): Promise<{ total: number; enqueued: number; errors: string[] }> {
+    let enqueued = 0;
+    const errors: string[] = [];
+
+    for (const listingId of listingIds) {
+      const result = await this.publishMulti(listingId, channels);
+      for (const r of result.results) {
+        if (r.jobId) {
+          enqueued++;
+        } else if (r.error) {
+          errors.push(`${listingId}@${r.channel}: ${r.error}`);
+        }
+      }
+    }
+
+    return { total: listingIds.length * channels.length, enqueued, errors };
+  }
+
   // ─── Webhooks ───
 
   async logWebhook(

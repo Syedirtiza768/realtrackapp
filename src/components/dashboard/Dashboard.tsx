@@ -8,6 +8,9 @@ import {
     RefreshCw,
     PackageX,
     Loader2,
+    Store,
+    Sparkles,
+    Radio,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -52,6 +55,13 @@ interface InventoryAlert {
     threshold: number;
 }
 
+interface MultiStoreMetrics {
+    stores: { channel: string; status: string; count: string }[];
+    instances: { channel: string; syncStatus: string; count: string }[];
+    aiEnhancements: { enhancementType: string; status: string; count: string }[];
+    demoSimulations: { operationType: string; channel: string; count: string; successCount: string }[];
+}
+
 function relativeTime(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60_000);
@@ -72,6 +82,7 @@ export default function Dashboard() {
     const [channels, setChannels] = useState<ChannelHealthRow[]>([]);
     const [lowStock, setLowStock] = useState<InventoryAlert[]>([]);
     const [outOfStock, setOutOfStock] = useState<InventoryAlert[]>([]);
+    const [multiStore, setMultiStore] = useState<MultiStoreMetrics | null>(null);
     const [loading, setLoading] = useState(true);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
@@ -93,17 +104,19 @@ export default function Dashboard() {
                 revenue: 0, avgPrice: 0, channelBreakdown: [], computedAt: new Date().toISOString(),
             };
 
-            const [sumRes, actRes, chRes, invRes] = await Promise.all([
+            const [sumRes, actRes, chRes, invRes, msRes] = await Promise.all([
                 safeFetch<DashboardSummary>(`${API}/dashboard/summary`, defaultSummary),
                 safeFetch<{ items?: AuditLogItem[] }>(`${API}/dashboard/activity?limit=8`, { items: [] }),
                 safeFetch<{ channels?: ChannelHealthRow[] }>(`${API}/dashboard/channel-health`, { channels: [] }),
                 safeFetch<{ lowStock?: InventoryAlert[]; outOfStock?: InventoryAlert[] }>(`${API}/dashboard/inventory-alerts`, { lowStock: [], outOfStock: [] }),
+                safeFetch<MultiStoreMetrics>(`${API}/dashboard/multi-store`, { stores: [], instances: [], aiEnhancements: [], demoSimulations: [] }),
             ]);
             setSummary(sumRes);
             setActivity(actRes.items ?? []);
             setChannels(chRes.channels ?? []);
             setLowStock(invRes.lowStock ?? []);
             setOutOfStock(invRes.outOfStock ?? []);
+            setMultiStore(msRes);
             setLastRefresh(new Date());
         } catch (e) {
             console.error('Dashboard fetch error', e);
@@ -288,6 +301,110 @@ export default function Dashboard() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Multi-Store & AI Metrics */}
+            {multiStore && (multiStore.stores.length > 0 || multiStore.aiEnhancements.length > 0 || multiStore.demoSimulations.length > 0) && (
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-3">
+                    {/* Store Overview */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Store className="h-4 w-4 text-blue-500" />
+                                Multi-Store Overview
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {multiStore.stores.length === 0 ? (
+                                <p className="text-sm text-slate-500 py-2">No stores configured</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {multiStore.stores.map((s) => (
+                                        <div key={`${s.channel}-${s.status}`} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-medium text-slate-200 capitalize">{s.channel}</span>
+                                                <Badge variant={s.status === 'active' ? 'success' : 'secondary'}>{s.status}</Badge>
+                                            </div>
+                                            <span className="text-sm text-slate-400 font-mono">{s.count}</span>
+                                        </div>
+                                    ))}
+                                    {multiStore.instances.length > 0 && (
+                                        <div className="pt-2 border-t border-slate-800 mt-2">
+                                            <p className="text-xs text-slate-500 mb-1">Channel Instances</p>
+                                            {multiStore.instances.map((inst) => (
+                                                <div key={`${inst.channel}-${inst.syncStatus}`} className="flex items-center justify-between text-xs">
+                                                    <span className="text-slate-400 capitalize">{inst.channel} · {inst.syncStatus}</span>
+                                                    <span className="text-slate-300 font-mono">{inst.count}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* AI Enhancements */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-purple-500" />
+                                AI Enhancements
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {multiStore.aiEnhancements.length === 0 ? (
+                                <p className="text-sm text-slate-500 py-2">No enhancements yet</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {multiStore.aiEnhancements.map((ai) => (
+                                        <div key={`${ai.enhancementType}-${ai.status}`} className="flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-slate-300 capitalize">{ai.enhancementType.replace(/_/g, ' ')}</span>
+                                                <Badge variant={
+                                                    ai.status === 'approved' ? 'success' :
+                                                    ai.status === 'rejected' ? 'destructive' :
+                                                    ai.status === 'generated' ? 'warning' : 'secondary'
+                                                }>{ai.status}</Badge>
+                                            </div>
+                                            <span className="text-slate-400 font-mono">{ai.count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Demo Simulations */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Radio className="h-4 w-4 text-amber-500" />
+                                Demo Mode Activity
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {multiStore.demoSimulations.length === 0 ? (
+                                <p className="text-sm text-slate-500 py-2">No simulations logged</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {multiStore.demoSimulations.map((d) => (
+                                        <div key={`${d.operationType}-${d.channel}`} className="flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-slate-300 capitalize">{d.channel}</span>
+                                                <span className="text-slate-500">{d.operationType.replace(/_/g, ' ')}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-slate-400 font-mono">{d.count}</span>
+                                                <span className="text-emerald-500 text-[10px]">({d.successCount} ok)</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* Inventory Alerts Row */}
             {(lowStock.length > 0 || outOfStock.length > 0) && (
