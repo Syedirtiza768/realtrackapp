@@ -300,6 +300,16 @@ export class ListingRecord {
   @Column({ type: 'varchar', length: 64, nullable: true })
   shopifyProductId: string | null;
 
+  /* ── Extracted vehicle make/model (from title) ──────────── */
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Index('idx_listing_extracted_make')
+  extractedMake: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Index('idx_listing_extracted_model')
+  extractedModel: string | null;
+
   /* ── Full-text search vector (managed by DB trigger) ──── */
   @Column({
     type: 'tsvector',

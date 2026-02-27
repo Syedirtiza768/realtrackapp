@@ -52,12 +52,12 @@ export class SearchQueryDto {
   @IsOptional() @IsString()
   mpns?: string;           // manufacturer part numbers
 
-  /* ── Vehicle fitment filters (comma-separated IDs) ──── */
+  /* ── Vehicle make/model filters (comma-separated names) ── */
   @IsOptional() @IsString()
-  makes?: string;          // fitment make IDs: "1,2,3"
+  makes?: string;          // make names: "Audi,BMW,Mercedes-Benz"
 
   @IsOptional() @IsString()
-  models?: string;         // fitment model IDs: "10,20,30"
+  models?: string;         // model names: "A4,Q7,X6"
 
   /* ── Range filters ────────────────────────────────────── */
   @IsOptional() @Type(() => Number) @Min(0)

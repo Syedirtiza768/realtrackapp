@@ -188,10 +188,10 @@ export interface ActiveFilters {
   formats: string[];
   locations: string[];
   mpns: string[];
-  makes: string[];            // fitment make IDs
-  makeNames: string[];        // for display
-  models: string[];           // fitment model IDs
-  modelNames: string[];       // for display
+  makes: string[];            // vehicle make names (extracted from title)
+  makeNames: string[];        // same as makes (kept for compat)
+  models: string[];           // vehicle model names (extracted from title)
+  modelNames: string[];       // same as models (kept for compat)
   minPrice: number | null;
   maxPrice: number | null;
   hasImage: boolean;

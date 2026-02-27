@@ -158,37 +158,29 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         onChange={(min, max) => onChange({ ...filters, minPrice: min, maxPrice: max })}
       />
 
-      {/* ── 3. Make (vehicle make from fitment) ───────────── */}
+      {/* ── 3. Make (vehicle make extracted from title) ────── */}
       <MultiSelectFacet
         title="Make"
         buckets={facets?.makes ?? []}
         selected={filters.makes}
         onChange={(vals) => {
-          const names = vals.map((id) => {
-            const m = facets?.makes.find((b) => b.value === id);
-            return m?.label ?? id;
-          });
           // When makes change, reset models to avoid stale selections
-          onChange({ ...filters, makes: vals, makeNames: names, models: [], modelNames: [] });
+          onChange({ ...filters, makes: vals, makeNames: vals, models: [], modelNames: [] });
         }}
-        getLabel={(b) => b.label ?? b.value}
+        getLabel={(b) => b.value}
         loading={loading}
         defaultExpanded
       />
 
-      {/* ── 4. Model (vehicle model from fitment) ─────────── */}
+      {/* ── 4. Model (vehicle model extracted from title) ──── */}
       <MultiSelectFacet
         title="Model"
         buckets={facets?.models ?? []}
         selected={filters.models}
         onChange={(vals) => {
-          const names = vals.map((id) => {
-            const m = facets?.models.find((b) => b.value === id);
-            return m?.label ?? id;
-          });
-          onChange({ ...filters, models: vals, modelNames: names });
+          onChange({ ...filters, models: vals, modelNames: vals });
         }}
-        getLabel={(b) => b.label ?? b.value}
+        getLabel={(b) => b.value}
         loading={loading}
         defaultExpanded={filters.makes.length > 0}
       />

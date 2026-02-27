@@ -591,30 +591,14 @@ export class SearchService {
       if (excludeDimension !== 'mpn' && mpnArr.length) {
         fb.andWhere(`r."cManufacturerPartNumber" IN (:...facetMpns)`, { facetMpns: mpnArr });
       }
-      // Fitment-based cross-filters
+      // Make/Model cross-filters (direct columns on listing_records)
       const makeArr = splitFilter(dto.makes);
       const modelArr = splitFilter(dto.models);
-      if (excludeDimension !== 'make' && excludeDimension !== 'model') {
-        if (makeArr.length || modelArr.length) {
-          const mkCond = makeArr.length ? `pf.make_id IN (${makeArr.map((_, i) => `:fmk${i}`).join(',')})` : '';
-          const mdCond = modelArr.length ? `pf.model_id IN (${modelArr.map((_, i) => `:fmd${i}`).join(',')})` : '';
-          const where = [mkCond, mdCond].filter(Boolean).join(' AND ');
-          fb.andWhere(`r.id IN (SELECT pf.listing_id FROM part_fitments pf WHERE ${where})`);
-          const params: Record<string, string> = {};
-          makeArr.forEach((v, i) => { params[`fmk${i}`] = v; });
-          modelArr.forEach((v, i) => { params[`fmd${i}`] = v; });
-          fb.setParameters(params);
-        }
-      } else if (excludeDimension === 'make' && modelArr.length) {
-        fb.andWhere(`r.id IN (SELECT pf.listing_id FROM part_fitments pf WHERE pf.model_id IN (${modelArr.map((_, i) => `:fmd${i}`).join(',')}))`);
-        const params: Record<string, string> = {};
-        modelArr.forEach((v, i) => { params[`fmd${i}`] = v; });
-        fb.setParameters(params);
-      } else if (excludeDimension === 'model' && makeArr.length) {
-        fb.andWhere(`r.id IN (SELECT pf.listing_id FROM part_fitments pf WHERE pf.make_id IN (${makeArr.map((_, i) => `:fmk${i}`).join(',')}))`);
-        const params: Record<string, string> = {};
-        makeArr.forEach((v, i) => { params[`fmk${i}`] = v; });
-        fb.setParameters(params);
+      if (excludeDimension !== 'make' && makeArr.length) {
+        fb.andWhere(`r."extractedMake" IN (:...facetMakes)`, { facetMakes: makeArr });
+      }
+      if (excludeDimension !== 'model' && modelArr.length) {
+        fb.andWhere(`r."extractedModel" IN (:...facetModels)`, { facetModels: modelArr });
       }
       return fb;
     };
@@ -704,39 +688,25 @@ export class SearchService {
           .limit(50)
           .getRawMany<{ value: string; count: string }>(),
 
-        // Makes facet (all vehicle makes that have fitment entries)
-        this.repo.manager.query(`
-          SELECT fm.id::text AS id, fm.name AS value, COUNT(DISTINCT pf.listing_id)::int AS count
-          FROM part_fitments pf
-          JOIN fitment_makes fm ON fm.id = pf.make_id
-          GROUP BY fm.id, fm.name
-          ORDER BY count DESC
-          LIMIT 100
-        `),
+        // Makes facet (extracted directly from listing titles)
+        buildFacetQb('make')
+          .select('r."extractedMake"', 'value')
+          .addSelect('COUNT(*)', 'count')
+          .andWhere(`r."extractedMake" IS NOT NULL AND r."extractedMake" != ''`)
+          .groupBy('r."extractedMake"')
+          .orderBy('count', 'DESC')
+          .limit(100)
+          .getRawMany<{ value: string; count: string }>(),
 
-        // Models facet (vehicle models, filtered by selected makes if any)
-        (() => {
-          const makeArr = splitFilter(dto.makes);
-          if (makeArr.length) {
-            return this.repo.manager.query(`
-              SELECT fmd.id::text AS id, fmd.name AS value, COUNT(DISTINCT pf.listing_id)::int AS count
-              FROM part_fitments pf
-              JOIN fitment_models fmd ON fmd.id = pf.model_id
-              WHERE pf.make_id = ANY($1::int[])
-              GROUP BY fmd.id, fmd.name
-              ORDER BY count DESC
-              LIMIT 100
-            `, [`{${makeArr.join(',')}}`]);
-          }
-          return this.repo.manager.query(`
-            SELECT fmd.id::text AS id, fmd.name AS value, COUNT(DISTINCT pf.listing_id)::int AS count
-            FROM part_fitments pf
-            JOIN fitment_models fmd ON fmd.id = pf.model_id
-            GROUP BY fmd.id, fmd.name
-            ORDER BY count DESC
-            LIMIT 100
-          `);
-        })(),
+        // Models facet (extracted from titles, filtered by selected makes)
+        buildFacetQb('model')
+          .select('r."extractedModel"', 'value')
+          .addSelect('COUNT(*)', 'count')
+          .andWhere(`r."extractedModel" IS NOT NULL AND r."extractedModel" != ''`)
+          .groupBy('r."extractedModel"')
+          .orderBy('count', 'DESC')
+          .limit(100)
+          .getRawMany<{ value: string; count: string }>(),
 
         // Price range (within filtered set)
         (() => {
@@ -765,8 +735,8 @@ export class SearchService {
       formats: formatsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       locations: locationsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       mpns: mpnsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      makes: (makesRaw as Array<{ id: string; value: string; count: number }>).map((r) => ({ value: r.id, count: r.count, label: r.value })),
-      models: (modelsRaw as Array<{ id: string; value: string; count: number }>).map((r) => ({ value: r.id, count: r.count, label: r.value })),
+      makes: makesRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      models: modelsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       priceRange: {
         min: priceRaw?.min != null ? parseFloat(priceRaw.min) : null,
         max: priceRaw?.max != null ? parseFloat(priceRaw.max) : null,
@@ -823,22 +793,14 @@ export class SearchService {
       qb.andWhere(`r."cManufacturerPartNumber" IN (:...mpns)`, { mpns: mpnArr });
     }
 
-    // Fitment-based filters (require JOIN through part_fitments)
+    // Make/Model filters (direct columns on listing_records)
     const makeArr = splitFilter(dto.makes);
     const modelArr = splitFilter(dto.models);
-    if (makeArr.length || modelArr.length) {
-      qb.andWhere(
-        `r.id IN (
-          SELECT pf.listing_id FROM part_fitments pf
-          WHERE 1=1
-          ${makeArr.length ? 'AND pf.make_id IN (' + makeArr.map((_, i) => `:mk${i}`).join(',') + ')' : ''}
-          ${modelArr.length ? 'AND pf.model_id IN (' + modelArr.map((_, i) => `:md${i}`).join(',') + ')' : ''}
-        )`,
-      );
-      const params: Record<string, string> = {};
-      makeArr.forEach((v, i) => { params[`mk${i}`] = v; });
-      modelArr.forEach((v, i) => { params[`md${i}`] = v; });
-      qb.setParameters(params);
+    if (makeArr.length) {
+      qb.andWhere(`r."extractedMake" IN (:...makes)`, { makes: makeArr });
+    }
+    if (modelArr.length) {
+      qb.andWhere(`r."extractedModel" IN (:...models)`, { models: modelArr });
     }
   }
 }
