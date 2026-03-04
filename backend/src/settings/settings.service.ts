@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantSetting } from './entities/tenant-setting.entity.js';
 import { ShippingProfile } from './entities/shipping-profile.entity.js';
 import { PricingRule } from './entities/pricing-rule.entity.js';
@@ -25,6 +26,7 @@ export class SettingsService {
     private readonly shippingRepo: Repository<ShippingProfile>,
     @InjectRepository(PricingRule)
     private readonly pricingRepo: Repository<PricingRule>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /* ═══ Tenant Settings ═══ */
@@ -131,14 +133,26 @@ export class SettingsService {
       priority: dto.priority ?? 0,
       active: dto.active ?? true,
     });
-    return this.pricingRepo.save(rule);
+    const saved = await this.pricingRepo.save(rule);
+    this.eventEmitter.emit('pricing_rule.changed', {
+      ruleId: saved.id,
+      ruleType: saved.ruleType,
+      channel: saved.channel,
+    });
+    return saved;
   }
 
   async updatePricingRule(id: string, dto: UpdatePricingRuleDto): Promise<PricingRule> {
     const rule = await this.pricingRepo.findOne({ where: { id } });
     if (!rule) throw new NotFoundException('Pricing rule not found');
     Object.assign(rule, dto);
-    return this.pricingRepo.save(rule);
+    const saved = await this.pricingRepo.save(rule);
+    this.eventEmitter.emit('pricing_rule.changed', {
+      ruleId: saved.id,
+      ruleType: saved.ruleType,
+      channel: saved.channel,
+    });
+    return saved;
   }
 
   async deletePricingRule(id: string): Promise<void> {

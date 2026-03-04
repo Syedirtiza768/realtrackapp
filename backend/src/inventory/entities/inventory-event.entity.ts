@@ -42,6 +42,9 @@ export class InventoryEvent {
   @Column({ name: 'quantity_after', type: 'integer' })
   quantityAfter!: number;
 
+  @Column({ name: 'store_id', type: 'uuid', nullable: true })
+  storeId!: string | null;
+
   @Column({ name: 'source_channel', type: 'varchar', length: 30, nullable: true })
   sourceChannel!: string | null;
 

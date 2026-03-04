@@ -79,6 +79,7 @@ export class CreatePricingRuleDto {
   ruleType: 'markup' | 'markdown' | 'round' | 'min_margin' | 'competitive';
 
   @IsOptional() @IsString() channel?: string;
+  @IsOptional() @IsString() storeId?: string;
   @IsOptional() @IsString() categoryId?: string;
   @IsOptional() @IsString() brand?: string;
 
@@ -94,6 +95,7 @@ export class UpdatePricingRuleDto {
   @IsOptional() @IsEnum(['markup', 'markdown', 'round', 'min_margin', 'competitive'])
   ruleType?: 'markup' | 'markdown' | 'round' | 'min_margin' | 'competitive';
   @IsOptional() @IsString() channel?: string;
+  @IsOptional() @IsString() storeId?: string;
   @IsOptional() @IsString() categoryId?: string;
   @IsOptional() @IsString() brand?: string;
   @IsOptional() @IsObject() parameters?: Record<string, unknown>;

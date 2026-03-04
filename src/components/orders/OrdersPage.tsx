@@ -30,6 +30,7 @@ interface OrderSummary {
     currency: string;
     trackingNumber: string | null;
     trackingCarrier: string | null;
+    storeId: string | null;
     orderedAt: string;
     createdAt: string;
 }
@@ -65,6 +66,7 @@ interface OrderDetail extends OrderSummary {
     shippedAt: string | null;
     deliveredAt: string | null;
     cancelledAt: string | null;
+    store?: { id: string; storeName: string; channel: string } | null;
     items: OrderItem[];
 }
 
@@ -115,6 +117,7 @@ export default function OrdersPage() {
     // Filters
     const [statusFilter, setStatusFilter] = useState<string>('');
     const [channelFilter, setChannelFilter] = useState<string>('');
+    const [storeFilter, setStoreFilter] = useState<string>('');
     const [searchQ, setSearchQ] = useState('');
     const [page, setPage] = useState(0);
     const limit = 20;
@@ -125,6 +128,7 @@ export default function OrdersPage() {
             const params = new URLSearchParams();
             if (statusFilter) params.set('status', statusFilter);
             if (channelFilter) params.set('channel', channelFilter);
+            if (storeFilter) params.set('storeId', storeFilter);
             params.set('limit', String(limit));
             params.set('offset', String(page * limit));
 
@@ -140,7 +144,7 @@ export default function OrdersPage() {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, channelFilter, page]);
+    }, [statusFilter, channelFilter, storeFilter, page]);
 
     useEffect(() => { void fetchOrders(); }, [fetchOrders]);
 
@@ -248,6 +252,13 @@ export default function OrdersPage() {
                     <option value="shopify">Shopify</option>
                     <option value="manual">Manual</option>
                 </select>
+                <input
+                    type="text"
+                    placeholder="Filter by Store ID..."
+                    value={storeFilter}
+                    onChange={e => { setStoreFilter(e.target.value); setPage(0); }}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-600"
+                />
             </div>
 
             {/* ─── Orders Table ─── */}

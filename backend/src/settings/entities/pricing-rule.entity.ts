@@ -19,6 +19,9 @@ export class PricingRule {
   @Column({ type: 'varchar', length: 30, nullable: true })
   channel: string | null;
 
+  @Column({ name: 'store_id', type: 'uuid', nullable: true })
+  storeId: string | null;
+
   @Column({ type: 'varchar', length: 20, nullable: true })
   categoryId: string | null;
 

@@ -43,6 +43,10 @@ export class SalesQueryDto {
 
   @IsOptional()
   @IsString()
+  storeId?: string;
+
+  @IsOptional()
+  @IsString()
   since?: string;
 
   @IsOptional()

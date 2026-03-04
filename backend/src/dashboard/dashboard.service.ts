@@ -45,29 +45,34 @@ export class DashboardService {
 
   /* ─── Dashboard Summary ─── */
 
-  async getSummary() {
-    const cached = await this.getCache<Record<string, unknown>>('dashboard:summary');
+  async getSummary(storeId?: string) {
+    const cacheKey = storeId ? `dashboard:summary:${storeId}` : 'dashboard:summary';
+    const cached = await this.getCache<Record<string, unknown>>(cacheKey);
     if (cached) return cached;
 
-    const [totalListings, activeListings, salesData, channelData] = await Promise.all([
-      this.listingRepo.count({ where: { deletedAt: IsNull() } }),
-      this.listingRepo.count({ where: { status: 'published', deletedAt: IsNull() } }),
-      this.salesRepo
+    const salesQb = this.salesRepo
         .createQueryBuilder('s')
         .select('COUNT(*)', 'count')
         .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
         .addSelect('COALESCE(AVG(s.salePrice), 0)', 'avgPrice')
         .where('s.soldAt >= :since', {
           since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-        })
-        .getRawOne(),
-      this.salesRepo
+        });
+    if (storeId) salesQb.andWhere('s.store_id = :storeId', { storeId });
+
+    const channelQb = this.salesRepo
         .createQueryBuilder('s')
         .select('s.channel', 'channel')
         .addSelect('COUNT(*)', 'count')
         .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
-        .groupBy('s.channel')
-        .getRawMany(),
+        .groupBy('s.channel');
+    if (storeId) channelQb.andWhere('s.store_id = :storeId', { storeId });
+
+    const [totalListings, activeListings, salesData, channelData] = await Promise.all([
+      this.listingRepo.count({ where: { deletedAt: IsNull() } }),
+      this.listingRepo.count({ where: { status: 'published', deletedAt: IsNull() } }),
+      salesQb.getRawOne(),
+      channelQb.getRawMany(),
     ]);
 
     const result = {
@@ -80,7 +85,7 @@ export class DashboardService {
       computedAt: new Date().toISOString(),
     };
 
-    await this.setCache('dashboard:summary', result);
+    await this.setCache(cacheKey, result);
     return result;
   }
 
@@ -91,28 +96,28 @@ export class DashboardService {
       ? new Date(dto.since)
       : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const until = dto.until ? new Date(dto.until) : new Date();
+    const storeId = dto.storeId;
 
-    const [salesByDay, salesByChannel, topItems] = await Promise.all([
-      this.salesRepo
+    const dayQb = this.salesRepo
         .createQueryBuilder('s')
         .select("DATE_TRUNC('day', s.soldAt)", 'day')
         .addSelect('COUNT(*)', 'count')
         .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
         .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
         .groupBy("DATE_TRUNC('day', s.soldAt)")
-        .orderBy("DATE_TRUNC('day', s.soldAt)", 'ASC')
-        .getRawMany(),
+        .orderBy("DATE_TRUNC('day', s.soldAt)", 'ASC');
+    if (storeId) dayQb.andWhere('s.store_id = :storeId', { storeId });
 
-      this.salesRepo
+    const channelQb = this.salesRepo
         .createQueryBuilder('s')
         .select('s.channel', 'channel')
         .addSelect('COUNT(*)', 'count')
         .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
         .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
-        .groupBy('s.channel')
-        .getRawMany(),
+        .groupBy('s.channel');
+    if (storeId) channelQb.andWhere('s.store_id = :storeId', { storeId });
 
-      this.salesRepo
+    const topQb = this.salesRepo
         .createQueryBuilder('s')
         .select('s.listingId', 'listingId')
         .addSelect('COUNT(*)', 'salesCount')
@@ -120,8 +125,13 @@ export class DashboardService {
         .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
         .groupBy('s.listingId')
         .orderBy('COALESCE(SUM(s.salePrice), 0)', 'DESC')
-        .limit(dto.topN ?? 10)
-        .getRawMany(),
+        .limit(dto.topN ?? 10);
+    if (storeId) topQb.andWhere('s.store_id = :storeId', { storeId });
+
+    const [salesByDay, salesByChannel, topItems] = await Promise.all([
+      dayQb.getRawMany(),
+      channelQb.getRawMany(),
+      topQb.getRawMany(),
     ]);
 
     return { salesByDay, salesByChannel, topItems };
@@ -153,28 +163,72 @@ export class DashboardService {
   /* ─── Channel Health ─── */
 
   async getChannelHealth() {
-    // Aggregate from channel_connections and channel_listings
-    const rows = await this.listingRepo.manager.query(`
-      SELECT
-        cc.channel,
-        cc.status,
-        cc.last_sync_at AS "lastSync",
-        cc.last_error AS "lastError",
-        COALESCE(cl.cnt, 0) AS "listingCount",
-        COALESCE(cl.err_cnt, 0) AS "errorCount"
-      FROM channel_connections cc
-      LEFT JOIN LATERAL (
-        SELECT
-          COUNT(*) AS cnt,
-          COUNT(*) FILTER (WHERE cl2.sync_status = 'error') AS err_cnt
-        FROM channel_listings cl2
-        WHERE cl2.connection_id = cc.id
-      ) cl ON true
-      WHERE cc.status != 'revoked'
-      ORDER BY cc.channel
-    `);
+    try {
+      const [hasConnections, hasChannelListings] = await Promise.all([
+        this.tableExists('channel_connections'),
+        this.tableExists('channel_listings'),
+      ]);
 
-    return { channels: rows };
+      if (!hasConnections) {
+        this.logger.warn(
+          'channel_connections table not found; returning empty channel health payload',
+        );
+        return { channels: [] };
+      }
+
+      if (hasChannelListings) {
+        const rows = await this.listingRepo.manager.query(`
+          SELECT
+            cc.channel,
+            cc.status,
+            cc.last_sync_at AS "lastSync",
+            cc.last_error AS "lastError",
+            COALESCE(cl.cnt, 0) AS "listingCount",
+            COALESCE(cl.err_cnt, 0) AS "errorCount"
+          FROM channel_connections cc
+          LEFT JOIN LATERAL (
+            SELECT
+              COUNT(*) AS cnt,
+              COUNT(*) FILTER (WHERE cl2.sync_status = 'error') AS err_cnt
+            FROM channel_listings cl2
+            WHERE cl2.connection_id = cc.id
+          ) cl ON true
+          WHERE cc.status != 'revoked'
+          ORDER BY cc.channel
+        `);
+
+        return { channels: rows };
+      }
+
+      // Fallback for deployments that no longer have channel_listings
+      const rows = await this.listingRepo.manager.query(`
+        SELECT
+          cc.channel,
+          cc.status,
+          cc.last_sync_at AS "lastSync",
+          cc.last_error AS "lastError",
+          0::bigint AS "listingCount",
+          0::bigint AS "errorCount"
+        FROM channel_connections cc
+        WHERE cc.status != 'revoked'
+        ORDER BY cc.channel
+      `);
+
+      return { channels: rows };
+    } catch (error) {
+      this.logger.error(
+        `Failed to compute channel health: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { channels: [] };
+    }
+  }
+
+  private async tableExists(tableName: string): Promise<boolean> {
+    const result = await this.listingRepo.manager.query(
+      `SELECT to_regclass($1) AS exists`,
+      [tableName],
+    );
+    return Boolean(result?.[0]?.exists);
   }
 
   /* ─── KPIs ─── */

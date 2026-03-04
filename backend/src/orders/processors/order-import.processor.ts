@@ -3,13 +3,16 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrdersService } from '../orders.service.js';
 import { Order } from '../entities/order.entity.js';
 import { ChannelConnection } from '../../channels/entities/channel-connection.entity.js';
 import { EbayAdapter } from '../../channels/adapters/ebay/ebay.adapter.js';
 import { ShopifyAdapter } from '../../channels/adapters/shopify/shopify.adapter.js';
+import { AmazonAdapter } from '../../channels/adapters/amazon/amazon.adapter.js';
+import { WalmartAdapter } from '../../channels/adapters/walmart/walmart.adapter.js';
 import { TokenEncryptionService } from '../../channels/token-encryption.service.js';
-import type { TokenSet, ChannelOrder } from '../../channels/channel-adapter.interface.js';
+import type { TokenSet, ChannelOrder, ChannelAdapter } from '../../channels/channel-adapter.interface.js';
 
 @Processor('orders', { concurrency: 1 })
 export class OrderImportProcessor extends WorkerHost {
@@ -21,7 +24,10 @@ export class OrderImportProcessor extends WorkerHost {
     private readonly connRepo: Repository<ChannelConnection>,
     private readonly ebayAdapter: EbayAdapter,
     private readonly shopifyAdapter: ShopifyAdapter,
+    private readonly amazonAdapter: AmazonAdapter,
+    private readonly walmartAdapter: WalmartAdapter,
     private readonly encryption: TokenEncryptionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     super();
   }
@@ -53,15 +59,24 @@ export class OrderImportProcessor extends WorkerHost {
         const tokens: TokenSet = JSON.parse(this.encryption.decrypt(conn.encryptedTokens));
         let channelOrders: ChannelOrder[] = [];
 
-        if (conn.channel === 'ebay') {
-          channelOrders = await this.ebayAdapter.getRecentOrders(tokens, since);
-        } else if (conn.channel === 'shopify') {
-          channelOrders = await this.shopifyAdapter.getRecentOrders(tokens, since);
+        const adapterMap: Record<string, ChannelAdapter> = {
+          ebay: this.ebayAdapter,
+          shopify: this.shopifyAdapter,
+          amazon: this.amazonAdapter,
+          walmart: this.walmartAdapter,
+        };
+
+        const adapter = adapterMap[conn.channel];
+        if (adapter) {
+          channelOrders = await adapter.getRecentOrders(tokens, since);
+        } else {
+          this.logger.warn(`No adapter for channel: ${conn.channel}`);
+          continue;
         }
 
         for (const co of channelOrders) {
           try {
-            await this.ordersService.importOrder({
+            const imported = await this.ordersService.importOrder({
               channel: conn.channel,
               connectionId: conn.id,
               externalOrderId: co.externalOrderId,
@@ -78,6 +93,13 @@ export class OrderImportProcessor extends WorkerHost {
                 unitPrice: String(co.totalPrice / co.quantity),
               }],
               orderedAt: co.orderedAt,
+            });
+
+            // Emit new order event for notifications
+            this.eventEmitter.emit('order.new', {
+              orderId: imported.id,
+              channel: conn.channel,
+              total: String(co.totalPrice),
             });
           } catch (error: any) {
             this.logger.warn(

@@ -34,6 +34,9 @@ export class OrdersService {
     if (dto.channel) {
       qb.andWhere('o.channel = :channel', { channel: dto.channel });
     }
+    if (dto.storeId) {
+      qb.andWhere('o.store_id = :storeId', { storeId: dto.storeId });
+    }
     if (dto.since) {
       qb.andWhere('o.ordered_at >= :since', { since: new Date(dto.since) });
     }
@@ -174,6 +177,7 @@ export class OrdersService {
   async importOrder(data: {
     channel: string;
     connectionId?: string;
+    storeId?: string;
     externalOrderId: string;
     externalUrl?: string;
     buyer?: { username?: string; email?: string; name?: string };
@@ -191,6 +195,7 @@ export class OrdersService {
     const order = this.orderRepo.create({
       channel: data.channel,
       connectionId: data.connectionId ?? null,
+      storeId: data.storeId ?? null,
       externalOrderId: data.externalOrderId,
       externalUrl: data.externalUrl ?? null,
       status: 'pending',

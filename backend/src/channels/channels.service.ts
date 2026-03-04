@@ -9,11 +9,13 @@ import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ChannelConnection } from './entities/channel-connection.entity.js';
-import { ChannelListing } from './entities/channel-listing.entity.js';
+import { ListingChannelInstance } from './entities/listing-channel-instance.entity.js';
 import { ChannelWebhookLog } from './entities/channel-webhook-log.entity.js';
 import { TokenEncryptionService } from './token-encryption.service.js';
 import { EbayAdapter } from './adapters/ebay/ebay.adapter.js';
 import { ShopifyAdapter } from './adapters/shopify/shopify.adapter.js';
+import { AmazonAdapter } from './adapters/amazon/amazon.adapter.js';
+import { WalmartAdapter } from './adapters/walmart/walmart.adapter.js';
 import type { ChannelAdapter, TokenSet } from './channel-adapter.interface.js';
 
 @Injectable()
@@ -24,8 +26,8 @@ export class ChannelsService {
   constructor(
     @InjectRepository(ChannelConnection)
     private readonly connectionRepo: Repository<ChannelConnection>,
-    @InjectRepository(ChannelListing)
-    private readonly listingRepo: Repository<ChannelListing>,
+    @InjectRepository(ListingChannelInstance)
+    private readonly instanceRepo: Repository<ListingChannelInstance>,
     @InjectRepository(ChannelWebhookLog)
     private readonly webhookLogRepo: Repository<ChannelWebhookLog>,
     @InjectQueue('channels')
@@ -33,10 +35,14 @@ export class ChannelsService {
     private readonly encryption: TokenEncryptionService,
     private readonly ebayAdapter: EbayAdapter,
     private readonly shopifyAdapter: ShopifyAdapter,
+    private readonly amazonAdapter: AmazonAdapter,
+    private readonly walmartAdapter: WalmartAdapter,
   ) {
     this.adapters = new Map<string, ChannelAdapter>([
       ['ebay', this.ebayAdapter],
       ['shopify', this.shopifyAdapter],
+      ['amazon', this.amazonAdapter],
+      ['walmart', this.walmartAdapter],
     ]);
   }
 
@@ -50,9 +56,13 @@ export class ChannelsService {
 
   // ─── Connection management ───
 
-  async getConnections(userId: string): Promise<ChannelConnection[]> {
+  async getConnections(userId?: string): Promise<ChannelConnection[]> {
+    // UUID validation — if userId is missing or not a valid UUID,
+    // return all connections (single-tenant / pre-auth mode)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const where = userId && uuidRegex.test(userId) ? { userId } : {};
     return this.connectionRepo.find({
-      where: { userId },
+      where,
       order: { createdAt: 'DESC' },
     });
   }
@@ -133,7 +143,7 @@ export class ChannelsService {
     connectionId: string,
     listingId: string,
     listingData: Record<string, unknown>,
-  ): Promise<ChannelListing> {
+  ): Promise<ListingChannelInstance> {
     const conn = await this.connectionRepo.findOneBy({ id: connectionId });
     if (!conn) throw new NotFoundException('Connection not found');
 
@@ -145,16 +155,32 @@ export class ChannelsService {
       throw new BadRequestException(result.error ?? 'Publish failed');
     }
 
-    const channelListing = this.listingRepo.create({
+    // Upsert into listing_channel_instances
+    const existing = await this.instanceRepo.findOne({
+      where: { connectionId, listingId },
+    });
+
+    if (existing) {
+      existing.externalId = result.externalId;
+      existing.externalUrl = result.externalUrl ?? null;
+      existing.syncStatus = 'synced';
+      existing.lastSyncedAt = new Date();
+      existing.lastError = null;
+      return this.instanceRepo.save(existing);
+    }
+
+    const instance = this.instanceRepo.create({
       connectionId,
       listingId,
+      storeId: listingData['storeId'] as string ?? connectionId,
+      channel: conn.channel,
       externalId: result.externalId,
       externalUrl: result.externalUrl ?? null,
       syncStatus: 'synced',
       lastSyncedAt: new Date(),
     });
 
-    return this.listingRepo.save(channelListing);
+    return this.instanceRepo.save(instance);
   }
 
   async enqueueSync(connectionId: string): Promise<{ jobId: string }> {
@@ -170,8 +196,8 @@ export class ChannelsService {
     return { jobId: job.id! };
   }
 
-  async getChannelListings(connectionId: string): Promise<ChannelListing[]> {
-    return this.listingRepo.find({
+  async getChannelListings(connectionId: string): Promise<ListingChannelInstance[]> {
+    return this.instanceRepo.find({
       where: { connectionId },
       order: { createdAt: 'DESC' },
     });
@@ -190,30 +216,20 @@ export class ChannelsService {
       lastError: string | null;
     }>
   > {
-    const listings = await this.listingRepo.find({
+    const instances = await this.instanceRepo.find({
       where: { listingId },
       order: { createdAt: 'DESC' },
     });
 
-    if (listings.length === 0) return [];
-
-    // Resolve the channel name via the connection
-    const connectionIds = [...new Set(listings.map((l) => l.connectionId))];
-    const connections = await this.connectionRepo.findByIds(connectionIds);
-    const connMap = new Map(connections.map((c) => [c.id, c]));
-
-    return listings.map((l) => {
-      const conn = connMap.get(l.connectionId);
-      return {
-        channel: conn?.channel ?? 'unknown',
-        connectionId: l.connectionId,
-        status: l.syncStatus,
-        externalId: l.externalId,
-        externalUrl: l.externalUrl,
-        lastSyncedAt: l.lastSyncedAt,
-        lastError: l.lastError,
-      };
-    });
+    return instances.map((inst) => ({
+      channel: inst.channel,
+      connectionId: inst.connectionId,
+      status: inst.syncStatus,
+      externalId: inst.externalId,
+      externalUrl: inst.externalUrl,
+      lastSyncedAt: inst.lastSyncedAt,
+      lastError: inst.lastError,
+    }));
   }
 
   // ─── Multi-channel publish ───
@@ -249,22 +265,24 @@ export class ChannelsService {
           },
         );
 
-        // Create a pending channel_listing record
-        const existing = await this.listingRepo.findOne({
+        // Create a pending instance record
+        const existing = await this.instanceRepo.findOne({
           where: { connectionId: connection.id, listingId },
         });
         if (!existing) {
-          await this.listingRepo.save(
-            this.listingRepo.create({
+          await this.instanceRepo.save(
+            this.instanceRepo.create({
               connectionId: connection.id,
               listingId,
+              storeId: connection.id, // resolved during actual publish
+              channel,
               syncStatus: 'pending',
             }),
           );
         } else {
           existing.syncStatus = 'pending';
           existing.lastError = null;
-          await this.listingRepo.save(existing);
+          await this.instanceRepo.save(existing);
         }
 
         results.push({ channel, jobId: job.id! });
@@ -282,14 +300,11 @@ export class ChannelsService {
     listingId: string,
     channel: string,
   ): Promise<{ jobId: string }> {
-    const listing = await this.listingRepo
-      .createQueryBuilder('cl')
-      .innerJoin(ChannelConnection, 'cc', 'cc.id = cl."connectionId"')
-      .where('cl."listingId" = :listingId', { listingId })
-      .andWhere('cc.channel = :channel', { channel })
-      .getOne();
+    const instance = await this.instanceRepo.findOne({
+      where: { listingId, channel },
+    });
 
-    if (!listing) {
+    if (!instance) {
       throw new NotFoundException(
         `No channel listing found for listing ${listingId} on ${channel}`,
       );
@@ -297,7 +312,7 @@ export class ChannelsService {
 
     const job = await this.channelsQueue.add(
       'update',
-      { connectionId: listing.connectionId, listingId, channelListingId: listing.id },
+      { connectionId: instance.connectionId, listingId, channelListingId: instance.id },
       {
         attempts: 3,
         backoff: { type: 'exponential', delay: 10_000 },
@@ -306,8 +321,8 @@ export class ChannelsService {
       },
     );
 
-    listing.syncStatus = 'pending';
-    await this.listingRepo.save(listing);
+    instance.syncStatus = 'pending';
+    await this.instanceRepo.save(instance);
     return { jobId: job.id! };
   }
 
@@ -317,21 +332,18 @@ export class ChannelsService {
     listingId: string,
     channel: string,
   ): Promise<{ success: boolean }> {
-    const listing = await this.listingRepo
-      .createQueryBuilder('cl')
-      .innerJoin(ChannelConnection, 'cc', 'cc.id = cl."connectionId"')
-      .where('cl."listingId" = :listingId', { listingId })
-      .andWhere('cc.channel = :channel', { channel })
-      .getOne();
+    const instance = await this.instanceRepo.findOne({
+      where: { listingId, channel },
+    });
 
-    if (!listing) {
+    if (!instance) {
       throw new NotFoundException(
         `No channel listing found for listing ${listingId} on ${channel}`,
       );
     }
 
-    listing.syncStatus = 'ended';
-    await this.listingRepo.save(listing);
+    instance.syncStatus = 'ended';
+    await this.instanceRepo.save(instance);
     return { success: true };
   }
 
@@ -365,6 +377,7 @@ export class ChannelsService {
     eventType: string,
     payload: Record<string, unknown>,
     externalId?: string,
+    storeId?: string,
   ): Promise<ChannelWebhookLog> {
     const log = this.webhookLogRepo.create({
       channel,
@@ -372,8 +385,25 @@ export class ChannelsService {
       externalId: externalId ?? null,
       payload,
       processingStatus: 'received',
-    });
+      storeId: storeId ?? null,
+    } as Partial<ChannelWebhookLog>);
     return this.webhookLogRepo.save(log);
+  }
+
+  /**
+   * Resolve a storeId from an external identifier found in a webhook payload.
+   * Looks up `stores.external_store_id` for the given channel.
+   * Returns null if no match is found (backward-compatible).
+   */
+  async resolveStoreFromWebhook(
+    channel: string,
+    externalStoreId?: string,
+  ): Promise<string | null> {
+    if (!externalStoreId) return null;
+    const store = await this.connectionRepo.manager
+      .getRepository('Store')
+      .findOne({ where: { channel, externalStoreId } });
+    return store?.id ?? null;
   }
 
   // ─── Token helpers ───
@@ -399,5 +429,57 @@ export class ChannelsService {
     }
 
     return tokens;
+  }
+
+  /* ─── Inventory Sync ─── */
+
+  /**
+   * Sync inventory for a single connection.
+   * Queries all channel listings for this connection and pushes updated quantities.
+   */
+  async syncConnectionInventory(connectionId: string): Promise<{ succeeded: number; failed: number }> {
+    const conn = await this.connectionRepo.findOneBy({ id: connectionId });
+    if (!conn) throw new NotFoundException(`Connection ${connectionId} not found`);
+
+    const adapter = this.getAdapter(conn.channel);
+    const tokens = await this.getValidTokens(conn);
+
+    const channelListings = await this.instanceRepo.find({
+      where: { connectionId },
+    });
+
+    if (channelListings.length === 0) {
+      return { succeeded: 0, failed: 0 };
+    }
+
+    const items = channelListings
+      .filter((cl) => cl.externalId)
+      .map((cl) => ({
+        externalId: cl.externalId as string,
+        quantity: 1, // Will be enriched from inventory ledger in future
+        price: undefined as number | undefined,
+      }));
+
+    return adapter.syncInventory(tokens, items);
+  }
+
+  /**
+   * Sync inventory across all active connections, optionally filtered by channel.
+   */
+  async syncAllInventory(channel?: string): Promise<void> {
+    const where: Record<string, unknown> = { status: 'active' };
+    if (channel) where['channel'] = channel;
+
+    const connections = await this.connectionRepo.find({ where });
+    this.logger.log(`Syncing inventory for ${connections.length} connections (channel=${channel ?? 'all'})`);
+
+    for (const conn of connections) {
+      try {
+        const result = await this.syncConnectionInventory(conn.id);
+        this.logger.log(`Inventory sync for ${conn.channel}:${conn.id}: ${result.succeeded} OK, ${result.failed} failed`);
+      } catch (error: any) {
+        this.logger.error(`Inventory sync failed for ${conn.channel}:${conn.id}: ${error.message}`);
+      }
+    }
   }
 }

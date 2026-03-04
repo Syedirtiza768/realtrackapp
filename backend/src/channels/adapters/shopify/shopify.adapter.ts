@@ -8,6 +8,7 @@ import type {
   ExternalListingResult,
   InventorySyncItem,
   ChannelOrder,
+  StoreContext,
 } from '../../channel-adapter.interface.js';
 
 @Injectable()
@@ -74,6 +75,7 @@ export class ShopifyAdapter implements ChannelAdapter {
   async publishListing(
     tokens: TokenSet,
     listingData: Record<string, unknown>,
+    _storeContext?: StoreContext,
   ): Promise<ExternalListingResult> {
     try {
       const shopDomain = listingData['shopDomain'] as string;
@@ -120,6 +122,7 @@ export class ShopifyAdapter implements ChannelAdapter {
     tokens: TokenSet,
     externalId: string,
     listingData: Record<string, unknown>,
+    _storeContext?: StoreContext,
   ): Promise<ExternalListingResult> {
     try {
       const shopDomain = listingData['shopDomain'] as string;
@@ -143,7 +146,7 @@ export class ShopifyAdapter implements ChannelAdapter {
     }
   }
 
-  async endListing(tokens: TokenSet, externalId: string): Promise<void> {
+  async endListing(tokens: TokenSet, externalId: string, _storeContext?: StoreContext): Promise<void> {
     // Shopify doesn't have "end" — we archive the product
     // We need the shop domain from somewhere; for now skip if unavailable
     this.logger.warn(
@@ -154,6 +157,7 @@ export class ShopifyAdapter implements ChannelAdapter {
   async syncInventory(
     tokens: TokenSet,
     items: InventorySyncItem[],
+    _storeContext?: StoreContext,
   ): Promise<{ succeeded: number; failed: number }> {
     // Shopify inventory sync requires inventory_item_id, not product_id
     // This is a simplified implementation
@@ -175,6 +179,7 @@ export class ShopifyAdapter implements ChannelAdapter {
   async getRecentOrders(
     tokens: TokenSet,
     since: Date,
+    _storeContext?: StoreContext,
   ): Promise<ChannelOrder[]> {
     // Need shop domain to make API call
     return [];

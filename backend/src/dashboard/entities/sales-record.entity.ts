@@ -22,6 +22,9 @@ export class SalesRecord {
   @Index('idx_sales_channel')
   channel: string;
 
+  @Column({ name: 'store_id', type: 'uuid', nullable: true })
+  storeId: string | null;
+
   @Column({ type: 'int', default: 1 })
   quantitySold: number;
 

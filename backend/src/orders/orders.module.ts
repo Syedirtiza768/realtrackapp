@@ -9,6 +9,8 @@ import { OrdersController } from './orders.controller.js';
 import { OrderImportProcessor } from './processors/order-import.processor.js';
 import { EbayAdapter } from '../channels/adapters/ebay/ebay.adapter.js';
 import { ShopifyAdapter } from '../channels/adapters/shopify/shopify.adapter.js';
+import { AmazonAdapter } from '../channels/adapters/amazon/amazon.adapter.js';
+import { WalmartAdapter } from '../channels/adapters/walmart/walmart.adapter.js';
 import { TokenEncryptionService } from '../channels/token-encryption.service.js';
 
 @Module({
@@ -22,6 +24,8 @@ import { TokenEncryptionService } from '../channels/token-encryption.service.js'
     OrderImportProcessor,
     EbayAdapter,
     ShopifyAdapter,
+    AmazonAdapter,
+    WalmartAdapter,
     TokenEncryptionService,
   ],
   exports: [OrdersService],

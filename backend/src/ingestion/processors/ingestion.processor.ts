@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
 import { Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IngestionJob } from '../entities/ingestion-job.entity.js';
 import { AiResult } from '../entities/ai-result.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
@@ -43,6 +44,7 @@ export class IngestionProcessor extends WorkerHost {
     private readonly assetRepo: Repository<ImageAsset>,
     private readonly aiService: AiService,
     private readonly storageService: StorageService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     super();
   }
@@ -125,9 +127,27 @@ export class IngestionProcessor extends WorkerHost {
       this.logger.log(
         `Ingestion job ${jobId} complete — confidence=${normalized.confidenceOverall.toFixed(2)}, review=${reviewStatus}`,
       );
+
+      // Emit events for notification system
+      this.eventEmitter.emit('ingestion.completed', {
+        jobId,
+        title: normalized.title,
+      });
+      if (reviewStatus === 'needs_review') {
+        this.eventEmitter.emit('ingestion.review_needed', {
+          jobId,
+          confidence: normalized.confidenceOverall,
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Ingestion job ${jobId} failed: ${message}`);
+
+      // Emit failure event
+      this.eventEmitter.emit('ingestion.failed', {
+        jobId,
+        error: message,
+      });
 
       // Calculate next retry time with exponential backoff
       const job_record = await this.jobRepo.findOneBy({ id: jobId });

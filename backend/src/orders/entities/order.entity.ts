@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { ChannelConnection } from '../../channels/entities/channel-connection.entity.js';
+import { Store } from '../../channels/entities/store.entity.js';
 
 @Entity('orders')
 @Index('idx_order_status', ['status'])
@@ -31,6 +32,13 @@ export class Order {
   @ManyToOne(() => ChannelConnection, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'connection_id' })
   connection!: ChannelConnection | null;
+
+  @Column({ name: 'store_id', type: 'uuid', nullable: true })
+  storeId!: string | null;
+
+  @ManyToOne(() => Store, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'store_id' })
+  store!: Store | null;
 
   @Column({ name: 'external_order_id', type: 'varchar', length: 100, nullable: true })
   externalOrderId!: string | null;

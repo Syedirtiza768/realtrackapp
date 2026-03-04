@@ -4,6 +4,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { sanitizeHtml } from '../../lib/sanitize';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -266,7 +267,7 @@ function OverviewTab({ listing, imageUrl }: { listing: ListingDetail; imageUrl: 
             <h3 className="font-semibold text-slate-800 mb-3">Description</h3>
             <div
               className="text-sm text-slate-600 prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: listing.description }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(listing.description) }}
             />
           </div>
         )}

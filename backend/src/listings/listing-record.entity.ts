@@ -23,9 +23,14 @@ import {
 @Index('idx_listing_condition', ['conditionId'])
 @Index('idx_listing_c_type', ['cType'])
 @Index('idx_listing_source_file', ['sourceFileName'])
+@Index('idx_listing_records_org', ['organizationId'])
 export class ListingRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /** Multi-tenant: nullable until `multi_tenant` flag is turned on */
+  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId: string | null;
 
   /* ── source metadata ────────────────────────────────────── */
 
@@ -273,6 +278,31 @@ export class ListingRecord {
 
   @Column({ type: 'text', nullable: true })
   responsiblePerson1ContactUrl: string | null;
+
+  /* ── Numeric price/quantity columns (Phase 3 migration) ── */
+  /* These mirror the TEXT columns above and are auto-synced
+     by a DB trigger. Application code should prefer these. */
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  startPriceNum: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  quantityNum: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  buyItNowPriceNum: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  bestOfferAutoAcceptPriceNum: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  minimumBestOfferPriceNum: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  shippingService1CostNum: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  shippingService2CostNum: number | null;
 
   /* ── Lifecycle columns (Module 1 — Listing CRUD) ──────── */
 

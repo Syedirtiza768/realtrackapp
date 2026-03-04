@@ -10,8 +10,8 @@ export class DashboardController {
 
   @Get('summary')
   @ApiOperation({ summary: 'Get dashboard summary (cached)' })
-  getSummary() {
-    return this.dashboardService.getSummary();
+  getSummary(@Query('storeId') storeId?: string) {
+    return this.dashboardService.getSummary(storeId);
   }
 
   @Get('sales')

@@ -6,6 +6,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import React, { useState, useCallback } from 'react';
+import { sanitizeHtml } from '../../lib/sanitize';
 import {
   Sparkles,
   Type,
@@ -280,7 +281,7 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
                     <p className="text-xs font-semibold text-green-600 mb-1">Enhanced</p>
                     <div className="p-2 bg-green-50 rounded border border-green-200 text-xs text-slate-700 max-h-48 overflow-y-auto whitespace-pre-wrap">
                       {type === 'description_generation' ? (
-                        <div dangerouslySetInnerHTML={{ __html: latest.enhancedValue }} />
+                        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(latest.enhancedValue) }} />
                       ) : (
                         latest.enhancedValue.slice(0, 800)
                       )}

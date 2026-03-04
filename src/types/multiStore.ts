@@ -21,6 +21,19 @@ export interface Store {
   updatedAt: string;
 }
 
+// ─── Per-Store Inventory Allocation ───
+
+export interface StoreInventoryAllocation {
+  id: string;
+  listingId: string;
+  storeId: string;
+  allocatedQty: number;
+  reservedQty: number;
+  availableQty: number;
+  version: number;
+  updatedAt: string;
+}
+
 // ─── Listing Channel Instances ───
 
 export type InstanceSyncStatus = 'synced' | 'pending' | 'publishing' | 'error' | 'ended' | 'draft';

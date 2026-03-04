@@ -16,6 +16,7 @@ import type { RawBodyRequest } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ChannelsService } from './channels.service.js';
+import { InventoryRealtimeSyncService } from './inventory-realtime-sync.service.js';
 import {
   PublishListingDto,
   SyncInventoryDto,
@@ -26,11 +27,14 @@ import {
 @ApiTags('channels')
 @Controller('channels')
 export class ChannelsController {
-  constructor(private readonly channelsService: ChannelsService) {}
+  constructor(
+    private readonly channelsService: ChannelsService,
+    private readonly inventorySync: InventoryRealtimeSyncService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List all connected channels for the current user' })
-  getConnections(@Query('userId') userId: string) {
+  getConnections(@Query('userId') userId?: string) {
     // TODO: Extract userId from JWT once auth guard is fully wired
     return this.channelsService.getConnections(userId);
   }
@@ -138,12 +142,21 @@ export class ChannelsController {
     @Headers('x-ebay-signature') signature: string,
     @Body() body: Record<string, unknown>,
   ) {
+    // Resolve storeId from eBay webhook payload (seller username → external_store_id)
+    const sellerUsername =
+      (body['notification'] as any)?.sellerUsername ??
+      (body['notification'] as any)?.userId;
+    const storeId = await this.channelsService.resolveStoreFromWebhook('ebay', sellerUsername);
+
     await this.channelsService.logWebhook(
       'ebay',
       (body['metadata'] as any)?.topic ?? 'unknown',
       body,
       (body['notification'] as any)?.itemId,
+      storeId ?? undefined,
     );
+    // Process inventory changes from eBay webhooks
+    await this.inventorySync.processEbayInventoryWebhook(body);
     return { status: 'received' };
   }
 
@@ -154,14 +167,67 @@ export class ChannelsController {
     @Req() req: RawBodyRequest<Request>,
     @Headers('x-shopify-hmac-sha256') signature: string,
     @Headers('x-shopify-topic') topic: string,
+    @Headers('x-shopify-shop-domain') shopDomain: string,
     @Body() body: Record<string, unknown>,
   ) {
+    // Resolve storeId from Shopify shop domain → external_store_id
+    const storeId = await this.channelsService.resolveStoreFromWebhook('shopify', shopDomain);
+
     await this.channelsService.logWebhook(
       'shopify',
       topic ?? 'unknown',
       body,
       body['id'] ? String(body['id']) : undefined,
+      storeId ?? undefined,
     );
+    // Process inventory changes from Shopify webhooks
+    await this.inventorySync.processShopifyInventoryWebhook(topic ?? '', body);
+    return { status: 'received' };
+  }
+
+  @Post('webhooks/amazon')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Amazon EventBridge webhook endpoint' })
+  async amazonWebhook(
+    @Body() body: Record<string, unknown>,
+  ) {
+    // Resolve storeId from Amazon seller ID or merchant ID
+    const sellerId = (body['detail'] as any)?.SellerId ?? (body['detail'] as any)?.MerchantId;
+    const storeId = await this.channelsService.resolveStoreFromWebhook('amazon', sellerId);
+
+    await this.channelsService.logWebhook(
+      'amazon',
+      (body['detail-type'] as string) ?? 'unknown',
+      body,
+      (body['detail'] as any)?.SellerSKU,
+      storeId ?? undefined,
+    );
+    await this.inventorySync.processAmazonInventoryWebhook(body);
+    return { status: 'received' };
+  }
+
+  @Post('webhooks/walmart')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Walmart webhook endpoint' })
+  async walmartWebhook(
+    @Headers('wm-partner-signature') signature: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    // Resolve storeId from Walmart partner/seller ID
+    const partnerId = body['partnerId'] ?? body['sellerId'];
+    const storeId = await this.channelsService.resolveStoreFromWebhook(
+      'walmart',
+      partnerId ? String(partnerId) : undefined,
+    );
+
+    await this.channelsService.logWebhook(
+      'walmart',
+      (body['eventType'] as string) ?? 'unknown',
+      body,
+      body['sku'] ? String(body['sku']) : undefined,
+      storeId ?? undefined,
+    );
+    await this.inventorySync.processWalmartInventoryWebhook(body);
     return { status: 'received' };
   }
 }

@@ -18,7 +18,13 @@ import { AiEnhancementController } from './ai-enhancement.controller.js';
 import { TokenEncryptionService } from './token-encryption.service.js';
 import { EbayAdapter } from './adapters/ebay/ebay.adapter.js';
 import { ShopifyAdapter } from './adapters/shopify/shopify.adapter.js';
+import { AmazonAdapter } from './adapters/amazon/amazon.adapter.js';
+import { WalmartAdapter } from './adapters/walmart/walmart.adapter.js';
 import { ChannelPublishProcessor } from './processors/channel-publish.processor.js';
+import { PricingPushService } from './pricing-push.service.js';
+import { InventoryRealtimeSyncService } from './inventory-realtime-sync.service.js';
+import { PricingRule } from '../settings/entities/pricing-rule.entity.js';
+import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.js';
 
 @Module({
   imports: [
@@ -31,8 +37,11 @@ import { ChannelPublishProcessor } from './processors/channel-publish.processor.
       AiEnhancement,
       DemoSimulationLog,
       ListingRecord,
+      PricingRule,
     ]),
     BullModule.registerQueue({ name: 'channels' }),
+    BullModule.registerQueue({ name: 'inventory' }),
+    FeatureFlagModule,
   ],
   controllers: [ChannelsController, StoresController, AiEnhancementController],
   providers: [
@@ -42,8 +51,12 @@ import { ChannelPublishProcessor } from './processors/channel-publish.processor.
     TokenEncryptionService,
     EbayAdapter,
     ShopifyAdapter,
+    AmazonAdapter,
+    WalmartAdapter,
     ChannelPublishProcessor,
+    PricingPushService,
+    InventoryRealtimeSyncService,
   ],
-  exports: [ChannelsService, StoresService, AiEnhancementService],
+  exports: [ChannelsService, StoresService, AiEnhancementService, PricingPushService, InventoryRealtimeSyncService],
 })
 export class ChannelsModule {}

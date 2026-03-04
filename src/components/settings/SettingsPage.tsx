@@ -11,6 +11,7 @@ import {
     ChevronRight,
     ToggleLeft,
     ToggleRight,
+    X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
@@ -73,6 +74,8 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+    const [showAddProfile, setShowAddProfile] = useState(false);
+    const [showAddRule, setShowAddRule] = useState(false);
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -105,6 +108,36 @@ export default function SettingsPage() {
             await fetchAll();
         } finally {
             setSaving(false);
+        }
+    };
+
+    const createShippingProfile = async (data: Partial<ShippingProfile>) => {
+        try {
+            const res = await fetch(`${API}/shipping-profiles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const created = await res.json();
+            setShipping(s => [...s, created]);
+            setShowAddProfile(false);
+        } catch (e) {
+            console.error('Failed to create shipping profile', e);
+        }
+    };
+
+    const createPricingRule = async (data: Partial<PricingRule>) => {
+        try {
+            const res = await fetch(`${API}/pricing-rules`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const created = await res.json();
+            setPricing(p => [...p, created]);
+            setShowAddRule(false);
+        } catch (e) {
+            console.error('Failed to create pricing rule', e);
         }
     };
 
@@ -231,10 +264,17 @@ export default function SettingsPage() {
                                 <p className="text-sm text-slate-400">
                                     {shipping.length} shipping profile{shipping.length !== 1 ? 's' : ''}
                                 </p>
-                                <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                                <button onClick={() => setShowAddProfile(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                                     <Plus size={16} /> Add Profile
                                 </button>
                             </div>
+
+                            {showAddProfile && (
+                                <AddShippingProfileForm
+                                    onSubmit={createShippingProfile}
+                                    onCancel={() => setShowAddProfile(false)}
+                                />
+                            )}
 
                             {shipping.length === 0 ? (
                                 <Card>
@@ -301,10 +341,17 @@ export default function SettingsPage() {
                                 <p className="text-sm text-slate-400">
                                     {pricing.length} pricing rule{pricing.length !== 1 ? 's' : ''}
                                 </p>
-                                <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                                <button onClick={() => setShowAddRule(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                                     <Plus size={16} /> Add Rule
                                 </button>
                             </div>
+
+                            {showAddRule && (
+                                <AddPricingRuleForm
+                                    onSubmit={createPricingRule}
+                                    onCancel={() => setShowAddRule(false)}
+                                />
+                            )}
 
                             {pricing.length === 0 ? (
                                 <Card>
@@ -418,5 +465,218 @@ function SettingValueEditor({
                 </button>
             )}
         </div>
+    );
+}
+
+/* ─── Add Shipping Profile Form ─── */
+
+function AddShippingProfileForm({
+    onSubmit,
+    onCancel,
+}: {
+    onSubmit: (data: Partial<ShippingProfile>) => void;
+    onCancel: () => void;
+}) {
+    const [name, setName] = useState('');
+    const [carrier, setCarrier] = useState('USPS');
+    const [service, setService] = useState('Priority');
+    const [handlingTime, setHandlingTime] = useState(1);
+    const [costType, setCostType] = useState('flat');
+    const [flatCost, setFlatCost] = useState('');
+    const [domesticOnly, setDomesticOnly] = useState(true);
+    const [isDefault, setIsDefault] = useState(false);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        onSubmit({
+            name: name.trim(),
+            carrier,
+            service,
+            handlingTime,
+            costType,
+            flatCost: costType === 'flat' ? flatCost || null : null,
+            weightBased: costType === 'weight',
+            domesticOnly,
+            isDefault,
+            active: true,
+        });
+    };
+
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-base">New Shipping Profile</CardTitle>
+                <button onClick={onCancel} className="p-1 text-slate-400 hover:text-slate-200">
+                    <X size={16} />
+                </button>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Name *</label>
+                            <input value={name} onChange={e => setName(e.target.value)} required
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Carrier</label>
+                            <select value={carrier} onChange={e => setCarrier(e.target.value)}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                <option value="USPS">USPS</option>
+                                <option value="UPS">UPS</option>
+                                <option value="FedEx">FedEx</option>
+                                <option value="DHL">DHL</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Service</label>
+                            <input value={service} onChange={e => setService(e.target.value)}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Handling Time (days)</label>
+                            <input type="number" value={handlingTime} onChange={e => setHandlingTime(Number(e.target.value))} min={0}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Cost Type</label>
+                            <select value={costType} onChange={e => setCostType(e.target.value)}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                <option value="flat">Flat Rate</option>
+                                <option value="free">Free</option>
+                                <option value="calculated">Calculated</option>
+                                <option value="weight">Weight Based</option>
+                            </select>
+                        </div>
+                        {costType === 'flat' && (
+                            <div>
+                                <label className="block text-xs text-slate-500 mb-1">Flat Cost ($)</label>
+                                <input value={flatCost} onChange={e => setFlatCost(e.target.value)} placeholder="0.00"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                            <input type="checkbox" checked={domesticOnly} onChange={e => setDomesticOnly(e.target.checked)}
+                                className="rounded bg-slate-800 border-slate-600" />
+                            Domestic only
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                            <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)}
+                                className="rounded bg-slate-800 border-slate-600" />
+                            Set as default
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-2 pt-2">
+                        <button type="submit" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                            <Plus size={16} /> Create Profile
+                        </button>
+                        <button type="button" onClick={onCancel} className="text-sm text-slate-400 hover:text-slate-200 px-3 py-2 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </CardContent>
+        </Card>
+    );
+}
+
+/* ─── Add Pricing Rule Form ─── */
+
+function AddPricingRuleForm({
+    onSubmit,
+    onCancel,
+}: {
+    onSubmit: (data: Partial<PricingRule>) => void;
+    onCancel: () => void;
+}) {
+    const [name, setName] = useState('');
+    const [ruleType, setRuleType] = useState('markup');
+    const [channel, setChannel] = useState('');
+    const [brand, setBrand] = useState('');
+    const [priority, setPriority] = useState(0);
+    const [percentage, setPercentage] = useState(10);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        onSubmit({
+            name: name.trim(),
+            ruleType,
+            channel: channel || null,
+            brand: brand || null,
+            parameters: { percentage },
+            priority,
+            active: true,
+        });
+    };
+
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-base">New Pricing Rule</CardTitle>
+                <button onClick={onCancel} className="p-1 text-slate-400 hover:text-slate-200">
+                    <X size={16} />
+                </button>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Name *</label>
+                            <input value={name} onChange={e => setName(e.target.value)} required placeholder="e.g., eBay 15% Markup"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Rule Type</label>
+                            <select value={ruleType} onChange={e => setRuleType(e.target.value)}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                <option value="markup">Markup</option>
+                                <option value="markdown">Markdown</option>
+                                <option value="round">Round</option>
+                                <option value="min_margin">Min Margin</option>
+                                <option value="competitive">Competitive</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Channel (optional)</label>
+                            <select value={channel} onChange={e => setChannel(e.target.value)}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                <option value="">All Channels</option>
+                                <option value="ebay">eBay</option>
+                                <option value="shopify">Shopify</option>
+                                <option value="amazon">Amazon</option>
+                                <option value="walmart">Walmart</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Brand (optional)</label>
+                            <input value={brand} onChange={e => setBrand(e.target.value)} placeholder="e.g., ACME"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Percentage</label>
+                            <input type="number" value={percentage} onChange={e => setPercentage(Number(e.target.value))} min={0} step={0.1}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1">Priority</label>
+                            <input type="number" value={priority} onChange={e => setPriority(Number(e.target.value))}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-2">
+                        <button type="submit" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                            <Plus size={16} /> Create Rule
+                        </button>
+                        <button type="button" onClick={onCancel} className="text-sm text-slate-400 hover:text-slate-200 px-3 py-2 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </CardContent>
+        </Card>
     );
 }

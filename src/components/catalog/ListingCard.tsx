@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { Eye, Image as ImageIcon, Pencil, Send, Trash2 } from 'lucide-react';
+import { sanitizeHighlight } from '../../lib/sanitize';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '../ui/badge';
 import { getFirstImageUrl } from '../../lib/searchApi';
@@ -83,7 +84,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
           className="text-sm font-medium text-slate-100 hover:text-blue-400 line-clamp-2 transition-colors"
         >
           {item.titleHighlight ? (
-            <span dangerouslySetInnerHTML={{ __html: item.titleHighlight }} />
+            <span dangerouslySetInnerHTML={{ __html: sanitizeHighlight(item.titleHighlight) }} />
           ) : (
             item.title ?? 'Untitled'
           )}

@@ -8,6 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, LessThanOrEqual, Repository } from 'typeorm';
 import { InventoryLedger } from './entities/inventory-ledger.entity.js';
 import { InventoryEvent } from './entities/inventory-event.entity.js';
+import { StoreInventoryAllocation } from './entities/store-inventory-allocation.entity.js';
+import { FeatureFlagService } from '../common/feature-flags/feature-flag.service.js';
 
 @Injectable()
 export class InventoryService {
@@ -18,7 +20,10 @@ export class InventoryService {
     private readonly ledgerRepo: Repository<InventoryLedger>,
     @InjectRepository(InventoryEvent)
     private readonly eventRepo: Repository<InventoryEvent>,
+    @InjectRepository(StoreInventoryAllocation)
+    private readonly allocationRepo: Repository<StoreInventoryAllocation>,
     private readonly dataSource: DataSource,
+    private readonly featureFlags: FeatureFlagService,
   ) {}
 
   // ─── Read ───
@@ -345,6 +350,121 @@ export class InventoryService {
         score = 0.95;
       }
       return { idA: r.idA, idB: r.idB, matchType, score };
+    });
+  }
+
+  // ─── Per-Store Inventory Allocation (gated by per_store_inventory flag) ───
+
+  /**
+   * Get allocations for a listing across all stores, or for a specific store.
+   */
+  async getAllocations(
+    listingId: string,
+    storeId?: string,
+  ): Promise<StoreInventoryAllocation[]> {
+    const where: Record<string, string> = { listingId };
+    if (storeId) where['storeId'] = storeId;
+    return this.allocationRepo.find({ where, order: { updatedAt: 'DESC' } });
+  }
+
+  /**
+   * Allocate inventory for a listing to a specific store.
+   * Uses optimistic locking (version column) for concurrency safety.
+   */
+  async allocateToStore(
+    listingId: string,
+    storeId: string,
+    quantity: number,
+  ): Promise<StoreInventoryAllocation> {
+    const perStoreEnabled = await this.featureFlags.isEnabled('per_store_inventory');
+    if (!perStoreEnabled) {
+      throw new BadRequestException('Per-store inventory is not enabled');
+    }
+    if (quantity < 0) throw new BadRequestException('Allocation quantity must be >= 0');
+
+    return this.dataSource.transaction('SERIALIZABLE', async (em) => {
+      // Verify total pool has enough unallocated
+      const ledger = await em
+        .createQueryBuilder(InventoryLedger, 'l')
+        .setLock('pessimistic_write')
+        .where('l.listing_id = :listingId', { listingId })
+        .getOne();
+
+      if (!ledger) {
+        throw new NotFoundException(`No inventory ledger for listing ${listingId}`);
+      }
+
+      // Sum current allocations
+      const { total: currentAllocated } = await em
+        .createQueryBuilder(StoreInventoryAllocation, 'a')
+        .select('COALESCE(SUM(a.allocated_qty), 0)', 'total')
+        .where('a.listing_id = :listingId', { listingId })
+        .andWhere('a.store_id != :storeId', { storeId })
+        .getRawOne() as { total: string };
+
+      let existing = await em.findOne(StoreInventoryAllocation, {
+        where: { listingId, storeId },
+      });
+
+      const otherAllocated = parseInt(currentAllocated, 10);
+      const totalAvailable = ledger.quantityTotal - ledger.quantityReserved;
+
+      if (otherAllocated + quantity > totalAvailable) {
+        throw new BadRequestException(
+          `Cannot allocate ${quantity} — only ${totalAvailable - otherAllocated} available (pool: ${totalAvailable}, other stores: ${otherAllocated})`,
+        );
+      }
+
+      if (existing) {
+        existing.allocatedQty = quantity;
+        return em.save(StoreInventoryAllocation, existing);
+      }
+
+      const allocation = em.create(StoreInventoryAllocation, {
+        listingId,
+        storeId,
+        allocatedQty: quantity,
+        reservedQty: 0,
+      });
+      return em.save(StoreInventoryAllocation, allocation);
+    });
+  }
+
+  /**
+   * Reserve quantity within a store allocation (e.g. when an order is placed on that store).
+   */
+  async reserveFromStore(
+    listingId: string,
+    storeId: string,
+    quantity: number,
+    orderId: string,
+  ): Promise<StoreInventoryAllocation> {
+    const perStoreEnabled = await this.featureFlags.isEnabled('per_store_inventory');
+    if (!perStoreEnabled) {
+      throw new BadRequestException('Per-store inventory is not enabled');
+    }
+    if (quantity <= 0) throw new BadRequestException('Reserve quantity must be positive');
+
+    return this.dataSource.transaction('SERIALIZABLE', async (em) => {
+      const allocation = await em
+        .createQueryBuilder(StoreInventoryAllocation, 'a')
+        .setLock('pessimistic_write')
+        .where('a.listing_id = :listingId AND a.store_id = :storeId', { listingId, storeId })
+        .getOne();
+
+      if (!allocation) {
+        throw new NotFoundException(`No allocation for listing ${listingId} at store ${storeId}`);
+      }
+
+      const available = allocation.allocatedQty - allocation.reservedQty;
+      if (quantity > available) {
+        throw new BadRequestException(
+          `Insufficient store allocation: requested ${quantity}, available ${available}`,
+        );
+      }
+
+      allocation.reservedQty += quantity;
+      return em.save(StoreInventoryAllocation, allocation);
     });
   }
 }

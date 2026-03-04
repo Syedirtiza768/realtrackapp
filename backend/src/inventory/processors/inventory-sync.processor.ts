@@ -1,13 +1,17 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InventoryService } from '../inventory.service.js';
 
 @Processor('inventory', { concurrency: 1 })
 export class InventorySyncProcessor extends WorkerHost {
   private readonly logger = new Logger(InventorySyncProcessor.name);
 
-  constructor(private readonly inventoryService: InventoryService) {
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {
     super();
   }
 
@@ -41,7 +45,22 @@ export class InventorySyncProcessor extends WorkerHost {
     const items = await this.inventoryService.getLowStock(5, 100);
     if (items.length > 0) {
       this.logger.warn(`Low stock alert: ${items.length} items below threshold`);
-      // TODO: Send notification via Module 10
+      for (const item of items) {
+        const available = (item.quantityTotal ?? 0) - (item.quantityReserved ?? 0);
+        if (available <= 0) {
+          this.eventEmitter.emit('inventory.out_of_stock', {
+            listingId: item.listingId,
+            title: item.listing?.title ?? undefined,
+          });
+        } else {
+          this.eventEmitter.emit('inventory.low_stock', {
+            listingId: item.listingId,
+            title: item.listing?.title ?? undefined,
+            available,
+            threshold: item.lowStockThreshold ?? 2,
+          });
+        }
+      }
     }
   }
 

@@ -85,6 +85,7 @@ export default function Dashboard() {
     const [multiStore, setMultiStore] = useState<MultiStoreMetrics | null>(null);
     const [loading, setLoading] = useState(true);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [selectedStoreId, setSelectedStoreId] = useState<string>('');
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -104,8 +105,10 @@ export default function Dashboard() {
                 revenue: 0, avgPrice: 0, channelBreakdown: [], computedAt: new Date().toISOString(),
             };
 
+            const summaryQs = selectedStoreId ? `?storeId=${encodeURIComponent(selectedStoreId)}` : '';
+
             const [sumRes, actRes, chRes, invRes, msRes] = await Promise.all([
-                safeFetch<DashboardSummary>(`${API}/dashboard/summary`, defaultSummary),
+                safeFetch<DashboardSummary>(`${API}/dashboard/summary${summaryQs}`, defaultSummary),
                 safeFetch<{ items?: AuditLogItem[] }>(`${API}/dashboard/activity?limit=8`, { items: [] }),
                 safeFetch<{ channels?: ChannelHealthRow[] }>(`${API}/dashboard/channel-health`, { channels: [] }),
                 safeFetch<{ lowStock?: InventoryAlert[]; outOfStock?: InventoryAlert[] }>(`${API}/dashboard/inventory-alerts`, { lowStock: [], outOfStock: [] }),
@@ -123,7 +126,7 @@ export default function Dashboard() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [selectedStoreId]);
 
     useEffect(() => { void fetchAll(); }, [fetchAll]);
 
@@ -152,6 +155,13 @@ export default function Dashboard() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h2>
                 <div className="flex items-center gap-2">
+                    <input
+                        type="text"
+                        placeholder="Filter by Store ID..."
+                        value={selectedStoreId}
+                        onChange={e => setSelectedStoreId(e.target.value)}
+                        className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-600"
+                    />
                     <span className="text-xs sm:text-sm text-slate-500">
                         Last sync: {relativeTime(lastRefresh.toISOString())}
                     </span>

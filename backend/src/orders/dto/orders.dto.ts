@@ -12,6 +12,10 @@ export class OrdersQueryDto {
 
   @IsOptional()
   @IsString()
+  storeId?: string;
+
+  @IsOptional()
+  @IsString()
   since?: string;
 
   @IsOptional()

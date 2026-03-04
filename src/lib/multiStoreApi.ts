@@ -14,6 +14,7 @@ import type {
   DemoSimulationLog,
   MultiStoreMetrics,
   EnhancementType,
+  StoreInventoryAllocation,
 } from '../types/multiStore';
 
 const API = '/api';
@@ -78,6 +79,11 @@ export async function updateStore(
   data: Partial<{ storeName: string; status: string; isPrimary: boolean }>,
 ): Promise<Store> {
   return putJson<Store>(`/stores/${storeId}`, data);
+}
+
+export async function deleteStore(storeId: string): Promise<void> {
+  const res = await fetch(`${API}/stores/${storeId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
 }
 
 /* ── Listing Channel Instances ────────────────────────────── */
@@ -218,6 +224,51 @@ export async function getAiStats(): Promise<AiEnhancementStats> {
 
 export async function getMultiStoreMetrics(): Promise<MultiStoreMetrics> {
   return fetchJson<MultiStoreMetrics>('/dashboard/multi-store');
+}
+
+/* ── Store-scoped Dashboard & Orders ──────────────────────── */
+
+export async function getDashboardSummary(storeId?: string): Promise<Record<string, unknown>> {
+  const qs = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+  return fetchJson(`/dashboard/summary${qs}`);
+}
+
+export async function getOrdersByStore(params: {
+  storeId?: string;
+  status?: string;
+  channel?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ items: unknown[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.storeId) qs.set('storeId', params.storeId);
+  if (params.status) qs.set('status', params.status);
+  if (params.channel) qs.set('channel', params.channel);
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
+  const q = qs.toString();
+  return fetchJson(`/orders${q ? `?${q}` : ''}`);
+}
+
+/* ── Per-Store Inventory Allocation ───────────────────────── */
+
+export async function getInventoryAllocations(
+  listingId: string,
+  storeId?: string,
+): Promise<StoreInventoryAllocation[]> {
+  const qs = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+  return fetchJson<StoreInventoryAllocation[]>(`/inventory/${listingId}/allocations${qs}`);
+}
+
+export async function allocateInventoryToStore(
+  listingId: string,
+  storeId: string,
+  quantity: number,
+): Promise<StoreInventoryAllocation> {
+  return postJson<StoreInventoryAllocation>(`/inventory/${listingId}/allocations`, {
+    storeId,
+    quantity,
+  });
 }
 
 /* ── Inventory (reexport for convenience) ─────────────────── */

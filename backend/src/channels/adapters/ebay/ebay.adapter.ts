@@ -8,6 +8,7 @@ import type {
   ExternalListingResult,
   InventorySyncItem,
   ChannelOrder,
+  StoreContext,
 } from '../../channel-adapter.interface.js';
 
 @Injectable()
@@ -121,6 +122,7 @@ export class EbayAdapter implements ChannelAdapter {
   async publishListing(
     tokens: TokenSet,
     listingData: Record<string, unknown>,
+    _storeContext?: StoreContext,
   ): Promise<ExternalListingResult> {
     try {
       // Step 1: Create inventory item
@@ -190,6 +192,7 @@ export class EbayAdapter implements ChannelAdapter {
     tokens: TokenSet,
     externalId: string,
     listingData: Record<string, unknown>,
+    _storeContext?: StoreContext,
   ): Promise<ExternalListingResult> {
     try {
       const sku = (listingData['sku'] as string) || externalId;
@@ -215,7 +218,7 @@ export class EbayAdapter implements ChannelAdapter {
     }
   }
 
-  async endListing(tokens: TokenSet, externalId: string): Promise<void> {
+  async endListing(tokens: TokenSet, externalId: string, _storeContext?: StoreContext): Promise<void> {
     await this.http.post(
       `/sell/inventory/v1/offer/${externalId}/withdraw`,
       {},
@@ -226,6 +229,7 @@ export class EbayAdapter implements ChannelAdapter {
   async syncInventory(
     tokens: TokenSet,
     items: InventorySyncItem[],
+    _storeContext?: StoreContext,
   ): Promise<{ succeeded: number; failed: number }> {
     let succeeded = 0;
     let failed = 0;
@@ -253,6 +257,7 @@ export class EbayAdapter implements ChannelAdapter {
   async getRecentOrders(
     tokens: TokenSet,
     since: Date,
+    _storeContext?: StoreContext,
   ): Promise<ChannelOrder[]> {
     const { data } = await this.http.get('/sell/fulfillment/v1/order', {
       params: {

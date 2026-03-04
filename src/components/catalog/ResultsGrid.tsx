@@ -4,6 +4,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useEffect, useRef } from 'react';
+import { sanitizeHighlight } from '../../lib/sanitize';
 import {
   ChevronLeft,
   ChevronRight,
@@ -171,7 +172,7 @@ export default function ResultsGrid({
                         className="font-medium text-slate-200 hover:text-blue-400 line-clamp-1 transition-colors"
                       >
                         {item.titleHighlight ? (
-                          <span dangerouslySetInnerHTML={{ __html: item.titleHighlight }} />
+                          <span dangerouslySetInnerHTML={{ __html: sanitizeHighlight(item.titleHighlight) }} />
                         ) : (
                           item.title ?? 'Untitled'
                         )}

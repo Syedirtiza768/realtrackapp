@@ -93,4 +93,33 @@ export class InventoryController {
       confidence ? parseFloat(confidence) : undefined,
     );
   }
+
+  // ─── Per-Store Allocation (gated by per_store_inventory flag) ───
+
+  @Get(':listingId/allocations')
+  @ApiOperation({ summary: 'Get per-store allocations for a listing' })
+  getAllocations(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+    @Query('storeId') storeId?: string,
+  ) {
+    return this.inventoryService.getAllocations(listingId, storeId);
+  }
+
+  @Post(':listingId/allocations')
+  @ApiOperation({ summary: 'Allocate inventory to a specific store' })
+  allocateToStore(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+    @Body() body: { storeId: string; quantity: number },
+  ) {
+    return this.inventoryService.allocateToStore(listingId, body.storeId, body.quantity);
+  }
+
+  @Post(':listingId/allocations/reserve')
+  @ApiOperation({ summary: 'Reserve from store allocation (order placed on store)' })
+  reserveFromStore(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+    @Body() body: { storeId: string; quantity: number; orderId: string },
+  ) {
+    return this.inventoryService.reserveFromStore(listingId, body.storeId, body.quantity, body.orderId);
+  }
 }

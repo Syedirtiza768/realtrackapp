@@ -7,6 +7,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { User } from './entities/user.entity';
+import { Organization } from './entities/organization.entity';
+import { OrganizationMember } from './entities/organization-member.entity';
 
 @Module({
   imports: [
@@ -21,10 +23,10 @@ import { User } from './entities/user.entity';
         },
       }),
     }),
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, Organization, OrganizationMember]),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtModule],
+  exports: [AuthService, JwtModule, TypeOrmModule],
 })
 export class AuthModule {}

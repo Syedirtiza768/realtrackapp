@@ -11,6 +11,11 @@ import {
     Bell,
     Menu,
     X,
+    Zap,
+    FileText,
+    ScrollText,
+    Layers,
+    Upload,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -20,7 +25,12 @@ const NAV_ITEMS = [
     { icon: PlusCircle, label: 'New Listing', path: '/listings/new' },
     { icon: ScanLine, label: 'Fitment', path: '/fitment' },
     { icon: Database, label: 'Catalog', path: '/catalog' },
+    { icon: Upload, label: 'CSV Import', path: '/catalog/import' },
+    { icon: Layers, label: 'Bulk Actions', path: '/bulk-actions' },
     { icon: Package, label: 'Orders', path: '/orders' },
+    { icon: Zap, label: 'Automation', path: '/automation' },
+    { icon: FileText, label: 'Templates', path: '/templates' },
+    { icon: ScrollText, label: 'Audit Trail', path: '/audit' },
     { icon: Bell, label: 'Notifications', path: '/notifications' },
     { icon: Settings, label: 'Settings', path: '/settings' },
 ];
