@@ -15,6 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CatalogImportService } from './catalog-import.service.js';
 import {
+  BackfillListingsDto,
   ImportQueryDto,
   ImportRowQueryDto,
   StartImportDto,
@@ -116,8 +117,7 @@ export class CatalogImportController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific catalog import' })
   async getImport(@Param('id') id: string) {
-    const importRecord = await this.importService.getImport(id);
-    return { import: importRecord };
+    return this.importService.getImport(id);
   }
 
   /* ── Import rows ───────────────────────────────────────── */
@@ -154,5 +154,13 @@ export class CatalogImportController {
   async retryImport(@Param('id') id: string) {
     const importRecord = await this.importService.retryImport(id);
     return { import: importRecord };
+  }
+
+  @Post('backfill-listings')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Backfill listing_records from existing catalog imports' })
+  async backfillListings(@Body() dto: BackfillListingsDto) {
+    const result = await this.importService.backfillListings(dto.importId);
+    return { result };
   }
 }

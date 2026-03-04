@@ -8,7 +8,31 @@ import * as path from 'path';
 import { CatalogImport } from './entities/catalog-import.entity.js';
 import { CatalogImportRow } from './entities/catalog-import-row.entity.js';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 import type { CsvImportJobData } from './processors/csv-import.processor.js';
+
+export interface ImportVerificationSummary {
+  importId: string;
+  expectedInsertedRows: number;
+  catalogProductsByImport: number;
+  listingRecordsByImport: number;
+  sampleSkus: string[];
+  db: {
+    database: string;
+    schema: string;
+  } | null;
+}
+
+export interface BackfillListingsResult {
+  scannedImports: number;
+  insertedListingRecords: number;
+  imports: Array<{
+    importId: string;
+    fileName: string;
+    catalogProducts: number;
+    insertedListingRecords: number;
+  }>;
+}
 
 /** Well-known CSV headers → catalog product field mapping */
 const DEFAULT_COLUMN_MAP: Record<string, string> = {
@@ -86,6 +110,8 @@ export class CatalogImportService {
     private readonly rowRepo: Repository<CatalogImportRow>,
     @InjectRepository(CatalogProduct)
     private readonly productRepo: Repository<CatalogProduct>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
     @InjectQueue('catalog-import')
     private readonly importQueue: Queue<CsvImportJobData>,
   ) {
@@ -216,10 +242,25 @@ export class CatalogImportService {
   /**
    * Get a single import with summary stats.
    */
-  async getImport(id: string): Promise<CatalogImport> {
+  async getImport(
+    id: string,
+  ): Promise<{ import: CatalogImport; verification: ImportVerificationSummary | null }> {
     const record = await this.importRepo.findOneBy({ id });
     if (!record) throw new NotFoundException(`Import ${id} not found`);
-    return record;
+
+    let verification: ImportVerificationSummary | null = null;
+    if (
+      record.status === 'completed' ||
+      record.status === 'processing' ||
+      record.status === 'failed'
+    ) {
+      verification = await this.buildVerificationSummary(record);
+    }
+
+    return {
+      import: record,
+      verification,
+    };
   }
 
   /**
@@ -318,6 +359,105 @@ export class CatalogImportService {
       totalCatalogProducts,
       recentImports,
     };
+  }
+
+  /**
+   * Backfill listing_records from already imported catalog_products.
+   * Safe to run multiple times: duplicates are ignored by unique source row key.
+   */
+  async backfillListings(importId?: string): Promise<BackfillListingsResult> {
+    const qb = this.importRepo
+      .createQueryBuilder('i')
+      .where('i.insertedRows > 0')
+      .andWhere('i.status IN (:...statuses)', {
+        statuses: ['completed', 'failed', 'cancelled'],
+      })
+      .orderBy('i.createdAt', 'ASC');
+
+    if (importId) {
+      qb.andWhere('i.id = :importId', { importId });
+    }
+
+    const imports = await qb.getMany();
+
+    const summary: BackfillListingsResult = {
+      scannedImports: imports.length,
+      insertedListingRecords: 0,
+      imports: [],
+    };
+
+    for (const importRecord of imports) {
+      const listingSheetName = `Catalog Import ${importRecord.id}`;
+      const existingBefore = await this.listingRepo.count({
+        where: {
+          sourceFileName: importRecord.fileName,
+          sheetName: listingSheetName,
+        },
+      });
+
+      const products = await this.productRepo
+        .createQueryBuilder('p')
+        .where('p.importId = :importId', { importId: importRecord.id })
+        .orderBy('p.sourceRow', 'ASC', 'NULLS LAST')
+        .addOrderBy('p.createdAt', 'ASC')
+        .addOrderBy('p.id', 'ASC')
+        .getMany();
+
+      if (products.length === 0) {
+        summary.imports.push({
+          importId: importRecord.id,
+          fileName: importRecord.fileName,
+          catalogProducts: 0,
+          insertedListingRecords: 0,
+        });
+        continue;
+      }
+
+      let importInserted = 0;
+      const values = products.map((product, idx) =>
+        this.mapCatalogProductToListingRecord(
+          product,
+          importRecord.fileName,
+          importRecord.filePath,
+          listingSheetName,
+          idx,
+        ),
+      );
+
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < values.length; i += CHUNK_SIZE) {
+        const chunk = values.slice(i, i + CHUNK_SIZE);
+        await this.listingRepo
+          .createQueryBuilder()
+          .insert()
+          .into(ListingRecord)
+          .values(chunk)
+          .orIgnore()
+          .execute();
+      }
+
+      const existingAfter = await this.listingRepo.count({
+        where: {
+          sourceFileName: importRecord.fileName,
+          sheetName: listingSheetName,
+        },
+      });
+      importInserted = Math.max(0, existingAfter - existingBefore);
+
+      summary.insertedListingRecords += importInserted;
+      summary.imports.push({
+        importId: importRecord.id,
+        fileName: importRecord.fileName,
+        catalogProducts: products.length,
+        insertedListingRecords: importInserted,
+      });
+    }
+
+    this.logger.log(
+      `Backfill completed: ${summary.insertedListingRecords} listing records inserted across ${summary.scannedImports} imports`,
+    );
+
+    return summary;
   }
 
   /* ── Header detection & column mapping ─────────────────── */
@@ -461,5 +601,92 @@ export class CatalogImportService {
       { field: 'returnProfile', label: 'Return Profile', required: false },
       { field: 'paymentProfile', label: 'Payment Profile', required: false },
     ];
+  }
+
+  private async buildVerificationSummary(
+    record: CatalogImport,
+  ): Promise<ImportVerificationSummary> {
+    const listingSheetName = `Catalog Import ${record.id}`;
+
+    const [catalogProductsByImport, listingRecordsByImport, insertedRows] = await Promise.all([
+      this.productRepo.count({ where: { importId: record.id } }),
+      this.listingRepo.count({
+        where: {
+          sourceFileName: record.fileName,
+          sheetName: listingSheetName,
+        },
+      }),
+      this.rowRepo.find({
+        where: { importId: record.id, status: 'inserted' },
+        order: { rowNumber: 'ASC' },
+        take: 10,
+      }),
+    ]);
+
+    const sampleSkus = insertedRows
+      .map((row) => row.rawData?.['sku']?.trim())
+      .filter((sku): sku is string => Boolean(sku));
+
+    const dbInfoRaw = await this.importRepo.query(
+      'SELECT current_database() AS database, current_schema() AS schema',
+    );
+    const dbInfo = Array.isArray(dbInfoRaw) && dbInfoRaw.length > 0
+      ? {
+          database: String(dbInfoRaw[0].database ?? ''),
+          schema: String(dbInfoRaw[0].schema ?? ''),
+        }
+      : null;
+
+    return {
+      importId: record.id,
+      expectedInsertedRows: record.insertedRows,
+      catalogProductsByImport,
+      listingRecordsByImport,
+      sampleSkus,
+      db: dbInfo,
+    };
+  }
+
+  private mapCatalogProductToListingRecord(
+    product: CatalogProduct,
+    sourceFileName: string,
+    sourceFilePath: string | null,
+    sheetName: string,
+    fallbackIndex: number,
+  ): Partial<ListingRecord> {
+    const rowNumber = product.sourceRow ?? (1_000_000 + fallbackIndex + 1);
+
+    return {
+      organizationId: null,
+      sourceFileName,
+      sourceFilePath: sourceFilePath ?? '',
+      sheetName,
+      sourceRowNumber: rowNumber,
+      action: 'Add',
+      customLabelSku: product.sku,
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
+      title: product.title,
+      pUpc: product.upc,
+      pEpid: product.epid,
+      startPrice: product.price != null ? String(product.price) : null,
+      quantity: product.quantity != null ? String(product.quantity) : null,
+      itemPhotoUrl: product.imageUrls?.length ? product.imageUrls.join('|') : null,
+      conditionId: product.conditionId,
+      description: product.description,
+      format: product.format,
+      duration: product.duration,
+      location: product.location,
+      shippingProfileName: product.shippingProfile,
+      returnProfileName: product.returnProfile,
+      paymentProfileName: product.paymentProfile,
+      cBrand: product.brand,
+      cType: product.partType,
+      cFeatures: product.features,
+      cManufacturerPartNumber: product.mpn,
+      cOeOemPartNumber: product.oemPartNumber,
+      startPriceNum: product.price,
+      quantityNum: product.quantity,
+    };
   }
 }

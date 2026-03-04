@@ -8,10 +8,16 @@ import { CatalogImportController } from './catalog-import.controller.js';
 import { CatalogImportService } from './catalog-import.service.js';
 import { CsvImportProcessor } from './processors/csv-import.processor.js';
 import { DuplicateDetectionService } from './services/duplicate-detection.service.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CatalogProduct, CatalogImport, CatalogImportRow]),
+    TypeOrmModule.forFeature([
+      CatalogProduct,
+      CatalogImport,
+      CatalogImportRow,
+      ListingRecord,
+    ]),
     BullModule.registerQueue({ name: 'catalog-import' }),
   ],
   controllers: [CatalogImportController],

@@ -152,11 +152,47 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
 
         {/* Completed success message */}
         {importRecord.status === 'completed' && (
-          <div className="mt-4 flex items-start gap-2 p-3 rounded-lg bg-emerald-900/20 border border-emerald-900/50">
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-            <p className="text-emerald-400 text-sm">
-              Import completed successfully. {importRecord.insertedRows} new products added to the catalog.
-            </p>
+          <div className="mt-4 space-y-3">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-900/20 border border-emerald-900/50">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+              <p className="text-emerald-400 text-sm">
+                Import completed successfully. {importRecord.insertedRows} new products added to the catalog.
+              </p>
+            </div>
+
+            {importRecord.verification && (
+              <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-700/60 text-sm space-y-2">
+                <p className="text-slate-200 font-medium">Visibility Verification</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
+                  <p>
+                    Expected inserted rows: <span className="text-slate-100">{importRecord.verification.expectedInsertedRows}</span>
+                  </p>
+                  <p>
+                    Catalog products persisted: <span className="text-slate-100">{importRecord.verification.catalogProductsByImport}</span>
+                  </p>
+                  <p>
+                    Listing records persisted: <span className="text-slate-100">{importRecord.verification.listingRecordsByImport}</span>
+                  </p>
+                  <p>
+                    Database target: <span className="text-slate-100">{importRecord.verification.db?.database ?? 'unknown'}</span>
+                    {importRecord.verification.db?.schema ? ` (${importRecord.verification.db.schema})` : ''}
+                  </p>
+                </div>
+
+                {importRecord.verification.sampleSkus.length > 0 && (
+                  <p className="text-slate-300">
+                    Sample SKUs: <span className="text-slate-100">{importRecord.verification.sampleSkus.slice(0, 5).join(', ')}</span>
+                  </p>
+                )}
+
+                <a
+                  href="/catalog"
+                  className="inline-flex items-center text-blue-400 hover:text-blue-300"
+                >
+                  Open catalog
+                </a>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

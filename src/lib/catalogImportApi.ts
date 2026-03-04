@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CatalogImport,
   ImportStats,
+  ImportVerificationSummary,
   UploadResponse,
   ImportListResponse,
   ImportRowListResponse,
@@ -148,10 +149,13 @@ export function useImportDetail(importId: string | null) {
     if (!importId) return;
     setLoading(true);
     try {
-      const result = await apiFetch<{ import: CatalogImport }>(
+      const result = await apiFetch<{ import: CatalogImport; verification: ImportVerificationSummary | null }>(
         `/catalog-import/${importId}`,
       );
-      setData(result.import);
+      setData({
+        ...result.import,
+        verification: result.verification,
+      });
 
       // Stop polling if terminal state
       if (

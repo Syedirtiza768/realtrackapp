@@ -41,6 +41,19 @@ export interface CatalogImport {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  verification?: ImportVerificationSummary | null;
+}
+
+export interface ImportVerificationSummary {
+  importId: string;
+  expectedInsertedRows: number;
+  catalogProductsByImport: number;
+  listingRecordsByImport: number;
+  sampleSkus: string[];
+  db: {
+    database: string;
+    schema: string;
+  } | null;
 }
 
 export interface CatalogImportRow {

@@ -49,3 +49,10 @@ export class ImportRowQueryDto {
   @IsOptional()
   offset?: number;
 }
+
+export class BackfillListingsDto {
+  @ApiPropertyOptional({ description: 'Optional import ID to backfill only one import' })
+  @IsOptional()
+  @IsString()
+  importId?: string;
+}

@@ -8,9 +8,9 @@ import * as fs from 'fs';
 import { CatalogImport } from '../entities/catalog-import.entity.js';
 import { CatalogImportRow } from '../entities/catalog-import-row.entity.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
+import { ListingRecord } from '../../listings/listing-record.entity.js';
 import {
   DuplicateDetectionService,
-  type DuplicateCheckResult,
 } from '../services/duplicate-detection.service.js';
 
 export interface CsvImportJobData {
@@ -84,6 +84,7 @@ export class CsvImportProcessor extends WorkerHost {
 
       const dataLines = lines.slice(dataStartIdx);
       const totalRows = dataLines.length;
+      const listingSheetName = `Catalog Import ${importId}`;
 
       // Update total rows if not set
       if (importRecord.totalRows !== totalRows) {
@@ -101,6 +102,7 @@ export class CsvImportProcessor extends WorkerHost {
       const seenSku = new Set<string>();
       const seenUpc = new Set<string>();
       const seenEbayItemId = new Set<string>();
+      const seenInsertedRows = new Set<number>();
 
       // Seed with already-inserted rows for resumable imports.
       const alreadyInserted = await this.productRepo.find({
@@ -113,6 +115,14 @@ export class CsvImportProcessor extends WorkerHost {
         if (p.ebayItemId) {
           seenEbayItemId.add(this.normalizeIdentifier(p.ebayItemId));
         }
+      }
+
+      const alreadyInsertedRows = await this.rowRepo.find({
+        where: { importId, status: 'inserted' },
+        select: ['rowNumber'],
+      });
+      for (const row of alreadyInsertedRows) {
+        seenInsertedRows.add(row.rowNumber);
       }
 
       // Process in batches
@@ -142,6 +152,10 @@ export class CsvImportProcessor extends WorkerHost {
         const importRowEntries: Partial<CatalogImportRow>[] = [];
 
         for (const row of parsedRows) {
+          if (seenInsertedRows.has(row.rowNumber)) {
+            continue;
+          }
+
           const validation = this.validateRow(row.data);
           if (!validation.valid) {
             invalidRows++;
@@ -230,6 +244,7 @@ export class CsvImportProcessor extends WorkerHost {
 
         // Process each valid row
         const productsToInsert: Partial<CatalogProduct>[] = [];
+        const listingsToInsert: Partial<ListingRecord>[] = [];
 
         for (let i = 0; i < uniqueRows.length; i++) {
           const row = uniqueRows[i];
@@ -263,6 +278,16 @@ export class CsvImportProcessor extends WorkerHost {
             // New product — prepare for insert
             const product = this.mapToProduct(row.data, importId, row.rowNumber);
             productsToInsert.push(product);
+            seenInsertedRows.add(row.rowNumber);
+            listingsToInsert.push(
+              this.mapToListingRecord(
+                row.data,
+                row.rowNumber,
+                importRecord.fileName,
+                filePath,
+                listingSheetName,
+              ),
+            );
             importRowEntries.push({
               importId,
               rowNumber: row.rowNumber,
@@ -279,6 +304,10 @@ export class CsvImportProcessor extends WorkerHost {
               const savedProducts = await manager
                 .getRepository(CatalogProduct)
                 .save(productsToInsert as CatalogProduct[]);
+
+              await manager
+                .getRepository(ListingRecord)
+                .save(listingsToInsert as ListingRecord[]);
 
               // Link created product IDs to row entries
               let insertIdx = 0;
@@ -517,7 +546,69 @@ export class CsvImportProcessor extends WorkerHost {
     };
   }
 
+  private mapToListingRecord(
+    data: Record<string, string>,
+    rowNumber: number,
+    sourceFileName: string,
+    sourceFilePath: string,
+    sheetName: string,
+  ): Partial<ListingRecord> {
+    const startPriceNum = this.parseNumber(data['price']);
+    const quantityNum = this.parseInteger(data['quantity']);
+    const buyItNowPriceNum = this.parseNumber(data['buyItNowPrice']);
+
+    return {
+      organizationId: null,
+      sourceFileName,
+      sourceFilePath,
+      sheetName,
+      sourceRowNumber: rowNumber,
+      action: data['action'] || 'Add',
+      customLabelSku: data['sku'] || null,
+      categoryId: data['categoryId'] || null,
+      categoryName: data['categoryName'] || null,
+      title: data['title'] || null,
+      pUpc: data['upc'] || null,
+      pEpid: data['epid'] || null,
+      startPrice: data['price'] || null,
+      quantity: data['quantity'] || null,
+      itemPhotoUrl: data['imageUrls'] || null,
+      conditionId: data['conditionId'] || null,
+      description: data['description'] || null,
+      format: data['format'] || null,
+      duration: data['duration'] || null,
+      buyItNowPrice: data['buyItNowPrice'] || null,
+      location: data['location'] || null,
+      shippingProfileName: data['shippingProfile'] || null,
+      returnProfileName: data['returnProfile'] || null,
+      paymentProfileName: data['paymentProfile'] || null,
+      cBrand: data['brand'] || null,
+      cType: data['partType'] || null,
+      cFeatures: data['features'] || null,
+      cManufacturerPartNumber: data['mpn'] || null,
+      cOeOemPartNumber: data['oemPartNumber'] || null,
+      cOperatingMode: data['operatingMode'] || null,
+      cFuelType: data['fuelType'] || null,
+      cDriveType: data['driveType'] || null,
+      startPriceNum,
+      quantityNum,
+      buyItNowPriceNum,
+    };
+  }
+
   /* ── Normalization helpers ─────────────────────────────── */
+
+  private parseNumber(value?: string): number | null {
+    if (!value) return null;
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private parseInteger(value?: string): number | null {
+    if (!value) return null;
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
 
   private normalizeMpn(mpn: string): string {
     return mpn.toUpperCase().replace(/[\s\-_.\/\\]+/g, '').trim();
