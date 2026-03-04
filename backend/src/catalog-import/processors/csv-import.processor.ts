@@ -74,7 +74,10 @@ export class CsvImportProcessor extends WorkerHost {
     try {
       // Read and parse the CSV
       const fileContent = fs.readFileSync(filePath, 'utf-8');
-      const lines = fileContent.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      const sanitizedContent = this.sanitizeCsvForLineSplit(fileContent);
+      const lines = sanitizedContent
+        .split(/\r?\n/)
+        .filter((l) => l.trim().length > 0);
 
       // Find the header row
       const { headers, dataStartIdx } = this.findHeaders(lines);
@@ -553,9 +556,13 @@ export class CsvImportProcessor extends WorkerHost {
     sourceFilePath: string,
     sheetName: string,
   ): Partial<ListingRecord> {
-    const startPriceNum = this.parseNumber(data['price']);
-    const quantityNum = this.parseInteger(data['quantity']);
-    const buyItNowPriceNum = this.parseNumber(data['buyItNowPrice']);
+    const startPriceText = this.normalizeNumericText(data['price']);
+    const quantityText = this.normalizeIntegerText(data['quantity']);
+    const buyItNowPriceText = this.normalizeNumericText(data['buyItNowPrice']);
+
+    const startPriceNum = this.parseNumber(startPriceText ?? undefined);
+    const quantityNum = this.parseInteger(quantityText ?? undefined);
+    const buyItNowPriceNum = this.parseNumber(buyItNowPriceText ?? undefined);
 
     return {
       organizationId: null,
@@ -570,14 +577,14 @@ export class CsvImportProcessor extends WorkerHost {
       title: data['title'] || null,
       pUpc: data['upc'] || null,
       pEpid: data['epid'] || null,
-      startPrice: data['price'] || null,
-      quantity: data['quantity'] || null,
+      startPrice: startPriceText,
+      quantity: quantityText,
       itemPhotoUrl: data['imageUrls'] || null,
       conditionId: data['conditionId'] || null,
       description: data['description'] || null,
       format: data['format'] || null,
       duration: data['duration'] || null,
-      buyItNowPrice: data['buyItNowPrice'] || null,
+      buyItNowPrice: buyItNowPriceText,
       location: data['location'] || null,
       shippingProfileName: data['shippingProfile'] || null,
       returnProfileName: data['returnProfile'] || null,
@@ -608,6 +615,55 @@ export class CsvImportProcessor extends WorkerHost {
     if (!value) return null;
     const parsed = parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private normalizeNumericText(value?: string): string | null {
+    if (!value) return null;
+    const cleaned = value.replace(/[$,\s]/g, '');
+    if (!cleaned) return null;
+    if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+    return cleaned;
+  }
+
+  private normalizeIntegerText(value?: string): string | null {
+    if (!value) return null;
+    const cleaned = value.replace(/[\s,]/g, '');
+    if (!cleaned) return null;
+    if (!/^-?\d+$/.test(cleaned)) return null;
+    return cleaned;
+  }
+
+  private sanitizeCsvForLineSplit(content: string): string {
+    let result = '';
+    let insideQuotes = false;
+
+    for (let i = 0; i < content.length; i++) {
+      const char = content[i];
+      const next = i + 1 < content.length ? content[i + 1] : '';
+
+      if (char === '"') {
+        if (insideQuotes && next === '"') {
+          result += '""';
+          i++;
+        } else {
+          insideQuotes = !insideQuotes;
+          result += char;
+        }
+        continue;
+      }
+
+      if (insideQuotes && (char === '\n' || char === '\r')) {
+        if (char === '\r' && next === '\n') {
+          i++;
+        }
+        result += ' ';
+        continue;
+      }
+
+      result += char;
+    }
+
+    return result;
   }
 
   private normalizeMpn(mpn: string): string {

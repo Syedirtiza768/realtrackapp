@@ -467,7 +467,7 @@ export class CatalogImportService {
    * which has a metadata row before the actual header row.
    */
   private detectHeaders(buffer: Buffer): string[] {
-    const content = buffer.toString('utf-8');
+    const content = this.sanitizeCsvForLineSplit(buffer.toString('utf-8'));
     const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
 
     for (const line of lines) {
@@ -519,7 +519,7 @@ export class CatalogImportService {
    * Count data rows in the CSV (excluding header/metadata rows).
    */
   private countDataRows(buffer: Buffer): number {
-    const content = buffer.toString('utf-8');
+    const content = this.sanitizeCsvForLineSplit(buffer.toString('utf-8'));
     const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
 
     // Find header row index
@@ -565,6 +565,39 @@ export class CatalogImportService {
       }
     }
     result.push(current);
+    return result;
+  }
+
+  private sanitizeCsvForLineSplit(content: string): string {
+    let result = '';
+    let insideQuotes = false;
+
+    for (let i = 0; i < content.length; i++) {
+      const char = content[i];
+      const next = i + 1 < content.length ? content[i + 1] : '';
+
+      if (char === '"') {
+        if (insideQuotes && next === '"') {
+          result += '""';
+          i++;
+        } else {
+          insideQuotes = !insideQuotes;
+          result += char;
+        }
+        continue;
+      }
+
+      if (insideQuotes && (char === '\n' || char === '\r')) {
+        if (char === '\r' && next === '\n') {
+          i++;
+        }
+        result += ' ';
+        continue;
+      }
+
+      result += char;
+    }
+
     return result;
   }
 
