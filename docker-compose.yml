@@ -74,7 +74,7 @@ services:
       # Auth
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3911}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8050}
       # OpenAI
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # eBay
@@ -102,7 +102,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-3911}:80"
+      - "${FRONTEND_PORT:-8050}:80"
 
 volumes:
   pgdata:
