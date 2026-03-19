@@ -5,15 +5,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getQueueToken } from '@nestjs/bullmq';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChannelsService } from './channels.service';
 import { ChannelConnection } from './entities/channel-connection.entity';
 import { ListingChannelInstance } from './entities/listing-channel-instance.entity';
 import { ChannelWebhookLog } from './entities/channel-webhook-log.entity';
+import { Store } from './entities/store.entity';
 import { TokenEncryptionService } from './token-encryption.service';
 import { EbayAdapter } from './adapters/ebay/ebay.adapter';
-import { ShopifyAdapter } from './adapters/shopify/shopify.adapter';
-import { AmazonAdapter } from './adapters/amazon/amazon.adapter';
-import { WalmartAdapter } from './adapters/walmart/walmart.adapter';
 
 const stubAdapter = () => ({
   publishListing: jest.fn(),
@@ -63,12 +63,12 @@ describe('ChannelsService — multi-store webhooks', () => {
         { provide: getRepositoryToken(ChannelConnection), useValue: connectionRepo },
         { provide: getRepositoryToken(ListingChannelInstance), useValue: instanceRepo },
         { provide: getRepositoryToken(ChannelWebhookLog), useValue: webhookLogRepo },
+        { provide: getRepositoryToken(Store), useValue: storeRepoMock },
         { provide: getQueueToken('channels'), useValue: { add: jest.fn() } },
         { provide: TokenEncryptionService, useValue: { encrypt: jest.fn(), decrypt: jest.fn() } },
         { provide: EbayAdapter, useValue: stubAdapter() },
-        { provide: ShopifyAdapter, useValue: stubAdapter() },
-        { provide: AmazonAdapter, useValue: stubAdapter() },
-        { provide: WalmartAdapter, useValue: stubAdapter() },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('true') } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
 

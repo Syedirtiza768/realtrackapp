@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { PriceMonitorService } from '../../pricing-intelligence/price-monitor.service.js';
 
 /**
  * Centralized scheduler that enqueues jobs to existing BullMQ queues.
@@ -26,6 +27,10 @@ export class SchedulerService {
     private readonly ordersQueue: Queue,
     @InjectQueue('dashboard')
     private readonly dashboardQueue: Queue,
+    @InjectQueue('channels')
+    private readonly channelsQueue: Queue,
+    @Optional()
+    private readonly priceMonitor?: PriceMonitorService,
   ) {}
 
   /* ─── Storage Cleanup: Daily at 3:00 AM ─── */
@@ -117,5 +122,52 @@ export class SchedulerService {
       removeOnFail: 10,
     });
     this.logger.log(`Enqueued daily sales rollup: ${jobId}`);
+  }
+
+  /* ─── Channels: Listing Refresh every 48 hours ─── */
+
+  @Cron('0 0 */2 * *', { name: 'listing-refresh-48h' })
+  async scheduleListingRefresh(): Promise<void> {
+    const jobId = `listing-refresh-${new Date().toISOString().slice(0, 10)}`;
+    await this.channelsQueue.add('refresh-stale-offers', {}, {
+      jobId,
+      removeOnComplete: 10,
+      removeOnFail: 10,
+    });
+    this.logger.log(`Enqueued listing refresh for stale offers: ${jobId}`);
+  }
+
+  /* ─── Channels: Inventory Sync every 2 hours ─── */
+
+  @Cron('0 */2 * * *', { name: 'channel-inventory-sync' })
+  async scheduleChannelInventorySync(): Promise<void> {
+    const jobId = `channel-inventory-sync-${Date.now()}`;
+    await this.channelsQueue.add('sync-inventory', {}, {
+      jobId,
+      removeOnComplete: 50,
+      removeOnFail: 20,
+    });
+    this.logger.log(`Enqueued channel inventory sync: ${jobId}`);
+  }
+
+  /* ─── Pricing Intelligence: Competitor Price Collection every 4 hours ─── */
+
+  @Cron('30 */4 * * *', { name: 'pricing-collect-competitor' })
+  async scheduleCompetitorPriceCollection(): Promise<void> {
+    if (!this.priceMonitor) {
+      this.logger.debug('PriceMonitorService not available — skipping competitor price collection');
+      return;
+    }
+
+    try {
+      this.logger.log('Starting scheduled competitor price collection');
+      const result = await this.priceMonitor.collectAllCompetitorPrices();
+      this.logger.log(
+        `Competitor price collection complete: ${result.processed} products, ${result.collected} prices, ${result.errors} errors`,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Scheduled competitor price collection failed: ${msg}`);
+    }
   }
 }

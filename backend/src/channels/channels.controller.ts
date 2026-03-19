@@ -16,6 +16,7 @@ import type { RawBodyRequest } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ChannelsService } from './channels.service.js';
+import { StoresService } from './stores.service.js';
 import { InventoryRealtimeSyncService } from './inventory-realtime-sync.service.js';
 import {
   PublishListingDto,
@@ -29,6 +30,7 @@ import {
 export class ChannelsController {
   constructor(
     private readonly channelsService: ChannelsService,
+    private readonly storesService: StoresService,
     private readonly inventorySync: InventoryRealtimeSyncService,
   ) {}
 
@@ -130,6 +132,40 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Publish multiple listings to multiple channels' })
   bulkPublish(@Body() dto: BulkPublishDto) {
     return this.channelsService.bulkPublish(dto.listingIds, dto.channels);
+  }
+
+  // ─── Demo store setup ───
+
+  @Post('demo/seed-ebay')
+  @ApiOperation({ summary: 'Create a demo eBay sandbox connection + store' })
+  async seedDemoEbay() {
+    return this.channelsService.seedDemoEbayConnection(this.storesService);
+  }
+
+  @Post('ebay/connect-legacy-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Connect eBay using a pre-generated sandbox Auth\'n\'Auth legacy token' })
+  async connectEbayLegacyToken(
+    @Body() body: { token: string; userId?: string },
+  ) {
+    if (!body?.token?.trim()) {
+      return { ok: false, error: 'token is required' };
+    }
+    try {
+      const result = await this.channelsService.connectEbayLegacyToken(
+        body.token.trim(),
+        this.storesService,
+        body.userId,
+      );
+      return { ok: true, ...result };
+    } catch (error: any) {
+      const msg: string =
+        error?.response?.data?.error_description ??
+        error?.response?.data?.message ??
+        error?.message ??
+        'Failed to connect eBay token';
+      return { ok: false, error: msg };
+    }
   }
 
   // ─── Webhooks ───

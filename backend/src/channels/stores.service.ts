@@ -462,7 +462,8 @@ export class StoresService {
   private generateDemoUrl(channel: string, externalId: string): string {
     switch (channel) {
       case 'ebay':
-        return `https://www.ebay.com/itm/${externalId}`;
+        // Sandbox demo — real item IDs would be at sandbox.ebay.com
+        return `https://www.sandbox.ebay.com/itm/${externalId}`;
       case 'shopify':
         return `https://demo-store.myshopify.com/products/${externalId}`;
       case 'amazon':

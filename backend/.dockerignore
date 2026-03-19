@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+*.md
+uploads/catalog/*
+!uploads/catalog/.gitkeep
+*.sql
+backend/
+test
+.vscode

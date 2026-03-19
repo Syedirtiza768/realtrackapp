@@ -23,9 +23,14 @@ import SkuDetailPage from './components/sku/SkuDetailPage';
 import AutomationRulesPage from './components/automation/AutomationRulesPage';
 import TemplateManagerPage from './components/templates/TemplateManagerPage';
 import AuditTrailPage from './components/audit/AuditTrailPage';
+import MotorsDashboard from './components/motors/MotorsDashboard';
+import MotorsProductDetail from './components/motors/MotorsProductDetail';
+import ReviewQueue from './components/motors/ReviewQueue';
+import AIUploadWizard from './components/motors/AIUploadWizard';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
+import EbayOAuthCallback from './components/channels/EbayOAuthCallback';
 
 
 function App() {
@@ -38,6 +43,7 @@ function App() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/channels/ebay/callback" element={<EbayOAuthCallback />} />
 
                 {/* App routes (with Shell) */}
                 <Route path="*" element={
@@ -59,6 +65,10 @@ function App() {
                             <Route path="/audit" element={<AuditTrailPage />} />
                             <Route path="/notifications" element={<NotificationsPage />} />
                             <Route path="/sku/:id" element={<SkuDetailPage />} />
+                            <Route path="/motors" element={<MotorsDashboard />} />
+                            <Route path="/motors/upload" element={<AIUploadWizard />} />
+                            <Route path="/motors/review" element={<ReviewQueue />} />
+                            <Route path="/motors/:id" element={<MotorsProductDetail />} />
                             <Route path="*" element={<div className="p-10 text-center text-slate-500">Page not found</div>} />
                         </Routes>
                     </Shell>

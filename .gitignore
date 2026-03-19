@@ -3,6 +3,7 @@ dist
 *.tsbuildinfo
 .env
 .env.*
+!.env.example
 
 # Data files (large spreadsheets)
 files/

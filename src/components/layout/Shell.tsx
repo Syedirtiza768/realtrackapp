@@ -16,12 +16,16 @@ import {
     ScrollText,
     Layers,
     Upload,
+    Cpu,
+    ClipboardList,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: Camera, label: 'Ingestion', path: '/ingestion' },
+    { icon: Cpu, label: 'Motors Intel', path: '/motors' },
+    { icon: ClipboardList, label: 'Review Queue', path: '/motors/review' },
     { icon: PlusCircle, label: 'New Listing', path: '/listings/new' },
     { icon: ScanLine, label: 'Fitment', path: '/fitment' },
     { icon: Database, label: 'Catalog', path: '/catalog' },

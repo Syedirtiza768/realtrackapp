@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { SchedulerService } from './scheduler.service.js';
+import { PricingIntelligenceModule } from '../../pricing-intelligence/pricing-intelligence.module.js';
 
 /**
  * SchedulerModule — Centralized cron-based job scheduling.
@@ -9,8 +10,8 @@ import { SchedulerService } from './scheduler.service.js';
  * and provides the SchedulerService which uses @Cron decorators
  * to enqueue jobs at defined intervals.
  * 
- * This module resolves the issue where multiple queue processors
- * existed but had no producers to enqueue jobs.
+ * Phase 5: also imports PricingIntelligenceModule for the 4h competitor
+ * price collection cron.
  */
 @Module({
   imports: [
@@ -19,7 +20,9 @@ import { SchedulerService } from './scheduler.service.js';
       { name: 'inventory' },
       { name: 'orders' },
       { name: 'dashboard' },
+      { name: 'channels' },
     ),
+    PricingIntelligenceModule,
   ],
   providers: [SchedulerService],
 })

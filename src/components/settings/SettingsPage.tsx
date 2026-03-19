@@ -12,6 +12,12 @@ import {
     ToggleLeft,
     ToggleRight,
     X,
+    Link2,
+    CheckCircle2,
+    AlertCircle,
+    ExternalLink,
+    Wifi,
+    WifiOff,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
@@ -67,7 +73,7 @@ function Spinner() {
 /* ─── Component ─── */
 
 export default function SettingsPage() {
-    const [tab, setTab] = useState<'general' | 'shipping' | 'pricing'>('general');
+    const [tab, setTab] = useState<'general' | 'shipping' | 'pricing' | 'channels'>('general');
     const [settings, setSettings] = useState<Record<string, TenantSetting[]>>({});
     const [shipping, setShipping] = useState<ShippingProfile[]>([]);
     const [pricing, setPricing] = useState<PricingRule[]>([]);
@@ -155,6 +161,7 @@ export default function SettingsPage() {
 
     const tabs = [
         { key: 'general' as const, label: 'General', icon: Settings },
+        { key: 'channels' as const, label: 'Channels', icon: Link2 },
         { key: 'shipping' as const, label: 'Shipping', icon: Truck },
         { key: 'pricing' as const, label: 'Pricing', icon: DollarSign },
     ];
@@ -407,6 +414,11 @@ export default function SettingsPage() {
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* ─── Channels ─── */}
+                    {tab === 'channels' && (
+                        <ChannelConnectionsTab />
                     )}
                 </>
             )}
@@ -678,5 +690,389 @@ function AddPricingRuleForm({
                 </form>
             </CardContent>
         </Card>
+    );
+}
+
+/* ─── Channel Connections Tab ─── */
+
+interface ChannelConn {
+    id: string;
+    channel: string;
+    accountName: string | null;
+    externalAccountId: string | null;
+    status: string;
+    lastSyncAt: string | null;
+    lastError: string | null;
+    createdAt: string;
+}
+
+interface ChannelStore {
+    id: string;
+    connectionId: string;
+    channel: string;
+    storeName: string;
+    storeUrl: string | null;
+    externalStoreId: string | null;
+    status: string;
+    isPrimary: boolean;
+    listingCount: number;
+    config: Record<string, unknown>;
+    createdAt: string;
+}
+
+const CHANNEL_INFO: Record<string, { label: string; color: string; logo: string }> = {
+    ebay:    { label: 'eBay',    color: '#0064D2', logo: '🛒' },
+    shopify: { label: 'Shopify', color: '#96BF48', logo: '🟢' },
+    amazon:  { label: 'Amazon',  color: '#FF9900', logo: '📦' },
+    walmart: { label: 'Walmart', color: '#0071CE', logo: '🏪' },
+};
+
+function ChannelConnectionsTab() {
+    const [connections, setConnections] = useState<ChannelConn[]>([]);
+    const [stores, setStores] = useState<ChannelStore[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [seeding, setSeeding] = useState(false);
+    const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+    const [testResult, setTestResult] = useState<{ id: string; ok: boolean; error?: string } | null>(null);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [showTokenForm, setShowTokenForm] = useState(false);
+    const [legacyToken, setLegacyToken] = useState('');
+    const [importingToken, setImportingToken] = useState(false);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [connRes, storeRes] = await Promise.all([
+                fetch('/api/channels?userId=system').then(r => r.json()),
+                fetch('/api/stores').then(r => r.json()),
+            ]);
+            setConnections(Array.isArray(connRes) ? connRes : []);
+            setStores(Array.isArray(storeRes) ? storeRes : []);
+        } catch (e) {
+            console.error('Failed to fetch channels', e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { void fetchData(); }, [fetchData]);
+
+    const seedDemoEbay = async () => {
+        setSeeding(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/channels/demo/seed-ebay', { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message ?? 'Seed failed');
+            setMessage({ type: 'success', text: data.message ?? 'Demo eBay store created!' });
+            await fetchData();
+        } catch (e: any) {
+            setMessage({ type: 'error', text: e.message });
+        } finally {
+            setSeeding(false);
+        }
+    };
+
+    const startOAuth = async (channel: string) => {
+        setOauthLoading(channel);
+        try {
+            const res = await fetch(`/api/channels/${channel}/auth-url?state=connect:system`);
+            const data = await res.json();
+            if (data.url) {
+                window.location.href = data.url;
+            }
+        } catch (e: any) {
+            setMessage({ type: 'error', text: `OAuth failed: ${e.message}` });
+        } finally {
+            setOauthLoading(null);
+        }
+    };
+
+    const importLegacyToken = async () => {
+        if (!legacyToken.trim()) return;
+        setImportingToken(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/channels/ebay/connect-legacy-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: legacyToken.trim() }),
+            });
+            const data = await res.json();
+            if (!res.ok || data.ok === false) throw new Error(data.error ?? data.message ?? 'Import failed');
+            setMessage({ type: 'success', text: data.message ?? 'eBay sandbox token imported!' });
+            setLegacyToken('');
+            setShowTokenForm(false);
+            await fetchData();
+        } catch (e: any) {
+            setMessage({ type: 'error', text: e.message });
+        } finally {
+            setImportingToken(false);
+        }
+    };
+
+    const testConnection = async (connectionId: string) => {
+        setTestResult(null);
+        try {
+            const res = await fetch(`/api/channels/${connectionId}/test`, { method: 'POST' });
+            const data = await res.json();
+            setTestResult({ id: connectionId, ...data });
+        } catch (e: any) {
+            setTestResult({ id: connectionId, ok: false, error: e.message });
+        }
+    };
+
+    const disconnectChannel = async (connectionId: string) => {
+        if (!confirm('Disconnect this channel? This will remove all associated stores.')) return;
+        try {
+            await fetch(`/api/channels/${connectionId}`, { method: 'DELETE' });
+            setMessage({ type: 'success', text: 'Channel disconnected' });
+            await fetchData();
+        } catch (e: any) {
+            setMessage({ type: 'error', text: e.message });
+        }
+    };
+
+    if (loading) return <Spinner />;
+
+    const ebayConnected = connections.some(c => c.channel === 'ebay' && c.status === 'active');
+    const shopifyConnected = connections.some(c => c.channel === 'shopify' && c.status === 'active');
+
+    return (
+        <div className="space-y-6">
+            {/* Status message */}
+            {message && (
+                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+                    message.type === 'success'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                }`}>
+                    {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                    {message.text}
+                    <button onClick={() => setMessage(null)} className="ml-auto text-slate-400 hover:text-slate-200">
+                        <X size={14} />
+                    </button>
+                </div>
+            )}
+
+            {/* Quick Setup */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <Wifi size={18} className="text-blue-400" />
+                        Quick Setup — eBay Sandbox
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-slate-400">
+                        Click below to create a demo eBay Sandbox connection using your developer credentials.
+                        This runs in <span className="text-amber-400 font-medium">demo mode</span> — no real listings will be published.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            onClick={seedDemoEbay}
+                            disabled={seeding || ebayConnected}
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                        >
+                            {seeding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                            {ebayConnected ? 'eBay Already Connected' : 'Create Demo eBay Store'}
+                        </button>
+                        {!ebayConnected && (
+                            <>
+                                <button
+                                    onClick={() => setShowTokenForm(v => !v)}
+                                    className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                                >
+                                    <Link2 size={16} />
+                                    Paste User Token
+                                </button>
+                                <button
+                                    onClick={() => startOAuth('ebay')}
+                                    disabled={!!oauthLoading}
+                                    className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                                >
+                                    {oauthLoading === 'ebay' ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
+                                    Connect via OAuth (Sandbox)
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Legacy token paste form */}
+                    {showTokenForm && !ebayConnected && (
+                        <div className="space-y-2 bg-slate-800/60 rounded-lg p-4 border border-slate-700/50">
+                            <p className="text-xs text-slate-400">
+                                Paste the <span className="text-slate-200 font-medium">eBay Sandbox User Token</span> from your{' '}
+                                <a
+                                    href="https://developer.ebay.com/my/auth/sandbox/user"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:underline"
+                                >
+                                    eBay Developer Portal → Sandbox → User Tokens
+                                </a>
+                                . It starts with <code className="text-amber-400">v^1.1#i^1#...</code>
+                            </p>
+                            <textarea
+                                value={legacyToken}
+                                onChange={e => setLegacyToken(e.target.value)}
+                                rows={4}
+                                placeholder="v^1.1#i^1#f^0#p^1#r^0#I^3#t^H4sI..."
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={importLegacyToken}
+                                    disabled={!legacyToken.trim() || importingToken}
+                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
+                                >
+                                    {importingToken ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                                    Import &amp; Connect
+                                </button>
+                                <button
+                                    onClick={() => { setShowTokenForm(false); setLegacyToken(''); }}
+                                    className="text-xs text-slate-400 hover:text-slate-200 px-3 py-2 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="bg-slate-800/50 rounded-lg p-3 text-xs text-slate-500 space-y-1">
+                        <p><span className="text-slate-400 font-medium">App ID:</span> IrtizaHa-listingp-SBX-e6e5fa804-178dade4</p>
+                        <p><span className="text-slate-400 font-medium">Dev ID:</span> 71354d52-d565-49e2-8977-d96caab268ee</p>
+                        <p><span className="text-slate-400 font-medium">Environment:</span> Sandbox</p>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Connected Channels */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-200">Connected Channels</h3>
+                {connections.length === 0 ? (
+                    <Card>
+                        <CardContent className="py-8 text-center text-slate-500">
+                            <WifiOff size={24} className="mx-auto mb-2 text-slate-600" />
+                            No channels connected yet. Use Quick Setup above to get started.
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {connections.map(conn => {
+                            const info = CHANNEL_INFO[conn.channel] ?? { label: conn.channel, color: '#666', logo: '🔗' };
+                            const connStores = stores.filter(s => s.connectionId === conn.id);
+                            const isTestOk = testResult?.id === conn.id ? testResult.ok : null;
+
+                            return (
+                                <Card key={conn.id} className="overflow-hidden">
+                                    <div className="h-1" style={{ backgroundColor: info.color }} />
+                                    <CardContent className="pt-4 space-y-3">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xl">{info.logo}</span>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-200">{info.label}</p>
+                                                    <p className="text-xs text-slate-500">{conn.accountName ?? conn.externalAccountId ?? conn.id.slice(0, 8)}</p>
+                                                </div>
+                                            </div>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                                conn.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' :
+                                                conn.status === 'error' ? 'bg-red-500/15 text-red-400' :
+                                                'bg-slate-700 text-slate-400'
+                                            }`}>
+                                                {conn.status}
+                                            </span>
+                                        </div>
+
+                                        {/* Stores */}
+                                        {connStores.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Stores</p>
+                                                {connStores.map(store => (
+                                                    <div key={store.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg px-3 py-2">
+                                                        <div>
+                                                            <p className="text-sm text-slate-300">{store.storeName}</p>
+                                                            <p className="text-xs text-slate-500">
+                                                                {store.listingCount} listing{store.listingCount !== 1 ? 's' : ''}
+                                                                {store.isPrimary && <span className="ml-1 text-blue-400">• Primary</span>}
+                                                            </p>
+                                                        </div>
+                                                        <span className={`text-xs px-2 py-0.5 rounded ${
+                                                            store.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700 text-slate-400'
+                                                        }`}>
+                                                            {store.status}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Connection details */}
+                                        <div className="text-xs text-slate-600 space-y-0.5">
+                                            <p>Connected: {new Date(conn.createdAt).toLocaleDateString()}</p>
+                                            {conn.lastSyncAt && <p>Last sync: {new Date(conn.lastSyncAt).toLocaleString()}</p>}
+                                            {conn.lastError && <p className="text-red-400">Error: {conn.lastError}</p>}
+                                        </div>
+
+                                        {/* Test result */}
+                                        {isTestOk !== null && (
+                                            <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded ${
+                                                isTestOk ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                            }`}>
+                                                {isTestOk ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                                                <span>{isTestOk ? 'Connection OK' : (testResult?.error ?? 'Connection failed')}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Actions */}
+                                        <div className="flex gap-2 pt-1">
+                                            <button
+                                                onClick={() => testConnection(conn.id)}
+                                                className="text-xs text-slate-400 hover:text-blue-400 transition-colors"
+                                            >
+                                                Test Connection
+                                            </button>
+                                            <span className="text-slate-700">|</span>
+                                            <button
+                                                onClick={() => disconnectChannel(conn.id)}
+                                                className="text-xs text-slate-400 hover:text-red-400 transition-colors"
+                                            >
+                                                Disconnect
+                                            </button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Available Channels (not yet connected) */}
+            {(!ebayConnected || !shopifyConnected) && (
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-slate-200">Available Channels</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                        {Object.entries(CHANNEL_INFO)
+                            .filter(([key]) => !connections.some(c => c.channel === key && c.status === 'active'))
+                            .map(([key, info]) => (
+                                <button
+                                    key={key}
+                                    onClick={() => key === 'ebay' ? seedDemoEbay() : startOAuth(key)}
+                                    disabled={!!oauthLoading || seeding}
+                                    className="flex items-center gap-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-lg p-4 text-left transition-all"
+                                >
+                                    <span className="text-2xl">{info.logo}</span>
+                                    <div>
+                                        <p className="text-sm font-medium text-slate-300">{info.label}</p>
+                                        <p className="text-xs text-slate-500">Click to connect</p>
+                                    </div>
+                                </button>
+                            ))}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

@@ -28,6 +28,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { OrdersModule } from './orders/orders.module';
 import { SettingsModule } from './settings/settings.module';
 import { StorageModule } from './storage/storage.module';
+import { MotorsIntelligenceModule } from './motors-intelligence/motors-intelligence.module';
+import { OpenAiModule } from './common/openai/openai.module';
+import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intelligence.module';
 
 @Module({
   imports: [
@@ -93,6 +96,9 @@ import { StorageModule } from './storage/storage.module';
     FeatureFlagModule,
     AutomationModule,
     TemplateModule,
+    MotorsIntelligenceModule,
+    OpenAiModule,
+    PricingIntelligenceModule,
   ],
   controllers: [AppController],
   providers: [

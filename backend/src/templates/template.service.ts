@@ -2,6 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ListingTemplate } from './entities/listing-template.entity.js';
+import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
+import type { ListingGenerationResult } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import type {
   CreateTemplateDto,
   UpdateTemplateDto,
@@ -16,6 +18,7 @@ export class TemplateService {
   constructor(
     @InjectRepository(ListingTemplate)
     private readonly templateRepo: Repository<ListingTemplate>,
+    private readonly listingPipeline: ListingGenerationPipeline,
   ) {}
 
   /* ─── CRUD ─── */
@@ -113,6 +116,43 @@ export class TemplateService {
       where,
       order: { channel: 'DESC' }, // Prefer channel-specific over universal
     });
+  }
+
+  /* ─── AI Generation from Template ─── */
+
+  /**
+   * Render a template with product data, then feed the rendered context
+   * into the OpenAI listing generation pipeline.
+   *
+   * Returns both the rendered template HTML and the AI-generated listing.
+   */
+  async generateFromTemplate(
+    id: string,
+    productData: Record<string, unknown>,
+    categoryName?: string,
+    condition?: string,
+  ): Promise<{ renderedHtml: string; generation: ListingGenerationResult }> {
+    const template = await this.findOne(id);
+    const renderedHtml = this.renderContent(template.content, productData);
+
+    // Include rendered template context in the product data for the AI
+    const enrichedData = {
+      ...productData,
+      template_context: renderedHtml,
+      template_name: template.name,
+    };
+
+    const generation = await this.listingPipeline.generate(
+      enrichedData,
+      categoryName ?? 'Auto Parts & Accessories',
+      condition ?? (productData.condition as string) ?? 'NEW',
+    );
+
+    this.logger.log(
+      `Generated listing from template "${template.name}": "${generation.title}"`,
+    );
+
+    return { renderedHtml, generation };
   }
 
   /* ─── Helpers ─── */

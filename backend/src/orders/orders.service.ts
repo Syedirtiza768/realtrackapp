@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Order } from './entities/order.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { canTransition, getValidTransitions, ALL_ORDER_STATUSES } from './order-state-machine.js';
@@ -20,6 +21,7 @@ export class OrdersService {
     private readonly orderRepo: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly itemRepo: Repository<OrderItem>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // ─── Queries ───
@@ -121,6 +123,16 @@ export class OrdersService {
 
     await this.orderRepo.save(order);
     this.logger.log(`Order ${id}: ${oldStatus} → ${newStatus}${reason ? ` (${reason})` : ''}`);
+
+    if (newStatus === 'shipped') {
+      this.eventEmitter.emit('order.shipped', {
+        orderId: order.id,
+        channel: order.channel,
+        trackingNumber: order.trackingNumber,
+        shippedAt: order.shippedAt,
+      });
+    }
+
     return order;
   }
 
@@ -140,6 +152,16 @@ export class OrdersService {
 
     await this.orderRepo.save(order);
     this.logger.log(`Order ${id}: tracking updated → ${dto.trackingNumber}`);
+
+    if (order.status === 'shipped') {
+      this.eventEmitter.emit('order.shipped', {
+        orderId: order.id,
+        channel: order.channel,
+        trackingNumber: order.trackingNumber,
+        shippedAt: order.shippedAt,
+      });
+    }
+
     return order;
   }
 

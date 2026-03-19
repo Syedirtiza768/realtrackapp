@@ -8,14 +8,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChannelConnection } from './entities/channel-connection.entity.js';
 import { ListingChannelInstance } from './entities/listing-channel-instance.entity.js';
 import { ChannelWebhookLog } from './entities/channel-webhook-log.entity.js';
+import { Store } from './entities/store.entity.js';
 import { TokenEncryptionService } from './token-encryption.service.js';
 import { EbayAdapter } from './adapters/ebay/ebay.adapter.js';
-import { ShopifyAdapter } from './adapters/shopify/shopify.adapter.js';
-import { AmazonAdapter } from './adapters/amazon/amazon.adapter.js';
-import { WalmartAdapter } from './adapters/walmart/walmart.adapter.js';
 import type { ChannelAdapter, TokenSet } from './channel-adapter.interface.js';
 
 @Injectable()
@@ -30,20 +30,22 @@ export class ChannelsService {
     private readonly instanceRepo: Repository<ListingChannelInstance>,
     @InjectRepository(ChannelWebhookLog)
     private readonly webhookLogRepo: Repository<ChannelWebhookLog>,
+    @InjectRepository(Store)
+    private readonly storeRepo: Repository<Store>,
     @InjectQueue('channels')
     private readonly channelsQueue: Queue,
     private readonly encryption: TokenEncryptionService,
     private readonly ebayAdapter: EbayAdapter,
-    private readonly shopifyAdapter: ShopifyAdapter,
-    private readonly amazonAdapter: AmazonAdapter,
-    private readonly walmartAdapter: WalmartAdapter,
+    private readonly config: ConfigService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.adapters = new Map<string, ChannelAdapter>([
       ['ebay', this.ebayAdapter],
-      ['shopify', this.shopifyAdapter],
-      ['amazon', this.amazonAdapter],
-      ['walmart', this.walmartAdapter],
     ]);
+  }
+
+  private get isDemoMode(): boolean {
+    return this.config.get<string>('CHANNEL_DEMO_MODE', 'true') === 'true';
   }
 
   private getAdapter(channel: string): ChannelAdapter {
@@ -90,7 +92,88 @@ export class ChannelsService {
 
     const saved = await this.connectionRepo.save(connection);
     this.logger.log(`Created ${channel} connection ${saved.id} for user ${userId}`);
+    this.eventEmitter.emit('channel.connected', {
+      connectionId: saved.id,
+      channel,
+      userId,
+    });
     return saved;
+  }
+
+  /**
+   * Connect using a pre-generated eBay sandbox Auth'n'Auth legacy user token.
+   * Stores the token directly (no eBay API call required — seller-scoped
+   * permissions cannot be obtained via client_credentials grant).
+   * In CHANNEL_DEMO_MODE all publish/sync operations are simulated locally.
+   */
+  async connectEbayLegacyToken(
+    legacyToken: string,
+    storesService: any,
+    userId = '00000000-0000-0000-0000-000000000001',
+  ): Promise<{ connection: ChannelConnection; storeId: string; message: string }> {
+    // Remove any existing eBay connection for this user first
+    const existing = await this.connectionRepo.find({
+      where: { channel: 'ebay', userId },
+    });
+    for (const conn of existing) {
+      // Cascade will remove stores; if not, delete them manually
+      await this.connectionRepo.delete(conn.id);
+      this.logger.log(`Removed previous eBay connection ${conn.id} before re-linking`);
+    }
+
+    // Wrap the legacy token into a TokenSet (no real API call needed)
+    const tokens = this.ebayAdapter.exchangeLegacyToken(legacyToken);
+
+    const connection = this.connectionRepo.create({
+      channel: 'ebay',
+      userId,
+      accountName: 'eBay Sandbox (User Token)',
+      externalAccountId: `${legacyToken.slice(0, 20)}…`,
+      encryptedTokens: this.encryption.encrypt(JSON.stringify(tokens)),
+      tokenExpiresAt: tokens.expiresAt,
+      scope: tokens.scope ?? null,
+      status: 'active',
+    });
+
+    const savedConn = await this.connectionRepo.save(connection);
+    this.logger.log(`Created eBay legacy-token connection ${savedConn.id}`);
+
+    // Create primary store (or reuse if already exists for this connection)
+    let store: any;
+    const existingStore = await this.storeRepo.findOne({
+      where: { connectionId: savedConn.id },
+    });
+    if (existingStore) {
+      store = existingStore;
+    } else {
+      store = await storesService.createStore({
+        connectionId: savedConn.id,
+        channel: 'ebay',
+        storeName: 'MHN eBay Sandbox Store',
+        storeUrl: 'https://www.sandbox.ebay.com',
+        externalStoreId: this.ebayAdapter['clientId'],
+        isPrimary: true,
+        config: {
+          marketplace: 'EBAY_MOTORS_US',
+          sandbox: true,
+          tokenType: 'legacy',
+          legacyTokenStored: true,
+        },
+      });
+    }
+
+    this.eventEmitter.emit('channel.connected', {
+      connectionId: savedConn.id,
+      channel: 'ebay',
+      userId,
+      storeId: store.id,
+    });
+
+    return {
+      connection: savedConn,
+      storeId: store.id,
+      message: 'eBay sandbox connected successfully. Demo mode active — publish operations are simulated locally.',
+    };
   }
 
   async disconnectChannel(connectionId: string): Promise<void> {
@@ -147,6 +230,48 @@ export class ChannelsService {
     const conn = await this.connectionRepo.findOneBy({ id: connectionId });
     if (!conn) throw new NotFoundException('Connection not found');
 
+    // ── Demo mode: simulate publish without calling real marketplace API ──
+    if (this.isDemoMode) {
+      const demoId = `DEMO-${conn.channel.toUpperCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      const demoUrl = conn.channel === 'ebay'
+        ? `https://www.sandbox.ebay.com/itm/${demoId}`
+        : `https://demo.example.com/${conn.channel}/${demoId}`;
+
+      const existing = await this.instanceRepo.findOne({ where: { connectionId, listingId } });
+      if (existing) {
+        existing.externalId = demoId;
+        existing.externalUrl = demoUrl;
+        existing.syncStatus = 'synced';
+        existing.lastSyncedAt = new Date();
+        existing.lastError = null;
+        this.logger.log(`[DEMO] Updated channel instance for listing ${listingId} on ${conn.channel}`);
+        return this.instanceRepo.save(existing);
+      }
+
+      let storeId = listingData['storeId'] as string | undefined;
+      if (!storeId) {
+        const store = await this.storeRepo.findOne({
+          where: { connectionId },
+          order: { isPrimary: 'DESC', createdAt: 'ASC' },
+        });
+        if (!store) throw new BadRequestException(`No store found for connection ${connectionId}.`);
+        storeId = store.id;
+      }
+
+      this.logger.log(`[DEMO] Simulated publish of listing ${listingId} to ${conn.channel} → ${demoUrl}`);
+      const instance = this.instanceRepo.create({
+        connectionId,
+        listingId,
+        storeId,
+        channel: conn.channel,
+        externalId: demoId,
+        externalUrl: demoUrl,
+        syncStatus: 'synced',
+        lastSyncedAt: new Date(),
+      });
+      return this.instanceRepo.save(instance);
+    }
+
     const tokens = await this.getValidTokens(conn);
     const adapter = this.getAdapter(conn.channel);
     const result = await adapter.publishListing(tokens, listingData);
@@ -169,10 +294,23 @@ export class ChannelsService {
       return this.instanceRepo.save(existing);
     }
 
+    // Resolve the actual store ID — use provided storeId or find the primary store
+    let storeId = listingData['storeId'] as string | undefined;
+    if (!storeId) {
+      const store = await this.storeRepo.findOne({
+        where: { connectionId },
+        order: { isPrimary: 'DESC', createdAt: 'ASC' },
+      });
+      if (!store) {
+        throw new BadRequestException(`No store found for connection ${connectionId}. Create a store first.`);
+      }
+      storeId = store.id;
+    }
+
     const instance = this.instanceRepo.create({
       connectionId,
       listingId,
-      storeId: listingData['storeId'] as string ?? connectionId,
+      storeId,
       channel: conn.channel,
       externalId: result.externalId,
       externalUrl: result.externalUrl ?? null,
@@ -265,6 +403,16 @@ export class ChannelsService {
           },
         );
 
+        // Resolve the primary store for this connection
+        const store = await this.storeRepo.findOne({
+          where: { connectionId: connection.id },
+          order: { isPrimary: 'DESC', createdAt: 'ASC' },
+        });
+        if (!store) {
+          results.push({ channel, error: `No store found for ${channel} connection. Create a store first.` });
+          continue;
+        }
+
         // Create a pending instance record
         const existing = await this.instanceRepo.findOne({
           where: { connectionId: connection.id, listingId },
@@ -274,7 +422,7 @@ export class ChannelsService {
             this.instanceRepo.create({
               connectionId: connection.id,
               listingId,
-              storeId: connection.id, // resolved during actual publish
+              storeId: store.id,
               channel,
               syncStatus: 'pending',
             }),
@@ -404,6 +552,76 @@ export class ChannelsService {
       .getRepository('Store')
       .findOne({ where: { channel, externalStoreId } });
     return store?.id ?? null;
+  }
+
+  // ─── Demo eBay Seed ───
+
+  async seedDemoEbayConnection(storesService: any): Promise<{
+    connectionId: string;
+    storeId: string;
+    message: string;
+  }> {
+    // Check if a demo eBay connection already exists
+    const existing = await this.connectionRepo.findOne({
+      where: { channel: 'ebay', accountName: 'eBay Sandbox Demo' },
+    });
+
+    if (existing) {
+      // Find associated store
+      const store = await this.connectionRepo.manager
+        .getRepository('Store')
+        .findOne({ where: { connectionId: existing.id } });
+      return {
+        connectionId: existing.id,
+        storeId: store?.id ?? '',
+        message: 'Demo eBay sandbox connection already exists',
+      };
+    }
+
+    // Create demo tokens
+    const demoTokens: TokenSet = {
+      accessToken: `DEMO_SANDBOX_TOKEN_${Date.now()}`,
+      refreshToken: `DEMO_SANDBOX_REFRESH_${Date.now()}`,
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account',
+      tokenType: 'User Access Token',
+    };
+
+    const userId = '00000000-0000-0000-0000-000000000001';
+
+    const connection = this.connectionRepo.create({
+      channel: 'ebay',
+      userId,
+      accountName: 'eBay Sandbox Demo',
+      externalAccountId: this.ebayAdapter.channelName,
+      encryptedTokens: this.encryption.encrypt(JSON.stringify(demoTokens)),
+      tokenExpiresAt: demoTokens.expiresAt,
+      scope: demoTokens.scope ?? null,
+      status: 'active',
+    });
+
+    const savedConn = await this.connectionRepo.save(connection);
+    this.logger.log(`Created demo eBay connection: ${savedConn.id}`);
+
+    // Create a demo store
+    const store = await storesService.createStore({
+      connectionId: savedConn.id,
+      channel: 'ebay',
+      storeName: 'MHN eBay Sandbox Store',
+      storeUrl: 'https://sandbox.ebay.com',
+      externalStoreId: 'IrtizaHa-listingp-SBX-e6e5fa804-178dade4',
+      isPrimary: true,
+      config: {
+        marketplace: 'EBAY_MOTORS_US',
+        sandbox: true,
+      },
+    });
+
+    return {
+      connectionId: savedConn.id,
+      storeId: store.id,
+      message: 'Demo eBay sandbox connection and store created successfully',
+    };
   }
 
   // ─── Token helpers ───

@@ -43,7 +43,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">MergeKart</h1>
+          <h1 className="text-3xl font-bold text-slate-800">ListingPro</h1>
           <p className="text-sm text-slate-500 mt-1">Create your account</p>
         </div>
 

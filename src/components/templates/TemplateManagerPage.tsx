@@ -11,6 +11,7 @@ import {
   Code2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { sanitizeHtml } from '../../lib/sanitize';
 
 const API = '/api/templates';
 
@@ -184,7 +185,7 @@ export default function TemplateManagerPage() {
                 <X size={16} />
               </button>
             </div>
-            <div className="p-6 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+            <div className="p-6 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }} />
           </div>
         </div>
       )}

@@ -60,4 +60,18 @@ export class TemplateController {
   renderPreview(@Param('id') id: string, @Body() dto: RenderPreviewDto) {
     return this.templateService.renderPreview(id, dto);
   }
+
+  @Post(':id/generate')
+  @ApiOperation({ summary: 'Render template + run OpenAI listing generation pipeline' })
+  generate(
+    @Param('id') id: string,
+    @Body() body: { productData: Record<string, unknown>; categoryName?: string; condition?: string },
+  ) {
+    return this.templateService.generateFromTemplate(
+      id,
+      body.productData,
+      body.categoryName,
+      body.condition,
+    );
+  }
 }

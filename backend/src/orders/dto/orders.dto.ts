@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class OrdersQueryDto {
@@ -68,4 +68,45 @@ export class RefundDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+/* ─── Phase 4: Bulk Operations ─── */
+
+export class BulkShipItemDto {
+  @IsUUID()
+  orderId!: string;
+
+  @IsString()
+  trackingNumber!: string;
+
+  @IsString()
+  carrier!: string;
+}
+
+export class BulkShipDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BulkShipItemDto)
+  items!: BulkShipItemDto[];
+}
+
+export class BulkCancelDto {
+  @IsArray()
+  @IsUUID('4', { each: true })
+  orderIds!: string[];
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class CsvTrackingUploadDto {
+  @IsString()
+  csvContent!: string;
+}
+
+export class ManualImportDto {
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
 }

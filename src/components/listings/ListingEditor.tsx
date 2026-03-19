@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
     Sparkles,
     Save,
     Eye,
     CheckCircle,
     Monitor,
-    ShoppingBag,
     Plus,
     ArrowLeft,
     Loader2,
     AlertTriangle,
+    Wand2,
+    FileText,
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '../ui/card';
@@ -21,6 +23,8 @@ import {
     isApiError,
 } from '../../lib/listingsApi';
 import { useListingDetail } from '../../lib/searchApi';
+import { generateListing, type ListingGenerationResult } from '../../lib/listingGenerationApi';
+import { getTemplates, type ListingTemplate } from '../../lib/templateApi';
 import type { IngestionListingSeed, ProductCondition } from '../../types/platform';
 import type { ListingStatus } from '../../types/listings';
 
@@ -109,6 +113,32 @@ export default function ListingEditor() {
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [categoryName, setCategoryName] = useState('');
+
+    /* ── Templates (TanStack Query) ─────────────────────── */
+    const { data: templates = [] } = useQuery<ListingTemplate[]>({
+        queryKey: ['templates', 'ebay'],
+        queryFn: () => getTemplates({ channel: 'ebay', active: 'true' }),
+        staleTime: 120_000,
+    });
+
+    /* ── AI Generation Mutation ─────────────────────────── */
+    const aiGenMutation = useMutation({
+        mutationFn: async () => {
+            if (!routeId) throw new Error('Save the listing first before generating AI content.');
+            return generateListing({
+                masterProductId: routeId,
+                templateId: selectedTemplateId || undefined,
+                categoryName: categoryName || undefined,
+            });
+        },
+        onSuccess: (result) => {
+            const gen: ListingGenerationResult = result.generation;
+            setTitle(gen.title);
+            setDescription(gen.description);
+        },
+    });
 
     // Sync form when existing listing loads in edit mode
     useEffect(() => {
@@ -245,6 +275,74 @@ export default function ListingEditor() {
                         </div>
                     </div>
 
+                    {/* ─── AI Generation Panel ─────────────────────── */}
+                    <Card>
+                        <CardContent className="p-4 space-y-3">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Wand2 size={16} className="text-purple-400" />
+                                <h4 className="text-sm font-medium text-slate-200">AI Listing Generation</h4>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">
+                                        <FileText size={10} className="inline mr-1" />Template
+                                    </label>
+                                    <select
+                                        value={selectedTemplateId}
+                                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                                    >
+                                        <option value="">Default template</option>
+                                        {templates.map((t) => (
+                                            <option key={t.id} value={t.id}>
+                                                {t.name} ({t.templateType})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">
+                                        eBay Category
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={categoryName}
+                                        onChange={(e) => setCategoryName(e.target.value)}
+                                        placeholder="Auto Parts & Accessories"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => aiGenMutation.mutate()}
+                                disabled={aiGenMutation.isPending || !isEditMode}
+                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed w-full justify-center"
+                            >
+                                {aiGenMutation.isPending ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <Wand2 size={14} />
+                                )}
+                                {aiGenMutation.isPending ? 'Generating…' : 'Generate with AI'}
+                            </button>
+                            {!isEditMode && (
+                                <p className="text-[10px] text-slate-500 text-center">
+                                    Save the listing first to enable AI generation.
+                                </p>
+                            )}
+                            {aiGenMutation.isError && (
+                                <p className="text-xs text-red-400 text-center">
+                                    {aiGenMutation.error instanceof Error ? aiGenMutation.error.message : 'Generation failed'}
+                                </p>
+                            )}
+                            {aiGenMutation.isSuccess && (
+                                <p className="text-xs text-emerald-400 text-center flex items-center justify-center gap-1">
+                                    <CheckCircle size={12} /> Title and description updated from AI.
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+
                     <Card>
                         <CardContent className="p-6 space-y-6">
                             <div className="space-y-4">
@@ -363,9 +461,6 @@ export default function ListingEditor() {
                         <div className="flex bg-slate-800 rounded-lg p-1">
                             <button className="p-1 px-3 rounded-md bg-blue-600/20 text-blue-400 text-xs font-medium flex items-center gap-2">
                                 <Monitor size={12} /> eBay
-                            </button>
-                            <button className="p-1 px-3 rounded-md text-slate-400 text-xs font-medium flex items-center gap-2 hover:text-slate-200">
-                                <ShoppingBag size={12} /> Shopify
                             </button>
                         </div>
                     </div>

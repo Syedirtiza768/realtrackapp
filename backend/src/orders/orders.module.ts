@@ -3,31 +3,27 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { Order } from './entities/order.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
-import { ChannelConnection } from '../channels/entities/channel-connection.entity.js';
+import { Store } from '../channels/entities/store.entity.js';
 import { OrdersService } from './orders.service.js';
 import { OrdersController } from './orders.controller.js';
 import { OrderImportProcessor } from './processors/order-import.processor.js';
-import { EbayAdapter } from '../channels/adapters/ebay/ebay.adapter.js';
-import { ShopifyAdapter } from '../channels/adapters/shopify/shopify.adapter.js';
-import { AmazonAdapter } from '../channels/adapters/amazon/amazon.adapter.js';
-import { WalmartAdapter } from '../channels/adapters/walmart/walmart.adapter.js';
-import { TokenEncryptionService } from '../channels/token-encryption.service.js';
+import { OrderFulfillmentService } from './order-fulfillment.service.js';
+import { EbayOrderImportService } from './order-import-ebay.service.js';
+import { ChannelsModule } from '../channels/channels.module.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, ChannelConnection]),
+    TypeOrmModule.forFeature([Order, OrderItem, Store]),
     BullModule.registerQueue({ name: 'orders' }),
+    ChannelsModule,
   ],
   controllers: [OrdersController],
   providers: [
     OrdersService,
     OrderImportProcessor,
-    EbayAdapter,
-    ShopifyAdapter,
-    AmazonAdapter,
-    WalmartAdapter,
-    TokenEncryptionService,
+    OrderFulfillmentService,
+    EbayOrderImportService,
   ],
-  exports: [OrdersService],
+  exports: [OrdersService, OrderFulfillmentService, EbayOrderImportService],
 })
 export class OrdersModule {}

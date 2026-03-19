@@ -61,6 +61,27 @@ export class EbayAdapter implements ChannelAdapter {
     );
   }
 
+  /**
+   * Accept a pre-generated eBay sandbox Auth'n'Auth (legacy) user token.
+   *
+   * eBay's client_credentials grant does NOT grant seller-scoped permissions
+   * (sell.inventory, sell.account, etc.) — those require a user OAuth2 flow.
+   * In CHANNEL_DEMO_MODE the token is never sent to eBay anyway, so we store
+   * it directly as the accessToken so the connection is valid for demo use.
+   * When the user later does the real OAuth flow the token will be replaced.
+   */
+  exchangeLegacyToken(legacyToken: string): TokenSet & { legacyToken: string } {
+    return {
+      accessToken: legacyToken,
+      refreshToken: undefined,
+      // Legacy tokens from the dev portal are valid for ~18 months
+      expiresAt: new Date(Date.now() + 548 * 24 * 60 * 60 * 1000),
+      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+      tokenType: 'legacy',
+      legacyToken,
+    };
+  }
+
   async exchangeCode(code: string): Promise<TokenSet> {
     const basicAuth = Buffer.from(
       `${this.clientId}:${this.clientSecret}`,
@@ -173,9 +194,13 @@ export class EbayAdapter implements ChannelAdapter {
         { headers: { Authorization: `Bearer ${tokens.accessToken}` } },
       );
 
+      const itemUrl = this.sandbox
+        ? `https://www.sandbox.ebay.com/itm/${publishData.listingId}`
+        : `https://www.ebay.com/itm/${publishData.listingId}`;
+
       return {
         externalId: publishData.listingId,
-        externalUrl: `https://www.ebay.com/itm/${publishData.listingId}`,
+        externalUrl: itemUrl,
         status: 'active',
       };
     } catch (error: any) {

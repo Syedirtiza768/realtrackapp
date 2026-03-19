@@ -17,14 +17,19 @@ import { AiEnhancementService } from './ai-enhancement.service.js';
 import { AiEnhancementController } from './ai-enhancement.controller.js';
 import { TokenEncryptionService } from './token-encryption.service.js';
 import { EbayAdapter } from './adapters/ebay/ebay.adapter.js';
-import { ShopifyAdapter } from './adapters/shopify/shopify.adapter.js';
-import { AmazonAdapter } from './adapters/amazon/amazon.adapter.js';
-import { WalmartAdapter } from './adapters/walmart/walmart.adapter.js';
 import { ChannelPublishProcessor } from './processors/channel-publish.processor.js';
 import { PricingPushService } from './pricing-push.service.js';
 import { InventoryRealtimeSyncService } from './inventory-realtime-sync.service.js';
 import { PricingRule } from '../settings/entities/pricing-rule.entity.js';
 import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.js';
+// ── New eBay API service layer ──
+import { EbayAuthService } from './ebay/ebay-auth.service.js';
+import { EbayInventoryApiService } from './ebay/ebay-inventory-api.service.js';
+import { EbayTaxonomyApiService } from './ebay/ebay-taxonomy-api.service.js';
+import { EbayFulfillmentApiService } from './ebay/ebay-fulfillment-api.service.js';
+import { EbayBrowseApiService } from './ebay/ebay-browse-api.service.js';
+import { EbayPublishService } from './ebay/ebay-publish.service.js';
+import { EbayPublishController } from './ebay/ebay-publish.controller.js';
 
 @Module({
   imports: [
@@ -43,20 +48,38 @@ import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.j
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
   ],
-  controllers: [ChannelsController, StoresController, AiEnhancementController],
+  controllers: [ChannelsController, StoresController, AiEnhancementController, EbayPublishController],
   providers: [
     ChannelsService,
     StoresService,
     AiEnhancementService,
     TokenEncryptionService,
     EbayAdapter,
-    ShopifyAdapter,
-    AmazonAdapter,
-    WalmartAdapter,
     ChannelPublishProcessor,
     PricingPushService,
     InventoryRealtimeSyncService,
+    // ── New eBay API services ──
+    EbayAuthService,
+    EbayInventoryApiService,
+    EbayTaxonomyApiService,
+    EbayFulfillmentApiService,
+    EbayBrowseApiService,
+    EbayPublishService,
   ],
-  exports: [ChannelsService, StoresService, AiEnhancementService, PricingPushService, InventoryRealtimeSyncService],
+  exports: [
+    ChannelsService,
+    StoresService,
+    AiEnhancementService,
+    PricingPushService,
+    InventoryRealtimeSyncService,
+    // ── Export new eBay services for use by other modules ──
+    EbayAuthService,
+    EbayInventoryApiService,
+    EbayTaxonomyApiService,
+    EbayFulfillmentApiService,
+    EbayBrowseApiService,
+    EbayPublishService,
+    TokenEncryptionService,
+  ],
 })
 export class ChannelsModule {}
