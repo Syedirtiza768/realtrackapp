@@ -53,7 +53,7 @@ import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intell
         database: config.get<string>('DB_NAME', 'listingpro'),
         autoLoadEntities: true,
         entities: [ListingRecord, ListingRevision, ListingCompliance],
-        synchronize: false,
+        synchronize: config.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
         migrationsRun: config.get<string>('DB_MIGRATIONS_RUN', 'false') === 'true',
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
         migrationsTableName: 'typeorm_migrations',
