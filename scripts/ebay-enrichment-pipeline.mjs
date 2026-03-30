@@ -301,6 +301,7 @@ async function getCategoryAspects(categoryId) {
 // ═══════════════════════════════════════════════════════════════════════
 
 const CATEGORY_KEYWORDS = [
+  // Doors & related
   { kw: ['complete door', 'door assembly', 'door front', 'door rear', 'driver door', "driver's door", 'door body-in-white', 'door, body'], id: '174105', name: 'Doors & Door Parts' },
   { kw: ['door panel', 'door skin', 'exterior door'], id: '33697', name: 'Exterior Door Panels & Frames' },
   { kw: ['interior door', 'door moulding', 'door trim', 'door armrest', 'door finisher', 'inner panel'], id: '33695', name: 'Interior Door Panels & Parts' },
@@ -312,22 +313,71 @@ const CATEGORY_KEYWORDS = [
   { kw: ['door seal', 'door sealing', 'weatherstrip', 'weather strip', 'belt weatherstrip', 'circumf'], id: '33712', name: 'Window Sweeps, Felts & Weatherstrips' },
   { kw: ['mirror', 'side mirror', 'rearview'], id: '33726', name: 'Exterior Mirrors' },
   { kw: ['door brake', 'door stop', 'door check', 'check arm', 'door damping'], id: '174105', name: 'Doors & Door Parts' },
-  { kw: ['speaker', 'tweeter', 'woofer', 'sound'], id: '174920', name: 'Car Speakers' },
-  { kw: ['control unit', 'module', 'ecu'], id: '33596', name: 'Engine Computers' },
-  { kw: ['wiring', 'harness', 'cable'], id: '174924', name: 'Wiring Harnesses' },
-  { kw: ['switch', 'button', 'control panel'], id: '174917', name: 'Switches & Controls' },
-  { kw: ['fender', 'wing'], id: '33718', name: 'Fenders' },
-  { kw: ['bumper'], id: '33719', name: 'Bumpers & Parts' },
-  { kw: ['hood', 'bonnet'], id: '174083', name: 'Hoods' },
-  { kw: ['trunk', 'boot', 'rear lid', 'tailgate'], id: '174849', name: 'Trunk Lids & Parts' },
-  { kw: ['headlight', 'headlamp', 'head light'], id: '33710', name: 'Headlights' },
-  { kw: ['tail light', 'taillight', 'rear light', 'rear lamp'], id: '33717', name: 'Tail Lights' },
-  { kw: ['air bag', 'airbag', 'srs'], id: '174098', name: 'Air Bags' },
-  { kw: ['seat'], id: '174089', name: 'Seats' },
+  // Audio & electronics
+  { kw: ['speaker', 'tweeter', 'woofer', 'subwoofer', 'amplifier', 'sound system'], id: '174920', name: 'Car Speakers' },
+  { kw: ['radio', 'stereo', 'head unit', 'infotainment', 'navigation', 'sat nav', 'display screen', 'multimedia'], id: '174921', name: 'Car Audio & Video Installation' },
+  // Computers & modules
+  { kw: ['control unit', 'module', 'ecu', 'ecm', 'tcm', 'bcm', 'sam module', 'abs module'], id: '33596', name: 'Engine Computers' },
+  // Wiring
+  { kw: ['wiring', 'harness', 'cable', 'loom'], id: '174924', name: 'Wiring Harnesses' },
+  { kw: ['switch', 'button', 'control panel', 'window switch', 'master switch'], id: '174917', name: 'Switches & Controls' },
+  // Body panels
+  { kw: ['fender', 'wing', 'fender liner', 'wheel arch'], id: '33718', name: 'Fenders' },
+  { kw: ['bumper', 'bumper cover', 'bumper support', 'bumper bracket'], id: '33719', name: 'Bumpers & Parts' },
+  { kw: ['hood', 'bonnet', 'hood hinge', 'hood latch'], id: '174083', name: 'Hoods' },
+  { kw: ['trunk', 'boot', 'rear lid', 'tailgate', 'trunk lid', 'liftgate'], id: '174849', name: 'Trunk Lids & Parts' },
+  { kw: ['grille', 'grill', 'front grille'], id: '33720', name: 'Grilles' },
+  { kw: ['roof', 'sunroof', 'panoramic', 'roof panel', 'roof rack'], id: '33721', name: 'Roofs' },
+  // Lighting
+  { kw: ['headlight', 'headlamp', 'head light', 'head lamp', 'hid', 'xenon'], id: '33710', name: 'Headlights' },
+  { kw: ['tail light', 'taillight', 'rear light', 'rear lamp', 'brake light', 'stop light'], id: '33717', name: 'Tail Lights' },
+  { kw: ['fog light', 'fog lamp', 'driving light'], id: '33715', name: 'Fog Lights' },
+  { kw: ['turn signal', 'indicator', 'side marker', 'corner light'], id: '33714', name: 'Turn Signals' },
+  // Safety
+  { kw: ['air bag', 'airbag', 'srs', 'crash sensor'], id: '174098', name: 'Air Bags' },
+  { kw: ['seat belt', 'seatbelt', 'belt pretensioner', 'belt buckle'], id: '174099', name: 'Seat Belts & Parts' },
+  // Interior
+  { kw: ['seat', 'seat cushion', 'seat back', 'seat frame', 'headrest'], id: '174089', name: 'Seats' },
+  { kw: ['dashboard', 'dash panel', 'instrument cluster', 'instrument panel', 'gauge cluster', 'speedometer'], id: '33717', name: 'Dashboards & Dashboard Parts' },
+  { kw: ['steering wheel', 'steering column', 'steering shaft', 'clock spring'], id: '33588', name: 'Steering Wheels & Horns' },
+  { kw: ['center console', 'console lid', 'armrest console'], id: '174090', name: 'Center Consoles' },
+  { kw: ['sun visor', 'visor'], id: '174091', name: 'Sun Visors' },
+  { kw: ['carpet', 'floor mat', 'floor liner'], id: '174092', name: 'Floor Mats & Carpets' },
+  { kw: ['glove box', 'glovebox'], id: '174093', name: 'Glove Boxes' },
+  // Engine & drivetrain
+  { kw: ['engine', 'motor assembly', 'long block', 'short block', 'engine block'], id: '33615', name: 'Complete Engines' },
+  { kw: ['transmission', 'gearbox', 'transaxle', 'transfer case'], id: '33616', name: 'Complete Manual Transmissions' },
+  { kw: ['turbo', 'turbocharger', 'supercharger', 'blower'], id: '174934', name: 'Turbo Chargers & Parts' },
+  { kw: ['alternator', 'generator'], id: '33615', name: 'Alternators & Generators' },
+  { kw: ['starter', 'starter motor'], id: '33617', name: 'Starters' },
+  { kw: ['radiator', 'intercooler', 'charge air cooler'], id: '33613', name: 'Radiators & Parts' },
+  { kw: ['exhaust', 'muffler', 'catalytic converter', 'exhaust manifold', 'downpipe'], id: '33619', name: 'Exhaust Parts' },
+  { kw: ['fuel pump', 'fuel injector', 'fuel rail', 'fuel tank'], id: '33554', name: 'Fuel Pumps & Sending Units' },
+  { kw: ['water pump', 'thermostat', 'coolant'], id: '33613', name: 'Radiators & Parts' },
+  { kw: ['oil pump', 'oil pan', 'oil filter', 'dipstick'], id: '174938', name: 'Oil System Parts' },
+  { kw: ['intake manifold', 'throttle body', 'air filter', 'mass air flow', 'maf'], id: '33547', name: 'Air Intake & Fuel Delivery' },
+  // Suspension & steering
+  { kw: ['shock', 'strut', 'shock absorber', 'air suspension', 'spring'], id: '33579', name: 'Shocks & Struts' },
+  { kw: ['control arm', 'ball joint', 'tie rod', 'sway bar', 'stabilizer', 'bushing'], id: '33580', name: 'Control Arms & Parts' },
+  { kw: ['wheel hub', 'wheel bearing', 'hub assembly', 'knuckle', 'spindle'], id: '33582', name: 'Wheel Hubs & Bearings' },
+  { kw: ['power steering', 'steering rack', 'steering pump', 'steering gear'], id: '33586', name: 'Power Steering Pumps & Parts' },
+  // Brakes
+  { kw: ['brake caliper', 'brake disc', 'brake rotor', 'brake pad', 'brake shoe', 'abs sensor'], id: '33559', name: 'Brake Discs, Rotors & Hardware' },
+  { kw: ['brake master', 'brake booster', 'brake line', 'brake hose'], id: '33560', name: 'Brake Master Cylinders & Parts' },
+  // AC & heating
+  { kw: ['a/c', 'ac compressor', 'condenser', 'evaporator', 'heater core', 'blower motor', 'climate control', 'hvac'], id: '33553', name: 'A/C & Heater Controls' },
+  // Trim & accessories  
   { kw: ['water shield', 'vapor barrier'], id: '174105', name: 'Doors & Door Parts' },
-  { kw: ['sound absorber', 'insulation', 'damping'], id: '174105', name: 'Doors & Door Parts' },
-  { kw: ['trim strip', 'moulding', 'molding', 'garnish', 'decal'], id: '33694', name: 'Body Kits' },
+  { kw: ['sound absorber', 'insulation', 'damping', 'deadening'], id: '174105', name: 'Doors & Door Parts' },
+  { kw: ['trim strip', 'moulding', 'molding', 'garnish', 'decal', 'emblem', 'badge'], id: '33694', name: 'Body Kits' },
   { kw: ['bolt', 'screw', 'nut', 'fastener', 'clip', 'rivet', 'cable holder', 'torx'], id: '174907', name: 'Nuts, Bolts & Fasteners' },
+  // Wheels & tires  
+  { kw: ['wheel', 'rim', 'alloy wheel', 'hubcap'], id: '33592', name: 'Wheels' },
+  { kw: ['tire', 'tyre'], id: '66471', name: 'Tires' },
+  // Cooling
+  { kw: ['fan', 'cooling fan', 'fan shroud', 'fan clutch'], id: '176658', name: 'Fans & Kits' },
+  // Axle & CV
+  { kw: ['axle', 'cv joint', 'drive shaft', 'half shaft', 'cv axle', 'propeller shaft'], id: '174935', name: 'CV Joints & Parts' },
 ];
 
 function fallbackCategoryMatch(partName, note) {
@@ -337,8 +387,8 @@ function fallbackCategoryMatch(partName, note) {
       return { categoryId: entry.id, categoryName: entry.name };
     }
   }
-  // Default: generic auto parts
-  return { categoryId: '174105', categoryName: 'Doors & Door Parts' };
+  // Default: generic auto parts & accessories category (not Doors & Door Parts)
+  return { categoryId: '262124', categoryName: 'Car & Truck Parts & Accessories' };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -486,6 +536,10 @@ function getVehicleInfo(part, vinData) {
       trim: decoded.trim,
       engine: decoded.engineModel || `${decoded.engineDisplacement}L ${decoded.engineCylinders}cyl`,
       bodyClass: decoded.bodyClass,
+      engineCylinders: decoded.engineCylinders,
+      engineDisplacement: decoded.engineDisplacement,
+      fuelType: decoded.fuelType,
+      driveType: decoded.driveType,
     };
   }
 
@@ -501,6 +555,10 @@ function getVehicleInfo(part, vinData) {
     trim: '',
     engine: '',
     bodyClass: '',
+    engineCylinders: '',
+    engineDisplacement: '',
+    fuelType: '',
+    driveType: '',
   };
 }
 
@@ -550,12 +608,26 @@ async function mapCategories(parts, vinData) {
 //  OPENAI ENRICHMENT ENGINE
 // ═══════════════════════════════════════════════════════════════════════
 
-const openai = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+let _openai = null;
 let openaiAvailable = false;
 
+function getOpenAI() {
+  if (!_openai) {
+    if (!CONFIG.openai.apiKey) {
+      log.warn('OPENAI_API_KEY not set — AI enrichment will use fallback mode');
+      return null;
+    }
+    _openai = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+  }
+  return _openai;
+}
+
 async function validateOpenAiKey() {
+  const client = getOpenAI();
+  if (!client) return false;
+
   try {
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: CONFIG.openai.model,
       messages: [{ role: 'user', content: 'Reply with OK' }],
       max_tokens: 5,
@@ -591,21 +663,47 @@ async function enrichBatch(batchParts, vinData) {
     };
   });
 
-  const systemPrompt = `You are an eBay Motors P&A listing expert. Enrich automotive parts from dismantled vehicles.
+  const systemPrompt = `You are a world-class eBay Motors Parts & Accessories listing expert with deep knowledge of automotive parts, OEM cross-references, and eBay SEO best practices.
 
-RULES:
-- Title: max 80 chars. Format: Year Make Model PartName Detail MPN OEM
-- Description: HTML, 400-800 chars, include fitment+condition
-- NEVER fabricate part numbers or fitment data
-- Condition is USED
+TASK: Enrich automotive parts from dismantled vehicles into eBay-ready listings.
 
-Return JSON: {"items":[{"index":N,"title":"...","description":"<h3>...</h3><p>...</p><ul>...</ul>","brand":"...","type":"...","mpn":"...","oemNumber":"...","placement":"Front Left etc","material":null,"warranty":"No Warranty","fitmentType":"Direct Replacement","color":null,"interchangeNumber":null}]}`;
+TITLE RULES (max 80 chars):
+- Format: [Year] [Make] [Model] [PartName] [Key Detail] [MPN/OEM#]
+- Lead with highest-value search terms (year+make+model)
+- Include condition indicator for used parts: "OEM", "Genuine", or "Used"
+- Never use ALL CAPS, special characters (!@#$%), or filler words ("Nice", "Great", "L@@K")
+- Include placement (Left/Right/Front/Rear) when relevant
+- End with MPN or OEM number if space permits
+- Example: "2015 Mercedes C300 W205 Front Left Door Lock Actuator A2057200135 OEM"
 
-  const userPrompt = `Enrich these ${partsForPrompt.length} automotive parts for eBay Motors listings:\n\n${JSON.stringify(partsForPrompt, null, 2)}`;
+DESCRIPTION RULES:
+- Professional HTML with structured sections
+- Include: Part identification, Vehicle fitment, Condition assessment, Compatibility notes
+- Always include disclaimer: "Please verify part number compatibility before purchasing"
+- Format: <h3>Title</h3><p>intro</p><h4>Details</h4><ul><li>...</li></ul><h4>Compatibility</h4><p>...</p><h4>Condition</h4><p>Used - Removed from running vehicle. Inspected and tested.</p>
+
+SPECIFICS RULES:
+- brand: Use OEM vehicle manufacturer name (e.g., "Mercedes-Benz" not "Mercedes")
+- type: Specific part type (e.g., "Door Lock Actuator" not "Door Parts")
+- mpn: ONLY use the provided partNumber — NEVER fabricate part numbers
+- oemNumber: Same as mpn unless explicitly different in source data
+- placement: Extract from notes/name (e.g., "Front Left", "Rear Right", "Upper", "Lower")
+- material: Only if determinable from part type (e.g., "Aluminum" for engine blocks, "Steel" for hinges)
+- warranty: "No Warranty" for used parts
+- fitmentType: "Direct Replacement" for OEM parts
+- color: Only if determinable from notes (never guess)
+- interchangeNumber: Only if provided in source data — NEVER fabricate
+
+Return JSON: {"items":[{"index":N,"title":"...","description":"<h3>...</h3>...","brand":"...","type":"...","mpn":"...","oemNumber":"...","placement":"...","material":"...","warranty":"No Warranty","fitmentType":"Direct Replacement","color":"","interchangeNumber":"","surfaceFinish":"","performanceType":"","bundleDescription":""}]}`;
+
+  const userPrompt = `Enrich these ${partsForPrompt.length} automotive parts for eBay Motors listings. Each part was removed from a real vehicle identified by VIN. Use the vehicle info to generate accurate fitment data.\n\n${JSON.stringify(partsForPrompt, null, 2)}`;
+
+  const client = getOpenAI();
+  if (!client) return null;
 
   for (let attempt = 1; attempt <= CONFIG.openai.maxRetries; attempt++) {
     try {
-      const response = await openai.chat.completions.create({
+      const response = await client.chat.completions.create({
         model: CONFIG.openai.model,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -653,7 +751,7 @@ async function enrichAllParts(parts, vinData) {
       const vehicle = getVehicleInfo(part, vinData);
       const pn = normalizePN(part.partNumber);
       part._enriched = {
-        title: `${vehicle.year} ${vehicle.make} ${vehicle.model} ${titleCase(part.partName)} ${pn} OEM`.replace(/\s+/g, ' ').slice(0, 80).trim(),
+        title: buildSeoTitle(vehicle, part, pn),
         description: buildBasicDescription(part, vehicle),
         brand: normalizeBrand(part.brand) || vehicle.make,
         type: titleCase(part.partName),
@@ -665,6 +763,9 @@ async function enrichAllParts(parts, vinData) {
         fitmentType: 'Direct Replacement',
         color: '',
         interchangeNumber: '',
+        surfaceFinish: '',
+        performanceType: '',
+        bundleDescription: '',
       };
       REPORT.totalFailed++;
     }
@@ -711,6 +812,9 @@ async function enrichAllParts(parts, vinData) {
               fitmentType: clean(enriched.fitmentType) || 'Direct Replacement',
               color: clean(enriched.color),
               interchangeNumber: clean(enriched.interchangeNumber),
+              surfaceFinish: clean(enriched.surfaceFinish),
+              performanceType: clean(enriched.performanceType),
+              bundleDescription: clean(enriched.bundleDescription),
             };
             enrichedCount++;
           }
@@ -720,7 +824,7 @@ async function enrichAllParts(parts, vinData) {
           const vehicle = getVehicleInfo(part, vinData);
           const pn = normalizePN(part.partNumber);
           part._enriched = {
-            title: `${vehicle.year} ${vehicle.make} ${vehicle.model} ${titleCase(part.partName)} ${pn} OEM`.replace(/\s+/g, ' ').slice(0, 80).trim(),
+            title: buildSeoTitle(vehicle, part, pn),
             description: buildBasicDescription(part, vehicle),
             brand: titleCase(part.brand) || vehicle.make,
             type: titleCase(part.partName),
@@ -732,6 +836,9 @@ async function enrichAllParts(parts, vinData) {
             fitmentType: 'Direct Replacement',
             color: '',
             interchangeNumber: '',
+            surfaceFinish: '',
+            performanceType: '',
+            bundleDescription: '',
           };
           failedCount++;
         }
@@ -749,20 +856,67 @@ async function enrichAllParts(parts, vinData) {
   log.info(`Enrichment complete: ${enrichedCount} enriched, ${failedCount} basic fallback`);
 }
 
+/**
+ * Build an SEO-optimized eBay title following best practices.
+ * Format: [Year] [Make] [Model] [Part Name] [Placement] [MPN] OEM
+ * Max 80 chars.
+ */
+function buildSeoTitle(vehicle, part, normalizedPN) {
+  const placement = extractPlacement(part.note);
+  const partName = titleCase(part.partName);
+
+  // Build title segments in priority order
+  const segments = [
+    vehicle.year,
+    vehicle.make,
+    vehicle.model,
+    partName,
+  ].filter(Boolean);
+
+  let title = segments.join(' ');
+
+  // Add placement if room
+  if (placement && (title.length + placement.length + 1) <= 69) {
+    title += ` ${placement}`;
+  }
+
+  // Add part number if room
+  if (normalizedPN && (title.length + normalizedPN.length + 1) <= 75) {
+    title += ` ${normalizedPN}`;
+  }
+
+  // Add OEM marker if room
+  if ((title.length + 4) <= 80) {
+    title += ' OEM';
+  }
+
+  return title.replace(/\s+/g, ' ').slice(0, 80).trim();
+}
+
 function buildBasicDescription(part, vehicle) {
-  const pn = part.partNumber ? `<p><strong>Part Number:</strong> ${part.partNumber}</p>` : '';
-  const note = part.note ? `<p><strong>Notes:</strong> ${part.note}</p>` : '';
+  const pn = part.partNumber ? `<li><strong>Part Number:</strong> ${part.partNumber}</li>` : '';
+  const placement = extractPlacement(part.note);
+  const placementLi = placement ? `<li><strong>Placement:</strong> ${placement}</li>` : '';
+  const noteLi = part.note ? `<li><strong>Notes:</strong> ${part.note}</li>` : '';
+  const brandName = normalizeBrand(part.brand) || vehicle.make;
+
   return `<h3>${vehicle.year} ${vehicle.make} ${vehicle.model} ${titleCase(part.partName)}</h3>
-<p>Genuine OEM ${titleCase(part.partName)} removed from a ${vehicle.year} ${vehicle.make} ${vehicle.model}. Part is in used condition and has been inspected for quality.</p>
+<p>Genuine OEM ${titleCase(part.partName)} removed from a ${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ' ' + vehicle.trim : ''}. This part has been carefully removed and inspected for quality assurance.</p>
+<h4>Part Details</h4>
 <ul>
-  <li><strong>Vehicle:</strong> ${vehicle.year} ${vehicle.make} ${vehicle.model}</li>
-  <li><strong>Part:</strong> ${titleCase(part.partName)}</li>
-  <li><strong>Condition:</strong> Used - Good</li>
-  <li><strong>Fits:</strong> ${vehicle.year} ${vehicle.make} ${vehicle.model}</li>
+  <li><strong>Brand:</strong> ${brandName}</li>
+  <li><strong>Part Type:</strong> ${titleCase(part.partName)}</li>
+  ${pn}
+  <li><strong>Vehicle:</strong> ${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ' ' + vehicle.trim : ''}</li>
+  ${placementLi}
+  ${noteLi}
 </ul>
-${pn}
-${note}
-<p>Please verify fitment using part number before purchasing. All sales are final unless item is not as described.</p>`;
+<h4>Condition</h4>
+<p>Used — Removed from a running vehicle. Visually inspected and verified functional. Normal wear consistent with age and mileage.</p>
+<h4>Compatibility</h4>
+<p>This part was removed from a ${vehicle.year} ${vehicle.make} ${vehicle.model}. Please verify part number compatibility with your vehicle before purchasing. Cross-reference the part number to confirm fitment.</p>
+<h4>Warranty & Returns</h4>
+<p>Sold as-is with no warranty. 30-day return policy if item is not as described.</p>`;
 }
 
 function extractPlacement(note) {
@@ -990,14 +1144,15 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   const row = new Array(headers.length).fill(null);
   const set = (colName, value) => {
     const idx = headers.indexOf(colName);
-    if (idx >= 0) row[idx] = value;
+    if (idx >= 0 && value !== undefined && value !== null && value !== '') row[idx] = value;
   };
 
   set('*Action(SiteID=eBayMotors|Country=US|Currency=USD|Version=1193)', 'Add');
   set('Custom label (SKU)', part.sku || part.category);
-  set('Category ID', part._category?.categoryId || '174105');
-  set('Category Name', part._category?.categoryName || 'Doors & Door Parts');
+  set('Category ID', part._category?.categoryId || '262124');
+  set('Category Name', part._category?.categoryName || 'Car & Truck Parts & Accessories');
   set('Title', enriched.title);
+  set('P:UPC', 'Does not apply');
   set('Start price', part.price);
   set('Quantity', CONFIG.defaultQuantity);
   set('Condition ID', CONFIG.defaultConditionId);
@@ -1015,10 +1170,19 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('Shipping profile name', policies.shipping);
   set('Return profile name', policies.returns);
   set('Payment profile name', policies.payment);
+  // Item Specifics
   set('C:Brand', enriched.brand);
   set('C:Type', enriched.type);
   set('C:Manufacturer Part Number', enriched.mpn || part.partNumber);
   set('C:OE/OEM Part Number', enriched.oemNumber || part.partNumber);
+  set('C:Placement on Vehicle', enriched.placement);
+  set('C:Fitment Type', enriched.fitmentType || 'Direct Replacement');
+  set('C:Warranty', enriched.warranty || 'No Warranty');
+  set('C:Material', enriched.material);
+  set('C:Color', enriched.color);
+  set('C:Surface Finish', enriched.surfaceFinish);
+  set('C:Interchange Part Number', enriched.interchangeNumber);
+  set('C:Bundle Description', enriched.bundleDescription);
 
   return row;
 }
@@ -1055,9 +1219,10 @@ function generateAUOutput(parts, vinData) {
 
     set('*Action(SiteID=Australia|Country=AU|Currency=AUD|Version=1193)', 'Add');
     set('Custom label (SKU)', part.sku || part.category);
-    set('Category ID', part._category?.categoryId || '174105');
-    set('Category name', part._category?.categoryName || 'Doors & Door Parts');
+    set('Category ID', part._category?.categoryId || '262124');
+    set('Category name', part._category?.categoryName || 'Car & Truck Parts & Accessories');
     set('Title', e.title);
+    set('P:UPC', 'Does not apply');
     set('Start price', Math.round(part.price * 1.55 * 100) / 100); // ~USD→AUD
     set('Quantity', CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
@@ -1075,10 +1240,18 @@ function generateAUOutput(parts, vinData) {
     set('Shipping profile name', policies.shipping);
     set('Return profile name', policies.returns);
     set('Payment profile name', policies.payment);
+    // Item Specifics (AU uses English names like US, but OE/OEM is different)
     set('C:Brand', e.brand);
     set('C:Type', e.type);
     set('C:Manufacturer Part Number', e.mpn || part.partNumber);
     set('C:Reference OE/OEM Number', e.oemNumber || part.partNumber);
+    set('C:Placement on Vehicle', e.placement);
+    set('C:Fitment Type', e.fitmentType || 'Direct Replacement');
+    set('C:Warranty', e.warranty || 'No Warranty');
+    set('C:Material', e.material);
+    set('C:Color', e.color);
+    set('C:Surface Finish', e.surfaceFinish);
+    set('C:Interchange Part Number', e.interchangeNumber);
 
     listingsData.push(row);
 
@@ -1132,9 +1305,10 @@ function generateDEOutput(parts, vinData) {
 
     set('*Action(SiteID=Germany|Country=DE|Currency=EUR|Version=1193)', 'Add');
     set('Custom label (SKU)', part.sku || part.category);
-    set('Category ID', part._category?.categoryId || '174105');
-    set('Category name', part._category?.categoryName || 'Doors & Door Parts');
+    set('Category ID', part._category?.categoryId || '262124');
+    set('Category name', part._category?.categoryName || 'Car & Truck Parts & Accessories');
     set('Title', e.title);
+    set('P:EAN', 'Nicht zutreffend');  // "Does not apply" in German
     set('Start price', Math.round(part.price * 0.92 * 100) / 100); // ~USD→EUR
     set('Quantity', CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
@@ -1154,11 +1328,26 @@ function generateDEOutput(parts, vinData) {
     set('Return profile name', policies.returns);
     set('Payment profile name', policies.payment);
     // German aspect names
-    set('C:Hersteller', e.brand);
-    set('C:Produktart', e.type);
-    set('C:Herstellernummer', e.mpn || part.partNumber);
-    set('C:OE/OEM Referenznummer(n)', e.oemNumber || part.partNumber);
-    set('C:Einbauposition', e.placement);
+    set('C:Hersteller', e.brand);                                      // Brand
+    set('C:Produktart', e.type);                                       // Type
+    set('C:Herstellernummer', e.mpn || part.partNumber);               // MPN
+    set('C:OE/OEM Referenznummer(n)', e.oemNumber || part.partNumber); // OE/OEM Number
+    set('C:Einbauposition', e.placement);                              // Placement
+    // VIN-decoded vehicle specifics for DE templates
+    if (vehicle.engineCylinders || (vinData.get && vinData.get(part.vin)?.engineCylinders)) {
+      const cylinders = vehicle.engineCylinders || vinData.get(part.vin)?.engineCylinders || '';
+      if (cylinders) set('C:Zylinder', cylinders);                    // Cylinders
+    }
+    if (vehicle.fuelType || (vinData.get && vinData.get(part.vin)?.fuelType)) {
+      const fuel = vehicle.fuelType || vinData.get(part.vin)?.fuelType || '';
+      if (fuel) set('C:Kraftstoffart', fuel);                         // Fuel type
+    }
+    if (vehicle.engineDisplacement || (vinData.get && vinData.get(part.vin)?.engineDisplacement)) {
+      const disp = vehicle.engineDisplacement || vinData.get(part.vin)?.engineDisplacement || '';
+      if (disp) set('C:Hubraum', disp.includes('L') ? disp : `${disp} L`); // Engine displacement
+    }
+    set('C:Material', e.material);
+    set('C:Farbe', e.color);                                          // Color in German
 
     listingsData.push(row);
 
@@ -1189,6 +1378,88 @@ function copySheet(srcWb, dstWb, sheetName) {
   }
 }
 
+/**
+ * Read template Aspects sheet to get valid aspect values for a category.
+ * Returns Map<categoryId, Map<aspectName, string[]>> for lookup.
+ */
+function readTemplateAspects(wb) {
+  const ws = wb.Sheets['Aspects'];
+  if (!ws) return new Map();
+
+  const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  const aspectMap = new Map();
+
+  // Aspects sheet: CategoryID | AspectName | Value1 | Value2 | ...
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row || !row[0]) continue;
+    const catId = String(row[0]);
+    const aspectName = String(row[1] || '');
+    if (!aspectName) continue;
+
+    if (!aspectMap.has(catId)) aspectMap.set(catId, new Map());
+    const catAspects = aspectMap.get(catId);
+
+    const values = row.slice(2).filter(v => v != null && String(v).trim() !== '').map(v => String(v).trim());
+    catAspects.set(aspectName, values);
+  }
+
+  return aspectMap;
+}
+
+/**
+ * Save pipeline checkpoint for resume capability.
+ */
+function saveCheckpoint(parts, step) {
+  const checkpointPath = path.join(CONFIG.outputDir, '.pipeline-checkpoint.json');
+  try {
+    const checkpoint = {
+      step,
+      timestamp: new Date().toISOString(),
+      totalParts: parts.length,
+      processedCount: parts.filter(p => p._enriched).length,
+      // Save minimal data for resume — just enriched flags and core IDs
+      partStates: parts.map(p => ({
+        vin: p.vin,
+        sku: p.sku,
+        partNumber: p.partNumber,
+        hasEnriched: !!p._enriched,
+        hasCategory: !!p._category,
+      })),
+    };
+    fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint));
+    log.info(`Checkpoint saved: step=${step}, ${checkpoint.processedCount}/${parts.length} enriched`);
+  } catch (err) {
+    log.warn(`Failed to save checkpoint: ${err.message}`);
+  }
+}
+
+/**
+ * Check if a checkpoint exists and return it.
+ */
+function loadCheckpoint() {
+  const checkpointPath = path.join(CONFIG.outputDir, '.pipeline-checkpoint.json');
+  if (!fs.existsSync(checkpointPath)) return null;
+
+  try {
+    const data = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
+    log.info(`Found checkpoint from ${data.timestamp}: step=${data.step}, ${data.processedCount}/${data.totalParts} enriched`);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clear checkpoint after successful completion.
+ */
+function clearCheckpoint() {
+  const checkpointPath = path.join(CONFIG.outputDir, '.pipeline-checkpoint.json');
+  if (fs.existsSync(checkpointPath)) {
+    fs.unlinkSync(checkpointPath);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  REPORT GENERATOR
 // ═══════════════════════════════════════════════════════════════════════
@@ -1203,23 +1474,33 @@ function generateReport() {
       totalFailedEnrichment: REPORT.totalFailed,
       totalSkipped: REPORT.totalSkipped,
       processingTimeSeconds: parseFloat(elapsed),
+      templatesGenerated: ['US-Motors', 'AU-Category', 'DE-Category'],
     },
     vinDecoding: {
       success: REPORT.vinDecodeSuccess,
       failed: REPORT.vinDecodeFail,
+      successRate: REPORT.vinDecodeSuccess > 0
+        ? `${((REPORT.vinDecodeSuccess / (REPORT.vinDecodeSuccess + REPORT.vinDecodeFail)) * 100).toFixed(1)}%`
+        : '0%',
     },
     categoryMapping: {
       apiMapped: REPORT.categoryMappingApi,
       fallbackMapped: REPORT.categoryMappingFallback,
+      apiRate: REPORT.categoryMappingApi > 0
+        ? `${((REPORT.categoryMappingApi / (REPORT.categoryMappingApi + REPORT.categoryMappingFallback)) * 100).toFixed(1)}%`
+        : '0%',
     },
     openai: {
       totalCalls: REPORT.openaiCalls,
       totalTokens: REPORT.openaiTokensUsed,
       errors: REPORT.openaiErrors,
       estimatedCost: `$${(REPORT.openaiTokensUsed * 0.00000015).toFixed(4)}`, // gpt-4o-mini pricing
+      enrichmentRate: REPORT.totalInput > 0
+        ? `${((REPORT.totalProcessed / REPORT.totalInput) * 100).toFixed(1)}%`
+        : '0%',
     },
-    validationFixes: REPORT.validationFixes.slice(0, 50), // First 50
-    missingRequiredSpecifics: REPORT.missingSpecifics.slice(0, 50),
+    validationFixes: REPORT.validationFixes.slice(0, 100),
+    missingRequiredSpecifics: REPORT.missingSpecifics.slice(0, 100),
     errors: REPORT.errors.slice(0, 50),
   };
 
@@ -1252,15 +1533,18 @@ async function main() {
 
   // ── Step 2: VIN Decoding ──
   const vinData = await decodeAllVins(parts);
+  saveCheckpoint(parts, 'vin-decode');
 
   // ── Step 3: Category Mapping ──
   await mapCategories(parts, vinData);
+  saveCheckpoint(parts, 'category-mapping');
 
   // ── Step 4: Part Number Intelligence ──
   deduplicatePartNumbers(parts);
 
   // ── Step 5: OpenAI Enrichment ──
   await enrichAllParts(parts, vinData);
+  saveCheckpoint(parts, 'enrichment');
 
   // ── Step 6: Compliance Validation ──
   validateAndFix(parts);
@@ -1298,6 +1582,9 @@ async function main() {
   console.log('\n' + JSON.stringify(report.summary, null, 2));
   console.log(`\nFull report: ${reportPath}`);
   console.log(`\n✓ Pipeline complete. ${enrichedParts.length} listings generated across 3 templates.`);
+
+  // Clear checkpoint on success
+  clearCheckpoint();
 }
 
 main().catch(err => {

@@ -8,11 +8,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiEnhancement } from './entities/ai-enhancement.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
+import { EnrichmentPipeline } from '../common/openai/pipelines/enrichment.pipeline.js';
+import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
+import { OpenAiService } from '../common/openai/openai.service.js';
 
 /**
  * AI Enhancement Service — generates and manages AI-powered listing improvements.
- * In demo mode, uses sophisticated simulation. In production, integrates with
- * OpenAI/Anthropic APIs for real AI-powered enhancements.
+ * Uses real OpenAI pipelines when available, falls back to local generation.
  */
 @Injectable()
 export class AiEnhancementService {
@@ -23,6 +25,9 @@ export class AiEnhancementService {
     private readonly enhancementRepo: Repository<AiEnhancement>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    private readonly enrichmentPipeline: EnrichmentPipeline,
+    private readonly listingGenPipeline: ListingGenerationPipeline,
+    private readonly openAiService: OpenAiService,
   ) {}
 
   // ─── Query ───
@@ -139,11 +144,11 @@ export class AiEnhancementService {
       enh.enhancedData = result.enhancedData ?? null;
       enh.diff = result.diff ?? null;
       enh.confidenceScore = result.confidenceScore;
-      enh.provider = 'demo';
-      enh.model = 'demo-sim-v1';
+      enh.provider = result.provider ?? 'openai';
+      enh.model = result.model ?? 'gpt-4o';
       enh.tokensUsed = result.tokensUsed;
       enh.latencyMs = Date.now() - startMs;
-      enh.costUsd = 0;
+      enh.costUsd = result.costUsd ?? 0;
 
       return this.enhancementRepo.save(enh);
     } catch (error: any) {
@@ -253,22 +258,21 @@ export class AiEnhancementService {
     diff?: Record<string, unknown>;
     confidenceScore: number;
     tokensUsed: number;
+    provider?: string;
+    model?: string;
+    costUsd?: number;
   }> {
-    // Simulate AI processing delay
-    await new Promise((r) => setTimeout(r, 100 + Math.random() * 400));
-
     const input = enh.inputData;
     const original = enh.originalValue ?? '';
 
     switch (enh.enhancementType) {
       case 'title_optimization':
-        return this.generateTitleOptimization(original, input);
       case 'description_generation':
-        return this.generateDescription(original, input);
+        return this.generateListingContent(enh.enhancementType, original, input);
       case 'item_specifics':
-        return this.generateItemSpecifics(input);
+        return this.generateItemSpecificsAI(input);
       case 'fitment_detection':
-        return this.generateFitmentDetection(input);
+        return this.generateFitmentDetectionAI(input);
       case 'image_enhancement':
         return this.generateImageEnhancement(input);
       default:
@@ -276,7 +280,118 @@ export class AiEnhancementService {
     }
   }
 
-  private generateTitleOptimization(
+  /**
+   * Use ListingGenerationPipeline for title and description generation.
+   */
+  private async generateListingContent(
+    type: 'title_optimization' | 'description_generation',
+    original: string,
+    input: Record<string, unknown>,
+  ) {
+    try {
+      const result = await this.listingGenPipeline.generate(
+        input,
+        String(input['category'] ?? 'Auto Parts'),
+        String(input['condition'] ?? 'Used'),
+      );
+
+      const enhancedValue = type === 'title_optimization'
+        ? result.title
+        : result.description;
+
+      const changes = type === 'title_optimization'
+        ? ['AI-optimized for eBay search ranking', 'Keyword prominence improved', 'Limited to 80 chars']
+        : ['Generated structured HTML description', 'Added product specs & compatibility', 'SEO-optimized content'];
+
+      return {
+        enhancedValue,
+        enhancedData: {
+          title: result.title,
+          subtitle: result.subtitle,
+          description: result.description,
+          bulletPoints: result.bulletPoints,
+          searchTerms: result.searchTerms,
+          pricePositioning: result.pricePositioning,
+        },
+        diff: { original: original?.slice(0, 200) ?? '(empty)', enhanced: enhancedValue.slice(0, 200), changes },
+        confidenceScore: 0.88,
+        tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
+        provider: 'openai',
+        model: result.rawResponse?.model ?? 'gpt-4o',
+        costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
+      };
+    } catch (err: any) {
+      this.logger.warn(`OpenAI listing generation failed, using fallback: ${err.message}`);
+      return this.fallbackListingContent(type, original, input);
+    }
+  }
+
+  /**
+   * Use EnrichmentPipeline for item specifics.
+   */
+  private async generateItemSpecificsAI(input: Record<string, unknown>) {
+    try {
+      const result = await this.enrichmentPipeline.enrich(input);
+
+      const specifics: Record<string, string> = {
+        Brand: result.brand ?? String(input['brand'] ?? 'Unbranded'),
+        'Manufacturer Part Number': result.mpn ?? String(input['mpn'] ?? 'Does Not Apply'),
+        Type: result.partType ?? String(input['partType'] ?? 'Replacement Part'),
+        ...result.itemSpecifics,
+      };
+
+      if (result.oemNumber) specifics['OE/OEM Part Number'] = result.oemNumber;
+
+      return {
+        enhancedValue: JSON.stringify(specifics),
+        enhancedData: { specifics, fieldCount: Object.keys(specifics).length, searchKeywords: result.searchKeywords },
+        diff: { added: Object.keys(specifics), fieldCount: Object.keys(specifics).length },
+        confidenceScore: result.confidence?.overall ?? 0.85,
+        tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
+        provider: 'openai',
+        model: result.rawResponse?.model ?? 'gpt-4o',
+        costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
+      };
+    } catch (err: any) {
+      this.logger.warn(`OpenAI enrichment failed, using fallback: ${err.message}`);
+      return this.fallbackItemSpecifics(input);
+    }
+  }
+
+  /**
+   * Use EnrichmentPipeline for fitment detection.
+   */
+  private async generateFitmentDetectionAI(input: Record<string, unknown>) {
+    try {
+      const result = await this.enrichmentPipeline.enrich({
+        ...input,
+        extractFitment: true,
+      });
+
+      const fitments = result.itemSpecifics?.fitments
+        ? JSON.parse(String(result.itemSpecifics.fitments))
+        : [];
+
+      return {
+        enhancedValue: JSON.stringify(fitments),
+        enhancedData: { fitments, suggestedCategory: result.suggestedCategory },
+        diff: { fitmentCount: fitments.length, detectedFromAI: true },
+        confidenceScore: result.confidence?.overall ?? 0.75,
+        tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
+        provider: 'openai',
+        model: result.rawResponse?.model ?? 'gpt-4o',
+        costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
+      };
+    } catch (err: any) {
+      this.logger.warn(`OpenAI fitment detection failed, using fallback: ${err.message}`);
+      return this.fallbackFitmentDetection(input);
+    }
+  }
+
+  // ─── Fallback methods (used when OpenAI is unavailable) ───
+
+  private fallbackListingContent(
+    type: 'title_optimization' | 'description_generation',
     original: string,
     input: Record<string, unknown>,
   ) {
@@ -284,161 +399,92 @@ export class AiEnhancementService {
     const mpn = String(input['mpn'] ?? '');
     const partType = String(input['partType'] ?? 'Auto Part');
 
-    // Demo: create an optimized eBay-style title (max 80 chars)
-    const keywords = [brand, mpn, partType].filter(Boolean);
-    const condition = String(input['condition'] ?? 'New');
-    const oemPart = String(input['oemNumber'] ?? '');
-    const pieces = [...keywords, condition !== 'New' ? condition : '', oemPart ? `OEM ${oemPart}` : '', 'Direct Fit', 'Free Shipping'].filter(Boolean);
-    const enhanced = pieces.join(' ').slice(0, 80).trim();
+    if (type === 'title_optimization') {
+      const pieces = [brand, mpn, partType, 'OEM Direct Fit'].filter(Boolean);
+      const enhanced = pieces.join(' ').slice(0, 80).trim();
+      return {
+        enhancedValue: enhanced,
+        diff: { original, enhanced, changes: ['Fallback: keyword concatenation'] },
+        confidenceScore: 0.5,
+        tokensUsed: 0,
+        provider: 'fallback',
+        model: 'rule-based',
+        costUsd: 0,
+      };
+    }
 
-    return {
-      enhancedValue: enhanced,
-      diff: {
-        original,
-        enhanced,
-        changes: [
-          'Added brand keyword prominence',
-          'Added MPN for search visibility',
-          'Added shipping mention',
-          'Optimized for eBay 80-char limit',
-        ],
-      },
-      confidenceScore: 0.85 + Math.random() * 0.12,
-      tokensUsed: 150 + Math.floor(Math.random() * 100),
-    };
-  }
-
-  private generateDescription(
-    original: string,
-    input: Record<string, unknown>,
-  ) {
-    const brand = String(input['brand'] ?? 'OEM');
-    const mpn = String(input['mpn'] ?? 'N/A');
     const title = String(input['title'] ?? 'Auto Part');
-    const features = (input['features'] as string[]) ?? [];
-
-    const enhanced = [
-      `<h2>${title}</h2>`,
-      `<p><strong>Brand:</strong> ${brand} | <strong>MPN:</strong> ${mpn}</p>`,
-      `<h3>Key Features</h3>`,
-      `<ul>`,
-      ...features.slice(0, 5).map((f) => `  <li>${f}</li>`),
-      features.length === 0 ? '  <li>OEM-quality direct replacement part</li>' : '',
-      `  <li>Manufactured to exact OEM specifications</li>`,
-      `  <li>Quality tested for reliable performance</li>`,
-      `</ul>`,
-      `<h3>Compatibility</h3>`,
-      `<p>Please verify fitment using the compatibility table above before purchasing.</p>`,
-      `<h3>Shipping & Returns</h3>`,
-      `<p>Ships same day if ordered before 2pm EST. 30-day hassle-free returns.</p>`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
+    const enhanced = `<h3>${title}</h3><p><strong>Brand:</strong> ${brand} | <strong>MPN:</strong> ${mpn}</p><p>OEM-quality direct replacement part. Please verify fitment before purchasing.</p>`;
     return {
       enhancedValue: enhanced,
-      diff: {
-        original: original?.slice(0, 200) ?? '(empty)',
-        enhanced: enhanced.slice(0, 200),
-        changes: [
-          'Generated structured HTML description',
-          'Added product specifications section',
-          'Added compatibility notice',
-          'Added shipping & returns section',
-        ],
-      },
-      confidenceScore: 0.82 + Math.random() * 0.15,
-      tokensUsed: 300 + Math.floor(Math.random() * 200),
+      diff: { original: original?.slice(0, 200) ?? '(empty)', enhanced: enhanced.slice(0, 200), changes: ['Fallback: template-based'] },
+      confidenceScore: 0.5,
+      tokensUsed: 0,
+      provider: 'fallback',
+      model: 'rule-based',
+      costUsd: 0,
     };
   }
 
-  private generateItemSpecifics(input: Record<string, unknown>) {
+  private fallbackItemSpecifics(input: Record<string, unknown>) {
     const specifics: Record<string, string> = {
       Brand: String(input['brand'] ?? 'Unbranded'),
       'Manufacturer Part Number': String(input['mpn'] ?? 'Does Not Apply'),
-      Condition: String(input['condition'] ?? 'New'),
       Type: String(input['partType'] ?? 'Replacement Part'),
-      'Placement on Vehicle': 'Front, Rear, Left, Right',
-      Warranty: '1 Year',
-      'Country/Region of Manufacture': 'United States',
       'Fitment Type': 'Direct Replacement',
+      Warranty: 'No Warranty',
     };
-
-    if (input['oemNumber']) {
-      specifics['OE/OEM Part Number'] = String(input['oemNumber']);
-      specifics['Interchange Part Number'] = String(input['oemNumber']);
-    }
+    if (input['oemNumber']) specifics['OE/OEM Part Number'] = String(input['oemNumber']);
 
     return {
       enhancedValue: JSON.stringify(specifics),
       enhancedData: { specifics, fieldCount: Object.keys(specifics).length },
-      diff: {
-        added: Object.keys(specifics),
-        fieldCount: Object.keys(specifics).length,
-      },
-      confidenceScore: 0.88 + Math.random() * 0.1,
-      tokensUsed: 200 + Math.floor(Math.random() * 100),
+      diff: { added: Object.keys(specifics), fieldCount: Object.keys(specifics).length },
+      confidenceScore: 0.5,
+      tokensUsed: 0,
+      provider: 'fallback',
+      model: 'rule-based',
+      costUsd: 0,
     };
   }
 
-  private generateFitmentDetection(input: Record<string, unknown>) {
+  private fallbackFitmentDetection(input: Record<string, unknown>) {
     const title = String(input['title'] ?? '');
-
-    // Demo: extract year/make/model from title patterns
     const yearPattern = /\b(19|20)\d{2}\b/g;
     const years = Array.from(title.matchAll(yearPattern)).map((m) => m[0]);
-
-    const makes = ['Ford', 'Chevrolet', 'Toyota', 'Honda', 'Nissan', 'BMW', 'Mercedes', 'Dodge', 'Jeep', 'Hyundai'];
+    const makes = ['Ford', 'Chevrolet', 'Toyota', 'Honda', 'BMW', 'Mercedes-Benz', 'Dodge', 'Audi', 'Volkswagen', 'Jaguar', 'Land Rover'];
     const detectedMake = makes.find((m) => title.toLowerCase().includes(m.toLowerCase())) ?? 'Universal';
 
     const fitments = years.length > 0
-      ? years.map((y) => ({
-          year: y,
-          make: detectedMake,
-          model: 'Various',
-          trim: 'All',
-          engine: 'All Engines',
-        }))
-      : [
-          { year: '2015-2020', make: detectedMake, model: 'Various Models', trim: 'All', engine: 'All' },
-        ];
+      ? years.map((y) => ({ year: y, make: detectedMake, model: 'Various' }))
+      : [];
 
     return {
       enhancedValue: JSON.stringify(fitments),
-      enhancedData: {
-        fitments,
-        fitmentCount: fitments.length,
-        detectedMake,
-        detectedYears: years,
-      },
-      diff: {
-        detectedFromTitle: years.length > 0,
-        fitmentCount: fitments.length,
-      },
-      confidenceScore: years.length > 0 ? 0.75 + Math.random() * 0.2 : 0.4 + Math.random() * 0.2,
-      tokensUsed: 250 + Math.floor(Math.random() * 150),
+      enhancedData: { fitments, fitmentCount: fitments.length, detectedMake },
+      diff: { fitmentCount: fitments.length },
+      confidenceScore: years.length > 0 ? 0.6 : 0.3,
+      tokensUsed: 0,
+      provider: 'fallback',
+      model: 'rule-based',
+      costUsd: 0,
     };
   }
 
   private generateImageEnhancement(input: Record<string, unknown>) {
     const imageCount = Number(input['imageCount'] ?? 1);
-
     return {
-      enhancedValue: `Enhanced ${imageCount} image(s): background removal, auto-crop, brightness adjustment`,
+      enhancedValue: `${imageCount} image(s) queued for enhancement`,
       enhancedData: {
         processedImages: imageCount,
-        enhancements: [
-          'Background removed (white)',
-          'Auto-cropped to product bounds',
-          'Brightness/contrast optimized',
-          'Sharpened for marketplace display',
-          'Resized to 1600x1600 (eBay optimal)',
-        ],
-        estimatedSizeReduction: `${Math.round(15 + Math.random() * 25)}%`,
+        enhancements: ['Background removal', 'Auto-crop', 'Brightness optimization', 'Resize to 1600x1600'],
       },
-      diff: { imageCount, enhancementsApplied: 5 },
-      confidenceScore: 0.9 + Math.random() * 0.08,
-      tokensUsed: 500 + Math.floor(Math.random() * 300),
+      diff: { imageCount, enhancementsApplied: 4 },
+      confidenceScore: 0.9,
+      tokensUsed: 0,
+      provider: 'local',
+      model: 'image-processor',
+      costUsd: 0,
     };
   }
 

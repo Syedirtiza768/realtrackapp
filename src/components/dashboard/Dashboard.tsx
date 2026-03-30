@@ -11,6 +11,11 @@ import {
     Store,
     Sparkles,
     Radio,
+    FileSpreadsheet,
+    Cpu,
+    CheckCircle2,
+    XCircle,
+    Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -62,6 +67,21 @@ interface MultiStoreMetrics {
     demoSimulations: { operationType: string; channel: string; count: string; successCount: string }[];
 }
 
+interface PipelineStats {
+    totalJobs: number;
+    completedJobs: number;
+    failedJobs: number;
+    processingJobs: number;
+    avgProcessingTime: number;
+}
+
+interface AiEnhancementStats {
+    totalCount: number;
+    byType: { type: string; count: string }[];
+    byStatus: { status: string; count: string }[];
+    avgConfidence: number;
+}
+
 function relativeTime(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60_000);
@@ -83,6 +103,8 @@ export default function Dashboard() {
     const [lowStock, setLowStock] = useState<InventoryAlert[]>([]);
     const [outOfStock, setOutOfStock] = useState<InventoryAlert[]>([]);
     const [multiStore, setMultiStore] = useState<MultiStoreMetrics | null>(null);
+    const [pipelineStats, setPipelineStats] = useState<PipelineStats | null>(null);
+    const [aiStats, setAiStats] = useState<AiEnhancementStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [selectedStoreId, setSelectedStoreId] = useState<string>('');
@@ -107,12 +129,14 @@ export default function Dashboard() {
 
             const summaryQs = selectedStoreId ? `?storeId=${encodeURIComponent(selectedStoreId)}` : '';
 
-            const [sumRes, actRes, chRes, invRes, msRes] = await Promise.all([
+            const [sumRes, actRes, chRes, invRes, msRes, pipeRes, aiStatsRes] = await Promise.all([
                 safeFetch<DashboardSummary>(`${API}/dashboard/summary${summaryQs}`, defaultSummary),
                 safeFetch<{ items?: AuditLogItem[] }>(`${API}/dashboard/activity?limit=8`, { items: [] }),
                 safeFetch<{ channels?: ChannelHealthRow[] }>(`${API}/dashboard/channel-health`, { channels: [] }),
                 safeFetch<{ lowStock?: InventoryAlert[]; outOfStock?: InventoryAlert[] }>(`${API}/dashboard/inventory-alerts`, { lowStock: [], outOfStock: [] }),
                 safeFetch<MultiStoreMetrics>(`${API}/dashboard/multi-store`, { stores: [], instances: [], aiEnhancements: [], demoSimulations: [] }),
+                safeFetch<{ stats: PipelineStats }>(`${API}/ingestion/stats`, { stats: { totalJobs: 0, completedJobs: 0, failedJobs: 0, processingJobs: 0, avgProcessingTime: 0 } }),
+                safeFetch<AiEnhancementStats>(`${API}/ai-enhancements/stats`, { totalCount: 0, byType: [], byStatus: [], avgConfidence: 0 }),
             ]);
             setSummary(sumRes);
             setActivity(actRes.items ?? []);
@@ -120,6 +144,8 @@ export default function Dashboard() {
             setLowStock(invRes.lowStock ?? []);
             setOutOfStock(invRes.outOfStock ?? []);
             setMultiStore(msRes);
+            setPipelineStats(pipeRes.stats ?? pipeRes as unknown as PipelineStats);
+            setAiStats(aiStatsRes);
             setLastRefresh(new Date());
         } catch (e) {
             console.error('Dashboard fetch error', e);
@@ -415,6 +441,118 @@ export default function Dashboard() {
                     </Card>
                 </div>
             )}
+
+            {/* Pipeline & AI Processing Stats */}
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2">
+                {/* Ingestion Pipeline Stats */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileSpreadsheet className="h-4 w-4 text-cyan-500" />
+                            Ingestion Pipeline
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {(!pipelineStats || pipelineStats.totalJobs === 0) ? (
+                            <p className="text-sm text-slate-500 py-2">No pipeline jobs recorded yet</p>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Cpu className="h-3 w-3 text-slate-400" />
+                                            <span className="text-xs text-slate-400">Total Jobs</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-slate-200">{pipelineStats.totalJobs}</span>
+                                    </div>
+                                    <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                            <span className="text-xs text-slate-400">Completed</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-emerald-500">{pipelineStats.completedJobs}</span>
+                                    </div>
+                                    <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <XCircle className="h-3 w-3 text-red-500" />
+                                            <span className="text-xs text-slate-400">Failed</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-red-500">{pipelineStats.failedJobs}</span>
+                                    </div>
+                                    <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Zap className="h-3 w-3 text-amber-500" />
+                                            <span className="text-xs text-slate-400">Processing</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-amber-500">{pipelineStats.processingJobs}</span>
+                                    </div>
+                                </div>
+                                {pipelineStats.avgProcessingTime > 0 && (
+                                    <div className="text-xs text-slate-500">
+                                        Avg processing time: {(pipelineStats.avgProcessingTime / 1000).toFixed(1)}s
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* AI Enhancement Stats */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-purple-500" />
+                            AI Enhancement Stats
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {(!aiStats || aiStats.totalCount === 0) ? (
+                            <p className="text-sm text-slate-500 py-2">No AI enhancements generated yet</p>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-slate-400">Total Enhancements</span>
+                                    <span className="text-lg font-bold text-slate-200">{aiStats.totalCount}</span>
+                                </div>
+                                {aiStats.avgConfidence > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-slate-400">Avg Confidence</span>
+                                        <span className={`text-lg font-bold ${aiStats.avgConfidence >= 0.8 ? 'text-emerald-500' : aiStats.avgConfidence >= 0.6 ? 'text-amber-500' : 'text-red-500'}`}>
+                                            {(aiStats.avgConfidence * 100).toFixed(0)}%
+                                        </span>
+                                    </div>
+                                )}
+                                {aiStats.byStatus.length > 0 && (
+                                    <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                                        <p className="text-xs text-slate-500">By Status</p>
+                                        {aiStats.byStatus.map((s) => (
+                                            <div key={s.status} className="flex items-center justify-between text-xs">
+                                                <Badge variant={
+                                                    s.status === 'approved' ? 'success' :
+                                                    s.status === 'rejected' ? 'destructive' :
+                                                    s.status === 'generated' ? 'warning' : 'secondary'
+                                                }>{s.status}</Badge>
+                                                <span className="text-slate-400 font-mono">{s.count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {aiStats.byType.length > 0 && (
+                                    <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                                        <p className="text-xs text-slate-500">By Type</p>
+                                        {aiStats.byType.map((t) => (
+                                            <div key={t.type} className="flex items-center justify-between text-xs">
+                                                <span className="text-slate-300 capitalize">{t.type.replace(/_/g, ' ')}</span>
+                                                <span className="text-slate-400 font-mono">{t.count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Inventory Alerts Row */}
             {(lowStock.length > 0 || outOfStock.length > 0) && (
