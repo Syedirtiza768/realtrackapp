@@ -12,9 +12,13 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
+    "axios": "^1.14.0",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.1",
+    "dotenv": "^17.3.1",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.474.0",
+    "openai": "^6.33.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.3",

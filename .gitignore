@@ -7,6 +7,9 @@ dist
 
 # Data files (large spreadsheets)
 files/
+*.xlsx
+*.csv
+output/
 
 # PM2 logs
 logs/

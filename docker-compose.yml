@@ -75,7 +75,7 @@ services:
       # Auth
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8050}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8050,https://mhn.realtrackapp.com,http://mhn.realtrackapp.com}
       # OpenAI
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # eBay
@@ -93,6 +93,12 @@ services:
       - uploads:/app/uploads
     ports:
       - "${BACKEND_PORT_EXTERNAL:-4191}:4191"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4191/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
   # ── Vite Frontend → Nginx ──────────────────────────────────
   frontend:
@@ -101,7 +107,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-8050}:80"
 
