@@ -32,6 +32,7 @@ export class FeatureFlagModule implements OnModuleInit {
       ['dashboard_aggregation', 'Enable scheduled dashboard aggregation', true],
       ['storage_cleanup', 'Enable scheduled storage cleanup', true],
       ['low_stock_alerts', 'Enable low stock alert notifications', true],
+      ['pipeline_enrichment', 'Enable VIN-to-listing enrichment pipeline', true],
     ];
 
     try {

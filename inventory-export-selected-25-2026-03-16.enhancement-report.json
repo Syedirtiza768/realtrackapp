@@ -1,0 +1,329 @@
+{
+  "model": "gpt-5.4",
+  "source": "d:\\apps\\listingpro\\inventory-export-selected-25-2026-03-16 (1).csv",
+  "output": "d:\\apps\\listingpro\\inventory-export-selected-25-2026-03-16.enhanced.csv",
+  "report": "d:\\apps\\listingpro\\inventory-export-selected-25-2026-03-16.enhancement-report.json",
+  "changes": "d:\\apps\\listingpro\\inventory-export-selected-25-2026-03-16.changes.csv",
+  "dryRun": false,
+  "startedAt": "2026-03-25T07:16:14.042Z",
+  "structureBefore": {
+    "totalRows": 1186,
+    "totalColumns": 25,
+    "metadataRows": [
+      1
+    ],
+    "headerRowNumber": 2,
+    "dataStartRowNumber": 3,
+    "itemRowCount": 25,
+    "compatibilityRowCount": 1159,
+    "newlineStyle": "\n",
+    "hasUtf8Bom": true
+  },
+  "processing": {
+    "requestedItemCount": 25,
+    "batchSize": 5,
+    "sampleSize": 3,
+    "changedCount": 25,
+    "skippedCount": 0,
+    "failureCount": 0
+  },
+  "samples": [
+    {
+      "csv_row_number": 3,
+      "custom_label": "BLA-04180",
+      "status": "changed",
+      "old_title": "2009-2017 Audi Q5 Parking Aid System Control Module Bracket 8R0035209B",
+      "new_title": "2009-2017 Audi Q5 Rear Parking Aid Control Module Bracket 8R0035209B",
+      "old_description_preview": "2009-2017 Audi Q5 Parking Aid System Control Module Bracket 8R0035209B Vehicle: Audi Q5 | Model Years: 2009-2017 | Part No: 8R0035209B Product Description OEM Parking Aid System...",
+      "new_description_preview": "Used Audi Parking Aid System Control Module Bracket for Audi Q5, model years 2009-2017. Rear placement. Part number: 8R0035209B. Brand: Audi. Please confirm the part number befo...",
+      "warnings": [
+        "Removed unsupported claims about OEM/genuine, testing, condition grading, installation, shipping, returns, and fitment beyond provided row fields.",
+        "Excluded SQ5 and alternate part number compatibility language because compatibility was not fully supported by the provided row fields."
+      ],
+      "skip_reason": ""
+    },
+    {
+      "csv_row_number": 147,
+      "custom_label": "BLA-04210",
+      "status": "changed",
+      "old_title": "2011-2018 Audi A8 Quattro Glove Box Door Cover 4H1857996",
+      "new_title": "2011-2018 Audi A8 Quattro Right Glove Box Door Cover 4H1857996",
+      "old_description_preview": "2011-2018 Audi A8 Quattro Glove Box Door Cover 4H1857996 Vehicle: Audi A8 Quattro | Model Years: 2011-2018 | Part No: 4H1857996 Product Description OEM Glove Box Door Cover for...",
+      "new_description_preview": "Used Audi glove box door cover for 2011-2018 A8 Quattro. Part number: 4H1857996. Type: Glove Box Door Cover. Placement: Right. Material: Leather. Please confirm the part number...",
+      "warnings": [
+        "Removed unsupported claims about OEM/genuine factory part, testing, condition grading, fitment, direct replacement, and easy installation.",
+        "Removed payment, shipping, returns, handling time, and contact/compatibility advisory content.",
+        "Excluded S8 and Audi A8 fitment references from description because title field supports A8 Quattro only."
+      ],
+      "skip_reason": ""
+    },
+    {
+      "csv_row_number": 233,
+      "custom_label": "BLA-04163",
+      "status": "changed",
+      "old_title": "2012-2018 Audi A6 Instrument Cluster Speedometer Trim Cover 9032202",
+      "new_title": "2012-2018 Audi A6 Instrument Cluster Speedometer Trim Cover 9032202",
+      "old_description_preview": "2012-2018 Audi A6 Instrument Cluster Speedometer Trim Cover 9032202 Vehicle: Audi A6 | Model Years: 2012-2018 | Part No: 9032202 Product Description OEM Instrument Cluster Speed...",
+      "new_description_preview": "Used AUDI instrument cluster speedometer trim cover for 2012-2018 Audi A6. Part number: 9032202. Please confirm the part number before purchase.",
+      "warnings": [
+        "Removed unsupported fitment claims beyond the provided title/vehicle reference",
+        "Removed OEM/genuine/original claims because oe_oem field is empty",
+        "Removed testing, condition grading, installation, shipping, returns, and warranty-style claims",
+        "Kept description conservative due to incomplete fitment and specification data"
+      ],
+      "skip_reason": ""
+    }
+  ],
+  "warnings": [
+    {
+      "csvRowNumber": 3,
+      "customLabel": "BLA-04180",
+      "warnings": [
+        "Removed unsupported claims about OEM/genuine, testing, condition grading, installation, shipping, returns, and fitment beyond provided row fields.",
+        "Excluded SQ5 and alternate part number compatibility language because compatibility was not fully supported by the provided row fields."
+      ]
+    },
+    {
+      "csvRowNumber": 147,
+      "customLabel": "BLA-04210",
+      "warnings": [
+        "Removed unsupported claims about OEM/genuine factory part, testing, condition grading, fitment, direct replacement, and easy installation.",
+        "Removed payment, shipping, returns, handling time, and contact/compatibility advisory content.",
+        "Excluded S8 and Audi A8 fitment references from description because title field supports A8 Quattro only."
+      ]
+    },
+    {
+      "csvRowNumber": 233,
+      "customLabel": "BLA-04163",
+      "warnings": [
+        "Removed unsupported fitment claims beyond the provided title/vehicle reference",
+        "Removed OEM/genuine/original claims because oe_oem field is empty",
+        "Removed testing, condition grading, installation, shipping, returns, and warranty-style claims",
+        "Kept description conservative due to incomplete fitment and specification data"
+      ]
+    },
+    {
+      "csvRowNumber": 285,
+      "customLabel": "BLA-04161",
+      "warnings": [
+        "Removed unsupported fitment references beyond the provided title range.",
+        "Removed installation, testing, condition grading, shipping, returns, and performance claims.",
+        "Did not use OE/OEM cross-reference numbers to avoid implying interchangeability."
+      ]
+    },
+    {
+      "csvRowNumber": 309,
+      "customLabel": "BLA-04164",
+      "warnings": [
+        "Removed unsupported fitment references to SQ5 and A4 from description",
+        "Removed unsupported claims about proper fitment, engine types, testing, condition grading, and easy installation",
+        "Removed payment, shipping, returns, handling time, and contact/technical support language",
+        "Did not use oe_oem numbers as equivalence claims"
+      ]
+    },
+    {
+      "csvRowNumber": 446,
+      "customLabel": "BLA-04172",
+      "warnings": [
+        "Removed unsupported fitment claims for additional models and years",
+        "Removed OEM/genuine/direct-fit claims not supported by provided fields",
+        "Removed testing, condition detail, installation, shipping, payment, returns, and advisory claims"
+      ]
+    },
+    {
+      "csvRowNumber": 513,
+      "customLabel": "BLA-04160",
+      "warnings": [
+        "Removed unsupported fitment references to A7 and RS7 from description",
+        "Removed installation, testing, condition grading, shipping, returns, and payment claims",
+        "Did not use oe_oem alternate number as equivalent fitment claim"
+      ]
+    },
+    {
+      "csvRowNumber": 533,
+      "customLabel": "BLA-04155",
+      "warnings": [
+        "Removed unsupported fitment references to Audi A7 Sportback",
+        "Removed claims about OEM/genuine status not directly supported by provided brand/part fields",
+        "Removed condition, testing, installation, shipping, returns, and compatibility advisory language to stay conservative"
+      ]
+    },
+    {
+      "csvRowNumber": 580,
+      "customLabel": "BLA-04178",
+      "warnings": [
+        "Removed unsupported fitment beyond the title scope",
+        "Removed OEM/genuine and tested condition claims not supported by structured fields",
+        "Removed shipping, returns, payment, installation, and seller promotional content",
+        "Removed compatibility guidance and advisory language not needed for core listing description"
+      ]
+    },
+    {
+      "csvRowNumber": 657,
+      "customLabel": "BLA-04139",
+      "warnings": [
+        "Removed unsupported fitment claims beyond Audi A4 2002-2009",
+        "Removed OEM quality, genuine OEM, tested, condition, and installation claims not supported by provided fields",
+        "Removed shipping, returns, payment, and contact policy content",
+        "Removed compatibility guidance and additional vehicle applications to stay conservative"
+      ]
+    },
+    {
+      "csvRowNumber": 818,
+      "customLabel": "BLA-04140",
+      "warnings": [
+        "Removed unsupported fitment details not fully supported by provided fields",
+        "Removed installation, testing, shipping, returns, and warranty-style claims",
+        "Removed manufacturer and OEM equivalence details not supported by provided fields"
+      ]
+    },
+    {
+      "csvRowNumber": 837,
+      "customLabel": "BLA-04129",
+      "warnings": [
+        "Removed unsupported fitment claims beyond the provided vehicle/year context.",
+        "Removed OEM equivalence references from description to avoid unsupported interchange claims.",
+        "Removed condition, testing, installation, shipping, returns, and warranty-style statements not supported for listing enhancement.",
+        "Kept description conservative due to limited verified fitment data."
+      ]
+    },
+    {
+      "csvRowNumber": 861,
+      "customLabel": "BLA-04122",
+      "warnings": [
+        "Removed unsupported claims such as tested, verified, direct replacement, easy installation, shipping, returns, and compatibility statements beyond provided core data.",
+        "Excluded OE/OEM alternate number from description/title to avoid implying interchangeability."
+      ]
+    },
+    {
+      "csvRowNumber": 910,
+      "customLabel": "BLA-04115",
+      "warnings": [
+        "Removed unsupported claims about testing, condition grading, installation, shipping, returns, and broad compatibility.",
+        "Excluded OEM equivalence implication from oe_oem field to avoid unsupported interchange claims."
+      ]
+    },
+    {
+      "csvRowNumber": 936,
+      "customLabel": "BLA-04089",
+      "warnings": [
+        "Original description included unsupported compatibility claims across many models/years.",
+        "Original description included OEM equivalence numbers not supported for listing enhancement.",
+        "Original description included testing, condition detail, installation, shipping, payment, and returns claims that should not be carried over.",
+        "Fitment data appears inconsistent with the original title and should be verified by part number only."
+      ]
+    },
+    {
+      "csvRowNumber": 1163,
+      "customLabel": "BLA-04041",
+      "warnings": [
+        "Removed unsupported fitment claims beyond provided core item data",
+        "Removed warranty, returns, shipping, testing, condition-detail, and installation claims",
+        "Removed references to compatibility guidance and seller contact language"
+      ]
+    },
+    {
+      "csvRowNumber": 1304,
+      "customLabel": "BLA-04030",
+      "warnings": [
+        "Removed unsupported fitment claims beyond Audi A6 from title/description",
+        "Removed shipping, returns, payment, and installation claims",
+        "Removed testing, condition grading, and OEM/genuine claims not supported by structured fields",
+        "Excluded OE/OEM cross-reference numbers from description to avoid equivalence implications"
+      ]
+    },
+    {
+      "csvRowNumber": 1338,
+      "customLabel": "BLA-04025",
+      "warnings": [
+        "Removed unsupported fitment claims beyond provided title scope",
+        "Removed OEM/genuine, tested, condition grading, and installation claims",
+        "Removed payment, shipping, returns, and contact language",
+        "Removed compatibility guidance and vehicle list to stay conservative"
+      ]
+    },
+    {
+      "csvRowNumber": 1379,
+      "customLabel": "BLA-03996",
+      "warnings": [
+        "Removed unsupported fitment references to Audi SQ5 and Porsche Macan from description",
+        "Removed unverified claims such as tested, verified, excellent condition, and easy installation",
+        "Removed payment, shipping, returns, handling time, and contact policy text",
+        "Kept description conservative and based only on provided row fields"
+      ]
+    },
+    {
+      "csvRowNumber": 1413,
+      "customLabel": "BLA-04000",
+      "warnings": [
+        "Removed unsupported claims about testing, condition grading, installation, shipping, returns, and seller assurances.",
+        "Removed fitment references beyond the title scope to avoid unsupported compatibility claims.",
+        "Did not use OE/OEM numbers as equivalence or interchange claims."
+      ]
+    },
+    {
+      "csvRowNumber": 1450,
+      "customLabel": "BLA-03963",
+      "warnings": [
+        "Removed unsupported fitment claims beyond the provided vehicle/year context",
+        "Removed installation, testing, quality, durability, shipping, returns, and warranty-style claims",
+        "Did not use OE/OEM cross-reference numbers as equivalence or compatibility claims"
+      ]
+    },
+    {
+      "csvRowNumber": 1474,
+      "customLabel": "BLA-03960",
+      "warnings": [
+        "Removed unsupported fitment claims for A7, A8, A8L, and Q7",
+        "Removed conflicting model year references including 2011-2025",
+        "Removed unverified claims about OEM/original replacement, testing, condition grading, fitment, performance, and easy installation",
+        "Removed payment, shipping, returns, and contact policy text per listing-text safety constraints"
+      ]
+    },
+    {
+      "csvRowNumber": 1519,
+      "customLabel": "BLA-03907",
+      "warnings": [
+        "Removed unsupported fitment claims beyond the provided vehicle/source data",
+        "Removed installation, testing, condition grading, shipping, returns, and warranty-style claims",
+        "Did not use OE/OEM number as equivalent part number due to ambiguity"
+      ]
+    },
+    {
+      "csvRowNumber": 1546,
+      "customLabel": "BLA-03917",
+      "warnings": [
+        "Removed unsupported fitment references to Audi A4, A5, and S4 from description",
+        "Removed claims about OEM/genuine status because not fully supported by provided fields",
+        "Removed testing, condition grading, installation, shipping, returns, and seller promotional claims",
+        "Kept description conservative due to incomplete verified fitment data"
+      ]
+    },
+    {
+      "csvRowNumber": 1591,
+      "customLabel": "BLA-03922",
+      "warnings": [
+        "Removed unsupported fitment references to Audi A5 and broader compatibility language",
+        "Removed installation, testing, condition grading, shipping, returns, and warranty-style claims not supported by structured fields",
+        "Did not use oe_oem as equivalent fitment or interchange information"
+      ]
+    }
+  ],
+  "failures": [],
+  "structureAfter": {
+    "totalRows": 1186,
+    "totalColumns": 25,
+    "metadataRows": [
+      1
+    ],
+    "headerRowNumber": 2,
+    "dataStartRowNumber": 3,
+    "itemRowCount": 25,
+    "compatibilityRowCount": 1159
+  },
+  "integrity": {
+    "ok": true,
+    "issues": []
+  },
+  "finishedAt": "2026-03-25T07:17:55.255Z"
+}

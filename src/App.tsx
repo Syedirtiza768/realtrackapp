@@ -27,6 +27,7 @@ import MotorsDashboard from './components/motors/MotorsDashboard';
 import MotorsProductDetail from './components/motors/MotorsProductDetail';
 import ReviewQueue from './components/motors/ReviewQueue';
 import AIUploadWizard from './components/motors/AIUploadWizard';
+import PipelineWizard from './components/pipeline/PipelineWizard';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
@@ -69,6 +70,7 @@ function App() {
                             <Route path="/motors/upload" element={<AIUploadWizard />} />
                             <Route path="/motors/review" element={<ReviewQueue />} />
                             <Route path="/motors/:id" element={<MotorsProductDetail />} />
+                            <Route path="/pipeline" element={<PipelineWizard />} />
                             <Route path="*" element={<div className="p-10 text-center text-slate-500">Page not found</div>} />
                         </Routes>
                     </Shell>

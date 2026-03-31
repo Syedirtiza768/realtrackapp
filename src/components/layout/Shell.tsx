@@ -18,6 +18,7 @@ import {
     Upload,
     Cpu,
     ClipboardList,
+    Workflow,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
     { icon: ScanLine, label: 'Fitment', path: '/fitment' },
     { icon: Database, label: 'Catalog', path: '/catalog' },
     { icon: Upload, label: 'CSV Import', path: '/catalog/import' },
+    { icon: Workflow, label: 'Pipeline', path: '/pipeline' },
     { icon: Layers, label: 'Bulk Actions', path: '/bulk-actions' },
     { icon: Package, label: 'Orders', path: '/orders' },
     { icon: Zap, label: 'Automation', path: '/automation' },

@@ -1,0 +1,151 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { PipelineService } from './pipeline.service.js';
+
+const UPLOAD_DIR = path.resolve(process.cwd(), '..', 'uploads', 'pipeline');
+
+/**
+ * PipelineController — REST endpoints for the enrichment pipeline.
+ *
+ * This is ADDITIVE — registered alongside the existing IngestionController.
+ * All routes are under /api/pipeline (separate from /api/ingestion).
+ */
+@ApiTags('Pipeline')
+@Controller('pipeline')
+export class PipelineController {
+  constructor(private readonly pipelineService: PipelineService) {}
+
+  @Post('upload')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload an Excel/CSV file and start enrichment pipeline' })
+  async uploadAndStart(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+
+    // Ensure upload directory exists
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+
+    // Save file with unique name
+    const timestamp = Date.now();
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storedName = `${timestamp}_${safeName}`;
+    const storedPath = path.join(UPLOAD_DIR, storedName);
+    fs.writeFileSync(storedPath, file.buffer);
+
+    const job = await this.pipelineService.createJob({
+      originalFilename: file.originalname,
+      storedFilePath: storedPath,
+      fileSizeBytes: file.size,
+    });
+
+    return { job };
+  }
+
+  @Get('jobs')
+  @ApiOperation({ summary: 'List pipeline jobs' })
+  async listJobs(
+    @Query('status') status?: string,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+  ) {
+    return this.pipelineService.listJobs(status, limit ?? 20, offset ?? 0);
+  }
+
+  @Get('jobs/:id')
+  @ApiOperation({ summary: 'Get pipeline job details' })
+  async getJob(@Param('id') id: string) {
+    const job = await this.pipelineService.getJob(id);
+    return { job };
+  }
+
+  @Post('jobs/:id/retry')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Retry a failed pipeline job' })
+  async retryJob(@Param('id') id: string) {
+    const job = await this.pipelineService.retryJob(id);
+    return { job };
+  }
+
+  @Post('jobs/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a pending/processing pipeline job' })
+  async cancelJob(@Param('id') id: string) {
+    const job = await this.pipelineService.cancelJob(id);
+    return { job };
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Get pipeline aggregate stats' })
+  async getStats() {
+    return this.pipelineService.getStats();
+  }
+
+  @Get('jobs/:id/download/:template')
+  @ApiOperation({ summary: 'Download pipeline output file (us, au, de, report)' })
+  async downloadOutput(
+    @Param('id') id: string,
+    @Param('template') template: string,
+    @Res() res: Response,
+  ) {
+    const job = await this.pipelineService.getJob(id);
+
+    let filePath: string | null = null;
+    let filename: string;
+
+    switch (template) {
+      case 'us':
+        filePath = job.outputUsPath;
+        filename = `US-Motors-Listings-${job.id.slice(0, 8)}.xlsx`;
+        break;
+      case 'au':
+        filePath = job.outputAuPath;
+        filename = `AU-Category-Listings-${job.id.slice(0, 8)}.xlsx`;
+        break;
+      case 'de':
+        filePath = job.outputDePath;
+        filename = `DE-Category-Listings-${job.id.slice(0, 8)}.xlsx`;
+        break;
+      case 'report':
+        filePath = job.reportPath;
+        filename = `Enrichment-Report-${job.id.slice(0, 8)}.json`;
+        break;
+      default:
+        throw new Error(`Unknown template: ${template}. Use: us, au, de, report`);
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      res.status(404).json({ message: `Output file not yet available for template: ${template}` });
+      return;
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType = ext === '.json'
+      ? 'application/json'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    fs.createReadStream(filePath).pipe(res);
+  }
+}
