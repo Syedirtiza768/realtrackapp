@@ -14,6 +14,7 @@ import { PipelineService } from './pipeline.service.js';
 import { PipelineProcessor } from './processors/pipeline.processor.js';
 import { AiModule } from './ai/ai.module.js';
 import { StorageModule } from '../storage/storage.module.js';
+import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.js';
 import { ReviewController } from './review/review.controller.js';
 import { ReviewService } from './review/review.service.js';
 
@@ -24,6 +25,7 @@ import { ReviewService } from './review/review.service.js';
     BullModule.registerQueue({ name: 'pipeline' }),
     AiModule,
     StorageModule,
+    FeatureFlagModule,
   ],
   controllers: [IngestionController, ReviewController, PipelineController],
   providers: [IngestionService, IngestionProcessor, ReviewService, PipelineService, PipelineProcessor],
