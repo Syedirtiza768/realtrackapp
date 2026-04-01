@@ -8,6 +8,8 @@ dist
 # Data files (large spreadsheets)
 files/
 *.xlsx
+# Exception: eBay listing template files required by the pipeline script
+!eBay-*.xlsx
 *.csv
 output/
 
