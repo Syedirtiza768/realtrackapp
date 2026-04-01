@@ -13,6 +13,48 @@ import type { PipelineJob, PipelineStats } from '../types/pipeline';
 
 const API = '/api';
 
+type PipelineJobApi = Omit<PipelineJob, 'fileSizeBytes' | 'totalParts' | 'processedParts' | 'vinDecodeSuccess' | 'vinDecodeFailed' | 'categoryApiCount' | 'categoryFallbackCount' | 'enrichedCount' | 'fallbackCount' | 'openaiTokensUsed' | 'openaiCostUsd'> & {
+  fileSizeBytes: number | string | null;
+  totalParts: number | string | null;
+  processedParts: number | string | null;
+  vinDecodeSuccess: number | string | null;
+  vinDecodeFailed: number | string | null;
+  categoryApiCount: number | string | null;
+  categoryFallbackCount: number | string | null;
+  enrichedCount: number | string | null;
+  fallbackCount: number | string | null;
+  openaiTokensUsed: number | string | null;
+  openaiCostUsd: number | string | null;
+};
+
+function toNumber(value: number | string | null | undefined, fallback = 0): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function normalizePipelineJob(job: PipelineJobApi): PipelineJob {
+  return {
+    ...job,
+    fileSizeBytes: toNumber(job.fileSizeBytes),
+    totalParts: toNumber(job.totalParts),
+    processedParts: toNumber(job.processedParts),
+    vinDecodeSuccess: toNumber(job.vinDecodeSuccess),
+    vinDecodeFailed: toNumber(job.vinDecodeFailed),
+    categoryApiCount: toNumber(job.categoryApiCount),
+    categoryFallbackCount: toNumber(job.categoryFallbackCount),
+    enrichedCount: toNumber(job.enrichedCount),
+    fallbackCount: toNumber(job.fallbackCount),
+    openaiTokensUsed: toNumber(job.openaiTokensUsed),
+    openaiCostUsd: toNumber(job.openaiCostUsd),
+  };
+}
+
 /* ── Helpers ──────────────────────────────────────────────── */
 
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -71,7 +113,8 @@ export function useUploadPipelineFile() {
 
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-              resolve(JSON.parse(xhr.responseText));
+              const payload = JSON.parse(xhr.responseText) as { job: PipelineJobApi };
+              resolve({ job: normalizePipelineJob(payload.job) });
             } else {
               reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
             }
@@ -107,7 +150,13 @@ export function usePipelineJobs(status?: string) {
   const qs = status ? `?status=${status}` : '';
   return useQuery<{ data: PipelineJob[]; total: number }>({
     queryKey: ['pipeline-jobs', status],
-    queryFn: ({ signal }) => fetchJson(`/pipeline/jobs${qs}`, signal),
+    queryFn: async ({ signal }) => {
+      const response = await fetchJson<{ jobs: PipelineJobApi[]; total: number }>(`/pipeline/jobs${qs}`, signal);
+      return {
+        data: response.jobs.map(normalizePipelineJob),
+        total: toNumber(response.total),
+      };
+    },
     refetchInterval: 5000,
   });
 }
@@ -115,7 +164,10 @@ export function usePipelineJobs(status?: string) {
 export function usePipelineJob(id: string | null) {
   return useQuery<{ job: PipelineJob }>({
     queryKey: ['pipeline-job', id],
-    queryFn: ({ signal }) => fetchJson(`/pipeline/jobs/${id}`, signal),
+    queryFn: async ({ signal }) => {
+      const response = await fetchJson<{ job: PipelineJobApi }>(`/pipeline/jobs/${id}`, signal);
+      return { job: normalizePipelineJob(response.job) };
+    },
     enabled: !!id,
     refetchInterval: (query) => {
       const status = query.state.data?.job?.status;

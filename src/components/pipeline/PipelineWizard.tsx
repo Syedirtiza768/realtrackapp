@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Upload,
   FileSpreadsheet,
@@ -10,6 +10,7 @@ import {
   Loader2,
   Workflow,
   ChevronRight,
+  Clock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
@@ -57,6 +58,27 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatElapsed(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+/** Compute a synthetic progress % from stage position when no part counts are available */
+function stageProgress(status: PipelineJobStatus): number {
+  const stageWeights: Record<string, number> = {
+    pending: 0,
+    uploading: 5,
+    vin_decode: 15,
+    category_mapping: 30,
+    enrichment: 55,
+    validation: 85,
+    output_generation: 95,
+    completed: 100,
+  };
+  return stageWeights[status] ?? 0;
 }
 
 /* ═════════════════════════════════════════════════════════════
@@ -267,6 +289,18 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   const cancelMutation = useCancelPipelineJob();
   const job = data?.job;
 
+  // Elapsed time counter
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!job) return;
+    if (isTerminal(job.status)) return;
+    const start = new Date(job.createdAt).getTime();
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [job?.createdAt, job?.status]);
+
   if (!job) {
     return (
       <Card>
@@ -279,9 +313,13 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   }
 
   const terminal = isTerminal(job.status);
-  const progressPct = job.totalParts > 0
+  const hasPartCounts = job.totalParts > 0;
+  const progressPct = hasPartCounts
     ? Math.round((job.processedParts / job.totalParts) * 100)
-    : 0;
+    : stageProgress(job.status);
+
+  // Current stage description
+  const currentStage = PIPELINE_STAGES.find((s) => s.key === job.status);
 
   return (
     <div className="space-y-4">
@@ -296,6 +334,12 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
               {job.originalFilename}
             </CardTitle>
             <div className="flex items-center gap-2">
+              {!terminal && (
+                <span className="flex items-center gap-1 text-xs text-slate-400">
+                  <Clock className="h-3.5 w-3.5" />
+                  {formatElapsed(elapsed)}
+                </span>
+              )}
               {statusBadge(job.status)}
               {job.status === 'failed' && (
                 <button
@@ -317,17 +361,23 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
           </div>
         </CardHeader>
         <CardContent>
-          {/* Progress bar */}
-          {!terminal && job.totalParts > 0 && (
+          {/* Progress bar — always shown during processing */}
+          {!terminal && (
             <div className="mb-4">
               <div className="flex justify-between text-xs text-slate-400 mb-1">
-                <span>{job.processedParts} / {job.totalParts} parts</span>
+                <span>
+                  {hasPartCounts
+                    ? `${job.processedParts} / ${job.totalParts} parts`
+                    : currentStage?.description ?? 'Processing...'}
+                </span>
                 <span>{progressPct}%</span>
               </div>
-              <div className="w-full bg-slate-700 rounded-full h-2">
+              <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${progressPct}%` }}
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    hasPartCounts ? 'bg-blue-500' : 'bg-blue-500/70 animate-pulse'
+                  }`}
+                  style={{ width: `${Math.max(progressPct, 2)}%` }}
                 />
               </div>
             </div>

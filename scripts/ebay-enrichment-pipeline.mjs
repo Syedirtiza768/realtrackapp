@@ -43,18 +43,18 @@ function loadEnv(filePath) {
 }
 
 // Load from both root and backend .env (root takes precedence for shared keys)
-const backendEnv = loadEnv(path.resolve(ROOT, 'backend/.env'));
-const rootEnv = fs.existsSync(path.resolve(ROOT, '.env'))
-  ? loadEnv(path.resolve(ROOT, '.env'))
-  : {};
+const backendEnvPath = path.resolve(ROOT, 'backend/.env');
+const backendEnv = fs.existsSync(backendEnvPath) ? loadEnv(backendEnvPath) : {};
+const rootEnvPath = path.resolve(ROOT, '.env');
+const rootEnv = fs.existsSync(rootEnvPath) ? loadEnv(rootEnvPath) : {};
 const env = { ...backendEnv, ...rootEnv };
 
 const CONFIG = {
   openai: {
     apiKey: env.OPENAI_API_KEY,
     model: 'gpt-4o-mini',         // cost-effective for bulk; override with OPENAI_CHAT_MODEL
-    batchSize: 25,                 // parts per OpenAI call
-    concurrency: 3,                // parallel OpenAI calls
+    batchSize: 10,                 // parts per OpenAI call (smaller = more reliable)
+    concurrency: 5,                // parallel OpenAI calls
     temperature: 0.2,
     maxTokens: 6000,
     maxRetries: 3,
@@ -70,13 +70,13 @@ const CONFIG = {
         : 'https://api.ebay.com';
     },
   },
-  input: path.resolve(ROOT, 'Vins Report Status.xlsx'),
+  input: process.env.PIPELINE_INPUT_FILE || path.resolve(ROOT, 'Vins Report Status.xlsx'),
   templates: {
     us: path.resolve(ROOT, 'eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx'),
     au: path.resolve(ROOT, 'eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx'),
     de: path.resolve(ROOT, 'eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx'),
   },
-  outputDir: path.resolve(ROOT, 'output'),
+  outputDir: process.env.PIPELINE_OUTPUT_DIR || path.resolve(ROOT, 'output'),
   defaultConditionId: '3000',      // Used
   defaultQuantity: 1,
   defaultFormat: 'FixedPrice',
@@ -114,6 +114,11 @@ const log = {
   warn:  (msg) => console.warn(`[WARN]  ${new Date().toISOString().slice(11,19)} ${msg}`),
   error: (msg) => console.error(`[ERROR] ${new Date().toISOString().slice(11,19)} ${msg}`),
   step:  (msg) => console.log(`\n${'═'.repeat(60)}\n  STEP: ${msg}\n${'═'.repeat(60)}`),
+  /** Structured progress line parsed by the backend processor */
+  progress: (fields) => {
+    const pairs = Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ');
+    console.log(`[PROGRESS] ${pairs}`);
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -439,17 +444,17 @@ function buildColumnMap(headers) {
     const h = headers[i];
     if (!h) continue;
 
-    if (h === 'sku') map.sku = i;
-    if (h === 'brand') map.brand = i;
+    // --- exact matches (original) ---
+    if (h === 'sku' || h === 's.no' || h === 'bu no.' || h === 'bu no') map.sku === -1 && (map.sku = i);
+    if (h === 'brand' || h === 'make') map.brand === -1 && (map.brand = i);
     if (h === 'model') map.model = i;
     if (h === 'vin') map.vin = i;
     if (h === 'category') map.category = i;
-    if (h === 'part number') map.partNumber = i;
-    if (h === 'name' && map.partName === -1) map.partName = i;     // first "Name" col = part name
-    if (h === 'part name') map.partName = i;                        // explicit "Part Name"
-    if (h === 'note' || h === 'notes') map.note = i;
+    if (h === 'part number' || h === 'oem number' || h === 'oem no' || h === 'part no' || h === 'part no.') map.partNumber === -1 && (map.partNumber = i);
+    if ((h === 'name' || h === 'part name' || h === 'parts description' || h === 'part description' || h === 'part title' || h === 'title' || h === 'description') && map.partName === -1) map.partName = i;
+    if (h === 'note' || h === 'notes' || h === 'additional details') map.note === -1 && (map.note = i);
     if (h === 'code') map.code = i;
-    if (h === 'price') map.price = i;
+    if (h === 'price' || h === 'real price' || h === 'unit price' || h === 'sell price') map.price === -1 && (map.price = i);
   }
 
   // Handle variant layouts:
@@ -523,6 +528,7 @@ async function decodeAllVins(parts) {
   }
 
   log.info(`VIN decode: ${REPORT.vinDecodeSuccess} success, ${REPORT.vinDecodeFail} failed`);
+  log.progress({ stage: 'vin_decode', vin_success: REPORT.vinDecodeSuccess, vin_failed: REPORT.vinDecodeFail, total_parts: parts.length });
   return results;
 }
 
@@ -586,10 +592,10 @@ async function mapCategories(parts, vinData) {
     const keywords = `${vehicle.make} ${part.partName}`.replace(/[^\w\s]/g, ' ').trim();
     let category = null;
 
-    if (apiAttempts < 100) { // Limit API calls
+    if (apiAttempts < 5000) { // Production: 5000/day limit
       category = await suggestCategory(keywords);
       apiAttempts++;
-      if (apiAttempts % 20 === 0) await sleep(1000);
+      if (apiAttempts % 50 === 0) await sleep(500); // Rate limit: pause every 50 calls
     }
 
     if (!category) {
@@ -602,6 +608,7 @@ async function mapCategories(parts, vinData) {
   }
 
   log.info(`Category mapping: ${REPORT.categoryMappingApi} via API, ${REPORT.categoryMappingFallback} fallback`);
+  log.progress({ stage: 'category_mapping', cat_api: REPORT.categoryMappingApi, cat_fallback: REPORT.categoryMappingFallback, total_parts: parts.length });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -734,6 +741,7 @@ Return JSON: {"items":[{"index":N,"title":"...","description":"<h3>...</h3>...",
         await sleep(delay);
       } else {
         log.error(`OpenAI enrichment failed after ${CONFIG.openai.maxRetries} attempts: ${err.message}`);
+        REPORT.errors.push({ type: 'openai', message: err.message, batchSize: batchParts.length });
         return null;
       }
     }
@@ -774,6 +782,7 @@ async function enrichAllParts(parts, vinData) {
 
   const batches = chunk(parts, CONFIG.openai.batchSize);
   log.info(`Processing ${parts.length} parts in ${batches.length} batches of ${CONFIG.openai.batchSize}...`);
+  log.progress({ stage: 'enrichment', enriched: 0, failed: 0, total_parts: parts.length, processed: 0 });
 
   let enrichedCount = 0;
   let failedCount = 0;
@@ -845,6 +854,9 @@ async function enrichAllParts(parts, vinData) {
       }
     }
 
+    // Emit progress after each parallel group
+    log.progress({ stage: 'enrichment', enriched: enrichedCount, failed: failedCount, total_parts: parts.length, processed: enrichedCount + failedCount, tokens: REPORT.openaiTokensUsed });
+
     // Rate limiting between parallel groups
     if (groupStart + concurrency < batches.length) {
       await sleep(CONFIG.openai.delayBetweenCallsMs);
@@ -854,6 +866,7 @@ async function enrichAllParts(parts, vinData) {
   REPORT.totalProcessed = enrichedCount;
   REPORT.totalFailed = failedCount;
   log.info(`Enrichment complete: ${enrichedCount} enriched, ${failedCount} basic fallback`);
+  log.progress({ stage: 'enrichment_done', enriched: enrichedCount, failed: failedCount, total_parts: parts.length, processed: parts.length, tokens: REPORT.openaiTokensUsed });
 }
 
 /**
@@ -1530,6 +1543,7 @@ async function main() {
     log.error('No parts found in input file. Exiting.');
     process.exit(1);
   }
+  log.progress({ stage: 'uploading', total_parts: parts.length, processed: 0 });
 
   // ── Step 2: VIN Decoding ──
   const vinData = await decodeAllVins(parts);
@@ -1547,10 +1561,12 @@ async function main() {
   saveCheckpoint(parts, 'enrichment');
 
   // ── Step 6: Compliance Validation ──
+  log.progress({ stage: 'validation', total_parts: parts.length, processed: parts.filter(p => p._enriched).length });
   validateAndFix(parts);
 
   // ── Step 7: Generate Template Outputs ──
   log.step('Generating Output Templates');
+  log.progress({ stage: 'output_generation', total_parts: parts.length, processed: parts.filter(p => p._enriched).length });
 
   const enrichedParts = parts.filter(p => p._enriched);
   log.info(`${enrichedParts.length} enriched parts ready for output`);

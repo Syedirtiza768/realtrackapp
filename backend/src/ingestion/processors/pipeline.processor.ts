@@ -38,8 +38,8 @@ export class PipelineProcessor extends WorkerHost {
 
     await this.updateStatus(jobId, 'uploading');
 
-    // Resolve paths
-    const projectRoot = path.resolve(process.cwd(), '..');
+    // Resolve paths — PIPELINE_PROJECT_ROOT is set in Docker; falls back to cwd/.. for bare-metal
+    const projectRoot = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
     const scriptPath = path.resolve(projectRoot, 'scripts', 'ebay-enrichment-pipeline.mjs');
     const outputDir = path.resolve(projectRoot, 'output', `pipeline-${jobId.slice(0, 8)}`);
 
@@ -52,8 +52,6 @@ export class PipelineProcessor extends WorkerHost {
     fs.mkdirSync(outputDir, { recursive: true });
 
     try {
-      await this.updateStatus(jobId, 'vin_decode');
-
       // Spawn the pipeline script with environment overrides
       const exitCode = await this.runPipeline(jobId, scriptPath, filePath, outputDir, projectRoot);
 
@@ -124,46 +122,55 @@ export class PipelineProcessor extends WorkerHost {
   }
 
   /**
-   * Parse stdout for STEP markers and update job status/stage accordingly.
+   * Parse stdout for [PROGRESS] markers and update job status/stats accordingly.
+   * Format: [PROGRESS] stage=enrichment enriched=50 failed=0 total_parts=200 processed=50 tokens=12345
    */
   private async parseProgress(jobId: string, text: string): Promise<void> {
-    const stageMap: Record<string, PipelineJobStatus> = {
-      'VIN Decod': 'vin_decode',
-      'Category Mapping': 'category_mapping',
-      'Enrichment': 'enrichment',
-      'Enriching': 'enrichment',
-      'OpenAI': 'enrichment',
-      'Compliance': 'validation',
-      'Validat': 'validation',
-      'Generating Output': 'output_generation',
-      'Pipeline Report': 'output_generation',
-    };
+    // Process each line that contains a [PROGRESS] marker
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const idx = line.indexOf('[PROGRESS]');
+      if (idx === -1) continue;
 
-    for (const [marker, status] of Object.entries(stageMap)) {
-      if (text.includes(marker)) {
-        await this.updateStatus(jobId, status);
-        break;
+      const payload = line.slice(idx + '[PROGRESS]'.length).trim();
+      const fields: Record<string, string> = {};
+      for (const pair of payload.split(/\s+/)) {
+        const eq = pair.indexOf('=');
+        if (eq > 0) {
+          fields[pair.slice(0, eq)] = pair.slice(eq + 1);
+        }
       }
-    }
 
-    // Parse numeric progress from lines like "Processed 50/200 parts"
-    const progressMatch = text.match(/(\d+)\s*\/\s*(\d+)\s*parts/i);
-    if (progressMatch) {
-      const processed = parseInt(progressMatch[1], 10);
-      const total = parseInt(progressMatch[2], 10);
-      await this.jobRepo.update(jobId, {
-        processedParts: processed,
-        totalParts: total,
-      });
-    }
+      const update: Partial<PipelineJob> = {};
 
-    // Parse VIN decode stats
-    const vinMatch = text.match(/VIN decode.*?(\d+)\s*success.*?(\d+)\s*fail/i);
-    if (vinMatch) {
-      await this.jobRepo.update(jobId, {
-        vinDecodeSuccess: parseInt(vinMatch[1], 10),
-        vinDecodeFailed: parseInt(vinMatch[2], 10),
-      });
+      // Stage transition
+      const validStages: PipelineJobStatus[] = [
+        'uploading', 'vin_decode', 'category_mapping',
+        'enrichment', 'validation', 'output_generation',
+      ];
+      if (fields.stage && validStages.includes(fields.stage as PipelineJobStatus)) {
+        update.status = fields.stage as PipelineJobStatus;
+      } else if (fields.stage === 'enrichment_done') {
+        update.status = 'enrichment';
+      }
+
+      // Numeric stats
+      if (fields.total_parts) update.totalParts = parseInt(fields.total_parts, 10);
+      if (fields.processed) update.processedParts = parseInt(fields.processed, 10);
+      if (fields.enriched) update.enrichedCount = parseInt(fields.enriched, 10);
+      if (fields.failed) update.fallbackCount = parseInt(fields.failed, 10);
+      if (fields.tokens) update.openaiTokensUsed = parseInt(fields.tokens, 10);
+      if (fields.vin_success) update.vinDecodeSuccess = parseInt(fields.vin_success, 10);
+      if (fields.vin_failed) update.vinDecodeFailed = parseInt(fields.vin_failed, 10);
+      if (fields.cat_api) update.categoryApiCount = parseInt(fields.cat_api, 10);
+      if (fields.cat_fallback) update.categoryFallbackCount = parseInt(fields.cat_fallback, 10);
+
+      if (Object.keys(update).length > 0) {
+        await this.jobRepo.update(jobId, update as any);
+        if (update.status) {
+          this.logger.log(`Job ${jobId} → ${update.status} (parts: ${update.processedParts ?? '?'}/${update.totalParts ?? '?'})`);
+        }
+      }
     }
   }
 
@@ -187,17 +194,17 @@ export class PipelineProcessor extends WorkerHost {
       } else if (lower.includes('report') && lower.endsWith('.json')) {
         update.reportPath = fullPath;
 
-        // Parse report for final stats
+        // Parse report for final stats (only fill in values not already set by progress markers)
         try {
           const report = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
           const summary = report.summary ?? report;
-          if (summary.totalProcessed) update.processedParts = summary.totalProcessed;
           if (summary.totalInput) update.totalParts = summary.totalInput;
           if (summary.vinDecodeSuccess) update.vinDecodeSuccess = summary.vinDecodeSuccess;
           if (summary.vinDecodeFail) update.vinDecodeFailed = summary.vinDecodeFail;
           if (summary.categoryMappingApi) update.categoryApiCount = summary.categoryMappingApi;
           if (summary.categoryMappingFallback) update.categoryFallbackCount = summary.categoryMappingFallback;
           if (summary.openaiTokensUsed) update.openaiTokensUsed = summary.openaiTokensUsed;
+          if (summary.totalProcessed) update.enrichedCount = summary.totalProcessed;
         } catch {
           // Non-critical
         }
@@ -224,7 +231,13 @@ export class PipelineProcessor extends WorkerHost {
   }
 
   private async updateStatus(jobId: string, status: PipelineJobStatus): Promise<void> {
-    await this.jobRepo.update(jobId, { status });
+    const update: Partial<PipelineJob> = { status };
+    if (status === 'uploading') {
+      update.startedAt = new Date();
+    } else if (status === 'completed') {
+      update.completedAt = new Date();
+    }
+    await this.jobRepo.update(jobId, update as any);
   }
 
   private async fail(jobId: string, error: string): Promise<void> {

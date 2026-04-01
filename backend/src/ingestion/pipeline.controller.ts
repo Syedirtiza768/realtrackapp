@@ -18,7 +18,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineService } from './pipeline.service.js';
 
-const UPLOAD_DIR = path.resolve(process.cwd(), '..', 'uploads', 'pipeline');
+const PROJECT_ROOT = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+const UPLOAD_DIR = path.resolve(PROJECT_ROOT, 'uploads', 'pipeline');
 
 /**
  * PipelineController — REST endpoints for the enrichment pipeline.

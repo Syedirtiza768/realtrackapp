@@ -74,6 +74,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Auth
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      # Pipeline project root (scripts, output, env files)
+      PIPELINE_PROJECT_ROOT: /app
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8050,https://mhn.realtrackapp.com,http://mhn.realtrackapp.com}
       # OpenAI
@@ -91,6 +93,13 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
     volumes:
       - uploads:/app/uploads
+      - ./scripts:/app/scripts:ro
+      - ./output:/app/output
+      - ./.env:/app/.env:ro
+      - ./backend/.env:/app/backend/.env:ro
+      - ./eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:/app/eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:ro
+      - ./eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:ro
+      - ./eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:ro
     ports:
       - "${BACKEND_PORT_EXTERNAL:-4191}:4191"
     healthcheck:
