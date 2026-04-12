@@ -1249,11 +1249,136 @@ function extractGridxPart(row, colMap, sheetName, vehicleInfo) {
   };
 }
 
+/**
+ * Parse vehicle year/make/model from a parts description string and brand.
+ * Handles patterns like:
+ *   "Jaguar XJ X351 Fuel Tank Mount A00-PW-020 3.0 Petrol 250kw 2016"
+ *   "14-22 Range Rover Sport L494 FUEL TANK PUMP..."
+ *   "2013 2014 2015 2016 Audi A4 AC Heat Climate..."
+ *   "2010-2015 VW PASSAT B7 HEATER CLIMATE CONTROL..."
+ */
+function parseVehicleFromDescription(desc, brand) {
+  if (!desc) return null;
+  const text = desc.trim();
+  const brandNorm = normalizeBrand(brand);
+
+  // Known make → model patterns (order matters: longer names first)
+  const MAKE_MODELS = {
+    'Land Rover': ['Range Rover Sport', 'Range Rover Velar', 'Range Rover Evoque', 'Range Rover', 'Discovery Sport', 'Discovery', 'Defender', 'Freelander'],
+    'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'GLE', 'GLC', 'GLA', 'GLB', 'CLA', 'CLS', 'A-Class', 'B-Class', 'G-Class', 'AMG GT'],
+    'Jaguar': ['F-Pace', 'E-Pace', 'I-Pace', 'F-Type', 'XF', 'XE', 'XJ', 'XK', 'XJR', 'S-Type', 'X-Type'],
+    'BMW': ['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'M2', 'M3', 'M4', 'M5', 'M6', 'M8', 'Z4', 'Z3', 'i3', 'i4', 'i8', 'iX'],
+    'Audi': ['A1', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'Q2', 'Q3', 'Q5', 'Q7', 'Q8', 'TT', 'R8', 'RS3', 'RS4', 'RS5', 'RS6', 'RS7', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'e-tron'],
+    'Volkswagen': ['Golf', 'Jetta', 'Passat', 'Tiguan', 'Touareg', 'Polo', 'Arteon', 'Atlas', 'ID.4', 'ID.3', 'Beetle', 'CC'],
+    'Porsche': ['Cayenne', 'Macan', 'Panamera', '911', '718', 'Boxster', 'Cayman', 'Taycan'],
+    'Ford': ['F-150', 'F-250', 'F-350', 'Mustang', 'Explorer', 'Escape', 'Edge', 'Bronco', 'Ranger', 'Expedition', 'Focus', 'Fusion'],
+    'Toyota': ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Tacoma', 'Tundra', '4Runner', 'Prius', 'Land Cruiser', 'Supra'],
+    'Honda': ['Civic', 'Accord', 'CR-V', 'HR-V', 'Pilot', 'Odyssey', 'Fit'],
+    'Dodge': ['Charger', 'Challenger', 'Durango', 'Ram', 'Journey', 'Grand Caravan'],
+    'Chrysler': ['300', 'Pacifica', 'Town & Country', 'Voyager'],
+    'Jeep': ['Grand Cherokee', 'Cherokee', 'Wrangler', 'Compass', 'Renegade', 'Gladiator'],
+    'Nissan': ['Altima', 'Maxima', 'Sentra', 'Rogue', 'Murano', 'Pathfinder', '370Z', 'GT-R', 'Frontier', 'Titan'],
+    'Lexus': ['IS', 'ES', 'GS', 'LS', 'RX', 'NX', 'UX', 'GX', 'LX', 'RC', 'LC'],
+    'Bentley': ['Continental', 'Flying Spur', 'Bentayga', 'Mulsanne'],
+    'Maserati': ['Ghibli', 'Levante', 'Quattroporte', 'GranTurismo'],
+    'Rolls-Royce': ['Ghost', 'Wraith', 'Dawn', 'Phantom', 'Cullinan'],
+  };
+
+  // Alias map for make names found in descriptions
+  const MAKE_ALIASES = {
+    'range rover': 'Land Rover', 'lr': 'Land Rover', 'landrover': 'Land Rover',
+    'mercedes': 'Mercedes-Benz', 'mb': 'Mercedes-Benz', 'benz': 'Mercedes-Benz',
+    'vw': 'Volkswagen',
+    'chevy': 'Chevrolet',
+  };
+
+  const textUpper = text.toUpperCase();
+
+  // ── Extract years ──
+  // Pattern 1: "2013-2017" or "14-22" year ranges
+  // Pattern 2: Multiple years "2013 2014 2015 2016"
+  let years = [];
+  const rangeMatch = text.match(/\b((?:19|20)?(\d{2}))\s*[-–]\s*((?:19|20)?(\d{2}))\b/);
+  if (rangeMatch) {
+    let startY = parseInt(rangeMatch[1]);
+    let endY = parseInt(rangeMatch[3]);
+    if (startY < 100) startY += startY > 50 ? 1900 : 2000;
+    if (endY < 100) endY += endY > 50 ? 1900 : 2000;
+    for (let y = startY; y <= endY; y++) years.push(String(y));
+  }
+  if (years.length === 0) {
+    const multiYearMatch = text.match(/\b((?:19|20)\d{2})(?:\s+(?:19|20)\d{2})+\b/);
+    if (multiYearMatch) {
+      const allYears = multiYearMatch[0].match(/(19|20)\d{2}/g);
+      if (allYears) years = allYears;
+    }
+  }
+  if (years.length === 0) {
+    // Single year anywhere in the text
+    const singleYear = text.match(/\b(19|20)\d{2}\b/);
+    if (singleYear) years = [singleYear[0]];
+  }
+
+  // ── Determine make ──
+  let make = brandNorm || '';
+  // Also try to find make in description if brand is generic or missing
+  if (!make || make === 'Unknown') {
+    for (const [alias, realMake] of Object.entries(MAKE_ALIASES)) {
+      if (textUpper.includes(alias.toUpperCase())) { make = realMake; break; }
+    }
+  }
+  // Direct make name match
+  if (!make || make === 'Unknown') {
+    for (const makeName of Object.keys(MAKE_MODELS)) {
+      if (textUpper.includes(makeName.toUpperCase())) { make = makeName; break; }
+    }
+  }
+
+  if (!make) return null;
+
+  // ── Extract model ──
+  let model = '';
+  const models = MAKE_MODELS[make] || [];
+  for (const m of models) {
+    if (textUpper.includes(m.toUpperCase())) {
+      model = m;
+      break;
+    }
+  }
+
+  // Fallback: try to find model pattern after make name in description
+  if (!model) {
+    const makeIdx = textUpper.indexOf(make.toUpperCase());
+    if (makeIdx >= 0) {
+      const afterMake = text.slice(makeIdx + make.length).trim();
+      // Match common model patterns: A4, XJ, 911, Golf, etc.
+      const modelMatch = afterMake.match(/^[,\s]*(\b[A-Z0-9][\w-]{0,15}\b)/i);
+      if (modelMatch) {
+        const candidate = modelMatch[1].trim();
+        // Reject if it looks like a part description word
+        const rejectWords = new Set(['FRONT','REAR','LEFT','RIGHT','UPPER','LOWER','INNER','OUTER','POWER','FUEL','AC','OEM','DOOR','SIDE','MOUNT','CONTROL','MODULE','TRIM','PANEL','COVER','BUMPER','SENSOR','PUMP','MOTOR','LIGHT','LAMP','SWITCH','VALVE','RELAY','FUSE','BRACKET','SUPPORT','HOUSING','ASSEMBLY','WIRING','HARNESS','CABLE','HOSE','PIPE','TUBE','FILTER']);
+        if (!rejectWords.has(candidate.toUpperCase()) && candidate.length <= 15) {
+          model = candidate;
+        }
+      }
+    }
+  }
+
+  if (!model) return null;
+
+  return {
+    year: years[0] || '',
+    years: years,
+    make: make,
+    model: model,
+  };
+}
+
 function buildColumnMap(headers) {
   const map = {
     sku: -1, brand: -1, model: -1, vin: -1,
     category: -1, partNumber: -1, partName: -1,
-    note: -1, code: -1, price: -1,
+    note: -1, code: -1, price: -1, quantity: -1,
   };
 
   for (let i = 0; i < headers.length; i++) {
@@ -1271,6 +1396,7 @@ function buildColumnMap(headers) {
     if (h === 'note' || h === 'notes' || h === 'additional details') map.note === -1 && (map.note = i);
     if (h === 'code') map.code = i;
     if (h === 'price' || h === 'real price' || h === 'unit price' || h === 'sell price') map.price === -1 && (map.price = i);
+    if (h === 'q' || h === 'qty' || h === 'quantity') map.quantity === -1 && (map.quantity = i);
   }
 
   // Handle variant layouts:
@@ -1308,18 +1434,42 @@ function buildColumnMap(headers) {
 function extractPart(row, colMap, sheetVin) {
   const getVal = (idx) => idx >= 0 && idx < row.length ? clean(row[idx]) : '';
 
-  return {
+  const brand = getVal(colMap.brand);
+  const partName = getVal(colMap.partName);
+  const note = getVal(colMap.note);
+
+  // Try to parse vehicle info from description when no VIN column exists
+  const descVehicle = parseVehicleFromDescription(partName || note, brand);
+
+  const part = {
     vin: getVal(colMap.vin) || sheetVin,
-    brand: getVal(colMap.brand),
+    brand: brand,
     model: getVal(colMap.model),
     sku: getVal(colMap.sku) || getVal(colMap.category),
     category: getVal(colMap.category),
     partNumber: getVal(colMap.partNumber),
-    partName: getVal(colMap.partName),
-    note: getVal(colMap.note),
+    partName: partName,
+    note: note,
     code: getVal(colMap.code),
     price: parseFloat(row[colMap.price]) || 0,
   };
+
+  // Attach quantity if available
+  if (colMap.quantity >= 0) {
+    part._quantity = parseInt(row[colMap.quantity]) || 1;
+  }
+
+  // Attach parsed vehicle info from description
+  if (descVehicle) {
+    part._vehicleInfo = {
+      year: descVehicle.year,
+      make: descVehicle.make,
+      model: descVehicle.model,
+    };
+    part._descYears = descVehicle.years; // all years found in description
+  }
+
+  return part;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2144,6 +2294,23 @@ function expandFitments(parts, vinData) {
       }
     }
 
+    // ── Priority 2.5: Description-based year range ──
+    // If platform expansion didn't match but we have years parsed from the description,
+    // use those years directly (e.g. "2013 2014 2015 2016 Audi A4" or "14-22 Range Rover Sport")
+    if (fitments.length === 0 && part._descYears && part._descYears.length > 1) {
+      const seen = new Set();
+      for (const yr of part._descYears) {
+        if (seen.has(yr)) continue;
+        seen.add(yr);
+        fitments.push({
+          year: yr, make: makeName, model: vehicle.model,
+          trim: '', engine: '', submodel: '',
+          bodyType: '', notes: 'Year range from description',
+        });
+      }
+      if (fitments.length > 0) platformExpanded++;
+    }
+
     // ── Priority 3: Cross-reference from multiple VINs ──
     if (fitments.length === 0) {
       const norm = normalizePN(part.partNumber);
@@ -2738,7 +2905,7 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('Title', enriched.title);
   set('P:UPC', 'Does not apply');
   set('Start price', part.price);
-  set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
+  set('Quantity', part._gridx?.quantity || part._quantity || CONFIG.defaultQuantity);
   set('Condition ID', CONFIG.defaultConditionId);
   set('Description', descriptionHtml);
   set('Format', CONFIG.defaultFormat);
@@ -2833,7 +3000,7 @@ function generateAUOutput(parts, vinData) {
     set('Title', e.title);
     set('P:UPC', 'Does not apply');
     set('Start price', Math.round(part.price * 1.55 * 100) / 100); // ~USD→AUD
-    set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
+    set('Quantity', part._gridx?.quantity || part._quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
     set('Description', wrapInTabbedDescription(e.description, part._fitments || []));
     set('Format', CONFIG.defaultFormat);
@@ -2939,7 +3106,7 @@ function generateDEOutput(parts, vinData) {
     set('Title', e.title);
     set('P:EAN', 'Nicht zutreffend');  // "Does not apply" in German
     set('Start price', Math.round(part.price * 0.92 * 100) / 100); // ~USD→EUR
-    set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
+    set('Quantity', part._gridx?.quantity || part._quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
     set('Description', wrapInTabbedDescription(e.description, part._fitments || []));
     set('Format', CONFIG.defaultFormat);
