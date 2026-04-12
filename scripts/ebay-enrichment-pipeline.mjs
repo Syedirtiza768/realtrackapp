@@ -49,6 +49,12 @@ const rootEnvPath = path.resolve(ROOT, '.env');
 const rootEnv = fs.existsSync(rootEnvPath) ? loadEnv(rootEnvPath) : {};
 const env = { ...backendEnv, ...rootEnv };
 
+// Fallback to process.env for critical keys not found in .env files
+// (Docker passes env vars via process.env, not .env files)
+for (const key of ['OPENAI_API_KEY', 'OPENAI_CHAT_MODEL', 'EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET', 'EBAY_SANDBOX']) {
+  if (!env[key] && process.env[key]) env[key] = process.env[key];
+}
+
 const CONFIG = {
   openai: {
     apiKey: env.OPENAI_API_KEY,
@@ -1680,13 +1686,22 @@ async function enrichAllParts(parts, vinData) {
     for (const part of parts) {
       const vehicle = getVehicleInfo(part, vinData);
       const pn = normalizePN(part.partNumber);
+      // Determine country of manufacture from make
+      const makeLower = (vehicle.make || '').toLowerCase();
+      const countryOfMfg = makeLower.includes('mercedes') || makeLower.includes('bmw') || makeLower.includes('audi') || makeLower.includes('volkswagen') || makeLower.includes('porsche')
+        ? 'Germany'
+        : makeLower.includes('toyota') || makeLower.includes('honda') || makeLower.includes('nissan') || makeLower.includes('lexus') || makeLower.includes('mazda') || makeLower.includes('subaru')
+          ? 'Japan'
+          : makeLower.includes('ford') || makeLower.includes('chevrolet') || makeLower.includes('gm') || makeLower.includes('chrysler') || makeLower.includes('dodge') || makeLower.includes('jeep')
+            ? 'United States'
+            : '';
       part._enriched = {
         title: buildSeoTitle(vehicle, part, pn),
         description: buildBasicDescription(part, vehicle),
         brand: normalizeBrand(part.brand) || vehicle.make,
         type: titleCase(part.partName),
         mpn: pn,
-        oemNumber: part.partNumber,
+        oemNumber: expandOemNumbers(part.partNumber),
         placement: extractPlacement(part.note),
         material: '',
         warranty: 'No Warranty',
@@ -1696,6 +1711,7 @@ async function enrichAllParts(parts, vinData) {
         surfaceFinish: '',
         performanceType: '',
         bundleDescription: '',
+        countryOfManufacture: countryOfMfg,
       };
       REPORT.totalFailed++;
     }
@@ -1762,7 +1778,7 @@ async function enrichAllParts(parts, vinData) {
             brand: titleCase(part.brand) || vehicle.make,
             type: titleCase(part.partName),
             mpn: pn,
-            oemNumber: part.partNumber,
+            oemNumber: expandOemNumbers(part.partNumber),
             placement: extractPlacement(part.note),
             material: '',
             warranty: 'No Warranty',
@@ -1831,29 +1847,32 @@ function buildSeoTitle(vehicle, part, normalizedPN) {
 }
 
 function buildBasicDescription(part, vehicle) {
-  const pn = part.partNumber ? `<li><strong>Part Number:</strong> ${part.partNumber}</li>` : '';
-  const placement = extractPlacement(part.note);
-  const placementLi = placement ? `<li><strong>Placement:</strong> ${placement}</li>` : '';
-  const noteLi = part.note ? `<li><strong>Notes:</strong> ${part.note}</li>` : '';
+  const partName = titleCase(part.partName);
   const brandName = normalizeBrand(part.brand) || vehicle.make;
+  const pn = part.partNumber || '';
 
-  return `<h3>${vehicle.year} ${vehicle.make} ${vehicle.model} ${titleCase(part.partName)}</h3>
-<p>Genuine OEM ${titleCase(part.partName)} removed from a ${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ' ' + vehicle.trim : ''}. This part has been carefully removed and inspected for quality assurance.</p>
-<h4>Part Details</h4>
-<ul>
-  <li><strong>Brand:</strong> ${brandName}</li>
-  <li><strong>Part Type:</strong> ${titleCase(part.partName)}</li>
-  ${pn}
-  <li><strong>Vehicle:</strong> ${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ' ' + vehicle.trim : ''}</li>
-  ${placementLi}
-  ${noteLi}
-</ul>
-<h4>Condition</h4>
-<p>Used — Removed from a running vehicle. Visually inspected and verified functional. Normal wear consistent with age and mileage.</p>
-<h4>Compatibility</h4>
-<p>This part was removed from a ${vehicle.year} ${vehicle.make} ${vehicle.model}. Please verify part number compatibility with your vehicle before purchasing. Cross-reference the part number to confirm fitment.</p>
-<h4>Warranty & Returns</h4>
-<p>Sold as-is with no warranty. 30-day return policy if item is not as described.</p>`;
+  // Generate a descriptive text paragraph
+  const descText = `Genuine OEM ${partName}${pn ? ` part number ${pn}` : ''} for ${vehicle.year ? vehicle.year + ' ' : ''}${vehicle.make} ${vehicle.model}${vehicle.trim ? ' ' + vehicle.trim : ''}. This part has been carefully removed and inspected for quality assurance. Please verify part number compatibility with your vehicle before purchasing.`;
+
+  return descText;
+}
+
+/**
+ * Wrap description text in the rich CSS tabbed HTML layout matching
+ * the reference eBay File Exchange template. Includes embedded fitment table
+ * and policy tabs (Payment, Shipping, Returns, Handling, International).
+ */
+function wrapInTabbedDescription(descriptionText, fitments) {
+  const fitmentTableRows = (fitments || [])
+    .filter(f => f.make && f.model && f.year)
+    .map(f => `<tr><td>${f.make}</td><td>${f.model}</td><td>${f.year}</td></tr>`)
+    .join('');
+
+  const fitmentSection = fitmentTableRows
+    ? `<div class="fitment-section" style="margin-top: 15px;"><h3 style="font-size: 16px;font-weight: bold;margin-bottom: 10px;color: #333;">Vehicle Compatibility</h3><table class="fitment" style="width: 100%;border-collapse: collapse;margin-bottom: 10px;"><thead><tr style="background-color: #333;color: white;"><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Make</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Model</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Year</th></tr></thead><tbody>${fitmentTableRows}</tbody></table></div>`
+    : '';
+
+  return `<style>.tab-wrap {font-family: Arial, sans-serif;font-size: 14px;color: #333;max-width: 800px;margin: auto;}.tab-title {background-color: #222;color: #fff;padding: 12px;font-size: 18px;font-weight: bold;text-align: center;}.product-description {padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;margin-bottom: 10px;}.fitment tbody tr:nth-child(even) {background-color: #f9f9f9;}.fitment tbody tr:nth-child(odd) {background-color: #fff;}.fitment tbody td {padding: 8px;border: 1px solid #ddd;}input[type="radio"] {display: none;}.tab-labels {display: flex;flex-wrap: wrap;background-color: #333;}.tab-labels label {flex: 1;text-align: center;padding: 10px;font-weight: bold;cursor: pointer;background-color: #333;color: white;border-right: 1px solid #444;transition: background 0.3s;}.tab-labels label:hover {background-color: #444;}.tab-content {display: none;padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;}#tab1:checked ~ .tabs #content1,#tab2:checked ~ .tabs #content2,#tab3:checked ~ .tabs #content3,#tab4:checked ~ .tabs #content4,#tab5:checked ~ .tabs #content5 {display: block;}#tab1:checked ~ .tab-labels label[for="tab1"],#tab2:checked ~ .tab-labels label[for="tab2"],#tab3:checked ~ .tab-labels label[for="tab3"],#tab4:checked ~ .tab-labels label[for="tab4"],#tab5:checked ~ .tab-labels label[for="tab5"] {background-color: #fff;color: #000;border-bottom: none;}</style><div class="tab-wrap"><div class="tab-title">Product Information</div><div class="product-description">${descriptionText}</div>${fitmentSection}<input type="radio" name="tab" id="tab1" checked><input type="radio" name="tab" id="tab2"><input type="radio" name="tab" id="tab3"><input type="radio" name="tab" id="tab4"><input type="radio" name="tab" id="tab5"><div class="tab-labels"><label for="tab1">Payment Policy</label><label for="tab2">Shipping Policy</label><label for="tab3">Returns Policy</label><label for="tab4">Handling Time</label><label for="tab5">International Buyers</label></div><div class="tabs"><div id="content1" class="tab-content">- We accept only online payment methods provided by eBay at checkout.</div><div id="content2" class="tab-content">- We provide worldwide shipping to most countries using reputed couriers like DHL, FedEx or Aramex.</div><div id="content3" class="tab-content">- We accept 14-day returns. Please clarify all doubts before purchasing.</div><div id="content4" class="tab-content">- All packages are shipped within 3 working days.</div><div id="content5" class="tab-content">- Import Duties, Taxes and charges are not included in the item price or shipping cost. These charges are Buyer's responsibility. Please check with your country's customs office before buying.</div></div></div>`;
 }
 
 function extractPlacement(note) {
@@ -1866,6 +1885,35 @@ function extractPlacement(note) {
   if (n.includes('upper') || n.includes('top')) parts.push('Upper');
   if (n.includes('lower') || n.includes('bottom')) parts.push('Lower');
   return parts.join(', ') || '';
+}
+
+/**
+ * Generate alternate OEM part number formats for cross-referencing.
+ * E.g., "A2048800657" → "2048800657, 204-880-06-57, 204.880.06.57"
+ */
+function expandOemNumbers(partNumber) {
+  if (!partNumber) return partNumber;
+  const pn = clean(partNumber);
+  const variants = new Set();
+  variants.add(pn);
+
+  // Remove "A" or "Q" prefix for alternate format
+  const noPrefix = pn.replace(/^[AQ]\s*/, '');
+  if (noPrefix !== pn) variants.add(noPrefix);
+
+  // Add dashed format: 204-880-06-57
+  if (noPrefix.length >= 10) {
+    const dashed = noPrefix.replace(/(\d{3})(\d{3})(\d{2})(\d{2})/, '$1-$2-$3-$4');
+    if (dashed !== noPrefix) variants.add(dashed);
+    // Add dotted format: 204.880.06.57
+    const dotted = noPrefix.replace(/(\d{3})(\d{3})(\d{2})(\d{2})/, '$1.$2.$3.$4');
+    if (dotted !== noPrefix) variants.add(dotted);
+    // Add spaced format: 204 880 06 57
+    const spaced = noPrefix.replace(/(\d{3})(\d{3})(\d{2})(\d{2})/, '$1 $2 $3 $4');
+    if (spaced !== noPrefix) variants.add(spaced);
+  }
+
+  return [...variants].join(', ');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1958,6 +2006,40 @@ function normalizeBrand(brand) {
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
+ * Normalize model names to match PLATFORM_RANGES keys.
+ * E.g., "C350 AMG" → "C-Class", "328i" → "3 Series", "A4 Quattro" → "A4"
+ */
+function normalizeModelForPlatform(make, model) {
+  if (!model) return model;
+  const m = model.trim();
+  const makeLower = (make || '').toLowerCase();
+
+  if (makeLower.includes('mercedes')) {
+    // Mercedes: C250/C300/C350/C63 → C-Class, E350/E550 → E-Class, S500/S550 → S-Class
+    const mbMatch = m.match(/^([A-Z]{1,3})\s*\d/i);
+    if (mbMatch) {
+      const prefix = mbMatch[1].toUpperCase();
+      const classMap = { 'C': 'C-Class', 'E': 'E-Class', 'S': 'S-Class', 'A': 'A-Class', 'B': 'B-Class' };
+      if (classMap[prefix]) return classMap[prefix];
+      // GLE, GLC, GLA, GLB, CLA etc. — return as-is if it matches PLATFORM_RANGES
+      return prefix.length >= 2 ? prefix : m;
+    }
+  }
+
+  if (makeLower === 'bmw') {
+    // BMW: 328i/335i → 3 Series, 528i/535i → 5 Series, X5 xDrive → X5
+    const bmwMatch = m.match(/^([1-8X]\d?)\s*\d{0,2}/i);
+    if (bmwMatch) {
+      const prefix = bmwMatch[1];
+      if (/^\d$/.test(prefix)) return `${prefix} Series`;
+      return prefix.toUpperCase(); // X3, X5, etc.
+    }
+  }
+
+  return m;
+}
+
+/**
  * Expands per-part fitment data from a single VIN year to the complete
  * platform generation year range (e.g. 2015 BMW 3-Series → 2011-2019 F3x).
  *
@@ -2011,7 +2093,8 @@ function expandFitments(parts, vinData) {
     }
 
     const makeName = normalizeBrand(vehicle.make);
-    const platformKey = `${makeName}|${vehicle.model}`;
+    const normalizedModel = normalizeModelForPlatform(makeName, vehicle.model);
+    const platformKey = `${makeName}|${normalizedModel}`;
     const platforms = PLATFORM_RANGES[platformKey];
     const yearNum = parseInt(vehicle.year) || 0;
     let fitments = [];
@@ -2639,6 +2722,12 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
     if (idx >= 0 && value !== undefined && value !== null && value !== '') row[idx] = value;
   };
 
+  // Wrap description in rich tabbed HTML with embedded fitment table
+  const descriptionHtml = wrapInTabbedDescription(
+    enriched.description,
+    part._fitments || []
+  );
+
   set('*Action(SiteID=eBayMotors|Country=US|Currency=USD|Version=1193)', 'Add');
   set('Custom label (SKU)', part.sku || part.category);
   set('Category ID', part._category?.categoryId || '262124');
@@ -2648,7 +2737,7 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('Start price', part.price);
   set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
   set('Condition ID', CONFIG.defaultConditionId);
-  set('Description', enriched.description);
+  set('Description', descriptionHtml);
   set('Format', CONFIG.defaultFormat);
   set('Duration', CONFIG.defaultDuration);
   set('Best Offer Enabled', 1);
@@ -2666,7 +2755,7 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('C:Brand', enriched.brand);
   set('C:Type', enriched.type);
   set('C:Manufacturer Part Number', enriched.mpn || part.partNumber);
-  set('C:OE/OEM Part Number', enriched.oemNumber || part.partNumber);
+  set('C:OE/OEM Part Number', enriched.oemNumber || expandOemNumbers(part.partNumber));
   set('C:Placement on Vehicle', enriched.placement);
   set('C:Fitment Type', enriched.fitmentType || 'Direct Replacement');
   set('C:Warranty', enriched.warranty || 'No Warranty');
@@ -2675,6 +2764,7 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('C:Surface Finish', enriched.surfaceFinish);
   set('C:Interchange Part Number', enriched.interchangeNumber);
   set('C:Bundle Description', enriched.bundleDescription);
+  set('C:Country/Region of Manufacture', enriched.countryOfManufacture || '');
 
   // Images — primary URL + pipe-separated additional URLs (eBay supports up to 12)
   if (part._images && part._images.length > 0) {
@@ -2742,7 +2832,7 @@ function generateAUOutput(parts, vinData) {
     set('Start price', Math.round(part.price * 1.55 * 100) / 100); // ~USD→AUD
     set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
-    set('Description', e.description);
+    set('Description', wrapInTabbedDescription(e.description, part._fitments || []));
     set('Format', CONFIG.defaultFormat);
     set('Duration', CONFIG.defaultDuration);
     set('Best Offer Enabled', 1);
@@ -2760,7 +2850,8 @@ function generateAUOutput(parts, vinData) {
     set('C:Brand', e.brand);
     set('C:Type', e.type);
     set('C:Manufacturer Part Number', e.mpn || part.partNumber);
-    set('C:Reference OE/OEM Number', e.oemNumber || part.partNumber);
+    set('C:Reference OE/OEM Number', e.oemNumber || expandOemNumbers(part.partNumber));
+    set('C:Country/Region of Manufacture', e.countryOfManufacture || '');
     set('C:Placement on Vehicle', e.placement);
     set('C:Fitment Type', e.fitmentType || 'Direct Replacement');
     set('C:Warranty', e.warranty || 'No Warranty');
@@ -2847,7 +2938,7 @@ function generateDEOutput(parts, vinData) {
     set('Start price', Math.round(part.price * 0.92 * 100) / 100); // ~USD→EUR
     set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
-    set('Description', e.description);
+    set('Description', wrapInTabbedDescription(e.description, part._fitments || []));
     set('Format', CONFIG.defaultFormat);
     set('Duration', CONFIG.defaultDuration);
     set('Best Offer Enabled', 1);
@@ -2866,8 +2957,9 @@ function generateDEOutput(parts, vinData) {
     set('C:Hersteller', e.brand);                                      // Brand
     set('C:Produktart', e.type);                                       // Type
     set('C:Herstellernummer', e.mpn || part.partNumber);               // MPN
-    set('C:OE/OEM Referenznummer(n)', e.oemNumber || part.partNumber); // OE/OEM Number
+    set('C:OE/OEM Referenznummer(n)', e.oemNumber || expandOemNumbers(part.partNumber)); // OE/OEM Number
     set('C:Einbauposition', e.placement);                              // Placement
+    set('C:Herstellungsland und -region', e.countryOfManufacture || ''); // Country/Region
     // VIN-decoded vehicle specifics for DE templates
     if (vehicle.engineCylinders || (vinData.get && vinData.get(part.vin)?.engineCylinders)) {
       const cylinders = vehicle.engineCylinders || vinData.get(part.vin)?.engineCylinders || '';
