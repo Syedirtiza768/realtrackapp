@@ -1350,7 +1350,10 @@ async function decodeAllVins(parts) {
 
 function getVehicleInfo(part, vinData) {
   const decoded = vinData.get(part.vin);
-  if (decoded) {
+  // Only use decoded VIN data if it actually has meaningful year+make
+  // (GridX sheet names like "2008 Mercedes C350 AMG" may pass VIN decode
+  //  but return empty fields, which would override _vehicleInfo)
+  if (decoded && decoded.year && decoded.make) {
     return {
       year: decoded.year,
       make: decoded.make,
