@@ -87,6 +87,630 @@ const CONFIG = {
 // Override model from env if set
 if (env.OPENAI_CHAT_MODEL) CONFIG.openai.model = env.OPENAI_CHAT_MODEL;
 
+// Image enrichment API — uses internal Docker hostname when running from the
+// backend processor (PIPELINE_JOB_ID is set by the NestJS worker), otherwise localhost.
+const IMAGE_API_URL =
+  process.env.IMAGE_ENRICHMENT_API_URL ||
+  (process.env.PIPELINE_JOB_ID ? 'http://backend:4191' : 'http://localhost:4191');
+
+// ─── Automotive Platform Year Ranges ──────────────────────────────────────────
+// Maps "MAKE|MODEL" → [{start, end, code}] per generation.
+// Used to expand a single VIN year to the full platform generation for fitments.
+const PLATFORM_RANGES = {
+  // ── BMW ──
+  'BMW|3 Series': [
+    { start: 1975, end: 1983, code: 'E21' }, { start: 1982, end: 1994, code: 'E30' },
+    { start: 1990, end: 2000, code: 'E36' }, { start: 1997, end: 2006, code: 'E46' },
+    { start: 2004, end: 2013, code: 'E9x' }, { start: 2011, end: 2019, code: 'F3x' },
+    { start: 2018, end: 2028, code: 'G2x' },
+  ],
+  'BMW|5 Series': [
+    { start: 1972, end: 1981, code: 'E12' }, { start: 1981, end: 1988, code: 'E28' },
+    { start: 1987, end: 1996, code: 'E34' }, { start: 1995, end: 2004, code: 'E39' },
+    { start: 2003, end: 2010, code: 'E60/E61' }, { start: 2009, end: 2017, code: 'F10/F11' },
+    { start: 2016, end: 2025, code: 'G30/G31' },
+  ],
+  'BMW|7 Series': [
+    { start: 1977, end: 1987, code: 'E23' }, { start: 1986, end: 1994, code: 'E32' },
+    { start: 1994, end: 2001, code: 'E38' }, { start: 2001, end: 2008, code: 'E65/E66' },
+    { start: 2008, end: 2015, code: 'F01/F02' }, { start: 2015, end: 2022, code: 'G11/G12' },
+    { start: 2022, end: 2028, code: 'G70' },
+  ],
+  'BMW|X3': [
+    { start: 2003, end: 2010, code: 'E83' }, { start: 2010, end: 2017, code: 'F25' },
+    { start: 2017, end: 2025, code: 'G01' },
+  ],
+  'BMW|X5': [
+    { start: 1999, end: 2006, code: 'E53' }, { start: 2006, end: 2013, code: 'E70' },
+    { start: 2013, end: 2019, code: 'F15' }, { start: 2018, end: 2028, code: 'G05' },
+  ],
+  'BMW|X6': [
+    { start: 2007, end: 2014, code: 'E71' }, { start: 2014, end: 2019, code: 'F16' },
+    { start: 2019, end: 2028, code: 'G06' },
+  ],
+  'BMW|X1': [
+    { start: 2009, end: 2015, code: 'E84' }, { start: 2015, end: 2022, code: 'F48' },
+    { start: 2022, end: 2028, code: 'U11' },
+  ],
+  'BMW|X7': [{ start: 2018, end: 2028, code: 'G07' }],
+  'BMW|4 Series': [
+    { start: 2013, end: 2020, code: 'F32/F33/F36' }, { start: 2020, end: 2028, code: 'G22/G23/G26' },
+  ],
+  'BMW|Z4': [
+    { start: 2002, end: 2008, code: 'E85/E86' }, { start: 2009, end: 2016, code: 'E89' },
+    { start: 2018, end: 2028, code: 'G29' },
+  ],
+  // ── Mercedes-Benz ──
+  'Mercedes-Benz|C-Class': [
+    { start: 1993, end: 2000, code: 'W202' }, { start: 2000, end: 2007, code: 'W203' },
+    { start: 2007, end: 2014, code: 'W204' }, { start: 2014, end: 2021, code: 'W205' },
+    { start: 2021, end: 2028, code: 'W206' },
+  ],
+  'Mercedes-Benz|E-Class': [
+    { start: 1985, end: 1997, code: 'W124' }, { start: 1995, end: 2002, code: 'W210' },
+    { start: 2002, end: 2009, code: 'W211' }, { start: 2009, end: 2016, code: 'W212' },
+    { start: 2016, end: 2025, code: 'W213' },
+  ],
+  'Mercedes-Benz|S-Class': [
+    { start: 1972, end: 1980, code: 'W116' }, { start: 1979, end: 1991, code: 'W126' },
+    { start: 1991, end: 1998, code: 'W140' }, { start: 1998, end: 2005, code: 'W220' },
+    { start: 2005, end: 2013, code: 'W221' }, { start: 2013, end: 2020, code: 'W222' },
+    { start: 2020, end: 2028, code: 'W223' },
+  ],
+  'Mercedes-Benz|GLE': [
+    { start: 2015, end: 2019, code: 'W166' }, { start: 2019, end: 2028, code: 'W167' },
+  ],
+  'Mercedes-Benz|GLC': [
+    { start: 2015, end: 2022, code: 'X253' }, { start: 2022, end: 2028, code: 'X254' },
+  ],
+  'Mercedes-Benz|A-Class': [
+    { start: 1997, end: 2004, code: 'W168' }, { start: 2004, end: 2012, code: 'W169' },
+    { start: 2012, end: 2018, code: 'W176' }, { start: 2018, end: 2025, code: 'W177' },
+  ],
+  'Mercedes-Benz|CLA': [
+    { start: 2013, end: 2019, code: 'C117' }, { start: 2019, end: 2028, code: 'C118' },
+  ],
+  'Mercedes-Benz|GLA': [
+    { start: 2013, end: 2020, code: 'X156' }, { start: 2020, end: 2028, code: 'H247' },
+  ],
+  'Mercedes-Benz|GLB': [{ start: 2019, end: 2028, code: 'X247' }],
+  // ── Audi ──
+  'Audi|A4': [
+    { start: 1994, end: 2001, code: 'B5' }, { start: 2001, end: 2008, code: 'B6/B7' },
+    { start: 2007, end: 2015, code: 'B8' }, { start: 2015, end: 2023, code: 'B9' },
+  ],
+  'Audi|A6': [
+    { start: 1994, end: 1997, code: 'C4' }, { start: 1997, end: 2004, code: 'C5' },
+    { start: 2004, end: 2011, code: 'C6' }, { start: 2011, end: 2018, code: 'C7' },
+    { start: 2018, end: 2025, code: 'C8' },
+  ],
+  'Audi|A8': [
+    { start: 1994, end: 2002, code: 'D2' }, { start: 2002, end: 2009, code: 'D3' },
+    { start: 2009, end: 2017, code: 'D4' }, { start: 2017, end: 2025, code: 'D5' },
+  ],
+  'Audi|A3': [
+    { start: 1996, end: 2003, code: '8L' }, { start: 2003, end: 2013, code: '8P' },
+    { start: 2012, end: 2020, code: '8V' }, { start: 2020, end: 2028, code: '8Y' },
+  ],
+  'Audi|Q5': [
+    { start: 2008, end: 2017, code: '8R' }, { start: 2017, end: 2025, code: 'FY' },
+  ],
+  'Audi|Q7': [
+    { start: 2005, end: 2015, code: '4L' }, { start: 2015, end: 2025, code: '4M' },
+  ],
+  'Audi|Q3': [
+    { start: 2011, end: 2018, code: '8U' }, { start: 2018, end: 2028, code: 'F3' },
+  ],
+  'Audi|Q8': [{ start: 2018, end: 2028, code: '4M8' }],
+  'Audi|TT': [
+    { start: 1998, end: 2006, code: '8N' }, { start: 2006, end: 2014, code: '8J' },
+    { start: 2014, end: 2024, code: '8S' },
+  ],
+  // ── Volkswagen ──
+  'Volkswagen|Golf': [
+    { start: 1974, end: 1983, code: 'Mk1' }, { start: 1983, end: 1992, code: 'Mk2' },
+    { start: 1991, end: 2002, code: 'Mk3' }, { start: 1997, end: 2006, code: 'Mk4' },
+    { start: 2003, end: 2009, code: 'Mk5' }, { start: 2008, end: 2013, code: 'Mk6' },
+    { start: 2012, end: 2020, code: 'Mk7' }, { start: 2019, end: 2028, code: 'Mk8' },
+  ],
+  'Volkswagen|Jetta': [
+    { start: 1979, end: 1984, code: 'Mk1' }, { start: 1984, end: 1992, code: 'Mk2' },
+    { start: 1992, end: 1999, code: 'Mk3' }, { start: 1999, end: 2005, code: 'Mk4' },
+    { start: 2005, end: 2011, code: 'Mk5' }, { start: 2010, end: 2018, code: 'Mk6' },
+    { start: 2018, end: 2028, code: 'Mk7' },
+  ],
+  'Volkswagen|Passat': [
+    { start: 1996, end: 2005, code: 'B5' }, { start: 2005, end: 2010, code: 'B6' },
+    { start: 2010, end: 2015, code: 'B7' }, { start: 2014, end: 2023, code: 'B8' },
+  ],
+  'Volkswagen|Tiguan': [
+    { start: 2007, end: 2017, code: '5N' }, { start: 2016, end: 2028, code: 'AD1' },
+  ],
+  // ── Porsche ──
+  'Porsche|911': [
+    { start: 1997, end: 2004, code: '996' }, { start: 2004, end: 2012, code: '997' },
+    { start: 2011, end: 2019, code: '991' }, { start: 2018, end: 2028, code: '992' },
+  ],
+  'Porsche|Cayenne': [
+    { start: 2002, end: 2010, code: '9PA' }, { start: 2010, end: 2018, code: '92A' },
+    { start: 2017, end: 2028, code: '9YA' },
+  ],
+  'Porsche|Macan': [{ start: 2014, end: 2028, code: '95B' }],
+  'Porsche|Panamera': [
+    { start: 2009, end: 2016, code: '970' }, { start: 2016, end: 2028, code: '971' },
+  ],
+  'Porsche|Boxster': [
+    { start: 1996, end: 2004, code: '986' }, { start: 2004, end: 2012, code: '987' },
+    { start: 2012, end: 2016, code: '981' }, { start: 2016, end: 2028, code: '718' },
+  ],
+  'Porsche|Cayman': [
+    { start: 2005, end: 2012, code: '987c' }, { start: 2012, end: 2016, code: '981c' },
+    { start: 2016, end: 2028, code: '718c' },
+  ],
+  // ── Toyota ──
+  'Toyota|Camry': [
+    { start: 1991, end: 1996, code: 'XV10' }, { start: 1996, end: 2001, code: 'XV20' },
+    { start: 2001, end: 2006, code: 'XV30' }, { start: 2006, end: 2011, code: 'XV40' },
+    { start: 2011, end: 2017, code: 'XV50' }, { start: 2017, end: 2024, code: 'XV70' },
+  ],
+  'Toyota|Corolla': [
+    { start: 1995, end: 2000, code: 'E110' }, { start: 2000, end: 2006, code: 'E120/E130' },
+    { start: 2006, end: 2013, code: 'E140/E150' }, { start: 2013, end: 2019, code: 'E170/E180' },
+    { start: 2018, end: 2028, code: 'E210' },
+  ],
+  'Toyota|RAV4': [
+    { start: 1994, end: 2000, code: 'XA10' }, { start: 2000, end: 2005, code: 'XA20' },
+    { start: 2005, end: 2012, code: 'XA30' }, { start: 2012, end: 2018, code: 'XA40' },
+    { start: 2018, end: 2028, code: 'XA50' },
+  ],
+  'Toyota|Highlander': [
+    { start: 2000, end: 2007, code: 'XU20' }, { start: 2007, end: 2013, code: 'XU40' },
+    { start: 2013, end: 2019, code: 'XU50' }, { start: 2019, end: 2028, code: 'XU70' },
+  ],
+  'Toyota|Tacoma': [
+    { start: 1995, end: 2004, code: 'N100' }, { start: 2004, end: 2015, code: 'N200' },
+    { start: 2015, end: 2023, code: 'N300' }, { start: 2023, end: 2028, code: 'N400' },
+  ],
+  'Toyota|4Runner': [
+    { start: 1995, end: 2002, code: 'N180' }, { start: 2002, end: 2009, code: 'N210' },
+    { start: 2009, end: 2024, code: 'N280' },
+  ],
+  'Toyota|Tundra': [
+    { start: 1999, end: 2006, code: 'XK30/XK40' }, { start: 2006, end: 2021, code: 'XK50' },
+    { start: 2021, end: 2028, code: 'XK70' },
+  ],
+  'Toyota|Prius': [
+    { start: 2003, end: 2009, code: 'XW20' }, { start: 2009, end: 2015, code: 'XW30' },
+    { start: 2015, end: 2022, code: 'XW50' }, { start: 2022, end: 2028, code: 'XW60' },
+  ],
+  // ── Lexus (Toyota luxury — shared platforms) ──
+  'Lexus|IS': [
+    { start: 1998, end: 2005, code: 'XE10' }, { start: 2005, end: 2013, code: 'XE20' },
+    { start: 2013, end: 2028, code: 'XE30' },
+  ],
+  'Lexus|ES': [
+    { start: 1996, end: 2001, code: 'XV20' }, { start: 2001, end: 2006, code: 'XV30' },
+    { start: 2006, end: 2012, code: 'XV40' }, { start: 2012, end: 2018, code: 'XV60' },
+    { start: 2018, end: 2028, code: 'XZ10' },
+  ],
+  'Lexus|RX': [
+    { start: 1998, end: 2003, code: 'XU10' }, { start: 2003, end: 2009, code: 'XU30' },
+    { start: 2009, end: 2015, code: 'AL10' }, { start: 2015, end: 2022, code: 'AL20' },
+    { start: 2022, end: 2028, code: 'AL30' },
+  ],
+  'Lexus|GX': [
+    { start: 2002, end: 2009, code: 'J120' }, { start: 2009, end: 2024, code: 'J150' },
+  ],
+  'Lexus|NX': [
+    { start: 2014, end: 2021, code: 'AZ10' }, { start: 2021, end: 2028, code: 'AZ20' },
+  ],
+  // ── Honda ──
+  'Honda|Civic': [
+    { start: 1995, end: 2000, code: 'EK/EJ' }, { start: 2000, end: 2005, code: 'EM/ES' },
+    { start: 2005, end: 2011, code: 'FA/FG' }, { start: 2011, end: 2015, code: 'FB/FG' },
+    { start: 2015, end: 2021, code: 'FC/FK' }, { start: 2021, end: 2028, code: 'FE/FL' },
+  ],
+  'Honda|Accord': [
+    { start: 1997, end: 2002, code: 'CG/CF' }, { start: 2002, end: 2007, code: 'CM' },
+    { start: 2007, end: 2012, code: 'CP/CU' }, { start: 2012, end: 2017, code: 'CR' },
+    { start: 2017, end: 2022, code: 'CV' },
+  ],
+  'Honda|CR-V': [
+    { start: 1995, end: 2001, code: 'RD1/RD3' }, { start: 2001, end: 2006, code: 'RD4-9' },
+    { start: 2006, end: 2011, code: 'RE' }, { start: 2011, end: 2016, code: 'RM' },
+    { start: 2016, end: 2022, code: 'RW' }, { start: 2022, end: 2028, code: 'RS' },
+  ],
+  'Honda|Pilot': [
+    { start: 2002, end: 2008, code: 'YF1' }, { start: 2008, end: 2015, code: 'YF2' },
+    { start: 2015, end: 2022, code: 'YF5' }, { start: 2022, end: 2028, code: 'YF6' },
+  ],
+  // ── Acura (Honda luxury — shared platforms) ──
+  'Acura|TLX': [{ start: 2014, end: 2028, code: 'UB1-UB6' }],
+  'Acura|MDX': [
+    { start: 2000, end: 2006, code: 'YD1' }, { start: 2006, end: 2013, code: 'YD2' },
+    { start: 2013, end: 2020, code: 'YD3' }, { start: 2020, end: 2028, code: 'YD4' },
+  ],
+  'Acura|RDX': [
+    { start: 2006, end: 2012, code: 'TB1' }, { start: 2012, end: 2018, code: 'TB3' },
+    { start: 2018, end: 2028, code: 'TC' },
+  ],
+  // ── Nissan ──
+  'Nissan|Altima': [
+    { start: 2001, end: 2006, code: 'L31' }, { start: 2006, end: 2012, code: 'L32' },
+    { start: 2012, end: 2018, code: 'L33' }, { start: 2018, end: 2028, code: 'L34' },
+  ],
+  'Nissan|Maxima': [
+    { start: 1999, end: 2003, code: 'A33' }, { start: 2003, end: 2008, code: 'A34' },
+    { start: 2008, end: 2014, code: 'A35' }, { start: 2015, end: 2023, code: 'A36' },
+  ],
+  'Nissan|Rogue': [
+    { start: 2007, end: 2013, code: 'S35' }, { start: 2013, end: 2020, code: 'T32' },
+    { start: 2020, end: 2028, code: 'T33' },
+  ],
+  'Nissan|Pathfinder': [
+    { start: 1996, end: 2004, code: 'R50' }, { start: 2004, end: 2012, code: 'R51' },
+    { start: 2012, end: 2020, code: 'R52' }, { start: 2021, end: 2028, code: 'R53' },
+  ],
+  'Nissan|Frontier': [
+    { start: 1997, end: 2004, code: 'D22' }, { start: 2004, end: 2021, code: 'D40' },
+    { start: 2021, end: 2028, code: 'D41' },
+  ],
+  'Nissan|350Z': [{ start: 2002, end: 2009, code: 'Z33' }],
+  'Nissan|370Z': [{ start: 2008, end: 2020, code: 'Z34' }],
+  // ── Infiniti (Nissan luxury — shared platforms) ──
+  'Infiniti|Q50': [{ start: 2013, end: 2028, code: 'V37' }],
+  'Infiniti|Q60': [{ start: 2016, end: 2028, code: 'CV37' }],
+  'Infiniti|QX60': [
+    { start: 2012, end: 2020, code: 'L50' }, { start: 2021, end: 2028, code: 'L52' },
+  ],
+  'Infiniti|QX80': [
+    { start: 2010, end: 2017, code: 'Z62' }, { start: 2017, end: 2028, code: 'Z63' },
+  ],
+  'Infiniti|G35': [{ start: 2002, end: 2007, code: 'V35' }],
+  'Infiniti|G37': [{ start: 2007, end: 2013, code: 'V36' }],
+  // ── Ford ──
+  'Ford|F-150': [
+    { start: 1997, end: 2003, code: 'P221' }, { start: 2003, end: 2008, code: 'P2' },
+    { start: 2008, end: 2014, code: 'P415' }, { start: 2014, end: 2020, code: 'P552' },
+    { start: 2020, end: 2028, code: 'P702' },
+  ],
+  'Ford|Mustang': [
+    { start: 1994, end: 2004, code: 'SN95' }, { start: 2004, end: 2014, code: 'S197' },
+    { start: 2014, end: 2023, code: 'S550' }, { start: 2023, end: 2028, code: 'S650' },
+  ],
+  'Ford|Explorer': [
+    { start: 2001, end: 2005, code: 'U152' }, { start: 2005, end: 2010, code: 'U251' },
+    { start: 2010, end: 2019, code: 'U502' }, { start: 2019, end: 2028, code: 'U625' },
+  ],
+  'Ford|Escape': [
+    { start: 2000, end: 2007, code: 'CD2' }, { start: 2007, end: 2012, code: 'CD2/2' },
+    { start: 2012, end: 2019, code: 'C520' }, { start: 2019, end: 2028, code: 'C519' },
+  ],
+  'Ford|Focus': [
+    { start: 1999, end: 2007, code: 'Mk1' }, { start: 2007, end: 2011, code: 'Mk2' },
+    { start: 2010, end: 2018, code: 'Mk3' },
+  ],
+  'Ford|Ranger': [
+    { start: 1998, end: 2011, code: 'N/A' }, { start: 2018, end: 2028, code: 'P703' },
+  ],
+  'Ford|Edge': [
+    { start: 2006, end: 2014, code: 'U387' }, { start: 2014, end: 2024, code: 'CD539' },
+  ],
+  // ── Lincoln (Ford luxury — shared platforms) ──
+  'Lincoln|Navigator': [
+    { start: 1997, end: 2002, code: 'U228' }, { start: 2002, end: 2006, code: 'U228/2' },
+    { start: 2006, end: 2017, code: 'U326' }, { start: 2017, end: 2028, code: 'U554' },
+  ],
+  'Lincoln|Aviator': [{ start: 2019, end: 2028, code: 'CD6' }],
+  'Lincoln|Corsair': [{ start: 2019, end: 2028, code: 'C519L' }],
+  // ── Chevrolet / GM ──
+  'Chevrolet|Silverado': [
+    { start: 1999, end: 2007, code: 'GMT800' }, { start: 2007, end: 2014, code: 'GMT900' },
+    { start: 2014, end: 2019, code: 'K2XX' }, { start: 2018, end: 2028, code: 'T1XX' },
+  ],
+  'Chevrolet|Tahoe': [
+    { start: 1999, end: 2006, code: 'GMT820' }, { start: 2006, end: 2014, code: 'GMT900' },
+    { start: 2014, end: 2020, code: 'K2XL' }, { start: 2020, end: 2028, code: 'T1XL' },
+  ],
+  'Chevrolet|Camaro': [
+    { start: 1993, end: 2002, code: 'F-body' }, { start: 2009, end: 2015, code: 'Zeta' },
+    { start: 2015, end: 2024, code: 'Alpha' },
+  ],
+  'Chevrolet|Corvette': [
+    { start: 1996, end: 2004, code: 'C5' }, { start: 2004, end: 2013, code: 'C6' },
+    { start: 2013, end: 2019, code: 'C7' }, { start: 2019, end: 2028, code: 'C8' },
+  ],
+  'Chevrolet|Equinox': [
+    { start: 2004, end: 2009, code: 'Theta' }, { start: 2009, end: 2017, code: 'Theta/2' },
+    { start: 2017, end: 2025, code: 'D2XX' },
+  ],
+  'Chevrolet|Malibu': [
+    { start: 2003, end: 2007, code: 'Epsilon' }, { start: 2007, end: 2012, code: 'Epsilon/2' },
+    { start: 2012, end: 2016, code: 'Epsilon II' }, { start: 2015, end: 2024, code: 'E2XX' },
+  ],
+  'Chevrolet|Traverse': [
+    { start: 2008, end: 2017, code: 'Lambda' }, { start: 2017, end: 2028, code: 'C1XX' },
+  ],
+  // ── GMC (shared GM platforms) ──
+  'GMC|Sierra': [
+    { start: 1999, end: 2007, code: 'GMT800' }, { start: 2007, end: 2014, code: 'GMT900' },
+    { start: 2014, end: 2019, code: 'K2XX' }, { start: 2018, end: 2028, code: 'T1XX' },
+  ],
+  'GMC|Yukon': [
+    { start: 1999, end: 2006, code: 'GMT820' }, { start: 2006, end: 2014, code: 'GMT900' },
+    { start: 2014, end: 2020, code: 'K2XL' }, { start: 2020, end: 2028, code: 'T1XL' },
+  ],
+  'GMC|Acadia': [
+    { start: 2006, end: 2016, code: 'Lambda' }, { start: 2016, end: 2028, code: 'C1XX' },
+  ],
+  // ── Cadillac (GM luxury — shared platforms) ──
+  'Cadillac|Escalade': [
+    { start: 1999, end: 2006, code: 'GMT820' }, { start: 2006, end: 2014, code: 'GMT900' },
+    { start: 2014, end: 2020, code: 'K2XL' }, { start: 2020, end: 2028, code: 'T1XL' },
+  ],
+  'Cadillac|CT5': [{ start: 2019, end: 2028, code: 'Alpha II' }],
+  'Cadillac|XT5': [{ start: 2016, end: 2028, code: 'C1XX' }],
+  // ── Subaru ──
+  'Subaru|Outback': [
+    { start: 1999, end: 2003, code: 'BH' }, { start: 2003, end: 2009, code: 'BP' },
+    { start: 2009, end: 2014, code: 'BR' }, { start: 2014, end: 2020, code: 'BS' },
+    { start: 2019, end: 2028, code: 'BT' },
+  ],
+  'Subaru|Forester': [
+    { start: 1997, end: 2002, code: 'SF' }, { start: 2002, end: 2008, code: 'SG' },
+    { start: 2007, end: 2013, code: 'SH' }, { start: 2012, end: 2018, code: 'SJ' },
+    { start: 2018, end: 2028, code: 'SK' },
+  ],
+  'Subaru|Impreza': [
+    { start: 1992, end: 2000, code: 'GC/GF' }, { start: 2000, end: 2007, code: 'GD/GG' },
+    { start: 2007, end: 2014, code: 'GE/GH' }, { start: 2011, end: 2016, code: 'GP/GJ' },
+    { start: 2016, end: 2023, code: 'GT/GK' },
+  ],
+  'Subaru|WRX': [
+    { start: 2001, end: 2007, code: 'GD' }, { start: 2007, end: 2014, code: 'GE/GH' },
+    { start: 2014, end: 2021, code: 'VA' }, { start: 2021, end: 2028, code: 'VB' },
+  ],
+  'Subaru|Crosstrek': [
+    { start: 2012, end: 2017, code: 'GP' }, { start: 2017, end: 2023, code: 'GT' },
+    { start: 2023, end: 2028, code: 'GU' },
+  ],
+  // ── Volvo ──
+  'Volvo|XC90': [
+    { start: 2002, end: 2015, code: 'C/275' }, { start: 2015, end: 2028, code: 'SPA' },
+  ],
+  'Volvo|XC60': [
+    { start: 2008, end: 2017, code: 'Y20' }, { start: 2017, end: 2028, code: 'SPA' },
+  ],
+  'Volvo|XC40': [{ start: 2017, end: 2028, code: 'CMA' }],
+  'Volvo|S60': [
+    { start: 2000, end: 2010, code: 'P2' }, { start: 2010, end: 2018, code: 'Y20' },
+    { start: 2018, end: 2028, code: 'SPA' },
+  ],
+  'Volvo|S90': [
+    { start: 1997, end: 1998, code: '960' }, { start: 2016, end: 2028, code: 'SPA' },
+  ],
+  'Volvo|V60': [
+    { start: 2010, end: 2018, code: 'Y20' }, { start: 2018, end: 2028, code: 'SPA' },
+  ],
+  // ── Hyundai ──
+  'Hyundai|Tucson': [
+    { start: 2004, end: 2009, code: 'JM' }, { start: 2009, end: 2015, code: 'LM/IX' },
+    { start: 2015, end: 2020, code: 'TL' }, { start: 2020, end: 2028, code: 'NX4' },
+  ],
+  'Hyundai|Santa Fe': [
+    { start: 2000, end: 2006, code: 'SM' }, { start: 2006, end: 2012, code: 'CM' },
+    { start: 2012, end: 2018, code: 'DM' }, { start: 2018, end: 2028, code: 'TM' },
+  ],
+  'Hyundai|Sonata': [
+    { start: 2004, end: 2009, code: 'NF' }, { start: 2009, end: 2014, code: 'YF' },
+    { start: 2014, end: 2019, code: 'LF' }, { start: 2019, end: 2028, code: 'DN8' },
+  ],
+  'Hyundai|Elantra': [
+    { start: 2006, end: 2010, code: 'HD' }, { start: 2010, end: 2015, code: 'MD/UD' },
+    { start: 2015, end: 2020, code: 'AD' }, { start: 2020, end: 2028, code: 'CN7' },
+  ],
+  // ── Kia (shares Hyundai platforms) ──
+  'Kia|Sorento': [
+    { start: 2002, end: 2009, code: 'BL' }, { start: 2009, end: 2015, code: 'XM' },
+    { start: 2014, end: 2020, code: 'UM' }, { start: 2020, end: 2028, code: 'MQ4' },
+  ],
+  'Kia|Sportage': [
+    { start: 2004, end: 2010, code: 'KM' }, { start: 2010, end: 2015, code: 'SL' },
+    { start: 2015, end: 2021, code: 'QL' }, { start: 2021, end: 2028, code: 'NQ5' },
+  ],
+  'Kia|Optima': [
+    { start: 2010, end: 2015, code: 'TF' }, { start: 2015, end: 2020, code: 'JF' },
+  ],
+  'Kia|K5': [{ start: 2020, end: 2028, code: 'DL3' }],
+  'Kia|Telluride': [{ start: 2019, end: 2028, code: 'ON' }],
+  // ── Genesis (Hyundai luxury — shared platforms) ──
+  'Genesis|G70': [{ start: 2017, end: 2028, code: 'IK' }],
+  'Genesis|G80': [
+    { start: 2016, end: 2020, code: 'DH' }, { start: 2020, end: 2028, code: 'RG3' },
+  ],
+  'Genesis|GV70': [{ start: 2021, end: 2028, code: 'JK' }],
+  'Genesis|GV80': [{ start: 2020, end: 2028, code: 'JX' }],
+  // ── Jaguar ──
+  'Jaguar|XF': [
+    { start: 2008, end: 2015, code: 'X250' }, { start: 2015, end: 2025, code: 'X260' },
+  ],
+  'Jaguar|XE': [{ start: 2015, end: 2025, code: 'X760' }],
+  'Jaguar|XJ': [
+    { start: 1994, end: 1997, code: 'X300' }, { start: 1997, end: 2003, code: 'X308' },
+    { start: 2003, end: 2009, code: 'X350' }, { start: 2009, end: 2019, code: 'X351' },
+  ],
+  'Jaguar|F-Pace': [{ start: 2015, end: 2025, code: 'X761' }],
+  'Jaguar|E-Pace': [{ start: 2017, end: 2025, code: 'X540' }],
+  'Jaguar|F-Type': [{ start: 2013, end: 2025, code: 'X152' }],
+  // ── Land Rover ──
+  'Land Rover|Range Rover': [
+    { start: 1970, end: 1996, code: 'Classic' }, { start: 1994, end: 2002, code: 'P38' },
+    { start: 2001, end: 2012, code: 'L322' }, { start: 2012, end: 2022, code: 'L405' },
+    { start: 2022, end: 2028, code: 'L460' },
+  ],
+  'Land Rover|Discovery': [
+    { start: 1989, end: 1998, code: 'Series 1' }, { start: 1998, end: 2004, code: 'Series 2' },
+    { start: 2004, end: 2009, code: 'LR3' }, { start: 2009, end: 2017, code: 'LR4' },
+    { start: 2017, end: 2025, code: 'Series 5' },
+  ],
+  'Land Rover|Range Rover Sport': [
+    { start: 2005, end: 2013, code: 'L320' }, { start: 2013, end: 2022, code: 'L494' },
+    { start: 2022, end: 2028, code: 'L461' },
+  ],
+  'Land Rover|Freelander': [
+    { start: 1997, end: 2006, code: 'L314' }, { start: 2006, end: 2015, code: 'L359' },
+  ],
+  'Land Rover|Defender': [
+    { start: 2019, end: 2028, code: 'L663' },
+  ],
+  'Land Rover|Range Rover Evoque': [
+    { start: 2011, end: 2019, code: 'L538' }, { start: 2019, end: 2028, code: 'L551' },
+  ],
+  'Land Rover|Range Rover Velar': [{ start: 2017, end: 2028, code: 'L560' }],
+  // ── Bentley ──
+  'Bentley|Continental': [
+    { start: 2003, end: 2011, code: 'D1' }, { start: 2011, end: 2018, code: 'D2' },
+    { start: 2018, end: 2028, code: 'D3' },
+  ],
+  'Bentley|Bentayga': [{ start: 2015, end: 2028, code: 'BY' }],
+  'Bentley|Flying Spur': [
+    { start: 2005, end: 2013, code: '3W' }, { start: 2019, end: 2028, code: '3W/2' },
+  ],
+  // ── Dodge / Ram ──
+  'Ram|1500': [
+    { start: 2001, end: 2009, code: 'DR/DH' }, { start: 2009, end: 2018, code: 'DS' },
+    { start: 2018, end: 2028, code: 'DT' },
+  ],
+  'Dodge|Charger': [
+    { start: 2005, end: 2010, code: 'LX' }, { start: 2011, end: 2023, code: 'LD' },
+  ],
+  'Dodge|Challenger': [{ start: 2008, end: 2023, code: 'LC' }],
+  'Dodge|Durango': [
+    { start: 2003, end: 2009, code: 'HB' }, { start: 2010, end: 2028, code: 'WD' },
+  ],
+  // ── Jeep ──
+  'Jeep|Grand Cherokee': [
+    { start: 1999, end: 2004, code: 'WJ' }, { start: 2004, end: 2010, code: 'WK' },
+    { start: 2010, end: 2021, code: 'WK2' }, { start: 2021, end: 2028, code: 'WL' },
+  ],
+  'Jeep|Wrangler': [
+    { start: 1996, end: 2006, code: 'TJ' }, { start: 2006, end: 2018, code: 'JK' },
+    { start: 2017, end: 2028, code: 'JL' },
+  ],
+  'Jeep|Cherokee': [
+    { start: 1997, end: 2001, code: 'XJ' }, { start: 2002, end: 2007, code: 'KJ' },
+    { start: 2007, end: 2012, code: 'KK' }, { start: 2013, end: 2023, code: 'KL' },
+  ],
+  // ── Mazda ──
+  'Mazda|CX-5': [
+    { start: 2012, end: 2017, code: 'KE' }, { start: 2017, end: 2028, code: 'KF' },
+  ],
+  'Mazda|Mazda3': [
+    { start: 2003, end: 2009, code: 'BK' }, { start: 2009, end: 2013, code: 'BL' },
+    { start: 2013, end: 2019, code: 'BM/BN' }, { start: 2019, end: 2028, code: 'BP' },
+  ],
+  'Mazda|Mazda6': [
+    { start: 2002, end: 2008, code: 'GG/GY' }, { start: 2007, end: 2012, code: 'GH' },
+    { start: 2012, end: 2021, code: 'GJ/GL' },
+  ],
+  'Mazda|CX-9': [
+    { start: 2006, end: 2015, code: 'TB' }, { start: 2015, end: 2028, code: 'TC' },
+  ],
+  'Mazda|MX-5': [
+    { start: 1989, end: 1998, code: 'NA' }, { start: 1998, end: 2005, code: 'NB' },
+    { start: 2005, end: 2015, code: 'NC' }, { start: 2015, end: 2028, code: 'ND' },
+  ],
+  // ── Tesla ──
+  'Tesla|Model 3': [{ start: 2017, end: 2028, code: 'Model 3' }],
+  'Tesla|Model Y': [{ start: 2019, end: 2028, code: 'Model Y' }],
+  'Tesla|Model S': [
+    { start: 2012, end: 2021, code: 'Model S' }, { start: 2021, end: 2028, code: 'Model S Refresh' },
+  ],
+  'Tesla|Model X': [
+    { start: 2015, end: 2021, code: 'Model X' }, { start: 2021, end: 2028, code: 'Model X Refresh' },
+  ],
+};
+
+/**
+ * Cross-platform sharing map: makes/models that share platforms and may
+ * interchange parts (e.g. VW/Audi MQB, Lexus/Toyota, GM trucks).
+ * Key: "Make|Model" → array of related "Make|Model" that share parts.
+ */
+const SHARED_PLATFORMS = {
+  // VW Group — MQB / MLB / PQ35
+  'Volkswagen|Golf':    ['Audi|A3', 'Volkswagen|Jetta'],
+  'Audi|A3':            ['Volkswagen|Golf', 'Volkswagen|Jetta'],
+  'Volkswagen|Jetta':   ['Volkswagen|Golf', 'Audi|A3'],
+  'Audi|Q7':            ['Volkswagen|Touareg', 'Porsche|Cayenne', 'Bentley|Bentayga'],
+  'Porsche|Cayenne':    ['Audi|Q7', 'Volkswagen|Touareg', 'Bentley|Bentayga'],
+  'Volkswagen|Passat':  ['Audi|A4'],
+  'Audi|A4':            ['Volkswagen|Passat'],
+  // Toyota / Lexus shared
+  'Toyota|Camry':       ['Lexus|ES'],
+  'Lexus|ES':           ['Toyota|Camry'],
+  'Toyota|RAV4':        ['Lexus|NX'],
+  'Lexus|NX':           ['Toyota|RAV4'],
+  'Toyota|Highlander':  ['Lexus|RX'],
+  'Lexus|RX':           ['Toyota|Highlander'],
+  'Toyota|4Runner':     ['Lexus|GX'],
+  'Lexus|GX':           ['Toyota|4Runner'],
+  // Honda / Acura shared
+  'Honda|Accord':       ['Acura|TLX'],
+  'Acura|TLX':          ['Honda|Accord'],
+  'Honda|Pilot':        ['Acura|MDX'],
+  'Acura|MDX':          ['Honda|Pilot'],
+  'Honda|CR-V':         ['Acura|RDX'],
+  'Acura|RDX':          ['Honda|CR-V'],
+  // Nissan / Infiniti shared
+  'Nissan|Altima':      ['Infiniti|Q50'],
+  'Infiniti|Q50':       ['Nissan|Altima'],
+  'Nissan|Pathfinder':  ['Infiniti|QX60'],
+  'Infiniti|QX60':      ['Nissan|Pathfinder'],
+  // GM shared platforms (trucks)
+  'Chevrolet|Silverado':['GMC|Sierra'],
+  'GMC|Sierra':         ['Chevrolet|Silverado'],
+  'Chevrolet|Tahoe':    ['GMC|Yukon', 'Cadillac|Escalade'],
+  'GMC|Yukon':          ['Chevrolet|Tahoe', 'Cadillac|Escalade'],
+  'Cadillac|Escalade':  ['Chevrolet|Tahoe', 'GMC|Yukon'],
+  'Chevrolet|Traverse': ['GMC|Acadia', 'Cadillac|XT5'],
+  'GMC|Acadia':         ['Chevrolet|Traverse', 'Cadillac|XT5'],
+  'Cadillac|XT5':       ['Chevrolet|Traverse', 'GMC|Acadia'],
+  // Ford / Lincoln shared
+  'Ford|Explorer':      ['Lincoln|Aviator'],
+  'Lincoln|Aviator':    ['Ford|Explorer'],
+  'Ford|Escape':        ['Lincoln|Corsair'],
+  'Lincoln|Corsair':    ['Ford|Escape'],
+  'Ford|F-150':         ['Lincoln|Navigator'],
+  'Lincoln|Navigator':  ['Ford|F-150'],
+  // Jaguar / Land Rover shared (iQ / PLA)
+  'Jaguar|XE':          ['Jaguar|F-Pace', 'Land Rover|Range Rover Velar'],
+  'Jaguar|F-Pace':      ['Jaguar|XE', 'Land Rover|Range Rover Velar'],
+  'Land Rover|Range Rover Velar': ['Jaguar|F-Pace', 'Jaguar|XE'],
+  'Land Rover|Range Rover Evoque':['Land Rover|Discovery Sport'],
+  // Hyundai / Kia / Genesis shared
+  'Hyundai|Tucson':     ['Kia|Sportage'],
+  'Kia|Sportage':       ['Hyundai|Tucson'],
+  'Hyundai|Santa Fe':   ['Kia|Sorento'],
+  'Kia|Sorento':        ['Hyundai|Santa Fe'],
+  'Hyundai|Sonata':     ['Kia|K5', 'Kia|Optima'],
+  'Kia|K5':             ['Hyundai|Sonata'],
+  'Kia|Optima':         ['Hyundai|Sonata'],
+  'Hyundai|Elantra':    ['Kia|Forte'],
+  'Genesis|G70':        ['Kia|Stinger'],
+  'Genesis|GV80':       ['Genesis|G80'],
+  'Genesis|G80':        ['Genesis|GV80'],
+  // Dodge / Jeep / Ram shared (Stellantis)
+  'Dodge|Durango':      ['Jeep|Grand Cherokee'],
+  'Jeep|Grand Cherokee':['Dodge|Durango'],
+  'Dodge|Charger':      ['Dodge|Challenger'],
+  'Dodge|Challenger':   ['Dodge|Charger'],
+  // Subaru shared
+  'Subaru|Impreza':     ['Subaru|Crosstrek', 'Subaru|WRX'],
+  'Subaru|WRX':         ['Subaru|Impreza'],
+  'Subaru|Crosstrek':   ['Subaru|Impreza'],
+  'Subaru|Outback':     ['Subaru|Legacy'],
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 //  LOGGING & REPORTING
 // ═══════════════════════════════════════════════════════════════════════
@@ -107,6 +731,35 @@ const REPORT = {
   missingSpecifics: [],
   errors: [],
   startTime: Date.now(),
+  // ── Image enrichment stats ──
+  images: {
+    totalParts: 0,
+    withPrimary: 0,
+    withGallery: 0,
+    withDiagrams: 0,
+    totalUrls: 0,
+    validated: 0,
+    accessible: 0,
+    inaccessible: 0,
+    belowMinResolution: 0,
+    apiFailed: 0,
+    apiRetries: 0,
+    cacheHits: 0,
+    missingParts: [],        // SKUs without any images
+    failedEnrichments: [],   // SKUs where API call failed
+  },
+  // ── Fitment stats ──
+  fitment: {
+    totalParts: 0,
+    platformExpanded: 0,
+    crossRefExpanded: 0,
+    aiInterchangeUsed: 0,
+    sharedPlatformExpanded: 0,
+    singleVehicle: 0,
+    totalCompatEntries: 0,
+    incomplete: [],          // SKUs with partial fitment data
+    noFitment: [],           // SKUs with no fitment at all
+  },
 };
 
 const log = {
@@ -411,26 +1064,183 @@ function parseInputFile(filePath) {
     const rawData = XLSX.utils.sheet_to_json(ws, { header: 1 });
     if (rawData.length < 2) continue;
 
-    const headers = rawData[0].map(h => clean(h).toLowerCase());
-    const colMap = buildColumnMap(headers);
+    // ── Detect GridX Connect format ──
+    // GridX Connect files have an info/metadata row at index 0 (e.g. "GridX Connect"
+    // or VIN info), actual column headers at row 1, and data starting at row 2.
+    // The headers include columns like "Image URLs", "Vehicle Make", "Description",
+    // "Weight Major", "Package Length" etc. that are not present in VIN-based sheets.
+    const row0Headers = rawData[0].map(h => clean(h).toLowerCase());
+    const row1Values = rawData.length > 1 ? rawData[1].map(h => clean(h).toLowerCase()) : [];
+    const isGridxFormat = detectGridxFormat(row0Headers, row1Values);
 
-    let sheetParts = 0;
-    for (let i = 1; i < rawData.length; i++) {
-      const row = rawData[i];
-      if (!row || !row.some(c => c != null && c !== '')) continue;
+    if (isGridxFormat) {
+      // GridX Connect format: row 0 = info, row 1 = headers, row 2+ = data
+      const gxHeaders = row1Values;
+      const gxColMap = buildGridxColumnMap(gxHeaders);
+      const vehicleInfo = parseVehicleFromSheetName(sheetName);
 
-      const part = extractPart(row, colMap, sheetName);
-      if (part.partName || part.partNumber) {
-        allParts.push(part);
-        sheetParts++;
+      let sheetParts = 0;
+      for (let i = 2; i < rawData.length; i++) {
+        const row = rawData[i];
+        if (!row || !row.some(c => c != null && c !== '')) continue;
+
+        const part = extractGridxPart(row, gxColMap, sheetName, vehicleInfo);
+        if (part.partName || part.partNumber) {
+          allParts.push(part);
+          sheetParts++;
+        }
       }
+      log.info(`  Sheet "${sheetName}" (GridX Connect): ${sheetParts} parts`);
+    } else {
+      // Standard VIN-based format: row 0 = headers, row 1+ = data
+      const headers = row0Headers;
+      const colMap = buildColumnMap(headers);
+
+      let sheetParts = 0;
+      for (let i = 1; i < rawData.length; i++) {
+        const row = rawData[i];
+        if (!row || !row.some(c => c != null && c !== '')) continue;
+
+        const part = extractPart(row, colMap, sheetName);
+        if (part.partName || part.partNumber) {
+          allParts.push(part);
+          sheetParts++;
+        }
+      }
+      log.info(`  Sheet "${sheetName}": ${sheetParts} parts`);
     }
-    log.info(`  Sheet "${sheetName}": ${sheetParts} parts`);
   }
 
   REPORT.totalInput = allParts.length;
-  log.info(`Total parts parsed: ${allParts.length} from ${vinSheets.length} VIN sheets`);
+  log.info(`Total parts parsed: ${allParts.length} from ${vinSheets.length} sheet(s)`);
   return allParts;
+}
+
+/**
+ * Detect if a sheet uses the GridX Connect format.
+ * GridX files have a metadata/info row at row 0 and actual headers at row 1.
+ * Key indicators: row 1 contains "image urls", "vehicle make", "description",
+ * or row 0 contains "gridx" / doesn't look like standard column headers.
+ */
+function detectGridxFormat(row0Headers, row1Values) {
+  // Check if row 0 contains GridX identifier
+  const row0Text = row0Headers.join(' ');
+  if (row0Text.includes('gridx') || row0Text.includes('gridxconnect')) return true;
+
+  // Check if row 1 has GridX-specific columns
+  const gridxCols = ['image urls', 'vehicle make', 'weight major', 'package length', 'package width', 'package depth'];
+  const matchCount = gridxCols.filter(col => row1Values.includes(col)).length;
+  if (matchCount >= 2) return true;
+
+  // Check if row 0 doesn't look like standard headers but row 1 does
+  const standardCols = ['sku', 'brand', 'make', 'model', 'vin', 'category', 'part number', 'name', 'price'];
+  const row0Matches = standardCols.filter(col => row0Headers.includes(col)).length;
+  const row1HasPartNumber = row1Values.includes('part number') || row1Values.includes('part no');
+  const row1HasDescription = row1Values.includes('description') || row1Values.includes('parts description');
+  if (row0Matches === 0 && row1HasPartNumber && row1HasDescription) return true;
+
+  return false;
+}
+
+/**
+ * Build column map for GridX Connect format.
+ * Columns: Part Number, Price, Quantity, Vehicle Make, Description,
+ *          Image URLs, SKU, Weight Major, Weight Minor,
+ *          Package Length, Package Width, Package Depth
+ */
+function buildGridxColumnMap(headers) {
+  const map = {
+    partNumber: -1, price: -1, quantity: -1, make: -1,
+    description: -1, images: -1, sku: -1,
+    weightMajor: -1, weightMinor: -1,
+    pkgLength: -1, pkgWidth: -1, pkgDepth: -1,
+  };
+
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i];
+    if (!h) continue;
+    if (h === 'part number' || h === 'part no' || h === 'part no.') map.partNumber = i;
+    if (h === 'price' || h === 'sell price' || h === 'unit price') map.price = i;
+    if (h === 'quantity' || h === 'qty') map.quantity = i;
+    if (h === 'vehicle make' || h === 'make') map.make = i;
+    if (h === 'description' || h === 'parts description' || h === 'part description') map.description = i;
+    if (h === 'image urls' || h === 'images' || h === 'image url') map.images = i;
+    if (h === 'sku' || h === 'custom label') map.sku = i;
+    if (h === 'weight major') map.weightMajor = i;
+    if (h === 'weight minor') map.weightMinor = i;
+    if (h === 'package length') map.pkgLength = i;
+    if (h === 'package width') map.pkgWidth = i;
+    if (h === 'package depth') map.pkgDepth = i;
+  }
+
+  return map;
+}
+
+/**
+ * Parse vehicle year/make/model from a GridX Connect sheet name.
+ * Examples: "2008 Mercedes C350 AMG", "2007 Mercedes-Benz C350 AMG 535 - 679"
+ */
+function parseVehicleFromSheetName(sheetName) {
+  const yearMatch = sheetName.match(/\b(19|20)\d{2}\b/);
+  const year = yearMatch ? yearMatch[0] : '';
+
+  // Remove year and clean up
+  let rest = sheetName.replace(/\b(19|20)\d{2}\b/, '').trim();
+  // Remove trailing range like "535 - 679"
+  rest = rest.replace(/\d+\s*-\s*\d+\s*$/, '').trim();
+
+  // First word is typically make, rest is model
+  const words = rest.split(/\s+/);
+  let make = '';
+  let model = '';
+
+  if (words.length >= 1) {
+    // Handle "Mercedes-Benz" or "Mercedes"
+    if (words[0].toLowerCase().startsWith('mercedes')) {
+      make = 'MERCEDES-BENZ';
+      model = words.slice(words[0].includes('-') ? 1 : 1).join(' ').trim();
+    } else if (words[0].toLowerCase() === 'bmw') {
+      make = 'BMW';
+      model = words.slice(1).join(' ').trim();
+    } else {
+      make = words[0].toUpperCase();
+      model = words.slice(1).join(' ').trim();
+    }
+  }
+
+  return { year, make, model };
+}
+
+/**
+ * Extract a part from a GridX Connect format row.
+ */
+function extractGridxPart(row, colMap, sheetName, vehicleInfo) {
+  const getVal = (idx) => idx >= 0 && idx < row.length ? clean(row[idx]) : '';
+  const desc = getVal(colMap.description);
+
+  return {
+    vin: sheetName,    // Use sheet name as VIN placeholder (VIN decode will skip non-VIN strings)
+    brand: getVal(colMap.make) || vehicleInfo.make,
+    model: vehicleInfo.model,
+    sku: getVal(colMap.sku),
+    category: '',
+    partNumber: getVal(colMap.partNumber),
+    partName: desc,     // Description serves as partName
+    note: desc,         // Also use as note for placement extraction
+    code: '',
+    price: parseFloat(row[colMap.price >= 0 ? colMap.price : -1]) || 0,
+    // GridX-specific fields preserved for downstream use
+    _gridx: {
+      images: getVal(colMap.images),
+      quantity: parseInt(row[colMap.quantity >= 0 ? colMap.quantity : -1]) || 1,
+      weightMajor: getVal(colMap.weightMajor),
+      weightMinor: getVal(colMap.weightMinor),
+      pkgLength: getVal(colMap.pkgLength),
+      pkgWidth: getVal(colMap.pkgWidth),
+      pkgDepth: getVal(colMap.pkgDepth),
+    },
+    _vehicleInfo: vehicleInfo,
+  };
 }
 
 function buildColumnMap(headers) {
@@ -549,6 +1359,22 @@ function getVehicleInfo(part, vinData) {
     };
   }
 
+  // GridX Connect parts carry pre-parsed vehicle info from the sheet name
+  if (part._vehicleInfo) {
+    return {
+      year: part._vehicleInfo.year || '',
+      make: part._vehicleInfo.make || '',
+      model: part._vehicleInfo.model || '',
+      trim: '',
+      engine: '',
+      bodyClass: '',
+      engineCylinders: '',
+      engineDisplacement: '',
+      fuelType: '',
+      driveType: '',
+    };
+  }
+
   // Fallback: parse from sheet data
   const brand = titleCase(part.brand);
   const model = part.model;
@@ -653,6 +1479,7 @@ async function validateOpenAiKey() {
 async function enrichBatch(batchParts, vinData) {
   const partsForPrompt = batchParts.map((part, idx) => {
     const vehicle = getVehicleInfo(part, vinData);
+    const decoded = vinData.get(part.vin);
     return {
       index: idx,
       sku: part.sku,
@@ -662,6 +1489,11 @@ async function enrichBatch(batchParts, vinData) {
       vehicleMake: vehicle.make,
       vehicleModel: vehicle.model,
       vehicleTrim: vehicle.trim,
+      vehicleEngine: vehicle.engine || '',
+      vehicleBodyClass: vehicle.bodyClass || decoded?.bodyClass || '',
+      vehicleDriveType: vehicle.driveType || decoded?.driveType || '',
+      vehicleFuelType: vehicle.fuelType || decoded?.fuelType || '',
+      vehicleEngineDisplacement: vehicle.engineDisplacement || decoded?.engineDisplacement || '',
       partName: part.partName,
       partNumber: part.partNumber,
       note: part.note,
@@ -670,40 +1502,130 @@ async function enrichBatch(batchParts, vinData) {
     };
   });
 
-  const systemPrompt = `You are a world-class eBay Motors Parts & Accessories listing expert with deep knowledge of automotive parts, OEM cross-references, and eBay SEO best practices.
+  const systemPrompt = `Role: You are a Senior Automotive Parts Interchange Specialist with 20+ years of experience in OEM parts databases (EPCs), cross-reference systems, and eBay Motors listing optimization. You have deep expertise across ALL makes — European, Japanese, American, Korean, and specialty manufacturers.
 
-TASK: Enrich automotive parts from dismantled vehicles into eBay-ready listings.
+TASK: Analyze each provided automotive part and generate:
+1. An optimized eBay Motors listing (title, description, specifics)
+2. Comprehensive vehicle compatibility / interchange data
+3. Technical installation requirements and notes
 
-TITLE RULES (max 80 chars):
-- Format: [Year] [Make] [Model] [PartName] [Key Detail] [MPN/OEM#]
-- Lead with highest-value search terms (year+make+model)
-- Include condition indicator for used parts: "OEM", "Genuine", or "Used"
-- Never use ALL CAPS, special characters (!@#$%), or filler words ("Nice", "Great", "L@@K")
+═══ INTERCHANGE & COMPATIBILITY RULES ═══
+
+** CRITICAL — AVOID DONOR-ONLY DATA **
+The vehicle each part was removed from is the "donor vehicle". You MUST NOT limit compatibility to ONLY the donor.
+- Use the Part Number (MPN) to research the FULL OEM application range
+- Expand fitment to ALL vehicles that use this exact part number across all shared platforms
+- If the donor is a 2018 Mercedes C300, but the same part fits 2015-2023 C-Class, E-Class, and GLC — list ALL of them
+- Cross-reference luxury/standard brand siblings (e.g., Camry↔ES, 3-Series↔Supra, Tucson↔Sportage)
+- The goal is MAXIMUM legitimate fitment coverage for eBay Motors Master Vehicle List (MVL)
+
+For EACH part, you MUST:
+
+A) OEM Interchange Research:
+   - Identify every Make, Model, and Year range that used this exact part from the factory
+   - Use the provided MPN/Part Number to determine the full OEM application range
+   - Parts often span multiple model years within a generation/platform
+
+B) Cross-Platform Compatibility:
+   - Identify shared platforms where the part may fit with different branding:
+     • VW Group: VW / Audi / Porsche / Bentley / Lamborghini (MQB, MLB, PQ35)
+     • Toyota / Lexus (TNGA), Honda / Acura, Nissan / Infiniti
+     • GM: Chevrolet / GMC / Cadillac / Buick (shared truck/SUV platforms)
+     • Ford / Lincoln, Stellantis: Dodge / Jeep / Ram / Chrysler
+     • Jaguar / Land Rover (PLA, iQ, D7a), Hyundai / Kia / Genesis
+     • Subaru / Toyota (shared BRZ/86 platform)
+   - Only include cross-platform fits when the SAME part number is used
+
+C) Chassis/Body Codes:
+   - ALWAYS include the chassis or body code in the compatibility data:
+     • BMW: E46, F30, G20, etc.  • Mercedes: W204, W205, W206, etc.
+     • Audi: B8, C7, 8V, etc.  • Toyota: XV70, XA50, E210, etc.
+     • Honda: FC/FK, CV, etc.  • Porsche: 996, 997, 991, 992, etc.
+   - Include these codes in the title when space allows
+
+D) Technical Requirements — flag if the part requires:
+   - Coding/Programming (VIN-unlocking, dealer-only activation, ECU coding)
+   - Specific Trims only (e.g., "Only for models with Bose Audio", "Sport package only")
+   - Engine-specific (e.g., "2.0T only", "Non-Turbo models only", "V6 only")
+   - Positioning (e.g., "Front Left / Driver Side only", "Passenger side")
+   - Drive type restrictions (e.g., "AWD only", "RWD only", "4WD only")
+
+═══ LISTING RULES ═══
+
+TITLE (max 80 chars):
+- Format: [Year Range] [Make] [Model] [Chassis] [PartName] [MPN] [OEM/Genuine]
+- Lead with highest-value search terms (year+make+model+chassis)
+- Include condition: "OEM", "Genuine", or "Used OEM"
 - Include placement (Left/Right/Front/Rear) when relevant
 - End with MPN or OEM number if space permits
-- Example: "2015 Mercedes C300 W205 Front Left Door Lock Actuator A2057200135 OEM"
+- Never use ALL CAPS, special chars (!@#$%), or filler words
+- Examples:
+  "2015-2021 Mercedes C-Class W205 Front Left Door Lock Actuator A2057200135 OEM"
+  "2018-2023 Toyota Camry XV70 Brake Caliper Front Right 47730-06330 OEM"
+  "2014-2020 BMW 3 Series F30 Headlight Control Module 63117316217 Genuine"
 
-DESCRIPTION RULES:
+DESCRIPTION:
 - Professional HTML with structured sections
-- Include: Part identification, Vehicle fitment, Condition assessment, Compatibility notes
-- Always include disclaimer: "Please verify part number compatibility before purchasing"
-- Format: <h3>Title</h3><p>intro</p><h4>Details</h4><ul><li>...</li></ul><h4>Compatibility</h4><p>...</p><h4>Condition</h4><p>Used - Removed from running vehicle. Inspected and tested.</p>
+- Include: Part identification, Full vehicle fitment list, Condition, Technical notes
+- Always include: "Please verify part number compatibility before purchasing"
+- Format: <h3>Title</h3><p>intro</p><h4>Details</h4><ul><li>...</li></ul><h4>Compatibility</h4><p>Full vehicle list with chassis codes</p><h4>Technical Notes</h4><p>Any coding/programming/trim requirements</p><h4>Condition</h4><p>Used - Removed from running vehicle. Inspected and tested.</p>
 
-SPECIFICS RULES:
-- brand: Use OEM vehicle manufacturer name (e.g., "Mercedes-Benz" not "Mercedes")
+SPECIFICS:
+- brand: OEM manufacturer name (e.g., "Mercedes-Benz" not "Mercedes", "BMW" not "Bmw")
 - type: Specific part type (e.g., "Door Lock Actuator" not "Door Parts")
-- mpn: ONLY use the provided partNumber — NEVER fabricate part numbers
-- oemNumber: Same as mpn unless explicitly different in source data
+- mpn: ONLY use the provided partNumber — NEVER fabricate
+- oemNumber: Same as mpn unless explicitly different
 - placement: Extract from notes/name (e.g., "Front Left", "Rear Right", "Upper", "Lower")
-- material: Only if determinable from part type (e.g., "Aluminum" for engine blocks, "Steel" for hinges)
+- material: Only if determinable from part type
 - warranty: "No Warranty" for used parts
 - fitmentType: "Direct Replacement" for OEM parts
 - color: Only if determinable from notes (never guess)
-- interchangeNumber: Only if provided in source data — NEVER fabricate
+- interchangeNumber: Only if known from cross-reference — NEVER fabricate
 
-Return JSON: {"items":[{"index":N,"title":"...","description":"<h3>...</h3>...","brand":"...","type":"...","mpn":"...","oemNumber":"...","placement":"...","material":"...","warranty":"No Warranty","fitmentType":"Direct Replacement","color":"","interchangeNumber":"","surfaceFinish":"","performanceType":"","bundleDescription":""}]}`;
+INTERCHANGE OUTPUT (eBay MVL Format):
+- Return a "compatibility" array with EVERY vehicle that uses this part — NOT just the donor
+- Each entry: { year, make, model, chassisCode, trim, engine, notes }
+- Include cross-platform vehicles if same part number applies
+- Expand year ranges: list EACH year individually (e.g., 2015, 2016, 2017, 2018 — not just 2015-2018)
+- "technicalNotes": any coding/programming/trim/engine restrictions as a string
+- The compatibility array will be formatted as eBay File Exchange / MIP pipe-separated strings:
+  Year=YYYY|Make=XXX|Model=YYY|Submodel=ZZZ|Trim=TTT|Engine=EEE
 
-  const userPrompt = `Enrich these ${partsForPrompt.length} automotive parts for eBay Motors listings. Each part was removed from a real vehicle identified by VIN. Use the vehicle info to generate accurate fitment data.\n\n${JSON.stringify(partsForPrompt, null, 2)}`;
+Return JSON:
+{
+  "items": [{
+    "index": N,
+    "title": "...",
+    "description": "<h3>...</h3>...",
+    "brand": "...",
+    "type": "...",
+    "mpn": "...",
+    "oemNumber": "...",
+    "placement": "...",
+    "material": "...",
+    "warranty": "No Warranty",
+    "fitmentType": "Direct Replacement",
+    "color": "",
+    "interchangeNumber": "",
+    "surfaceFinish": "",
+    "performanceType": "",
+    "bundleDescription": "",
+    "compatibility": [
+      { "year": "2015", "make": "Mercedes-Benz", "model": "C-Class", "chassisCode": "W205", "trim": "", "engine": "", "notes": "" }
+    ],
+    "technicalNotes": "Requires dealer coding after installation"
+  }]
+}`;
+
+  const userPrompt = `Analyze these ${partsForPrompt.length} automotive parts as a Senior Interchange Specialist. For each part:
+1. Research the Part Number (MPN) to identify ALL Makes, Models, and Year ranges that use this exact part
+2. Check for cross-platform compatibility (shared platforms between luxury/standard brands)
+3. Include chassis/body codes for every compatible vehicle
+4. Note any technical requirements (coding, trim-specific, engine-specific, positioning)
+
+Each part was removed from a real vehicle identified by VIN. Use the decoded vehicle data (including engine, body class, drive type) for accurate fitment.
+
+${JSON.stringify(partsForPrompt, null, 2)}`;
 
   const client = getOpenAI();
   if (!client) return null;
@@ -824,6 +1746,8 @@ async function enrichAllParts(parts, vinData) {
               surfaceFinish: clean(enriched.surfaceFinish),
               performanceType: clean(enriched.performanceType),
               bundleDescription: clean(enriched.bundleDescription),
+              compatibility: Array.isArray(enriched.compatibility) ? enriched.compatibility : [],
+              technicalNotes: clean(enriched.technicalNotes),
             };
             enrichedCount++;
           }
@@ -1030,6 +1954,544 @@ function normalizeBrand(brand) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  FITMENT EXPANSION
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Expands per-part fitment data from a single VIN year to the complete
+ * platform generation year range (e.g. 2015 BMW 3-Series → 2011-2019 F3x).
+ *
+ * Also extracts submodel/body type from VIN data and builds a structured
+ * JSON representation for every part.
+ *
+ * Stores:
+ *   part._fitments     — Array of {year, make, model, trim, engine, submodel, bodyType, notes}
+ *   part._fitmentJson  — Full structured JSON string for the output column
+ *   part._fitmentFlat  — Pipe-separated flat string for CSV compatibility
+ */
+function expandFitments(parts, vinData) {
+  log.step('Fitment Expansion (Universal Interchange)');
+
+  // Build part-number → all decoded vehicles map for cross-referencing
+  const pnVehicleMap = new Map();
+  for (const part of parts) {
+    const norm = normalizePN(part.partNumber);
+    if (!norm) continue;
+    const v = vinData.get(part.vin);
+    if (!v || !v.year) continue;
+    if (!pnVehicleMap.has(norm)) pnVehicleMap.set(norm, []);
+    pnVehicleMap.get(norm).push({
+      year: v.year,
+      make: normalizeBrand(v.make || part.brand),
+      model: v.model,
+      trim: v.trim || '',
+      engine: v.engineModel || (v.engineDisplacement ? `${v.engineDisplacement}L` : ''),
+      submodel: '',
+      bodyType: v.bodyClass || '',
+    });
+  }
+
+  let platformExpanded = 0;
+  let crossRefExpanded = 0;
+  let aiInterchangeUsed = 0;
+  let sharedPlatformExpanded = 0;
+
+  for (const part of parts) {
+    const vehicle = getVehicleInfo(part, vinData);
+    const decoded = vinData.get(part.vin);
+
+    if (!vehicle.make || !vehicle.model || !vehicle.year) {
+      part._fitments = vehicle.year ? [{
+        year: vehicle.year, make: normalizeBrand(vehicle.make), model: vehicle.model,
+        trim: '', engine: '', submodel: '', bodyType: decoded?.bodyClass || '', notes: '',
+      }] : [];
+      REPORT.fitment.noFitment.push(part.sku || part.partNumber);
+      generateFitmentOutput(part);
+      continue;
+    }
+
+    const makeName = normalizeBrand(vehicle.make);
+    const platformKey = `${makeName}|${vehicle.model}`;
+    const platforms = PLATFORM_RANGES[platformKey];
+    const yearNum = parseInt(vehicle.year) || 0;
+    let fitments = [];
+    let generationCode = '';
+
+    // ── Priority 1: AI-returned interchange/compatibility data ──
+    const aiCompat = part._enriched?.compatibility;
+    if (Array.isArray(aiCompat) && aiCompat.length > 0) {
+      const seen = new Set();
+      for (const c of aiCompat) {
+        if (!c.year || !c.make || !c.model) continue;
+        const key = `${c.year}|${c.make}|${c.model}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        fitments.push({
+          year: String(c.year),
+          make: normalizeBrand(c.make),
+          model: c.model,
+          trim: c.trim || '',
+          engine: c.engine || '',
+          submodel: c.chassisCode || '',
+          bodyType: c.bodyType || '',
+          notes: c.notes || '',
+        });
+      }
+      if (fitments.length > 0) aiInterchangeUsed++;
+    }
+
+    // ── Priority 2: Platform generation expansion ──
+    if (fitments.length === 0 && platforms && yearNum) {
+      const gen = platforms.find(g => yearNum >= g.start && yearNum <= g.end);
+      if (gen) {
+        generationCode = gen.code;
+        for (let y = gen.start; y <= gen.end; y++) {
+          fitments.push({
+            year: String(y), make: makeName, model: vehicle.model,
+            trim: '', engine: '',
+            submodel: gen.code,
+            bodyType: decoded?.bodyClass || '',
+            notes: `Platform ${gen.code}`,
+          });
+        }
+        platformExpanded++;
+      }
+    }
+
+    // ── Priority 3: Cross-reference from multiple VINs ──
+    if (fitments.length === 0) {
+      const norm = normalizePN(part.partNumber);
+      const crossVehicles = (pnVehicleMap.get(norm) || [])
+        .filter(v => v.make?.toLowerCase() === vehicle.make?.toLowerCase() &&
+                     v.model?.toLowerCase() === vehicle.model?.toLowerCase());
+      if (crossVehicles.length > 1) {
+        const seen = new Set();
+        fitments = crossVehicles
+          .filter(v => { if (seen.has(v.year)) return false; seen.add(v.year); return true; })
+          .sort((a, b) => parseInt(a.year) - parseInt(b.year))
+          .map(v => ({
+            ...v,
+            submodel: v.submodel || '',
+            bodyType: v.bodyType || decoded?.bodyClass || '',
+            notes: 'Cross-referenced from multiple VINs',
+          }));
+        crossRefExpanded++;
+      }
+    }
+
+    // ── Priority 4: Single-vehicle fallback ──
+    if (fitments.length === 0) {
+      fitments = [{
+        year: vehicle.year, make: makeName, model: vehicle.model,
+        trim: vehicle.trim || '', engine: vehicle.engine || '',
+        submodel: generationCode || '',
+        bodyType: decoded?.bodyClass || '',
+        notes: vehicle.trim ? `Trim: ${vehicle.trim}` : '',
+      }];
+    }
+
+    // ── Shared platform expansion ──
+    // If we have fitments for Make|Model, also look for cross-brand platform siblings
+    const sharedSiblings = SHARED_PLATFORMS[platformKey] || [];
+    if (sharedSiblings.length > 0 && fitments.length > 0) {
+      const existingKeys = new Set(fitments.map(f => `${f.make}|${f.model}`));
+      for (const siblingKey of sharedSiblings) {
+        if (existingKeys.has(siblingKey)) continue;
+        const sibPlatforms = PLATFORM_RANGES[siblingKey];
+        if (!sibPlatforms) continue;
+        // Find the sibling generation that overlaps with the source vehicle's year
+        const sibGen = sibPlatforms.find(g => yearNum >= g.start && yearNum <= g.end);
+        if (sibGen) {
+          const [sibMake, sibModel] = siblingKey.split('|');
+          for (let y = sibGen.start; y <= sibGen.end; y++) {
+            fitments.push({
+              year: String(y), make: sibMake, model: sibModel,
+              trim: '', engine: '',
+              submodel: sibGen.code,
+              bodyType: '',
+              notes: `Shared platform with ${makeName} ${vehicle.model} (${sibGen.code})`,
+            });
+          }
+          sharedPlatformExpanded++;
+        }
+      }
+    }
+
+    // Store technical notes from AI
+    if (part._enriched?.technicalNotes) {
+      part._technicalNotes = part._enriched.technicalNotes;
+      // Tag all fitments with the technical notes
+      for (const f of fitments) {
+        if (!f.notes) f.notes = part._enriched.technicalNotes;
+      }
+    }
+
+    part._fitments = fitments.slice(0, 150); // raised cap for cross-platform expansion
+
+    // Validate fitment completeness
+    const incomplete = part._fitments.filter(f => !f.make || !f.model || !f.year);
+    if (incomplete.length > 0) {
+      REPORT.fitment.incomplete.push(part.sku || part.partNumber);
+      log.warn(`Incomplete fitment for ${part.partNumber}: missing make/model/year in ${incomplete.length}/${part._fitments.length} entries`);
+    }
+
+    generateFitmentOutput(part);
+  }
+
+  // Update report stats
+  REPORT.fitment.totalParts = parts.length;
+  REPORT.fitment.platformExpanded = platformExpanded;
+  REPORT.fitment.crossRefExpanded = crossRefExpanded;
+  REPORT.fitment.aiInterchangeUsed = aiInterchangeUsed || 0;
+  REPORT.fitment.sharedPlatformExpanded = sharedPlatformExpanded || 0;
+  REPORT.fitment.singleVehicle = parts.length - platformExpanded - crossRefExpanded - aiInterchangeUsed;
+  REPORT.fitment.totalCompatEntries = parts.reduce((s, p) => s + (p._fitments?.length || 0), 0);
+
+  log.info(`Fitment expansion: ${aiInterchangeUsed} AI-interchange, ${platformExpanded} platform, ${crossRefExpanded} cross-ref, ${sharedPlatformExpanded} shared-platform, ${parts.length - platformExpanded - crossRefExpanded - aiInterchangeUsed} single-vehicle`);
+  log.info(`Total compatibility entries: ${REPORT.fitment.totalCompatEntries}`);
+  if (REPORT.fitment.incomplete.length) log.warn(`Incomplete fitments: ${REPORT.fitment.incomplete.length} parts`);
+  if (REPORT.fitment.noFitment.length) log.warn(`No fitment data: ${REPORT.fitment.noFitment.length} parts`);
+}
+
+/**
+ * Populate structured JSON and flat fitment output fields on a part.
+ */
+function generateFitmentOutput(part) {
+  const fitments = part._fitments || [];
+  if (fitments.length === 0) {
+    part._fitmentJson = '[]';
+    part._fitmentFlat = '';
+    return;
+  }
+
+  // Structured JSON for the fitment_json column
+  const structured = fitments.map(f => ({
+    year: f.year || '',
+    make: f.make || '',
+    model: f.model || '',
+    trim: f.trim || '',
+    engine: f.engine || '',
+    submodel: f.submodel || '',
+    bodyType: f.bodyType || '',
+    notes: f.notes || '',
+  }));
+  part._fitmentJson = JSON.stringify(structured);
+
+  // Flat pipe-separated format: Year Make Model [Chassis] [Trim] [Engine]
+  part._fitmentFlat = fitments
+    .map(f => [f.year, f.make, f.model, f.submodel ? `(${f.submodel})` : '', f.trim, f.engine].filter(Boolean).join(' '))
+    .join(' | ');
+
+  // eBay MVL Compatibility string — pipe-separated Year|Make|Model|Trim|Engine per vehicle,
+  // semicolon-separated entries for a single-cell "Compatibility" column
+  part._compatibilityMVL = fitments
+    .filter(f => f.year && f.make && f.model)
+    .map(f => {
+      const segs = [];
+      if (f.year) segs.push(`Year=${f.year}`);
+      if (f.make) segs.push(`Make=${f.make}`);
+      if (f.model) segs.push(`Model=${f.model}`);
+      if (f.submodel || f.chassisCode) segs.push(`Submodel=${f.submodel || f.chassisCode}`);
+      if (f.trim) segs.push(`Trim=${f.trim}`);
+      if (f.engine) segs.push(`Engine=${f.engine}`);
+      return segs.join('|');
+    })
+    .join('; ');
+
+  // Description Note: concise fit summary + technical requirements
+  const techNotes = part._technicalNotes || part._enriched?.technicalNotes || '';
+  const yearRange = (() => {
+    const yrs = fitments.map(f => parseInt(f.year)).filter(y => y > 1900).sort((a, b) => a - b);
+    return yrs.length > 1 ? `${yrs[0]}-${yrs[yrs.length - 1]}` : yrs.length === 1 ? String(yrs[0]) : '';
+  })();
+  const makes = [...new Set(fitments.map(f => f.make).filter(Boolean))].join(', ');
+  const fitSummary = yearRange && makes ? `Fits ${yearRange} ${makes}` : '';
+  part._descriptionNote = [fitSummary, techNotes].filter(Boolean).join('. ');
+
+  // Compute year range summary for quick display
+  const years = fitments.map(f => parseInt(f.year)).filter(y => y > 1900).sort((a, b) => a - b);
+  if (years.length > 1) {
+    part._fitmentYearRange = `${years[0]}-${years[years.length - 1]}`;
+  } else if (years.length === 1) {
+    part._fitmentYearRange = String(years[0]);
+  } else {
+    part._fitmentYearRange = '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  IMAGE FETCHING & VALIDATION
+// ═══════════════════════════════════════════════════════════════════════
+
+/** LRU-style image cache — keyed on normalized(partNumber||title) */
+const _imageResultCache = new Map();
+const IMAGE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 h
+
+function imageCacheKey(part) {
+  return `${normalizePN(part.partNumber || '')}||${(part._enriched?.title || part.partName || '').toLowerCase().slice(0, 60)}`;
+}
+
+/**
+ * Calls the ImageEnrichmentService API to fetch ranked image URLs for all
+ * enriched parts with retry, caching, and URL validation.
+ *
+ * For every part stores:
+ *   part._images     — flat array of up to 12 image URLs (backward compatible)
+ *   part._imageData  — structured { primary, gallery, diagrams, enriched, validation }
+ */
+async function fetchImages(parts) {
+  log.step('Image Enrichment & Validation');
+
+  // Pre-populate images for GridX Connect parts that already have image URLs
+  for (const p of parts) {
+    if (p._gridx?.images && !p._images) {
+      const urls = p._gridx.images.split(/[|,;]/).map(u => u.trim()).filter(Boolean);
+      if (urls.length > 0) {
+        p._images = urls.slice(0, 12);
+        p._imageData = {
+          primary_image_url: urls[0],
+          additional_image_urls: urls.slice(1),
+          diagram_image_urls: [],
+          enriched_image_urls: urls.slice(0, 12),
+          confidence: 1.0,
+        };
+      }
+    }
+  }
+
+  const toBeFetched = parts.filter(p => p._enriched && (!p._images || p._images.length === 0));
+  if (!toBeFetched.length) {
+    log.info('No enriched parts to fetch images for');
+    return;
+  }
+
+  REPORT.images.totalParts = toBeFetched.length;
+  log.info(`Fetching images for ${toBeFetched.length} parts via ${IMAGE_API_URL}...`);
+
+  const IMAGE_BATCH_SIZE = 10;
+  const MAX_RETRIES = 2;
+  const batches = chunk(toBeFetched, IMAGE_BATCH_SIZE);
+
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx];
+
+    // Check cache first — bypass API for cached results
+    const uncached = [];
+    for (const p of batch) {
+      const key = imageCacheKey(p);
+      const cached = _imageResultCache.get(key);
+      if (cached && Date.now() - cached.ts < IMAGE_CACHE_TTL) {
+        Object.assign(p, cached.data);
+        REPORT.images.cacheHits++;
+      } else {
+        uncached.push(p);
+      }
+    }
+
+    if (uncached.length === 0) continue;
+
+    // Retry loop for the API call
+    let apiSuccess = false;
+    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+      try {
+        const payload = {
+          parts: uncached.map(p => ({
+            partNumber: p.partNumber || p.sku || '',
+            title: p._enriched?.title || p.partName || '',
+            brand: p._enriched?.brand || p.brand || '',
+            mpn: p._enriched?.mpn || p.partNumber || '',
+            fitment: p._fitmentFlat || '',
+          })),
+          downloadImages: false,
+        };
+
+        const { data } = await axios.post(
+          `${IMAGE_API_URL}/api/pipeline/images/enrich`,
+          payload,
+          { timeout: 120_000, headers: { 'Content-Type': 'application/json' } },
+        );
+
+        const results = data.results || [];
+        for (let i = 0; i < uncached.length; i++) {
+          processImageResult(uncached[i], results[i]);
+        }
+
+        apiSuccess = true;
+        break;
+      } catch (err) {
+        log.warn(`Image API batch ${batchIdx + 1}/${batches.length} attempt ${attempt} failed: ${err.message}`);
+        REPORT.images.apiRetries++;
+        if (attempt <= MAX_RETRIES) {
+          await sleep(Math.pow(2, attempt) * 1000);
+        }
+      }
+    }
+
+    if (!apiSuccess) {
+      REPORT.images.apiFailed++;
+      for (const p of uncached) {
+        setEmptyImageData(p);
+        REPORT.images.failedEnrichments.push(p.sku || p.partNumber);
+        log.warn(`Image enrichment failed for ${p.partNumber} — no images available`);
+      }
+    }
+
+    if (batches.length > 1) await sleep(400);
+  }
+
+  // ── URL validation pass ──
+  log.info('Validating enriched image URLs...');
+  const uniqueUrls = [...new Set(
+    toBeFetched
+      .flatMap(p => p._images || [])
+      .filter(u => u && u.startsWith('http'))
+  )];
+
+  const validationResults = new Map();
+
+  // Validate via the backend API in batches of 50
+  for (let i = 0; i < uniqueUrls.length; i += 50) {
+    const urlBatch = uniqueUrls.slice(i, i + 50);
+    try {
+      const { data } = await axios.post(
+        `${IMAGE_API_URL}/api/pipeline/images/validate`,
+        { urls: urlBatch },
+        { timeout: 30_000, headers: { 'Content-Type': 'application/json' } },
+      );
+      for (const r of (data.results || [])) {
+        validationResults.set(r.url, r);
+      }
+    } catch (err) {
+      log.warn(`Image validation batch failed: ${err.message}`);
+      for (const u of urlBatch) {
+        validationResults.set(u, { url: u, accessible: true, issues: [] });
+      }
+    }
+  }
+
+  // Apply validation — remove inaccessible URLs, update stats
+  for (const p of toBeFetched) {
+    if (!p._images || p._images.length === 0) continue;
+
+    const validated = [];
+    const removed = [];
+    for (const url of p._images) {
+      const v = validationResults.get(url);
+      if (v && !v.accessible) {
+        removed.push(url);
+        REPORT.images.inaccessible++;
+      } else {
+        validated.push(url);
+        REPORT.images.accessible++;
+      }
+    }
+
+    if (removed.length > 0) {
+      log.warn(`Removed ${removed.length} inaccessible image(s) for ${p.partNumber}: ${removed.join(', ')}`);
+    }
+
+    p._images = validated.slice(0, 12);
+
+    if (p._imageData) {
+      p._imageData.enriched_image_urls = validated;
+      p._imageData.primary_image_url = validated[0] || '';
+      p._imageData.additional_image_urls = validated.slice(1);
+      p._imageData.validation = {
+        total: validated.length + removed.length,
+        accessible: validated.length,
+        inaccessible: removed.length,
+        issues: removed.map(u => `Inaccessible: ${u}`),
+      };
+    }
+
+    REPORT.images.validated += validated.length + removed.length;
+  }
+
+  // Final observability summary
+  const imagesWithPrimary = toBeFetched.filter(p => p._imageData?.primary_image_url).length;
+  const imagesWithGallery = toBeFetched.filter(p => (p._imageData?.additional_image_urls?.length || 0) > 0).length;
+  const imagesWithDiagrams = toBeFetched.filter(p => (p._imageData?.diagram_image_urls?.length || 0) > 0).length;
+  const missingImages = toBeFetched.filter(p => !p._images || p._images.length === 0);
+
+  REPORT.images.withPrimary = imagesWithPrimary;
+  REPORT.images.withGallery = imagesWithGallery;
+  REPORT.images.withDiagrams = imagesWithDiagrams;
+  REPORT.images.totalUrls = toBeFetched.reduce((s, p) => s + (p._images?.length || 0), 0);
+
+  for (const p of missingImages) {
+    REPORT.images.missingParts.push(p.sku || p.partNumber);
+  }
+
+  log.info(`Images: ${imagesWithPrimary}/${toBeFetched.length} with primary, ${imagesWithGallery} with gallery, ${imagesWithDiagrams} with diagrams`);
+  log.info(`Validated ${REPORT.images.validated} URLs: ${REPORT.images.accessible} accessible, ${REPORT.images.inaccessible} removed`);
+  if (REPORT.images.cacheHits > 0) log.info(`Cache hits: ${REPORT.images.cacheHits}`);
+  if (missingImages.length > 0) log.warn(`${missingImages.length} parts have NO images`);
+  if (REPORT.images.failedEnrichments.length > 0) log.warn(`${REPORT.images.failedEnrichments.length} parts had API failures`);
+
+  log.progress({
+    stage: 'image_enrichment',
+    with_images: imagesWithPrimary,
+    no_images: missingImages.length,
+    total_parts: toBeFetched.length,
+    validated: REPORT.images.validated,
+    inaccessible: REPORT.images.inaccessible,
+  });
+}
+
+/** Process a single image enrichment API result into part fields. */
+function processImageResult(part, result) {
+  if (!result || !result.primaryImage?.url) {
+    setEmptyImageData(part);
+    return;
+  }
+
+  const primaryUrl = result.primaryImage.url;
+  const galleryUrls = (result.galleryImages || []).map(g => g?.url).filter(Boolean);
+  const diagramUrls = (result.diagramImages || []).map(d => d?.url).filter(Boolean);
+  const allUrls = [primaryUrl, ...galleryUrls, ...diagramUrls].filter(Boolean).slice(0, 12);
+
+  // Backward-compatible flat array
+  part._images = allUrls;
+
+  // Structured image data
+  part._imageData = {
+    primary_image_url: primaryUrl,
+    additional_image_urls: galleryUrls,
+    diagram_image_urls: diagramUrls,
+    enriched_image_urls: allUrls,
+    confidence: result.confidenceScore || 0,
+    sources: (result.sourceAttribution || []).map(s => s.source).filter(Boolean),
+    validation: result.validation || null,
+  };
+
+  // Cache the result
+  const key = imageCacheKey(part);
+  _imageResultCache.set(key, { data: { _images: part._images, _imageData: { ...part._imageData } }, ts: Date.now() });
+
+  // Manage cache size (evict oldest when over 5k entries)
+  if (_imageResultCache.size > 5000) {
+    const oldest = [..._imageResultCache.entries()]
+      .sort((a, b) => a[1].ts - b[1].ts)
+      .slice(0, 1000);
+    for (const [k] of oldest) _imageResultCache.delete(k);
+  }
+}
+
+/** Set empty image data on a part (fallback when API fails). */
+function setEmptyImageData(part) {
+  part._images = [];
+  part._imageData = {
+    primary_image_url: '',
+    additional_image_urls: [],
+    diagram_image_urls: [],
+    enriched_image_urls: [],
+    confidence: 0,
+    sources: [],
+    validation: null,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  PART NUMBER INTELLIGENCE
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -1063,6 +2525,26 @@ function deduplicatePartNumbers(parts) {
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
+ * Build eBay compatibility (Relationship) rows from a fitment array.
+ * Returns one row per vehicle entry — eBay requires one row per vehicle.
+ */
+function buildCompatibilityRows(headers, fitments) {
+  if (!fitments || fitments.length === 0) return [];
+  const relIdx = headers.findIndex(h => h && /^Relationship$/i.test(String(h).trim()));
+  const relDetailIdx = headers.findIndex(h => h && /^Relationship\s*details$/i.test(String(h).trim()));
+  const rIdx = relIdx >= 0 ? relIdx : 5;
+  const rdIdx = relDetailIdx >= 0 ? relDetailIdx : 6;
+  return fitments
+    .filter(f => f.year && f.make && f.model)
+    .map(f => {
+      const row = new Array(headers.length).fill(null);
+      row[rIdx] = 'Compatibility';
+      row[rdIdx] = buildFitmentString(f);
+      return row;
+    });
+}
+
+/**
  * Read a template file and extract its structure.
  */
 function readTemplate(filePath) {
@@ -1086,14 +2568,15 @@ function getBusinessPolicies(wb) {
 }
 
 /**
- * Build fitment compatibility string for eBay.
- * Format: Year=YYYY|Make=XXX|Model=YYY
+ * Build fitment compatibility string for eBay File Exchange.
+ * Format: Year=YYYY|Make=XXX|Model=YYY|Submodel=ZZZ|Trim=TTT|Engine=EEE
  */
 function buildFitmentString(vehicle) {
   const parts = [];
   if (vehicle.year) parts.push(`Year=${vehicle.year}`);
   if (vehicle.make) parts.push(`Make=${vehicle.make}`);
   if (vehicle.model) parts.push(`Model=${vehicle.model}`);
+  if (vehicle.submodel || vehicle.chassisCode) parts.push(`Submodel=${vehicle.submodel || vehicle.chassisCode}`);
   if (vehicle.trim) parts.push(`Trim=${vehicle.trim}`);
   if (vehicle.engine) parts.push(`Engine=${vehicle.engine}`);
   return parts.join('|');
@@ -1132,12 +2615,8 @@ function generateUSMotorsOutput(parts, vinData) {
     const row = buildUSRow(fullHeaders, part, e, vehicle, policies);
     listingsData.push(row);
 
-    // Compatibility/fitment row
-    if (vehicle.year && vehicle.make && vehicle.model) {
-      const fitRow = new Array(fullHeaders.length).fill(null);
-      fitRow[0] = '';                           // Action (empty for compatibility)
-      fitRow[5] = 'Compatibility';              // Relationship
-      fitRow[6] = buildFitmentString(vehicle);  // Relationship details
+    // Comprehensive fitment rows — one row per year in the expanded platform range
+    for (const fitRow of buildCompatibilityRows(fullHeaders, part._fitments || (vehicle.year ? [vehicle] : []))) {
       listingsData.push(fitRow);
     }
   }
@@ -1167,7 +2646,7 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('Title', enriched.title);
   set('P:UPC', 'Does not apply');
   set('Start price', part.price);
-  set('Quantity', CONFIG.defaultQuantity);
+  set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
   set('Condition ID', CONFIG.defaultConditionId);
   set('Description', enriched.description);
   set('Format', CONFIG.defaultFormat);
@@ -1196,6 +2675,30 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('C:Surface Finish', enriched.surfaceFinish);
   set('C:Interchange Part Number', enriched.interchangeNumber);
   set('C:Bundle Description', enriched.bundleDescription);
+
+  // Images — primary URL + pipe-separated additional URLs (eBay supports up to 12)
+  if (part._images && part._images.length > 0) {
+    set('PicURL', part._images[0]);
+    if (part._images.length > 1) {
+      set('AdditionalImageURLs', part._images.slice(1).join('|'));
+    }
+  }
+
+  // Enriched image metadata columns (append-only, backward compatible)
+  set('primary_image_url', part._imageData?.primary_image_url || '');
+  set('additional_image_urls', (part._imageData?.additional_image_urls || []).join('|'));
+  set('enriched_image_urls', (part._imageData?.enriched_image_urls || []).join('|'));
+
+  // eBay File Exchange / MIP columns
+  set('Compatibility', part._compatibilityMVL || '');
+  set('Description Note', part._descriptionNote || '');
+
+  // Fitment structured output columns
+  set('fitment_json', part._fitmentJson || '[]');
+  set('fitment_flat', part._fitmentFlat || '');
+  set('fitment_year_range', part._fitmentYearRange || '');
+  set('fitment_notes', (part._fitments?.[0]?.notes) || '');
+  set('technical_notes', part._technicalNotes || part._enriched?.technicalNotes || '');
 
   return row;
 }
@@ -1237,7 +2740,7 @@ function generateAUOutput(parts, vinData) {
     set('Title', e.title);
     set('P:UPC', 'Does not apply');
     set('Start price', Math.round(part.price * 1.55 * 100) / 100); // ~USD→AUD
-    set('Quantity', CONFIG.defaultQuantity);
+    set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
     set('Description', e.description);
     set('Format', CONFIG.defaultFormat);
@@ -1266,13 +2769,32 @@ function generateAUOutput(parts, vinData) {
     set('C:Surface Finish', e.surfaceFinish);
     set('C:Interchange Part Number', e.interchangeNumber);
 
+    // Images
+    if (part._images && part._images.length > 0) {
+      set('PicURL', part._images[0]);
+      if (part._images.length > 1) set('AdditionalImageURLs', part._images.slice(1).join('|'));
+    }
+
+    // Enriched image metadata columns
+    set('primary_image_url', part._imageData?.primary_image_url || '');
+    set('additional_image_urls', (part._imageData?.additional_image_urls || []).join('|'));
+    set('enriched_image_urls', (part._imageData?.enriched_image_urls || []).join('|'));
+
+    // eBay File Exchange / MIP columns
+    set('Compatibility', part._compatibilityMVL || '');
+    set('Description Note', part._descriptionNote || '');
+
+    // Fitment structured output columns
+    set('fitment_json', part._fitmentJson || '[]');
+    set('fitment_flat', part._fitmentFlat || '');
+    set('fitment_year_range', part._fitmentYearRange || '');
+    set('fitment_notes', (part._fitments?.[0]?.notes) || '');
+    set('technical_notes', part._technicalNotes || part._enriched?.technicalNotes || '');
+
     listingsData.push(row);
 
-    // Fitment row
-    if (vehicle.year && vehicle.make && vehicle.model) {
-      const fitRow = new Array(fullHeaders.length).fill(null);
-      fitRow[5] = 'Compatibility';
-      fitRow[6] = buildFitmentString(vehicle);
+    // Comprehensive fitment rows
+    for (const fitRow of buildCompatibilityRows(fullHeaders, part._fitments || (vehicle.year ? [vehicle] : []))) {
       listingsData.push(fitRow);
     }
   }
@@ -1323,7 +2845,7 @@ function generateDEOutput(parts, vinData) {
     set('Title', e.title);
     set('P:EAN', 'Nicht zutreffend');  // "Does not apply" in German
     set('Start price', Math.round(part.price * 0.92 * 100) / 100); // ~USD→EUR
-    set('Quantity', CONFIG.defaultQuantity);
+    set('Quantity', part._gridx?.quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
     set('Description', e.description);
     set('Format', CONFIG.defaultFormat);
@@ -1362,13 +2884,32 @@ function generateDEOutput(parts, vinData) {
     set('C:Material', e.material);
     set('C:Farbe', e.color);                                          // Color in German
 
+    // Images
+    if (part._images && part._images.length > 0) {
+      set('PicURL', part._images[0]);
+      if (part._images.length > 1) set('AdditionalImageURLs', part._images.slice(1).join('|'));
+    }
+
+    // Enriched image metadata columns
+    set('primary_image_url', part._imageData?.primary_image_url || '');
+    set('additional_image_urls', (part._imageData?.additional_image_urls || []).join('|'));
+    set('enriched_image_urls', (part._imageData?.enriched_image_urls || []).join('|'));
+
+    // eBay File Exchange / MIP columns
+    set('Compatibility', part._compatibilityMVL || '');
+    set('Description Note', part._descriptionNote || '');
+
+    // Fitment structured output columns
+    set('fitment_json', part._fitmentJson || '[]');
+    set('fitment_flat', part._fitmentFlat || '');
+    set('fitment_year_range', part._fitmentYearRange || '');
+    set('fitment_notes', (part._fitments?.[0]?.notes) || '');
+    set('technical_notes', part._technicalNotes || part._enriched?.technicalNotes || '');
+
     listingsData.push(row);
 
-    // Fitment row
-    if (vehicle.year && vehicle.make && vehicle.model) {
-      const fitRow = new Array(fullHeaders.length).fill(null);
-      fitRow[5] = 'Compatibility';
-      fitRow[6] = buildFitmentString(vehicle);
+    // Comprehensive fitment rows
+    for (const fitRow of buildCompatibilityRows(fullHeaders, part._fitments || (vehicle.year ? [vehicle] : []))) {
       listingsData.push(fitRow);
     }
   }
@@ -1515,6 +3056,39 @@ function generateReport() {
     validationFixes: REPORT.validationFixes.slice(0, 100),
     missingRequiredSpecifics: REPORT.missingSpecifics.slice(0, 100),
     errors: REPORT.errors.slice(0, 50),
+    imageEnrichment: {
+      totalParts: REPORT.images.totalParts,
+      withPrimaryImage: REPORT.images.withPrimary,
+      withGalleryImages: REPORT.images.withGallery,
+      withDiagramImages: REPORT.images.withDiagrams,
+      totalImageUrls: REPORT.images.totalUrls,
+      urlsValidated: REPORT.images.validated,
+      urlsAccessible: REPORT.images.accessible,
+      urlsInaccessible: REPORT.images.inaccessible,
+      belowMinResolution: REPORT.images.belowMinResolution,
+      apiFailures: REPORT.images.apiFailed,
+      apiRetries: REPORT.images.apiRetries,
+      cacheHits: REPORT.images.cacheHits,
+      coverage: REPORT.images.totalParts > 0
+        ? `${((REPORT.images.withPrimary / REPORT.images.totalParts) * 100).toFixed(1)}%`
+        : '0%',
+      missingParts: REPORT.images.missingParts.slice(0, 50),
+      failedEnrichments: REPORT.images.failedEnrichments.slice(0, 50),
+    },
+    fitmentExpansion: {
+      totalParts: REPORT.fitment.totalParts,
+      aiInterchangeUsed: REPORT.fitment.aiInterchangeUsed || 0,
+      platformExpanded: REPORT.fitment.platformExpanded,
+      crossRefExpanded: REPORT.fitment.crossRefExpanded,
+      sharedPlatformExpanded: REPORT.fitment.sharedPlatformExpanded || 0,
+      singleVehicle: REPORT.fitment.singleVehicle,
+      totalCompatibilityEntries: REPORT.fitment.totalCompatEntries,
+      coverage: REPORT.fitment.totalParts > 0
+        ? `${(((REPORT.fitment.totalParts - REPORT.fitment.noFitment.length) / REPORT.fitment.totalParts) * 100).toFixed(1)}%`
+        : '0%',
+      incompleteFitments: REPORT.fitment.incomplete.slice(0, 50),
+      noFitment: REPORT.fitment.noFitment.slice(0, 50),
+    },
   };
 
   return report;
@@ -1553,6 +3127,10 @@ async function main() {
   await mapCategories(parts, vinData);
   saveCheckpoint(parts, 'category-mapping');
 
+  // ── Step 3.5: Fitment Expansion ──
+  // Expand single-VIN fitments to full platform generation year ranges
+  expandFitments(parts, vinData);
+
   // ── Step 4: Part Number Intelligence ──
   deduplicatePartNumbers(parts);
 
@@ -1570,6 +3148,10 @@ async function main() {
 
   const enrichedParts = parts.filter(p => p._enriched);
   log.info(`${enrichedParts.length} enriched parts ready for output`);
+
+  // ── Step 6.5: Image Enrichment ──
+  // Fetch best-match image URLs for all enriched parts from the image service
+  await fetchImages(enrichedParts);
 
   // US Motors (eBay Motors)
   const usWb = generateUSMotorsOutput(enrichedParts, vinData);
