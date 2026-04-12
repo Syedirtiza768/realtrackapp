@@ -74,6 +74,7 @@ export interface SearchItem {
   pUpc: string | null;
   relevanceScore: number | null;
   titleHighlight: string | null;
+  fitmentCount: number | null;
 }
 
 /* ── Suggestions ──────────────────────────────────────────── */

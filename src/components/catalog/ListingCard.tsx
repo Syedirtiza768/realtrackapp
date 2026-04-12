@@ -5,7 +5,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useState } from 'react';
-import { Eye, Image as ImageIcon, Pencil, Send, Trash2 } from 'lucide-react';
+import { Eye, Image as ImageIcon, Pencil, Send, Trash2, Car } from 'lucide-react';
 import { sanitizeHighlight } from '../../lib/sanitize';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '../ui/badge';
@@ -90,12 +90,17 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
           )}
         </a>
 
-        {/* SKU + Brand */}
+        {/* SKU + Brand + Fitment */}
         <div className="text-xs text-slate-500 flex items-center gap-1 flex-wrap">
           {item.customLabelSku && (
             <span className="font-mono bg-slate-800/60 rounded px-1 py-0.5">{item.customLabelSku}</span>
           )}
           {item.cBrand && <span>· {item.cBrand}</span>}
+          {item.fitmentCount != null && item.fitmentCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 bg-blue-900/30 text-blue-400 rounded px-1 py-0.5 text-[10px] font-medium">
+              <Car size={10} /> {item.fitmentCount} fitment{item.fitmentCount !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
         {/* Category (short) */}

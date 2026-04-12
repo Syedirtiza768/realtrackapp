@@ -15,6 +15,7 @@ import {
   Send,
   Sparkles,
   ArrowDown,
+  Car,
 } from 'lucide-react';
 import ListingCard from './ListingCard';
 import { getFirstImageUrl } from '../../lib/searchApi';
@@ -145,6 +146,7 @@ export default function ResultsGrid({
                 <th className="p-2 sm:p-3">Product</th>
                 <th className="p-2 sm:p-3 hidden md:table-cell">Brand</th>
                 <th className="p-2 sm:p-3 hidden lg:table-cell">Category</th>
+                <th className="p-2 sm:p-3 hidden md:table-cell text-center">Fitments</th>
                 <th className="p-2 sm:p-3 text-right">Price</th>
                 <th className="p-2 sm:p-3 hidden sm:table-cell text-center">Qty</th>
                 <th className="p-2 sm:p-3 w-12 sm:w-16"></th>
@@ -185,6 +187,15 @@ export default function ResultsGrid({
                         const parts = item.categoryName.split('/').filter(Boolean);
                         return parts.length > 1 ? parts[parts.length - 1] : item.categoryName;
                       })() : '—'}
+                    </td>
+                    <td className="p-3 text-center text-xs hidden md:table-cell">
+                      {item.fitmentCount != null && item.fitmentCount > 0 ? (
+                        <span className="inline-flex items-center gap-0.5 bg-blue-900/30 text-blue-400 rounded px-1.5 py-0.5 font-medium">
+                          <Car size={10} /> {item.fitmentCount}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
                     </td>
                     <td className="p-3 text-right text-slate-200 font-semibold">
                       {price !== null ? `$${price.toFixed(2)}` : '—'}

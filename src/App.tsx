@@ -28,6 +28,8 @@ import MotorsProductDetail from './components/motors/MotorsProductDetail';
 import ReviewQueue from './components/motors/ReviewQueue';
 import AIUploadWizard from './components/motors/AIUploadWizard';
 import PipelineWizard from './components/pipeline/PipelineWizard';
+import EbayPreviewPage from './components/preview/EbayPreviewPage';
+import InventoryManager from './components/inventory/InventoryManager';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
@@ -58,6 +60,7 @@ function App() {
                             <Route path="/fitment" element={<FitmentManager />} />
                             <Route path="/catalog" element={<CatalogManager />} />
                             <Route path="/catalog/import" element={<CatalogImportDashboard />} />
+                            <Route path="/inventory" element={<InventoryManager />} />
                             <Route path="/bulk-actions" element={<BulkActionsPage />} />
                             <Route path="/orders" element={<OrdersPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
@@ -71,6 +74,7 @@ function App() {
                             <Route path="/motors/review" element={<ReviewQueue />} />
                             <Route path="/motors/:id" element={<MotorsProductDetail />} />
                             <Route path="/pipeline" element={<PipelineWizard />} />
+                            <Route path="/preview" element={<EbayPreviewPage />} />
                             <Route path="*" element={<div className="p-10 text-center text-slate-500">Page not found</div>} />
                         </Routes>
                     </Shell>

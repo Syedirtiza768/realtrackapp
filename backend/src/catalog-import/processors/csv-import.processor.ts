@@ -12,6 +12,7 @@ import { ListingRecord } from '../../listings/listing-record.entity.js';
 import {
   DuplicateDetectionService,
 } from '../services/duplicate-detection.service.js';
+import { EbayComplianceService } from '../services/ebay-compliance.service.js';
 
 export interface CsvImportJobData {
   importId: string;
@@ -49,6 +50,7 @@ export class CsvImportProcessor extends WorkerHost {
     @InjectRepository(CatalogProduct)
     private readonly productRepo: Repository<CatalogProduct>,
     private readonly duplicateService: DuplicateDetectionService,
+    private readonly complianceService: EbayComplianceService,
     private readonly dataSource: DataSource,
     private readonly eventEmitter: EventEmitter2,
   ) {
@@ -170,6 +172,46 @@ export class CsvImportProcessor extends WorkerHost {
               rawData: row.data,
             });
           } else {
+            // eBay compliance pre-check: validate & auto-correct before insert
+            const compliance = this.complianceService.validateRowData(row.data);
+            if (!compliance.compliant) {
+              // Non-compliant rows are rejected with audit info
+              invalidRows++;
+              const complianceMsg = `eBay compliance failed: ${compliance.errors.join('; ')}`;
+              importRowEntries.push({
+                importId,
+                rowNumber: row.rowNumber,
+                status: 'invalid',
+                message: complianceMsg,
+                rawData: row.data,
+              });
+              if (warnings.length < 500) {
+                warnings.push(`Row ${row.rowNumber}: ${complianceMsg}`);
+              }
+              continue;
+            }
+
+            // Log auto-corrections as warnings
+            for (const ac of compliance.autoCorrections) {
+              if (warnings.length < 500) {
+                warnings.push(`Row ${row.rowNumber}: Auto-corrected ${ac.field}: "${ac.original}" → "${ac.corrected}"`);
+              }
+            }
+
+            // Log compliance warnings
+            for (const w of compliance.warnings) {
+              if (warnings.length < 500) {
+                warnings.push(`Row ${row.rowNumber}: [Compliance] ${w}`);
+              }
+            }
+
+            // Collect row-level structural warnings
+            if (validation.warnings) {
+              for (const w of validation.warnings) {
+                const warnMsg = `Row ${row.rowNumber}: ${w}`;
+                if (warnings.length < 500) warnings.push(warnMsg);
+              }
+            }
             validRows.push(row);
           }
         }
@@ -452,12 +494,32 @@ export class CsvImportProcessor extends WorkerHost {
     return mapped;
   }
 
-  private validateRow(data: Record<string, string>): { valid: boolean; error?: string } {
+  private validateRow(data: Record<string, string>): { valid: boolean; error?: string; warnings?: string[] } {
+    const warnings: string[] = [];
+
     // At minimum, we need a title or both brand + mpn
     if (!data['title'] && !(data['brand'] && data['mpn'])) {
       return { valid: false, error: 'Missing required field: title or brand+mpn' };
     }
-    return { valid: true };
+
+    // Image link is required — flag missing images as a warning
+    if (!data['imageUrls'] || !data['imageUrls'].trim()) {
+      warnings.push('Missing image URL — listings without images have significantly lower visibility');
+    } else {
+      // Validate that at least one URL is a valid HTTP(S) link
+      const urls = data['imageUrls'].split('|').map(u => u.trim()).filter(Boolean);
+      const validUrls = urls.filter(u => /^https?:\/\/.+/i.test(u));
+      if (validUrls.length === 0) {
+        warnings.push('No valid image URL found (must start with http:// or https://)');
+      }
+    }
+
+    // Brand validation warning
+    if (!data['brand'] || !data['brand'].trim()) {
+      warnings.push('Missing brand — brand is required for eBay item specifics');
+    }
+
+    return { valid: true, warnings: warnings.length > 0 ? warnings : undefined };
   }
 
   private mapToProduct(

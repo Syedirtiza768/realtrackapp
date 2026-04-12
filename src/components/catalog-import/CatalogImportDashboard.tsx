@@ -15,6 +15,8 @@ import { Badge } from '../ui/badge';
 import CsvUploader from './CsvUploader';
 import ColumnMapper from './ColumnMapper';
 import ImportReport from './ImportReport';
+import ImportErrorViewer from './ImportErrorViewer';
+import CompliancePanel from './CompliancePanel';
 import {
   useUploadCsv,
   startImport,
@@ -197,6 +199,25 @@ export default function CatalogImportDashboard() {
       {(step === 'processing' || step === 'complete') && importDetail && (
         <div className="space-y-4">
           <ImportReport importRecord={importDetail} />
+
+          {/* Show row-level errors and warnings */}
+          {(importDetail.status === 'completed' || importDetail.status === 'failed') && (
+            <ImportErrorViewer
+              importId={importDetail.id}
+              totalRows={importDetail.totalRows}
+              invalidRows={importDetail.invalidRows}
+              flaggedForReview={importDetail.flaggedForReview}
+            />
+          )}
+
+          {/* eBay compliance validation */}
+          {importDetail.status === 'completed' && (
+            <CompliancePanel
+              importId={importDetail.id}
+              productIds={(importDetail as any).productIds ?? []}
+              importStatus={importDetail.status}
+            />
+          )}
 
           {step === 'complete' && (
             <div className="flex gap-3">

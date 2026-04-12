@@ -49,7 +49,80 @@ const toColumnLetter = (zeroBasedIndex) => {
     return letters;
 };
 
-const deriveBrandFromTitle = (title) => {
+/** Known automotive OEM brands for auto-detection */
+const KNOWN_BRANDS = new Map([
+    // German
+    ['mercedes', 'Mercedes-Benz'], ['mercedes-benz', 'Mercedes-Benz'], ['mercedesbenz', 'Mercedes-Benz'],
+    ['bmw', 'BMW'], ['audi', 'Audi'], ['volkswagen', 'Volkswagen'], ['vw', 'Volkswagen'],
+    ['porsche', 'Porsche'], ['opel', 'Opel'],
+    // British
+    ['jaguar', 'Jaguar'], ['land rover', 'Land Rover'], ['landrover', 'Land Rover'],
+    ['range rover', 'Land Rover'], ['rangerover', 'Land Rover'],
+    ['bentley', 'Bentley'], ['rolls-royce', 'Rolls-Royce'], ['rollsroyce', 'Rolls-Royce'],
+    ['aston martin', 'Aston Martin'], ['astonmartin', 'Aston Martin'], ['mclaren', 'McLaren'],
+    ['mini', 'MINI'], ['lotus', 'Lotus'],
+    // American
+    ['ford', 'Ford'], ['chevrolet', 'Chevrolet'], ['chevy', 'Chevrolet'],
+    ['dodge', 'Dodge'], ['chrysler', 'Chrysler'], ['jeep', 'Jeep'],
+    ['gmc', 'GMC'], ['cadillac', 'Cadillac'], ['lincoln', 'Lincoln'],
+    ['buick', 'Buick'], ['tesla', 'Tesla'], ['ram', 'RAM'],
+    // Japanese
+    ['toyota', 'Toyota'], ['honda', 'Honda'], ['nissan', 'Nissan'],
+    ['mazda', 'Mazda'], ['subaru', 'Subaru'], ['mitsubishi', 'Mitsubishi'],
+    ['lexus', 'Lexus'], ['infiniti', 'Infiniti'], ['acura', 'Acura'],
+    ['suzuki', 'Suzuki'], ['isuzu', 'Isuzu'],
+    // Korean
+    ['hyundai', 'Hyundai'], ['kia', 'Kia'], ['genesis', 'Genesis'],
+    // Italian
+    ['ferrari', 'Ferrari'], ['lamborghini', 'Lamborghini'], ['maserati', 'Maserati'],
+    ['fiat', 'Fiat'], ['alfa romeo', 'Alfa Romeo'], ['alfaromeo', 'Alfa Romeo'],
+    // Swedish
+    ['volvo', 'Volvo'], ['saab', 'Saab'],
+    // Aftermarket brands
+    ['bosch', 'Bosch'], ['denso', 'Denso'], ['delphi', 'Delphi'],
+    ['valeo', 'Valeo'], ['hella', 'Hella'], ['brembo', 'Brembo'],
+    ['sachs', 'Sachs'], ['monroe', 'Monroe'], ['moog', 'Moog'],
+    ['dorman', 'Dorman'], ['acdelco', 'ACDelco'], ['motorcraft', 'Motorcraft'],
+    ['gates', 'Gates'], ['dayco', 'Dayco'], ['ngk', 'NGK'],
+    ['aisin', 'Aisin'], ['continental', 'Continental'], ['trw', 'TRW'],
+    ['febi', 'Febi Bilstein'], ['meyle', 'Meyle'], ['lemforder', 'Lemforder'],
+    ['mahle', 'Mahle'], ['mann', 'Mann-Filter'], ['ate', 'ATE'],
+    ['bilstein', 'Bilstein'], ['sachs', 'Sachs'], ['pierburg', 'Pierburg'],
+]);
+
+/**
+ * Smart brand detection from title, description, and other fields.
+ * 1. Scan all text for known brand names (multi-word aware)
+ * 2. Extract from common patterns like "Genuine [Brand]" or "OEM [Brand]"
+ * 3. Fall back to first alphabetic token from title
+ */
+const deriveBrandFromTitle = (title, description = '', specifics = '') => {
+    const allText = `${toText(title)} ${toText(description)} ${toText(specifics)}`.toLowerCase();
+
+    // 1. Check for known brands (try multi-word first, then single-word)
+    for (const [key, brandName] of KNOWN_BRANDS) {
+        if (key.includes(' ')) {
+            // Multi-word brand: check as phrase
+            if (allText.includes(key)) return brandName;
+        }
+    }
+    for (const [key, brandName] of KNOWN_BRANDS) {
+        if (!key.includes(' ')) {
+            // Single-word brand: check as whole word
+            const regex = new RegExp(`\\b${key}\\b`, 'i');
+            if (regex.test(allText)) return brandName;
+        }
+    }
+
+    // 2. Pattern-based extraction: "Genuine [Brand]", "OEM [Brand]", "by [Brand]"
+    const patternMatch = allText.match(/(?:genuine|oem|original|by)\s+([a-z][a-z\-]+)/i);
+    if (patternMatch) {
+        const candidate = patternMatch[1].toLowerCase();
+        if (KNOWN_BRANDS.has(candidate)) return KNOWN_BRANDS.get(candidate);
+        if (candidate.length >= 3) return titleCase(candidate);
+    }
+
+    // 3. Fallback: first alphabetic token >= 2 chars from title only
     const tokens = toText(title).split(/\s+/).filter(Boolean);
     for (const token of tokens) {
         const normalized = token.replace(/[^A-Za-z]/g, '');
@@ -314,11 +387,123 @@ const parseFitmentString = (fitmentValue) => {
 
 const imageFallback = 'https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=800&q=80';
 
+/**
+ * Build an SEO-optimized title from item details instead of copy-pasting from description.
+ * Format: [Brand] [Part Type] [Placement] [Key Detail] [MPN] [Fitment Summary]
+ * Max 80 chars for eBay.
+ */
+const buildTitleFromDetails = ({
+    rawTitle, brand, partType, placement, material, mpn, categoryName,
+    yearRange, make, model, condition, descriptionText
+}) => {
+    // Extract part type from rawTitle or categoryName if not explicitly provided
+    const inferredPartType = partType
+        || extractPartTypeFromText(rawTitle)
+        || extractPartTypeFromText(categoryName)
+        || '';
+
+    // Build segments in priority order
+    const segments = [];
+
+    // 1. Fitment: year+make+model (highest search value)
+    if (yearRange) {
+        segments.push(yearRange);
+    } else if (make && model) {
+        segments.push(`${make} ${model}`.trim());
+    }
+
+    // 2. Part type (core search term)
+    if (inferredPartType) segments.push(inferredPartType);
+
+    // 3. Placement
+    if (placement && placement !== 'Front') segments.push(placement);
+
+    // 4. Material if distinctive
+    if (material && material !== 'Steel') segments.push(material);
+
+    // 5. MPN/OEM number
+    if (mpn) segments.push(mpn);
+
+    // 6. Brand
+    if (brand && brand !== 'Generic') segments.push(brand);
+
+    // 7. Condition for used parts
+    if (condition === 'used') segments.push('OEM');
+
+    let title = segments.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+
+    // If generated title is too short or meaningless, fallback to cleaned raw title
+    if (title.length < 15 && rawTitle && rawTitle.length >= 10) {
+        return rawTitle.slice(0, 80).trim();
+    }
+
+    return title.slice(0, 80).trim() || rawTitle.slice(0, 80).trim();
+};
+
+/** Extract a meaningful part type from free text (title or category). */
+const PART_TYPE_PATTERNS = [
+    /\b(headlight|headlamp)\s*(assembly)?/i,
+    /\b(tail\s*light|taillight)\s*(assembly)?/i,
+    /\b(fog\s*light|fog\s*lamp)/i,
+    /\b(door\s*lock\s*actuator)/i,
+    /\b(window\s*regulator)/i,
+    /\b(control\s*arm)/i,
+    /\b(wheel\s*hub|hub\s*bearing|hub\s*assembly)/i,
+    /\b(brake\s*caliper)/i,
+    /\b(brake\s*pad)s?/i,
+    /\b(brake\s*rotor|brake\s*disc)/i,
+    /\b(power\s*steering\s*pump)/i,
+    /\b(steering\s*rack)/i,
+    /\b(alternator)/i,
+    /\b(starter\s*motor|starter)/i,
+    /\b(radiator)/i,
+    /\b(a\/?c\s*compressor|ac\s*compressor)/i,
+    /\b(condenser)/i,
+    /\b(blower\s*motor)/i,
+    /\b(turbo|turbocharger)/i,
+    /\b(exhaust\s*manifold)/i,
+    /\b(catalytic\s*converter)/i,
+    /\b(fuel\s*pump)/i,
+    /\b(fuel\s*injector)/i,
+    /\b(ignition\s*coil)/i,
+    /\b(shock\s*absorber|strut)/i,
+    /\b(mirror|side\s*mirror)/i,
+    /\b(door\s*handle)/i,
+    /\b(door\s*hinge)/i,
+    /\b(fender|wing)/i,
+    /\b(bumper)/i,
+    /\b(grille|grill)/i,
+    /\b(hood|bonnet)/i,
+    /\b(trunk\s*lid|tailgate|liftgate)/i,
+    /\b(seat\s*belt)/i,
+    /\b(air\s*bag|airbag)/i,
+    /\b(instrument\s*cluster|speedometer)/i,
+    /\b(infotainment|head\s*unit|radio)/i,
+    /\b(ecu|ecm|control\s*module)/i,
+    /\b(wiring\s*harness)/i,
+    /\b(cv\s*axle|drive\s*shaft)/i,
+    /\b(water\s*pump)/i,
+    /\b(thermostat)/i,
+    /\b(sun\s*visor)/i,
+    /\b(glove\s*box)/i,
+    /\b(center\s*console)/i,
+];
+
+const extractPartTypeFromText = (text) => {
+    const source = toText(text);
+    if (!source) return '';
+    for (const pattern of PART_TYPE_PATTERNS) {
+        const match = source.match(pattern);
+        if (match) return titleCase(match[0]);
+    }
+    return '';
+};
+
 const grouped = new Map();
 
 rows.forEach((row, index) => {
     const sku = toText(pickField(row, ['custom label (sku)', 'custom label', 'sku', 'part sku', 'stock keeping unit', 'item number', 'item id'])) || `SKU-${index + 1}`;
-    const title = toText(pickField(row, ['title', 'name', 'product name', 'listing title'])) || `Catalog Item ${index + 1}`;
+    const rawTitle = toText(pickField(row, ['title', 'name', 'product name', 'listing title'])) || `Catalog Item ${index + 1}`;
 
     const quantity = parseNumber(pickField(row, ['quantity', 'qty', 'stock', 'available qty']), 0);
     const price = parseNumber(pickField(row, ['start price', 'buy it now price', 'price', 'unit price', 'sale price']), 0);
@@ -337,7 +522,7 @@ rows.forEach((row, index) => {
     const descriptionHtml = toText(pickField(row, ['description']));
     const descriptionText = stripHtml(descriptionHtml);
 
-    const extractedPartNumbers = parsePartNumbers(title, descriptionText, sku);
+    const extractedPartNumbers = parsePartNumbers(rawTitle, descriptionText, sku);
     const oemParts = Array.from(new Set([
         ...splitMulti(pickField(row, ['oem', 'oem part number', 'oem part no', 'manufacturer part number', 'mpn'])),
         ...extractedPartNumbers,
@@ -356,7 +541,7 @@ rows.forEach((row, index) => {
     const availability = normalizeAvailability(quantity, pickField(row, ['status', 'availability']));
 
     const parsedCompatibilityFromDescription = parseCompatibilityFromDescription(descriptionHtml);
-    const parsedCompatibilityFromTitle = parseCompatibilityFromTitle(title);
+    const parsedCompatibilityFromTitle = parseCompatibilityFromTitle(rawTitle);
 
     const allCompatibility = [
         ...(compatibilityEntry ? [compatibilityEntry] : []),
@@ -383,14 +568,41 @@ rows.forEach((row, index) => {
     });
 
     const inferredBrandFromCompatibility = compatibility[0]?.make || '';
-    const brand = titleCase(pickField(row, ['brand', 'manufacturer', 'c:brand', 'column c:brand', 'column c brand', 'c brand', 'cbrand', 'columncbrand', 'explicit_column_c_brand']))
+    const explicitBrand = toText(pickField(row, ['brand', 'manufacturer', 'c:brand', 'column c:brand', 'column c brand', 'c brand', 'cbrand', 'columncbrand', 'explicit_column_c_brand']));
+    const brand = titleCase(explicitBrand)
         || titleCase(inferredBrandFromCompatibility)
-        || deriveBrandFromTitle(title)
+        || deriveBrandFromTitle(rawTitle, descriptionText, toText(pickField(row, ['c:manufacturer part number', 'mpn', 'oem part number'])))
         || 'Generic';
-    const placement = choosePlacement(title, categoryName);
-    const material = chooseMaterial(title, descriptionText);
-    const color = chooseColor(title, descriptionText);
+    const placement = choosePlacement(rawTitle, categoryName);
+    const material = chooseMaterial(rawTitle, descriptionText);
+    const color = chooseColor(rawTitle, descriptionText);
     const description = descriptionText || 'Imported from workbook source.';
+
+    // Build year range for title from compatibility
+    let yearRange = '';
+    if (compatibility.length > 0) {
+        const years = compatibility.map(c => c.year).filter(y => y > 0).sort((a, b) => a - b);
+        if (years.length > 0) {
+            const minY = years[0];
+            const maxY = years[years.length - 1];
+            const fitMake = compatibility[0].make;
+            const fitModel = compatibility[0].model;
+            yearRange = minY === maxY
+                ? `${minY} ${fitMake} ${fitModel}`
+                : `${minY}-${maxY} ${fitMake} ${fitModel}`;
+        }
+    }
+
+    // Smart title: build from details instead of copy-pasting from description
+    const mpn = oemParts[0] || '';
+    const partType = toText(pickField(row, ['c:type', 'part type', 'type']));
+    const title = buildTitleFromDetails({
+        rawTitle, brand, partType, placement, material,
+        mpn, categoryName, yearRange,
+        make: compatibility[0]?.make || titleCase(make),
+        model: compatibility[0]?.model || titleCase(model),
+        condition, descriptionText,
+    });
 
     const photoPipe = toText(pickField(row, ['item photo url', 'picurl', 'image', 'image url', 'photo']));
     const imageCandidates = splitMulti(photoPipe).filter((candidate) => /^https?:\/\//i.test(candidate));

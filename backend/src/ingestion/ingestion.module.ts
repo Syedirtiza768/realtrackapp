@@ -17,6 +17,11 @@ import { StorageModule } from '../storage/storage.module.js';
 import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.js';
 import { ReviewController } from './review/review.controller.js';
 import { ReviewService } from './review/review.service.js';
+import { ImageEnrichmentController } from './image-enrichment/image-enrichment.controller.js';
+import { ImageEnrichmentService } from './image-enrichment/image-enrichment.service.js';
+import { ImageSearchService } from './image-enrichment/image-search.service.js';
+import { ImageOptimizerService } from './image-enrichment/image-optimizer.service.js';
+import { OpenAiModule } from '../common/openai/openai.module.js';
 
 @Module({
   imports: [
@@ -26,9 +31,19 @@ import { ReviewService } from './review/review.service.js';
     AiModule,
     StorageModule,
     FeatureFlagModule,
+    OpenAiModule,
   ],
-  controllers: [IngestionController, ReviewController, PipelineController],
-  providers: [IngestionService, IngestionProcessor, ReviewService, PipelineService, PipelineProcessor],
-  exports: [IngestionService, PipelineService],
+  controllers: [IngestionController, ReviewController, PipelineController, ImageEnrichmentController],
+  providers: [
+    IngestionService,
+    IngestionProcessor,
+    ReviewService,
+    PipelineService,
+    PipelineProcessor,
+    ImageEnrichmentService,
+    ImageSearchService,
+    ImageOptimizerService,
+  ],
+  exports: [IngestionService, PipelineService, ImageEnrichmentService],
 })
 export class IngestionModule {}

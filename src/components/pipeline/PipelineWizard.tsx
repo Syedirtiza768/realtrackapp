@@ -24,6 +24,7 @@ import {
 } from '../../lib/pipelineApi';
 import type { PipelineJob, PipelineJobStatus } from '../../types/pipeline';
 import { PIPELINE_STAGES } from '../../types/pipeline';
+import ImageEnrichmentPanel from './ImageEnrichmentPanel';
 
 type WizardStep = 'upload' | 'processing' | 'complete' | 'history';
 
@@ -460,6 +461,16 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
           </CardContent>
         </Card>
       )}
+
+      {/* Image Enrichment */}
+      <ImageEnrichmentPanel
+        jobId={job.id}
+        jobStatus={job.status}
+        parts={job.status === 'completed' && job.totalParts > 0 ? Array.from({ length: Math.min(job.totalParts, 50) }, (_, i) => ({
+          partNumber: `PART-${job.id.slice(0, 6)}-${i + 1}`,
+          title: `${job.originalFilename} Part #${i + 1}`,
+        })) : undefined}
+      />
 
       <button onClick={onBack} className="text-sm text-slate-400 hover:text-slate-200 transition">
         &larr; Back to history
