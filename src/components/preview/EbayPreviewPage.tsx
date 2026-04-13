@@ -1,8 +1,8 @@
-import { useState, useCallback, useRef } from 'react';
-import { Upload, FileText, X, Eye, ChevronLeft, ChevronRight, Search, Package, Image as ImageIcon, ShieldCheck, Tag, MapPin, Truck, RotateCcw, CreditCard, Info, Grid3X3 } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Upload, FileText, X, Eye, ChevronLeft, ChevronRight, Search, Image as ImageIcon, AlertTriangle } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { parseEbayFileExchangeCsv, type EbayListing, type ParseResult } from '../../lib/ebayFileExchangeParser';
-import DOMPurify from 'dompurify';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -12,27 +12,158 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-function formatPrice(price: string): string {
-  const num = parseFloat(price);
-  if (isNaN(num)) return price;
-  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
-
-// ─── eBay Listing Preview Card ──────────────────────────────────────────────
+// ─── Exact eBay Listing Preview ─────────────────────────────────────────────
 
 function EbayListingPreview({ listing }: { listing: EbayListing }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [imgErrors, setImgErrors] = useState<Set<number>>(new Set());
-  const [showDescription, setShowDescription] = useState(false);
-
-  const validImages = listing.imageUrls.filter((_, i) => !imgErrors.has(i));
-  const currentImageUrl = listing.imageUrls[selectedImage];
+  const descIframeRef = useRef<HTMLIFrameElement>(null);
 
   const handleImgError = useCallback((idx: number) => {
     setImgErrors(prev => new Set(prev).add(idx));
   }, []);
 
-  const itemSpecifics = [
+  // Sanitize description: remove file:// URLs and other local resource references
+  const sanitizeDescription = (html: string): string => {
+    return html
+      // Remove file:// URLs in any attribute
+      .replace(/(?:src|href|data|action|poster|background)=["']file:\/\/[^"']*["']/gi, '')
+      // Remove Windows-style paths in attributes like P:/ or C:\
+      .replace(/(?:src|href|data|action|poster|background)=["'][A-Za-z]:[\\\/][^"']*["']/gi, '')
+      // Remove file:// URLs in CSS url()
+      .replace(/url\(\s*["']?file:\/\/[^"')]*["']?\s*\)/gi, 'url()')
+      // Remove Windows paths in CSS url()
+      .replace(/url\(\s*["']?[A-Za-z]:[\\\/][^"')]*["']?\s*\)/gi, 'url()')
+      // Remove javascript: URLs
+      .replace(/(?:src|href)=["']javascript:[^"']*["']/gi, '')
+      // Remove any remaining file:// references (catch-all)
+      .replace(/file:\/\/\/[A-Za-z]:[^"'\s<>]*/gi, '#');
+  };
+
+  const safeDescription = listing.description ? sanitizeDescription(listing.description) : '';
+
+  // Build the full HTML document for the description iframe using srcdoc
+  // Use <base href="about:blank"> to prevent relative URLs from resolving to file://
+  const descriptionHtml = safeDescription ? `<!DOCTYPE html>
+<html>
+<head>
+<base href="about:blank">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+  background: #fff;
+}
+img { max-width: 100%; height: auto; }
+table { border-collapse: collapse; width: 100%; }
+td, th { padding: 8px; border: 1px solid #ddd; }
+
+/* ═══ CSS-only tabs support for eBay descriptions ═══ */
+/* Hide radio buttons but keep them functional */
+input[type="radio"][name="tab"] {
+  position: absolute;
+  left: -9999px;
+}
+
+/* Default: hide all tab content */
+.tab-content {
+  display: none;
+  padding: 15px;
+  border: 1px solid #ddd;
+  background: #f9f9f9;
+}
+
+/* Show content when corresponding radio is checked */
+#tab1:checked ~ .tabs #content1,
+#tab1:checked ~ .tab-content:nth-of-type(1),
+#tab1:checked ~ * #content1 { display: block; }
+
+#tab2:checked ~ .tabs #content2,
+#tab2:checked ~ .tab-content:nth-of-type(2),
+#tab2:checked ~ * #content2 { display: block; }
+
+#tab3:checked ~ .tabs #content3,
+#tab3:checked ~ .tab-content:nth-of-type(3),
+#tab3:checked ~ * #content3 { display: block; }
+
+#tab4:checked ~ .tabs #content4,
+#tab4:checked ~ .tab-content:nth-of-type(4),
+#tab4:checked ~ * #content4 { display: block; }
+
+#tab5:checked ~ .tabs #content5,
+#tab5:checked ~ .tab-content:nth-of-type(5),
+#tab5:checked ~ * #content5 { display: block; }
+
+/* Tab label styling */
+.tab-labels {
+  display: flex;
+  flex-wrap: wrap;
+  background: #333;
+}
+.tab-labels label {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  background: #333;
+  color: white;
+  border-right: 1px solid #444;
+  transition: background 0.3s;
+}
+.tab-labels label:hover {
+  background: #444;
+}
+
+/* Active tab styling */
+#tab1:checked ~ .tab-labels label[for="tab1"],
+#tab2:checked ~ .tab-labels label[for="tab2"],
+#tab3:checked ~ .tab-labels label[for="tab3"],
+#tab4:checked ~ .tab-labels label[for="tab4"],
+#tab5:checked ~ .tab-labels label[for="tab5"] {
+  background: #fff;
+  color: #000;
+}
+</style>
+</head>
+<body>${safeDescription}</body>
+</html>` : '';
+
+  // Auto-resize iframe after content loads
+  useEffect(() => {
+    const iframe = descIframeRef.current;
+    if (!iframe || !safeDescription) return;
+
+    const handleLoad = () => {
+      try {
+        const doc = iframe.contentDocument;
+        if (doc?.documentElement) {
+          const height = doc.documentElement.scrollHeight;
+          if (height > 100) {
+            iframe.style.height = `${height + 40}px`;
+          }
+        }
+      } catch { /* cross-origin blocked */ }
+    };
+
+    iframe.addEventListener('load', handleLoad);
+    // Also try after a delay for slow-loading content
+    const timer = setTimeout(handleLoad, 500);
+
+    return () => {
+      iframe.removeEventListener('load', handleLoad);
+      clearTimeout(timer);
+    };
+  }, [safeDescription]);
+
+  const fallbackSpecifics = [
+    { label: 'Condition', value: listing.conditionLabel || 'Used' },
     { label: 'Brand', value: listing.brand },
     { label: 'Type', value: listing.type },
     { label: 'Manufacturer Part Number', value: listing.mpn },
@@ -41,278 +172,424 @@ function EbayListingPreview({ listing }: { listing: EbayListing }) {
     { label: 'Material', value: listing.material },
     { label: 'Features', value: listing.features },
     { label: 'Country/Region of Manufacture', value: listing.countryOfManufacture },
-  ].filter(s => s.value);
+  ].filter((specific) => specific.value);
 
-  const sanitizedDescription = DOMPurify.sanitize(listing.description, {
-    ADD_TAGS: ['style'],
-    ADD_ATTR: ['class', 'style', 'id', 'for', 'name', 'type', 'checked'],
-  });
+  const itemSpecifics = [
+    { label: 'Condition', value: listing.conditionLabel || 'Used' },
+    ...listing.itemSpecifics.filter((specific) => cleanSpecificValue(specific.value)),
+  ];
+
+  if (itemSpecifics.length === 1) {
+    itemSpecifics.push(...fallbackSpecifics.filter((specific) => specific.label !== 'Condition'));
+  }
+
+  // Pair item specifics into rows of 2 (eBay uses a 2-column grid)
+  const specPairs: { label: string; value: string }[][] = [];
+  for (let i = 0; i < itemSpecifics.length; i += 2) {
+    specPairs.push(itemSpecifics.slice(i, i + 2));
+  }
+
+  const conditionLabel = listing.conditionLabel || 'Used';
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-      {/* eBay-style header bar */}
-      <div className="bg-[#f7f7f7] border-b border-gray-200 px-4 py-2 flex items-center gap-2">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-400" />
-          <div className="w-3 h-3 rounded-full bg-yellow-400" />
-          <div className="w-3 h-3 rounded-full bg-green-400" />
-        </div>
-        <div className="flex-1 mx-4 bg-white rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-500 flex items-center gap-2">
-          <Search className="w-3 h-3" />
-          <span>ebay.com/itm/{listing.customLabel || '...'}</span>
-        </div>
-      </div>
-
-      {/* eBay top bar */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-[1200px] mx-auto px-6 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl font-bold italic text-[#e53238]">e</span>
-            <span className="text-2xl font-bold italic text-[#0064d2]">b</span>
-            <span className="text-2xl font-bold italic text-[#f5af02]">a</span>
-            <span className="text-2xl font-bold italic text-[#86b817]">y</span>
+    <div style={{ fontFamily: "'Market Sans', Arial, Helvetica, sans-serif", background: '#fff', color: '#191919', lineHeight: 1.4 }}>
+      {/* ═══ eBay Top Navigation Bar ═══ */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #e5e5e5' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* Top links left */}
+          <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#555' }}>
+            <span>Hi! <span style={{ color: '#3665f3', cursor: 'pointer' }}>Sign in</span> or <span style={{ color: '#3665f3', cursor: 'pointer' }}>register</span></span>
+            <span>Daily Deals</span>
+            <span>Help & Contact</span>
           </div>
-          <div className="text-xs text-gray-400">Preview Mode — Not a live listing</div>
+          {/* Top links right */}
+          <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#555' }}>
+            <span>Sell</span>
+            <span>Watchlist</span>
+            <span>My eBay</span>
+            <span>🛒</span>
+          </div>
         </div>
       </div>
 
-      {/* Main content area */}
-      <div className="max-w-[1200px] mx-auto px-6 py-6">
+      {/* ═══ eBay Header with Logo + Search ═══ */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #e5e5e5' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* eBay Logo */}
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'baseline', gap: 0 }}>
+            <span style={{ fontSize: 30, fontWeight: 700, fontStyle: 'italic', color: '#e53238', letterSpacing: -1 }}>e</span>
+            <span style={{ fontSize: 30, fontWeight: 700, fontStyle: 'italic', color: '#0064d2', letterSpacing: -1 }}>b</span>
+            <span style={{ fontSize: 30, fontWeight: 700, fontStyle: 'italic', color: '#f5af02', letterSpacing: -1 }}>a</span>
+            <span style={{ fontSize: 30, fontWeight: 700, fontStyle: 'italic', color: '#86b817', letterSpacing: -1 }}>y</span>
+          </div>
+          {/* Shop by category */}
+          <div style={{ fontSize: 13, color: '#555', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Shop by<br />category <span style={{ fontSize: 10 }}>▾</span>
+          </div>
+          {/* Search bar */}
+          <div style={{ flex: 1, display: 'flex', gap: 0 }}>
+            <input
+              readOnly
+              style={{
+                flex: 1, height: 40, border: '2px solid #191919', borderRight: 'none', borderRadius: '24px 0 0 24px',
+                padding: '0 16px', fontSize: 14, outline: 'none', background: '#fff', color: '#191919'
+              }}
+              placeholder="Search for anything"
+            />
+            <div style={{
+              width: 200, height: 40, border: '2px solid #191919', borderLeft: '1px solid #ccc', borderRight: 'none',
+              display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 13, color: '#555', background: '#fff'
+            }}>
+              All Categories <span style={{ marginLeft: 'auto', fontSize: 10 }}>▾</span>
+            </div>
+            <button style={{
+              width: 48, height: 40, background: '#3665f3', border: '2px solid #3665f3', borderRadius: '0 24px 24px 0',
+              color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              🔍
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: '#555', whiteSpace: 'nowrap' }}>Advanced</div>
+        </div>
+      </div>
+
+      {/* ═══ Category Nav Bar ═══ */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #e5e5e5' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', display: 'flex', gap: 20, fontSize: 13, color: '#555', height: 40, alignItems: 'center', overflow: 'hidden' }}>
+          {['eBay Motors', 'Electronics', 'Fashion', 'Home & Garden', 'Collectibles', 'Sporting Goods', 'Toys', 'Business & Industrial', 'Deals'].map(c => (
+            <span key={c} style={{ whiteSpace: 'nowrap', cursor: 'pointer' }}>{c}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ Preview Banner ═══ */}
+      <div style={{ background: '#fff3cd', borderBottom: '1px solid #ffc107', padding: '6px 20px', textAlign: 'center', fontSize: 12, color: '#856404' }}>
+        ⚠️ PREVIEW MODE — This is how the listing will appear on eBay. Not a live listing.
+      </div>
+
+      {/* ═══ Main Content ═══ */}
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '16px 20px' }}>
         {/* Breadcrumb */}
-        <div className="text-xs text-[#0654ba] mb-4 flex items-center gap-1">
-          <span>eBay Motors</span>
-          <span className="text-gray-400">›</span>
-          <span>Parts & Accessories</span>
-          <span className="text-gray-400">›</span>
-          <span>Car & Truck Parts & Accessories</span>
+        <nav style={{ fontSize: 12, color: '#555', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+          <a style={{ color: '#3665f3', textDecoration: 'none' }}>eBay</a>
+          <span style={{ color: '#aaa' }}>&gt;</span>
+          <a style={{ color: '#3665f3', textDecoration: 'none' }}>eBay Motors</a>
+          <span style={{ color: '#aaa' }}>&gt;</span>
+          <a style={{ color: '#3665f3', textDecoration: 'none' }}>Parts & Accessories</a>
+          <span style={{ color: '#aaa' }}>&gt;</span>
+          <a style={{ color: '#3665f3', textDecoration: 'none' }}>Car & Truck Parts & Accessories</a>
           {listing.type && (
             <>
-              <span className="text-gray-400">›</span>
-              <span>{listing.type}</span>
+              <span style={{ color: '#aaa' }}>&gt;</span>
+              <a style={{ color: '#3665f3', textDecoration: 'none' }}>{listing.type}</a>
             </>
           )}
-        </div>
+        </nav>
 
-        <div className="flex gap-8">
-          {/* Left: Images */}
-          <div className="flex-shrink-0 w-[480px]">
-            {/* Main image */}
-            <div className="w-full aspect-square bg-gray-50 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center mb-3">
-              {currentImageUrl && !imgErrors.has(selectedImage) ? (
-                <img
-                  src={currentImageUrl}
-                  alt={listing.title}
-                  className="max-w-full max-h-full object-contain"
-                  onError={() => handleImgError(selectedImage)}
-                />
-              ) : (
-                <div className="text-gray-300 flex flex-col items-center gap-2">
-                  <ImageIcon className="w-16 h-16" />
-                  <span className="text-sm">No image available</span>
-                </div>
-              )}
-            </div>
-            {/* Thumbnails */}
+        {/* ═══ Two-Column Layout: Images + Details ═══ */}
+        <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
+
+          {/* ══ LEFT COLUMN: Images ══ */}
+          <div style={{ width: '55%', flexShrink: 0, display: 'flex', gap: 12 }}>
+            {/* Vertical thumbnail strip */}
             {listing.imageUrls.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 64, flexShrink: 0 }}>
                 {listing.imageUrls.map((url, i) => (
                   <button
                     key={i}
                     onClick={() => setSelectedImage(i)}
-                    className={`flex-shrink-0 w-16 h-16 rounded border-2 overflow-hidden ${
-                      selectedImage === i ? 'border-[#0654ba]' : 'border-gray-200 hover:border-gray-400'
-                    }`}
+                    style={{
+                      width: 64, height: 64, border: selectedImage === i ? '2px solid #3665f3' : '1px solid #ddd',
+                      borderRadius: 8, padding: 2, background: '#fff', cursor: 'pointer', overflow: 'hidden',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      outline: selectedImage === i ? '1px solid #3665f3' : 'none',
+                      outlineOffset: 1,
+                    }}
+                    onMouseEnter={() => setSelectedImage(i)}
                   >
                     {!imgErrors.has(i) ? (
-                      <img
-                        src={url}
-                        alt={`Thumbnail ${i + 1}`}
-                        className="w-full h-full object-cover"
-                        onError={() => handleImgError(i)}
-                      />
+                      <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }} onError={() => handleImgError(i)} />
                     ) : (
-                      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                        <ImageIcon className="w-4 h-4 text-gray-300" />
-                      </div>
+                      <ImageIcon style={{ width: 20, height: 20, color: '#ccc' }} />
                     )}
                   </button>
                 ))}
               </div>
             )}
-            <div className="text-xs text-gray-400 mt-1">
-              {validImages.length} image{validImages.length !== 1 ? 's' : ''} total
+            {/* Main image */}
+            <div style={{
+              flex: 1, aspectRatio: '1/1', background: '#fff', border: '1px solid #e5e5e5', borderRadius: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative'
+            }}>
+              {listing.imageUrls[selectedImage] && !imgErrors.has(selectedImage) ? (
+                <img
+                  src={listing.imageUrls[selectedImage]}
+                  alt={listing.title}
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  onError={() => handleImgError(selectedImage)}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', color: '#ccc' }}>
+                  <ImageIcon style={{ width: 64, height: 64 }} />
+                  <div style={{ fontSize: 14, marginTop: 8 }}>No image</div>
+                </div>
+              )}
+              {/* Image counter */}
+              <div style={{
+                position: 'absolute', bottom: 12, right: 12, background: 'rgba(0,0,0,0.6)', color: '#fff',
+                fontSize: 12, padding: '4px 10px', borderRadius: 12
+              }}>
+                {selectedImage + 1} / {listing.imageUrls.length}
+              </div>
             </div>
           </div>
 
-          {/* Right: Details */}
-          <div className="flex-1 min-w-0">
+          {/* ══ RIGHT COLUMN: Details ══ */}
+          <div style={{ flex: 1, minWidth: 0 }}>
             {/* Title */}
-            <h1 className="text-[22px] font-normal text-gray-900 leading-tight mb-2">
+            <h1 style={{ fontSize: 22, fontWeight: 400, color: '#191919', margin: '0 0 8px', lineHeight: 1.3 }}>
               {listing.title}
             </h1>
 
-            {/* Condition badge */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-sm text-gray-600">
-                Condition: <span className="font-medium text-gray-900">{listing.conditionLabel || 'Used'}</span>
-              </span>
-              {listing.customLabel && (
-                <span className="text-xs text-gray-400">SKU: {listing.customLabel}</span>
-              )}
-            </div>
+            {/* SKU / Custom Label */}
+            {listing.customLabel && (
+              <div style={{ fontSize: 12, color: '#707070', marginBottom: 12 }}>
+                Custom label <span style={{ fontWeight: 500 }}>{listing.customLabel}</span>
+              </div>
+            )}
 
-            {/* Price */}
-            <div className="mb-4">
-              <div className="text-[28px] font-bold text-gray-900">
-                {formatPrice(listing.price)}
-              </div>
-              <div className="text-sm text-gray-500 flex items-center gap-1">
-                <Tag className="w-3.5 h-3.5" />
-                {listing.format === 'FixedPrice' ? 'Buy It Now' : listing.format}
-                {listing.duration === 'GTC' && <span className="text-gray-400 ml-1">· Good 'Til Cancelled</span>}
-              </div>
+            {/* Condition */}
+            <div style={{ fontSize: 14, color: '#191919', marginBottom: 4 }}>
+              <span style={{ color: '#707070' }}>Condition:</span>{' '}
+              <span style={{ fontWeight: 600 }}>{conditionLabel}</span>
             </div>
 
             {/* Quantity */}
-            <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-              <Package className="w-4 h-4" />
-              <span>Quantity: {listing.quantity} available</span>
-            </div>
-
-            {/* Buy / Cart buttons (visual only) */}
-            <div className="flex gap-3 mb-6">
-              <button className="flex-1 bg-[#3665f3] text-white font-bold py-3 rounded-full text-sm hover:bg-[#2d55cc] transition-colors cursor-default">
-                Buy It Now
-              </button>
-              <button className="flex-1 border-2 border-[#3665f3] text-[#3665f3] font-bold py-3 rounded-full text-sm hover:bg-blue-50 transition-colors cursor-default">
-                Add to cart
-              </button>
-            </div>
-
-            {/* Shipping / Returns / Payment info */}
-            <div className="border border-gray-200 rounded-lg p-4 space-y-3 mb-6">
-              {listing.shippingProfile && (
-                <div className="flex items-start gap-3 text-sm">
-                  <Truck className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <div className="text-gray-700 font-medium">Shipping</div>
-                    <div className="text-gray-500 text-xs">{listing.shippingProfile}</div>
-                  </div>
-                </div>
-              )}
-              {listing.returnProfile && (
-                <div className="flex items-start gap-3 text-sm">
-                  <RotateCcw className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <div className="text-gray-700 font-medium">Returns</div>
-                    <div className="text-gray-500 text-xs">{listing.returnProfile}</div>
-                  </div>
-                </div>
-              )}
-              {listing.paymentProfile && (
-                <div className="flex items-start gap-3 text-sm">
-                  <CreditCard className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <div className="text-gray-700 font-medium">Payments</div>
-                    <div className="text-gray-500 text-xs">{listing.paymentProfile}</div>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-start gap-3 text-sm">
-                <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="text-gray-700 font-medium">Located in</div>
-                  <div className="text-gray-500 text-xs">{listing.location || 'Not specified'}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Item Specifics */}
-            {itemSpecifics.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-[#0654ba]" />
-                  Item specifics
-                </h3>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                  {itemSpecifics.map((spec) => (
-                    <div key={spec.label} className="flex text-sm">
-                      <span className="text-gray-500 w-[180px] flex-shrink-0">{spec.label}</span>
-                      <span className="text-gray-900 font-medium">{spec.value}</span>
-                    </div>
-                  ))}
-                </div>
+            {parseInt(listing.quantity) > 1 && (
+              <div style={{ fontSize: 14, color: '#707070', marginBottom: 12 }}>
+                Quantity: <span style={{ color: '#191919' }}>{listing.quantity} available</span>
               </div>
             )}
 
-            {/* Compatibility / Fitment */}
-            {listing.compatibility.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <Info className="w-4 h-4 text-[#0654ba]" />
-                  Vehicle Compatibility ({listing.compatibility.length})
-                </h3>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="text-left px-3 py-2 text-gray-600 font-semibold">Make</th>
-                        <th className="text-left px-3 py-2 text-gray-600 font-semibold">Model</th>
-                        <th className="text-left px-3 py-2 text-gray-600 font-semibold">Year</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {listing.compatibility.map((compat, i) => (
-                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-3 py-1.5 text-gray-800">{compat.make}</td>
-                          <td className="px-3 py-1.5 text-gray-800">{compat.model}</td>
-                          <td className="px-3 py-1.5 text-gray-800">{compat.year}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* ── Price Block ── */}
+            <div style={{ marginTop: 12, marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid #e5e5e5' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Price:</span>
+                <span style={{ fontSize: 24, fontWeight: 700, color: '#191919' }}>
+                  US ${parseFloat(listing.price || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {listing.format === 'FixedPrice' && (
+                <div style={{ fontSize: 12, color: '#707070' }}>Buy It Now</div>
+              )}
+            </div>
+
+            {/* ── Buy It Now Button ── */}
+            <button style={{
+              width: '100%', height: 48, background: '#3665f3', color: '#fff', border: 'none', borderRadius: 24,
+              fontSize: 16, fontWeight: 700, cursor: 'default', marginBottom: 10,
+              fontFamily: "'Market Sans', Arial, sans-serif",
+            }}>
+              Buy It Now
+            </button>
+
+            {/* Add to cart */}
+            <button style={{
+              width: '100%', height: 48, background: '#fff', color: '#3665f3', border: '1px solid #3665f3', borderRadius: 24,
+              fontSize: 16, fontWeight: 700, cursor: 'default', marginBottom: 10,
+              fontFamily: "'Market Sans', Arial, sans-serif",
+            }}>
+              Add to cart
+            </button>
+
+            {/* Add to watchlist */}
+            <button style={{
+              width: '100%', height: 48, background: '#fff', color: '#191919', border: '1px solid #191919', borderRadius: 24,
+              fontSize: 14, fontWeight: 600, cursor: 'default', marginBottom: 20,
+              fontFamily: "'Market Sans', Arial, sans-serif",
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              <span style={{ fontSize: 18 }}>♡</span> Add to Watchlist
+            </button>
+
+            {/* ── Shipping & Delivery ── */}
+            <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: 16, marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>🚚</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Shipping:</div>
+                  <div style={{ fontSize: 13, color: '#707070' }}>{listing.shippingProfile || 'See listing details'}</div>
                 </div>
               </div>
-            )}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>📍</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Located in:</div>
+                  <div style={{ fontSize: 13, color: '#707070' }}>{listing.location}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>↩️</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Returns:</div>
+                  <div style={{ fontSize: 13, color: '#707070' }}>{listing.returnProfile || 'See listing details'}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>💳</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Payments:</div>
+                  <div style={{ fontSize: 13, color: '#707070' }}>{listing.paymentProfile || 'See listing details'}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Description section */}
-        <div className="mt-8 border-t border-gray-200 pt-6">
-          <button
-            onClick={() => setShowDescription(!showDescription)}
-            className="flex items-center gap-2 text-base font-bold text-gray-900 mb-4 cursor-pointer hover:text-[#0654ba] transition-colors"
-          >
-            <Grid3X3 className="w-4 h-4" />
-            Item Description
-            <ChevronRight className={`w-4 h-4 transition-transform ${showDescription ? 'rotate-90' : ''}`} />
-          </button>
-          {showDescription && (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <iframe
-                srcDoc={`
-                  <!DOCTYPE html>
-                  <html>
-                  <head>
-                    <style>
-                      body { margin: 0; padding: 16px; font-family: Arial, sans-serif; font-size: 14px; color: #333; background: #fff; }
-                      img { max-width: 100%; height: auto; }
-                    </style>
-                  </head>
-                  <body>${sanitizedDescription}</body>
-                  </html>
-                `}
-                className="w-full border-0"
-                style={{ minHeight: '400px' }}
-                title="Item description"
-                sandbox="allow-same-origin"
-              />
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* BELOW THE FOLD: About this item / Item specifics / Compatibility / Description */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+
+        <div style={{ marginTop: 40, borderTop: '1px solid #e5e5e5', paddingTop: 32 }}>
+
+          {/* ── About this item ── */}
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#191919', marginBottom: 24 }}>About this item</h2>
+
+          {/* ── Item Specifics (2-column grid like real eBay) ── */}
+          {itemSpecifics.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#191919', marginBottom: 16 }}>Item specifics</h3>
+              <div style={{ border: '1px solid #e5e5e5', borderRadius: 12, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <tbody>
+                    {specPairs.map((pair, rowIdx) => (
+                      <tr key={rowIdx} style={{ background: rowIdx % 2 === 0 ? '#f7f7f7' : '#fff' }}>
+                        <td style={{
+                          padding: '12px 16px', color: '#707070', fontWeight: 400, width: '18%',
+                          borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
+                          borderRight: '1px solid #e5e5e5', verticalAlign: 'top',
+                        }}>
+                          {pair[0].label}
+                        </td>
+                        <td style={{
+                          padding: '12px 16px', color: '#191919', fontWeight: 600, width: '32%',
+                          borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
+                          borderRight: '1px solid #e5e5e5', verticalAlign: 'top',
+                        }}>
+                          {pair[0].value}
+                        </td>
+                        {pair[1] ? (
+                          <>
+                            <td style={{
+                              padding: '12px 16px', color: '#707070', fontWeight: 400, width: '18%',
+                              borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
+                              borderRight: '1px solid #e5e5e5', verticalAlign: 'top',
+                            }}>
+                              {pair[1].label}
+                            </td>
+                            <td style={{
+                              padding: '12px 16px', color: '#191919', fontWeight: 600, width: '32%',
+                              borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
+                              verticalAlign: 'top',
+                            }}>
+                              {pair[1].value}
+                            </td>
+                          </>
+                        ) : (
+                          <td colSpan={2} style={{
+                            borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
+                          }} />
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
+
+          {/* ── Vehicle Compatibility / Motor Vehicle Fitment ── */}
+          {listing.compatibility.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#191919', marginBottom: 4 }}>
+                Motor Vehicle Fitment
+              </h3>
+              <p style={{ fontSize: 13, color: '#707070', marginBottom: 16 }}>
+                This part fits {listing.compatibility.length} vehicle{listing.compatibility.length !== 1 ? 's' : ''}
+              </p>
+              <div style={{ border: '1px solid #e5e5e5', borderRadius: 12, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: '#191919' }}>
+                      <th style={{ padding: '10px 16px', color: '#fff', textAlign: 'left', fontWeight: 600, fontSize: 13 }}>Year</th>
+                      <th style={{ padding: '10px 16px', color: '#fff', textAlign: 'left', fontWeight: 600, fontSize: 13 }}>Make</th>
+                      <th style={{ padding: '10px 16px', color: '#fff', textAlign: 'left', fontWeight: 600, fontSize: 13 }}>Model</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listing.compatibility.map((compat, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f7f7f7' }}>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e5e5', color: '#191919' }}>{compat.year}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e5e5', color: '#191919' }}>{compat.make}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e5e5', color: '#191919' }}>{compat.model}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Item Description ── */}
+          {safeDescription && (
+            <div style={{ marginBottom: 32 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#191919', marginBottom: 16 }}>Item description from the seller</h3>
+              <div style={{ border: '1px solid #e5e5e5', borderRadius: 12, overflow: 'hidden' }}>
+                <iframe
+                  ref={descIframeRef}
+                  srcDoc={descriptionHtml}
+                  style={{ width: '100%', border: 'none', minHeight: 500, display: 'block' }}
+                  title="Seller's item description"
+                  sandbox="allow-same-origin allow-forms"
+                />
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* ═══ eBay Footer ═══ */}
+        <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: 24, marginTop: 40, textAlign: 'center' }}>
+          <div style={{ fontSize: 12, color: '#707070', lineHeight: 2 }}>
+            <span style={{ cursor: 'pointer' }}>About eBay</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Announcements</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Community</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Security Center</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Seller Center</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Policies</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Affiliates</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Help & Contact</span>
+            {' | '}
+            <span style={{ cursor: 'pointer' }}>Site Map</span>
+          </div>
+          <div style={{ fontSize: 11, color: '#aaa', marginTop: 8, paddingBottom: 20 }}>
+            Copyright © 1995-2026 eBay Inc. All Rights Reserved.
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function cleanSpecificValue(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 // ─── Main Preview Page ──────────────────────────────────────────────────────
@@ -328,22 +605,53 @@ export default function EbayPreviewPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((file: File) => {
-    if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') return;
+    const name = file.name.toLowerCase();
+    const isXlsx = name.endsWith('.xlsx') || name.endsWith('.xls');
+    const isCsv = name.endsWith('.csv') || file.type === 'text/csv';
+    if (!isXlsx && !isCsv) return;
 
     setFileName(file.name);
     setFileSize(file.size);
-
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (text) {
-        const result = parseEbayFileExchangeCsv(text);
-        setParseResult(result);
-        setSelectedIndex(0);
-        setSearchQuery('');
-      }
-    };
-    reader.readAsText(file);
+
+    if (isXlsx) {
+      reader.onload = (e) => {
+        try {
+          const buffer = e.target?.result;
+          if (!buffer) return;
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+          console.log('[eBay Preview] XLSX→CSV length:', csv.length);
+          const result = parseEbayFileExchangeCsv(csv);
+          console.log('[eBay Preview] Result:', result.listings.length, 'listings,', result.skippedListings.length, 'skipped,', result.totalRows, 'rows');
+          setParseResult(result);
+          setSelectedIndex(0);
+          setSearchQuery('');
+        } catch (err) {
+          console.error('[eBay Preview] Parse error:', err);
+          setParseResult({ listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: [`Parse error: ${err}`] });
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          if (!text) return;
+          console.log('[eBay Preview] CSV text length:', text.length, 'first 120:', text.slice(0, 120));
+          const result = parseEbayFileExchangeCsv(text);
+          console.log('[eBay Preview] Result:', result.listings.length, 'listings,', result.skippedListings.length, 'skipped,', result.totalRows, 'rows');
+          setParseResult(result);
+          setSelectedIndex(0);
+          setSearchQuery('');
+        } catch (err) {
+          console.error('[eBay Preview] Parse error:', err);
+          setParseResult({ listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: [`Parse error: ${err}`] });
+        }
+      };
+      reader.readAsText(file);
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -405,7 +713,7 @@ export default function EbayPreviewPage() {
               <input
                 ref={inputRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,text/csv"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFile(file);
@@ -414,10 +722,10 @@ export default function EbayPreviewPage() {
               />
               <Eye className="h-12 w-12 text-slate-400 mb-4" />
               <p className="text-slate-300 text-sm font-medium">
-                Drag & drop a pipeline output CSV, or click to browse
+                Drag & drop a pipeline output CSV or Excel file, or click to browse
               </p>
               <p className="text-slate-500 text-xs mt-2">
-                Supports eBay File Exchange format CSV files from the enrichment pipeline
+                Supports eBay File Exchange format — CSV or XLSX
               </p>
             </div>
           </CardContent>
@@ -450,7 +758,7 @@ export default function EbayPreviewPage() {
             <h1 className="text-xl font-bold text-slate-100">eBay Listing Preview</h1>
             <p className="text-xs text-slate-400">
               <FileText className="w-3 h-3 inline mr-1" />
-              {fileName} · {formatBytes(fileSize)} · {parseResult.listings.length} listing{parseResult.listings.length !== 1 ? 's' : ''} · {parseResult.compatibilityRows} fitment rows
+              {fileName} · {formatBytes(fileSize)} · {parseResult.listings.length} listing{parseResult.listings.length !== 1 ? 's' : ''}{parseResult.skippedListings.length > 0 ? ` · ${parseResult.skippedListings.length} skipped` : ''} · {parseResult.compatibilityRows} fitment rows
             </p>
           </div>
         </div>
@@ -462,6 +770,31 @@ export default function EbayPreviewPage() {
           Clear & Upload New
         </button>
       </div>
+
+      {/* Warnings / Skipped rows */}
+      {parseResult.warnings.length > 0 && (
+        <Card>
+          <CardContent className="py-3 px-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-300 mb-1">
+                  {parseResult.skippedListings.length > 0
+                    ? `${parseResult.skippedListings.length} invalid row${parseResult.skippedListings.length !== 1 ? 's' : ''} skipped`
+                    : `${parseResult.warnings.length} warning${parseResult.warnings.length !== 1 ? 's' : ''}`}
+                </p>
+                <ul className="text-xs text-slate-400 space-y-0.5">
+                  {parseResult.warnings.map((w, i) => (
+                    <li key={i}>
+                      Row {w.rowIndex}: <span className="text-slate-300">{w.customLabel || '(no SKU)'}</span> — {w.issues.join(', ')}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search + Navigation bar */}
       <Card>
@@ -475,8 +808,17 @@ export default function EbayPreviewPage() {
                 placeholder="Search listings by title, SKU, or brand..."
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(0); }}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-9 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => { setSearchQuery(''); setSelectedIndex(0); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* View toggle */}
@@ -524,11 +866,33 @@ export default function EbayPreviewPage() {
       {/* Content */}
       {viewMode === 'single' ? (
         currentListing ? (
-          <EbayListingPreview listing={currentListing} key={selectedIndex} />
+          <div className="rounded-xl overflow-hidden border border-slate-700 shadow-2xl">
+            <EbayListingPreview listing={currentListing} key={selectedIndex} />
+          </div>
         ) : (
           <Card>
-            <CardContent className="py-16 text-center">
-              <p className="text-slate-400">No listings match your search.</p>
+            <CardContent className="py-16 text-center space-y-2">
+              {searchQuery ? (
+                <>
+                  <p className="text-slate-400">No listings match <span className="text-slate-200">&ldquo;{searchQuery}&rdquo;</span>.</p>
+                  <button onClick={() => { setSearchQuery(''); setSelectedIndex(0); }} className="text-sm text-blue-400 hover:underline">Clear search</button>
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400">
+                    {parseResult && parseResult.skippedListings.length > 0
+                      ? `All ${parseResult.skippedListings.length} rows were skipped — check the warnings above.`
+                      : 'No listings were found in this file.'}
+                  </p>
+                  {parseResult && (
+                    <p className="text-xs text-slate-500 mt-3">
+                      Rows parsed: {parseResult.totalRows} · Compatibility: {parseResult.compatibilityRows} · Skipped: {parseResult.skippedListings.length}
+                      {parseResult.errors.length > 0 && <span className="text-red-400"> · Errors: {parseResult.errors.join(', ')}</span>}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-600 mt-1">Open browser DevTools (F12 → Console) for detailed parse diagnostics</p>
+                </>
+              )}
             </CardContent>
           </Card>
         )
@@ -536,7 +900,13 @@ export default function EbayPreviewPage() {
         /* Grid view */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredListings.length === 0 && (
-            <div className="col-span-full text-center py-16 text-slate-400">No listings match your search.</div>
+            <div className="col-span-full text-center py-16 text-slate-400">
+              {searchQuery ? (
+                <span>No listings match &ldquo;{searchQuery}&rdquo;. <button onClick={() => { setSearchQuery(''); setSelectedIndex(0); }} className="text-blue-400 hover:underline">Clear search</button></span>
+              ) : parseResult && parseResult.skippedListings.length > 0
+                ? `All ${parseResult.skippedListings.length} rows were skipped — check the warnings above.`
+                : 'No listings were found in this file.'}
+            </div>
           )}
           {filteredListings.map((listing, i) => (
             <div
@@ -544,7 +914,6 @@ export default function EbayPreviewPage() {
               onClick={() => { setSelectedIndex(i); setViewMode('single'); }}
               className="bg-white rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
             >
-              {/* Image */}
               <div className="aspect-[4/3] bg-gray-50 flex items-center justify-center overflow-hidden">
                 {listing.imageUrls[0] ? (
                   <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
@@ -552,12 +921,11 @@ export default function EbayPreviewPage() {
                   <ImageIcon className="w-12 h-12 text-gray-300" />
                 )}
               </div>
-              {/* Info */}
               <div className="p-3">
-                <p className="text-sm text-gray-900 font-medium line-clamp-2 leading-snug mb-1">
-                  {listing.title}
+                <p className="text-sm text-gray-900 font-medium line-clamp-2 leading-snug mb-1">{listing.title}</p>
+                <p className="text-lg font-bold text-gray-900">
+                  US ${parseFloat(listing.price || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
-                <p className="text-lg font-bold text-gray-900">{formatPrice(listing.price)}</p>
                 <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
                   <span>{listing.conditionLabel || 'Used'}</span>
                   <span>·</span>
