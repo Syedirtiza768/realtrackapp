@@ -473,6 +473,14 @@ function generateCSV(parts) {
     '*StartPrice',
     '*Quantity',
     'PicURL',
+    'AdditionalPicURL',
+    'AdditionalPicURL1',
+    'AdditionalPicURL2',
+    'AdditionalPicURL3',
+    'AdditionalPicURL4',
+    'AdditionalPicURL5',
+    'AdditionalPicURL6',
+    'AdditionalPicURL7',
     '*ConditionID',
     '*Description',
     '*Format',
@@ -534,7 +542,13 @@ function generateCSV(parts) {
       '',                               // RelationshipDetails
       part.price,                       // StartPrice
       part.quantity,                    // Quantity
-      part.images,                      // PicURL
+      // Images: split pipe-separated URLs into separate eBay AdditionalPicURL columns
+      ...(() => {
+        const imgs = (part.images || '').split('|').map(u => u.trim()).filter(Boolean).slice(0, 9);
+        const imgCols = new Array(9).fill('');
+        imgs.forEach((url, i) => { imgCols[i] = url; });
+        return imgCols; // PicURL + AdditionalPicURL through AdditionalPicURL7
+      })(),
       '3000-Used',                      // ConditionID
       htmlDesc,                         // Description
       'FixedPrice',                     // Format

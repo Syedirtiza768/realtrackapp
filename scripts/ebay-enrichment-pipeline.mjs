@@ -2991,6 +2991,15 @@ function generateUSMotorsOutput(parts, vinData) {
   const refData = XLSX.utils.sheet_to_json(refSheet, { header: 1 });
   const fullHeaders = refData[3]; // Row 3 has headers
 
+  // Inject AdditionalPicURL columns right after PicURL (if not already present)
+  const picUrlIdx = fullHeaders.findIndex(h => h && /picurl|item photo url/i.test(h));
+  const addPicCols = ['AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
+    'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
+    'AdditionalPicURL6', 'AdditionalPicURL7'];
+  if (picUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
+    fullHeaders.splice(picUrlIdx + 1, 0, ...addPicCols);
+  }
+
   // Build output workbook preserving template structure
   const outWb = XLSX.utils.book_new();
 
@@ -3080,13 +3089,15 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('C:Bundle Description', enriched.bundleDescription);
   set('C:Country/Region of Manufacture', enriched.countryOfManufacture || '');
 
-  // Images — primary URL + pipe-separated additional URLs (eBay supports up to 12)
+  // Images — eBay File Exchange requires separate columns per image (not pipe-separated)
+  // PicURL = primary, AdditionalPicURL = 2nd, AdditionalPicURL1-7 = 3rd-9th
   if (part._images && part._images.length > 0) {
+    const imgs = part._images.slice(0, 9);
     const imgCol = findImageColumn(headers);
-    if (imgCol) set(imgCol, part._images[0]);
-    if (part._images.length > 1) {
-      const addImgCol = findAdditionalImageColumn(headers);
-      if (addImgCol) set(addImgCol, part._images.slice(1).join('|'));
+    if (imgCol) set(imgCol, imgs[0]);
+    if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);
+    for (let i = 2; i < imgs.length; i++) {
+      set(`AdditionalPicURL${i - 1}`, imgs[i]);
     }
   }
 
@@ -3119,6 +3130,15 @@ function generateAUOutput(parts, vinData) {
   const refSheet = templateWb.Sheets['Listings'];
   const refData = XLSX.utils.sheet_to_json(refSheet, { header: 1 });
   const fullHeaders = refData[3];
+
+  // Inject AdditionalPicURL columns right after PicURL (if not already present)
+  const auPicUrlIdx = fullHeaders.findIndex(h => h && /item photo url|picurl|artikelfoto/i.test(h));
+  const auAddPicCols = ['AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
+    'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
+    'AdditionalPicURL6', 'AdditionalPicURL7'];
+  if (auPicUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
+    fullHeaders.splice(auPicUrlIdx + 1, 0, ...auAddPicCols);
+  }
 
   const outWb = XLSX.utils.book_new();
   const listingsData = [
@@ -3176,13 +3196,14 @@ function generateAUOutput(parts, vinData) {
     set('C:Surface Finish', e.surfaceFinish);
     set('C:Interchange Part Number', e.interchangeNumber);
 
-    // Images
+    // Images — eBay File Exchange requires separate columns per image
     if (part._images && part._images.length > 0) {
+      const imgs = part._images.slice(0, 9);
       const imgCol = findImageColumn(fullHeaders);
-      if (imgCol) set(imgCol, part._images[0]);
-      if (part._images.length > 1) {
-        const addImgCol = findAdditionalImageColumn(fullHeaders);
-        if (addImgCol) set(addImgCol, part._images.slice(1).join('|'));
+      if (imgCol) set(imgCol, imgs[0]);
+      if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);
+      for (let i = 2; i < imgs.length; i++) {
+        set(`AdditionalPicURL${i - 1}`, imgs[i]);
       }
     }
 
@@ -3229,6 +3250,15 @@ function generateDEOutput(parts, vinData) {
   const refSheet = templateWb.Sheets['Listings'];
   const refData = XLSX.utils.sheet_to_json(refSheet, { header: 1 });
   const fullHeaders = refData[3];
+
+  // Inject AdditionalPicURL columns right after PicURL (if not already present)
+  const dePicUrlIdx = fullHeaders.findIndex(h => h && /artikelfoto|item photo url|picurl/i.test(h));
+  const deAddPicCols = ['AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
+    'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
+    'AdditionalPicURL6', 'AdditionalPicURL7'];
+  if (dePicUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
+    fullHeaders.splice(dePicUrlIdx + 1, 0, ...deAddPicCols);
+  }
 
   const outWb = XLSX.utils.book_new();
   const listingsData = [
@@ -3296,13 +3326,14 @@ function generateDEOutput(parts, vinData) {
     set('C:Material', e.material);
     set('C:Farbe', e.color);                                          // Color in German
 
-    // Images
+    // Images — eBay File Exchange requires separate columns per image
     if (part._images && part._images.length > 0) {
+      const imgs = part._images.slice(0, 9);
       const imgCol = findImageColumn(fullHeaders);
-      if (imgCol) set(imgCol, part._images[0]);
-      if (part._images.length > 1) {
-        const addImgCol = findAdditionalImageColumn(fullHeaders);
-        if (addImgCol) set(addImgCol, part._images.slice(1).join('|'));
+      if (imgCol) set(imgCol, imgs[0]);
+      if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);
+      for (let i = 2; i < imgs.length; i++) {
+        set(`AdditionalPicURL${i - 1}`, imgs[i]);
       }
     }
 
