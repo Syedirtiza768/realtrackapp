@@ -268,7 +268,7 @@ export function parseEbayFileExchangeCsv(csvText: string): ParseResult {
   // Auto-detect header row by scanning for the first row that contains
   // known eBay column names (Action, Title, StartPrice, etc.).
   // Metadata/info rows (Info, #INFO, etc.) are skipped automatically.
-  const KNOWN_HEADERS = ['action', 'title', 'startprice', 'customlabel', 'category', 'picurl', 'conditionid', 'description', 'format'];
+  const KNOWN_HEADERS = ['action', 'title', 'startprice', 'customlabel', 'category', 'picurl', 'itemphotourl', 'conditionid', 'description', 'format'];
 
   function isHeaderRow(row: string[]): boolean {
     const normalised = row.map(h => normalizeHeaderKey(h));
@@ -326,7 +326,7 @@ export function parseEbayFileExchangeCsv(csvText: string): ParseResult {
     if (action && action !== 'info') {
       // Resolve common header aliases for price and images
       const priceRaw  = col(fields, colMap, 'startprice', 'price', 'buynow price', 'buy it now price', 'buyitnowprice');
-      const imageRaw  = col(fields, colMap, 'picurl', 'pictureurl', 'picture url', 'imageurl', 'image url', 'images');
+      const imageRaw  = col(fields, colMap, 'picurl', 'pictureurl', 'picture url', 'imageurl', 'image url', 'images', 'itemphotourl', 'item photo url', 'photourl', 'photo url');
       const condRaw   = col(fields, colMap, 'conditionid', 'condition id', 'condition');
       const condParsed = parseCondition(condRaw);
 
