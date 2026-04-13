@@ -37,8 +37,8 @@ const OUTPUT_FILE = path.resolve(ROOT, 'output', 'inventory-export-selected-96-2
 const OUTPUT_FILE_FINAL = String.raw`C:\Users\Irtiza Hassan\Downloads\inventory-export-selected-96-2026-04-06.csv`;
 
 const MODEL = 'gpt-4o-mini';
-const BATCH_SIZE = 10;
-const CONCURRENCY = 1;
+const BATCH_SIZE = 25;
+const CONCURRENCY = 5;
 const MAX_RETRIES = 3;
 
 // ───── Vehicle Info (from sheet name) ─────
@@ -350,7 +350,7 @@ ${JSON.stringify(partsForPrompt)}`;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      await sleep(500); // Rate limiting
+      await sleep(100); // Rate limiting
       const data = await callOpenAI([
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
@@ -451,7 +451,7 @@ async function enrichAllParts(parts) {
 
     // Rate limiting between groups
     if (groupStart + CONCURRENCY < batches.length) {
-      await sleep(500);
+      await sleep(50);
     }
   }
 

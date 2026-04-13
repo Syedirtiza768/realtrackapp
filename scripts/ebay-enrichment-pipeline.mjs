@@ -18,9 +18,17 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import https from 'https';
+import http from 'http';
 import XLSX from 'xlsx';
 import OpenAI from 'openai';
 import axios from 'axios';
+
+// ── HTTP connection pooling — reuse TCP sockets across requests ──
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 15, maxFreeSockets: 5 });
+const httpAgent  = new http.Agent({ keepAlive: true, maxSockets: 15, maxFreeSockets: 5 });
+axios.defaults.httpAgent  = httpAgent;
+axios.defaults.httpsAgent = httpsAgent;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -59,12 +67,12 @@ const CONFIG = {
   openai: {
     apiKey: env.OPENAI_API_KEY,
     model: 'gpt-4o-mini',         // cost-effective for bulk; override with OPENAI_CHAT_MODEL
-    batchSize: 10,                 // parts per OpenAI call (smaller = more reliable)
-    concurrency: 5,                // parallel OpenAI calls
+    batchSize: 25,                 // parts per OpenAI call (larger = fewer round-trips)
+    concurrency: 8,                // parallel OpenAI calls
     temperature: 0.2,
     maxTokens: 6000,
     maxRetries: 3,
-    delayBetweenCallsMs: 300,
+    delayBetweenCallsMs: 50,      // minimal delay — rate limits handled by retry
   },
   ebay: {
     clientId: env.EBAY_CLIENT_ID,
@@ -1477,20 +1485,88 @@ function extractPart(row, colMap, sheetVin) {
 // ═══════════════════════════════════════════════════════════════════════
 
 async function decodeAllVins(parts) {
-  log.step('VIN Decoding (NHTSA API)');
+  log.step('VIN Decoding (NHTSA Batch API)');
   const uniqueVins = [...new Set(parts.map(p => p.vin).filter(v => v.length >= 11))];
   log.info(`Decoding ${uniqueVins.length} unique VINs...`);
 
   const results = new Map();
-  for (const vin of uniqueVins) {
-    const decoded = await decodeVin(vin);
-    if (decoded) {
-      results.set(vin, decoded);
-      log.info(`  ✓ ${vin} → ${decoded.year} ${decoded.make} ${decoded.model}`);
-    } else {
-      log.warn(`  ✗ ${vin} → decode failed, using sheet data`);
+
+  // NHTSA Batch API: decode up to 50 VINs in a single POST (massively faster)
+  // Process multiple batches in parallel (up to 3 concurrent API requests)
+  const vinBatches = chunk(uniqueVins, 50);
+  const VIN_BATCH_CONCURRENCY = 3;
+
+  for (let batchGroupStart = 0; batchGroupStart < vinBatches.length; batchGroupStart += VIN_BATCH_CONCURRENCY) {
+    const batchGroup = vinBatches.slice(batchGroupStart, batchGroupStart + VIN_BATCH_CONCURRENCY);
+
+    await Promise.allSettled(batchGroup.map(async (batch) => {
+    try {
+      const vinList = batch.map(v => v.replace(/[^A-HJ-NPR-Z0-9]/gi, '').toUpperCase()).join(';');
+      const { data } = await axios.post(
+        'https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVINValuesBatch/',
+        `DATA=${encodeURIComponent(vinList)}&format=json`,
+        { timeout: 30000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      for (const row of (data.Results || [])) {
+        const vin = (row.VIN || '').toUpperCase();
+        if (!vin || vin.length < 11) continue;
+
+        const year = row.ModelYear || '';
+        const make = row.Make || '';
+        const model = row.Model || '';
+
+        if (year && make) {
+          const decoded = {
+            vin,
+            year,
+            make,
+            model,
+            trim: row.Trim || '',
+            bodyClass: row.BodyClass || '',
+            engineCylinders: row.EngineCylinders || '',
+            engineDisplacement: row.DisplacementL || '',
+            engineModel: row.EngineModel || '',
+            fuelType: row.FuelTypePrimary || '',
+            driveType: row.DriveType || '',
+            plantCountry: row.PlantCountry || '',
+            vehicleType: row.VehicleType || '',
+            manufacturer: row.Manufacturer || '',
+          };
+          vinCache.set(vin.slice(0, 17), decoded);
+          results.set(vin, decoded);
+          // Also map original-cased VINs from the batch
+          for (const orig of batch) {
+            if (orig.replace(/[^A-HJ-NPR-Z0-9]/gi, '').toUpperCase() === vin) {
+              results.set(orig, decoded);
+            }
+          }
+          REPORT.vinDecodeSuccess++;
+          log.info(`  ✓ ${vin} → ${year} ${make} ${model}`);
+        } else {
+          REPORT.vinDecodeFail++;
+          log.warn(`  ✗ ${vin} → decode returned incomplete data`);
+        }
+      }
+    } catch (err) {
+      log.warn(`NHTSA batch decode failed, falling back to individual: ${err.message}`);
+      // Fallback: parallel individual decoding with concurrency limit
+      const VIN_CONCURRENCY = 5;
+      for (let i = 0; i < batch.length; i += VIN_CONCURRENCY) {
+        const group = batch.slice(i, i + VIN_CONCURRENCY);
+        const decodeResults = await Promise.allSettled(group.map(v => decodeVin(v)));
+        for (let j = 0; j < group.length; j++) {
+          const r = decodeResults[j];
+          if (r.status === 'fulfilled' && r.value) {
+            results.set(group[j], r.value);
+            log.info(`  ✓ ${group[j]} → ${r.value.year} ${r.value.make} ${r.value.model}`);
+          } else {
+            log.warn(`  ✗ ${group[j]} → decode failed, using sheet data`);
+          }
+        }
+      }
     }
-    await sleep(200); // Rate limiting
+    }));
   }
 
   log.info(`VIN decode: ${REPORT.vinDecodeSuccess} success, ${REPORT.vinDecodeFail} failed`);
@@ -1560,9 +1636,9 @@ function getVehicleInfo(part, vinData) {
 async function mapCategories(parts, vinData) {
   log.step('Category Mapping (eBay Taxonomy API + Fallback)');
 
-  // Group by unique part name patterns
+  // First pass: deduplicate lookups by partKey
   const partTypeCache = new Map();
-  let apiAttempts = 0;
+  const uniqueLookups = []; // { partKey, keywords, parts: [part, ...] }
 
   for (const part of parts) {
     const vehicle = getVehicleInfo(part, vinData);
@@ -1573,23 +1649,55 @@ async function mapCategories(parts, vinData) {
       continue;
     }
 
-    // Try eBay Taxonomy API first
+    // Mark as pending to avoid duplicates in the lookup queue
+    partTypeCache.set(partKey, null);
     const keywords = `${vehicle.make} ${part.partName}`.replace(/[^\w\s]/g, ' ').trim();
-    let category = null;
+    if (!uniqueLookups.find(l => l.partKey === partKey)) {
+      uniqueLookups.push({ partKey, keywords, parts: [part] });
+    } else {
+      uniqueLookups.find(l => l.partKey === partKey).parts.push(part);
+    }
+  }
 
-    if (apiAttempts < 5000) { // Production: 5000/day limit
-      category = await suggestCategory(keywords);
-      apiAttempts++;
-      if (apiAttempts % 50 === 0) await sleep(500); // Rate limit: pause every 50 calls
+  log.info(`${uniqueLookups.length} unique category lookups needed for ${parts.length} parts`);
+
+  // Second pass: parallel category lookups with concurrency control
+  const CAT_CONCURRENCY = 10;
+  let apiAttempts = 0;
+
+  for (let i = 0; i < uniqueLookups.length; i += CAT_CONCURRENCY) {
+    const group = uniqueLookups.slice(i, i + CAT_CONCURRENCY);
+
+    const results = await Promise.allSettled(
+      group.map(async (lookup) => {
+        let category = null;
+        if (apiAttempts < 5000) {
+          category = await suggestCategory(lookup.keywords);
+          apiAttempts++;
+        }
+        if (!category) {
+          category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
+          REPORT.categoryMappingFallback++;
+        }
+        return { partKey: lookup.partKey, category };
+      })
+    );
+
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        partTypeCache.set(r.value.partKey, r.value.category);
+      }
     }
 
-    if (!category) {
-      category = fallbackCategoryMatch(part.partName, part.note);
-      REPORT.categoryMappingFallback++;
-    }
+    // Light rate limiting — only every 60 calls
+    if (apiAttempts > 0 && apiAttempts % 60 === 0) await sleep(200);
+  }
 
-    part._category = category;
-    partTypeCache.set(partKey, category);
+  // Apply cached results to all parts
+  for (const part of parts) {
+    if (part._category) continue;
+    const partKey = `${part.partName}|${part.note}`.toLowerCase();
+    part._category = partTypeCache.get(partKey) || null;
   }
 
   log.info(`Category mapping: ${REPORT.categoryMappingApi} via API, ${REPORT.categoryMappingFallback} fallback`);
@@ -1639,16 +1747,13 @@ async function enrichBatch(batchParts, vinData) {
   const partsForPrompt = batchParts.map((part, idx) => {
     const vehicle = getVehicleInfo(part, vinData);
     const decoded = vinData.get(part.vin);
-    return {
+    const obj = {
       index: idx,
       sku: part.sku,
       brand: part.brand,
       vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
-      vehicleYear: vehicle.year,
-      vehicleMake: vehicle.make,
-      vehicleModel: vehicle.model,
       vehicleTrim: vehicle.trim,
-      vehicleEngine: vehicle.engine || '',
+      vehicleEngine: vehicle.engine || decoded?.engineModel || '',
       vehicleBodyClass: vehicle.bodyClass || decoded?.bodyClass || '',
       vehicleDriveType: vehicle.driveType || decoded?.driveType || '',
       vehicleFuelType: vehicle.fuelType || decoded?.fuelType || '',
@@ -1659,6 +1764,11 @@ async function enrichBatch(batchParts, vinData) {
       category: part._category?.categoryName || '',
       price: part.price,
     };
+    // Strip empty values to reduce token usage
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === '' || v == null) delete obj[k];
+    }
+    return obj;
   });
 
   const systemPrompt = `Role: You are a Senior Automotive Parts Interchange Specialist with 20+ years of experience in OEM parts databases (EPCs), cross-reference systems, and eBay Motors listing optimization. You have deep expertise across ALL makes — European, Japanese, American, Korean, and specialty manufacturers.
@@ -1784,7 +1894,7 @@ Return JSON:
 
 Each part was removed from a real vehicle identified by VIN. Use the decoded vehicle data (including engine, body class, drive type) for accurate fitment.
 
-${JSON.stringify(partsForPrompt, null, 2)}`;
+${JSON.stringify(partsForPrompt)}`;
 
   const client = getOpenAI();
   if (!client) return null;
@@ -2521,12 +2631,17 @@ async function fetchImages(parts) {
   REPORT.images.totalParts = toBeFetched.length;
   log.info(`Fetching images for ${toBeFetched.length} parts via ${IMAGE_API_URL}...`);
 
-  const IMAGE_BATCH_SIZE = 10;
+  const IMAGE_BATCH_SIZE = 25;
   const MAX_RETRIES = 2;
+  const IMAGE_CONCURRENCY = 3; // parallel image API requests
   const batches = chunk(toBeFetched, IMAGE_BATCH_SIZE);
 
-  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-    const batch = batches[batchIdx];
+  // Process image batches with concurrency control
+  for (let groupStart = 0; groupStart < batches.length; groupStart += IMAGE_CONCURRENCY) {
+    const batchGroup = batches.slice(groupStart, groupStart + IMAGE_CONCURRENCY);
+
+    await Promise.allSettled(batchGroup.map(async (batch, groupIdx) => {
+    const batchIdx = groupStart + groupIdx;
 
     // Check cache first — bypass API for cached results
     const uncached = [];
@@ -2541,7 +2656,7 @@ async function fetchImages(parts) {
       }
     }
 
-    if (uncached.length === 0) continue;
+    if (uncached.length === 0) return;
 
     // Retry loop for the API call
     let apiSuccess = false;
@@ -2588,11 +2703,10 @@ async function fetchImages(parts) {
         log.warn(`Image enrichment failed for ${p.partNumber} — no images available`);
       }
     }
-
-    if (batches.length > 1) await sleep(400);
+    }));
   }
 
-  // ── URL validation pass ──
+  // ── URL validation pass (parallel) ──
   log.info('Validating enriched image URLs...');
   const uniqueUrls = [...new Set(
     toBeFetched
@@ -2602,24 +2716,28 @@ async function fetchImages(parts) {
 
   const validationResults = new Map();
 
-  // Validate via the backend API in batches of 50
-  for (let i = 0; i < uniqueUrls.length; i += 50) {
-    const urlBatch = uniqueUrls.slice(i, i + 50);
-    try {
-      const { data } = await axios.post(
-        `${IMAGE_API_URL}/api/pipeline/images/validate`,
-        { urls: urlBatch },
-        { timeout: 30_000, headers: { 'Content-Type': 'application/json' } },
-      );
-      for (const r of (data.results || [])) {
-        validationResults.set(r.url, r);
-      }
-    } catch (err) {
-      log.warn(`Image validation batch failed: ${err.message}`);
-      for (const u of urlBatch) {
-        validationResults.set(u, { url: u, accessible: true, issues: [] });
-      }
-    }
+  // Validate via the backend API — parallel batches of 80
+  const valBatches = [];
+  for (let i = 0; i < uniqueUrls.length; i += 80) {
+    valBatches.push(uniqueUrls.slice(i, i + 80));
+  }
+  const VAL_CONCURRENCY = 4;
+  for (let g = 0; g < valBatches.length; g += VAL_CONCURRENCY) {
+    const group = valBatches.slice(g, g + VAL_CONCURRENCY);
+    const valResults = await Promise.allSettled(
+      group.map(urlBatch =>
+        axios.post(
+          `${IMAGE_API_URL}/api/pipeline/images/validate`,
+          { urls: urlBatch },
+          { timeout: 30_000, headers: { 'Content-Type': 'application/json' } },
+        ).then(({ data }) => {
+          for (const r of (data.results || [])) validationResults.set(r.url, r);
+        }).catch(err => {
+          log.warn(`Image validation batch failed: ${err.message}`);
+          for (const u of urlBatch) validationResults.set(u, { url: u, accessible: true, issues: [] });
+        })
+      )
+    );
   }
 
   // Apply validation — remove inaccessible URLs, update stats
@@ -2835,6 +2953,32 @@ function buildFitmentString(vehicle) {
   return parts.join('|');
 }
 
+/**
+ * Find the primary image column name from headers.
+ * eBay templates use various names: PicURL, Item photo URL, Artikelfoto-URL, etc.
+ */
+function findImageColumn(headers) {
+  const aliases = ['PicURL', 'Item photo URL', 'Artikelfoto-URL', 'Picture URL', 'Photo URL', 'Image URL'];
+  for (const alias of aliases) {
+    if (headers.indexOf(alias) >= 0) return alias;
+  }
+  // Fallback: case-insensitive search for common patterns
+  const found = headers.find(h => h && /^(pic\s*url|item\s*photo\s*url|picture\s*url|image\s*url|artikelfoto)/i.test(String(h).trim()));
+  return found || null;
+}
+
+/**
+ * Find the additional images column name from headers.
+ */
+function findAdditionalImageColumn(headers) {
+  const aliases = ['AdditionalImageURLs', 'Additional image URLs', 'Zus\u00E4tzliche Bild-URLs'];
+  for (const alias of aliases) {
+    if (headers.indexOf(alias) >= 0) return alias;
+  }
+  const found = headers.find(h => h && /additional\s*image/i.test(String(h).trim()));
+  return found || null;
+}
+
 // ────────── US Motors Template ──────────
 
 function generateUSMotorsOutput(parts, vinData) {
@@ -2938,9 +3082,11 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
 
   // Images — primary URL + pipe-separated additional URLs (eBay supports up to 12)
   if (part._images && part._images.length > 0) {
-    set('PicURL', part._images[0]);
+    const imgCol = findImageColumn(headers);
+    if (imgCol) set(imgCol, part._images[0]);
     if (part._images.length > 1) {
-      set('AdditionalImageURLs', part._images.slice(1).join('|'));
+      const addImgCol = findAdditionalImageColumn(headers);
+      if (addImgCol) set(addImgCol, part._images.slice(1).join('|'));
     }
   }
 
@@ -3032,8 +3178,12 @@ function generateAUOutput(parts, vinData) {
 
     // Images
     if (part._images && part._images.length > 0) {
-      set('PicURL', part._images[0]);
-      if (part._images.length > 1) set('AdditionalImageURLs', part._images.slice(1).join('|'));
+      const imgCol = findImageColumn(fullHeaders);
+      if (imgCol) set(imgCol, part._images[0]);
+      if (part._images.length > 1) {
+        const addImgCol = findAdditionalImageColumn(fullHeaders);
+        if (addImgCol) set(addImgCol, part._images.slice(1).join('|'));
+      }
     }
 
     // Enriched image metadata columns
@@ -3148,8 +3298,12 @@ function generateDEOutput(parts, vinData) {
 
     // Images
     if (part._images && part._images.length > 0) {
-      set('PicURL', part._images[0]);
-      if (part._images.length > 1) set('AdditionalImageURLs', part._images.slice(1).join('|'));
+      const imgCol = findImageColumn(fullHeaders);
+      if (imgCol) set(imgCol, part._images[0]);
+      if (part._images.length > 1) {
+        const addImgCol = findAdditionalImageColumn(fullHeaders);
+        if (addImgCol) set(addImgCol, part._images.slice(1).join('|'));
+      }
     }
 
     // Enriched image metadata columns
@@ -3400,37 +3554,39 @@ async function main() {
   await enrichAllParts(parts, vinData);
   saveCheckpoint(parts, 'enrichment');
 
-  // ── Step 6: Compliance Validation ──
+  // ── Step 6: Compliance Validation + Image Enrichment (parallel) ──
   log.progress({ stage: 'validation', total_parts: parts.length, processed: parts.filter(p => p._enriched).length });
-  validateAndFix(parts);
-
-  // ── Step 7: Generate Template Outputs ──
-  log.step('Generating Output Templates');
-  log.progress({ stage: 'output_generation', total_parts: parts.length, processed: parts.filter(p => p._enriched).length });
 
   const enrichedParts = parts.filter(p => p._enriched);
-  log.info(`${enrichedParts.length} enriched parts ready for output`);
+  log.info(`${enrichedParts.length} enriched parts ready for validation + image enrichment`);
 
-  // ── Step 6.5: Image Enrichment ──
-  // Fetch best-match image URLs for all enriched parts from the image service
-  await fetchImages(enrichedParts);
+  // Run validation (sync/CPU) and image enrichment (async/IO) in parallel
+  const imagePromise = fetchImages(enrichedParts);
+  validateAndFix(parts);
+  await imagePromise;
 
-  // US Motors (eBay Motors)
-  const usWb = generateUSMotorsOutput(enrichedParts, vinData);
-  const usPath = path.join(CONFIG.outputDir, `US-Motors-Listings-${new Date().toISOString().slice(0,10)}.xlsx`);
+  // ── Step 7: Generate Template Outputs (parallel) ──
+  log.step('Generating Output Templates');
+  log.progress({ stage: 'output_generation', total_parts: parts.length, processed: enrichedParts.length });
+
+  // Generate all three regional templates in parallel
+  const dateSuffix = new Date().toISOString().slice(0, 10);
+  const [usWb, auWb, deWb] = await Promise.all([
+    Promise.resolve(generateUSMotorsOutput(enrichedParts, vinData)),
+    Promise.resolve(generateAUOutput(enrichedParts, vinData)),
+    Promise.resolve(generateDEOutput(enrichedParts, vinData)),
+  ]);
+
+  const usPath = path.join(CONFIG.outputDir, `US-Motors-Listings-${dateSuffix}.xlsx`);
+  const auPath = path.join(CONFIG.outputDir, `AU-Category-Listings-${dateSuffix}.xlsx`);
+  const dePath = path.join(CONFIG.outputDir, `DE-Category-Listings-${dateSuffix}.xlsx`);
+
   XLSX.writeFile(usWb, usPath);
-  log.info(`  ✓ US Motors: ${usPath}`);
-
-  // Australia
-  const auWb = generateAUOutput(enrichedParts, vinData);
-  const auPath = path.join(CONFIG.outputDir, `AU-Category-Listings-${new Date().toISOString().slice(0,10)}.xlsx`);
   XLSX.writeFile(auWb, auPath);
-  log.info(`  ✓ AU: ${auPath}`);
-
-  // Germany
-  const deWb = generateDEOutput(enrichedParts, vinData);
-  const dePath = path.join(CONFIG.outputDir, `DE-Category-Listings-${new Date().toISOString().slice(0,10)}.xlsx`);
   XLSX.writeFile(deWb, dePath);
+
+  log.info(`  ✓ US Motors: ${usPath}`);
+  log.info(`  ✓ AU: ${auPath}`);
   log.info(`  ✓ DE: ${dePath}`);
 
   // ── Step 8: Generate Report ──

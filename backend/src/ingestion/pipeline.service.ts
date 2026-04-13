@@ -165,25 +165,42 @@ export class PipelineService {
   }
 
   /**
-   * Get aggregate stats for pipeline jobs.
+   * Get aggregate stats for pipeline jobs using a single DB query.
    */
   async getStats(): Promise<PipelineJobSummary> {
-    const jobs = await this.jobRepo.find();
+    const result = await this.jobRepo
+      .createQueryBuilder('job')
+      .select('job.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(job.processedParts), 0)', 'totalPartsProcessed')
+      .addSelect('COALESCE(SUM(job.enrichedCount), 0)', 'totalEnriched')
+      .addSelect('COALESCE(SUM(job.openaiTokensUsed), 0)', 'totalTokens')
+      .groupBy('job.status')
+      .getRawMany<{
+        status: string;
+        count: string;
+        totalPartsProcessed: string;
+        totalEnriched: string;
+        totalTokens: string;
+      }>();
 
     const byStatus: Record<string, number> = {};
+    let total = 0;
     let totalPartsProcessed = 0;
     let totalEnriched = 0;
     let totalTokens = 0;
 
-    for (const job of jobs) {
-      byStatus[job.status] = (byStatus[job.status] ?? 0) + 1;
-      totalPartsProcessed += job.processedParts;
-      totalEnriched += job.enrichedCount;
-      totalTokens += job.openaiTokensUsed;
+    for (const row of result) {
+      const count = parseInt(row.count, 10);
+      byStatus[row.status] = count;
+      total += count;
+      totalPartsProcessed += parseInt(row.totalPartsProcessed, 10) || 0;
+      totalEnriched += parseInt(row.totalEnriched, 10) || 0;
+      totalTokens += parseInt(row.totalTokens, 10) || 0;
     }
 
     return {
-      total: jobs.length,
+      total,
       byStatus,
       totalPartsProcessed,
       totalEnriched,

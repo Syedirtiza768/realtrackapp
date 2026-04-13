@@ -25,6 +25,12 @@ export interface PipelineJobData {
 export class PipelineProcessor extends WorkerHost {
   private readonly logger = new Logger(PipelineProcessor.name);
 
+  // Debounce progress DB writes — accumulate updates and flush periodically
+  private pendingUpdate: Partial<PipelineJob> | null = null;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastFlushJobId: string | null = null;
+  private static readonly FLUSH_INTERVAL_MS = 1500; // flush at most every 1.5s
+
   constructor(
     @InjectRepository(PipelineJob)
     private readonly jobRepo: Repository<PipelineJob>,
@@ -116,18 +122,20 @@ export class PipelineProcessor extends WorkerHost {
         if (code !== 0 && stderr) {
           this.logger.error(`Pipeline stderr: ${stderr.slice(-500)}`);
         }
-        resolve(code ?? 1);
+        // Flush any pending progress before resolving
+        this.flushProgress(jobId).then(() => resolve(code ?? 1)).catch(() => resolve(code ?? 1));
       });
     });
   }
 
   /**
-   * Parse stdout for [PROGRESS] markers and update job status/stats accordingly.
-   * Format: [PROGRESS] stage=enrichment enriched=50 failed=0 total_parts=200 processed=50 tokens=12345
+   * Parse stdout for [PROGRESS] markers and debounce DB updates.
+   * Stage transitions flush immediately; numeric stats are batched every 1.5s.
    */
   private async parseProgress(jobId: string, text: string): Promise<void> {
-    // Process each line that contains a [PROGRESS] marker
     const lines = text.split('\n');
+    let hasStageChange = false;
+
     for (const line of lines) {
       const idx = line.indexOf('[PROGRESS]');
       if (idx === -1) continue;
@@ -141,7 +149,8 @@ export class PipelineProcessor extends WorkerHost {
         }
       }
 
-      const update: Partial<PipelineJob> = {};
+      if (!this.pendingUpdate) this.pendingUpdate = {};
+      this.lastFlushJobId = jobId;
 
       // Stage transition
       const validStages: PipelineJobStatus[] = [
@@ -149,29 +158,59 @@ export class PipelineProcessor extends WorkerHost {
         'enrichment', 'validation', 'output_generation',
       ];
       if (fields.stage && validStages.includes(fields.stage as PipelineJobStatus)) {
-        update.status = fields.stage as PipelineJobStatus;
+        this.pendingUpdate.status = fields.stage as PipelineJobStatus;
+        hasStageChange = true;
       } else if (fields.stage === 'enrichment_done') {
-        update.status = 'enrichment';
+        this.pendingUpdate.status = 'enrichment';
+        hasStageChange = true;
       }
 
-      // Numeric stats
-      if (fields.total_parts) update.totalParts = parseInt(fields.total_parts, 10);
-      if (fields.processed) update.processedParts = parseInt(fields.processed, 10);
-      if (fields.enriched) update.enrichedCount = parseInt(fields.enriched, 10);
-      if (fields.failed) update.fallbackCount = parseInt(fields.failed, 10);
-      if (fields.tokens) update.openaiTokensUsed = parseInt(fields.tokens, 10);
-      if (fields.vin_success) update.vinDecodeSuccess = parseInt(fields.vin_success, 10);
-      if (fields.vin_failed) update.vinDecodeFailed = parseInt(fields.vin_failed, 10);
-      if (fields.cat_api) update.categoryApiCount = parseInt(fields.cat_api, 10);
-      if (fields.cat_fallback) update.categoryFallbackCount = parseInt(fields.cat_fallback, 10);
+      // Numeric stats — accumulate without writing
+      if (fields.total_parts) this.pendingUpdate.totalParts = parseInt(fields.total_parts, 10);
+      if (fields.processed) this.pendingUpdate.processedParts = parseInt(fields.processed, 10);
+      if (fields.enriched) this.pendingUpdate.enrichedCount = parseInt(fields.enriched, 10);
+      if (fields.failed) this.pendingUpdate.fallbackCount = parseInt(fields.failed, 10);
+      if (fields.tokens) this.pendingUpdate.openaiTokensUsed = parseInt(fields.tokens, 10);
+      if (fields.vin_success) this.pendingUpdate.vinDecodeSuccess = parseInt(fields.vin_success, 10);
+      if (fields.vin_failed) this.pendingUpdate.vinDecodeFailed = parseInt(fields.vin_failed, 10);
+      if (fields.cat_api) this.pendingUpdate.categoryApiCount = parseInt(fields.cat_api, 10);
+      if (fields.cat_fallback) this.pendingUpdate.categoryFallbackCount = parseInt(fields.cat_fallback, 10);
+    }
 
-      if (Object.keys(update).length > 0) {
-        await this.jobRepo.update(jobId, update as any);
-        if (update.status) {
-          this.logger.log(`Job ${jobId} → ${update.status} (parts: ${update.processedParts ?? '?'}/${update.totalParts ?? '?'})`);
-        }
+    // Stage changes flush immediately for responsive UI
+    if (hasStageChange) {
+      await this.flushProgress(jobId);
+    } else {
+      // Schedule a debounced flush for numeric-only updates
+      this.scheduleFlush(jobId);
+    }
+  }
+
+  /** Flush accumulated progress to DB */
+  private async flushProgress(jobId: string): Promise<void> {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+
+    const update = this.pendingUpdate;
+    this.pendingUpdate = null;
+
+    if (update && Object.keys(update).length > 0) {
+      await this.jobRepo.update(jobId, update as any);
+      if (update.status) {
+        this.logger.log(`Job ${jobId} → ${update.status} (parts: ${update.processedParts ?? '?'}/${update.totalParts ?? '?'})`);
       }
     }
+  }
+
+  /** Schedule a flush if one isn't already pending */
+  private scheduleFlush(jobId: string): void {
+    if (this.flushTimer) return; // already scheduled
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flushProgress(jobId).catch(() => {});
+    }, PipelineProcessor.FLUSH_INTERVAL_MS);
   }
 
   /**

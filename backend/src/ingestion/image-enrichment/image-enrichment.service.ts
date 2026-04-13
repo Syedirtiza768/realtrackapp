@@ -118,7 +118,7 @@ export class ImageEnrichmentService {
     options: { downloadImages?: boolean } = {},
   ): Promise<{ results: PartImageResult[]; progress: ImageEnrichmentProgress }> {
     const downloadImages = options.downloadImages ?? false;
-    const CONCURRENCY = 4; // process 4 parts in parallel
+    const CONCURRENCY = 8; // process 8 parts in parallel
 
     const progress: ImageEnrichmentProgress = {
       totalParts: parts.length,

@@ -22,9 +22,9 @@ export interface CsvImportJobData {
 }
 
 /** Batch size for streaming row processing */
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 250;
 /** Progress update frequency (every N rows) */
-const PROGRESS_UPDATE_INTERVAL = 50;
+const PROGRESS_UPDATE_INTERVAL = 250;
 
 /**
  * BullMQ processor for CSV catalog imports.
