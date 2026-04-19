@@ -138,6 +138,18 @@ export default function CatalogManager() {
     setSearchQuery('');
   }, []);
 
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback((ids: string[]) => {
+    setSelectedIds(ids.length === 0 ? new Set() : new Set(ids));
+  }, []);
+
   const handleFilterChange = useCallback((f: ActiveFilters) => {
     setFilters(f);
   }, []);
@@ -160,6 +172,81 @@ export default function CatalogManager() {
     if (selectedIds.size === 0) return;
     setBulkPublishOpen(true);
   }, [selectedIds]);
+
+  const [exporting, setExporting] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const handleExportTemplates = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setExporting(true);
+    try {
+      const res = await fetch('/api/catalog-products/export-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingIds: Array.from(selectedIds) }),
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const disp = res.headers.get('Content-Disposition');
+      a.download = disp?.match(/filename="(.+)"/)?.[1] || 'listings.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export templates failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, [selectedIds]);
+
+  const handleExportCsv = useCallback(async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery) params.set('q', searchQuery);
+      const fq = filtersToQuery(filters);
+      for (const [k, v] of Object.entries(fq)) {
+        if (v !== undefined && v !== '') params.set(k, String(v));
+      }
+      const res = await fetch(`/api/listings/export?${params.toString()}`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const disp = res.headers.get('Content-Disposition');
+      a.download = disp?.match(/filename="(.+)"/)?.[1] || 'listings-export.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('CSV export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, [searchQuery, filters]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch('/api/listings/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (!res.ok) throw new Error('Bulk delete failed');
+      setBulkDeleteConfirm(false);
+      setSelectedIds(new Set());
+      refetch();
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [selectedIds, refetch]);
 
   const handlePublishComplete = useCallback(() => {
     setPublishModalOpen(false);
@@ -257,8 +344,12 @@ export default function CatalogManager() {
             <Zap size={13} />
             {infiniteScroll ? 'Infinite Scroll' : 'Pagination'}
           </button>
-          <button className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-xs transition-colors">
-            <Download size={14} /> Export
+          <button
+            onClick={handleExportCsv}
+            disabled={exporting}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-xs transition-colors disabled:opacity-50"
+          >
+            <Download size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
         </div>
       </div>
@@ -378,6 +469,9 @@ export default function CatalogManager() {
                 infiniteScroll={infiniteScroll}
                 hasMore={hasMore}
                 onLoadMore={loadMore}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                onSelectAll={handleSelectAll}
               />
             </CardContent>
           </Card>
@@ -433,6 +527,38 @@ export default function CatalogManager() {
         </div>
       )}
 
+      {/* Bulk delete confirmation modal */}
+      {bulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBulkDeleteConfirm(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-500/10">
+                <Trash2 size={20} className="text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-100">Delete {selectedIds.size} Listings</h3>
+            </div>
+            <p className="text-sm text-slate-400 mb-6">
+              Are you sure you want to delete <span className="font-semibold text-slate-200">{selectedIds.size}</span> selected listings? They will be soft-deleted and can be restored later.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Single-item publish modal */}
       {publishTargetId && (
         <PublishModal
@@ -464,6 +590,19 @@ export default function CatalogManager() {
             className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
           >
             <Send size={12} /> List on Channels
+          </button>
+          <button
+            onClick={handleExportTemplates}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            <Download size={12} /> {exporting ? 'Exporting…' : 'Export Templates'}
+          </button>
+          <button
+            onClick={() => setBulkDeleteConfirm(true)}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            <Trash2 size={12} /> Delete
           </button>
           <button
             onClick={() => setSelectedIds(new Set())}

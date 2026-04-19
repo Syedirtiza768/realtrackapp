@@ -8,7 +8,9 @@ import {
   Post,
   Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { BulkUpdateDto } from './dto/bulk-update.dto';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingsQueryDto } from './dto/listings-query.dto';
@@ -75,6 +77,22 @@ export class ListingsController {
   @Post('bulk')
   bulkUpdate(@Body() dto: BulkUpdateDto) {
     return this.listingsService.bulkUpdate(dto);
+  }
+
+  @Post('bulk-delete')
+  bulkDelete(@Body() body: { ids: string[] }) {
+    return this.listingsService.bulkSoftDelete(body.ids);
+  }
+
+  @Get('export')
+  async exportCsv(@Query() query: SearchQueryDto, @Res() res: Response) {
+    const csv = await this.listingsService.exportCsv(query);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.set({
+      'Content-Type': 'text/csv',
+      'Content-Disposition': `attachment; filename="listings-export-${dateStr}.csv"`,
+    });
+    res.send(csv);
   }
 
   @Get(':id/revisions')

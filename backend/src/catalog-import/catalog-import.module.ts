@@ -14,6 +14,9 @@ import { ComplianceAuditService } from './services/compliance-audit.service.js';
 import { ComplianceController } from './controllers/compliance.controller.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { OpenAiModule } from '../common/openai/openai.module.js';
+import { CatalogProductController } from './catalog-product.controller.js';
+import { CatalogProductService } from './catalog-product.service.js';
+import { TemplateGeneratorService } from './template-generator.service.js';
 
 @Module({
   imports: [
@@ -27,14 +30,16 @@ import { OpenAiModule } from '../common/openai/openai.module.js';
     BullModule.registerQueue({ name: 'catalog-import' }),
     OpenAiModule,
   ],
-  controllers: [CatalogImportController, ComplianceController],
+  controllers: [CatalogImportController, ComplianceController, CatalogProductController],
   providers: [
     CatalogImportService,
     CsvImportProcessor,
     DuplicateDetectionService,
     EbayComplianceService,
     ComplianceAuditService,
+    CatalogProductService,
+    TemplateGeneratorService,
   ],
-  exports: [CatalogImportService, DuplicateDetectionService, EbayComplianceService, ComplianceAuditService],
+  exports: [CatalogImportService, DuplicateDetectionService, EbayComplianceService, ComplianceAuditService, CatalogProductService, TemplateGeneratorService],
 })
 export class CatalogImportModule {}

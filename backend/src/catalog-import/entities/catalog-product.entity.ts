@@ -144,6 +144,9 @@ export class CatalogProduct {
   @Column({ name: 'import_id', type: 'uuid', nullable: true })
   importId!: string | null;
 
+  @Column({ name: 'pipeline_job_id', type: 'uuid', nullable: true })
+  pipelineJobId!: string | null;
+
   /* ── Audit columns ─────────────────────────────────────── */
 
   @CreateDateColumn({ type: 'timestamptz' })

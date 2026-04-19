@@ -14,6 +14,7 @@ import type { PipelineJob, PipelineStats } from '../types/pipeline';
 const API = '/api';
 
 type PipelineJobApi = Omit<PipelineJob, 'fileSizeBytes' | 'totalParts' | 'processedParts' | 'vinDecodeSuccess' | 'vinDecodeFailed' | 'categoryApiCount' | 'categoryFallbackCount' | 'enrichedCount' | 'fallbackCount' | 'openaiTokensUsed' | 'openaiCostUsd'> & {
+  storedFilePath?: string | null;
   fileSizeBytes: number | string | null;
   totalParts: number | string | null;
   processedParts: number | string | null;
@@ -217,11 +218,11 @@ export function useCancelPipelineJob() {
  *  DOWNLOADS
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-export function getDownloadUrl(jobId: string, template: 'us' | 'au' | 'de' | 'report'): string {
+export function getDownloadUrl(jobId: string, template: 'us' | 'au' | 'de' | 'report' | 'input'): string {
   return `${API}/pipeline/jobs/${jobId}/download/${template}`;
 }
 
-export async function downloadPipelineFile(jobId: string, template: 'us' | 'au' | 'de' | 'report'): Promise<void> {
+export async function downloadPipelineFile(jobId: string, template: 'us' | 'au' | 'de' | 'report' | 'input'): Promise<void> {
   const url = getDownloadUrl(jobId, template);
   const a = document.createElement('a');
   a.href = url;

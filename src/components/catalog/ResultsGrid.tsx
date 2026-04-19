@@ -16,6 +16,7 @@ import {
   Sparkles,
   ArrowDown,
   Car,
+  Trash2,
 } from 'lucide-react';
 import ListingCard from './ListingCard';
 import { getFirstImageUrl } from '../../lib/searchApi';
@@ -41,6 +42,10 @@ interface Props {
   hasMore?: boolean;
   /** Use infinite scroll instead of pagination */
   infiniteScroll?: boolean;
+  /** Multi-select support */
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onSelectAll?: (ids: string[]) => void;
 }
 
 const formatPrice = (raw: string | null) => {
@@ -64,7 +69,12 @@ export default function ResultsGrid({
   onLoadMore,
   hasMore,
   infiniteScroll,
+  selectedIds,
+  onToggleSelect,
+  onSelectAll,
 }: Props) {
+  const allSelected = items.length > 0 && items.every(i => selectedIds?.has(i.id));
+  const someSelected = !allSelected && items.some(i => selectedIds?.has(i.id));
   const totalPages = Math.ceil(total / pageSize);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +101,22 @@ export default function ResultsGrid({
     <div>
       {/* View toggle toolbar */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-1 border border-slate-700 rounded-lg overflow-hidden">
+        <div className="flex items-center gap-3">
+          {onToggleSelect && (
+            <label className="flex items-center gap-2 cursor-pointer select-none" title="Select all on page">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={el => { if (el) el.indeterminate = someSelected; }}
+                onChange={() => onSelectAll?.(allSelected ? [] : items.map(i => i.id))}
+                className="w-4 h-4 rounded accent-blue-500 cursor-pointer"
+              />
+              <span className="text-xs text-slate-400">
+                {selectedIds && selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+              </span>
+            </label>
+          )}
+          <div className="flex items-center gap-1 border border-slate-700 rounded-lg overflow-hidden">
           <button
             onClick={() => onViewModeChange('grid')}
             className={`px-2.5 py-1.5 transition-colors ${
@@ -113,6 +138,7 @@ export default function ResultsGrid({
             <LayoutList size={14} />
           </button>
         </div>
+        </div>
       </div>
 
       {/* Loading skeleton */}
@@ -131,7 +157,21 @@ export default function ResultsGrid({
       {viewMode === 'grid' && items.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
           {items.map((item) => (
-            <ListingCard key={item.id} item={item} onQuickView={onQuickView} onDelete={onDelete} onPublish={onPublish} />
+            <div key={item.id} className="relative group">
+              {onToggleSelect && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds?.has(item.id) ?? false}
+                  onChange={() => onToggleSelect(item.id)}
+                  className="absolute top-2 left-2 z-10 w-4 h-4 rounded accent-blue-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ opacity: selectedIds?.has(item.id) ? 1 : undefined }}
+                  onClick={e => e.stopPropagation()}
+                />
+              )}
+              <div className={selectedIds?.has(item.id) ? 'ring-2 ring-blue-500 rounded-xl' : ''}>
+                <ListingCard item={item} onQuickView={onQuickView} onDelete={onDelete} onPublish={onPublish} />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -142,6 +182,7 @@ export default function ResultsGrid({
           <table className="w-full text-sm text-left min-w-[480px]">
             <thead className="text-xs uppercase bg-slate-900/80 text-slate-500 font-medium sticky top-0">
               <tr>
+                {onToggleSelect && <th className="p-2 sm:p-3 w-8"></th>}
                 <th className="p-2 sm:p-3 w-12 sm:w-16">Image</th>
                 <th className="p-2 sm:p-3">Product</th>
                 <th className="p-2 sm:p-3 hidden md:table-cell">Brand</th>
@@ -156,8 +197,22 @@ export default function ResultsGrid({
               {items.map((item) => {
                 const imageUrl = getFirstImageUrl(item.itemPhotoUrl);
                 const price = formatPrice(item.startPrice);
+                const isSelected = selectedIds?.has(item.id) ?? false;
                 return (
-                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
+                  <tr
+                    key={item.id}
+                    className={`hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-blue-900/20' : ''}`}
+                  >
+                    {onToggleSelect && (
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => onToggleSelect(item.id)}
+                          className="w-4 h-4 rounded accent-blue-500 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="p-3">
                       {imageUrl ? (
                         <img src={imageUrl} alt="" loading="lazy" className="w-12 h-12 object-cover rounded-lg" />
@@ -218,6 +273,15 @@ export default function ResultsGrid({
                             title="List on Channels"
                           >
                             <Send size={14} />
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            onClick={() => onDelete(item.id)}
+                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>

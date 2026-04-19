@@ -4,9 +4,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
 import { Repository } from 'typeorm';
 import { PipelineJob, PipelineJobStatus } from '../entities/pipeline-job.entity.js';
+import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
+import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import * as XLSX from 'xlsx';
 
 export interface PipelineJobData {
   jobId: string;
@@ -34,6 +37,10 @@ export class PipelineProcessor extends WorkerHost {
   constructor(
     @InjectRepository(PipelineJob)
     private readonly jobRepo: Repository<PipelineJob>,
+    @InjectRepository(CatalogProduct)
+    private readonly productRepo: Repository<CatalogProduct>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
   ) {
     super();
   }
@@ -68,6 +75,9 @@ export class PipelineProcessor extends WorkerHost {
 
       // Scan output directory for generated files
       await this.collectOutputs(jobId, outputDir);
+
+      // Save enriched listings to catalog_products + listing_records
+      await this.saveToCatalog(jobId, outputDir);
 
       await this.updateStatus(jobId, 'completed');
       this.logger.log(`Pipeline job=${jobId} completed successfully`);
@@ -284,5 +294,234 @@ export class PipelineProcessor extends WorkerHost {
       status: 'failed' as PipelineJobStatus,
       lastError: error.substring(0, 2000),
     });
+  }
+
+  /**
+   * Parse the US output XLSX and save each listing row to catalog_products + listing_records.
+   */
+  private async saveToCatalog(jobId: string, outputDir: string): Promise<void> {
+    const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+    const usFile = files.find(f => {
+      const lower = f.toLowerCase();
+      return lower.includes('us-motors') || lower.includes('us_motors');
+    });
+    if (!usFile) {
+      this.logger.warn(`Job ${jobId}: No US output file found for catalog save`);
+      return;
+    }
+
+    const usPath = path.join(outputDir, usFile);
+    try {
+      const wb = XLSX.readFile(usPath);
+      const ws = wb.Sheets['Listings'];
+      if (!ws) {
+        this.logger.warn(`Job ${jobId}: No Listings sheet in US output`);
+        return;
+      }
+
+      const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const row = rows[i];
+        if (row?.some(h => h && /title/i.test(String(h)) && !/info/i.test(String(h)))) {
+          headerIdx = i;
+          break;
+        }
+      }
+      if (headerIdx === -1) {
+        this.logger.warn(`Job ${jobId}: Could not find header row in US output`);
+        return;
+      }
+
+      const headers = rows[headerIdx].map(h => String(h ?? '').trim());
+      const colIdx = (name: string): number => {
+        const norm = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return headers.findIndex(h => h.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm));
+      };
+
+      const iAction = colIdx('Action');
+      const iSku = colIdx('Customlabel');
+      const iCategoryId = colIdx('CategoryID');
+      const iCategoryName = colIdx('CategoryName');
+      const iTitle = colIdx('Title');
+      const iPrice = colIdx('Startprice');
+      const iQty = colIdx('Quantity');
+      const iConditionId = colIdx('ConditionID');
+      const iDesc = colIdx('Description');
+      const iFormat = colIdx('Format');
+      const iDuration = colIdx('Duration');
+      const iLocation = colIdx('Location');
+      const iPicUrl = headers.findIndex(h => /picurl|item\s*photo\s*url/i.test(h));
+      const iShipping = colIdx('Shippingprofilename');
+      const iReturn = colIdx('Returnprofilename');
+      const iPayment = colIdx('Paymentprofilename');
+      const iBrand = headers.findIndex(h => /^C:Brand$/i.test(h));
+      const iType = headers.findIndex(h => /^C:Type$/i.test(h));
+      const iMpn = headers.findIndex(h => /C:Manufacturer\s*Part\s*Number/i.test(h));
+      const iOem = headers.findIndex(h => /C:OE.*OEM.*Part.*Number/i.test(h));
+      const iPlacement = headers.findIndex(h => /C:Placement/i.test(h));
+      const iMaterial = headers.findIndex(h => /^C:Material$/i.test(h));
+      const iFeatures = headers.findIndex(h => /^C:Features$/i.test(h));
+      const iCountry = headers.findIndex(h => /C:Country/i.test(h));
+      const iRelationship = colIdx('Relationship');
+
+      const get = (row: string[], idx: number): string =>
+        idx >= 0 && row[idx] != null ? String(row[idx]).trim() : '';
+
+      const products: Partial<CatalogProduct>[] = [];
+      const listingRecords: Partial<ListingRecord>[] = [];
+      const compatibilities = new Map<number, { make: string; model: string; year: string }[]>();
+
+      let currentProductIdx = -1;
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const relationship = get(row, iRelationship);
+        if (relationship === 'Compatibility') {
+          if (currentProductIdx >= 0) {
+            const details = get(row, colIdx('RelationshipDetails'));
+            if (details) {
+              const parts: Record<string, string> = {};
+              details.split('|').forEach(pair => {
+                const [k, ...v] = pair.split('=');
+                if (k && v.length) parts[k.trim()] = v.join('=').trim();
+              });
+              if (!compatibilities.has(currentProductIdx)) compatibilities.set(currentProductIdx, []);
+              compatibilities.get(currentProductIdx)!.push({
+                make: parts['Make'] || '',
+                model: parts['Model'] || '',
+                year: parts['Year'] || '',
+              });
+            }
+          }
+          continue;
+        }
+
+        const action = get(row, iAction).toLowerCase();
+        if (!action || action === 'info') continue;
+
+        const title = get(row, iTitle);
+        if (!title) continue;
+
+        const sku = get(row, iSku);
+        const priceStr = get(row, iPrice);
+        const price = priceStr ? parseFloat(priceStr) : null;
+        const qtyStr = get(row, iQty);
+        const quantity = qtyStr ? parseInt(qtyStr, 10) : null;
+        const picUrl = get(row, iPicUrl);
+        const imageUrls = picUrl ? picUrl.split('|').filter(Boolean) : [];
+        for (let ai = 0; ai <= 7; ai++) {
+          const colName = ai === 0 ? 'AdditionalPicURL' : `AdditionalPicURL${ai}`;
+          const addIdx = headers.indexOf(colName);
+          if (addIdx >= 0) {
+            const url = get(row, addIdx);
+            if (url) imageUrls.push(url);
+          }
+        }
+
+        const brand = get(row, iBrand);
+        const mpn = get(row, iMpn);
+
+        currentProductIdx = products.length;
+
+        products.push({
+          sku: sku || null,
+          title,
+          description: get(row, iDesc) || null,
+          brand: brand || null,
+          brandNormalized: brand ? brand.toLowerCase().trim() : null,
+          mpn: mpn || null,
+          mpnNormalized: mpn ? mpn.toLowerCase().replace(/[\s\-]/g, '') : null,
+          partType: get(row, iType) || null,
+          placement: get(row, iPlacement) || null,
+          material: get(row, iMaterial) || null,
+          features: get(row, iFeatures) || null,
+          countryOfOrigin: get(row, iCountry) || null,
+          oemPartNumber: get(row, iOem) || null,
+          price,
+          quantity,
+          conditionId: get(row, iConditionId) || null,
+          categoryId: get(row, iCategoryId) || null,
+          categoryName: get(row, iCategoryName) || null,
+          imageUrls,
+          location: get(row, iLocation) || null,
+          format: get(row, iFormat) || null,
+          duration: get(row, iDuration) || null,
+          shippingProfile: get(row, iShipping) || null,
+          returnProfile: get(row, iReturn) || null,
+          paymentProfile: get(row, iPayment) || null,
+          sourceFile: usFile,
+          sourceRow: i,
+          pipelineJobId: jobId,
+        });
+
+        listingRecords.push({
+          sourceFileName: usFile,
+          sourceFilePath: usPath,
+          sheetName: `Pipeline ${jobId.slice(0, 8)}`,
+          sourceRowNumber: i,
+          action: 'Add',
+          customLabelSku: sku || null,
+          categoryId: get(row, iCategoryId) || null,
+          categoryName: get(row, iCategoryName) || null,
+          title,
+          startPrice: priceStr || null,
+          startPriceNum: price,
+          quantity: qtyStr || null,
+          quantityNum: quantity,
+          itemPhotoUrl: imageUrls.join('|') || null,
+          conditionId: get(row, iConditionId) || null,
+          description: get(row, iDesc) || null,
+          format: get(row, iFormat) || null,
+          duration: get(row, iDuration) || null,
+          location: get(row, iLocation) || null,
+          shippingProfileName: get(row, iShipping) || null,
+          returnProfileName: get(row, iReturn) || null,
+          paymentProfileName: get(row, iPayment) || null,
+          cBrand: brand || null,
+          cType: get(row, iType) || null,
+          cFeatures: get(row, iFeatures) || null,
+          cManufacturerPartNumber: mpn || null,
+          cOeOemPartNumber: get(row, iOem) || null,
+        });
+      }
+
+      for (const [idx, fitments] of compatibilities) {
+        if (products[idx]) {
+          products[idx].fitmentData = fitments as Record<string, unknown>[];
+        }
+      }
+
+      if (products.length > 0) {
+        const CHUNK = 500;
+        for (let i = 0; i < products.length; i += CHUNK) {
+          await this.productRepo
+            .createQueryBuilder()
+            .insert()
+            .into(CatalogProduct)
+            .values(products.slice(i, i + CHUNK) as any)
+            .orIgnore()
+            .execute();
+        }
+        this.logger.log(`Job ${jobId}: Saved ${products.length} products to catalog`);
+      }
+
+      if (listingRecords.length > 0) {
+        const CHUNK = 500;
+        for (let i = 0; i < listingRecords.length; i += CHUNK) {
+          await this.listingRepo
+            .createQueryBuilder()
+            .insert()
+            .into(ListingRecord)
+            .values(listingRecords.slice(i, i + CHUNK))
+            .orIgnore()
+            .execute();
+        }
+        this.logger.log(`Job ${jobId}: Saved ${listingRecords.length} listing records`);
+      }
+    } catch (err) {
+      this.logger.error(`Job ${jobId}: Failed to save to catalog: ${err instanceof Error ? err.message : err}`);
+    }
   }
 }

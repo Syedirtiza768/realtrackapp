@@ -6,6 +6,7 @@ import { AiResult } from './entities/ai-result.entity.js';
 import { ImageAsset } from '../storage/entities/image-asset.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PipelineJob } from './entities/pipeline-job.entity.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { IngestionController } from './ingestion.controller.js';
 import { IngestionService } from './ingestion.service.js';
 import { IngestionProcessor } from './processors/ingestion.processor.js';
@@ -25,7 +26,7 @@ import { OpenAiModule } from '../common/openai/openai.module.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob]),
+    TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob, CatalogProduct]),
     BullModule.registerQueue({ name: 'ingestion' }),
     BullModule.registerQueue({ name: 'pipeline' }),
     AiModule,

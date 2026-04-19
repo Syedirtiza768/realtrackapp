@@ -131,8 +131,12 @@ export class PipelineController {
         filePath = job.reportPath;
         filename = `Enrichment-Report-${job.id.slice(0, 8)}.json`;
         break;
+      case 'input':
+        filePath = job.storedFilePath;
+        filename = job.originalFilename;
+        break;
       default:
-        throw new Error(`Unknown template: ${template}. Use: us, au, de, report`);
+        throw new Error(`Unknown template: ${template}. Use: us, au, de, report, input`);
     }
 
     if (!filePath || !fs.existsSync(filePath)) {
@@ -141,9 +145,16 @@ export class PipelineController {
     }
 
     const ext = path.extname(filePath).toLowerCase();
-    const mimeType = ext === '.json'
-      ? 'application/json'
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    let mimeType: string;
+    if (ext === '.json') {
+      mimeType = 'application/json';
+    } else if (ext === '.csv') {
+      mimeType = 'text/csv';
+    } else if (ext === '.xls') {
+      mimeType = 'application/vnd.ms-excel';
+    } else {
+      mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
 
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

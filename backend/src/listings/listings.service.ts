@@ -7,12 +7,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { BulkUpdateDto } from './dto/bulk-update.dto';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingsQueryDto } from './dto/listings-query.dto';
 import { PatchStatusDto } from './dto/patch-status.dto';
+import { SearchQueryDto } from './dto/search-query.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
 import { ListingRecord } from './listing-record.entity';
 import { ListingRevision } from './listing-revision.entity';
@@ -428,6 +429,70 @@ export class ListingsService {
       }
     }
     return { updated: updated.length, failed };
+  }
+
+  async bulkSoftDelete(ids: string[]) {
+    const listings = await this.listingRepo.findBy({ id: In(ids) });
+    if (!listings.length) throw new NotFoundException('No listings found for given IDs');
+    await this.listingRepo.softRemove(listings);
+    return { deleted: listings.length };
+  }
+
+  async exportCsv(query: SearchQueryDto): Promise<string> {
+    const qb = this.listingRepo
+      .createQueryBuilder('r')
+      .select([
+        'r.id', 'r.customLabelSku', 'r.title', 'r.cBrand', 'r.cType',
+        'r.categoryId', 'r.categoryName', 'r.startPrice', 'r.quantity',
+        'r.conditionId', 'r.cManufacturerPartNumber', 'r.cOeOemPartNumber',
+        'r.location', 'r.format', 'r.description', 'r.itemPhotoUrl',
+        'r.sourceFileName', 'r.importedAt',
+      ])
+      .orderBy('r.importedAt', 'DESC')
+      .limit(10000);
+
+    if (query.q?.trim()) {
+      qb.andWhere(
+        '(r.customLabelSku ILIKE :q OR r.title ILIKE :q OR r.cBrand ILIKE :q)',
+        { q: `%${query.q.trim()}%` },
+      );
+    }
+    if (query.brands?.trim()) {
+      const brandList = query.brands.split(',').map(b => b.trim()).filter(Boolean);
+      qb.andWhere('r.cBrand IN (:...brands)', { brands: brandList });
+    }
+    if (query.categories?.trim()) {
+      const catList = query.categories.split(',').map(c => c.trim()).filter(Boolean);
+      qb.andWhere('r.categoryId IN (:...cats)', { cats: catList });
+    }
+    if (query.conditions?.trim()) {
+      const condList = query.conditions.split(',').map(c => c.trim()).filter(Boolean);
+      qb.andWhere('r.conditionId IN (:...conds)', { conds: condList });
+    }
+    if (query.minPrice != null) {
+      qb.andWhere('CAST(r.startPrice AS numeric) >= :minPrice', { minPrice: query.minPrice });
+    }
+    if (query.maxPrice != null) {
+      qb.andWhere('CAST(r.startPrice AS numeric) <= :maxPrice', { maxPrice: query.maxPrice });
+    }
+
+    const items = await qb.getMany();
+
+    const headers = ['SKU','Title','Brand','Type','Category','Price','Qty','Condition','MPN','OEM Part','Location','Format'];
+    const escape = (v: string | null | undefined) => {
+      if (v == null) return '';
+      const s = String(v);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const rows = items.map(r => [
+      escape(r.customLabelSku), escape(r.title), escape(r.cBrand), escape(r.cType),
+      escape(r.categoryName), escape(r.startPrice), escape(r.quantity),
+      escape(r.conditionId), escape(r.cManufacturerPartNumber), escape(r.cOeOemPartNumber),
+      escape(r.location), escape(r.format),
+    ].join(','));
+
+    return [headers.join(','), ...rows].join('\n');
   }
 
   async getRevisions(listingId: string, limit: number, offset: number) {

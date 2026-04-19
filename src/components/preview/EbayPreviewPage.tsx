@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, FileText, X, Eye, ChevronLeft, ChevronRight, Search, Image as ImageIcon, AlertTriangle } from 'lucide-react';
+import { Upload, FileText, X, Eye, ChevronLeft, ChevronRight, Search, Image as ImageIcon, AlertTriangle, Pencil, Download, LayoutGrid, List } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { parseEbayFileExchangeCsv, type EbayListing, type ParseResult } from '../../lib/ebayFileExchangeParser';
+import { parseEbayFileExchangeCsv, generateEbayFileExchangeCsv, type EbayListing, type ParseResult } from '../../lib/ebayFileExchangeParser';
+import EditListingPanel from './EditListingPanel';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -601,7 +602,9 @@ export default function EbayPreviewPage() {
   const [fileSize, setFileSize] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'single' | 'grid'>('single');
+  const [viewMode, setViewMode] = useState<'single' | 'grid' | 'list'>('single');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [hasEdits, setHasEdits] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((file: File) => {
@@ -630,7 +633,7 @@ export default function EbayPreviewPage() {
           setSearchQuery('');
         } catch (err) {
           console.error('[eBay Preview] Parse error:', err);
-          setParseResult({ listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: [`Parse error: ${err}`] });
+          setParseResult({ listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: [`Parse error: ${err}`], rawHeaders: [], metadataRows: [] });
         }
       };
       reader.readAsArrayBuffer(file);
@@ -647,7 +650,7 @@ export default function EbayPreviewPage() {
           setSearchQuery('');
         } catch (err) {
           console.error('[eBay Preview] Parse error:', err);
-          setParseResult({ listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: [`Parse error: ${err}`] });
+          setParseResult({ listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: [`Parse error: ${err}`], rawHeaders: [], metadataRows: [] });
         }
       };
       reader.readAsText(file);
@@ -675,8 +678,66 @@ export default function EbayPreviewPage() {
     setFileSize(0);
     setSelectedIndex(0);
     setSearchQuery('');
+    setEditingIndex(null);
+    setHasEdits(false);
     if (inputRef.current) inputRef.current.value = '';
   }, []);
+
+  const handleSaveListing = useCallback((updated: EbayListing) => {
+    if (!parseResult || editingIndex === null) return;
+    // Use customLabel as stable ID; fall back to filtered position index
+    const filteredListing = filteredListings[editingIndex];
+    const stableId = filteredListing?.customLabel;
+    const realIndex = stableId
+      ? parseResult.listings.findIndex(l => l.customLabel === stableId)
+      : editingIndex;
+    if (realIndex === -1) return;
+    const newListings = [...parseResult.listings];
+    newListings[realIndex] = updated;
+    setParseResult({ ...parseResult, listings: newListings });
+    // Keep the panel open so the user can see the change confirmed in-panel
+    setHasEdits(true);
+
+    // Sync to catalog backend (fire-and-forget, non-blocking)
+    if (stableId) {
+      fetch(`/api/catalog-products/by-sku/${encodeURIComponent(stableId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: updated.title,
+          description: updated.description,
+          brand: updated.brand,
+          mpn: updated.mpn,
+          oemPartNumber: updated.oemPartNumber,
+          partType: updated.type,
+          placement: updated.placement,
+          material: updated.material,
+          features: updated.features,
+          price: updated.price ? parseFloat(updated.price) : undefined,
+          quantity: updated.quantity ? parseInt(updated.quantity, 10) : undefined,
+          conditionId: updated.conditionId,
+          imageUrls: updated.imageUrls,
+          fitmentData: updated.compatibility?.map((f: { make: string; model: string; year: string }) => ({
+            make: f.make, model: f.model, year: f.year,
+          })),
+        }),
+      }).catch(() => { /* catalog sync is best-effort */ });
+    }
+  }, [parseResult, editingIndex, filteredListings]);
+
+  const handleDownloadCsv = useCallback(() => {
+    if (!parseResult) return;
+    const allListings = [...parseResult.listings, ...parseResult.skippedListings];
+    const csv = generateEbayFileExchangeCsv(allListings, parseResult.rawHeaders, parseResult.metadataRows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const baseName = fileName.replace(/\.[^.]+$/, '');
+    a.href = url;
+    a.download = `${baseName}-edited.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [parseResult, fileName]);
 
   // ─── Upload screen ─────────────────────────────────────────────────
 
@@ -762,14 +823,43 @@ export default function EbayPreviewPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleReset}
-          className="text-sm text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors"
-        >
-          <X className="w-4 h-4" />
-          Clear & Upload New
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleDownloadCsv}
+            className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download CSV
+          </button>
+          <button
+            onClick={handleReset}
+            className="text-sm text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors"
+          >
+            <X className="w-4 h-4" />
+            Clear & Upload New
+          </button>
+        </div>
       </div>
+
+      {/* Edit / Download bar */}
+      {hasEdits && (
+        <Card>
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-amber-300 font-medium">
+                Listings have been modified. Download the updated output file.
+              </p>
+              <button
+                onClick={handleDownloadCsv}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download Edited CSV
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Warnings / Skipped rows */}
       {parseResult.warnings.length > 0 && (
@@ -831,9 +921,15 @@ export default function EbayPreviewPage() {
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                Grid
+                <LayoutGrid className="w-3.5 h-3.5" /> Grid
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <List className="w-3.5 h-3.5" /> List
               </button>
             </div>
 
@@ -841,7 +937,18 @@ export default function EbayPreviewPage() {
             {viewMode === 'single' && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setSelectedIndex(Math.max(0, selectedIndex - 1))}
+                  onClick={() => { setEditingIndex(editingIndex !== null ? null : selectedIndex); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                    editingIndex !== null
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                  }`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {editingIndex !== null ? 'Editing' : 'Edit'}
+                </button>
+                <button
+                  onClick={() => { const newIdx = Math.max(0, selectedIndex - 1); setSelectedIndex(newIdx); if (editingIndex !== null) setEditingIndex(newIdx); }}
                   disabled={selectedIndex === 0}
                   className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
@@ -851,7 +958,7 @@ export default function EbayPreviewPage() {
                   {filteredListings.length > 0 ? `${selectedIndex + 1} / ${filteredListings.length}` : '0 / 0'}
                 </span>
                 <button
-                  onClick={() => setSelectedIndex(Math.min(filteredListings.length - 1, selectedIndex + 1))}
+                  onClick={() => { const newIdx = Math.min(filteredListings.length - 1, selectedIndex + 1); setSelectedIndex(newIdx); if (editingIndex !== null) setEditingIndex(newIdx); }}
                   disabled={selectedIndex >= filteredListings.length - 1}
                   className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
@@ -866,8 +973,20 @@ export default function EbayPreviewPage() {
       {/* Content */}
       {viewMode === 'single' ? (
         currentListing ? (
-          <div className="rounded-xl overflow-hidden border border-slate-700 shadow-2xl">
-            <EbayListingPreview listing={currentListing} key={selectedIndex} />
+          <div className="flex gap-4">
+            <div className={`rounded-xl overflow-hidden border border-slate-700 shadow-2xl ${editingIndex !== null ? 'flex-1 min-w-0' : 'w-full'}`}>
+              <EbayListingPreview listing={currentListing} key={selectedIndex} />
+            </div>
+            {editingIndex !== null && currentListing && (
+              <div className="w-[420px] flex-shrink-0 rounded-xl overflow-hidden border border-slate-700 shadow-2xl" style={{ maxHeight: 'calc(100vh - 200px)', position: 'sticky', top: 16 }}>
+                <EditListingPanel
+                  listing={currentListing}
+                  key={`edit-${selectedIndex}`}
+                  onSave={handleSaveListing}
+                  onCancel={() => setEditingIndex(null)}
+                />
+              </div>
+            )}
           </div>
         ) : (
           <Card>
@@ -896,9 +1015,9 @@ export default function EbayPreviewPage() {
             </CardContent>
           </Card>
         )
-      ) : (
-        /* Grid view */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      ) : viewMode === 'grid' ? (
+        /* ── Compact Grid view ── */
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {filteredListings.length === 0 && (
             <div className="col-span-full text-center py-16 text-slate-400">
               {searchQuery ? (
@@ -912,33 +1031,83 @@ export default function EbayPreviewPage() {
             <div
               key={i}
               onClick={() => { setSelectedIndex(i); setViewMode('single'); }}
-              className="bg-white rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+              className="bg-white rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
             >
-              <div className="aspect-[4/3] bg-gray-50 flex items-center justify-center overflow-hidden">
+              <div className="h-28 bg-gray-50 flex items-center justify-center overflow-hidden">
                 {listing.imageUrls[0] ? (
                   <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
                 ) : (
-                  <ImageIcon className="w-12 h-12 text-gray-300" />
+                  <ImageIcon className="w-8 h-8 text-gray-300" />
                 )}
               </div>
-              <div className="p-3">
-                <p className="text-sm text-gray-900 font-medium line-clamp-2 leading-snug mb-1">{listing.title}</p>
-                <p className="text-lg font-bold text-gray-900">
+              <div className="p-2">
+                <p className="text-xs text-gray-900 font-medium line-clamp-2 leading-snug mb-1">{listing.title}</p>
+                <p className="text-sm font-bold text-gray-900">
                   US ${parseFloat(listing.price || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
-                <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                  <span>{listing.conditionLabel || 'Used'}</span>
-                  <span>·</span>
-                  <span>{listing.brand}</span>
-                  {listing.compatibility.length > 0 && (
-                    <>
-                      <span>·</span>
-                      <span>{listing.compatibility.length} fitments</span>
-                    </>
-                  )}
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                  <span className="text-xs text-gray-400">{listing.conditionLabel || 'Used'}</span>
+                  {listing.brand && <><span className="text-gray-300">·</span><span className="text-xs text-gray-400 truncate max-w-[60px]">{listing.brand}</span></>}
+                  {listing.compatibility.length > 0 && <><span className="text-gray-300">·</span><span className="text-xs text-gray-400">{listing.compatibility.length}f</span></>}
                 </div>
-                <p className="text-xs text-gray-400 mt-1 truncate">{listing.customLabel}</p>
+                {listing.customLabel && <p className="text-xs text-gray-300 mt-0.5 truncate">{listing.customLabel}</p>}
               </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* ── List view ── */
+        <div className="rounded-xl border border-slate-700 overflow-hidden">
+          {/* Header */}
+          <div className="grid bg-slate-800 border-b border-slate-700 px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider" style={{ gridTemplateColumns: '48px 1fr 130px 90px 110px 110px 70px' }}>
+            <div />
+            <div className="pl-2">Title</div>
+            <div>SKU</div>
+            <div>Price</div>
+            <div>Condition</div>
+            <div>Brand</div>
+            <div>Fitments</div>
+          </div>
+          {filteredListings.length === 0 && (
+            <div className="text-center py-16 text-slate-400">
+              {searchQuery ? (
+                <span>No listings match &ldquo;{searchQuery}&rdquo;. <button onClick={() => { setSearchQuery(''); setSelectedIndex(0); }} className="text-blue-400 hover:underline">Clear search</button></span>
+              ) : parseResult && parseResult.skippedListings.length > 0
+                ? `All ${parseResult.skippedListings.length} rows were skipped — check the warnings above.`
+                : 'No listings were found in this file.'}
+            </div>
+          )}
+          {filteredListings.map((listing, i) => (
+            <div
+              key={i}
+              onClick={() => { setSelectedIndex(i); setViewMode('single'); }}
+              className="grid items-center px-3 py-1.5 border-b border-slate-700/60 cursor-pointer hover:bg-slate-700/40 transition-colors last:border-b-0"
+              style={{ gridTemplateColumns: '48px 1fr 130px 90px 110px 110px 70px' }}
+            >
+              {/* Thumb */}
+              <div className="w-10 h-10 rounded overflow-hidden bg-slate-700 flex items-center justify-center flex-shrink-0">
+                {listing.imageUrls[0] ? (
+                  <img src={listing.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon className="w-4 h-4 text-slate-500" />
+                )}
+              </div>
+              {/* Title */}
+              <div className="pl-2 min-w-0">
+                <p className="text-sm text-slate-200 truncate">{listing.title}</p>
+              </div>
+              {/* SKU */}
+              <div className="text-xs text-slate-400 truncate pr-2">{listing.customLabel || '—'}</div>
+              {/* Price */}
+              <div className="text-sm font-semibold text-slate-100">
+                US ${parseFloat(listing.price || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              {/* Condition */}
+              <div className="text-xs text-slate-400 truncate">{listing.conditionLabel || 'Used'}</div>
+              {/* Brand */}
+              <div className="text-xs text-slate-400 truncate">{listing.brand || '—'}</div>
+              {/* Fitments */}
+              <div className="text-xs text-slate-400">{listing.compatibility.length > 0 ? listing.compatibility.length : '—'}</div>
             </div>
           ))}
         </div>

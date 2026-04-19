@@ -45,6 +45,10 @@ export interface ParseResult {
   totalRows: number;
   compatibilityRows: number;
   errors: string[];
+  /** Preserved raw headers for CSV regeneration */
+  rawHeaders: string[];
+  /** Metadata rows before the header (e.g. info row) */
+  metadataRows: string[][];
 }
 
 /** Simple CSV line parser that handles quoted fields with commas and escaped quotes */
@@ -262,7 +266,7 @@ export function parseEbayFileExchangeCsv(csvText: string): ParseResult {
   }
 
   if (records.length < 2) {
-    return { listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: ['File has too few rows'] };
+    return { listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: ['File has too few rows'], rawHeaders: [], metadataRows: [] };
   }
 
   // Auto-detect header row by scanning for the first row that contains
@@ -293,10 +297,12 @@ export function parseEbayFileExchangeCsv(csvText: string): ParseResult {
 
   const dataStartIndex = headerRowIndex + 1;
 
+  const metadataRows = records.slice(0, headerRowIndex);
+
   console.log('[Parser] headerRowIndex:', headerRowIndex, 'dataStartIndex:', dataStartIndex);
 
   if (records.length <= dataStartIndex) {
-    return { listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: ['File has no data rows'] };
+    return { listings: [], skippedListings: [], warnings: [], totalRows: 0, compatibilityRows: 0, errors: ['File has no data rows'], rawHeaders: [], metadataRows };
   }
 
   const rawHeaders = records[headerRowIndex].map((h) => h.trim());
@@ -388,6 +394,109 @@ export function parseEbayFileExchangeCsv(csvText: string): ParseResult {
     totalRows: records.length - dataStartIndex,
     compatibilityRows,
     errors,
+    rawHeaders,
+    metadataRows,
   };
+}
+
+/** Escape a CSV field: wrap in quotes if it contains commas, quotes, or newlines */
+function escapeCsvField(value: string): string {
+  if (!value) return '';
+  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+    return '"' + value.replace(/"/g, '""') + '"';
+  }
+  return value;
+}
+
+/**
+ * Generate an eBay File Exchange CSV from edited listings.
+ * Preserves the original header structure and metadata rows.
+ */
+export function generateEbayFileExchangeCsv(
+  listings: EbayListing[],
+  rawHeaders: string[],
+  metadataRows: string[][] = [],
+): string {
+  const colMap = buildColMap(rawHeaders);
+  const lines: string[] = [];
+
+  // Write metadata rows (e.g. info row)
+  for (const row of metadataRows) {
+    lines.push(row.map(escapeCsvField).join(','));
+  }
+
+  // Write header row
+  lines.push(rawHeaders.map(escapeCsvField).join(','));
+
+  // Helper to set a value into a row at the right column index
+  function setCol(row: string[], value: string, ...names: string[]) {
+    for (const name of names) {
+      const idx = colMap[name.toLowerCase().replace(/\s+/g, '')];
+      if (idx !== undefined) {
+        row[idx] = value;
+        return;
+      }
+    }
+  }
+
+  // Helper to set item specifics C: columns
+  function setItemSpecifics(row: string[], specifics: { label: string; value: string }[]) {
+    for (const spec of specifics) {
+      // Find the matching C: header
+      const headerIdx = rawHeaders.findIndex(h => {
+        const cleaned = h.replace(/^\*/, '').trim();
+        return cleaned.toLowerCase() === `c:${spec.label.toLowerCase()}` ||
+               cleaned.toLowerCase() === spec.label.toLowerCase();
+      });
+      if (headerIdx !== -1) {
+        row[headerIdx] = spec.value;
+      }
+    }
+  }
+
+  for (const listing of listings) {
+    // Create a row with empty fields
+    const row = new Array(rawHeaders.length).fill('');
+
+    setCol(row, listing.action, 'action');
+    setCol(row, listing.customLabel, 'customlabel', 'custom label', 'sku', 'item sku');
+    setCol(row, listing.category, 'category', 'categoryid', 'category id');
+    setCol(row, listing.title, 'title');
+    setCol(row, listing.price, 'startprice', 'price', 'buynow price', 'buy it now price', 'buyitnowprice');
+    setCol(row, listing.quantity, 'quantity');
+    setCol(row, listing.imageUrls.join('|'), 'picurl', 'pictureurl', 'picture url', 'imageurl', 'image url', 'images', 'itemphotourl', 'item photo url', 'photourl', 'photo url');
+    setCol(row, listing.conditionId, 'conditionid', 'condition id', 'condition');
+    setCol(row, listing.description, 'description');
+    setCol(row, listing.format, 'format');
+    setCol(row, listing.duration, 'duration');
+    setCol(row, listing.location, 'location');
+    setCol(row, listing.brand, 'brand');
+    setCol(row, listing.type, 'type');
+    setCol(row, listing.placement, 'placement on vehicle', 'placementonvehicle', 'placement');
+    setCol(row, listing.material, 'material');
+    setCol(row, listing.features, 'features');
+    setCol(row, listing.countryOfManufacture, 'country/region of manufacture', 'country of manufacture', 'countryofmanufacture');
+    setCol(row, listing.mpn, 'manufacturer part number', 'manufacturerpartnumber', 'mpn');
+    setCol(row, listing.oemPartNumber, 'oe/oem part number', 'oem part number', 'oempartnumber');
+    setCol(row, listing.shippingProfile, 'shippingprofilename', 'shipping profile');
+    setCol(row, listing.returnProfile, 'returnprofilename', 'return profile');
+    setCol(row, listing.paymentProfile, 'paymentprofilename', 'payment profile');
+
+    // Write item specifics into C: columns
+    setItemSpecifics(row, listing.itemSpecifics);
+
+    lines.push(row.map(escapeCsvField).join(','));
+
+    // Write compatibility rows
+    for (const compat of listing.compatibility) {
+      const compatRow = new Array(rawHeaders.length).fill('');
+      setCol(compatRow, listing.action, 'action');
+      setCol(compatRow, 'Compatibility', 'relationship');
+      setCol(compatRow, `Make=${compat.make}|Model=${compat.model}|Year=${compat.year}`, 'relationshipdetails');
+      lines.push(compatRow.map(escapeCsvField).join(','));
+    }
+  }
+
+  return lines.join('\r\n') + '\r\n';
 }
 

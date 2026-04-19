@@ -423,6 +423,14 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
               {job.lastError}
             </div>
           )}
+
+          {/* Input file download – always available */}
+          {job.storedFilePath && (
+            <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Original input file</span>
+              <DownloadButton label={job.originalFilename} template="input" jobId={job.id} variant="subtle" />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -491,13 +499,17 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   );
 }
 
-function DownloadButton({ label, template, jobId }: { label: string; template: 'us' | 'au' | 'de' | 'report'; jobId: string }) {
+function DownloadButton({ label, template, jobId, variant = 'default' }: { label: string; template: 'us' | 'au' | 'de' | 'report' | 'input'; jobId: string; variant?: 'default' | 'subtle' }) {
   return (
     <button
       onClick={() => downloadPipelineFile(jobId, template)}
-      className="flex items-center gap-2 p-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600 rounded-lg transition text-left"
+      className={`flex items-center gap-2 p-3 border rounded-lg transition text-left ${
+        variant === 'subtle'
+          ? 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700'
+          : 'bg-slate-700/50 hover:bg-slate-600/50 border-slate-600'
+      }`}
     >
-      <Download className="h-4 w-4 text-green-400 flex-shrink-0" />
+      <Download className={`h-4 w-4 flex-shrink-0 ${variant === 'subtle' ? 'text-slate-400' : 'text-green-400'}`} />
       <span className="text-sm text-slate-200">{label}</span>
     </button>
   );
@@ -545,6 +557,13 @@ function HistoryStep({ onViewJob }: { onViewJob: (id: string) => void }) {
                     <span className="text-xs text-slate-400">{job.processedParts}/{job.totalParts} parts</span>
                   )}
                   {statusBadge(job.status)}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); downloadPipelineFile(job.id, 'input'); }}
+                    title="Download original input file"
+                    className="p-1.5 text-slate-500 hover:text-blue-400 transition rounded"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
                   <ChevronRight className="h-4 w-4 text-slate-500" />
                 </div>
               </button>

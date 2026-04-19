@@ -18,6 +18,7 @@ export interface PipelineJob {
   id: string;
   status: PipelineJobStatus;
   originalFilename: string;
+  storedFilePath: string | null;
   fileSizeBytes: number;
   totalParts: number;
   processedParts: number;
