@@ -8,6 +8,7 @@ import { FitmentYear } from './entities/fitment-year.entity.js';
 import { FitmentEngine } from './entities/fitment-engine.entity.js';
 import { PartFitment } from './entities/part-fitment.entity.js';
 import { VinCache } from './entities/vin-cache.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 import { FitmentService } from './fitment.service.js';
 import { FitmentMatcherService } from './fitment-matcher.service.js';
 import { FitmentImportService } from './fitment-import.service.js';
@@ -27,6 +28,7 @@ import { ChannelsModule } from '../channels/channels.module.js';
       FitmentEngine,
       PartFitment,
       VinCache,
+      ListingRecord,
     ]),
     BullModule.registerQueue({ name: 'fitment' }),
     ChannelsModule,

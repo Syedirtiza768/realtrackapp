@@ -21,10 +21,13 @@ import {
   useRetryPipelineJob,
   useCancelPipelineJob,
   downloadPipelineFile,
+  runCombinedOptimization,
 } from '../../lib/pipelineApi';
 import type { PipelineJob, PipelineJobStatus } from '../../types/pipeline';
 import { PIPELINE_STAGES } from '../../types/pipeline';
 import ImageEnrichmentPanel from './ImageEnrichmentPanel';
+import type { EnterpriseOptimizationResult } from '../../types/pipeline';
+import type { ListingQualityProfile } from '../../types/pipeline';
 
 type WizardStep = 'upload' | 'processing' | 'complete' | 'history';
 
@@ -289,6 +292,17 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   const retryMutation = useRetryPipelineJob();
   const cancelMutation = useCancelPipelineJob();
   const job = data?.job;
+  const [enterpriseLoading, setEnterpriseLoading] = useState(false);
+  const [enterpriseResult, setEnterpriseResult] = useState<EnterpriseOptimizationResult | null>(null);
+  const [optimizationMarketplace, setOptimizationMarketplace] = useState<'US' | 'DE' | 'AU'>('US');
+  const [optimizationLimit, setOptimizationLimit] = useState(250);
+  const [qualityProfile, setQualityProfile] = useState<ListingQualityProfile>('max_seo_comprehensive');
+  const [lastRunConfig, setLastRunConfig] = useState<{
+    marketplace: 'US' | 'DE' | 'AU';
+    limit: number;
+    listingQualityProfile: ListingQualityProfile;
+    runAt: string;
+  } | null>(null);
 
   // Elapsed time counter
   const [elapsed, setElapsed] = useState(0);
@@ -452,6 +466,98 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 p-3 bg-slate-800/60 rounded-lg border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-3 w-full">
+                <p className="text-sm font-medium text-slate-100">Enterprise Optimization & Compliance</p>
+                <p className="text-xs text-slate-400">Generate production-grade listing intelligence payloads for this job</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <label className="text-xs text-slate-300 space-y-1">
+                    <span className="block text-slate-400">Marketplace</span>
+                    <select
+                      value={optimizationMarketplace}
+                      onChange={(e) => setOptimizationMarketplace(e.target.value as 'US' | 'DE' | 'AU')}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-sm"
+                    >
+                      <option value="US">US</option>
+                      <option value="DE">DE</option>
+                      <option value="AU">AU</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300 space-y-1">
+                    <span className="block text-slate-400">Product Limit</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={2000}
+                      value={optimizationLimit}
+                      onChange={(e) => setOptimizationLimit(Math.min(2000, Math.max(1, Number(e.target.value) || 1)))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-300 space-y-1">
+                    <span className="block text-slate-400">Listing Quality Profile</span>
+                    <select
+                      value={qualityProfile}
+                      onChange={(e) => setQualityProfile(e.target.value as ListingQualityProfile)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-sm"
+                    >
+                      <option value="max_seo_comprehensive">Max SEO + Comprehensive (recommended)</option>
+                      <option value="balanced">Balanced SEO / Readability</option>
+                      <option value="creative_exploration">Creative Exploration</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-[11px] text-emerald-400">
+                    Default is tuned for optimal SEO coverage and complete, comprehensive listing content.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      setEnterpriseLoading(true);
+                      try {
+                        const res = await runCombinedOptimization(
+                          job.id,
+                          optimizationMarketplace,
+                          optimizationLimit,
+                          qualityProfile,
+                        );
+                        setEnterpriseResult(res.enterprise);
+                        setLastRunConfig({
+                          marketplace: optimizationMarketplace,
+                          limit: optimizationLimit,
+                          listingQualityProfile: qualityProfile,
+                          runAt: new Date().toISOString(),
+                        });
+                      } finally {
+                        setEnterpriseLoading(false);
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm transition disabled:opacity-60"
+                    disabled={enterpriseLoading}
+                  >
+                    {enterpriseLoading ? 'Generating...' : 'Run Combined Optimization'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {enterpriseResult && (
+              <>
+                {lastRunConfig && (
+                  <div className="mb-3 rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+                    Last run: {new Date(lastRunConfig.runAt).toLocaleString()} | Marketplace: {lastRunConfig.marketplace} | Limit: {lastRunConfig.limit} | Profile: {lastRunConfig.listingQualityProfile}
+                  </div>
+                )}
+                <div className="mb-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <StatCard label="Total" value={enterpriseResult.totalProducts} />
+                  <StatCard label="Pass" value={enterpriseResult.passCount} />
+                  <StatCard label="Review" value={enterpriseResult.reviewCount} />
+                  <StatCard label="Blocked" value={enterpriseResult.blockedCount} />
+                  <StatCard label="Avg Readiness" value={`${Math.round(enterpriseResult.averageUploadReadiness * 100)}%`} />
+                </div>
+              </>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {job.outputUsPath && (
                 <DownloadButton label="US Motors Template" template="us" jobId={job.id} />

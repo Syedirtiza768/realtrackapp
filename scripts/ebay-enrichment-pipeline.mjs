@@ -66,11 +66,11 @@ for (const key of ['OPENAI_API_KEY', 'OPENAI_CHAT_MODEL', 'EBAY_CLIENT_ID', 'EBA
 const CONFIG = {
   openai: {
     apiKey: env.OPENAI_API_KEY,
-    model: 'gpt-4o-mini',         // cost-effective for bulk; override with OPENAI_CHAT_MODEL
-    batchSize: 25,                 // parts per OpenAI call (larger = fewer round-trips)
-    concurrency: 8,                // parallel OpenAI calls
-    temperature: 0.2,
-    maxTokens: 6000,
+    model: 'gpt-5.4',              // default high-quality model; override with OPENAI_CHAT_MODEL
+    batchSize: 8,                  // safer JSON payload size for structured output
+    concurrency: 2,                // reduce malformed/truncated output risk under heavy load
+    temperature: 0.25,
+    maxTokens: undefined,          // allow model to use full response budget unless explicitly configured
     maxRetries: 3,
     delayBetweenCallsMs: 50,      // minimal delay — rate limits handled by retry
   },
@@ -741,6 +741,7 @@ const REPORT = {
   openaiCalls: 0,
   openaiTokensUsed: 0,
   openaiErrors: 0,
+  specificsEnrichedCount: 0,
   validationFixes: [],
   missingSpecifics: [],
   errors: [],
@@ -1726,20 +1727,47 @@ async function validateOpenAiKey() {
   const client = getOpenAI();
   if (!client) return false;
 
+  const preferredModel = CONFIG.openai.model;
+  const candidateModels = [
+    preferredModel,
+    'gpt-5.4',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+  ].filter(Boolean);
+  const uniqueModels = [...new Set(candidateModels)];
+
   try {
-    const response = await client.chat.completions.create({
-      model: CONFIG.openai.model,
-      messages: [{ role: 'user', content: 'Reply with OK' }],
-      max_tokens: 5,
-    });
-    if (response.choices?.[0]?.message?.content) {
-      openaiAvailable = true;
-      log.info('OpenAI API key validated successfully');
-      return true;
+    for (const model of uniqueModels) {
+      try {
+        const response = await client.chat.completions.create({
+          model,
+          messages: [{ role: 'user', content: 'Reply with OK' }],
+          max_tokens: 5,
+        });
+        if (response.choices?.[0]?.message?.content) {
+          openaiAvailable = true;
+          if (CONFIG.openai.model !== model) {
+            log.warn(
+              `Preferred model "${CONFIG.openai.model}" unavailable. Falling back to "${model}" for enrichment.`,
+            );
+            CONFIG.openai.model = model;
+          }
+          log.info(`OpenAI API key validated successfully (model=${CONFIG.openai.model})`);
+          return true;
+        }
+      } catch (modelErr) {
+        const message = modelErr instanceof Error ? modelErr.message : String(modelErr);
+        log.warn(`OpenAI validation failed for model "${model}": ${message}`);
+      }
     }
   } catch (err) {
     log.error(`OpenAI API key invalid: ${err.message}`);
   }
+  REPORT.errors.push({
+    type: 'openai',
+    message: `OpenAI validation failed for all candidate models: ${uniqueModels.join(', ')}`,
+  });
   return false;
 }
 
@@ -1879,6 +1907,14 @@ Return JSON:
     "surfaceFinish": "",
     "performanceType": "",
     "bundleDescription": "",
+    "itemSpecifics": {
+      "Brand": "...",
+      "Manufacturer Part Number": "...",
+      "Type": "...",
+      "Placement on Vehicle": "...",
+      "Material": "...",
+      "Color": "..."
+    },
     "compatibility": [
       { "year": "2015", "make": "Mercedes-Benz", "model": "C-Class", "chassisCode": "W205", "trim": "", "engine": "", "notes": "" }
     ],
@@ -1908,7 +1944,7 @@ ${JSON.stringify(partsForPrompt)}`;
           { role: 'user', content: userPrompt },
         ],
         temperature: CONFIG.openai.temperature,
-        max_tokens: CONFIG.openai.maxTokens,
+        ...(typeof CONFIG.openai.maxTokens === 'number' ? { max_tokens: CONFIG.openai.maxTokens } : {}),
         response_format: { type: 'json_object' },
       });
 
@@ -1919,7 +1955,7 @@ ${JSON.stringify(partsForPrompt)}`;
       const content = response.choices[0]?.message?.content;
       if (!content) throw new Error('Empty OpenAI response');
 
-      const parsed = JSON.parse(content);
+      const parsed = parseOpenAiJson(content);
       // Handle both { items: [...] } and direct array
       const items = Array.isArray(parsed) ? parsed : (parsed.items || parsed.results || parsed.parts || [parsed]);
 
@@ -1938,6 +1974,78 @@ ${JSON.stringify(partsForPrompt)}`;
     }
   }
   return null;
+}
+
+function parseOpenAiJson(content) {
+  const direct = tryJsonParse(content);
+  if (direct.ok) return direct.value;
+
+  // Fallback: try extracting the largest JSON object/array block from mixed output.
+  const firstBrace = content.indexOf('{');
+  const firstBracket = content.indexOf('[');
+  const starts = [firstBrace, firstBracket].filter((i) => i >= 0);
+  if (starts.length === 0) {
+    throw new Error(`OpenAI returned non-JSON content: ${direct.error}`);
+  }
+  const start = Math.min(...starts);
+  const lastBrace = content.lastIndexOf('}');
+  const lastBracket = content.lastIndexOf(']');
+  const end = Math.max(lastBrace, lastBracket);
+  if (end <= start) {
+    throw new Error(`OpenAI returned truncated JSON: ${direct.error}`);
+  }
+
+  const extracted = content.slice(start, end + 1);
+  const extractedParse = tryJsonParse(extracted);
+  if (extractedParse.ok) return extractedParse.value;
+
+  // Last attempt: remove trailing commas before closing braces/brackets.
+  const normalized = extracted.replace(/,\s*([}\]])/g, '$1');
+  const normalizedParse = tryJsonParse(normalized);
+  if (normalizedParse.ok) return normalizedParse.value;
+
+  throw new Error(
+    `Failed to parse OpenAI JSON (direct=${direct.error}; extracted=${extractedParse.error}; normalized=${normalizedParse.error})`,
+  );
+}
+
+function tryJsonParse(text) {
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function enrichBatchAdaptive(batchParts, vinData, depth = 0) {
+  const enriched = await enrichBatch(batchParts, vinData);
+  if (enriched) return enriched;
+
+  // Split failed batches recursively to isolate problematic rows/payload size.
+  if (batchParts.length <= 1 || depth >= 3) return null;
+
+  const mid = Math.ceil(batchParts.length / 2);
+  const left = batchParts.slice(0, mid);
+  const right = batchParts.slice(mid);
+
+  const [leftRes, rightRes] = await Promise.all([
+    enrichBatchAdaptive(left, vinData, depth + 1),
+    enrichBatchAdaptive(right, vinData, depth + 1),
+  ]);
+
+  if (!leftRes && !rightRes) return null;
+
+  const merged = [];
+  if (leftRes) merged.push(...leftRes);
+  if (rightRes) {
+    for (const item of rightRes) {
+      merged.push({
+        ...item,
+        index: typeof item.index === 'number' ? item.index + mid : item.index,
+      });
+    }
+  }
+  return merged;
 }
 
 async function enrichAllParts(parts, vinData) {
@@ -1975,6 +2083,7 @@ async function enrichAllParts(parts, vinData) {
         performanceType: '',
         bundleDescription: '',
         countryOfManufacture: countryOfMfg,
+        itemSpecifics: buildFallbackItemSpecifics(part, vehicle),
       };
       REPORT.totalFailed++;
     }
@@ -1996,7 +2105,7 @@ async function enrichAllParts(parts, vinData) {
     log.info(`  Batches ${groupStart + 1}-${Math.min(groupStart + concurrency, batches.length)}/${batches.length} (${groupBatches.reduce((s, b) => s + b.length, 0)} parts)...`);
 
     const results = await Promise.allSettled(
-      groupBatches.map(batch => enrichBatch(batch, vinData))
+      groupBatches.map(batch => enrichBatchAdaptive(batch, vinData))
     );
 
     for (let i = 0; i < results.length; i++) {
@@ -2025,9 +2134,20 @@ async function enrichAllParts(parts, vinData) {
               surfaceFinish: clean(enriched.surfaceFinish),
               performanceType: clean(enriched.performanceType),
               bundleDescription: clean(enriched.bundleDescription),
+              itemSpecifics: sanitizeItemSpecifics(enriched.itemSpecifics),
               compatibility: Array.isArray(enriched.compatibility) ? enriched.compatibility : [],
               technicalNotes: clean(enriched.technicalNotes),
             };
+            const vehicle = getVehicleInfo(part, vinData);
+            const fallbackSpecifics = buildFallbackItemSpecifics(part, vehicle);
+            const mergedSpecifics = mergeAiSpecificsOnly(
+              fallbackSpecifics,
+              part._enriched.itemSpecifics,
+            );
+            if (countAdditionalSpecifics(fallbackSpecifics, mergedSpecifics) > 0) {
+              REPORT.specificsEnrichedCount++;
+            }
+            part._enriched.itemSpecifics = mergedSpecifics;
             enrichedCount++;
           }
         }
@@ -2051,6 +2171,7 @@ async function enrichAllParts(parts, vinData) {
             surfaceFinish: '',
             performanceType: '',
             bundleDescription: '',
+            itemSpecifics: buildFallbackItemSpecifics(part, vehicle),
           };
           failedCount++;
         }
@@ -2207,6 +2328,10 @@ function validateAndFix(parts) {
 
     // Brand normalization
     e.brand = normalizeBrand(e.brand || part.brand);
+    e.itemSpecifics = mergeAiSpecificsOnly(
+      buildFallbackItemSpecifics(part, getVehicleInfo(part, vinCache)),
+      sanitizeItemSpecifics(e.itemSpecifics),
+    );
 
     // MPN: must not be fabricated — only use raw part number
     if (e.mpn && normalizePN(e.mpn) !== normalizePN(part.partNumber)) {
@@ -2262,6 +2387,71 @@ function normalizeBrand(brand) {
   };
   const lower = (brand || '').toLowerCase().trim();
   return map[lower] || titleCase(brand);
+}
+
+function sanitizeItemSpecifics(rawSpecifics) {
+  if (!rawSpecifics || typeof rawSpecifics !== 'object') return {};
+  const out = {};
+  for (const [rawKey, rawValue] of Object.entries(rawSpecifics)) {
+    const key = clean(String(rawKey || ''));
+    const value = clean(String(rawValue || ''));
+    if (!key || !value) continue;
+    if (value.length > 120) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+function buildFallbackItemSpecifics(part, vehicle) {
+  const pn = normalizePN(part.partNumber || '');
+  return sanitizeItemSpecifics({
+    Brand: normalizeBrand(part.brand) || vehicle.make || '',
+    'Manufacturer Part Number': pn || part.partNumber || '',
+    Type: titleCase(part.partName || ''),
+    'Placement on Vehicle': extractPlacement(part.note || ''),
+    'Fitment Type': 'Direct Replacement',
+    Warranty: 'No Warranty',
+    Material: '',
+    Color: '',
+    'OE/OEM Part Number': expandOemNumbers(part.partNumber),
+  });
+}
+
+function mergeAiSpecificsOnly(baseSpecifics, aiSpecifics) {
+  const merged = { ...sanitizeItemSpecifics(baseSpecifics) };
+  const cleanAi = sanitizeItemSpecifics(aiSpecifics);
+  for (const [k, v] of Object.entries(cleanAi)) {
+    if (!merged[k]) merged[k] = v;
+  }
+  return merged;
+}
+
+function countAdditionalSpecifics(baseSpecifics, mergedSpecifics) {
+  const base = sanitizeItemSpecifics(baseSpecifics);
+  const merged = sanitizeItemSpecifics(mergedSpecifics);
+  let added = 0;
+  for (const key of Object.keys(merged)) {
+    if (!base[key] && merged[key]) added++;
+  }
+  return added;
+}
+
+function applyDynamicItemSpecifics(headers, row, specifics) {
+  if (!specifics || typeof specifics !== 'object') return;
+  const indexByNormalized = new Map();
+  for (let i = 0; i < headers.length; i++) {
+    const header = String(headers[i] || '').trim();
+    if (!header.startsWith('C:')) continue;
+    const normalized = header.slice(2).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!indexByNormalized.has(normalized)) indexByNormalized.set(normalized, i);
+  }
+  for (const [key, value] of Object.entries(specifics)) {
+    const normalizedKey = String(key).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const idx = indexByNormalized.get(normalizedKey);
+    if (idx == null) continue;
+    if (row[idx] != null && String(row[idx]).trim() !== '') continue;
+    row[idx] = value;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3088,6 +3278,11 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   set('C:Interchange Part Number', enriched.interchangeNumber);
   set('C:Bundle Description', enriched.bundleDescription);
   set('C:Country/Region of Manufacture', enriched.countryOfManufacture || '');
+  applyDynamicItemSpecifics(
+    headers,
+    row,
+    mergeAiSpecificsOnly(buildFallbackItemSpecifics(part, vehicle), enriched.itemSpecifics),
+  );
 
   // Images — eBay File Exchange requires separate columns per image (not pipe-separated)
   // PicURL = primary, AdditionalPicURL = 2nd, AdditionalPicURL1-7 = 3rd-9th
@@ -3195,6 +3390,11 @@ function generateAUOutput(parts, vinData) {
     set('C:Color', e.color);
     set('C:Surface Finish', e.surfaceFinish);
     set('C:Interchange Part Number', e.interchangeNumber);
+    applyDynamicItemSpecifics(
+      fullHeaders,
+      row,
+      mergeAiSpecificsOnly(buildFallbackItemSpecifics(part, vehicle), e.itemSpecifics),
+    );
 
     // Images — eBay File Exchange requires separate columns per image
     if (part._images && part._images.length > 0) {
@@ -3325,6 +3525,11 @@ function generateDEOutput(parts, vinData) {
     }
     set('C:Material', e.material);
     set('C:Farbe', e.color);                                          // Color in German
+    applyDynamicItemSpecifics(
+      fullHeaders,
+      row,
+      mergeAiSpecificsOnly(buildFallbackItemSpecifics(part, vehicle), e.itemSpecifics),
+    );
 
     // Images — eBay File Exchange requires separate columns per image
     if (part._images && part._images.length > 0) {
@@ -3495,6 +3700,7 @@ function generateReport() {
       totalCalls: REPORT.openaiCalls,
       totalTokens: REPORT.openaiTokensUsed,
       errors: REPORT.openaiErrors,
+      specificsEnrichedCount: REPORT.specificsEnrichedCount,
       estimatedCost: `$${(REPORT.openaiTokensUsed * 0.00000015).toFixed(4)}`, // gpt-4o-mini pricing
       enrichmentRate: REPORT.totalInput > 0
         ? `${((REPORT.totalProcessed / REPORT.totalInput) * 100).toFixed(1)}%`

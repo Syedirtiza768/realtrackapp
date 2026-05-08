@@ -34,7 +34,10 @@ import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intell
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      ignoreEnvFile: process.env.IGNORE_ENV_FILE === 'true',
+    }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([

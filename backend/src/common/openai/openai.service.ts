@@ -40,7 +40,7 @@ export class OpenAiService implements OnModuleInit {
   private sessionCostUsd = 0;
 
   constructor(private readonly config: ConfigService) {
-    this.chatModel = this.config.get<string>('OPENAI_CHAT_MODEL', 'gpt-4o');
+    this.chatModel = this.config.get<string>('OPENAI_CHAT_MODEL', 'gpt-5.4');
     this.embeddingModel = this.config.get<string>(
       'OPENAI_EMBEDDING_MODEL',
       'text-embedding-3-small',
@@ -73,7 +73,6 @@ export class OpenAiService implements OnModuleInit {
   async chat(req: OpenAiChatRequest): Promise<OpenAiChatResponse> {
     const model = req.model ?? this.chatModel;
     const temperature = req.temperature ?? 0.2;
-    const maxTokens = req.maxTokens ?? 2000;
     const startMs = Date.now();
 
     // Build messages
@@ -103,7 +102,7 @@ export class OpenAiService implements OnModuleInit {
         model,
         messages,
         temperature,
-        max_tokens: maxTokens,
+        ...(typeof req.maxTokens === 'number' ? { max_tokens: req.maxTokens } : {}),
         ...(req.jsonMode ? { response_format: { type: 'json_object' } } : {}),
       }),
     );

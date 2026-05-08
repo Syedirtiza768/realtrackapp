@@ -236,4 +236,11 @@ export class FitmentController {
   vinToEbayFilter(@Param('vin') vin: string) {
     return this.vinService.toEbayCompatibilityFilter(vin);
   }
+
+  @Get('vin/:vin/listings')
+  @ApiOperation({ summary: 'Get all part listings that fit a vehicle identified by VIN' })
+  @ApiParam({ name: 'vin', type: String, example: '1HGCV1F34LA000001' })
+  getListingsByVin(@Param('vin') vin: string) {
+    return this.fitmentService.findListingsByVin(vin);
+  }
 }

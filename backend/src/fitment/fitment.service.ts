@@ -1,13 +1,15 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { Brackets, ILike, Repository } from 'typeorm';
 import { FitmentMake } from './entities/fitment-make.entity.js';
 import { FitmentModel } from './entities/fitment-model.entity.js';
 import { FitmentSubmodel } from './entities/fitment-submodel.entity.js';
 import { FitmentEngine } from './entities/fitment-engine.entity.js';
 import { PartFitment } from './entities/part-fitment.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 import type { CreateFitmentDto } from './dto/create-fitment.dto.js';
 import type { SearchFitmentDto } from './dto/search-fitment.dto.js';
+import { VinDecodeService } from './vin-decode.service.js';
 
 @Injectable()
 export class FitmentService {
@@ -24,6 +26,9 @@ export class FitmentService {
     private readonly engineRepo: Repository<FitmentEngine>,
     @InjectRepository(PartFitment)
     private readonly fitmentRepo: Repository<PartFitment>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
+    private readonly vinDecodeService: VinDecodeService,
   ) {}
 
   // ─── Reference data lookups ───
@@ -165,5 +170,146 @@ export class FitmentService {
 
     const [fitments, total] = await qb.getManyAndCount();
     return { fitments, total };
+  }
+
+  /**
+   * Find all listings that fit a vehicle identified by VIN.
+   * Uses decoded VIN → make/model/year to resolve fitments, then
+   * returns the unique listing records attached to those fitments.
+   */
+  async findListingsByVin(vin: string) {
+    const decoded = await this.vinDecodeService.decode(vin);
+    const year = parseInt(decoded.year, 10);
+    const makeSlug = this.slugify(decoded.make);
+    const modelSlug = this.slugify(decoded.model);
+
+    const qb = this.fitmentRepo
+      .createQueryBuilder('pf')
+      .leftJoinAndSelect('pf.make', 'make')
+      .leftJoinAndSelect('pf.model', 'model')
+      .leftJoinAndSelect('pf.submodel', 'submodel')
+      .leftJoinAndSelect('pf.engine', 'engine')
+      .leftJoinAndSelect('pf.listing', 'listing');
+
+    if (makeSlug) {
+      qb.andWhere('make.slug = :makeSlug', { makeSlug });
+    }
+    if (modelSlug) {
+      qb.andWhere('model.slug = :modelSlug', { modelSlug });
+    }
+    if (!Number.isNaN(year)) {
+      qb.andWhere('pf.year_start <= :year AND pf.year_end >= :year', {
+        year,
+      });
+    }
+
+    const fitments = await qb.getMany();
+
+    const listingsMap = new Map<string, unknown>();
+    for (const f of fitments) {
+      const listing: any = f.listing;
+      if (listing?.id && !listingsMap.has(listing.id)) {
+        listingsMap.set(listing.id, listing);
+      }
+    }
+
+    let listings = Array.from(listingsMap.values());
+    let matchStrategy: 'fitment' | 'fallback_text' = 'fitment';
+
+    // Fallback for datasets where explicit fitment rows are missing:
+    // search listing records by extracted make/model and title/description hints.
+    if (listings.length === 0) {
+      listings = await this.findListingsByVehicleText(decoded.make, decoded.model, year);
+      matchStrategy = 'fallback_text';
+    }
+
+    return {
+      vin: decoded.vin,
+      vehicle: decoded,
+      totalFitments: fitments.length,
+      totalListings: listings.length,
+      matchStrategy,
+      listings,
+    };
+  }
+
+  private async findListingsByVehicleText(
+    make: string,
+    model: string,
+    year: number,
+  ): Promise<ListingRecord[]> {
+    const normalizedMake = make?.trim();
+    const normalizedModel = model?.trim();
+
+    if (!normalizedMake || !normalizedModel) {
+      return [];
+    }
+
+    const qb = this.listingRepo
+      .createQueryBuilder('r')
+      .select([
+        'r.id',
+        'r.customLabelSku',
+        'r.title',
+        'r.cBrand',
+        'r.cType',
+        'r.categoryId',
+        'r.categoryName',
+        'r.startPrice',
+        'r.quantity',
+        'r.conditionId',
+        'r.itemPhotoUrl',
+        'r.cManufacturerPartNumber',
+        'r.cOeOemPartNumber',
+        'r.location',
+        'r.format',
+        'r.sourceFileName',
+        'r.importedAt',
+        'r.extractedMake',
+        'r.extractedModel',
+      ])
+      .where(
+        new Brackets((whereQb) => {
+          whereQb
+            .where('r.extractedMake ILIKE :make', { make: normalizedMake })
+            .orWhere(
+              '(r.title ILIKE :makeLike AND r.title ILIKE :modelLike)',
+              {
+                makeLike: `%${normalizedMake}%`,
+                modelLike: `%${normalizedModel}%`,
+              },
+            )
+            .orWhere(
+              '(r.description ILIKE :makeLike2 AND r.description ILIKE :modelLike2)',
+              {
+                makeLike2: `%${normalizedMake}%`,
+                modelLike2: `%${normalizedModel}%`,
+              },
+            );
+        }),
+      )
+      .orderBy('r.importedAt', 'DESC')
+      .addOrderBy('r.id', 'ASC')
+      .limit(300);
+
+    if (!Number.isNaN(year)) {
+      qb.andWhere(
+        new Brackets((yearQb) => {
+          yearQb
+            .where('r.title ILIKE :yearStr', { yearStr: `%${year}%` })
+            .orWhere('r.description ILIKE :yearStr2', { yearStr2: `%${year}%` });
+        }),
+      );
+    }
+
+    return qb.getMany();
+  }
+
+  private slugify(text: string | null | undefined): string {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '-');
   }
 }

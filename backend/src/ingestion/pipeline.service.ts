@@ -1,10 +1,13 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 import { PipelineJob } from './entities/pipeline-job.entity.js';
 import { FeatureFlagService } from '../common/feature-flags/feature-flag.service.js';
+import { EnterpriseListingIntelligenceService } from './enterprise-listing-intelligence.service.js';
+import type { EnterpriseOptimizationResult } from './enterprise-listing-intelligence.service.js';
+import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 
 export interface CreatePipelineJobDto {
   originalFilename: string;
@@ -18,6 +21,11 @@ export interface PipelineJobSummary {
   totalPartsProcessed: number;
   totalEnriched: number;
   totalTokens: number;
+}
+
+export interface CombinedOptimizationResult {
+  job: PipelineJob;
+  enterprise: EnterpriseOptimizationResult;
 }
 
 /**
@@ -36,6 +44,7 @@ export class PipelineService {
     @InjectQueue('pipeline')
     private readonly pipelineQueue: Queue,
     private readonly featureFlagService: FeatureFlagService,
+    private readonly enterpriseListingIntelligence: EnterpriseListingIntelligenceService,
   ) {}
 
   /**
@@ -205,6 +214,67 @@ export class PipelineService {
       totalPartsProcessed,
       totalEnriched,
       totalTokens,
+    };
+  }
+
+  async generateEnterpriseOptimization(
+    jobId: string,
+    options?: {
+      marketplace?: 'US' | 'DE' | 'AU';
+      limit?: number;
+      aiBudgetListings?: number;
+      listingQualityProfile?: ListingQualityProfile;
+    },
+  ): Promise<EnterpriseOptimizationResult> {
+    const enterpriseDefaults = this.normalizeEnterpriseOptions(options);
+    return this.enterpriseListingIntelligence.generateForPipelineJob(jobId, enterpriseDefaults);
+  }
+
+  async runCombinedOptimization(
+    jobId: string,
+    options?: {
+      marketplace?: 'US' | 'DE' | 'AU';
+      limit?: number;
+      aiBudgetListings?: number;
+      listingQualityProfile?: ListingQualityProfile;
+    },
+  ): Promise<CombinedOptimizationResult> {
+    const job = await this.getJob(jobId);
+    if (job.status !== 'completed') {
+      throw new BadRequestException(
+        `Pipeline job ${jobId} is ${job.status}. Wait until non-enterprise pipeline reaches completed before running combined optimization.`,
+      );
+    }
+
+    const enterprise = await this.generateEnterpriseOptimization(
+      jobId,
+      this.normalizeEnterpriseOptions(options),
+    );
+    const refreshedJob = await this.getJob(jobId);
+    return {
+      job: refreshedJob,
+      enterprise,
+    };
+  }
+
+  private normalizeEnterpriseOptions(options?: {
+    marketplace?: 'US' | 'DE' | 'AU';
+    limit?: number;
+    aiBudgetListings?: number;
+    listingQualityProfile?: ListingQualityProfile;
+  }): {
+    marketplace?: 'US' | 'DE' | 'AU';
+    limit?: number;
+    aiBudgetListings?: number;
+    listingQualityProfile?: ListingQualityProfile;
+  } {
+    const limit = options?.limit;
+    return {
+      marketplace: options?.marketplace,
+      limit,
+      // Enforce full enterprise AI optimization coverage for all selected rows.
+      aiBudgetListings: limit,
+      listingQualityProfile: options?.listingQualityProfile ?? 'max_seo_comprehensive',
     };
   }
 }

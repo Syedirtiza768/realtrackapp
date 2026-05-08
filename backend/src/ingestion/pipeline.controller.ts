@@ -17,6 +17,9 @@ import type { Response } from 'express';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineService } from './pipeline.service.js';
+import type { EnterpriseOptimizationResult } from './enterprise-listing-intelligence.service.js';
+import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
+import type { CombinedOptimizationResult } from './pipeline.service.js';
 
 const PROJECT_ROOT = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 const UPLOAD_DIR = path.resolve(PROJECT_ROOT, 'uploads', 'pipeline');
@@ -31,6 +34,44 @@ const UPLOAD_DIR = path.resolve(PROJECT_ROOT, 'uploads', 'pipeline');
 @Controller('pipeline')
 export class PipelineController {
   constructor(private readonly pipelineService: PipelineService) {}
+
+  @Post('jobs/:id/enterprise-optimize')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Generate enterprise-grade AI listing optimization, compliance scoring, and upload payloads',
+  })
+  async generateEnterpriseOptimization(
+    @Param('id') id: string,
+    @Body()
+    body?: {
+      marketplace?: 'US' | 'DE' | 'AU';
+      limit?: number;
+      aiBudgetListings?: number;
+      listingQualityProfile?: ListingQualityProfile;
+    },
+  ): Promise<EnterpriseOptimizationResult> {
+    return this.pipelineService.generateEnterpriseOptimization(id, body);
+  }
+
+  @Post('jobs/:id/optimize-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Run combined optimization in one go (non-enterprise output + enterprise intelligence)',
+  })
+  async runCombinedOptimization(
+    @Param('id') id: string,
+    @Body()
+    body?: {
+      marketplace?: 'US' | 'DE' | 'AU';
+      limit?: number;
+      aiBudgetListings?: number;
+      listingQualityProfile?: ListingQualityProfile;
+    },
+  ): Promise<CombinedOptimizationResult> {
+    return this.pipelineService.runCombinedOptimization(id, body);
+  }
 
   @Post('upload')
   @HttpCode(HttpStatus.CREATED)

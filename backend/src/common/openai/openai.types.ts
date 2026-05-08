@@ -106,8 +106,8 @@ export interface PromptTemplate {
   jsonMode: boolean;
   /** Recommended temperature */
   temperature: number;
-  /** Recommended max tokens */
-  maxTokens: number;
+  /** Optional max tokens override */
+  maxTokens?: number;
 }
 
 // ──────────────────────────── Cost Estimation ──────────────────────
@@ -122,6 +122,8 @@ export interface PromptTemplate {
  *  Output: $0.60 / 1M tokens
  */
 export const OPENAI_PRICING: Record<string, { input: number; output: number }> = {
+  // Keep in sync with OpenAI pricing updates.
+  'gpt-5.4': { input: 2.5, output: 10.0 },
   'gpt-4o': { input: 2.5, output: 10.0 },
   'gpt-4o-mini': { input: 0.15, output: 0.6 },
   'gpt-4-turbo': { input: 10.0, output: 30.0 },

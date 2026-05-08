@@ -56,6 +56,8 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      # Use compose `environment` only; do not read a host .env file in the container
+      IGNORE_ENV_FILE: "true"
       PORT: 4191
       # Database
       DB_HOST: postgres
@@ -95,7 +97,8 @@ services:
       - uploads:/app/uploads
       - ./scripts:/app/scripts:ro
       - ./output:/app/output
-      - ./.env:/app/.env:ro
+      # Optional: add your own env file (must be a real file, not a directory):
+      #   - ./.env:/app/.env:ro
       - ./eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:/app/eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:ro
       - ./eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:ro
       - ./eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:ro

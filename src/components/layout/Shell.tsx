@@ -20,6 +20,7 @@ import {
     ClipboardList,
     Workflow,
     Eye,
+    Car,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
     { icon: ClipboardList, label: 'Review Queue', path: '/motors/review' },
     { icon: PlusCircle, label: 'New Listing', path: '/listings/new' },
     { icon: ScanLine, label: 'Fitment', path: '/fitment' },
+    { icon: Car, label: 'VIN Lookup', path: '/fitment/vin' },
     { icon: Database, label: 'Catalog', path: '/catalog' },
     { icon: Upload, label: 'CSV Import', path: '/catalog/import' },
     { icon: Package, label: 'Inventory', path: '/inventory' },

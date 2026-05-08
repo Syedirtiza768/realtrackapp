@@ -9,7 +9,13 @@
 
 import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PipelineJob, PipelineStats } from '../types/pipeline';
+import type {
+  CombinedOptimizationResult,
+  EnterpriseOptimizationResult,
+  ListingQualityProfile,
+  PipelineJob,
+  PipelineStats,
+} from '../types/pipeline';
 
 const API = '/api';
 
@@ -230,4 +236,30 @@ export async function downloadPipelineFile(jobId: string, template: 'us' | 'au' 
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+export async function generateEnterpriseOptimization(
+  jobId: string,
+  marketplace: 'US' | 'DE' | 'AU' = 'US',
+  limit = 250,
+  listingQualityProfile: ListingQualityProfile = 'max_seo_comprehensive',
+): Promise<EnterpriseOptimizationResult> {
+  return postJson<EnterpriseOptimizationResult>(`/pipeline/jobs/${jobId}/enterprise-optimize`, {
+    marketplace,
+    limit,
+    listingQualityProfile,
+  });
+}
+
+export async function runCombinedOptimization(
+  jobId: string,
+  marketplace: 'US' | 'DE' | 'AU' = 'US',
+  limit = 250,
+  listingQualityProfile: ListingQualityProfile = 'max_seo_comprehensive',
+): Promise<CombinedOptimizationResult> {
+  return postJson<CombinedOptimizationResult>(`/pipeline/jobs/${jobId}/optimize-all`, {
+    marketplace,
+    limit,
+    listingQualityProfile,
+  });
 }

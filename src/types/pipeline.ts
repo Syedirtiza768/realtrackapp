@@ -49,6 +49,44 @@ export interface PipelineStats {
   cancelled: number;
 }
 
+export interface EnterpriseListingOptimization {
+  productId: string;
+  sku: string | null;
+  optimizedTitle: string;
+  validationStatus: 'pass' | 'review' | 'block';
+  uploadReadinessScore: number;
+  complianceWarnings: Array<{
+    code: string;
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+    field?: string;
+  }>;
+  missingDataReport: string[];
+  finalUploadPayload: Record<string, unknown>;
+}
+
+export interface EnterpriseOptimizationResult {
+  jobId: string;
+  marketplace: 'US' | 'DE' | 'AU';
+  totalProducts: number;
+  aiGeneratedCount: number;
+  blockedCount: number;
+  reviewCount: number;
+  passCount: number;
+  averageUploadReadiness: number;
+  listings: EnterpriseListingOptimization[];
+}
+
+export interface CombinedOptimizationResult {
+  job: PipelineJob;
+  enterprise: EnterpriseOptimizationResult;
+}
+
+export type ListingQualityProfile =
+  | 'max_seo_comprehensive'
+  | 'balanced'
+  | 'creative_exploration';
+
 /** Stage metadata for the progress stepper */
 export const PIPELINE_STAGES: Array<{
   key: PipelineJobStatus;

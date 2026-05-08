@@ -37,8 +37,14 @@ export class EbayAuthService {
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
   ) {
-    const sandbox =
-      this.configService.get<string>('EBAY_SANDBOX', 'true') === 'true';
+    const environment = this.configService
+      .get<string>('EBAY_ENVIRONMENT', '')
+      .trim()
+      .toUpperCase();
+    const sandboxOverride = this.configService.get<string>('EBAY_SANDBOX');
+    const sandbox = sandboxOverride != null
+      ? sandboxOverride.toLowerCase() === 'true'
+      : environment !== 'PRODUCTION';
 
     this.config = {
       clientId: this.configService.get<string>('EBAY_CLIENT_ID', ''),

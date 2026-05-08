@@ -23,6 +23,8 @@ import { ImageEnrichmentService } from './image-enrichment/image-enrichment.serv
 import { ImageSearchService } from './image-enrichment/image-search.service.js';
 import { ImageOptimizerService } from './image-enrichment/image-optimizer.service.js';
 import { OpenAiModule } from '../common/openai/openai.module.js';
+import { ChannelsModule } from '../channels/channels.module.js';
+import { EnterpriseListingIntelligenceService } from './enterprise-listing-intelligence.service.js';
 
 @Module({
   imports: [
@@ -33,6 +35,7 @@ import { OpenAiModule } from '../common/openai/openai.module.js';
     StorageModule,
     FeatureFlagModule,
     OpenAiModule,
+    ChannelsModule,
   ],
   controllers: [IngestionController, ReviewController, PipelineController, ImageEnrichmentController],
   providers: [
@@ -44,6 +47,7 @@ import { OpenAiModule } from '../common/openai/openai.module.js';
     ImageEnrichmentService,
     ImageSearchService,
     ImageOptimizerService,
+    EnterpriseListingIntelligenceService,
   ],
   exports: [IngestionService, PipelineService, ImageEnrichmentService],
 })

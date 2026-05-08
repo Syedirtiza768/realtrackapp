@@ -34,6 +34,7 @@ import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import EbayOAuthCallback from './components/channels/EbayOAuthCallback';
+import VinListingsPage from './components/fitment/VinListingsPage';
 
 
 function App() {
@@ -58,6 +59,7 @@ function App() {
                             <Route path="/listings/:id/history" element={<RevisionHistory />} />
                             <Route path="/ingestion" element={<IngestionManager />} />
                             <Route path="/fitment" element={<FitmentManager />} />
+                            <Route path="/fitment/vin" element={<VinListingsPage />} />
                             <Route path="/catalog" element={<CatalogManager />} />
                             <Route path="/catalog/import" element={<CatalogImportDashboard />} />
                             <Route path="/inventory" element={<InventoryManager />} />

@@ -45,6 +45,9 @@ export class ListingGenerationPipeline {
     productData: Record<string, unknown>,
     categoryName: string,
     condition: string,
+    options?: {
+      temperature?: number;
+    },
   ): Promise<ListingGenerationResult> {
     const { systemPrompt, userPrompt } = renderPrompt(
       LISTING_GENERATION_PROMPT,
@@ -59,8 +62,10 @@ export class ListingGenerationPipeline {
       systemPrompt,
       userPrompt,
       jsonMode: true,
-      temperature: LISTING_GENERATION_PROMPT.temperature,
-      maxTokens: LISTING_GENERATION_PROMPT.maxTokens,
+      temperature: options?.temperature ?? LISTING_GENERATION_PROMPT.temperature,
+      ...(typeof LISTING_GENERATION_PROMPT.maxTokens === 'number'
+        ? { maxTokens: LISTING_GENERATION_PROMPT.maxTokens }
+        : {}),
     });
 
     const parsed = response.content as Record<string, unknown>;
@@ -103,7 +108,14 @@ export class ListingGenerationPipeline {
    * Batch generate listings for multiple products.
    */
   async generateBatch(
-    items: { productData: Record<string, unknown>; categoryName: string; condition: string }[],
+    items: {
+      productData: Record<string, unknown>;
+      categoryName: string;
+      condition: string;
+      options?: {
+        temperature?: number;
+      };
+    }[],
   ): Promise<ListingGenerationResult[]> {
     const results: ListingGenerationResult[] = [];
     for (let i = 0; i < items.length; i++) {
@@ -112,6 +124,7 @@ export class ListingGenerationPipeline {
         items[i].productData,
         items[i].categoryName,
         items[i].condition,
+        items[i].options,
       );
       results.push(result);
     }
