@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
-import { Repository } from 'typeorm';
+import { DataSource, Like, Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CatalogImport } from './entities/catalog-import.entity.js';
@@ -73,6 +73,7 @@ const DEFAULT_COLUMN_MAP: Record<string, string> = {
   'c:material': 'material',
   'c:features': 'features',
   'c:country of origin': 'countryOfOrigin',
+  'c:country/region of manufacture': 'countryOfOrigin',
   'c:manufacturer part number': 'mpn',
   'c:oe/oem part number': 'oemPartNumber',
   'c:operatingmode': 'operatingMode',
@@ -95,6 +96,7 @@ const DEFAULT_COLUMN_MAP: Record<string, string> = {
   'part type': 'partType',
   'oem part number': 'oemPartNumber',
   'image url': 'imageUrls',
+  'imageurl': 'imageUrls',
   'images': 'imageUrls',
 };
 
@@ -114,12 +116,87 @@ export class CatalogImportService {
     private readonly listingRepo: Repository<ListingRecord>,
     @InjectQueue('catalog-import')
     private readonly importQueue: Queue<CsvImportJobData>,
+    private readonly dataSource: DataSource,
   ) {
     this.uploadDir = process.env.CATALOG_UPLOAD_DIR || path.resolve('uploads', 'catalog');
     // Ensure upload directory exists
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
     }
+  }
+
+  /**
+   * Wipe catalog tables and catalog-generated listing rows. Irreversible.
+   * Requires confirm phrase to prevent accidental calls.
+   */
+  async clearAllCatalog(confirm: string): Promise<{
+    motorsProductsUnlinked: number;
+    listingRecordsDeleted: number;
+    catalogProductsDeleted: number;
+    catalogImportsDeleted: number;
+    catalogImportRowsDeleted: number;
+    complianceAuditLogsDeleted: number;
+  }> {
+    if (confirm !== 'DELETE_ALL_CATALOG') {
+      throw new BadRequestException(
+        'Body must be { "confirm": "DELETE_ALL_CATALOG" } to delete all catalog data.',
+      );
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      const motorsBefore = await manager.query(
+        `SELECT COUNT(*)::int AS c FROM "motors_products" WHERE "catalogProductId" IS NOT NULL`,
+      );
+      const motorsUnlinked = Number(motorsBefore[0]?.c ?? 0);
+
+      await manager.query(
+        `UPDATE "motors_products" SET "catalogProductId" = NULL WHERE "catalogProductId" IS NOT NULL`,
+      );
+
+      const auditCountRows = await manager.query(
+        `SELECT COUNT(*)::int AS c FROM "compliance_audit_logs"`,
+      );
+      const auditBefore = Number(auditCountRows[0]?.c ?? 0);
+      await manager.query(`DELETE FROM "compliance_audit_logs"`);
+
+      const cir = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(CatalogImportRow)
+        .execute();
+
+      const ci = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(CatalogImport)
+        .execute();
+
+      const cp = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(CatalogProduct)
+        .execute();
+
+      const lr = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(ListingRecord)
+        .where({ sheetName: Like('Catalog Import%') })
+        .execute();
+
+      this.logger.warn(
+        `clearAllCatalog: motors unlinked=${motorsUnlinked}, listing_rows=${lr.affected ?? 0}, products=${cp.affected ?? 0}`,
+      );
+
+      return {
+        motorsProductsUnlinked: motorsUnlinked,
+        listingRecordsDeleted: lr.affected ?? 0,
+        catalogProductsDeleted: cp.affected ?? 0,
+        catalogImportsDeleted: ci.affected ?? 0,
+        catalogImportRowsDeleted: cir.affected ?? 0,
+        complianceAuditLogsDeleted: auditBefore,
+      };
+    });
   }
 
   /**

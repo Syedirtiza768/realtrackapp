@@ -48,7 +48,7 @@ export class StorageController {
     const asset = this.assetRepo.create({
       id: assetId,
       listingId: dto.listingId ?? null,
-      s3Bucket: 'realtrack-images',
+      s3Bucket: this.storageService.getBucket(),
       s3Key,
       mimeType: dto.mimeType,
       fileSizeBytes: dto.fileSize ?? 0,
@@ -72,7 +72,7 @@ export class StorageController {
     }
 
     // Move from temp to permanent if needed
-    if (body.listingId && asset.s3Key.startsWith('temp/')) {
+    if (body.listingId && this.storageService.isTempKey(asset.s3Key)) {
       const newKey = await this.storageService.confirmUpload(
         asset.s3Key,
         body.listingId,
@@ -170,7 +170,7 @@ export class StorageController {
       this.assetRepo.create({
         id: r.assetId,
         listingId: body.listingId ?? null,
-        s3Bucket: 'realtrack-images',
+        s3Bucket: this.storageService.getBucket(),
         s3Key: r.s3Key,
         mimeType: body.files.find((f) => r.s3Key.includes(f.filename.split('.')[0]))?.mimeType ?? 'image/webp',
         fileSizeBytes: 0,

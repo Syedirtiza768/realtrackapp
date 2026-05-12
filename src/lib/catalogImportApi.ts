@@ -273,6 +273,24 @@ export async function retryImport(id: string): Promise<{ import: CatalogImport }
   });
 }
 
+/** Permanently deletes catalog products, import jobs/rows, and catalog-generated listings. */
+export async function clearAllCatalog(): Promise<{
+  result: {
+    motorsProductsUnlinked: number;
+    listingRecordsDeleted: number;
+    catalogProductsDeleted: number;
+    catalogImportsDeleted: number;
+    catalogImportRowsDeleted: number;
+    complianceAuditLogsDeleted: number;
+  };
+}> {
+  return apiFetch(`/catalog-import/clear-all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: 'DELETE_ALL_CATALOG' }),
+  });
+}
+
 /* ── Get catalog fields ───────────────────────────────────── */
 
 export async function getCatalogFields() {

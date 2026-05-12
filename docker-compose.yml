@@ -88,7 +88,10 @@ services:
       EBAY_DEV_ID: ${EBAY_DEV_ID:-}
       EBAY_ENVIRONMENT: ${EBAY_ENVIRONMENT:-SANDBOX}
       EBAY_REDIRECT_URI: ${EBAY_REDIRECT_URI:-}
-      # S3 / Storage
+      # S3 / Storage (s3://solarrisebackupbucket/mhn/ — set bucket + prefix in .env)
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-${S3_BUCKET:-}}
+      AWS_S3_PREFIX: ${AWS_S3_PREFIX:-${S3_PREFIX:-}}
+      AWS_S3_REGION: ${AWS_S3_REGION:-${S3_REGION:-us-east-1}}
       S3_BUCKET: ${S3_BUCKET:-}
       S3_REGION: ${S3_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}

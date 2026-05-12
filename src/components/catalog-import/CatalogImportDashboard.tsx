@@ -22,6 +22,7 @@ import {
   startImport,
   cancelImport,
   retryImport,
+  clearAllCatalog,
   useImportList,
   useImportDetail,
   useImportStats,
@@ -128,6 +129,26 @@ export default function CatalogImportDashboard() {
     [refreshList],
   );
 
+  const handleClearCatalog = useCallback(async () => {
+    if (
+      !window.confirm(
+        'Permanently delete all catalog products, CSV import history, and listings created from catalog imports?',
+      )
+    ) {
+      return;
+    }
+    const typed = window.prompt('Type DELETE_ALL_CATALOG to confirm');
+    if (typed !== 'DELETE_ALL_CATALOG') return;
+    try {
+      await clearAllCatalog();
+      refreshStats();
+      refreshList();
+      handleNewImport();
+    } catch (err) {
+      console.error('Clear catalog failed:', err);
+    }
+  }, [refreshStats, refreshList, handleNewImport]);
+
   // Auto-advance to complete when processing finishes
   if (
     step === 'processing' &&
@@ -152,15 +173,24 @@ export default function CatalogImportDashboard() {
             Import CSV catalog files into the master product database
           </p>
         </div>
-        {step !== 'upload' && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleNewImport}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
+            type="button"
+            onClick={handleClearCatalog}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-800 text-red-300 text-sm hover:bg-red-950/50 transition-colors"
           >
-            <FileText className="h-4 w-4" />
-            New Import
+            Clear catalog
           </button>
-        )}
+          {step !== 'upload' && (
+            <button
+              onClick={handleNewImport}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+              New Import
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats bar */}

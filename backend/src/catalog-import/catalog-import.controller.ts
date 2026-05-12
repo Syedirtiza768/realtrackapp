@@ -16,6 +16,7 @@ import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CatalogImportService } from './catalog-import.service.js';
 import {
   BackfillListingsDto,
+  ClearCatalogDto,
   ImportQueryDto,
   ImportRowQueryDto,
   StartImportDto,
@@ -161,6 +162,17 @@ export class CatalogImportController {
   @ApiOperation({ summary: 'Backfill listing_records from existing catalog imports' })
   async backfillListings(@Body() dto: BackfillListingsDto) {
     const result = await this.importService.backfillListings(dto.importId);
+    return { result };
+  }
+
+  @Post('clear-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Delete all catalog products, CSV import jobs/rows, compliance audit logs, and listing rows created by catalog import',
+  })
+  async clearAllCatalog(@Body() dto: ClearCatalogDto) {
+    const result = await this.importService.clearAllCatalog(dto.confirm);
     return { result };
   }
 }

@@ -6,7 +6,6 @@ import { Repository } from 'typeorm';
 import { PipelineJob } from './entities/pipeline-job.entity.js';
 import { FeatureFlagService } from '../common/feature-flags/feature-flag.service.js';
 import { EnterpriseListingIntelligenceService } from './enterprise-listing-intelligence.service.js';
-import type { EnterpriseOptimizationResult } from './enterprise-listing-intelligence.service.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 
 export interface CreatePipelineJobDto {
@@ -27,6 +26,10 @@ export interface CombinedOptimizationResult {
   job: PipelineJob;
   enterprise: EnterpriseOptimizationResult;
 }
+
+export type EnterpriseOptimizationResult = Awaited<
+  ReturnType<EnterpriseListingIntelligenceService['generateForPipelineJob']>
+>;
 
 /**
  * PipelineService — manages enrichment pipeline jobs.

@@ -17,9 +17,9 @@ import type { Response } from 'express';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineService } from './pipeline.service.js';
-import type { EnterpriseOptimizationResult } from './enterprise-listing-intelligence.service.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import type { CombinedOptimizationResult } from './pipeline.service.js';
+import type { EnterpriseOptimizationResult } from './pipeline.service.js';
 
 const PROJECT_ROOT = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 const UPLOAD_DIR = path.resolve(PROJECT_ROOT, 'uploads', 'pipeline');

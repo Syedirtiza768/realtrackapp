@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
 import { DataSource, Repository } from 'typeorm';
@@ -9,6 +10,7 @@ import { CatalogImport } from '../entities/catalog-import.entity.js';
 import { CatalogImportRow } from '../entities/catalog-import-row.entity.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
+import { StorageService } from '../../storage/storage.service.js';
 import {
   DuplicateDetectionService,
 } from '../services/duplicate-detection.service.js';
@@ -49,10 +51,14 @@ export class CsvImportProcessor extends WorkerHost {
     private readonly rowRepo: Repository<CatalogImportRow>,
     @InjectRepository(CatalogProduct)
     private readonly productRepo: Repository<CatalogProduct>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
     private readonly duplicateService: DuplicateDetectionService,
     private readonly complianceService: EbayComplianceService,
     private readonly dataSource: DataSource,
     private readonly eventEmitter: EventEmitter2,
+    private readonly storageService: StorageService,
+    private readonly config: ConfigService,
   ) {
     super();
   }
@@ -343,10 +349,11 @@ export class CsvImportProcessor extends WorkerHost {
         }
 
         // Transactional batch insert
+        let savedBatchProducts: CatalogProduct[] = [];
         if (productsToInsert.length > 0 || importRowEntries.length > 0) {
           await this.dataSource.transaction(async (manager) => {
             if (productsToInsert.length > 0) {
-              const savedProducts = await manager
+              savedBatchProducts = await manager
                 .getRepository(CatalogProduct)
                 .save(productsToInsert as CatalogProduct[]);
 
@@ -357,8 +364,8 @@ export class CsvImportProcessor extends WorkerHost {
               // Link created product IDs to row entries
               let insertIdx = 0;
               for (const entry of importRowEntries) {
-                if (entry.status === 'inserted' && insertIdx < savedProducts.length) {
-                  entry.createdProductId = savedProducts[insertIdx].id;
+                if (entry.status === 'inserted' && insertIdx < savedBatchProducts.length) {
+                  entry.createdProductId = savedBatchProducts[insertIdx].id;
                   insertIdx++;
                 }
               }
@@ -373,6 +380,15 @@ export class CsvImportProcessor extends WorkerHost {
           });
 
           insertedRows += productsToInsert.length;
+
+          if (savedBatchProducts.length > 0 && this.shouldMirrorCatalogImages()) {
+            await this.mirrorImagesForInsertedBatch(
+              savedBatchProducts,
+              listingsToInsert as Partial<ListingRecord>[],
+              importRecord,
+              listingSheetName,
+            );
+          }
         }
 
         // Update progress
@@ -443,6 +459,54 @@ export class CsvImportProcessor extends WorkerHost {
       });
 
       throw err; // Let BullMQ handle retry
+    }
+  }
+
+  private shouldMirrorCatalogImages(): boolean {
+    return this.config.get<string>('CATALOG_MIRROR_IMAGES', 'true') !== 'false';
+  }
+
+  /**
+   * Copy remote PicURL / imageUrls into S3 (IAM role or env credentials).
+   * Updates catalog_products.image_urls and listing_records.itemPhotoUrl for preview/export.
+   */
+  private async mirrorImagesForInsertedBatch(
+    products: CatalogProduct[],
+    listings: Partial<ListingRecord>[],
+    importRecord: CatalogImport,
+    listingSheetName: string,
+  ): Promise<void> {
+    if (products.length !== listings.length) {
+      this.logger.warn(
+        `mirrorImagesForInsertedBatch: length mismatch products=${products.length} listings=${listings.length}`,
+      );
+    }
+    const n = Math.min(products.length, listings.length);
+    for (let i = 0; i < n; i++) {
+      const product = products[i];
+      const urls = product.imageUrls?.filter((u) => /^https?:\/\//i.test(u.trim())) ?? [];
+      if (urls.length === 0) continue;
+
+      const skuPart = (product.sku || product.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const ns = `${importRecord.id}/${skuPart}`;
+
+      try {
+        const mirrored = await this.storageService.mirrorRemoteImageUrls(urls, ns);
+        await this.productRepo.update(product.id, { imageUrls: mirrored });
+
+        await this.listingRepo.update(
+          {
+            sourceFileName: importRecord.fileName,
+            sheetName: listingSheetName,
+            sourceRowNumber: listings[i].sourceRowNumber!,
+          },
+          { itemPhotoUrl: mirrored.join('|') },
+        );
+      } catch (err) {
+        this.logger.error(
+          `Image mirror failed for SKU ${product.sku ?? product.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
   }
 

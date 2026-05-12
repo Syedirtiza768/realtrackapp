@@ -1,4 +1,11 @@
-import { IsArray, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  Equals,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UploadCsvDto {
@@ -55,4 +62,13 @@ export class BackfillListingsDto {
   @IsOptional()
   @IsString()
   importId?: string;
+}
+
+export class ClearCatalogDto {
+  @ApiProperty({
+    description: 'Must be exactly DELETE_ALL_CATALOG',
+    example: 'DELETE_ALL_CATALOG',
+  })
+  @Equals('DELETE_ALL_CATALOG')
+  confirm!: 'DELETE_ALL_CATALOG';
 }

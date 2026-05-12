@@ -17,6 +17,7 @@ import { OpenAiModule } from '../common/openai/openai.module.js';
 import { CatalogProductController } from './catalog-product.controller.js';
 import { CatalogProductService } from './catalog-product.service.js';
 import { TemplateGeneratorService } from './template-generator.service.js';
+import { StorageModule } from '../storage/storage.module.js';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { TemplateGeneratorService } from './template-generator.service.js';
     ]),
     BullModule.registerQueue({ name: 'catalog-import' }),
     OpenAiModule,
+    StorageModule,
   ],
   controllers: [CatalogImportController, ComplianceController, CatalogProductController],
   providers: [
