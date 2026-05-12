@@ -42,12 +42,21 @@ function StatusBadge({ status }: { status: CatalogImport['status'] }) {
 }
 
 export default function ImportReport({ importRecord }: ImportReportProps) {
+  // Use floor so the bar never shows 100% until every row is processed (Math.round
+  // hits 100% at ~99.5%, which looked like "stuck at 100%" during the last batches).
   const progressPct =
     importRecord.totalRows > 0
-      ? Math.round((importRecord.processedRows / importRecord.totalRows) * 100)
+      ? Math.min(
+          100,
+          Math.floor((importRecord.processedRows / importRecord.totalRows) * 100),
+        )
       : 0;
 
   const isProcessing = importRecord.status === 'processing' || importRecord.status === 'validating';
+  const isFinalizing =
+    isProcessing &&
+    importRecord.totalRows > 0 &&
+    importRecord.processedRows >= importRecord.totalRows;
 
   return (
     <Card>
@@ -75,7 +84,9 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
         {isProcessing && (
           <div className="mb-4">
             <div className="flex justify-between text-xs text-slate-400 mb-1">
-              <span>Processing rows...</span>
+              <span>
+                {isFinalizing ? 'Finalizing import…' : 'Processing rows…'}
+              </span>
               <span>
                 {importRecord.processedRows.toLocaleString()} / {importRecord.totalRows.toLocaleString()} ({progressPct}%)
               </span>

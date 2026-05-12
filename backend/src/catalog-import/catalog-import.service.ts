@@ -2,9 +2,10 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
-import { DataSource, Like, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
+import { StringDecoder } from 'node:string_decoder';
 import { CatalogImport } from './entities/catalog-import.entity.js';
 import { CatalogImportRow } from './entities/catalog-import-row.entity.js';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
@@ -97,6 +98,7 @@ const DEFAULT_COLUMN_MAP: Record<string, string> = {
   'oem part number': 'oemPartNumber',
   'image url': 'imageUrls',
   'imageurl': 'imageUrls',
+  'imageurls': 'imageUrls',
   'images': 'imageUrls',
 };
 
@@ -126,7 +128,8 @@ export class CatalogImportService {
   }
 
   /**
-   * Wipe catalog tables and catalog-generated listing rows. Irreversible.
+   * Wipe CSV catalog import tables, compliance audit logs, and **all** listing_records
+   * (what the /catalog browse page shows). Irreversible.
    * Requires confirm phrase to prevent accidental calls.
    */
   async clearAllCatalog(confirm: string): Promise<{
@@ -137,13 +140,17 @@ export class CatalogImportService {
     catalogImportRowsDeleted: number;
     complianceAuditLogsDeleted: number;
   }> {
-    if (confirm !== 'DELETE_ALL_CATALOG') {
+    const phrase = typeof confirm === 'string' ? confirm.trim() : '';
+    if (phrase !== 'DELETE_ALL_CATALOG') {
       throw new BadRequestException(
         'Body must be { "confirm": "DELETE_ALL_CATALOG" } to delete all catalog data.',
       );
     }
 
     return await this.dataSource.transaction(async (manager) => {
+      // Pool may use a low statement_timeout; large deletes need longer than the default window.
+      await manager.query(`SET LOCAL statement_timeout = '5min'`);
+
       const motorsBefore = await manager.query(
         `SELECT COUNT(*)::int AS c FROM "motors_products" WHERE "catalogProductId" IS NOT NULL`,
       );
@@ -152,6 +159,21 @@ export class CatalogImportService {
       await manager.query(
         `UPDATE "motors_products" SET "catalogProductId" = NULL WHERE "catalogProductId" IS NOT NULL`,
       );
+
+      await manager.query(
+        `UPDATE "motors_products" SET "listingId" = NULL WHERE "listingId" IS NOT NULL`,
+      );
+
+      await manager.query(
+        `UPDATE "master_products" SET "listing_record_id" = NULL WHERE "listing_record_id" IS NOT NULL`,
+      );
+
+      const listingCountRows = await manager.query(
+        `SELECT COUNT(*)::int AS c FROM "listing_records"`,
+      );
+      const listingsBefore = Number(listingCountRows[0]?.c ?? 0);
+
+      await manager.query(`DELETE FROM "listing_revisions"`);
 
       const auditCountRows = await manager.query(
         `SELECT COUNT(*)::int AS c FROM "compliance_audit_logs"`,
@@ -177,20 +199,17 @@ export class CatalogImportService {
         .from(CatalogProduct)
         .execute();
 
-      const lr = await manager
-        .createQueryBuilder()
-        .delete()
-        .from(ListingRecord)
-        .where({ sheetName: Like('Catalog Import%') })
-        .execute();
+      await manager.query(`DELETE FROM "listing_records"`);
+
+      const listingsDeleted = listingsBefore;
 
       this.logger.warn(
-        `clearAllCatalog: motors unlinked=${motorsUnlinked}, listing_rows=${lr.affected ?? 0}, products=${cp.affected ?? 0}`,
+        `clearAllCatalog: motors catalog unlinked=${motorsUnlinked}, listing_rows_deleted=${listingsDeleted}, products=${cp.affected ?? 0}`,
       );
 
       return {
         motorsProductsUnlinked: motorsUnlinked,
-        listingRecordsDeleted: lr.affected ?? 0,
+        listingRecordsDeleted: listingsDeleted,
         catalogProductsDeleted: cp.affected ?? 0,
         catalogImportsDeleted: ci.affected ?? 0,
         catalogImportRowsDeleted: cir.affected ?? 0,
@@ -200,7 +219,8 @@ export class CatalogImportService {
   }
 
   /**
-   * Handle uploaded CSV file — save to disk, detect headers, create import record.
+   * Handle uploaded CSV file — detect headers, create import record.
+   * With diskStorage the file is already on disk at file.path; we just read it.
    */
   async handleUpload(
     file: Express.Multer.File,
@@ -212,19 +232,13 @@ export class CatalogImportService {
       throw new BadRequestException('Only CSV files are supported');
     }
 
-    // Save file to upload directory
-    const safeFileName = `${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const filePath = path.join(this.uploadDir, safeFileName);
-    fs.writeFileSync(filePath, file.buffer);
-
-    // Detect headers from first line
-    const detectedHeaders = this.detectHeaders(file.buffer);
+    // diskStorage already wrote the file to disk at file.path.
+    // Stream the file for header detection / row counting so large CSVs do not OOM the process (nginx 502).
+    const filePath = file.path;
+    const { detectedHeaders, totalRows } = await this.scanUploadedCsvForMetadata(filePath);
 
     // Auto-generate column mapping if not provided
     const resolvedMapping = columnMapping || this.autoMapColumns(detectedHeaders);
-
-    // Count total rows (subtract header row(s) — eBay files have 2 header rows)
-    const totalRows = this.countDataRows(file.buffer);
 
     // Create import record
     const catalogImport = this.importRepo.create({
@@ -540,16 +554,95 @@ export class CatalogImportService {
   /* ── Header detection & column mapping ─────────────────── */
 
   /**
-   * Detect headers from CSV buffer — handles eBay File Exchange format
-   * which has a metadata row before the actual header row.
+   * Yields logical CSV rows (same boundaries as sanitizeCsvForLineSplit + split on newlines)
+   * without loading the entire file into memory.
    */
-  private detectHeaders(buffer: Buffer): string[] {
-    const content = this.sanitizeCsvForLineSplit(buffer.toString('utf-8'));
-    const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  private async *logicalLineIterator(filePath: string): AsyncGenerator<string> {
+    const stream = fs.createReadStream(filePath, { highWaterMark: 256 * 1024 });
+    const decoder = new StringDecoder('utf8');
+    let insideQuotes = false;
+    let lineOut = '';
 
-    for (const line of lines) {
+    const flushLine = (): string => {
+      const line = lineOut;
+      lineOut = '';
+      return line;
+    };
+
+    const processTextChunk = function* (text: string): Generator<string> {
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i]!;
+        const next = i + 1 < text.length ? text[i + 1]! : '';
+
+        if (char === '"') {
+          if (insideQuotes && next === '"') {
+            lineOut += '""';
+            i++;
+          } else {
+            insideQuotes = !insideQuotes;
+            lineOut += char;
+          }
+          continue;
+        }
+
+        if (insideQuotes && (char === '\n' || char === '\r')) {
+          if (char === '\r' && next === '\n') {
+            i++;
+          }
+          lineOut += ' ';
+          continue;
+        }
+
+        if (char === '\r' && next === '\n') {
+          yield flushLine();
+          i++;
+          continue;
+        }
+        if (char === '\n') {
+          if (lineOut.endsWith('\r')) {
+            lineOut = lineOut.slice(0, -1);
+          }
+          yield flushLine();
+          continue;
+        }
+
+        lineOut += char;
+      }
+    };
+
+    for await (const chunk of stream) {
+      yield* processTextChunk(decoder.write(chunk as Buffer));
+    }
+    yield* processTextChunk(decoder.end());
+    if (lineOut.length > 0) {
+      yield lineOut;
+      lineOut = '';
+    }
+  }
+
+  /**
+   * Header row + data row count for an uploaded CSV on disk.
+   * Matches legacy detectHeaders + countDataRows semantics (header for mapping may appear after row 5;
+   * row count uses header index only within the first five non-empty lines).
+   */
+  private async scanUploadedCsvForMetadata(
+    filePath: string,
+  ): Promise<{ detectedHeaders: string[]; totalRows: number }> {
+    let nonEmptyIdx = 0;
+    let detectedHeaders: string[] | null = null;
+    let firstNonEmptyLine: string | null = null;
+    let headerIdxForCount = 0;
+    let foundHeaderInFirst5 = false;
+
+    for await (const rawLine of this.logicalLineIterator(filePath)) {
+      const line = rawLine.trim();
+      if (!line.length) continue;
+
+      if (firstNonEmptyLine === null) {
+        firstNonEmptyLine = line;
+      }
+
       const cells = this.parseCsvLine(line);
-      // eBay files have a header row that starts with *Action or Action
       const hasAction = cells.some(
         (c) =>
           c.toLowerCase().includes('action') ||
@@ -561,17 +654,29 @@ export class CatalogImportService {
           c.toLowerCase().includes('*title'),
       );
 
-      if (hasAction || hasTitle) {
-        return cells.map((c) => c.trim());
+      if (!detectedHeaders && (hasAction || hasTitle)) {
+        detectedHeaders = cells.map((c) => c.trim());
       }
+
+      if (nonEmptyIdx < 5 && !foundHeaderInFirst5 && (hasAction || hasTitle)) {
+        headerIdxForCount = nonEmptyIdx;
+        foundHeaderInFirst5 = true;
+      }
+
+      nonEmptyIdx++;
     }
 
-    // Fallback: use first non-empty row
-    if (lines.length > 0) {
-      return this.parseCsvLine(lines[0]).map((c) => c.trim());
+    if (!detectedHeaders) {
+      detectedHeaders = firstNonEmptyLine
+        ? this.parseCsvLine(firstNonEmptyLine).map((c) => c.trim())
+        : [];
+    }
+    if (!foundHeaderInFirst5) {
+      headerIdxForCount = 0;
     }
 
-    return [];
+    const totalRows = Math.max(0, nonEmptyIdx - headerIdxForCount - 1);
+    return { detectedHeaders, totalRows };
   }
 
   /**
@@ -590,31 +695,6 @@ export class CatalogImportService {
     }
 
     return mapping;
-  }
-
-  /**
-   * Count data rows in the CSV (excluding header/metadata rows).
-   */
-  private countDataRows(buffer: Buffer): number {
-    const content = this.sanitizeCsvForLineSplit(buffer.toString('utf-8'));
-    const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
-
-    // Find header row index
-    let headerIdx = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const cells = this.parseCsvLine(lines[i]);
-      const hasAction = cells.some(
-        (c) =>
-          c.toLowerCase().includes('action') ||
-          c.toLowerCase().includes('*action'),
-      );
-      if (hasAction) {
-        headerIdx = i;
-        break;
-      }
-    }
-
-    return Math.max(0, lines.length - headerIdx - 1);
   }
 
   /**
@@ -642,39 +722,6 @@ export class CatalogImportService {
       }
     }
     result.push(current);
-    return result;
-  }
-
-  private sanitizeCsvForLineSplit(content: string): string {
-    let result = '';
-    let insideQuotes = false;
-
-    for (let i = 0; i < content.length; i++) {
-      const char = content[i];
-      const next = i + 1 < content.length ? content[i + 1] : '';
-
-      if (char === '"') {
-        if (insideQuotes && next === '"') {
-          result += '""';
-          i++;
-        } else {
-          insideQuotes = !insideQuotes;
-          result += char;
-        }
-        continue;
-      }
-
-      if (insideQuotes && (char === '\n' || char === '\r')) {
-        if (char === '\r' && next === '\n') {
-          i++;
-        }
-        result += ' ';
-        continue;
-      }
-
-      result += char;
-    }
-
     return result;
   }
 

@@ -122,6 +122,11 @@ function splitFilter(val: string | undefined): string[] {
 /** Safely cast startPrice to numeric, handling European comma format ("139,99" → 139.99) */
 const SAFE_PRICE = `NULLIF(REPLACE(r."startPrice", ',', '.'), '')::numeric`;
 
+/** Escape `%`, `_`, and `\` for use in `ILIKE ... ESCAPE '\\'` */
+function escapeForLike(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 /* ────────────────────────────────────────────────────────────── */
 
 @Injectable()
@@ -185,11 +190,11 @@ export class SearchService {
         .map((t) => `${t}:*`)
         .join(' & ');
 
-      // Combined FTS: websearch OR prefix query
+      // Combined FTS: websearch OR prefix query (COALESCE: CSV-import rows may lack searchVector until trigger/backfill)
       qb.addSelect(
         `GREATEST(
-          ts_rank_cd(r."searchVector", websearch_to_tsquery('english', :q), 32),
-          ts_rank_cd(r."searchVector", to_tsquery('english', :prefixQ), 32)
+          ts_rank_cd(COALESCE(r."searchVector", ''::tsvector), websearch_to_tsquery('english', :q), 32),
+          ts_rank_cd(COALESCE(r."searchVector", ''::tsvector), to_tsquery('english', :prefixQ), 32)
         )`,
         'relevanceScore',
       );
@@ -211,15 +216,24 @@ export class SearchService {
         'skuBoost',
       );
 
-      // FTS filter with fuzzy fallback
+      // FTS + fuzzy + substring fallback (NULL searchVector: catalog CSV imports before DB trigger)
+      const qContains = `%${escapeForLike(q)}%`;
       qb.where(
         `(
           r."searchVector" @@ websearch_to_tsquery('english', :q)
           OR r."searchVector" @@ to_tsquery('english', :prefixQ)
           OR LOWER(r."customLabelSku") = LOWER(:q)
           OR LOWER(r."customLabelSku") LIKE LOWER(:qPrefix)
-          OR similarity(r.title, :q) > 0.15
-          OR similarity(r."customLabelSku", :q) > 0.3
+          OR COALESCE(similarity(COALESCE(r.title, ''), :q), 0) > 0.15
+          OR COALESCE(similarity(COALESCE(r."customLabelSku", ''), :q), 0) > 0.3
+          OR (
+            r."searchVector" IS NULL AND (
+              COALESCE(r.title, '') ILIKE :qContains ESCAPE '\\'
+              OR COALESCE(r."cBrand", '') ILIKE :qContains ESCAPE '\\'
+              OR COALESCE(r."customLabelSku", '') ILIKE :qContains ESCAPE '\\'
+              OR COALESCE(r."cManufacturerPartNumber", '') ILIKE :qContains ESCAPE '\\'
+            )
+          )
         )`,
       );
 
@@ -227,6 +241,7 @@ export class SearchService {
         q,
         prefixQ: prefixTerms || q,
         qPrefix: `${q}%`,
+        qContains,
       });
     }
 
@@ -517,8 +532,7 @@ export class SearchService {
     const q = dto.q?.trim() || '';
     const hasQuery = q.length > 0;
 
-    // Build base WHERE clause — OPTIMIZED: use only FTS (skip expensive similarity)
-    // similarity() is O(n) and forces sequential scan; FTS uses GIN index
+    // Build base WHERE — same text-match rules as SearchService.search (FTS + SKU + ILIKE when vector null)
     const buildBaseQb = () => {
       const base = this.repo.createQueryBuilder('r');
       if (hasQuery) {
@@ -529,16 +543,30 @@ export class SearchService {
           .map((t) => `${t}:*`)
           .join(' & ');
 
-        // Facets use FTS only (not similarity) for speed — GIN indexed
+        // Match main search: FTS + SKU + ILIKE when searchVector is NULL (imported rows)
+        const qContains = `%${escapeForLike(q)}%`;
         base.where(
           `(
             r."searchVector" @@ websearch_to_tsquery('english', :q)
             OR r."searchVector" @@ to_tsquery('english', :prefixQ)
             OR LOWER(r."customLabelSku") = LOWER(:q)
             OR LOWER(r."customLabelSku") LIKE LOWER(:qPrefix)
+            OR (
+              r."searchVector" IS NULL AND (
+                COALESCE(r.title, '') ILIKE :qContains ESCAPE '\\'
+                OR COALESCE(r."cBrand", '') ILIKE :qContains ESCAPE '\\'
+                OR COALESCE(r."customLabelSku", '') ILIKE :qContains ESCAPE '\\'
+                OR COALESCE(r."cManufacturerPartNumber", '') ILIKE :qContains ESCAPE '\\'
+              )
+            )
           )`,
         );
-        base.setParameters({ q, prefixQ: prefixTerms || q, qPrefix: `${q}%` });
+        base.setParameters({
+          q,
+          prefixQ: prefixTerms || q,
+          qPrefix: `${q}%`,
+          qContains,
+        });
       }
       if (dto.hasImage === '1') {
         base.andWhere(`r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != ''`);

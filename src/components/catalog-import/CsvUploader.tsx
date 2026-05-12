@@ -44,9 +44,9 @@ export default function CsvUploader({
         return;
       }
 
-      // Validate file size (100 MB max)
-      if (file.size > 100 * 1024 * 1024) {
-        setValidationError('File too large. Maximum file size is 100 MB.');
+      // Validate file size (200 MB max — must match backend FileInterceptor)
+      if (file.size > 200 * 1024 * 1024) {
+        setValidationError('File too large. Maximum file size is 200 MB.');
         return;
       }
 
@@ -140,7 +140,7 @@ export default function CsvUploader({
                 Drag & drop a CSV file here, or click to browse
               </p>
               <p className="text-slate-500 text-xs mt-1">
-                Supports .csv files up to 100 MB (50,000+ rows)
+                Supports .csv files up to 200 MB (50,000+ rows)
               </p>
             </>
           )}
@@ -183,7 +183,11 @@ export default function CsvUploader({
         {uploading && (
           <div className="mt-4">
             <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-              <span>Uploading...</span>
+              <span>
+                {progress >= 100
+                  ? 'Finishing upload on server…'
+                  : 'Uploading…'}
+              </span>
               <span>{progress}%</span>
             </div>
             <div className="h-2 bg-slate-700 rounded-full overflow-hidden">

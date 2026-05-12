@@ -12,6 +12,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as path from 'path';
+import * as fs from 'fs';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CatalogImportService } from './catalog-import.service.js';
 import {
@@ -32,7 +35,23 @@ export class CatalogImportController {
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB max
+      // Use diskStorage so multer streams the file directly to disk.
+      // In multer 2.x, omitting storage leaves file.buffer undefined;
+      // diskStorage populates file.path instead, which handleUpload reads.
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          const uploadDir =
+            process.env.CATALOG_UPLOAD_DIR ??
+            path.resolve(process.cwd(), 'uploads', 'catalog');
+          fs.mkdirSync(uploadDir, { recursive: true });
+          cb(null, uploadDir);
+        },
+        filename: (_req, file, cb) => {
+          const safeFileName = `${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+          cb(null, safeFileName);
+        },
+      }),
+      limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB max
       fileFilter: (_req, file, cb) => {
         if (
           file.mimetype === 'text/csv' ||
@@ -87,6 +106,25 @@ export class CatalogImportController {
       dto.columnMapping,
     );
     return { import: importRecord };
+  }
+
+  @Post('backfill-listings')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Backfill listing_records from existing catalog imports' })
+  async backfillListings(@Body() dto: BackfillListingsDto) {
+    const result = await this.importService.backfillListings(dto.importId);
+    return { result };
+  }
+
+  @Post('clear-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Delete all catalog_products, CSV import jobs/rows, compliance audit logs, and every listing_record (browse /catalog)',
+  })
+  async clearAllCatalog(@Body() dto: ClearCatalogDto) {
+    const result = await this.importService.clearAllCatalog(dto.confirm);
+    return { result };
   }
 
   /* ── List imports ──────────────────────────────────────── */
@@ -155,24 +193,5 @@ export class CatalogImportController {
   async retryImport(@Param('id') id: string) {
     const importRecord = await this.importService.retryImport(id);
     return { import: importRecord };
-  }
-
-  @Post('backfill-listings')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Backfill listing_records from existing catalog imports' })
-  async backfillListings(@Body() dto: BackfillListingsDto) {
-    const result = await this.importService.backfillListings(dto.importId);
-    return { result };
-  }
-
-  @Post('clear-all')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Delete all catalog products, CSV import jobs/rows, compliance audit logs, and listing rows created by catalog import',
-  })
-  async clearAllCatalog(@Body() dto: ClearCatalogDto) {
-    const result = await this.importService.clearAllCatalog(dto.confirm);
-    return { result };
   }
 }

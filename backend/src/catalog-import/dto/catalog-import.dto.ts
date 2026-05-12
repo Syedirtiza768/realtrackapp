@@ -1,11 +1,14 @@
 import {
-  IsArray,
   Equals,
+  IsInt,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UploadCsvDto {
@@ -35,10 +38,17 @@ export class ImportQueryDto {
 
   @ApiPropertyOptional({ default: 20 })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   offset?: number;
 }
 
@@ -50,10 +60,17 @@ export class ImportRowQueryDto {
 
   @ApiPropertyOptional({ default: 50 })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
   limit?: number;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   offset?: number;
 }
 
@@ -69,6 +86,8 @@ export class ClearCatalogDto {
     description: 'Must be exactly DELETE_ALL_CATALOG',
     example: 'DELETE_ALL_CATALOG',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
   @Equals('DELETE_ALL_CATALOG')
   confirm!: 'DELETE_ALL_CATALOG';
 }

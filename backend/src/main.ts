@@ -12,10 +12,16 @@ async function bootstrap() {
   // Gzip/deflate compression — cuts JSON payload size ~70-80%
   app.use(compression({ level: 6, threshold: 1024 }));
 
-  // CORS — environment-driven (D5 fix)
+  // CORS — trim entries so "origin1, origin2" and Docker defaults match browser Origin exactly
+  const defaultCorsOrigins = [
+    'http://localhost:3911', // npm run dev (vite)
+    'http://localhost:8050', // docker compose frontend (FRONTEND_PORT)
+    'https://mhn.realtrackapp.com',
+    'http://mhn.realtrackapp.com',
+  ];
   const corsOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',')
-    : ['http://localhost:3911', 'https://mhn.realtrackapp.com'];
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : defaultCorsOrigins;
   app.enableCors({ origin: corsOrigins });
 
   app.setGlobalPrefix('api');

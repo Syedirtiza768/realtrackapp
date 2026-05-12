@@ -419,6 +419,26 @@ export class CsvImportProcessor extends WorkerHost {
         await job.updateProgress(Math.round((batchEnd / totalRows) * 100));
       }
 
+      // Backfill FTS vector for rows from this import (mirrors listing_search_vector_trigger).
+      // Without it, /catalog text search and facets skip rows when searchVector stayed NULL
+      // (migrations not applied or trigger missing).
+      await this.dataSource.query(
+        `
+        UPDATE "listing_records" SET "searchVector" =
+          setweight(to_tsvector('english', COALESCE("customLabelSku", '')), 'A') ||
+          setweight(to_tsvector('english', COALESCE("title", '')), 'A') ||
+          setweight(to_tsvector('english', COALESCE("cBrand", '')), 'B') ||
+          setweight(to_tsvector('english', COALESCE("cManufacturerPartNumber", '')), 'B') ||
+          setweight(to_tsvector('english', COALESCE("cOeOemPartNumber", '')), 'B') ||
+          setweight(to_tsvector('english', COALESCE("categoryName", '')), 'C') ||
+          setweight(to_tsvector('english', COALESCE("cType", '')), 'C') ||
+          setweight(to_tsvector('english', COALESCE("cFeatures", '')), 'C') ||
+          setweight(to_tsvector('english', COALESCE("description", '')), 'D')
+        WHERE "sheetName" = $1
+        `,
+        [listingSheetName],
+      );
+
       // Mark as completed
       await this.importRepo.update(importId, {
         status: 'completed',

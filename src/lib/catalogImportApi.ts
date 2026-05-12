@@ -273,7 +273,7 @@ export async function retryImport(id: string): Promise<{ import: CatalogImport }
   });
 }
 
-/** Permanently deletes catalog products, import jobs/rows, and catalog-generated listings. */
+/** Permanently deletes catalog_products, import jobs/rows, compliance audit logs, and all listing_records (browse /catalog). */
 export async function clearAllCatalog(): Promise<{
   result: {
     motorsProductsUnlinked: number;

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Database,
   History,
@@ -9,6 +9,9 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronUp,
+  Loader2,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -26,6 +29,7 @@ import {
   useImportList,
   useImportDetail,
   useImportStats,
+  getCatalogFields,
 } from '../../lib/catalogImportApi';
 import type {
   CatalogField,
@@ -47,8 +51,34 @@ export default function CatalogImportDashboard() {
   const { data: importDetail } = useImportDetail(
     step === 'processing' || step === 'complete' ? activeImportId : null,
   );
-  const { data: importListData, loading: listLoading, refresh: refreshList } = useImportList();
-  const { stats, refresh: refreshStats } = useImportStats();
+  const {
+    data: importListData,
+    loading: listLoading,
+    error: listError,
+    refresh: refreshList,
+  } = useImportList();
+  const {
+    stats,
+    loading: statsLoading,
+    error: statsError,
+    refresh: refreshStats,
+  } = useImportStats();
+
+  const [startImportError, setStartImportError] = useState<string | null>(null);
+
+  const [clearCatalogOpen, setClearCatalogOpen] = useState(false);
+  const [clearCatalogPhrase, setClearCatalogPhrase] = useState('');
+  const [clearCatalogBusy, setClearCatalogBusy] = useState(false);
+  const [clearCatalogError, setClearCatalogError] = useState<string | null>(null);
+
+  /* ── When import finishes, leave processing step (must not run in render) ─ */
+  useEffect(() => {
+    if (step !== 'processing' || !importDetail) return;
+    if (importDetail.status !== 'completed' && importDetail.status !== 'failed') return;
+    setStep('complete');
+    void refreshList();
+    void refreshStats();
+  }, [step, importDetail, refreshList, refreshStats]);
 
   /* ── Upload handler ─────────────────────────────────────── */
   const handleFileSelected = useCallback(
@@ -73,10 +103,14 @@ export default function CatalogImportDashboard() {
   const handleConfirmMapping = useCallback(
     async (mapping: Record<string, string>) => {
       if (!activeImportId) return;
+      setStartImportError(null);
       try {
         await startImport(activeImportId, mapping);
         setStep('processing');
       } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : 'Failed to start import. Is Redis running?';
+        setStartImportError(msg);
         console.error('Failed to start import:', err);
       }
     },
@@ -97,6 +131,7 @@ export default function CatalogImportDashboard() {
     setDetectedHeaders([]);
     setColumnMapping({});
     setCatalogFields([]);
+    setStartImportError(null);
     resetUpload();
   }, [resetUpload]);
 
@@ -129,36 +164,46 @@ export default function CatalogImportDashboard() {
     [refreshList],
   );
 
-  const handleClearCatalog = useCallback(async () => {
-    if (
-      !window.confirm(
-        'Permanently delete all catalog products, CSV import history, and listings created from catalog imports?',
-      )
-    ) {
+  const openClearCatalogModal = useCallback(() => {
+    setClearCatalogPhrase('');
+    setClearCatalogError(null);
+    setClearCatalogOpen(true);
+  }, []);
+
+  const closeClearCatalogModal = useCallback(() => {
+    if (clearCatalogBusy) return;
+    setClearCatalogOpen(false);
+    setClearCatalogPhrase('');
+    setClearCatalogError(null);
+  }, [clearCatalogBusy]);
+
+  const submitClearCatalog = useCallback(async () => {
+    const phrase = clearCatalogPhrase.trim();
+    if (phrase !== 'DELETE_ALL_CATALOG') {
+      setClearCatalogError(
+        phrase.length === 0
+          ? 'Enter the phrase DELETE_ALL_CATALOG to enable the delete button.'
+          : 'Must match exactly: DELETE_ALL_CATALOG (no extra characters).',
+      );
       return;
     }
-    const typed = window.prompt('Type DELETE_ALL_CATALOG to confirm');
-    if (typed !== 'DELETE_ALL_CATALOG') return;
+    setClearCatalogBusy(true);
+    setClearCatalogError(null);
     try {
       await clearAllCatalog();
-      refreshStats();
-      refreshList();
+      await Promise.all([refreshStats(), refreshList()]);
       handleNewImport();
+      setClearCatalogOpen(false);
+      setClearCatalogPhrase('');
     } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Clear catalog failed. Check the Network tab or server logs.';
       console.error('Clear catalog failed:', err);
+      setClearCatalogError(msg);
+    } finally {
+      setClearCatalogBusy(false);
     }
-  }, [refreshStats, refreshList, handleNewImport]);
-
-  // Auto-advance to complete when processing finishes
-  if (
-    step === 'processing' &&
-    importDetail &&
-    (importDetail.status === 'completed' || importDetail.status === 'failed')
-  ) {
-    setStep('complete');
-    refreshList();
-    refreshStats();
-  }
+  }, [clearCatalogPhrase, refreshStats, refreshList, handleNewImport]);
 
   return (
     <div className="space-y-6">
@@ -176,7 +221,7 @@ export default function CatalogImportDashboard() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleClearCatalog}
+            onClick={openClearCatalogModal}
             className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-800 text-red-300 text-sm hover:bg-red-950/50 transition-colors"
           >
             Clear catalog
@@ -193,7 +238,28 @@ export default function CatalogImportDashboard() {
         </div>
       </div>
 
+      {(listError || statsError) && (
+        <div
+          className="rounded-lg border border-amber-800/80 bg-amber-950/40 px-4 py-3 text-sm text-amber-100"
+          role="alert"
+        >
+          <p className="font-medium text-amber-200">Could not reach the catalog import API</p>
+          {listError && <p className="mt-1 text-amber-100/90">Import history: {listError}</p>}
+          {statsError && <p className="mt-1 text-amber-100/90">Stats: {statsError}</p>}
+          <p className="mt-2 text-xs text-amber-200/80">
+            Confirm the backend is up (e.g. port 4191), nginx proxies <span className="font-mono">/api</span> to it,
+            and open DevTools → Network on a failed request for details.
+          </p>
+        </div>
+      )}
+
       {/* Stats bar */}
+      {statsLoading && !stats && !statsError && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 px-4 py-3 text-sm text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+          Loading catalog stats…
+        </div>
+      )}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MiniStat label="Catalog Products" value={stats.totalCatalogProducts.toLocaleString()} />
@@ -216,13 +282,23 @@ export default function CatalogImportDashboard() {
 
       {/* Step: Column mapping */}
       {step === 'mapping' && (
-        <ColumnMapper
-          detectedHeaders={detectedHeaders}
-          initialMapping={columnMapping}
-          catalogFields={catalogFields}
-          onConfirm={handleConfirmMapping}
-          onAutoMap={handleAutoMap}
-        />
+        <div className="space-y-3">
+          {startImportError && (
+            <div
+              className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+              role="alert"
+            >
+              {startImportError}
+            </div>
+          )}
+          <ColumnMapper
+            detectedHeaders={detectedHeaders}
+            initialMapping={columnMapping}
+            catalogFields={catalogFields}
+            onConfirm={handleConfirmMapping}
+            onAutoMap={handleAutoMap}
+          />
+        </div>
       )}
 
       {/* Step: Processing / Complete */}
@@ -317,7 +393,18 @@ export default function CatalogImportDashboard() {
         </CardHeader>
         {showHistory && (
           <CardContent>
-            {importListData && importListData.imports.length > 0 ? (
+            {listLoading && !importListData && !listError && (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading import history…
+              </div>
+            )}
+            {listError && !listLoading && (
+              <p className="text-center text-sm text-red-400 py-6">
+                Import history could not be loaded (details in the alert above). Use refresh to retry.
+              </p>
+            )}
+            {!listLoading && !listError && importListData && importListData.imports.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -338,16 +425,29 @@ export default function CatalogImportDashboard() {
                         importRecord={imp}
                         onRetry={handleRetry}
                         onCancel={handleCancel}
-                        onView={(id) => {
+                        onView={async (id, status) => {
                           setActiveImportId(id);
-                          setStep('complete');
+                          if (status === 'pending') {
+                            setDetectedHeaders(imp.detectedHeaders || []);
+                            setColumnMapping(imp.columnMapping || {});
+                            try {
+                              const { fields } = await getCatalogFields();
+                              setCatalogFields(fields);
+                            } catch (e) {
+                              console.error(e);
+                            }
+                            setStep('mapping');
+                          } else {
+                            setStep('complete');
+                          }
                         }}
                       />
                     ))}
                   </tbody>
                 </table>
               </div>
-            ) : (
+            ) : null}
+            {!listLoading && !listError && importListData && importListData.imports.length === 0 && (
               <p className="text-slate-500 text-sm text-center py-6">
                 No imports yet. Upload a CSV file to get started.
               </p>
@@ -355,6 +455,98 @@ export default function CatalogImportDashboard() {
           </CardContent>
         )}
       </Card>
+
+      {clearCatalogOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-catalog-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-700 px-4 py-3">
+              <div className="flex items-center gap-2 text-amber-400">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <h2 id="clear-catalog-title" className="text-base font-semibold text-slate-100">
+                  Clear entire catalog
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeClearCatalogModal}
+                disabled={clearCatalogBusy}
+                className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 px-4 py-4 text-sm text-slate-300">
+              <p>
+                This permanently deletes all rows shown on the <strong className="text-slate-200">Catalog</strong> page
+                (<span className="font-mono text-slate-300">listing_records</span> — Excel uploads, pipeline jobs,
+                CSV imports, etc.), plus catalog import history, <span className="font-mono">catalog_products</span>,
+                and compliance audit logs for this flow. Motors products are unlinked from catalog SKUs and from any
+                generated listing id.
+              </p>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Type <span className="font-mono text-slate-200">DELETE_ALL_CATALOG</span> to confirm
+                </span>
+                <input
+                  type="text"
+                  value={clearCatalogPhrase}
+                  onChange={(e) => {
+                    setClearCatalogPhrase(e.target.value);
+                    setClearCatalogError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !clearCatalogBusy && clearCatalogPhrase.trim() === 'DELETE_ALL_CATALOG') {
+                      e.preventDefault();
+                      void submitClearCatalog();
+                    }
+                  }}
+                  disabled={clearCatalogBusy}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 font-mono text-slate-100 outline-none ring-blue-500/40 focus:border-blue-500 focus:ring-2 disabled:opacity-50"
+                  placeholder="DELETE_ALL_CATALOG"
+                />
+              </label>
+              {clearCatalogError && (
+                <p className="rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+                  {clearCatalogError}
+                </p>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={closeClearCatalogModal}
+                  disabled={clearCatalogBusy}
+                  className="rounded-lg border border-slate-600 px-3 py-2 text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submitClearCatalog()}
+                  disabled={clearCatalogBusy || clearCatalogPhrase.trim() !== 'DELETE_ALL_CATALOG'}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {clearCatalogBusy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting…
+                    </>
+                  ) : (
+                    'Delete everything'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -396,13 +588,13 @@ function ImportHistoryRow({
   importRecord: CatalogImport;
   onRetry: (id: string) => void;
   onCancel: (id: string) => void;
-  onView: (id: string) => void;
+  onView: (id: string, status: CatalogImportStatus) => void;
 }) {
   return (
     <tr className="border-b border-slate-700/50 hover:bg-slate-800/30">
       <td className="py-2 px-3">
         <button
-          onClick={() => onView(importRecord.id)}
+          onClick={() => onView(importRecord.id, importRecord.status)}
           className="text-blue-400 hover:text-blue-300 text-left"
         >
           {importRecord.fileName}
@@ -446,7 +638,7 @@ function ImportHistoryRow({
             </button>
           )}
           <button
-            onClick={() => onView(importRecord.id)}
+            onClick={() => onView(importRecord.id, importRecord.status)}
             className="text-slate-400 hover:text-slate-200 p-1"
             title="View details"
           >

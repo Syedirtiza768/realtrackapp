@@ -13,7 +13,7 @@ import { CatalogProductService } from './catalog-product.service.js';
 import type { UpdateProductDto } from './catalog-product.service.js';
 import { TemplateGeneratorService } from './template-generator.service.js';
 
-@Controller('api/catalog-products')
+@Controller('catalog-products')
 export class CatalogProductController {
   constructor(
     private readonly productService: CatalogProductService,
