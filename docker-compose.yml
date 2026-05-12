@@ -56,6 +56,8 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      # Catalog CSV import loads the full file into JS heap (see CsvImportProcessor); default ~2GB OOMs on large files
+      NODE_OPTIONS: "${NODE_OPTIONS:---max-old-space-size=8192}"
       # Use compose `environment` only; do not read a host .env file in the container
       IGNORE_ENV_FILE: "true"
       PORT: 4191

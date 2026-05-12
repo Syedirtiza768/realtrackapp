@@ -40,7 +40,8 @@ const PROGRESS_UPDATE_INTERVAL = 250;
  * 6. Update import record with progress
  * 7. Generate import report on completion
  */
-@Processor('catalog-import', { concurrency: 2 })
+/** Single worker: each job holds the full CSV in memory (readFileSync + line array); concurrency 2 doubled peak heap. */
+@Processor('catalog-import', { concurrency: 1 })
 export class CsvImportProcessor extends WorkerHost {
   private readonly logger = new Logger(CsvImportProcessor.name);
 
