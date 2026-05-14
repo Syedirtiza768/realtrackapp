@@ -21,6 +21,7 @@ import {
     Workflow,
     Eye,
     Car,
+    Filter,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
     { icon: Car, label: 'VIN Lookup', path: '/fitment/vin' },
     { icon: Database, label: 'Catalog', path: '/catalog' },
     { icon: Upload, label: 'CSV Import', path: '/catalog/import' },
+    { icon: Filter, label: 'Motors CSV filters', path: '/catalog/motors-filters' },
     { icon: Package, label: 'Inventory', path: '/inventory' },
     { icon: Workflow, label: 'Pipeline', path: '/pipeline' },
     { icon: Eye, label: 'eBay Preview', path: '/preview' },

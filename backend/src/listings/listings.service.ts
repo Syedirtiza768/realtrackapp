@@ -17,6 +17,7 @@ import { SearchQueryDto } from './dto/search-query.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
 import { ListingRecord } from './listing-record.entity';
 import { ListingRevision } from './listing-revision.entity';
+import { extractMakeModelFromTitle } from './utils/extract-make-model-from-title.js';
 
 /**
  * Maps each Excel header text (normalized to lowercase) to the
@@ -181,6 +182,8 @@ const UPSERT_COLUMNS: (keyof ListingRecord)[] = [
   'responsiblePerson1Email',
   'responsiblePerson1ContactUrl',
   'sourceFilePath',
+  'extractedMake',
+  'extractedModel',
 ];
 
 type ImportSummary = {
@@ -661,6 +664,10 @@ export class ListingsService {
             hasAnyData = true;
           }
         }
+
+        const mm = extractMakeModelFromTitle(record.title ?? null);
+        record.extractedMake = mm.make;
+        record.extractedModel = mm.model;
 
         if (!hasAnyData) {
           skippedRows += 1;

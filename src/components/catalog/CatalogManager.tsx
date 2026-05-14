@@ -25,6 +25,7 @@ import DetailModal from './DetailModal';
 import PublishModal from '../channels/PublishModal';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
 import { deleteListing } from '../../lib/listingsApi';
+import { showCatalogDestructiveUi } from '../../lib/catalogDestructiveUi';
 import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
 import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
 
@@ -464,7 +465,7 @@ export default function CatalogManager() {
                 onViewModeChange={setViewMode}
                 onPageChange={setPage}
                 onQuickView={setDetailId}
-                onDelete={handleDelete}
+                onDelete={showCatalogDestructiveUi ? handleDelete : undefined}
                 onPublish={handlePublish}
                 infiniteScroll={infiniteScroll}
                 hasMore={hasMore}
@@ -496,7 +497,7 @@ export default function CatalogManager() {
       <DetailModal id={detailId} onClose={() => setDetailId(null)} onPublish={handlePublish} />
 
       {/* Delete confirmation modal */}
-      {deleteConfirmId && (
+      {showCatalogDestructiveUi && deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDeleteConfirmId(null)}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
@@ -528,7 +529,7 @@ export default function CatalogManager() {
       )}
 
       {/* Bulk delete confirmation modal */}
-      {bulkDeleteConfirm && (
+      {showCatalogDestructiveUi && bulkDeleteConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBulkDeleteConfirm(false)}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
@@ -598,12 +599,14 @@ export default function CatalogManager() {
           >
             <Download size={12} /> {exporting ? 'Exporting…' : 'Export Templates'}
           </button>
-          <button
-            onClick={() => setBulkDeleteConfirm(true)}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
-          >
-            <Trash2 size={12} /> Delete
-          </button>
+          {showCatalogDestructiveUi && (
+            <button
+              onClick={() => setBulkDeleteConfirm(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
+            >
+              <Trash2 size={12} /> Delete
+            </button>
+          )}
           <button
             onClick={() => setSelectedIds(new Set())}
             className="text-xs text-slate-400 hover:text-slate-200 transition-colors"

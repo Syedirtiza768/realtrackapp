@@ -181,6 +181,7 @@ export interface ListingDetail {
 /* ── Active Filter State ──────────────────────────────────── */
 
 export interface ActiveFilters {
+  brands: string[];
   categories: string[];       // category IDs
   categoryNames: string[];    // for display
   conditions: string[];
@@ -200,6 +201,7 @@ export interface ActiveFilters {
 }
 
 export const EMPTY_FILTERS: ActiveFilters = {
+  brands: [],
   categories: [],
   categoryNames: [],
   conditions: [],
@@ -220,6 +222,7 @@ export const EMPTY_FILTERS: ActiveFilters = {
 
 export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
   return {
+    brands: f.brands.length ? f.brands.join(',') : undefined,
     categories: f.categories.length ? f.categories.join(',') : undefined,
     conditions: f.conditions.length ? f.conditions.join(',') : undefined,
     types: f.types.length ? f.types.join(',') : undefined,
@@ -238,6 +241,7 @@ export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
 
 export function countActiveFilters(f: ActiveFilters): number {
   let count = 0;
+  count += f.brands.length;
   count += f.categories.length;
   count += f.conditions.length;
   count += f.types.length;

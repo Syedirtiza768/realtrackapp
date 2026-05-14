@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { PipelineJob, PipelineJobStatus } from '../entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
+import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -423,6 +424,9 @@ export class PipelineProcessor extends WorkerHost {
         const brand = get(row, iBrand);
         const mpn = get(row, iMpn);
 
+        const { make: extractedMake, model: extractedModel } =
+          extractMakeModelFromTitle(title || null);
+
         currentProductIdx = products.length;
 
         products.push({
@@ -484,6 +488,8 @@ export class PipelineProcessor extends WorkerHost {
           cFeatures: get(row, iFeatures) || null,
           cManufacturerPartNumber: mpn || null,
           cOeOemPartNumber: get(row, iOem) || null,
+          extractedMake,
+          extractedModel,
         });
       }
 

@@ -15,6 +15,7 @@ import FitmentManager from './components/fitment/FitmentManager';
 import CatalogManager from './components/catalog/CatalogManager';
 import BulkActionsPage from './components/catalog/BulkActionsPage';
 import CatalogImportDashboard from './components/catalog-import/CatalogImportDashboard';
+import CatalogMotorsFiltersPage from './components/catalog-import/CatalogMotorsFiltersPage';
 import IngestionManager from './components/ingestion/IngestionManager';
 import OrdersPage from './components/orders/OrdersPage';
 import SettingsPage from './components/settings/SettingsPage';
@@ -62,6 +63,7 @@ function App() {
                             <Route path="/fitment/vin" element={<VinListingsPage />} />
                             <Route path="/catalog" element={<CatalogManager />} />
                             <Route path="/catalog/import" element={<CatalogImportDashboard />} />
+                            <Route path="/catalog/motors-filters" element={<CatalogMotorsFiltersPage />} />
                             <Route path="/inventory" element={<InventoryManager />} />
                             <Route path="/bulk-actions" element={<BulkActionsPage />} />
                             <Route path="/orders" element={<OrdersPage />} />

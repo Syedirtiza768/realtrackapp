@@ -18,6 +18,7 @@ import { CatalogProductController } from './catalog-product.controller.js';
 import { CatalogProductService } from './catalog-product.service.js';
 import { TemplateGeneratorService } from './template-generator.service.js';
 import { StorageModule } from '../storage/storage.module.js';
+import { ChannelsModule } from '../channels/channels.module.js';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { StorageModule } from '../storage/storage.module.js';
     BullModule.registerQueue({ name: 'catalog-import' }),
     OpenAiModule,
     StorageModule,
+    ChannelsModule,
   ],
   controllers: [CatalogImportController, ComplianceController, CatalogProductController],
   providers: [

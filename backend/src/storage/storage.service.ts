@@ -171,23 +171,31 @@ export class StorageService {
   /**
    * Download remote image URLs and store under catalog-import prefix.
    * Returns public HTTPS URLs (same shape as getCdnUrl). Failed URLs keep the original link.
+   * @param parallel max concurrent HTTP fetches (default 1 = sequential).
    */
   async mirrorRemoteImageUrls(
     urls: string[],
     namespace: string,
+    parallel = 1,
   ): Promise<string[]> {
     const sanitizedNs = namespace.replace(/[^a-zA-Z0-9/_-]/g, '_').replace(/\/+/g, '/');
-    const out: string[] = [];
-    for (let i = 0; i < urls.length; i++) {
+    const out: string[] = new Array(urls.length);
+    const conc = Math.max(1, Math.min(16, parallel));
+
+    const mirrorOne = async (i: number): Promise<void> => {
       const raw = urls[i];
       const u = raw?.trim();
-      if (!u || !/^https?:\/\//i.test(u)) {
-        if (u) out.push(u);
-        continue;
+      if (!u) {
+        out[i] = '';
+        return;
+      }
+      if (!/^https?:\/\//i.test(u)) {
+        out[i] = u;
+        return;
       }
       if (this.urlLooksLikeOurBucket(u)) {
-        out.push(u);
-        continue;
+        out[i] = u;
+        return;
       }
       try {
         const res = await fetch(u, {
@@ -200,8 +208,8 @@ export class StorageService {
         });
         if (!res.ok) {
           this.logger.warn(`mirrorRemoteImageUrls: HTTP ${res.status} for ${u.slice(0, 80)}`);
-          out.push(u);
-          continue;
+          out[i] = u;
+          return;
         }
         const buf = Buffer.from(await res.arrayBuffer());
         const contentType =
@@ -212,15 +220,24 @@ export class StorageService {
           `catalog-images/${sanitizedNs}/${String(i).padStart(3, '0')}${ext}`,
         );
         await this.putObject(key, buf, contentType);
-        out.push(this.getCdnUrl(key));
+        out[i] = this.getCdnUrl(key);
       } catch (e) {
         this.logger.warn(
           `mirrorRemoteImageUrls failed for ${u.slice(0, 96)}: ${e instanceof Error ? e.message : e}`,
         );
-        out.push(u);
+        out[i] = u;
       }
+    };
+
+    for (let start = 0; start < urls.length; start += conc) {
+      const slice = Array.from(
+        { length: Math.min(conc, urls.length - start) },
+        (_, j) => start + j,
+      );
+      await Promise.all(slice.map((idx) => mirrorOne(idx)));
     }
-    return out;
+
+    return out.map((v, i) => (v !== undefined && v !== '' ? v : (urls[i]?.trim() ?? '')));
   }
 
   private urlLooksLikeOurBucket(url: string): boolean {

@@ -31,6 +31,14 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     });
   }
 
+  for (const brand of filters.brands) {
+    tags.push({
+      key: `brand:${brand}`,
+      label: `Brand: ${brand}`,
+      onRemove: () => onChange({ ...filters, brands: filters.brands.filter((b) => b !== brand) }),
+    });
+  }
+
   // Make tags
   for (let i = 0; i < filters.makes.length; i++) {
     const makeId = filters.makes[i];

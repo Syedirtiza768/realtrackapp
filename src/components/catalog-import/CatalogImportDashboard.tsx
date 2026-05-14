@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Database,
   History,
@@ -31,6 +32,7 @@ import {
   useImportStats,
   getCatalogFields,
 } from '../../lib/catalogImportApi';
+import { showCatalogDestructiveUi } from '../../lib/catalogDestructiveUi';
 import type {
   CatalogField,
   CatalogImport,
@@ -215,17 +217,22 @@ export default function CatalogImportDashboard() {
             Catalog Import
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Import CSV catalog files into the master product database
+            Import CSV catalog files into the master product database.{' '}
+            <Link to="/catalog/motors-filters" className="text-blue-400 hover:underline">
+              Browse with Motors ops filters
+            </Link>
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={openClearCatalogModal}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-800 text-red-300 text-sm hover:bg-red-950/50 transition-colors"
-          >
-            Clear catalog
-          </button>
+          {showCatalogDestructiveUi && (
+            <button
+              type="button"
+              onClick={openClearCatalogModal}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-800 text-red-300 text-sm hover:bg-red-950/50 transition-colors"
+            >
+              Clear catalog
+            </button>
+          )}
           {step !== 'upload' && (
             <button
               onClick={handleNewImport}
@@ -456,7 +463,7 @@ export default function CatalogImportDashboard() {
         )}
       </Card>
 
-      {clearCatalogOpen && (
+      {showCatalogDestructiveUi && clearCatalogOpen && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4"
           role="dialog"

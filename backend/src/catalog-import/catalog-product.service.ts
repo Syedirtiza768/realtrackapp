@@ -3,6 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
+import { computeCatalogProductDerived, type CatalogProductDerived } from './utils/catalog-product-derivatives.js';
+import {
+  applyCatalogProductListFilters,
+  type CatalogProductListParams,
+} from './utils/catalog-product-list-query.js';
 
 export interface UpdateProductDto {
   title?: string;
@@ -42,31 +47,26 @@ export class CatalogProductService {
     private readonly listingRepo: Repository<ListingRecord>,
   ) {}
 
-  async findAll(opts: {
-    limit?: number;
-    offset?: number;
-    pipelineJobId?: string;
-    search?: string;
-  }): Promise<{ products: CatalogProduct[]; total: number }> {
+  async findAll(params: CatalogProductListParams): Promise<{
+    products: Array<CatalogProduct & { derived?: CatalogProductDerived }>;
+    total: number;
+  }> {
     const qb = this.productRepo.createQueryBuilder('p');
+    applyCatalogProductListFilters(qb, params);
 
-    if (opts.pipelineJobId) {
-      qb.andWhere('p.pipelineJobId = :jobId', { jobId: opts.pipelineJobId });
-    }
-
-    if (opts.search) {
-      qb.andWhere(
-        '(p.title ILIKE :q OR p.sku ILIKE :q OR p.brand ILIKE :q OR p.mpn ILIKE :q)',
-        { q: `%${opts.search}%` },
-      );
-    }
-
-    qb.orderBy('p.createdAt', 'DESC')
-      .take(opts.limit || 50)
-      .skip(opts.offset || 0);
+    qb.orderBy('p.createdAt', 'DESC').take(params.limit).skip(params.offset);
 
     const [products, total] = await qb.getManyAndCount();
-    return { products, total };
+
+    if (!params.includeDerived) {
+      return { products, total };
+    }
+
+    const enriched = products.map((row) => ({
+      ...row,
+      derived: computeCatalogProductDerived(row),
+    }));
+    return { products: enriched, total };
   }
 
   async findOne(id: string): Promise<CatalogProduct> {

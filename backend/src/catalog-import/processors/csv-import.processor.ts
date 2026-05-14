@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
@@ -10,11 +10,13 @@ import { CatalogImport } from '../entities/catalog-import.entity.js';
 import { CatalogImportRow } from '../entities/catalog-import-row.entity.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
+import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { StorageService } from '../../storage/storage.service.js';
 import {
   DuplicateDetectionService,
 } from '../services/duplicate-detection.service.js';
 import { EbayComplianceService } from '../services/ebay-compliance.service.js';
+import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
 
 export interface CsvImportJobData {
   importId: string;
@@ -23,10 +25,12 @@ export interface CsvImportJobData {
   resumeFromRow: number;
 }
 
-/** Batch size for streaming row processing */
+/** Target primary listing rows per DB batch */
 const BATCH_SIZE = 250;
-/** Progress update frequency (every N rows) */
-const PROGRESS_UPDATE_INTERVAL = 250;
+/** Emit DB + SSE progress every N physical CSV lines processed */
+const PROGRESS_UPDATE_INTERVAL = 50;
+/** Parallel remote image fetches per SKU during S3 mirror */
+const IMAGE_MIRROR_CONCURRENCY = 6;
 
 /**
  * BullMQ processor for CSV catalog imports.
@@ -60,6 +64,7 @@ export class CsvImportProcessor extends WorkerHost {
     private readonly eventEmitter: EventEmitter2,
     private readonly storageService: StorageService,
     private readonly config: ConfigService,
+    @Optional() private readonly browseApi?: EbayBrowseApiService,
   ) {
     super();
   }
@@ -137,30 +142,51 @@ export class CsvImportProcessor extends WorkerHost {
         seenInsertedRows.add(row.rowNumber);
       }
 
-      // Process in batches
-      for (let batchStart = resumeFromRow; batchStart < totalRows; batchStart += BATCH_SIZE) {
-        // Check for cancellation between batches
+      let physicalCursor = resumeFromRow;
+      let fitmentMergedLines = 0;
+      let orphanFitmentLines = 0;
+
+      // Process primary listing rows (eBay File Exchange: merge vehicle-compatibility continuation lines)
+      while (physicalCursor < totalRows) {
         const currentStatus = await this.importRepo.findOne({
           where: { id: importId },
           select: ['status'],
         });
         if (currentStatus?.status === 'cancelled') {
-          this.logger.warn(`Import ${importId} cancelled at row ${batchStart}`);
+          this.logger.warn(`Import ${importId} cancelled at physical line ${physicalCursor}`);
           return;
         }
 
-        const batchEnd = Math.min(batchStart + BATCH_SIZE, totalRows);
-        const batchLines = dataLines.slice(batchStart, batchEnd);
+        type ParsedRow = {
+          rowNumber: number;
+          data: Record<string, string>;
+          rawLine: string;
+        };
 
-        // Parse rows in this batch
-        const parsedRows = batchLines.map((line, idx) => ({
-          rowNumber: batchStart + idx + 1,
-          data: this.parseRow(line, headers, columnMapping),
-          rawLine: line,
-        }));
+        const batchPrimaryRows: ParsedRow[] = [];
+        while (physicalCursor < totalRows && batchPrimaryRows.length < BATCH_SIZE) {
+          const pulled = this.pullNextFileExchangeLogicalRow(
+            dataLines,
+            headers,
+            columnMapping,
+            physicalCursor,
+          );
+          physicalCursor = pulled.nextPhysicalIndex;
+          if (pulled.mergedFitmentLines > 0) {
+            fitmentMergedLines += pulled.mergedFitmentLines;
+          }
+          if (pulled.skippedOrphanFitment) {
+            orphanFitmentLines++;
+          }
+          if (pulled.primary) {
+            batchPrimaryRows.push(pulled.primary);
+          }
+        }
+
+        const parsedRows = batchPrimaryRows;
 
         // Filter out invalid rows
-        const validRows: typeof parsedRows = [];
+        const validRows: ParsedRow[] = [];
         const importRowEntries: Partial<CatalogImportRow>[] = [];
 
         for (const row of parsedRows) {
@@ -223,8 +249,10 @@ export class CsvImportProcessor extends WorkerHost {
           }
         }
 
+        await this.enrichRowsFromEbayBrowse(validRows);
+
         // Intra-import duplicate detection (same file / same import)
-        const uniqueRows: typeof validRows = [];
+        const uniqueRows: ParsedRow[] = [];
         for (const row of validRows) {
           const skuKey = row.data['sku']
             ? this.normalizeIdentifier(row.data['sku'])
@@ -392,32 +420,51 @@ export class CsvImportProcessor extends WorkerHost {
           }
         }
 
-        // Update progress
-        if (batchEnd % PROGRESS_UPDATE_INTERVAL === 0 || batchEnd === totalRows) {
+        // Update progress (physical CSV lines, includes merged compatibility rows)
+        if (
+          physicalCursor % PROGRESS_UPDATE_INTERVAL === 0 ||
+          physicalCursor >= totalRows
+        ) {
           await this.importRepo.update(importId, {
-            processedRows: batchEnd,
+            processedRows: physicalCursor,
             insertedRows,
             skippedDuplicates,
             flaggedForReview,
             invalidRows,
-            lastProcessedRow: batchEnd,
+            lastProcessedRow: physicalCursor,
             warnings: warnings.length > 0 ? warnings : null,
           });
 
-          // Emit progress event for real-time UI updates
           this.eventEmitter.emit('catalog-import.progress', {
             importId,
-            processedRows: batchEnd,
+            processedRows: physicalCursor,
             totalRows,
             insertedRows,
             skippedDuplicates,
             flaggedForReview,
             invalidRows,
+            phase:
+              productsToInsert.length > 0 && this.shouldMirrorCatalogImages()
+                ? 'mirroring_images'
+                : 'batch',
           });
         }
 
-        // Update BullMQ job progress
-        await job.updateProgress(Math.round((batchEnd / totalRows) * 100));
+        await job.updateProgress(
+          totalRows > 0 ? Math.round((physicalCursor / totalRows) * 100) : 100,
+        );
+      }
+
+      if (fitmentMergedLines > 0 && warnings.length < 500) {
+        warnings.unshift(
+          `eBay File Exchange: merged ${fitmentMergedLines} vehicle compatibility continuation line(s) into parent listing rows.`,
+        );
+        await this.importRepo.update(importId, { warnings });
+      }
+      if (orphanFitmentLines > 0) {
+        this.logger.warn(
+          `Import ${importId}: skipped ${orphanFitmentLines} orphan compatibility row(s) (no preceding listing row).`,
+        );
       }
 
       // Backfill FTS vector for rows from this import (mirrors listing_search_vector_trigger).
@@ -483,6 +530,191 @@ export class CsvImportProcessor extends WorkerHost {
     }
   }
 
+  /**
+   * eBay Motors File Exchange: pull one logical listing row, merging trailing
+   * `Relationship=Compatibility` continuation lines into fitment JSON.
+   */
+  private pullNextFileExchangeLogicalRow(
+    dataLines: string[],
+    headers: string[],
+    columnMapping: Record<string, string>,
+    cursor: number,
+  ): {
+    primary: { rowNumber: number; data: Record<string, string>; rawLine: string } | null;
+    nextPhysicalIndex: number;
+    mergedFitmentLines: number;
+    skippedOrphanFitment: boolean;
+  } {
+    if (cursor >= dataLines.length) {
+      return {
+        primary: null,
+        nextPhysicalIndex: cursor,
+        mergedFitmentLines: 0,
+        skippedOrphanFitment: false,
+      };
+    }
+
+    const firstLine = dataLines[cursor]!;
+    const firstCells = this.parseCsvLine(firstLine);
+
+    if (this.isFileExchangeFitmentContinuation(firstCells, headers)) {
+      return {
+        primary: null,
+        nextPhysicalIndex: cursor + 1,
+        mergedFitmentLines: 0,
+        skippedOrphanFitment: true,
+      };
+    }
+
+    const chunk: string[] = [firstLine];
+    let next = cursor + 1;
+    let mergedFitmentLines = 0;
+    while (next < dataLines.length) {
+      const nc = this.parseCsvLine(dataLines[next]!);
+      if (!this.isFileExchangeFitmentContinuation(nc, headers)) {
+        break;
+      }
+      chunk.push(dataLines[next]!);
+      mergedFitmentLines++;
+      next++;
+    }
+
+    const primaryLine = chunk[0]!;
+    const data = this.parseRow(primaryLine, headers, columnMapping);
+    const fitmentObjs: Record<string, string>[] = [];
+    for (let i = 1; i < chunk.length; i++) {
+      const fc = this.parseCsvLine(chunk[i]!);
+      const det = this.extractRelationshipDetailsCell(fc, headers);
+      if (det) {
+        fitmentObjs.push(this.parseFitmentPipeDetails(det));
+      }
+    }
+    if (fitmentObjs.length > 0) {
+      data['_fitmentRecordsJson'] = JSON.stringify(fitmentObjs);
+    }
+
+    return {
+      primary: {
+        rowNumber: cursor + 1,
+        data,
+        rawLine: primaryLine,
+      },
+      nextPhysicalIndex: next,
+      mergedFitmentLines,
+      skippedOrphanFitment: false,
+    };
+  }
+
+  private headerBaseName(header: string): string {
+    return header.replace(/^\*/, '').split('(')[0].trim().toLowerCase();
+  }
+
+  private columnIndexByBaseName(headers: string[], base: string): number {
+    return headers.findIndex((h) => this.headerBaseName(h) === base);
+  }
+
+  private isFileExchangeFitmentContinuation(
+    cells: string[],
+    headers: string[],
+  ): boolean {
+    const ri = this.columnIndexByBaseName(headers, 'relationship');
+    if (ri < 0 || ri >= cells.length) {
+      return false;
+    }
+    const rel = cells[ri]?.trim() || '';
+    if (!/^Compatibility$/i.test(rel)) {
+      return false;
+    }
+    const ci = this.columnIndexByBaseName(headers, 'customlabel');
+    if (ci >= 0 && ci < cells.length && cells[ci]?.trim()) {
+      return false;
+    }
+    const action = cells[0]?.trim() || '';
+    if (/^(Add|Revise|Relist|Delete|End|Verify)/i.test(action)) {
+      return false;
+    }
+    return true;
+  }
+
+  private extractRelationshipDetailsCell(
+    cells: string[],
+    headers: string[],
+  ): string | null {
+    const di = this.columnIndexByBaseName(headers, 'relationshipdetails');
+    if (di < 0 || di >= cells.length) {
+      return null;
+    }
+    const v = cells[di]?.trim();
+    return v || null;
+  }
+
+  private parseFitmentPipeDetails(details: string): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const part of details.split('|')) {
+      const eq = part.indexOf('=');
+      if (eq > 0) {
+        const k = part.slice(0, eq).trim();
+        const v = part.slice(eq + 1).trim();
+        if (k) {
+          out[k] = v;
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Optional: fill missing title/brand/images from eBay Browse API (application token). */
+  private async enrichRowsFromEbayBrowse(
+    rows: Array<{ data: Record<string, string> }>,
+  ): Promise<void> {
+    if (!this.browseApi || rows.length === 0) {
+      return;
+    }
+    const targets = rows.filter((r) => {
+      const id = r.data['ebayItemId']?.trim();
+      return Boolean(id && /^\d{9,}$/.test(id));
+    });
+    if (targets.length === 0) {
+      return;
+    }
+
+    const concurrency = Math.max(
+      1,
+      Number(this.config.get<string>('CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY', '4')) || 4,
+    );
+
+    for (let i = 0; i < targets.length; i += concurrency) {
+      const slice = targets.slice(i, i + concurrency);
+      await Promise.all(
+        slice.map(async (r) => {
+          const legacyId = r.data['ebayItemId']!.trim();
+          try {
+            const item = await this.browseApi!.getItemByLegacyId(legacyId);
+            if (!r.data['title']?.trim() && item.title) {
+              r.data['title'] = item.title;
+            }
+            if (!r.data['brand']?.trim()) {
+              const aspectBrand = item.localizedAspects?.find(
+                (a) => a.name.toLowerCase() === 'brand',
+              )?.value;
+              const b = item.brand || aspectBrand;
+              if (b) {
+                r.data['brand'] = b;
+              }
+            }
+            if (!r.data['imageUrls']?.trim() && item.image?.imageUrl) {
+              r.data['imageUrls'] = item.image.imageUrl;
+            }
+          } catch (e) {
+            this.logger.debug(
+              `Browse enrich skipped for item ${legacyId}: ${e instanceof Error ? e.message : e}`,
+            );
+          }
+        }),
+      );
+    }
+  }
+
   private shouldMirrorCatalogImages(): boolean {
     return this.config.get<string>('CATALOG_MIRROR_IMAGES', 'true') !== 'false';
   }
@@ -503,31 +735,48 @@ export class CsvImportProcessor extends WorkerHost {
       );
     }
     const n = Math.min(products.length, listings.length);
-    for (let i = 0; i < n; i++) {
-      const product = products[i];
-      const urls = product.imageUrls?.filter((u) => /^https?:\/\//i.test(u.trim())) ?? [];
-      if (urls.length === 0) continue;
+    const skuConcurrency = Math.max(
+      1,
+      Number(this.config.get<string>('CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY', '4')) || 4,
+    );
+
+    const mirrorOne = async (i: number): Promise<void> => {
+      const product = products[i]!;
+      const urls =
+        product.imageUrls?.filter((u) => /^https?:\/\//i.test(u.trim())) ?? [];
+      if (urls.length === 0) return;
 
       const skuPart = (product.sku || product.id).replace(/[^a-zA-Z0-9_-]/g, '_');
       const ns = `${importRecord.id}/${skuPart}`;
 
       try {
-        const mirrored = await this.storageService.mirrorRemoteImageUrls(urls, ns);
+        const mirrored = await this.storageService.mirrorRemoteImageUrls(
+          urls,
+          ns,
+          IMAGE_MIRROR_CONCURRENCY,
+        );
         await this.productRepo.update(product.id, { imageUrls: mirrored });
 
         await this.listingRepo.update(
           {
             sourceFileName: importRecord.fileName,
             sheetName: listingSheetName,
-            sourceRowNumber: listings[i].sourceRowNumber!,
+            sourceRowNumber: listings[i]!.sourceRowNumber!,
           },
-          { itemPhotoUrl: mirrored.join('|') },
+          { itemPhotoUrl: mirrored.filter(Boolean).join('|') },
         );
       } catch (err) {
         this.logger.error(
           `Image mirror failed for SKU ${product.sku ?? product.id}: ${err instanceof Error ? err.message : err}`,
         );
       }
+    };
+
+    for (let batch = 0; batch < n; batch += skuConcurrency) {
+      const end = Math.min(batch + skuConcurrency, n);
+      await Promise.all(
+        Array.from({ length: end - batch }, (_, k) => mirrorOne(batch + k)),
+      );
     }
   }
 
@@ -658,6 +907,19 @@ export class CsvImportProcessor extends WorkerHost {
       conditionLabel = conditionMap[conditionId] || conditionId;
     }
 
+    let fitmentData: Record<string, unknown>[] | null = null;
+    const rawFit = data['_fitmentRecordsJson']?.trim();
+    if (rawFit) {
+      try {
+        const parsed = JSON.parse(rawFit) as unknown;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          fitmentData = parsed as Record<string, unknown>[];
+        }
+      } catch {
+        /* ignore malformed fitment JSON */
+      }
+    }
+
     return {
       sku: data['sku'] || null,
       mpn: mpn,
@@ -684,6 +946,7 @@ export class CsvImportProcessor extends WorkerHost {
       categoryId: data['categoryId'] || null,
       categoryName: data['categoryName'] || null,
       imageUrls,
+      fitmentData,
       location: data['location'] || null,
       format: data['format'] || null,
       duration: data['duration'] || null,
@@ -711,6 +974,10 @@ export class CsvImportProcessor extends WorkerHost {
     const quantityNum = this.parseInteger(quantityText ?? undefined);
     const buyItNowPriceNum = this.parseNumber(buyItNowPriceText ?? undefined);
 
+    const title = data['title'] || null;
+    const { make: extractedMake, model: extractedModel } =
+      extractMakeModelFromTitle(title);
+
     return {
       organizationId: null,
       sourceFileName,
@@ -721,7 +988,7 @@ export class CsvImportProcessor extends WorkerHost {
       customLabelSku: data['sku'] || null,
       categoryId: data['categoryId'] || null,
       categoryName: data['categoryName'] || null,
-      title: data['title'] || null,
+      title,
       pUpc: data['upc'] || null,
       pEpid: data['epid'] || null,
       startPrice: startPriceText,
@@ -747,6 +1014,8 @@ export class CsvImportProcessor extends WorkerHost {
       startPriceNum,
       quantityNum,
       buyItNowPriceNum,
+      extractedMake,
+      extractedModel,
     };
   }
 

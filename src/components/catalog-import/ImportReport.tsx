@@ -85,10 +85,14 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
           <div className="mb-4">
             <div className="flex justify-between text-xs text-slate-400 mb-1">
               <span>
-                {isFinalizing ? 'Finalizing import…' : 'Processing rows…'}
+                {isFinalizing
+                  ? 'Writing search index and finishing…'
+                  : 'Parsing rows, checking eBay rules, mirroring images to S3…'}
               </span>
               <span>
-                {importRecord.processedRows.toLocaleString()} / {importRecord.totalRows.toLocaleString()} ({progressPct}%)
+                Lines {importRecord.processedRows.toLocaleString()} /{' '}
+                {importRecord.totalRows.toLocaleString()} ({progressPct}%) · inserted{' '}
+                {importRecord.insertedRows.toLocaleString()}
               </span>
             </div>
             <div className="h-2 bg-slate-700 rounded-full overflow-hidden">

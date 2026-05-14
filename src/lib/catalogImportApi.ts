@@ -182,7 +182,7 @@ export function useImportDetail(importId: string | null) {
 
     intervalRef.current = window.setInterval(() => {
       void refresh();
-    }, 3000);
+    }, 1000);
 
     return () => {
       if (intervalRef.current) window.clearInterval(intervalRef.current);

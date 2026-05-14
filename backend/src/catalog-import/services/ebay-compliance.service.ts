@@ -379,7 +379,14 @@ export class EbayComplianceService {
       }
     }
 
-    // Brand validation
+    // Brand validation — infer common OEM from title when C:Brand is blank (eBay export quirk)
+    if (!data['brand'] || !data['brand'].trim()) {
+      const inferred = this.inferBrandFromTitle(data['title'] || '');
+      if (inferred) {
+        data['brand'] = inferred;
+        autoCorrections.push({ field: 'brand', original: '(empty)', corrected: inferred });
+      }
+    }
     if (!data['brand'] || !data['brand'].trim()) {
       errors.push('Brand is required for eBay Motors');
     }
@@ -445,6 +452,63 @@ export class EbayComplianceService {
       warnings,
       autoCorrections,
     };
+  }
+
+  /**
+   * Best-effort OEM brand from listing title when C:Brand is blank (common on File Exchange exports).
+   */
+  private inferBrandFromTitle(title: string): string | null {
+    const t = title.trim();
+    if (!t) return null;
+    const lower = t.toLowerCase();
+    const brands: Array<[string, string]> = [
+      ['mercedes-benz', 'Mercedes-Benz'],
+      ['mercedes', 'Mercedes-Benz'],
+      ['bmw', 'BMW'],
+      ['audi', 'Audi'],
+      ['porsche', 'Porsche'],
+      ['volkswagen', 'Volkswagen'],
+      ['toyota', 'Toyota'],
+      ['honda', 'Honda'],
+      ['nissan', 'Nissan'],
+      ['mazda', 'Mazda'],
+      ['subaru', 'Subaru'],
+      ['lexus', 'Lexus'],
+      ['acura', 'Acura'],
+      ['infiniti', 'Infiniti'],
+      ['hyundai', 'Hyundai'],
+      ['kia', 'Kia'],
+      ['genesis', 'Genesis'],
+      ['ford', 'Ford'],
+      ['chevrolet', 'Chevrolet'],
+      ['chevy', 'Chevrolet'],
+      ['gmc', 'GMC'],
+      ['cadillac', 'Cadillac'],
+      ['dodge', 'Dodge'],
+      ['chrysler', 'Chrysler'],
+      ['jeep', 'Jeep'],
+      ['ram', 'RAM'],
+      ['tesla', 'Tesla'],
+      ['volvo', 'Volvo'],
+      ['land rover', 'Land Rover'],
+      ['jaguar', 'Jaguar'],
+      ['mini', 'MINI'],
+      ['fiat', 'Fiat'],
+      ['alfa romeo', 'Alfa Romeo'],
+      ['maserati', 'Maserati'],
+      ['ferrari', 'Ferrari'],
+      ['lamborghini', 'Lamborghini'],
+      ['bentley', 'Bentley'],
+      ['rolls-royce', 'Rolls-Royce'],
+      ['rolls royce', 'Rolls-Royce'],
+      ['mitsubishi', 'Mitsubishi'],
+      ['suzuki', 'Suzuki'],
+      ['isuzu', 'Isuzu'],
+    ];
+    for (const [needle, brand] of brands) {
+      if (lower.includes(needle)) return brand;
+    }
+    return null;
   }
 
   /**

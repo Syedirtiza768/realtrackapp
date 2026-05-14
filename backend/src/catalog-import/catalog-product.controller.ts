@@ -12,6 +12,7 @@ import * as express from 'express';
 import { CatalogProductService } from './catalog-product.service.js';
 import type { UpdateProductDto } from './catalog-product.service.js';
 import { TemplateGeneratorService } from './template-generator.service.js';
+import { parseCatalogProductListQuery } from './utils/catalog-product-list-query.js';
 
 @Controller('catalog-products')
 export class CatalogProductController {
@@ -21,18 +22,9 @@ export class CatalogProductController {
   ) {}
 
   @Get()
-  async list(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('pipelineJobId') pipelineJobId?: string,
-    @Query('search') search?: string,
-  ) {
-    return this.productService.findAll({
-      limit: limit ? parseInt(limit, 10) : undefined,
-      offset: offset ? parseInt(offset, 10) : undefined,
-      pipelineJobId,
-      search,
-    });
+  async list(@Query() query: Record<string, string | undefined>) {
+    const params = parseCatalogProductListQuery(query);
+    return this.productService.findAll(params);
   }
 
   @Patch('by-sku/:sku')

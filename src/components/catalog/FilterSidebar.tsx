@@ -6,16 +6,16 @@
  *  Filter sections (in order):
  *  1. Availability toggles (Has Image, Has Price)
  *  2. Price Range (min/max inputs)
- *  3. Make (vehicle make from fitment, multi-select)
- *  4. Model (vehicle model from fitment, cascading)
- *  5. Brand (multi-select with counts)
- *  6. Category (multi-select, hierarchical path display)
- *  7. Condition (multi-select with labels)
- *  8. Type (multi-select)
- *  9. Format (multi-select — FixedPrice, etc.)
- *  10. Location (multi-select)
- *  11. MPN (multi-select, searchable)
- *  12. Source File (multi-select)
+ *  3. Make (vehicle make from title)
+ *  4. Model (vehicle model from title; narrows with selected makes)
+ *  5. Brand (C:Brand / part brand)
+ *  6. Category
+ *  7. Condition
+ *  8. Type
+ *  9. Format
+ *  10. Location
+ *  11. MPN
+ *  12. Source File
  *
  *  Each section: collapsible, quick-filter search, show all,
  *  selected count badge, dynamic counts from facets API.
@@ -158,7 +158,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         onChange={(min, max) => onChange({ ...filters, minPrice: min, maxPrice: max })}
       />
 
-      {/* ── 3. Make (vehicle make extracted from title) ────── */}
+      {/* ── 3. Make (vehicle make from title) ────── */}
       <MultiSelectFacet
         title="Make"
         buckets={facets?.makes ?? []}
@@ -170,9 +170,10 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         getLabel={(b) => b.value}
         loading={loading}
         defaultExpanded
+        emptyMessage="No vehicle makes in the current result set. Motors listings usually use a title like “2015–2018 BMW X5 …”."
       />
 
-      {/* ── 4. Model (vehicle model extracted from title) ──── */}
+      {/* ── 4. Model (vehicle model from title) ──── */}
       <MultiSelectFacet
         title="Model"
         buckets={facets?.models ?? []}
@@ -183,9 +184,21 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         getLabel={(b) => b.value}
         loading={loading}
         defaultExpanded={filters.makes.length > 0}
+        emptyMessage="No models yet for this filter set. Pick a make first, or widen search."
       />
 
-      {/* ── 5. Category ───────────────────────────────────── */}
+      {/* ── 5. Brand (part manufacturer / C:Brand) ─────────── */}
+      <MultiSelectFacet
+        title="Brand"
+        buckets={facets?.brands ?? []}
+        selected={filters.brands}
+        onChange={(vals) => onChange({ ...filters, brands: vals })}
+        getLabel={(b) => b.value}
+        loading={loading}
+        defaultExpanded
+      />
+
+      {/* ── 6. Category ───────────────────────────────────── */}
       <MultiSelectFacet
         title="Category"
         buckets={facets?.categories ?? []}
@@ -291,6 +304,7 @@ function MultiSelectFacet({
   loading,
   defaultExpanded = false,
   initialShowCount = 8,
+  emptyMessage,
 }: {
   title: string;
   buckets: FacetBucket[];
@@ -302,6 +316,8 @@ function MultiSelectFacet({
   loading?: boolean;
   defaultExpanded?: boolean;
   initialShowCount?: number;
+  /** When set, section stays visible with this hint if there are no facet buckets */
+  emptyMessage?: string;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [filterText, setFilterText] = useState('');
@@ -348,7 +364,25 @@ function MultiSelectFacet({
     [selected, onChange],
   );
 
-  if (buckets.length === 0 && !loading) return null;
+  if (buckets.length === 0 && !loading && emptyMessage) {
+    return (
+      <div className="border border-slate-800 rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-800/40 transition-colors"
+        >
+          <span className="flex items-center gap-1.5">{title}</span>
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+        {expanded && (
+          <p className="text-[11px] text-slate-500 px-3 pb-3 leading-relaxed">{emptyMessage}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (buckets.length === 0 && !loading && !emptyMessage) return null;
 
   return (
     <div className="border border-slate-800 rounded-lg overflow-hidden">
