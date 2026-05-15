@@ -16,9 +16,12 @@ import CatalogManager from './components/catalog/CatalogManager';
 import BulkActionsPage from './components/catalog/BulkActionsPage';
 import CatalogImportDashboard from './components/catalog-import/CatalogImportDashboard';
 import CatalogMotorsFiltersPage from './components/catalog-import/CatalogMotorsFiltersPage';
+import EbayPublishWizardPage from './components/catalog/EbayPublishWizardPage';
 import IngestionManager from './components/ingestion/IngestionManager';
 import OrdersPage from './components/orders/OrdersPage';
 import SettingsPage from './components/settings/SettingsPage';
+import EbayStoresSettingsPage from './components/settings/EbayStoresSettingsPage';
+import EbayPolicyMappingPage from './components/settings/EbayPolicyMappingPage';
 import NotificationsPage from './components/notifications/NotificationsPage';
 import SkuDetailPage from './components/sku/SkuDetailPage';
 import AutomationRulesPage from './components/automation/AutomationRulesPage';
@@ -68,6 +71,9 @@ function App() {
                             <Route path="/bulk-actions" element={<BulkActionsPage />} />
                             <Route path="/orders" element={<OrdersPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/settings/integrations/ebay" element={<EbayStoresSettingsPage />} />
+                            <Route path="/settings/integrations/ebay/:accountId/policies" element={<EbayPolicyMappingPage />} />
+                            <Route path="/catalog/products/:productId/publish/ebay" element={<EbayPublishWizardPage />} />
                             <Route path="/automation" element={<AutomationRulesPage />} />
                             <Route path="/templates" element={<TemplateManagerPage />} />
                             <Route path="/audit" element={<AuditTrailPage />} />

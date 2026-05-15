@@ -4,7 +4,7 @@ import * as crypto from 'crypto';
 
 /**
  * AES-256-GCM encryption for OAuth token storage.
- * Uses CHANNEL_ENCRYPTION_KEY env var (64-char hex = 32 bytes).
+ * Uses TOKEN_ENCRYPTION_KEY (preferred) or CHANNEL_ENCRYPTION_KEY (64-char hex = 32 bytes).
  */
 @Injectable()
 export class TokenEncryptionService {
@@ -12,13 +12,15 @@ export class TokenEncryptionService {
   private readonly key: Buffer;
 
   constructor(private readonly config: ConfigService) {
-    const hexKey = this.config.get<string>('CHANNEL_ENCRYPTION_KEY', '');
+    const hexKey =
+      this.config.get<string>('TOKEN_ENCRYPTION_KEY', '') ||
+      this.config.get<string>('CHANNEL_ENCRYPTION_KEY', '');
     if (hexKey.length === 64) {
       this.key = Buffer.from(hexKey, 'hex');
     } else {
       // Development fallback — NOT safe for production
       this.logger.warn(
-        'CHANNEL_ENCRYPTION_KEY not set or invalid. Using insecure dev key.',
+        'TOKEN_ENCRYPTION_KEY / CHANNEL_ENCRYPTION_KEY not set or invalid. Using insecure dev key.',
       );
       this.key = crypto.scryptSync('dev-insecure-key', 'salt', 32);
     }

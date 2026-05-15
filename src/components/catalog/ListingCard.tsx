@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Eye, Image as ImageIcon, Pencil, Send, Trash2, Car } from 'lucide-react';
 import { sanitizeHighlight } from '../../lib/sanitize';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Badge } from '../ui/badge';
 import { getFirstImageUrl } from '../../lib/searchApi';
 import type { SearchItem } from '../../types/search';
@@ -137,17 +137,17 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
         </div>
 
         {/* Edit / Publish / Delete actions */}
-        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60">
+        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60 flex-wrap">
           <button
             onClick={() => navigate(`/listings/${item.id}/edit`)}
-            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-slate-800 hover:text-blue-400 transition-colors"
+            className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-slate-800 hover:text-blue-400 transition-colors"
           >
             <Pencil size={11} /> Edit
           </button>
           {onPublish && (
             <button
               onClick={() => onPublish(item.id)}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-blue-900/30 hover:text-blue-400 transition-colors"
+              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-blue-900/30 hover:text-blue-400 transition-colors"
             >
               <Send size={11} /> Channels
             </button>
@@ -155,11 +155,18 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
           {onDelete && (
             <button
               onClick={() => onDelete(item.id)}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
+              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
             >
               <Trash2 size={11} /> Delete
             </button>
           )}
+          <Link
+            to={`/catalog/products/${item.id}/publish/ebay`}
+            className="w-full text-center text-[11px] text-[#E53238] hover:text-[#ff6b6f] py-1 rounded-md border border-slate-800 hover:border-red-900/50 transition-colors"
+            title="Multi-store eBay publish wizard"
+          >
+            eBay publish…
+          </Link>
         </div>
       </div>
     </article>

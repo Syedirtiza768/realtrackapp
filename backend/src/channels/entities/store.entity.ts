@@ -26,6 +26,10 @@ export class Store {
   @Column({ name: 'connection_id', type: 'uuid' })
   connectionId!: string;
 
+  /** Optional organization scope (multi-tenant). */
+  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId!: string | null;
+
   @ManyToOne(() => ChannelConnection, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'connection_id' })
   connection!: ChannelConnection;

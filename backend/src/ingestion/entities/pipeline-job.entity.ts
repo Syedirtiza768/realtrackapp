@@ -94,6 +94,25 @@ export class PipelineJob {
   @Column({ name: 'report_path', type: 'varchar', length: 1000, nullable: true })
   reportPath!: string | null;
 
+  // ─── Mandatory listing optimization (post-enrichment) ───
+  @Column({ name: 'optimization_status', type: 'varchar', length: 32, default: 'pending' })
+  optimizationStatus!: string;
+
+  @Column({ name: 'optimization_processed', type: 'integer', default: 0 })
+  optimizationProcessed!: number;
+
+  @Column({ name: 'optimization_total', type: 'integer', default: 0 })
+  optimizationTotal!: number;
+
+  @Column({ name: 'optimization_pass_count', type: 'integer', default: 0 })
+  optimizationPassCount!: number;
+
+  @Column({ name: 'optimization_review_count', type: 'integer', default: 0 })
+  optimizationReviewCount!: number;
+
+  @Column({ name: 'optimization_block_count', type: 'integer', default: 0 })
+  optimizationBlockCount!: number;
+
   // ─── Progress detail (JSON for real-time update) ───
   @Column({ name: 'stage_details', type: 'jsonb', default: '{}' })
   stageDetails!: Record<string, unknown>;

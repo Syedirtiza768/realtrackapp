@@ -4,6 +4,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   X,
   ChevronLeft,
@@ -215,6 +216,15 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
                     </p>
                   </div>
                 )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    to={`/catalog/products/${data.id}/publish/ebay`}
+                    className="text-xs font-medium text-[#E53238] hover:text-[#ff6b6f] underline-offset-2 hover:underline"
+                  >
+                    Publish to eBay (multi-store wizard)
+                  </Link>
+                </div>
 
                 {/* Channel listing panel */}
                 <ChannelListingPanel listingId={data.id} onPublish={onPublish} />

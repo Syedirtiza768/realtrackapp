@@ -15,6 +15,14 @@ export interface PresignedUploadResult {
   assetId: string;
 }
 
+/** Result of mirroring a remote image into this app's S3 bucket. */
+export interface MirroredRemoteImage {
+  /** Public URL (CDN or bucket URL) written to listing PicURL columns. */
+  url: string;
+  /** Object key in the bucket (includes optional AWS_S3_PREFIX), or null if not mirrored. */
+  s3Key: string | null;
+}
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
@@ -178,23 +186,36 @@ export class StorageService {
     namespace: string,
     parallel = 1,
   ): Promise<string[]> {
+    const mirrored = await this.mirrorRemoteImages(urls, namespace, parallel);
+    return mirrored.map((m, i) => m.url || urls[i]?.trim() || '');
+  }
+
+  /**
+   * Download remote image URLs and store under catalog-import / pipeline prefix.
+   * Returns public URLs plus S3 object keys for audit columns in export files.
+   */
+  async mirrorRemoteImages(
+    urls: string[],
+    namespace: string,
+    parallel = 1,
+  ): Promise<MirroredRemoteImage[]> {
     const sanitizedNs = namespace.replace(/[^a-zA-Z0-9/_-]/g, '_').replace(/\/+/g, '/');
-    const out: string[] = new Array(urls.length);
+    const out: MirroredRemoteImage[] = new Array(urls.length);
     const conc = Math.max(1, Math.min(16, parallel));
 
     const mirrorOne = async (i: number): Promise<void> => {
       const raw = urls[i];
       const u = raw?.trim();
       if (!u) {
-        out[i] = '';
+        out[i] = { url: '', s3Key: null };
         return;
       }
       if (!/^https?:\/\//i.test(u)) {
-        out[i] = u;
+        out[i] = { url: u, s3Key: null };
         return;
       }
       if (this.urlLooksLikeOurBucket(u)) {
-        out[i] = u;
+        out[i] = { url: u, s3Key: this.tryKeyFromOurUrl(u) };
         return;
       }
       try {
@@ -207,8 +228,8 @@ export class StorageService {
           },
         });
         if (!res.ok) {
-          this.logger.warn(`mirrorRemoteImageUrls: HTTP ${res.status} for ${u.slice(0, 80)}`);
-          out[i] = u;
+          this.logger.warn(`mirrorRemoteImages: HTTP ${res.status} for ${u.slice(0, 80)}`);
+          out[i] = { url: u, s3Key: null };
           return;
         }
         const buf = Buffer.from(await res.arrayBuffer());
@@ -220,12 +241,12 @@ export class StorageService {
           `catalog-images/${sanitizedNs}/${String(i).padStart(3, '0')}${ext}`,
         );
         await this.putObject(key, buf, contentType);
-        out[i] = this.getCdnUrl(key);
+        out[i] = { url: this.getCdnUrl(key), s3Key: key };
       } catch (e) {
         this.logger.warn(
-          `mirrorRemoteImageUrls failed for ${u.slice(0, 96)}: ${e instanceof Error ? e.message : e}`,
+          `mirrorRemoteImages failed for ${u.slice(0, 96)}: ${e instanceof Error ? e.message : e}`,
         );
-        out[i] = u;
+        out[i] = { url: u, s3Key: null };
       }
     };
 
@@ -237,7 +258,28 @@ export class StorageService {
       await Promise.all(slice.map((idx) => mirrorOne(idx)));
     }
 
-    return out.map((v, i) => (v !== undefined && v !== '' ? v : (urls[i]?.trim() ?? '')));
+    return out.map((v, i) => {
+      if (v) return v;
+      const fallback = urls[i]?.trim() ?? '';
+      return { url: fallback, s3Key: null };
+    });
+  }
+
+  private tryKeyFromOurUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      if (this.cdnDomain && host === this.cdnDomain.toLowerCase()) {
+        return parsed.pathname.replace(/^\//, '');
+      }
+      const bucketHost = `${this.bucket.toLowerCase()}.s3`;
+      if (host.includes(bucketHost)) {
+        return parsed.pathname.replace(/^\//, '');
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
   }
 
   private urlLooksLikeOurBucket(url: string): boolean {

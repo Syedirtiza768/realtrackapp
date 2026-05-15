@@ -24,13 +24,16 @@ import { ImageSearchService } from './image-enrichment/image-search.service.js';
 import { ImageOptimizerService } from './image-enrichment/image-optimizer.service.js';
 import { OpenAiModule } from '../common/openai/openai.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
-import { EnterpriseListingIntelligenceService } from './enterprise-listing-intelligence.service.js';
+import { ListingOptimizationModule } from '../listing-optimization/listing-optimization.module.js';
+import { PipelineOutputImageService } from './services/pipeline-output-image.service.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob, CatalogProduct]),
     BullModule.registerQueue({ name: 'ingestion' }),
     BullModule.registerQueue({ name: 'pipeline' }),
+    BullModule.registerQueue({ name: 'listing-optimization' }),
+    ListingOptimizationModule,
     AiModule,
     StorageModule,
     FeatureFlagModule,
@@ -47,8 +50,8 @@ import { EnterpriseListingIntelligenceService } from './enterprise-listing-intel
     ImageEnrichmentService,
     ImageSearchService,
     ImageOptimizerService,
-    EnterpriseListingIntelligenceService,
+    PipelineOutputImageService,
   ],
-  exports: [IngestionService, PipelineService, ImageEnrichmentService],
+  exports: [IngestionService, PipelineService, ImageEnrichmentService, ListingOptimizationModule],
 })
 export class IngestionModule {}

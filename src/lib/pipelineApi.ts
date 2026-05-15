@@ -12,14 +12,34 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CombinedOptimizationResult,
   EnterpriseOptimizationResult,
+  JobOptimizationStatus,
   ListingQualityProfile,
   PipelineJob,
   PipelineStats,
+  ProductOptimizationSummary,
 } from '../types/pipeline';
 
 const API = '/api';
 
-type PipelineJobApi = Omit<PipelineJob, 'fileSizeBytes' | 'totalParts' | 'processedParts' | 'vinDecodeSuccess' | 'vinDecodeFailed' | 'categoryApiCount' | 'categoryFallbackCount' | 'enrichedCount' | 'fallbackCount' | 'openaiTokensUsed' | 'openaiCostUsd'> & {
+type PipelineJobApi = Omit<
+  PipelineJob,
+  | 'fileSizeBytes'
+  | 'totalParts'
+  | 'processedParts'
+  | 'vinDecodeSuccess'
+  | 'vinDecodeFailed'
+  | 'categoryApiCount'
+  | 'categoryFallbackCount'
+  | 'enrichedCount'
+  | 'fallbackCount'
+  | 'openaiTokensUsed'
+  | 'openaiCostUsd'
+  | 'optimizationProcessed'
+  | 'optimizationTotal'
+  | 'optimizationPassCount'
+  | 'optimizationReviewCount'
+  | 'optimizationBlockCount'
+> & {
   storedFilePath?: string | null;
   fileSizeBytes: number | string | null;
   totalParts: number | string | null;
@@ -32,6 +52,11 @@ type PipelineJobApi = Omit<PipelineJob, 'fileSizeBytes' | 'totalParts' | 'proces
   fallbackCount: number | string | null;
   openaiTokensUsed: number | string | null;
   openaiCostUsd: number | string | null;
+  optimizationProcessed?: number | string | null;
+  optimizationTotal?: number | string | null;
+  optimizationPassCount?: number | string | null;
+  optimizationReviewCount?: number | string | null;
+  optimizationBlockCount?: number | string | null;
 };
 
 function toNumber(value: number | string | null | undefined, fallback = 0): number {
@@ -59,6 +84,12 @@ function normalizePipelineJob(job: PipelineJobApi): PipelineJob {
     fallbackCount: toNumber(job.fallbackCount),
     openaiTokensUsed: toNumber(job.openaiTokensUsed),
     openaiCostUsd: toNumber(job.openaiCostUsd),
+    optimizationProcessed: toNumber(job.optimizationProcessed),
+    optimizationTotal: toNumber(job.optimizationTotal),
+    optimizationPassCount: toNumber(job.optimizationPassCount),
+    optimizationReviewCount: toNumber(job.optimizationReviewCount),
+    optimizationBlockCount: toNumber(job.optimizationBlockCount),
+    optimizationStatus: job.optimizationStatus ?? 'pending',
   };
 }
 
@@ -177,11 +208,27 @@ export function usePipelineJob(id: string | null) {
     },
     enabled: !!id,
     refetchInterval: (query) => {
-      const status = query.state.data?.job?.status;
-      if (!status) return 3000;
-      // Stop polling once terminal
-      if (status === 'completed' || status === 'failed' || status === 'cancelled') return false;
-      return 2000; // Poll every 2s while processing
+      const job = query.state.data?.job;
+      if (!job) return 3000;
+      const status = job.status;
+      const optStatus = job.optimizationStatus;
+      if (status === 'failed' || status === 'cancelled') return false;
+      if (status !== 'completed') return 2000;
+      if (optStatus === 'pending' || optStatus === 'running') return 2000;
+      return false;
+    },
+  });
+}
+
+export function useJobOptimization(jobId: string | null, enabled = true) {
+  return useQuery<JobOptimizationStatus>({
+    queryKey: ['pipeline-optimization', jobId],
+    queryFn: ({ signal }) => fetchJson(`/pipeline/jobs/${jobId}/optimization`, signal),
+    enabled: !!jobId && enabled,
+    refetchInterval: (query) => {
+      const status = query.state.data?.optimizationStatus;
+      if (status === 'pending' || status === 'running') return 2000;
+      return false;
     },
   });
 }
@@ -251,15 +298,38 @@ export async function generateEnterpriseOptimization(
   });
 }
 
-export async function runCombinedOptimization(
+/** Admin/debug: force re-run mandatory optimization for entire job */
+export async function rerunJobOptimization(
   jobId: string,
   marketplace: 'US' | 'DE' | 'AU' = 'US',
-  limit = 250,
-  listingQualityProfile: ListingQualityProfile = 'max_seo_comprehensive',
 ): Promise<CombinedOptimizationResult> {
   return postJson<CombinedOptimizationResult>(`/pipeline/jobs/${jobId}/optimize-all`, {
     marketplace,
-    limit,
-    listingQualityProfile,
+    listingQualityProfile: 'max_seo_comprehensive',
+  });
+}
+
+export async function fetchProductOptimization(
+  jobId: string,
+  productId: string,
+): Promise<ProductOptimizationSummary & { fitmentRows?: unknown; fitmentData?: unknown; optimizationPayload?: unknown }> {
+  return fetchJson(`/pipeline/jobs/${jobId}/products/${productId}/optimization`);
+}
+
+export async function markProductManualReview(
+  jobId: string,
+  productId: string,
+  enabled = true,
+): Promise<void> {
+  await postJson(`/pipeline/jobs/${jobId}/products/${productId}/manual-review`, { enabled });
+}
+
+export async function rerunProductOptimization(
+  jobId: string,
+  productId: string,
+  marketplace: 'US' | 'DE' | 'AU' = 'US',
+): Promise<void> {
+  await postJson(`/pipeline/jobs/${jobId}/products/${productId}/rerun-optimization`, {
+    marketplace,
   });
 }

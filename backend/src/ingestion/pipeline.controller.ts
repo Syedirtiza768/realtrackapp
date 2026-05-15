@@ -54,11 +54,53 @@ export class PipelineController {
     return this.pipelineService.generateEnterpriseOptimization(id, body);
   }
 
+  @Get('jobs/:id/optimization')
+  @ApiOperation({ summary: 'Get mandatory listing optimization status for a pipeline job' })
+  async getOptimizationStatus(@Param('id') id: string) {
+    return this.pipelineService.getOptimizationStatus(id);
+  }
+
+  @Get('jobs/:id/products/:productId/optimization')
+  @ApiOperation({ summary: 'Get optimization details for a single catalog product' })
+  async getProductOptimization(
+    @Param('id') _jobId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.pipelineService.getProductOptimization(productId);
+  }
+
+  @Post('jobs/:id/products/:productId/rerun-optimization')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin/debug: force re-run optimization for one product' })
+  async rerunProductOptimization(
+    @Param('productId') productId: string,
+    @Body() body?: { marketplace?: 'US' | 'DE' | 'AU' },
+  ) {
+    const product = await this.pipelineService.rerunProductOptimization(
+      productId,
+      body?.marketplace ?? 'US',
+    );
+    return { product };
+  }
+
+  @Post('jobs/:id/products/:productId/manual-review')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send product to manual review queue' })
+  async markManualReview(
+    @Param('productId') productId: string,
+    @Body() body?: { enabled?: boolean },
+  ) {
+    const product = await this.pipelineService.markProductManualReview(
+      productId,
+      body?.enabled !== false,
+    );
+    return { product };
+  }
+
   @Post('jobs/:id/optimize-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Run combined optimization in one go (non-enterprise output + enterprise intelligence)',
+    summary: 'Re-run mandatory listing optimization for entire job (admin/debug)',
   })
   async runCombinedOptimization(
     @Param('id') id: string,

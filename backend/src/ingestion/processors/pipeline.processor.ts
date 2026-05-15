@@ -1,12 +1,14 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { Job } from 'bullmq';
+import type { Job, Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 import { PipelineJob, PipelineJobStatus } from '../entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
+import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -42,6 +44,9 @@ export class PipelineProcessor extends WorkerHost {
     private readonly productRepo: Repository<CatalogProduct>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectQueue('listing-optimization')
+    private readonly optimizationQueue: Queue,
+    private readonly pipelineOutputImages: PipelineOutputImageService,
   ) {
     super();
   }
@@ -77,11 +82,32 @@ export class PipelineProcessor extends WorkerHost {
       // Scan output directory for generated files
       await this.collectOutputs(jobId, outputDir);
 
+      // Mirror remote listing images to S3 and rewrite output XLSX PicURL columns
+      await this.pipelineOutputImages.mirrorImagesInOutputDir(jobId, outputDir);
+
       // Save enriched listings to catalog_products + listing_records
       await this.saveToCatalog(jobId, outputDir);
 
       await this.updateStatus(jobId, 'completed');
-      this.logger.log(`Pipeline job=${jobId} completed successfully`);
+
+      await this.jobRepo.update(jobId, {
+        optimizationStatus: 'pending',
+        optimizationTotal: 0,
+        optimizationProcessed: 0,
+      } as any);
+
+      await this.optimizationQueue.add(
+        'optimize-job',
+        { jobId, marketplace: 'US' },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: 50,
+          removeOnFail: 100,
+        },
+      );
+
+      this.logger.log(`Pipeline job=${jobId} enrichment completed; queued mandatory listing optimization`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Pipeline job=${jobId} failed: ${message}`);
@@ -339,6 +365,9 @@ export class PipelineProcessor extends WorkerHost {
         const norm = name.toLowerCase().replace(/[^a-z0-9]/g, '');
         return headers.findIndex(h => h.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm));
       };
+      /** Exact match — avoids colIdx('Relationship') matching "Relationship details". */
+      const colExact = (pattern: RegExp): number =>
+        headers.findIndex(h => pattern.test(String(h ?? '').trim()));
 
       const iAction = colIdx('Action');
       const iSku = colIdx('Customlabel');
@@ -364,14 +393,15 @@ export class PipelineProcessor extends WorkerHost {
       const iMaterial = headers.findIndex(h => /^C:Material$/i.test(h));
       const iFeatures = headers.findIndex(h => /^C:Features$/i.test(h));
       const iCountry = headers.findIndex(h => /C:Country/i.test(h));
-      const iRelationship = colIdx('Relationship');
+      const iRelationship = colExact(/^Relationship$/i);
+      const iRelationshipDetails = colExact(/^Relationship\s*details$/i);
 
       const get = (row: string[], idx: number): string =>
         idx >= 0 && row[idx] != null ? String(row[idx]).trim() : '';
 
       const products: Partial<CatalogProduct>[] = [];
       const listingRecords: Partial<ListingRecord>[] = [];
-      const compatibilities = new Map<number, { make: string; model: string; year: string }[]>();
+      const compatibilities = new Map<number, Record<string, unknown>[]>();
 
       let currentProductIdx = -1;
       for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -381,19 +411,27 @@ export class PipelineProcessor extends WorkerHost {
         const relationship = get(row, iRelationship);
         if (relationship === 'Compatibility') {
           if (currentProductIdx >= 0) {
-            const details = get(row, colIdx('RelationshipDetails'));
+            const details = get(row, iRelationshipDetails);
             if (details) {
               const parts: Record<string, string> = {};
               details.split('|').forEach(pair => {
                 const [k, ...v] = pair.split('=');
                 if (k && v.length) parts[k.trim()] = v.join('=').trim();
               });
-              if (!compatibilities.has(currentProductIdx)) compatibilities.set(currentProductIdx, []);
-              compatibilities.get(currentProductIdx)!.push({
-                make: parts['Make'] || '',
-                model: parts['Model'] || '',
-                year: parts['Year'] || '',
-              });
+              const make = parts['Make'] || '';
+              const model = parts['Model'] || '';
+              const year = parts['Year'] || '';
+              if (make && model && year) {
+                if (!compatibilities.has(currentProductIdx)) compatibilities.set(currentProductIdx, []);
+                compatibilities.get(currentProductIdx)!.push({
+                  Make: make,
+                  Model: model,
+                  Year: year,
+                  ...(parts['Trim'] ? { Trim: parts['Trim'] } : {}),
+                  ...(parts['Engine'] ? { Engine: parts['Engine'] } : {}),
+                  ...(parts['Submodel'] ? { Submodel: parts['Submodel'] } : {}),
+                });
+              }
             }
           }
           continue;
@@ -500,17 +538,68 @@ export class PipelineProcessor extends WorkerHost {
       }
 
       if (products.length > 0) {
+        const withFitment = products.filter(
+          (p) => Array.isArray(p.fitmentData) && (p.fitmentData as unknown[]).length > 0,
+        ).length;
         const CHUNK = 500;
+        const upsertColumns = [
+          'title',
+          'description',
+          'brand',
+          'brandNormalized',
+          'mpn',
+          'mpnNormalized',
+          'partType',
+          'placement',
+          'material',
+          'features',
+          'countryOfOrigin',
+          'oemPartNumber',
+          'price',
+          'quantity',
+          'conditionId',
+          'categoryId',
+          'categoryName',
+          'imageUrls',
+          'location',
+          'format',
+          'duration',
+          'shippingProfile',
+          'returnProfile',
+          'paymentProfile',
+          'sourceFile',
+          'sourceRow',
+          'pipelineJobId',
+          'fitmentData',
+        ] as const;
+
         for (let i = 0; i < products.length; i += CHUNK) {
-          await this.productRepo
-            .createQueryBuilder()
-            .insert()
-            .into(CatalogProduct)
-            .values(products.slice(i, i + CHUNK) as any)
-            .orIgnore()
-            .execute();
+          const batch = products.slice(i, i + CHUNK);
+          const withSku = batch.filter((p) => p.sku?.trim());
+          const withoutSku = batch.filter((p) => !p.sku?.trim());
+
+          if (withSku.length > 0) {
+            await this.productRepo
+              .createQueryBuilder()
+              .insert()
+              .into(CatalogProduct)
+              .values(withSku as any)
+              .orUpdate([...upsertColumns], ['sku'])
+              .execute();
+          }
+          if (withoutSku.length > 0) {
+            await this.productRepo
+              .createQueryBuilder()
+              .insert()
+              .into(CatalogProduct)
+              .values(withoutSku as any)
+              .orIgnore()
+              .execute();
+          }
         }
-        this.logger.log(`Job ${jobId}: Saved ${products.length} products to catalog`);
+        this.logger.log(
+          `Job ${jobId}: Saved ${products.length} products to catalog (${withFitment} with fitment rows)`,
+        );
       }
 
       if (listingRecords.length > 0) {

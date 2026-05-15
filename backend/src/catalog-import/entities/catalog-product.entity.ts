@@ -133,6 +133,62 @@ export class CatalogProduct {
   @Column({ name: 'fitment_data', type: 'jsonb', nullable: true })
   fitmentData!: Record<string, unknown>[] | null;
 
+  /* ── Mandatory listing optimization ───────────────────── */
+
+  @Column({ name: 'optimization_status', type: 'varchar', length: 32, default: 'pending' })
+  optimizationStatus!: string;
+
+  @Column({ name: 'optimization_version', type: 'int', default: 0 })
+  optimizationVersion!: number;
+
+  @Column({ name: 'optimized_at', type: 'timestamptz', nullable: true })
+  optimizedAt!: Date | null;
+
+  @Column({ name: 'source_data_hash', type: 'text', nullable: true })
+  sourceDataHash!: string | null;
+
+  @Column({ name: 'fitment_status', type: 'varchar', length: 32, default: 'pending' })
+  fitmentStatus!: string;
+
+  @Column({ name: 'fitment_confidence', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  fitmentConfidence!: number | null;
+
+  @Column({ name: 'ebay_validation_status', type: 'varchar', length: 32, nullable: true })
+  ebayValidationStatus!: string | null;
+
+  @Column({ name: 'optimization_errors', type: 'jsonb', default: () => "'[]'" })
+  optimizationErrors!: Record<string, unknown>[];
+
+  @Column({ name: 'optimization_warnings', type: 'jsonb', default: () => "'[]'" })
+  optimizationWarnings!: Record<string, unknown>[];
+
+  @Column({ name: 'optimized_title', type: 'text', nullable: true })
+  optimizedTitle!: string | null;
+
+  @Column({ name: 'optimized_description', type: 'text', nullable: true })
+  optimizedDescription!: string | null;
+
+  @Column({ name: 'optimization_payload', type: 'jsonb', nullable: true })
+  optimizationPayload!: Record<string, unknown> | null;
+
+  @Column({ name: 'fitment_rows', type: 'jsonb', nullable: true })
+  fitmentRows!: Record<string, unknown>[] | null;
+
+  @Column({ name: 'donor_vin_decoded', type: 'jsonb', nullable: true })
+  donorVinDecoded!: Record<string, unknown> | null;
+
+  @Column({ name: 'donor_vin', type: 'text', nullable: true })
+  donorVin!: string | null;
+
+  @Column({ name: 'seo_score', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  seoScore!: number | null;
+
+  @Column({ name: 'readiness_score', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  readinessScore!: number | null;
+
+  @Column({ name: 'manual_review', type: 'boolean', default: false })
+  manualReview!: boolean;
+
   /* ── Source tracking ───────────────────────────────────── */
 
   @Column({ name: 'source_file', type: 'text', nullable: true })

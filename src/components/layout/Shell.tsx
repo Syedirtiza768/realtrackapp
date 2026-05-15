@@ -22,6 +22,7 @@ import {
     Eye,
     Car,
     Filter,
+    ShoppingBag,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
     { icon: ScrollText, label: 'Audit Trail', path: '/audit' },
     { icon: Bell, label: 'Notifications', path: '/notifications' },
     { icon: Settings, label: 'Settings', path: '/settings' },
+    { icon: ShoppingBag, label: 'eBay stores', path: '/settings/integrations/ebay' },
 ];
 
 /* ── Sidebar content (shared between desktop & mobile drawer) ── */

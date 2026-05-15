@@ -7,6 +7,8 @@ import { PipelineJob } from './entities/pipeline-job.entity.js';
 import { FeatureFlagService } from '../common/feature-flags/feature-flag.service.js';
 import { EnterpriseListingIntelligenceService } from './enterprise-listing-intelligence.service.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
+import { ListingOptimizationService } from '../listing-optimization/listing-optimization.service.js';
+import type { JobOptimizationStatus } from '../listing-optimization/listing-optimization.types.js';
 
 export interface CreatePipelineJobDto {
   originalFilename: string;
@@ -48,6 +50,7 @@ export class PipelineService {
     private readonly pipelineQueue: Queue,
     private readonly featureFlagService: FeatureFlagService,
     private readonly enterpriseListingIntelligence: EnterpriseListingIntelligenceService,
+    private readonly listingOptimization: ListingOptimizationService,
   ) {}
 
   /**
@@ -245,18 +248,71 @@ export class PipelineService {
     const job = await this.getJob(jobId);
     if (job.status !== 'completed') {
       throw new BadRequestException(
-        `Pipeline job ${jobId} is ${job.status}. Wait until non-enterprise pipeline reaches completed before running combined optimization.`,
+        `Pipeline job ${jobId} is ${job.status}. Wait until enrichment pipeline completes.`,
       );
     }
 
-    const enterprise = await this.generateEnterpriseOptimization(
-      jobId,
-      this.normalizeEnterpriseOptions(options),
-    );
+    const marketplace = options?.marketplace ?? 'US';
+    await this.listingOptimization.enqueueJobOptimization(jobId, marketplace);
+
+    const status = await this.getOptimizationStatus(jobId);
     const refreshedJob = await this.getJob(jobId);
     return {
       job: refreshedJob,
-      enterprise,
+      enterprise: this.optimizationStatusToEnterpriseResult(jobId, status, marketplace),
+    };
+  }
+
+  async getOptimizationStatus(jobId: string): Promise<JobOptimizationStatus> {
+    return this.listingOptimization.getJobOptimizationStatus(jobId);
+  }
+
+  async getProductOptimization(productId: string) {
+    return this.listingOptimization.getProductOptimization(productId);
+  }
+
+  async rerunProductOptimization(
+    productId: string,
+    marketplace: 'US' | 'DE' | 'AU' = 'US',
+  ) {
+    return this.listingOptimization.optimizeProduct(productId, marketplace, { force: true });
+  }
+
+  async markProductManualReview(productId: string, enabled = true) {
+    return this.listingOptimization.markManualReview(productId, enabled);
+  }
+
+  private optimizationStatusToEnterpriseResult(
+    jobId: string,
+    status: JobOptimizationStatus,
+    marketplace: 'US' | 'DE' | 'AU',
+  ): EnterpriseOptimizationResult {
+    return {
+      jobId,
+      marketplace,
+      totalProducts: status.total,
+      aiGeneratedCount: status.processed,
+      blockedCount: status.blockCount,
+      reviewCount: status.reviewCount,
+      passCount: status.passCount,
+      averageUploadReadiness:
+        status.products.length > 0
+          ? Math.round(
+              (status.products.reduce((s, p) => s + p.uploadReadinessScore, 0) /
+                status.products.length) *
+                100,
+            ) / 100
+          : 0,
+      listings: status.products.map((p) => ({
+        productId: p.productId,
+        sku: p.sku,
+        optimizedTitle: p.optimizedTitle ?? '',
+        validationStatus: p.validationStatus,
+        uploadReadinessScore: p.uploadReadinessScore,
+        complianceWarnings: [...p.errors, ...p.warnings],
+        missingDataReport: p.missingDataReport,
+        finalUploadPayload: {},
+      })) as EnterpriseOptimizationResult['listings'],
     };
   }
 

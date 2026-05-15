@@ -14,6 +14,20 @@ export type PipelineJobStatus =
   | 'failed'
   | 'cancelled';
 
+export type OptimizationStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'needs_review';
+
+export type FitmentStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'needs_review';
+
 export interface PipelineJob {
   id: string;
   status: PipelineJobStatus;
@@ -34,10 +48,47 @@ export interface PipelineJob {
   outputAuPath: string | null;
   outputDePath: string | null;
   reportPath: string | null;
+  optimizationStatus?: OptimizationStatus;
+  optimizationProcessed?: number;
+  optimizationTotal?: number;
+  optimizationPassCount?: number;
+  optimizationReviewCount?: number;
+  optimizationBlockCount?: number;
   stageDetails: Record<string, unknown> | null;
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProductOptimizationSummary {
+  productId: string;
+  sku: string | null;
+  optimizationStatus: OptimizationStatus;
+  fitmentStatus: FitmentStatus;
+  ebayValidationStatus: string | null;
+  optimizedTitle: string | null;
+  validationStatus: 'pass' | 'review' | 'block';
+  uploadReadinessScore: number;
+  seoScore: number;
+  readinessScore: number;
+  fitmentConfidence: number | null;
+  fitmentRowCount: number;
+  manualReview: boolean;
+  errors: Array<{ code: string; severity: string; message: string; field?: string }>;
+  warnings: Array<{ code: string; severity: string; message: string; field?: string }>;
+  missingDataReport: string[];
+  canPublish: boolean;
+}
+
+export interface JobOptimizationStatus {
+  jobId: string;
+  optimizationStatus: OptimizationStatus;
+  processed: number;
+  total: number;
+  passCount: number;
+  reviewCount: number;
+  blockCount: number;
+  products: ProductOptimizationSummary[];
 }
 
 export interface PipelineStats {

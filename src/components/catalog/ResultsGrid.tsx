@@ -4,6 +4,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { sanitizeHighlight } from '../../lib/sanitize';
 import {
   ChevronLeft,
@@ -275,6 +276,13 @@ export default function ResultsGrid({
                             <Send size={14} />
                           </button>
                         )}
+                        <Link
+                          to={`/catalog/products/${item.id}/publish/ebay`}
+                          className="p-1.5 rounded-lg border border-slate-700 text-[#E53238] hover:bg-red-950/40 transition-colors text-[10px] font-semibold leading-none"
+                          title="eBay multi-store publish"
+                        >
+                          eB
+                        </Link>
                         {onDelete && (
                           <button
                             onClick={() => onDelete(item.id)}

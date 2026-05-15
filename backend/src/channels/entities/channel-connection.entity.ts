@@ -19,6 +19,10 @@ export class ChannelConnection {
   @Column({ name: 'user_id', type: 'uuid' })
   userId!: string;
 
+  /** Optional organization scope (multi-tenant). */
+  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId!: string | null;
+
   @Column({ name: 'account_name', type: 'varchar', length: 200, nullable: true })
   accountName!: string | null;
 

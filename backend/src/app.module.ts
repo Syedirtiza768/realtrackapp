@@ -31,6 +31,7 @@ import { StorageModule } from './storage/storage.module';
 import { MotorsIntelligenceModule } from './motors-intelligence/motors-intelligence.module';
 import { OpenAiModule } from './common/openai/openai.module';
 import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intelligence.module';
+import { EbayIntegrationsModule } from './integrations/ebay/ebay-integrations.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intell
     MotorsIntelligenceModule,
     OpenAiModule,
     PricingIntelligenceModule,
+    EbayIntegrationsModule,
   ],
   controllers: [AppController],
   providers: [

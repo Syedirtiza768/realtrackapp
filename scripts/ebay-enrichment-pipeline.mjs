@@ -2246,14 +2246,26 @@ function buildBasicDescription(part, vehicle) {
  * the reference eBay File Exchange template. Includes embedded fitment table
  * and policy tabs (Payment, Shipping, Returns, Handling, International).
  */
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function wrapInTabbedDescription(descriptionText, fitments) {
-  const fitmentTableRows = (fitments || [])
-    .filter(f => f.make && f.model && f.year)
-    .map(f => `<tr><td>${f.make}</td><td>${f.model}</td><td>${f.year}</td></tr>`)
+  const rows = (fitments || []).filter(f => f.make && f.model && f.year);
+  const fitmentTableRows = rows
+    .map(
+      (f) =>
+        `<tr><td>${escapeHtml(f.year)}</td><td>${escapeHtml(f.make)}</td><td>${escapeHtml(f.model)}</td><td>${escapeHtml(f.submodel || f.chassisCode || '')}</td><td>${escapeHtml(f.trim)}</td><td>${escapeHtml(f.engine)}</td></tr>`,
+    )
     .join('');
 
+  const fitmentCount = rows.length;
   const fitmentSection = fitmentTableRows
-    ? `<div class="fitment-section" style="margin-top: 15px;"><h3 style="font-size: 16px;font-weight: bold;margin-bottom: 10px;color: #333;">Vehicle Compatibility</h3><table class="fitment" style="width: 100%;border-collapse: collapse;margin-bottom: 10px;"><thead><tr style="background-color: #333;color: white;"><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Make</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Model</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Year</th></tr></thead><tbody>${fitmentTableRows}</tbody></table></div>`
+    ? `<div class="fitment-section" style="margin-top: 15px;"><h3 style="font-size: 16px;font-weight: bold;margin-bottom: 10px;color: #333;">Vehicle Compatibility (${fitmentCount} applications)</h3><p style="font-size: 13px;color: #555;margin-bottom: 8px;">Complete fitment list — verify part number before purchasing.</p><table class="fitment" style="width: 100%;border-collapse: collapse;margin-bottom: 10px;font-size: 13px;"><thead><tr style="background-color: #333;color: white;"><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Year</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Make</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Model</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Submodel</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Trim</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Engine</th></tr></thead><tbody>${fitmentTableRows}</tbody></table></div>`
     : '';
 
   return `<style>.tab-wrap {font-family: Arial, sans-serif;font-size: 14px;color: #333;max-width: 800px;margin: auto;}.tab-title {background-color: #222;color: #fff;padding: 12px;font-size: 18px;font-weight: bold;text-align: center;}.product-description {padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;margin-bottom: 10px;}.fitment tbody tr:nth-child(even) {background-color: #f9f9f9;}.fitment tbody tr:nth-child(odd) {background-color: #fff;}.fitment tbody td {padding: 8px;border: 1px solid #ddd;}input[type="radio"] {display: none;}.tab-labels {display: flex;flex-wrap: wrap;background-color: #333;}.tab-labels label {flex: 1;text-align: center;padding: 10px;font-weight: bold;cursor: pointer;background-color: #333;color: white;border-right: 1px solid #444;transition: background 0.3s;}.tab-labels label:hover {background-color: #444;}.tab-content {display: none;padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;}#tab1:checked ~ .tabs #content1,#tab2:checked ~ .tabs #content2,#tab3:checked ~ .tabs #content3,#tab4:checked ~ .tabs #content4,#tab5:checked ~ .tabs #content5 {display: block;}#tab1:checked ~ .tab-labels label[for="tab1"],#tab2:checked ~ .tab-labels label[for="tab2"],#tab3:checked ~ .tab-labels label[for="tab3"],#tab4:checked ~ .tab-labels label[for="tab4"],#tab5:checked ~ .tab-labels label[for="tab5"] {background-color: #fff;color: #000;border-bottom: none;}</style><div class="tab-wrap"><div class="tab-title">Product Information</div><div class="product-description">${descriptionText}</div>${fitmentSection}<input type="radio" name="tab" id="tab1" checked><input type="radio" name="tab" id="tab2"><input type="radio" name="tab" id="tab3"><input type="radio" name="tab" id="tab4"><input type="radio" name="tab" id="tab5"><div class="tab-labels"><label for="tab1">Payment Policy</label><label for="tab2">Shipping Policy</label><label for="tab3">Returns Policy</label><label for="tab4">Handling Time</label><label for="tab5">International Buyers</label></div><div class="tabs"><div id="content1" class="tab-content">- We accept only online payment methods provided by eBay at checkout.</div><div id="content2" class="tab-content">- We provide worldwide shipping to most countries using reputed couriers like DHL, FedEx or Aramex.</div><div id="content3" class="tab-content">- We accept 14-day returns. Please clarify all doubts before purchasing.</div><div id="content4" class="tab-content">- All packages are shipped within 3 working days.</div><div id="content5" class="tab-content">- Import Duties, Taxes and charges are not included in the item price or shipping cost. These charges are Buyer's responsibility. Please check with your country's customs office before buying.</div></div></div>`;
@@ -2492,6 +2504,38 @@ function normalizeModelForPlatform(make, model) {
   return m;
 }
 
+function fitmentDedupeKey(f) {
+  return `${f.year}|${f.make}|${f.model}|${f.trim || ''}|${f.engine || ''}|${f.submodel || f.chassisCode || ''}`.toLowerCase();
+}
+
+function addUniqueFitment(fitments, seen, entry) {
+  if (!entry?.year || !entry?.make || !entry?.model) return false;
+  const key = fitmentDedupeKey(entry);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  fitments.push(entry);
+  return true;
+}
+
+/** Append fitment export columns missing from eBay template headers. */
+function ensureFitmentExportColumns(headers) {
+  const extra = [
+    'Compatibility',
+    'Description Note',
+    'fitment_json',
+    'fitment_flat',
+    'fitment_year_range',
+    'fitment_notes',
+    'technical_notes',
+  ];
+  for (const col of extra) {
+    if (!headers.some(h => h && String(h).trim() === col)) {
+      headers.push(col);
+    }
+  }
+  return headers;
+}
+
 /**
  * Expands per-part fitment data from a single VIN year to the complete
  * platform generation year range (e.g. 2015 BMW 3-Series → 2011-2019 F3x).
@@ -2550,19 +2594,35 @@ function expandFitments(parts, vinData) {
     const platformKey = `${makeName}|${normalizedModel}`;
     const platforms = PLATFORM_RANGES[platformKey];
     const yearNum = parseInt(vehicle.year) || 0;
-    let fitments = [];
+    const fitments = [];
+    const seen = new Set();
     let generationCode = '';
+    // ── Platform generation expansion (full year range per chassis) ──
+    if (platforms && yearNum) {
+      const gen = platforms.find(g => yearNum >= g.start && yearNum <= g.end);
+      if (gen) {
+        generationCode = gen.code;
+        let added = 0;
+        for (let y = gen.start; y <= gen.end; y++) {
+          if (addUniqueFitment(fitments, seen, {
+            year: String(y), make: makeName, model: vehicle.model,
+            trim: '', engine: '',
+            submodel: gen.code,
+            bodyType: decoded?.bodyClass || '',
+            notes: `Platform ${gen.code}`,
+          })) added++;
+        }
+        if (added > 0) platformExpanded++;
+      }
+    }
 
-    // ── Priority 1: AI-returned interchange/compatibility data ──
+    // ── AI interchange / compatibility (merge — do not replace platform years) ──
     const aiCompat = part._enriched?.compatibility;
     if (Array.isArray(aiCompat) && aiCompat.length > 0) {
-      const seen = new Set();
+      let added = 0;
       for (const c of aiCompat) {
         if (!c.year || !c.make || !c.model) continue;
-        const key = `${c.year}|${c.make}|${c.model}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        fitments.push({
+        if (addUniqueFitment(fitments, seen, {
           year: String(c.year),
           make: normalizeBrand(c.make),
           model: c.model,
@@ -2571,76 +2631,53 @@ function expandFitments(parts, vinData) {
           submodel: c.chassisCode || '',
           bodyType: c.bodyType || '',
           notes: c.notes || '',
-        });
+        })) added++;
       }
-      if (fitments.length > 0) aiInterchangeUsed++;
+      if (added > 0) aiInterchangeUsed++;
     }
 
-    // ── Priority 2: Platform generation expansion ──
-    if (fitments.length === 0 && platforms && yearNum) {
-      const gen = platforms.find(g => yearNum >= g.start && yearNum <= g.end);
-      if (gen) {
-        generationCode = gen.code;
-        for (let y = gen.start; y <= gen.end; y++) {
-          fitments.push({
-            year: String(y), make: makeName, model: vehicle.model,
-            trim: '', engine: '',
-            submodel: gen.code,
-            bodyType: decoded?.bodyClass || '',
-            notes: `Platform ${gen.code}`,
-          });
-        }
-        platformExpanded++;
-      }
-    }
-
-    // ── Priority 2.5: Description-based year range ──
-    // If platform expansion didn't match but we have years parsed from the description,
-    // use those years directly (e.g. "2013 2014 2015 2016 Audi A4" or "14-22 Range Rover Sport")
-    if (fitments.length === 0 && part._descYears && part._descYears.length > 1) {
-      const seen = new Set();
+    // ── Description-based year range ──
+    if (part._descYears && part._descYears.length > 1) {
+      let added = 0;
       for (const yr of part._descYears) {
-        if (seen.has(yr)) continue;
-        seen.add(yr);
-        fitments.push({
+        if (addUniqueFitment(fitments, seen, {
           year: yr, make: makeName, model: vehicle.model,
           trim: '', engine: '', submodel: '',
           bodyType: '', notes: 'Year range from description',
-        });
+        })) added++;
       }
-      if (fitments.length > 0) platformExpanded++;
+      if (added > 0 && fitments.length === added) platformExpanded++;
     }
 
-    // ── Priority 3: Cross-reference from multiple VINs ──
+    // ── Cross-reference from multiple VINs ──
     if (fitments.length === 0) {
       const norm = normalizePN(part.partNumber);
       const crossVehicles = (pnVehicleMap.get(norm) || [])
         .filter(v => v.make?.toLowerCase() === vehicle.make?.toLowerCase() &&
                      v.model?.toLowerCase() === vehicle.model?.toLowerCase());
       if (crossVehicles.length > 1) {
-        const seen = new Set();
-        fitments = crossVehicles
-          .filter(v => { if (seen.has(v.year)) return false; seen.add(v.year); return true; })
-          .sort((a, b) => parseInt(a.year) - parseInt(b.year))
-          .map(v => ({
+        let added = 0;
+        for (const v of crossVehicles.sort((a, b) => parseInt(a.year) - parseInt(b.year))) {
+          if (addUniqueFitment(fitments, seen, {
             ...v,
             submodel: v.submodel || '',
             bodyType: v.bodyType || decoded?.bodyClass || '',
             notes: 'Cross-referenced from multiple VINs',
-          }));
-        crossRefExpanded++;
+          })) added++;
+        }
+        if (added > 0) crossRefExpanded++;
       }
     }
 
-    // ── Priority 4: Single-vehicle fallback ──
+    // ── Single-vehicle fallback ──
     if (fitments.length === 0) {
-      fitments = [{
+      addUniqueFitment(fitments, seen, {
         year: vehicle.year, make: makeName, model: vehicle.model,
         trim: vehicle.trim || '', engine: vehicle.engine || '',
         submodel: generationCode || '',
         bodyType: decoded?.bodyClass || '',
         notes: vehicle.trim ? `Trim: ${vehicle.trim}` : '',
-      }];
+      });
     }
 
     // ── Shared platform expansion ──
@@ -2652,20 +2689,20 @@ function expandFitments(parts, vinData) {
         if (existingKeys.has(siblingKey)) continue;
         const sibPlatforms = PLATFORM_RANGES[siblingKey];
         if (!sibPlatforms) continue;
-        // Find the sibling generation that overlaps with the source vehicle's year
         const sibGen = sibPlatforms.find(g => yearNum >= g.start && yearNum <= g.end);
         if (sibGen) {
           const [sibMake, sibModel] = siblingKey.split('|');
+          let added = 0;
           for (let y = sibGen.start; y <= sibGen.end; y++) {
-            fitments.push({
+            if (addUniqueFitment(fitments, seen, {
               year: String(y), make: sibMake, model: sibModel,
               trim: '', engine: '',
               submodel: sibGen.code,
               bodyType: '',
               notes: `Shared platform with ${makeName} ${vehicle.model} (${sibGen.code})`,
-            });
+            })) added++;
           }
-          sharedPlatformExpanded++;
+          if (added > 0) sharedPlatformExpanded++;
         }
       }
     }
@@ -2679,7 +2716,10 @@ function expandFitments(parts, vinData) {
       }
     }
 
-    part._fitments = fitments.slice(0, 150); // raised cap for cross-platform expansion
+    part._fitments = fitments.slice(0, 400);
+    if (fitments.length > 400) {
+      log.warn(`Fitment list truncated for ${part.sku || part.partNumber}: ${fitments.length} → 400`);
+    }
 
     // Validate fitment completeness
     const incomplete = part._fitments.filter(f => !f.make || !f.model || !f.year);
@@ -2759,7 +2799,11 @@ function generateFitmentOutput(part) {
   })();
   const makes = [...new Set(fitments.map(f => f.make).filter(Boolean))].join(', ');
   const fitSummary = yearRange && makes ? `Fits ${yearRange} ${makes}` : '';
-  part._descriptionNote = [fitSummary, techNotes].filter(Boolean).join('. ');
+  const countNote =
+    fitments.length > 0
+      ? `${fitments.length} vehicle applications — full list in description table, Compatibility column, fitment_flat, and Relationship rows`
+      : '';
+  part._descriptionNote = [fitSummary, countNote, techNotes].filter(Boolean).join('. ');
 
   // Compute year range summary for quick display
   const years = fitments.map(f => parseInt(f.year)).filter(y => y > 1900).sort((a, b) => a - b);
@@ -3189,6 +3233,7 @@ function generateUSMotorsOutput(parts, vinData) {
   if (picUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
     fullHeaders.splice(picUrlIdx + 1, 0, ...addPicCols);
   }
+  ensureFitmentExportColumns(fullHeaders);
 
   // Build output workbook preserving template structure
   const outWb = XLSX.utils.book_new();
@@ -3334,6 +3379,7 @@ function generateAUOutput(parts, vinData) {
   if (auPicUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
     fullHeaders.splice(auPicUrlIdx + 1, 0, ...auAddPicCols);
   }
+  ensureFitmentExportColumns(fullHeaders);
 
   const outWb = XLSX.utils.book_new();
   const listingsData = [
@@ -3459,6 +3505,7 @@ function generateDEOutput(parts, vinData) {
   if (dePicUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
     fullHeaders.splice(dePicUrlIdx + 1, 0, ...deAddPicCols);
   }
+  ensureFitmentExportColumns(fullHeaders);
 
   const outWb = XLSX.utils.book_new();
   const listingsData = [
@@ -3780,16 +3827,15 @@ async function main() {
   await mapCategories(parts, vinData);
   saveCheckpoint(parts, 'category-mapping');
 
-  // ── Step 3.5: Fitment Expansion ──
-  // Expand single-VIN fitments to full platform generation year ranges
-  expandFitments(parts, vinData);
-
   // ── Step 4: Part Number Intelligence ──
   deduplicatePartNumbers(parts);
 
   // ── Step 5: OpenAI Enrichment ──
   await enrichAllParts(parts, vinData);
   saveCheckpoint(parts, 'enrichment');
+
+  // ── Step 5.5: Fitment expansion (after AI — merges platform years + AI compatibility) ──
+  expandFitments(parts, vinData);
 
   // ── Step 6: Compliance Validation + Image Enrichment (parallel) ──
   log.progress({ stage: 'validation', total_parts: parts.length, processed: parts.filter(p => p._enriched).length });

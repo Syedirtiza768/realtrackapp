@@ -205,6 +205,56 @@ export class EnterpriseListingIntelligenceService {
     };
   }
 
+  /** Max SEO + comprehensive optimization for a single catalog product. */
+  async generateForProduct(
+    productId: string,
+    rawOptions?: Partial<EnterpriseOptions>,
+  ): Promise<EnterpriseListingResult> {
+    const product = await this.productRepo.findOneBy({ id: productId });
+    if (!product) {
+      throw new NotFoundException(`Product ${productId} not found`);
+    }
+
+    const options: EnterpriseOptions = {
+      marketplace: rawOptions?.marketplace ?? 'US',
+      limit: 1,
+      aiBudgetListings: 1,
+      listingQualityProfile: rawOptions?.listingQualityProfile ?? 'max_seo_comprehensive',
+    };
+
+    const aiResults = await this.listingPipeline.generateBatch([
+      {
+        productData: {
+          sku: product.sku,
+          brand: product.brand,
+          mpn: product.mpn,
+          part_type: product.partType,
+          placement: product.placement,
+          material: product.material,
+          features: product.features,
+          fitment: this.normalizeCompatibility(product.fitmentData).filter(
+            (row) => row.source === 'source_data',
+          ),
+          image_count: product.imageUrls.length,
+          item_specifics: this.extractBaseSpecifics(product),
+          optimization_profile: options.listingQualityProfile,
+          content_requirements: this.getContentRequirements(options.listingQualityProfile),
+        },
+        categoryName: product.categoryName ?? 'eBay Motors Parts & Accessories',
+        condition: product.conditionLabel ?? product.conditionId ?? 'Used',
+        options: {
+          temperature: this.getTemperatureForProfile(options.listingQualityProfile),
+        },
+      },
+    ]);
+
+    return this.buildEnterpriseListing(
+      product,
+      options.marketplace,
+      aiResults[0] ?? null,
+    );
+  }
+
   private async buildEnterpriseListing(
     product: CatalogProduct,
     marketplace: Marketplace,
