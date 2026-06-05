@@ -80,6 +80,14 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Auth
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      # Demo user seeding (enabled by default; set false to disable)
+      SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
+      DEFAULT_SUPER_ADMIN_EMAIL: ${DEFAULT_SUPER_ADMIN_EMAIL:-admin@realtrack.local}
+      DEFAULT_SUPER_ADMIN_PASSWORD: ${DEFAULT_SUPER_ADMIN_PASSWORD:?DEFAULT_SUPER_ADMIN_PASSWORD is required}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      DEFAULT_MANAGER_PASSWORD: ${DEFAULT_MANAGER_PASSWORD:-}
+      DEFAULT_STAFF_PASSWORD: ${DEFAULT_STAFF_PASSWORD:-}
+      DEFAULT_VIEWER_PASSWORD: ${DEFAULT_VIEWER_PASSWORD:-}
       # Pipeline project root (scripts, output, env files)
       PIPELINE_PROJECT_ROOT: /app
       # CORS
