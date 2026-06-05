@@ -121,11 +121,16 @@ export class MotorsPublisherService {
 
   private mapConditionToId(condition: string | null): string {
     switch (condition?.toLowerCase()) {
-      case 'new': return '1000';
-      case 'remanufactured': return '2000';
-      case 'used': return '3000';
-      case 'for parts or not working': return '7000';
-      default: return '1000'; // Default to New
+      case 'new':
+        return '1000-New';
+      case 'remanufactured':
+        return '2000-Remanufactured';
+      case 'used':
+        return '3000-Used';
+      case 'for parts or not working':
+        return '7000-For parts or not working';
+      default:
+        return '3000-Used';
     }
   }
 }

@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Order } from './entities/order.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { Store } from '../channels/entities/store.entity.js';
+import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { OrdersService } from './orders.service.js';
 import { OrdersController } from './orders.controller.js';
 import { OrderImportProcessor } from './processors/order-import.processor.js';
@@ -13,7 +14,7 @@ import { ChannelsModule } from '../channels/channels.module.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, Store]),
+    TypeOrmModule.forFeature([Order, OrderItem, Store, ConnectedEbayAccount]),
     BullModule.registerQueue({ name: 'orders' }),
     ChannelsModule,
   ],

@@ -30,6 +30,7 @@ import {
 } from '../../lib/publishApi';
 import type { SearchItem } from '../../types/search';
 import type { Store } from '../../types/multiStore';
+import { getAllImageUrls } from '../../lib/listingsApi';
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -67,7 +68,8 @@ function validateListing(listing: SearchItem): { valid: boolean; missing: string
   if (!listing.startPrice) missing.push('Price');
   if (!listing.quantity) missing.push('Quantity');
   if (!listing.categoryId) missing.push('eBay Category');
-  if (!listing.description) missing.push('Description');
+  // Description may be empty or long in the grid — backend generates/truncates for eBay (max 4000 chars)
+  if (!getAllImageUrls(listing.itemPhotoUrl).length) missing.push('Images');
   return { valid: missing.length === 0, missing };
 }
 
@@ -173,7 +175,7 @@ export default function PublishModal(props: Props) {
         condition: listing.conditionId ?? 'NEW',
         price: ov?.price ?? parseFloat(listing.startPrice ?? '0'),
         quantity: ov?.quantity ?? parseInt(listing.quantity ?? '0', 10),
-        imageUrls: listing.itemPhotoUrl ? [listing.itemPhotoUrl] : [],
+        imageUrls: getAllImageUrls(listing.itemPhotoUrl),
         aspects: {},
         fulfillmentPolicyId: (store.config as Record<string, string>)?.fulfillmentPolicyId ?? undefined,
         paymentPolicyId: (store.config as Record<string, string>)?.paymentPolicyId ?? undefined,
@@ -263,9 +265,6 @@ export default function PublishModal(props: Props) {
     onClose();
   }, [onClose, onComplete]);
 
-  if (!open) return null;
-
-  /* ── Helpers for rendering ──────────────────────────────── */
   const storeMap = useMemo(
     () => new Map(stores.map((s) => [s.id, s])),
     [stores],
@@ -274,20 +273,22 @@ export default function PublishModal(props: Props) {
   const successCount = results.filter((r) => r.success).length;
   const failCount = results.filter((r) => !r.success).length;
 
+  if (!open) return null;
+
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm p-4 flex items-center justify-center"
+      className="fixed inset-0 z-50 bg-slate-100/80 dark:bg-slate-950/80 backdrop-blur-sm p-4 flex items-center justify-center"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-2xl shadow-black/50 max-h-[85vh]"
+        className="w-full max-w-lg bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-2xl shadow-black/50 max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Send size={16} className="text-blue-400" />
-            <h3 className="font-semibold text-slate-100 text-sm">
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
               {mode === 'bulk'
                 ? `Publish ${listingIds?.length ?? 0} Listings to eBay`
                 : 'Publish to eBay Stores'}
@@ -295,7 +296,7 @@ export default function PublishModal(props: Props) {
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-100 p-1 rounded-lg hover:bg-slate-800"
+            className="text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 p-1 rounded-lg hover:bg-slate-100 dark:bg-slate-800"
           >
             <X size={18} />
           </button>
@@ -308,17 +309,17 @@ export default function PublishModal(props: Props) {
             <>
               {/* Listing info (single mode) */}
               {listing && (
-                <div className="border border-slate-800 rounded-lg p-3 flex items-center gap-3">
+                <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-200 font-medium truncate">
+                    <p className="text-sm text-slate-600 dark:text-slate-200 font-medium truncate">
                       {listing.title ?? 'Untitled'}
                     </p>
-                    <p className="text-xs text-slate-500 font-mono">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">
                       {listing.customLabelSku ?? listing.id}
                     </p>
                   </div>
                   {listing.startPrice && (
-                    <span className="text-sm font-bold text-slate-200">
+                    <span className="text-sm font-bold text-slate-600 dark:text-slate-200">
                       ${parseFloat(listing.startPrice).toFixed(2)}
                     </span>
                   )}
@@ -340,7 +341,7 @@ export default function PublishModal(props: Props) {
 
               {/* Loading */}
               {storesLoading && (
-                <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
+                <div className="flex items-center justify-center py-8 gap-2 text-slate-400 dark:text-slate-400">
                   <Loader2 size={16} className="animate-spin" />
                   <span className="text-sm">Loading eBay stores…</span>
                 </div>
@@ -350,7 +351,7 @@ export default function PublishModal(props: Props) {
               {!storesLoading && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">
+                    <p className="text-xs text-slate-400 dark:text-slate-400 font-medium uppercase tracking-wider">
                       Select eBay Stores
                     </p>
                     {activeStores.length > 1 && (
@@ -361,10 +362,10 @@ export default function PublishModal(props: Props) {
                         >
                           Select all
                         </button>
-                        <span className="text-slate-700">|</span>
+                        <span className="text-slate-600 dark:text-slate-700">|</span>
                         <button
                           onClick={deselectAll}
-                          className="text-[10px] text-slate-500 hover:text-slate-400"
+                          className="text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-400 dark:text-slate-400"
                         >
                           Deselect all
                         </button>
@@ -382,14 +383,14 @@ export default function PublishModal(props: Props) {
                           className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                             isChecked
                               ? 'border-blue-600/60 bg-blue-950/30'
-                              : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
+                              : 'border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 hover:border-slate-200 dark:border-slate-700'
                           }`}
                         >
                           <div
                             className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
                               isChecked
                                 ? 'bg-blue-600 border-blue-600'
-                                : 'border-slate-600'
+                                : 'border-slate-300 dark:border-slate-600'
                             }`}
                           >
                             {isChecked && (
@@ -405,11 +406,11 @@ export default function PublishModal(props: Props) {
                           </div>
                           <StoreIcon size={14} className="text-blue-400 shrink-0" />
                           <div className="flex-1 text-left min-w-0">
-                            <span className="text-sm text-slate-200 font-medium block truncate">
+                            <span className="text-sm text-slate-600 dark:text-slate-200 font-medium block truncate">
                               {store.storeName}
                             </span>
                             {store.externalStoreId && (
-                              <span className="text-[10px] text-slate-500 block">
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
                                 {store.externalStoreId}
                               </span>
                             )}
@@ -430,7 +431,7 @@ export default function PublishModal(props: Props) {
                                   expandedOverride === store.id ? null : store.id,
                                 );
                               }}
-                              className="text-slate-500 hover:text-slate-300 p-0.5"
+                              className="text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:text-slate-300 p-0.5"
                             >
                               {expandedOverride === store.id ? (
                                 <ChevronUp size={14} />
@@ -443,13 +444,13 @@ export default function PublishModal(props: Props) {
 
                         {/* Per-store overrides */}
                         {isChecked && expandedOverride === store.id && mode === 'single' && (
-                          <div className="border border-slate-800 border-t-0 rounded-b-lg p-3 bg-slate-900/60 space-y-2">
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                          <div className="border border-slate-200 dark:border-slate-800 border-t-0 rounded-b-lg p-3 bg-white/60 dark:bg-slate-900/60 space-y-2">
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                               Store-specific overrides (optional)
                             </p>
                             <div className="grid grid-cols-3 gap-2">
                               <div>
-                                <label className="text-[10px] text-slate-500 block mb-1">
+                                <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-1">
                                   Price
                                 </label>
                                 <input
@@ -460,11 +461,11 @@ export default function PublishModal(props: Props) {
                                   onChange={(e) =>
                                     setOverride(store.id, 'price', e.target.value)
                                   }
-                                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs text-slate-600 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-500 block mb-1">
+                                <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-1">
                                   Quantity
                                 </label>
                                 <input
@@ -474,11 +475,11 @@ export default function PublishModal(props: Props) {
                                   onChange={(e) =>
                                     setOverride(store.id, 'quantity', e.target.value)
                                   }
-                                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs text-slate-600 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-500 block mb-1">
+                                <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-1">
                                   Title
                                 </label>
                                 <input
@@ -488,7 +489,7 @@ export default function PublishModal(props: Props) {
                                   onChange={(e) =>
                                     setOverride(store.id, 'title', e.target.value)
                                   }
-                                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs text-slate-600 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                                 />
                               </div>
                             </div>
@@ -500,8 +501,8 @@ export default function PublishModal(props: Props) {
 
                   {/* No stores */}
                   {!storesLoading && activeStores.length === 0 && (
-                    <div className="text-center py-6 text-sm text-slate-500">
-                      <StoreIcon size={24} className="mx-auto mb-2 text-slate-600" />
+                    <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500">
+                      <StoreIcon size={24} className="mx-auto mb-2 text-slate-500 dark:text-slate-600" />
                       <p>No active eBay stores found.</p>
                       <p className="text-xs mt-1">
                         Go to Settings → Channels to connect your eBay account.
@@ -517,10 +518,10 @@ export default function PublishModal(props: Props) {
           {step === 'publishing' && (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 size={32} className="animate-spin text-blue-400 mb-4" />
-              <p className="text-sm text-slate-300 font-medium">
+              <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
                 Publishing to {selected.size} store{selected.size !== 1 ? 's' : ''}…
               </p>
-              <p className="text-xs text-slate-500 mt-1">This may take a moment.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">This may take a moment.</p>
             </div>
           )}
 
@@ -532,26 +533,26 @@ export default function PublishModal(props: Props) {
                 {failCount === 0 ? (
                   <>
                     <CheckCircle2 size={32} className="text-emerald-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-200 font-medium">
+                    <p className="text-sm text-slate-600 dark:text-slate-200 font-medium">
                       All published successfully!
                     </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                       {successCount} offer{successCount !== 1 ? 's' : ''} created on eBay.
                     </p>
                   </>
                 ) : successCount === 0 ? (
                   <>
                     <XCircle size={32} className="text-red-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-200 font-medium">Publishing failed</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-sm text-slate-600 dark:text-slate-200 font-medium">Publishing failed</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                       {failCount} store{failCount !== 1 ? 's' : ''} failed.
                     </p>
                   </>
                 ) : (
                   <>
                     <AlertTriangle size={32} className="text-amber-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-200 font-medium">Partial success</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-sm text-slate-600 dark:text-slate-200 font-medium">Partial success</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                       {successCount} succeeded, {failCount} failed.
                     </p>
                   </>
@@ -572,16 +573,16 @@ export default function PublishModal(props: Props) {
                   >
                     <StoreIcon size={14} className="text-blue-400 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm text-slate-200 font-medium block truncate">
+                      <span className="text-sm text-slate-600 dark:text-slate-200 font-medium block truncate">
                         {r.storeName ?? store?.storeName ?? r.storeId}
                       </span>
                       {r.offerId && (
-                        <span className="text-[10px] text-slate-500 font-mono">
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
                           Offer: {r.offerId}
                         </span>
                       )}
                       {r.listingId && (
-                        <span className="text-[10px] text-slate-500 font-mono ml-2">
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono ml-2">
                           Listing: {r.listingId}
                         </span>
                       )}
@@ -602,8 +603,8 @@ export default function PublishModal(props: Props) {
 
               {/* Bulk results breakdown */}
               {mode === 'bulk' && bulkResults.length > 0 && (
-                <div className="border-t border-slate-800 pt-3 mt-3">
-                  <p className="text-xs text-slate-500 mb-2">
+                <div className="border-t border-slate-200 dark:border-slate-800 pt-3 mt-3">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
                     {bulkResults.length} listing{bulkResults.length !== 1 ? 's' : ''} processed
                   </p>
                 </div>
@@ -613,12 +614,12 @@ export default function PublishModal(props: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-800 flex items-center justify-end gap-2 shrink-0">
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2 shrink-0">
           {step === 'select' && (
             <>
               <button
                 onClick={onClose}
-                className="px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>

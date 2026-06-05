@@ -13,6 +13,7 @@ import { DemoSimulationLog } from './entities/demo-simulation-log.entity.js';
 import { ChannelConnection } from './entities/channel-connection.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { ConfigService } from '@nestjs/config';
+import { EbayPublishService } from './ebay/ebay-publish.service.js';
 
 @Injectable()
 export class StoresService {
@@ -31,6 +32,7 @@ export class StoresService {
     private readonly listingRepo: Repository<ListingRecord>,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
+    private readonly ebayPublish: EbayPublishService,
   ) {}
 
   private get isDemoMode(): boolean {
@@ -236,10 +238,40 @@ export class StoresService {
 
       this.logger.log(`[DEMO] Published instance ${instanceId} → ${externalId}`);
     } else {
-      // Real publish — delegate to channel adapter
-      // This would integrate with the existing ChannelsService.publishListing
-      instance.syncStatus = 'pending';
+      const listing = await this.listingRepo.findOneBy({ id: instance.listingId });
+      if (!listing) {
+        instance.syncStatus = 'error';
+        instance.lastError = `Listing ${instance.listingId} not found`;
+        await this.instanceRepo.save(instance);
+        throw new NotFoundException(instance.lastError);
+      }
+
+      const stub = this.ebayPublish.stubPublishRequest(
+        instance.listingId,
+        [instance.storeId],
+      );
+      if (instance.overrideTitle) stub.title = instance.overrideTitle;
+      if (instance.overridePrice != null) stub.price = Number(instance.overridePrice);
+      if (instance.overrideQuantity != null) stub.quantity = instance.overrideQuantity;
+
+      const results = await this.ebayPublish.publish(stub);
+      const result = results[0];
+      if (!result?.success) {
+        instance.syncStatus = 'error';
+        instance.lastError = result?.error ?? 'Publish failed';
+        await this.instanceRepo.save(instance);
+        throw new BadRequestException(instance.lastError);
+      }
+
+      instance.externalId = result.listingId ?? result.offerId ?? null;
+      instance.externalUrl = result.listingId
+        ? `https://www.ebay.com/itm/${result.listingId}`
+        : null;
+      instance.syncStatus = 'synced';
+      instance.lastSyncedAt = new Date();
+      instance.lastError = null;
       await this.instanceRepo.save(instance);
+      await this.updateStoreListingCount(instance.storeId);
     }
 
     return instance;

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import {
   FileText,
   Plus,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { sanitizeHtml } from '../../lib/sanitize';
+import { authDelete, authPost, fetchWithAuth } from '../../lib/authApi';
 
 const API = '/api/templates';
 
@@ -54,8 +55,7 @@ export default function TemplateManagerPage() {
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await fetch(API);
-      const data = await res.json();
+      const data = await fetchWithAuth<ListingTemplate[]>(API);
       setTemplates(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Failed to fetch templates', e);
@@ -71,7 +71,7 @@ export default function TemplateManagerPage() {
   const deleteTemplate = async (id: string) => {
     if (!confirm('Delete this template?')) return;
     try {
-      await fetch(`${API}/${id}`, { method: 'DELETE' });
+      await authDelete(`${API}/${id}`);
       setTemplates((prev) => prev.filter((t) => t.id !== id));
       setActionMsg('Template deleted');
     } catch (e) {
@@ -81,21 +81,16 @@ export default function TemplateManagerPage() {
 
   const previewTemplate = async (id: string) => {
     try {
-      const res = await fetch(`${API}/${id}/preview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          variables: {
-            title: 'Sample Listing Title',
-            description: 'This is a sample product description for preview purposes.',
-            price: '29.99',
-            brand: 'ACME',
-            condition: 'Used',
-            sku: 'SAMPLE-001',
-          },
-        }),
+      const data = await authPost<{ html?: string }>(`${API}/${id}/preview`, {
+        variables: {
+          title: 'Sample Listing Title',
+          description: 'This is a sample product description for preview purposes.',
+          price: '29.99',
+          brand: 'ACME',
+          condition: 'Used',
+          sku: 'SAMPLE-001',
+        },
       });
-      const data = await res.json();
       setPreviewHtml(data.html ?? '<p>No content</p>');
     } catch (e) {
       setActionMsg('Failed to preview template');
@@ -104,12 +99,7 @@ export default function TemplateManagerPage() {
 
   const createTemplate = async (data: Partial<ListingTemplate>) => {
     try {
-      const res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      const created = await res.json();
+      const created = await authPost<ListingTemplate>(API, data);
       setTemplates((prev) => [created, ...prev]);
       setShowCreate(false);
       setActionMsg('Template created');
@@ -120,12 +110,10 @@ export default function TemplateManagerPage() {
 
   const updateTemplate = async (id: string, data: Partial<ListingTemplate>) => {
     try {
-      const res = await fetch(`${API}/${id}`, {
+      const updated = await fetchWithAuth<ListingTemplate>(`${API}/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      const updated = await res.json();
       setTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)));
       setEditing(null);
       setActionMsg('Template updated');
@@ -137,7 +125,7 @@ export default function TemplateManagerPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
       </div>
     );
   }
@@ -147,7 +135,7 @@ export default function TemplateManagerPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Listing Templates</h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
             {templates.length} template{templates.length !== 1 ? 's' : ''} · {templates.filter((t) => t.active).length} active
           </p>
         </div>
@@ -181,7 +169,7 @@ export default function TemplateManagerPage() {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="text-sm font-semibold text-slate-800">Template Preview</h3>
-              <button onClick={() => setPreviewHtml(null)} className="p-1 text-slate-400 hover:text-slate-600">
+              <button onClick={() => setPreviewHtml(null)} className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-500 dark:text-slate-600">
                 <X size={16} />
               </button>
             </div>
@@ -202,9 +190,9 @@ export default function TemplateManagerPage() {
       {templates.length === 0 && !showCreate ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <FileText className="w-12 h-12 mx-auto mb-3 text-slate-600" />
-            <p className="text-slate-400 font-medium">No templates yet</p>
-            <p className="text-sm text-slate-500 mt-1">
+            <FileText className="w-12 h-12 mx-auto mb-3 text-slate-500 dark:text-slate-600" />
+            <p className="text-slate-400 dark:text-slate-400 font-medium">No templates yet</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
               Create listing templates for brand-consistent formatting across channels.
             </p>
           </CardContent>
@@ -220,7 +208,7 @@ export default function TemplateManagerPage() {
                     {template.isDefault && <Star size={14} className="text-amber-400 shrink-0" fill="currentColor" />}
                   </div>
                   {template.description && (
-                    <p className="text-xs text-slate-500 mt-0.5 truncate">{template.description}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">{template.description}</p>
                   )}
                 </div>
               </CardHeader>
@@ -230,7 +218,7 @@ export default function TemplateManagerPage() {
                     {template.templateType}
                   </span>
                   {template.channel && (
-                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300">
                       {CHANNEL_LABELS[template.channel] ?? template.channel}
                     </span>
                   )}
@@ -241,7 +229,7 @@ export default function TemplateManagerPage() {
                   )}
                 </div>
 
-                <div className="bg-slate-800/50 rounded p-2 mb-3 max-h-20 overflow-hidden text-xs font-mono text-slate-400">
+                <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded p-2 mb-3 max-h-20 overflow-hidden text-xs font-mono text-slate-400 dark:text-slate-400">
                   {template.content.slice(0, 200)}
                   {template.content.length > 200 && '...'}
                 </div>
@@ -249,13 +237,13 @@ export default function TemplateManagerPage() {
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => previewTemplate(template.id)}
-                    className="flex items-center gap-1 px-2 py-1 bg-slate-700 text-slate-300 text-xs font-medium rounded hover:bg-slate-600 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-xs font-medium rounded hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
                   >
                     <Eye size={12} /> Preview
                   </button>
                   <button
                     onClick={() => setEditing(template)}
-                    className="flex items-center gap-1 px-2 py-1 bg-slate-700 text-slate-300 text-xs font-medium rounded hover:bg-slate-600 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-xs font-medium rounded hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
                   >
                     <Edit3 size={12} /> Edit
                   </button>
@@ -312,7 +300,7 @@ function TemplateForm({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">{initial ? 'Edit Template' : 'New Template'}</CardTitle>
-        <button onClick={onCancel} className="p-1 text-slate-400 hover:text-slate-200">
+        <button onClick={onCancel} className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
           <X size={16} />
         </button>
       </CardHeader>
@@ -320,29 +308,29 @@ function TemplateForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Name *</label>
+              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Name *</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., eBay Pro Template"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Description</label>
+              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Description</label>
               <input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Channel</label>
+              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Channel</label>
               <select
                 value={channel}
                 onChange={(e) => setChannel(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="">All Channels</option>
                 {Object.entries(CHANNEL_LABELS).map(([k, v]) => (
@@ -353,11 +341,11 @@ function TemplateForm({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Template Type</label>
+              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Template Type</label>
               <select
                 value={templateType}
                 onChange={(e) => setTemplateType(e.target.value as 'title' | 'description' | 'full')}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="description">Description</option>
                 <option value="title">Title</option>
@@ -367,36 +355,36 @@ function TemplateForm({
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-              <Code2 size={12} /> Template Content * <span className="text-slate-600">(use {'{{variable}}'} syntax)</span>
+            <label className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 mb-1">
+              <Code2 size={12} /> Template Content * <span className="text-slate-500 dark:text-slate-600">(use {'{{variable}}'} syntax)</span>
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={8}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Custom CSS (optional)</label>
+            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Custom CSS (optional)</label>
             <textarea
               value={css}
               onChange={(e) => setCss(e.target.value)}
               rows={3}
               placeholder=".listing-title { color: #333; }"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={isDefault}
                 onChange={(e) => setIsDefault(e.target.checked)}
-                className="rounded bg-slate-800 border-slate-600"
+                className="rounded bg-slate-800 border-slate-300 dark:border-slate-600"
               />
               Set as default
             </label>
@@ -412,7 +400,7 @@ function TemplateForm({
             <button
               type="button"
               onClick={onCancel}
-              className="text-sm text-slate-400 hover:text-slate-200 px-3 py-2 transition-colors"
+              className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors"
             >
               Cancel
             </button>

@@ -30,6 +30,9 @@ export type EbayConnectionStatus =
 @Index('idx_connected_ebay_org', ['organizationId'])
 @Index('idx_connected_ebay_status', ['connectionStatus'])
 @Index('idx_connected_ebay_ebay_user', ['ebayUserId'])
+@Index('uq_connected_ebay_org_user', ['organizationId', 'ebayUserId'], {
+  unique: true,
+})
 export class ConnectedEbayAccount {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -89,6 +92,39 @@ export class ConnectedEbayAccount {
 
   @Column({ name: 'last_verified_at', type: 'timestamptz', nullable: true })
   lastVerifiedAt!: Date | null;
+
+  @Column({ name: 'last_successful_sync_at', type: 'timestamptz', nullable: true })
+  lastSuccessfulSyncAt!: Date | null;
+
+  @Column({ name: 'last_token_refresh_at', type: 'timestamptz', nullable: true })
+  lastTokenRefreshAt!: Date | null;
+
+  @Column({ name: 'last_error_message', type: 'text', nullable: true })
+  lastErrorMessage!: string | null;
+
+  @Column({ name: 'last_listings_fetched_count', type: 'int', default: 0 })
+  lastListingsFetchedCount!: number;
+
+  @Column({ name: 'last_policies_fetched_count', type: 'int', default: 0 })
+  lastPoliciesFetchedCount!: number;
+
+  @Column({ name: 'connection_source', type: 'varchar', length: 30, default: 'native_oauth' })
+  connectionSource!: 'native_oauth' | 'sellerpundit';
+
+  @Column({ name: 'sellerpundit_token_id', type: 'int', nullable: true })
+  sellerpunditTokenId!: number | null;
+
+  @Column({ name: 'sellerpundit_account_name', type: 'varchar', length: 200, nullable: true })
+  sellerpunditAccountName!: string | null;
+
+  @Column({ name: 'sellerpundit_marketplace_id', type: 'int', nullable: true })
+  sellerpunditMarketplaceId!: number | null;
+
+  @Column({ name: 'sellerpundit_last_sync_at', type: 'timestamptz', nullable: true })
+  sellerpunditLastSyncAt!: Date | null;
+
+  @Column({ name: 'sellerpundit_last_policy_sync_at', type: 'timestamptz', nullable: true })
+  sellerpunditLastPolicySyncAt!: Date | null;
 
   @OneToOne(() => EbayOAuthToken, (t) => t.ebayAccount)
   oauthToken?: EbayOAuthToken;

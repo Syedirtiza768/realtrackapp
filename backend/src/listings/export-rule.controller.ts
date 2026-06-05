@@ -14,9 +14,11 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ExportRuleService } from './export-rule.service.js';
 import { CreateExportRuleDto, UpdateExportRuleDto } from './dto/export-rule.dto.js';
 import type { ExportRule } from './entities/export-rule.entity.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('export-rules')
 @Controller('api/export-rules')
+@RequirePermissions('listings.export')
 export class ExportRuleController {
   constructor(private readonly service: ExportRuleService) {}
 

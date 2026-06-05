@@ -22,50 +22,32 @@ import type {
   ConfirmUploadResponse,
   PipelineProgress,
 } from '../types/motors';
+import { fetchWithAuth } from './authApi';
 
 const API = '/api';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${API}${path}`, { signal });
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(`API ${res.status}: ${res.statusText}`), { body: errBody });
-  }
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API}${path}`, { signal });
 }
 
 async function postJson<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  return fetchWithAuth<T>(`${API}${path}`, {
     method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(`API ${res.status}: ${res.statusText}`), { body: errBody });
-  }
-  if (res.status === 204) return undefined as unknown as T;
-  return res.json() as Promise<T>;
 }
 
 async function patchJson<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  return fetchWithAuth<T>(`${API}${path}`, {
     method: 'PATCH',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(`API ${res.status}: ${res.statusText}`), { body: errBody });
-  }
-  return res.json() as Promise<T>;
 }
 
 async function deleteJson(path: string): Promise<void> {
-  const res = await fetch(`${API}${path}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  await fetchWithAuth(`${API}${path}`, { method: 'DELETE' });
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -370,7 +352,11 @@ export function subscribePipelineProgress(
   onError?: (error: Event) => void,
   onDone?: () => void,
 ): EventSource {
-  const es = new EventSource(`${API}/motors-intelligence/products/${motorsProductId}/progress`);
+  const token = localStorage.getItem('mk_auth_token');
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  const qs = params.toString();
+  const es = new EventSource(`${API}/motors-intelligence/products/${motorsProductId}/progress${qs ? `?${qs}` : ''}`);
 
   es.onmessage = (event) => {
     try {

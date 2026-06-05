@@ -7,18 +7,14 @@ import type {
   ImportListResponse,
   ImportRowListResponse,
 } from '../types/catalogImport';
+import { authHeaders, fetchWithAuth } from './authApi';
 
 const API_BASE = '/api';
 
 /* ── Helper ───────────────────────────────────────────────── */
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init);
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`API ${res.status}: ${body || res.statusText}`);
-  }
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API_BASE}${path}`, init);
 }
 
 /* ── Upload CSV ───────────────────────────────────────────── */
@@ -47,6 +43,10 @@ export function useUploadCsv() {
         const response = await new Promise<UploadResponse>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', `${API_BASE}/catalog-import/upload`);
+          const auth = authHeaders();
+          if (auth.Authorization) {
+            xhr.setRequestHeader('Authorization', auth.Authorization);
+          }
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {

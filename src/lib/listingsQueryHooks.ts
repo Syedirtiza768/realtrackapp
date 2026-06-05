@@ -29,15 +29,14 @@ import type {
   BulkUpdateResponse,
   RevisionsResponse,
 } from '../types/listings';
+import { fetchWithAuth } from './authApi';
 
 const API_BASE = '/api';
 
 /* ── Low-level fetch helpers ── */
 
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API_BASE}${path}`);
 }
 
 async function apiMutate<T>(
@@ -45,20 +44,10 @@ async function apiMutate<T>(
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  return fetchWithAuth<T>(`${API_BASE}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const errorBody = await res.json().catch(() => ({}));
-    const err = new Error(`API ${res.status}: ${res.statusText}`);
-    (err as any).status = res.status;
-    (err as any).body = errorBody;
-    throw err;
-  }
-  if (res.status === 204) return undefined as unknown as T;
-  return res.json() as Promise<T>;
 }
 
 function buildQs(params: Record<string, string | number | undefined>): string {

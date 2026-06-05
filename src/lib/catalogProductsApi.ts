@@ -1,4 +1,5 @@
 import type { CatalogMotorsListQuery, CatalogProductsListResponse } from '../types/catalogMotorsFilters';
+import { fetchWithAuth } from './authApi';
 
 function toQueryString(q: CatalogMotorsListQuery): string {
   const p = new URLSearchParams();
@@ -18,10 +19,5 @@ export async function fetchCatalogProducts(
   query: CatalogMotorsListQuery,
 ): Promise<CatalogProductsListResponse> {
   const qs = toQueryString(query);
-  const res = await fetch(`/api/catalog-products?${qs}`);
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error(t || `HTTP ${res.status}`);
-  }
-  return res.json() as Promise<CatalogProductsListResponse>;
+  return fetchWithAuth<CatalogProductsListResponse>(`/api/catalog-products?${qs}`);
 }

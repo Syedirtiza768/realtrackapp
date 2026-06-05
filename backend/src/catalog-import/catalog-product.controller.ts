@@ -13,8 +13,10 @@ import { CatalogProductService } from './catalog-product.service.js';
 import type { UpdateProductDto } from './catalog-product.service.js';
 import { TemplateGeneratorService } from './template-generator.service.js';
 import { parseCatalogProductListQuery } from './utils/catalog-product-list-query.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @Controller('catalog-products')
+@RequirePermissions('catalog.view')
 export class CatalogProductController {
   constructor(
     private readonly productService: CatalogProductService,
@@ -28,6 +30,7 @@ export class CatalogProductController {
   }
 
   @Patch('by-sku/:sku')
+  @RequirePermissions('catalog.update')
   async updateBySku(@Param('sku') sku: string, @Body() dto: Record<string, unknown>) {
     return this.productService.updateBySku(sku, dto);
   }
@@ -38,11 +41,13 @@ export class CatalogProductController {
   }
 
   @Patch(':id')
+  @RequirePermissions('catalog.update')
   async update(@Param('id') id: string, @Body() dto: Record<string, unknown>) {
     return this.productService.update(id, dto);
   }
 
   @Post('export-templates')
+  @RequirePermissions('catalog.export')
   async exportTemplates(
     @Body() body: { ids?: string[]; listingIds?: string[]; formats?: ('us' | 'au' | 'de')[] },
     @Res() res: express.Response,

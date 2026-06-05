@@ -1,10 +1,13 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { DashboardService } from './dashboard.service.js';
 import { AuditLogQueryDto, SalesQueryDto } from './dto/dashboard.dto.js';
 
 @ApiTags('Dashboard')
+@ApiBearerAuth()
 @Controller('dashboard')
+@RequirePermissions('dashboard.view')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
@@ -52,7 +55,9 @@ export class DashboardController {
 }
 
 @ApiTags('Audit Logs')
+@ApiBearerAuth()
 @Controller('audit-logs')
+@RequirePermissions('audit.view')
 export class AuditLogController {
   constructor(private readonly dashboardService: DashboardService) {}
 

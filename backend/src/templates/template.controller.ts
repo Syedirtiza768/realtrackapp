@@ -18,9 +18,11 @@ import {
   TemplateQueryDto,
   RenderPreviewDto,
 } from './dto/template.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Templates')
 @Controller('templates')
+@RequirePermissions('templates.view')
 export class TemplateController {
   constructor(private readonly templateService: TemplateService) {}
 
@@ -37,18 +39,21 @@ export class TemplateController {
   }
 
   @Post()
+  @RequirePermissions('templates.manage')
   @ApiOperation({ summary: 'Create a listing template' })
   create(@Body() dto: CreateTemplateDto) {
     return this.templateService.create(dto);
   }
 
   @Patch(':id')
+  @RequirePermissions('templates.manage')
   @ApiOperation({ summary: 'Update a listing template' })
   update(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
     return this.templateService.update(id, dto);
   }
 
   @Delete(':id')
+  @RequirePermissions('templates.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a listing template' })
   remove(@Param('id') id: string) {
@@ -56,12 +61,14 @@ export class TemplateController {
   }
 
   @Post(':id/preview')
+  @RequirePermissions('templates.manage')
   @ApiOperation({ summary: 'Render a template preview with variables' })
   renderPreview(@Param('id') id: string, @Body() dto: RenderPreviewDto) {
     return this.templateService.renderPreview(id, dto);
   }
 
   @Post(':id/generate')
+  @RequirePermissions('templates.manage')
   @ApiOperation({ summary: 'Render template + run OpenAI listing generation pipeline' })
   generate(
     @Param('id') id: string,

@@ -8,6 +8,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { UserOrganizationService } from './user-organization.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
+import { ROLE_SLUGS } from '../rbac/permission-registry.js';
 
 const SALT_ROUNDS = 12;
 
@@ -16,6 +19,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     private readonly jwt: JwtService,
+    private readonly userOrgs: UserOrganizationService,
+    private readonly rbac: RbacService,
   ) {}
 
   async validateAndSign(
@@ -35,7 +40,9 @@ export class AuthService {
     await this.userRepo.update(user.id, { lastLoginAt: new Date() });
 
     const payload = { sub: user.id, email: user.email, role: user.role };
+    console.log('[DEBUG] AuthService - Signing token with payload:', payload);
     const accessToken = this.jwt.sign(payload);
+    console.log('[DEBUG] AuthService - Token:', accessToken.substring(0, 50) + '...');
 
     return {
       accessToken,
@@ -66,6 +73,8 @@ export class AuthService {
       role: 'user',
     });
     const saved = await this.userRepo.save(user);
+    await this.userOrgs.ensureDefaultForUser(saved.id);
+    await this.rbac.assignPrimaryRole(saved.id, ROLE_SLUGS.STAFF);
 
     const payload = { sub: saved.id, email: saved.email, role: saved.role };
     const accessToken = this.jwt.sign(payload);

@@ -1,4 +1,4 @@
-import {
+﻿import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
@@ -71,8 +71,8 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
       </CardHeader>
       <CardContent>
         {/* File info */}
-        <div className="text-sm text-slate-400 mb-4">
-          <span className="text-slate-200 font-medium">{importRecord.fileName}</span>
+        <div className="text-sm text-slate-400 dark:text-slate-400 mb-4">
+          <span className="text-slate-600 dark:text-slate-200 font-medium">{importRecord.fileName}</span>
           {importRecord.fileSizeBytes && (
             <span className="ml-2">
               ({(importRecord.fileSizeBytes / 1024).toFixed(0)} KB)
@@ -83,7 +83,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
         {/* Progress bar (while processing) */}
         {isProcessing && (
           <div className="mb-4">
-            <div className="flex justify-between text-xs text-slate-400 mb-1">
+            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
               <span>
                 {isFinalizing
                   ? 'Writing search index and finishing…'
@@ -95,7 +95,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
                 {importRecord.insertedRows.toLocaleString()}
               </span>
             </div>
-            <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-blue-500 rounded-full transition-all duration-500"
                 style={{ width: `${progressPct}%` }}
@@ -107,7 +107,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
         {/* Stats grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <StatCard
-            icon={<FileText className="h-4 w-4 text-slate-400" />}
+            icon={<FileText className="h-4 w-4 text-slate-400 dark:text-slate-400" />}
             label="Total Rows"
             value={importRecord.totalRows.toLocaleString()}
           />
@@ -136,7 +136,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
             variant="error"
           />
           <StatCard
-            icon={<Clock className="h-4 w-4 text-slate-400" />}
+            icon={<Clock className="h-4 w-4 text-slate-400 dark:text-slate-400" />}
             label="Duration"
             value={formatDuration(importRecord.startedAt, importRecord.completedAt)}
           />
@@ -176,27 +176,27 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
             </div>
 
             {importRecord.verification && (
-              <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-700/60 text-sm space-y-2">
-                <p className="text-slate-200 font-medium">Visibility Verification</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
+              <div className="p-3 rounded-lg bg-slate-100/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 text-sm space-y-2">
+                <p className="text-slate-600 dark:text-slate-200 font-medium">Visibility Verification</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-500 dark:text-slate-300">
                   <p>
-                    Expected inserted rows: <span className="text-slate-100">{importRecord.verification.expectedInsertedRows}</span>
+                    Expected inserted rows: <span className="text-slate-900 dark:text-slate-100">{importRecord.verification.expectedInsertedRows}</span>
                   </p>
                   <p>
-                    Catalog products persisted: <span className="text-slate-100">{importRecord.verification.catalogProductsByImport}</span>
+                    Catalog products persisted: <span className="text-slate-900 dark:text-slate-100">{importRecord.verification.catalogProductsByImport}</span>
                   </p>
                   <p>
-                    Listing records persisted: <span className="text-slate-100">{importRecord.verification.listingRecordsByImport}</span>
+                    Listing records persisted: <span className="text-slate-900 dark:text-slate-100">{importRecord.verification.listingRecordsByImport}</span>
                   </p>
                   <p>
-                    Database target: <span className="text-slate-100">{importRecord.verification.db?.database ?? 'unknown'}</span>
+                    Database target: <span className="text-slate-900 dark:text-slate-100">{importRecord.verification.db?.database ?? 'unknown'}</span>
                     {importRecord.verification.db?.schema ? ` (${importRecord.verification.db.schema})` : ''}
                   </p>
                 </div>
 
                 {importRecord.verification.sampleSkus.length > 0 && (
-                  <p className="text-slate-300">
-                    Sample SKUs: <span className="text-slate-100">{importRecord.verification.sampleSkus.slice(0, 5).join(', ')}</span>
+                  <p className="text-slate-500 dark:text-slate-300">
+                    Sample SKUs: <span className="text-slate-900 dark:text-slate-100">{importRecord.verification.sampleSkus.slice(0, 5).join(', ')}</span>
                   </p>
                 )}
 
@@ -236,12 +236,12 @@ function StatCard({
   };
 
   return (
-    <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
+    <div className="p-3 rounded-lg bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
       <div className="flex items-center gap-1.5 mb-1">
         {icon}
-        <span className="text-xs text-slate-400">{label}</span>
+        <span className="text-xs text-slate-400 dark:text-slate-400">{label}</span>
       </div>
-      <p className={`text-lg font-semibold ${variant ? valueColors[variant] : 'text-slate-200'}`}>
+      <p className={`text-lg font-semibold ${variant ? valueColors[variant] : 'text-slate-600 dark:text-slate-200'}`}>
         {value}
       </p>
     </div>

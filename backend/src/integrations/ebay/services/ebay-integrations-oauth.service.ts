@@ -104,7 +104,7 @@ export class EbayIntegrationsOAuthService {
         timeout: 15_000,
       });
       ebayUserId =
-        identity.data?.username ?? identity.data?.userId ?? ebayUserId;
+        identity.data?.userId ?? identity.data?.username ?? ebayUserId;
       ebayUsername = identity.data?.username ?? null;
     } catch (e) {
       this.logger.warn('eBay identity fetch failed after OAuth', e);

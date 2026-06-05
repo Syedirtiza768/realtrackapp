@@ -6,6 +6,11 @@ import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChannelsService } from '../channels.service.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
+import { ChannelConnection } from '../entities/channel-connection.entity.js';
+import { Store } from '../entities/store.entity.js';
+import { EbayPublishService } from '../ebay/ebay-publish.service.js';
+import { sanitizeEbayImageUrls } from '../ebay/ebay-listing-images.util.js';
+import { mapToEbayConditionEnum } from '../ebay/ebay-listing-condition.util.js';
 
 /**
  * BullMQ processor for the `channels` queue.
@@ -18,8 +23,13 @@ export class ChannelPublishProcessor extends WorkerHost {
 
   constructor(
     private readonly channelsService: ChannelsService,
+    private readonly ebayPublish: EbayPublishService,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectRepository(ChannelConnection)
+    private readonly connectionRepo: Repository<ChannelConnection>,
+    @InjectRepository(Store)
+    private readonly storeRepo: Repository<Store>,
     private readonly eventEmitter: EventEmitter2,
   ) {
     super();
@@ -59,25 +69,53 @@ export class ChannelPublishProcessor extends WorkerHost {
       throw new Error(`Listing ${listingId} not found`);
     }
 
-    const listingData: Record<string, unknown> = {
-      title: overrides?.title ?? listing.title,
-      description: listing.description,
-      sku: listing.customLabelSku,
-      price: overrides?.price ?? listing.startPrice,
-      quantity: overrides?.quantity ?? 1,
-      categoryId: listing.categoryId,
-      condition: listing.conditionId,
-      brand: listing.cBrand,
-      mpn: listing.cManufacturerPartNumber,
-      imageUrls: listing.itemPhotoUrl ? [listing.itemPhotoUrl] : [],
-    };
+    const conn = await this.connectionRepo.findOneBy({ id: connectionId });
 
     try {
-      await this.channelsService.publishListing(
-        connectionId,
-        listingId,
-        listingData,
-      );
+      if (conn?.channel === 'ebay') {
+        const store = await this.storeRepo.findOne({
+          where: { connectionId },
+          order: { isPrimary: 'DESC', createdAt: 'ASC' },
+        });
+        if (!store) {
+          throw new Error(`No eBay store found for connection ${connectionId}`);
+        }
+        const stub = this.ebayPublish.stubPublishRequest(listingId, [store.id]);
+        if (overrides?.title) stub.title = overrides.title;
+        if (overrides?.price != null) stub.price = overrides.price;
+        if (overrides?.quantity != null) stub.quantity = overrides.quantity;
+        const results = await this.ebayPublish.publish(stub);
+        const result = results[0];
+        if (!result?.success) {
+          throw new Error(result?.error ?? 'eBay publish failed');
+        }
+        await this.channelsService.recordEbayPublishSuccess(
+          connectionId,
+          listingId,
+          store.id,
+          result,
+        );
+      } else {
+        const listingData: Record<string, unknown> = {
+          title: overrides?.title ?? listing.title,
+          description: listing.description,
+          sku: listing.customLabelSku,
+          price: overrides?.price ?? listing.startPrice,
+          quantity: overrides?.quantity ?? 1,
+          categoryId: listing.categoryId,
+          condition: mapToEbayConditionEnum(listing.conditionId),
+          brand: listing.cBrand,
+          mpn: listing.cManufacturerPartNumber,
+          imageUrls: listing.itemPhotoUrl
+            ? sanitizeEbayImageUrls([listing.itemPhotoUrl]).imageUrls
+            : [],
+        };
+        await this.channelsService.publishListing(
+          connectionId,
+          listingId,
+          listingData,
+        );
+      }
 
       // Update listing with published status
       listing.publishedAt = new Date();
@@ -155,10 +193,12 @@ export class ChannelPublishProcessor extends WorkerHost {
       price: listing.startPrice,
       quantity: 1,
       categoryId: listing.categoryId,
-      condition: listing.conditionId,
+      condition: mapToEbayConditionEnum(listing.conditionId),
       brand: listing.cBrand,
       mpn: listing.cManufacturerPartNumber,
-      imageUrls: listing.itemPhotoUrl ? [listing.itemPhotoUrl] : [],
+      imageUrls: listing.itemPhotoUrl
+        ? sanitizeEbayImageUrls([listing.itemPhotoUrl]).imageUrls
+        : [],
     };
 
     // Re-publish acts as update for most channel adapters

@@ -62,6 +62,16 @@ export function batchPublishToEbay(items: PublishRequest[]): Promise<BatchPublis
 }
 
 /**
+ * Publish listing records by ID with server-side enrichment.
+ */
+export function publishListingIdsToEbay(
+  listingIds: string[],
+  storeIds: string[],
+): Promise<BatchPublishResult[]> {
+  return authPost(`${BASE}/publish-by-listings`, { listingIds, storeIds });
+}
+
+/**
  * Update price and quantity for existing eBay offers.
  */
 export function updateOfferPriceQuantity(

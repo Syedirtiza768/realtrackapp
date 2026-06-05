@@ -1,4 +1,4 @@
-/* ─── ResultsGrid ──────────────────────────────────────────
+﻿/* ─── ResultsGrid ──────────────────────────────────────────
  *  Grid / List view for search results with infinite scroll
  *  support, loading skeletons, and empty state.
  * ────────────────────────────────────────────────────────── */
@@ -112,7 +112,7 @@ export default function ResultsGrid({
                 onChange={() => onSelectAll?.(allSelected ? [] : items.map(i => i.id))}
                 className="w-4 h-4 rounded accent-blue-500 cursor-pointer"
               />
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-400 dark:text-slate-400">
                 {selectedIds && selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
               </span>
             </label>
@@ -123,7 +123,7 @@ export default function ResultsGrid({
             className={`px-2.5 py-1.5 transition-colors ${
               viewMode === 'grid'
                 ? 'bg-blue-600/20 text-blue-400'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'
             }`}
           >
             <Grid3X3 size={14} />
@@ -133,7 +133,7 @@ export default function ResultsGrid({
             className={`px-2.5 py-1.5 transition-colors ${
               viewMode === 'list'
                 ? 'bg-blue-600/20 text-blue-400'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'
             }`}
           >
             <LayoutList size={14} />
@@ -179,9 +179,9 @@ export default function ResultsGrid({
 
       {/* List view */}
       {viewMode === 'list' && items.length > 0 && (
-        <div className="border border-slate-800 rounded-xl overflow-hidden overflow-x-auto">
+        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden overflow-x-auto">
           <table className="w-full text-sm text-left min-w-[480px]">
-            <thead className="text-xs uppercase bg-slate-900/80 text-slate-500 font-medium sticky top-0">
+            <thead className="text-xs uppercase bg-white/80 dark:bg-slate-900/80 text-slate-400 dark:text-slate-500 font-medium sticky top-0">
               <tr>
                 {onToggleSelect && <th className="p-2 sm:p-3 w-8"></th>}
                 <th className="p-2 sm:p-3 w-12 sm:w-16">Image</th>
@@ -202,7 +202,7 @@ export default function ResultsGrid({
                 return (
                   <tr
                     key={item.id}
-                    className={`hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-blue-900/20' : ''}`}
+                    className={`hover:bg-slate-100/40 dark:bg-slate-800/40 transition-colors ${isSelected ? 'bg-blue-900/20' : ''}`}
                   >
                     {onToggleSelect && (
                       <td className="p-3">
@@ -218,7 +218,7 @@ export default function ResultsGrid({
                       {imageUrl ? (
                         <img src={imageUrl} alt="" loading="lazy" className="w-12 h-12 object-cover rounded-lg" />
                       ) : (
-                        <div className="w-12 h-12 flex items-center justify-center text-slate-700 bg-slate-800 rounded-lg">
+                        <div className="w-12 h-12 flex items-center justify-center text-slate-600 dark:text-slate-700 bg-slate-800 rounded-lg">
                           <Package size={16} />
                         </div>
                       )}
@@ -227,7 +227,7 @@ export default function ResultsGrid({
                       <a
                         href="#"
                         onClick={(e) => { e.preventDefault(); onQuickView(item.id); }}
-                        className="font-medium text-slate-200 hover:text-blue-400 line-clamp-1 transition-colors"
+                        className="font-medium text-slate-600 dark:text-slate-200 hover:text-blue-400 line-clamp-1 transition-colors"
                       >
                         {item.titleHighlight ? (
                           <span dangerouslySetInnerHTML={{ __html: sanitizeHighlight(item.titleHighlight) }} />
@@ -235,10 +235,10 @@ export default function ResultsGrid({
                           item.title ?? 'Untitled'
                         )}
                       </a>
-                      <div className="text-xs text-slate-500 font-mono mt-0.5">{item.customLabelSku}</div>
+                      <div className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{item.customLabelSku}</div>
                     </td>
-                    <td className="p-3 text-slate-400 text-xs hidden md:table-cell">{item.cBrand ?? '—'}</td>
-                    <td className="p-3 text-slate-500 text-xs max-w-48 truncate hidden lg:table-cell">
+                    <td className="p-3 text-slate-400 dark:text-slate-400 text-xs hidden md:table-cell">{item.cBrand ?? '—'}</td>
+                    <td className="p-3 text-slate-400 dark:text-slate-500 text-xs max-w-48 truncate hidden lg:table-cell">
                       {item.categoryName ? (() => {
                         const parts = item.categoryName.split('/').filter(Boolean);
                         return parts.length > 1 ? parts[parts.length - 1] : item.categoryName;
@@ -250,27 +250,27 @@ export default function ResultsGrid({
                           <Car size={10} /> {item.fitmentCount}
                         </span>
                       ) : (
-                        <span className="text-slate-600">—</span>
+                        <span className="text-slate-500 dark:text-slate-600">—</span>
                       )}
                     </td>
-                    <td className="p-3 text-right text-slate-200 font-semibold">
+                    <td className="p-3 text-right text-slate-600 dark:text-slate-200 font-semibold">
                       {price !== null ? `$${price.toFixed(2)}` : '—'}
                     </td>
-                    <td className="p-3 text-center text-slate-400 text-xs hidden sm:table-cell">
+                    <td className="p-3 text-center text-slate-400 dark:text-slate-400 text-xs hidden sm:table-cell">
                       {item.quantity ?? '—'}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => onQuickView(item.id)}
-                          className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                          className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
                           <Eye size={14} />
                         </button>
                         {onPublish && (
                           <button
                             onClick={() => onPublish(item.id)}
-                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 transition-colors"
+                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 transition-colors"
                             title="List on Channels"
                           >
                             <Send size={14} />
@@ -286,7 +286,7 @@ export default function ResultsGrid({
                         {onDelete && (
                           <button
                             onClick={() => onDelete(item.id)}
-                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-colors"
                             title="Delete"
                           >
                             <Trash2 size={14} />
@@ -304,10 +304,10 @@ export default function ResultsGrid({
 
       {/* Empty state */}
       {!loading && items.length === 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-12 text-center">
-          <Sparkles className="mx-auto text-slate-600 mb-4" size={32} />
-          <h4 className="text-lg font-semibold text-slate-200 mb-1">No results found</h4>
-          <p className="text-sm text-slate-500 max-w-md mx-auto">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 p-12 text-center">
+          <Sparkles className="mx-auto text-slate-500 dark:text-slate-600 mb-4" size={32} />
+          <h4 className="text-lg font-semibold text-slate-600 dark:text-slate-200 mb-1">No results found</h4>
+          <p className="text-sm text-slate-400 dark:text-slate-500 max-w-md mx-auto">
             Try adjusting your search terms or removing some filters to see more results.
           </p>
         </div>
@@ -317,7 +317,7 @@ export default function ResultsGrid({
       {infiniteScroll && hasMore && (
         <div ref={sentinelRef} className="flex items-center justify-center py-8">
           {loading && (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
+            <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500">
               <ArrowDown size={16} className="animate-bounce" />
               Loading more…
             </div>
@@ -332,7 +332,7 @@ export default function ResultsGrid({
 
       {/* Loading overlay for page transitions */}
       {loading && items.length > 0 && !infiniteScroll && (
-        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center rounded-xl pointer-events-none">
+        <div className="absolute inset-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center rounded-xl pointer-events-none">
           <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
@@ -358,14 +358,14 @@ function Pagination({
       <button
         onClick={() => onChange(Math.max(0, page - 1))}
         disabled={page === 0}
-        className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-2 rounded-lg border border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronLeft size={16} />
       </button>
 
       {pages.map((p, i) =>
         p === -1 ? (
-          <span key={`e-${i}`} className="px-2 text-slate-600">…</span>
+          <span key={`e-${i}`} className="px-2 text-slate-500 dark:text-slate-600">…</span>
         ) : (
           <button
             key={p}
@@ -373,7 +373,7 @@ function Pagination({
             className={`min-w-[36px] py-2 rounded-lg border text-sm font-medium transition-colors ${
               p === page
                 ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20'
-                : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                : 'border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             {p + 1}
@@ -384,7 +384,7 @@ function Pagination({
       <button
         onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
         disabled={page >= totalPages - 1}
-        className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-2 rounded-lg border border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronRight size={16} />
       </button>
@@ -397,7 +397,7 @@ function Pagination({
 function SkeletonCard({ viewMode }: { viewMode: ViewMode }) {
   if (viewMode === 'list') {
     return (
-      <div className="flex items-center gap-3 p-3 border border-slate-800 rounded-lg animate-pulse">
+      <div className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg animate-pulse">
         <div className="w-12 h-12 bg-slate-800 rounded-lg shrink-0" />
         <div className="flex-1 space-y-2">
           <div className="h-4 bg-slate-800 rounded w-3/4" />
@@ -409,7 +409,7 @@ function SkeletonCard({ viewMode }: { viewMode: ViewMode }) {
   }
 
   return (
-    <div className="border border-slate-700/60 rounded-xl overflow-hidden animate-pulse">
+    <div className="border border-slate-200/60 dark:border-slate-700/60 rounded-xl overflow-hidden animate-pulse">
       <div className="h-44 bg-slate-800" />
       <div className="p-3 space-y-2">
         <div className="h-4 bg-slate-800 rounded w-full" />

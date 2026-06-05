@@ -10,8 +10,11 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ImageEnrichmentService } from './image-enrichment.service.js';
 
+import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
+
 @ApiTags('Pipeline / Image Enrichment')
 @Controller('pipeline/images')
+@RequirePermissions('pipeline.run')
 export class ImageEnrichmentController {
   constructor(private readonly imageEnrichmentService: ImageEnrichmentService) {}
 

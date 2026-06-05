@@ -5,6 +5,7 @@ import { ExportRule } from './entities/export-rule.entity.js';
 import { MasterProduct } from './entities/master-product.entity.js';
 import { EbayOffer } from './entities/ebay-offer.entity.js';
 import type { CreateExportRuleDto, UpdateExportRuleDto } from './dto/export-rule.dto.js';
+import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
 
 /**
  * ExportRuleService — Manages automated listing export rules.
@@ -125,8 +126,7 @@ export class ExportRuleService {
     let title = baseTitle;
     if (rule.titlePrefix) title = `${rule.titlePrefix}${title}`;
     if (rule.titleSuffix) title = `${title}${rule.titleSuffix}`;
-    // eBay max title = 80 chars
-    return title.substring(0, 80);
+    return truncateEbayTitle(title);
   }
 
   /**

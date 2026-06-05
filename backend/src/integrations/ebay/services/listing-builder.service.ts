@@ -1,163 +1,524 @@
 import { Injectable } from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
+
 import { Repository } from 'typeorm';
-import { CatalogProduct } from '../../../catalog-import/entities/catalog-product.entity.js';
+
 import { ListingStoreOverride } from '../entities/listing-store-override.entity.js';
+
 import { EbayAccountMarketplace } from '../entities/ebay-account-marketplace.entity.js';
+import { EbayBusinessPolicy } from '../entities/ebay-business-policy.entity.js';
+
 import type { PublishRequest } from '../../../channels/ebay/ebay-publish.service.js';
-import type { EbayConditionEnum } from '../../../channels/ebay/ebay-api.types.js';
+
 import { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.js';
 
+import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
+
+import {
+
+  buildEbayListingTitle,
+
+  buildEbayListingDescription,
+
+} from '../../../channels/ebay/ebay-listing-text.util.js';
+
+import {
+
+  applyImageOrderOverride,
+
+} from '../../../channels/ebay/ebay-listing-images.util.js';
+
+import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
+
+import { mapToEbayConditionEnum } from '../../../channels/ebay/ebay-listing-condition.util.js';
+import {
+  listingRequiresPartsAccessoriesReturnPolicy,
+  partsAccessoriesReturnPolicyGuidance,
+  pickReturnPolicyIdForListing,
+  readPolicyGeoSite,
+} from './ebay-business-policy.util.js';
+import { EbayInventoryApiService } from '../../../channels/ebay/ebay-inventory-api.service.js';
+import {
+  buildListingAspects,
+  isUsedEbayCondition,
+} from '../../../channels/ebay/ebay-listing-aspects.util.js';
+
+
+
 export interface ListingBuilderResult {
+
   publishRequest: PublishRequest;
+
   warnings: string[];
+
   blockingErrors: string[];
+
 }
+
+
 
 @Injectable()
+
 export class ListingBuilderService {
+
   constructor(
-    @InjectRepository(CatalogProduct)
-    private readonly catalogRepo: Repository<CatalogProduct>,
+
     @InjectRepository(ListingStoreOverride)
+
     private readonly overrideRepo: Repository<ListingStoreOverride>,
+
     @InjectRepository(EbayAccountMarketplace)
+
     private readonly mpRepo: Repository<EbayAccountMarketplace>,
+
+    @InjectRepository(EbayBusinessPolicy)
+
+    private readonly policyRepo: Repository<EbayBusinessPolicy>,
+
+    @InjectRepository(ConnectedEbayAccount)
+
+    private readonly accountRepo: Repository<ConnectedEbayAccount>,
+
     private readonly marketplaceConfig: EbayMarketplaceConfigService,
+
+    private readonly publishResolver: CatalogPublishResolverService,
+
+    private readonly inventoryApi: EbayInventoryApiService,
+
   ) {}
 
+
+
   async build(params: {
+
     catalogProductId: string;
+
     ebayAccountId: string;
+
     marketplaceId: string;
+
     listingRecordId: string;
+
     storeId: string;
+
   }): Promise<ListingBuilderResult> {
+
     const warnings: string[] = [];
+
     const blockingErrors: string[] = [];
 
-    const product = await this.catalogRepo.findOne({
-      where: { id: params.catalogProductId },
-    });
-    if (!product) {
-      blockingErrors.push('Catalog product not found');
+
+
+    const resolved = await this.publishResolver.resolve(params.catalogProductId);
+
+    if (!resolved) {
+
+      blockingErrors.push('Catalog product or listing record not found');
+
       return this.emptyResult(blockingErrors, warnings, params);
+
     }
+
+
+
+    const { snapshot } = resolved;
+
+    warnings.push(...resolved.warnings);
+
+
 
     const ov = await this.overrideRepo.findOne({
+
       where: {
-        catalogProductId: params.catalogProductId,
+
+        catalogProductId: snapshot.catalogProductId,
+
         ebayAccountId: params.ebayAccountId,
+
         marketplaceId: params.marketplaceId,
+
       },
+
     });
 
-    const sku = product.sku?.trim() || product.id;
-    const title = ov?.titleOverride?.trim() || product.title;
-    const description =
-      ov?.descriptionOverride?.trim() || product.description || '<p></p>';
-    const price = ov?.priceOverride != null ? Number(ov.priceOverride) : Number(product.price ?? 0);
-    const quantity = ov?.quantityOverride ?? product.quantity ?? 0;
-    const categoryId = ov?.categoryIdOverride?.trim() || product.categoryId || '';
-    const condition = (ov?.conditionOverride ||
-      product.conditionId ||
-      'USED_GOOD') as EbayConditionEnum;
+
+
+    const sku = snapshot.sku;
+
+    const titleResult = buildEbayListingTitle({
+
+      title: snapshot.title,
+
+      titleOverride: ov?.titleOverride,
+
+      brand: snapshot.brand,
+
+      partType: snapshot.partType,
+
+      mpn: snapshot.mpn,
+
+      sku,
+
+    });
+
+    warnings.push(...titleResult.warnings);
+
+    const title = titleResult.title;
+
+    const descResult = buildEbayListingDescription({
+
+      description: ov?.descriptionOverride?.trim() || snapshot.description,
+
+      title,
+
+      brand: snapshot.brand,
+
+      mpn: snapshot.mpn,
+
+      sku,
+
+      partType: snapshot.partType,
+
+    });
+
+    warnings.push(...descResult.warnings);
+
+    const description = descResult.description;
+
+    const price =
+
+      ov?.priceOverride != null
+
+        ? Number(ov.priceOverride)
+
+        : Number(snapshot.price ?? 0);
+
+    const quantity = ov?.quantityOverride ?? snapshot.quantity ?? 0;
+
+    const categoryId =
+
+      ov?.categoryIdOverride?.trim() || snapshot.categoryId || '';
+
+    const condition = mapToEbayConditionEnum(
+
+      ov?.conditionOverride ?? snapshot.conditionId,
+
+      'USED_GOOD',
+
+    );
+
+
 
     if (!categoryId) {
+
       warnings.push('Using empty category — publish will likely fail until taxonomy is set');
+
     }
 
+
+
     const mpRow = await this.mpRepo.findOne({
+
+      where: {
+
+        ebayAccountId: params.ebayAccountId,
+
+        marketplaceId: params.marketplaceId,
+
+      },
+
+    });
+
+
+
+    let fulfillmentPolicyId = mpRow?.defaultFulfillmentPolicyId ?? undefined;
+
+    let paymentPolicyId = mpRow?.defaultPaymentPolicyId ?? undefined;
+
+    let returnPolicyId = mpRow?.defaultReturnPolicyId ?? undefined;
+
+    let merchantLocationKey = mpRow?.defaultInventoryLocationKey ?? undefined;
+
+
+
+    const po = ov?.policyOverrides;
+
+    if (po && typeof po === 'object') {
+
+      const o = po as Record<string, unknown>;
+
+      if (typeof o.fulfillmentPolicyId === 'string' && o.fulfillmentPolicyId.trim()) {
+
+        fulfillmentPolicyId = o.fulfillmentPolicyId.trim();
+
+      }
+
+      if (typeof o.paymentPolicyId === 'string' && o.paymentPolicyId.trim()) {
+
+        paymentPolicyId = o.paymentPolicyId.trim();
+
+      }
+
+      if (typeof o.returnPolicyId === 'string' && o.returnPolicyId.trim()) {
+
+        returnPolicyId = o.returnPolicyId.trim();
+
+      }
+
+      if (typeof o.merchantLocationKey === 'string' && o.merchantLocationKey.trim()) {
+
+        merchantLocationKey = o.merchantLocationKey.trim();
+
+      }
+
+    }
+
+    const returnRows = await this.policyRepo.find({
       where: {
         ebayAccountId: params.ebayAccountId,
         marketplaceId: params.marketplaceId,
+        policyType: 'return',
       },
     });
-
-    let fulfillmentPolicyId = mpRow?.defaultFulfillmentPolicyId ?? undefined;
-    let paymentPolicyId = mpRow?.defaultPaymentPolicyId ?? undefined;
-    let returnPolicyId = mpRow?.defaultReturnPolicyId ?? undefined;
-    let merchantLocationKey = mpRow?.defaultInventoryLocationKey ?? undefined;
-
-    const po = ov?.policyOverrides;
-    if (po && typeof po === 'object') {
-      const o = po as Record<string, unknown>;
-      if (typeof o.fulfillmentPolicyId === 'string' && o.fulfillmentPolicyId.trim()) {
-        fulfillmentPolicyId = o.fulfillmentPolicyId.trim();
-      }
-      if (typeof o.paymentPolicyId === 'string' && o.paymentPolicyId.trim()) {
-        paymentPolicyId = o.paymentPolicyId.trim();
-      }
-      if (typeof o.returnPolicyId === 'string' && o.returnPolicyId.trim()) {
-        returnPolicyId = o.returnPolicyId.trim();
-      }
-      if (typeof o.merchantLocationKey === 'string' && o.merchantLocationKey.trim()) {
-        merchantLocationKey = o.merchantLocationKey.trim();
+    if (returnRows.length) {
+      const compliantReturnId = pickReturnPolicyIdForListing(
+        returnRows.map((r) => ({
+          ebayPolicyId: r.ebayPolicyId,
+          isDefault: r.isDefault,
+          geoSite: readPolicyGeoSite(r.rawPayload ?? {}),
+          rawPayload: r.rawPayload ?? {},
+        })),
+        params.marketplaceId,
+        categoryId,
+        condition,
+      );
+      if (compliantReturnId) {
+        returnPolicyId = compliantReturnId;
+      } else if (
+        listingRequiresPartsAccessoriesReturnPolicy(
+          params.marketplaceId,
+          categoryId,
+          condition,
+        )
+      ) {
+        blockingErrors.push(partsAccessoriesReturnPolicyGuidance());
       }
     }
+
+
 
     let currency: string | undefined;
+
     try {
+
       currency = this.marketplaceConfig.require(params.marketplaceId).currency;
+
     } catch {
+
       warnings.push(`Unknown marketplace ${params.marketplaceId} — defaulting currency in offer may be wrong`);
+
     }
 
-    if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId || !merchantLocationKey) {
+
+
+    const account = await this.accountRepo.findOne({
+
+      where: { id: params.ebayAccountId },
+
+    });
+
+    const isSellerpundit = account?.connectionSource === 'sellerpundit';
+
+
+
+    if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
+
       blockingErrors.push(
-        'Missing fulfillment, payment, return policy IDs or merchant location — sync policies and map defaults.',
+
+        isSellerpundit
+
+          ? 'Missing fulfillment, payment, or return policy IDs — sync SellerPundit policies.'
+
+          : 'Missing fulfillment, payment, or return policy IDs — sync policies and map defaults.',
+
       );
+
     }
 
-    const aspects: Record<string, string[]> = {};
-    if (product.brand) aspects.Brand = [product.brand];
-    if (product.mpn) aspects.MPN = [product.mpn];
+    if (!merchantLocationKey) {
+
+      const ensured = await this.inventoryApi.ensureMerchantLocation(
+
+        params.storeId,
+
+        merchantLocationKey,
+
+      );
+
+      if (ensured) {
+
+        merchantLocationKey = ensured;
+
+        if (mpRow) {
+
+          mpRow.defaultInventoryLocationKey = ensured;
+
+          await this.mpRepo.save(mpRow);
+
+        }
+
+      } else {
+
+        blockingErrors.push(
+
+          isSellerpundit
+
+            ? 'Missing merchant location — required when SellerPundit falls back to direct eBay publish. Sync policies from eBay or set a default ship-from address.'
+
+            : 'Missing merchant location — sync policies from eBay or set a default ship-from address.',
+
+        );
+
+      }
+
+    }
+
+
+
+    const aspects = buildListingAspects({
+      brand: snapshot.brand,
+      mpn: snapshot.mpn,
+      partType: snapshot.partType,
+    });
+
+
+
+    const imageUrls = applyImageOrderOverride(
+
+      snapshot.imageUrls,
+
+      ov?.imageOrderOverride,
+
+    );
+
+    if (!imageUrls.length) {
+
+      blockingErrors.push(
+
+        'At least one valid image URL (http/https) is required — add images to the catalog listing or linked image assets',
+
+      );
+
+    }
+
+
+
+    const listingRecordId =
+
+      snapshot.listingRecordId ?? params.listingRecordId ?? snapshot.catalogProductId;
+
+
 
     const publishRequest: PublishRequest = {
-      listingId: params.listingRecordId,
+
+      listingId: listingRecordId,
+
       storeIds: [params.storeId],
+
       sku,
+
       title,
+
       description,
+
       categoryId,
+
       condition,
-      conditionDescription: product.conditionLabel ?? undefined,
+
+      conditionDescription:
+        snapshot.conditionLabel?.trim() ||
+        (isUsedEbayCondition(condition)
+          ? snapshot.partType?.trim() || title
+          : undefined),
+      listingDuration: 'GTC',
+
       price,
+
       currency,
+
       quantity,
-      imageUrls: product.imageUrls?.length ? product.imageUrls : [],
+
+      imageUrls,
+
       aspects,
+
       compatibility: undefined,
+
       fulfillmentPolicyId,
+
       paymentPolicyId,
+
       returnPolicyId,
+
       merchantLocationKey,
+
     };
+
+
 
     return { publishRequest, warnings, blockingErrors };
+
   }
 
+
+
   private emptyResult(
+
     blockingErrors: string[],
+
     warnings: string[],
+
     params: { listingRecordId: string; storeId: string },
+
   ): ListingBuilderResult {
+
     return {
+
       blockingErrors,
+
       warnings,
+
       publishRequest: {
+
         listingId: params.listingRecordId,
+
         storeIds: [params.storeId],
+
         sku: 'missing',
+
         title: 'missing',
+
         description: 'missing',
+
         categoryId: '',
+
         condition: 'USED_GOOD',
+
         price: 0,
+
         quantity: 0,
+
         imageUrls: [],
+
         aspects: {},
+
       },
+
     };
+
   }
+
 }
+
+

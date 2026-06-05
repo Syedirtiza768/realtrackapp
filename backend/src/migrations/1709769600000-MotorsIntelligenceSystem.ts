@@ -4,6 +4,17 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
   name = 'MotorsIntelligenceSystem1709769600000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const alreadyApplied = await queryRunner.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'motors_products'
+      ) AS "exists"
+    `);
+    if (alreadyApplied[0]?.exists) {
+      return;
+    }
+
     // ─── motors_products ───────────────────────────────────────────
     await queryRunner.query(`
       CREATE TYPE "motors_product_status_enum" AS ENUM (

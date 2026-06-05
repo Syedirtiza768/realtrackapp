@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+﻿import { useCallback, useState } from 'react';
 import { Columns, ArrowRight, Check, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -75,10 +75,10 @@ export default function ColumnMapper({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700">
-                <th className="text-left text-slate-400 py-2 px-3 font-medium">CSV Column</th>
-                <th className="text-center text-slate-400 py-2 w-12"></th>
-                <th className="text-left text-slate-400 py-2 px-3 font-medium">Catalog Field</th>
-                <th className="text-center text-slate-400 py-2 px-3 font-medium w-16">Status</th>
+                <th className="text-left text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">CSV Column</th>
+                <th className="text-center text-slate-400 dark:text-slate-400 py-2 w-12"></th>
+                <th className="text-left text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Catalog Field</th>
+                <th className="text-center text-slate-400 dark:text-slate-400 py-2 px-3 font-medium w-16">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -88,7 +88,7 @@ export default function ColumnMapper({
                 return (
                   <tr
                     key={header}
-                    className="border-b border-slate-700/50 hover:bg-slate-800/50"
+                    className="border-b border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-100/50 dark:bg-slate-800/50"
                   >
                     <td className="py-2 px-3">
                       <code className="text-blue-300 text-xs bg-slate-800 px-1.5 py-0.5 rounded">
@@ -96,13 +96,13 @@ export default function ColumnMapper({
                       </code>
                     </td>
                     <td className="text-center">
-                      <ArrowRight className="h-3 w-3 text-slate-500 mx-auto" />
+                      <ArrowRight className="h-3 w-3 text-slate-400 dark:text-slate-500 mx-auto" />
                     </td>
                     <td className="py-2 px-3">
                       <select
                         value={currentField}
                         onChange={(e) => handleFieldChange(header, e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                        className="w-full bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-slate-600 dark:text-slate-200 focus:outline-none focus:border-blue-500"
                       >
                         <option value="">-- Skip this column --</option>
                         {catalogFields.map((field) => (
@@ -116,7 +116,7 @@ export default function ColumnMapper({
                       {isMapped ? (
                         <Check className="h-4 w-4 text-emerald-400 mx-auto" />
                       ) : (
-                        <span className="text-slate-600 text-xs">—</span>
+                        <span className="text-slate-500 dark:text-slate-600 text-xs">—</span>
                       )}
                     </td>
                   </tr>
@@ -135,7 +135,7 @@ export default function ColumnMapper({
               flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
               ${
                 missingRequired.length > 0
-                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-500'
               }
             `}

@@ -35,9 +35,11 @@ import {
 import { MotorsProductStatus, MotorsSourceType } from '../entities';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Motors Intelligence')
 @Controller('motors-intelligence')
+@RequirePermissions('motors.view')
 export class MotorsIntelligenceController {
   constructor(
     private readonly motorsService: MotorsIntelligenceService,
@@ -50,6 +52,7 @@ export class MotorsIntelligenceController {
   /* ─── Image Upload Flow ──────────────────────────────────── */
 
   @Post('products/upload-images')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Start image-based product creation with presigned S3 URLs' })
   async uploadImages(@Body() dto: ImageUploadRequestDto): Promise<ImageUploadResponseDto> {
     // Create the product first so we have an ID for S3 paths
@@ -83,6 +86,7 @@ export class MotorsIntelligenceController {
   }
 
   @Post('products/:id/confirm-upload')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Confirm images uploaded to S3, optionally start pipeline' })
   async confirmUpload(
     @Param('id', ParseUUIDPipe) id: string,
@@ -238,6 +242,7 @@ export class MotorsIntelligenceController {
   /* ─── eBay Enrichment ────────────────────────────────────── */
 
   @Post('products/:id/enrich')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Run eBay enrichment (category + aspects) for a product' })
   async enrichProduct(@Param('id', ParseUUIDPipe) id: string) {
     return this.ebayEnrichmentService.enrichProduct(id);
@@ -246,12 +251,14 @@ export class MotorsIntelligenceController {
   /* ─── Products CRUD ──────────────────────────────────────── */
 
   @Post('products')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Create a new Motors product and start pipeline' })
   async createProduct(@Body() dto: CreateMotorsProductDto) {
     return this.motorsService.createProduct(dto);
   }
 
   @Post('products/batch')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Batch create Motors products' })
   async batchCreate(@Body() dto: BatchCreateMotorsProductDto) {
     return this.motorsService.batchCreateProducts(dto.products);
@@ -270,6 +277,7 @@ export class MotorsIntelligenceController {
   }
 
   @Patch('products/:id')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Update a Motors product' })
   async updateProduct(
     @Param('id', ParseUUIDPipe) id: string,
@@ -279,6 +287,7 @@ export class MotorsIntelligenceController {
   }
 
   @Delete('products/:id')
+  @RequirePermissions('motors.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a Motors product' })
   async deleteProduct(@Param('id', ParseUUIDPipe) id: string) {
@@ -288,12 +297,14 @@ export class MotorsIntelligenceController {
   /* ─── Pipeline ───────────────────────────────────────────── */
 
   @Post('products/:id/run-pipeline')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Re-run the full pipeline for a product' })
   async runPipeline(@Param('id', ParseUUIDPipe) id: string) {
     return this.motorsService.runPipeline(id);
   }
 
   @Post('products/:id/publish')
+  @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Publish a Motors product to eBay' })
   async publish(
     @Param('id', ParseUUIDPipe) id: string,

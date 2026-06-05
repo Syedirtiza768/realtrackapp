@@ -12,8 +12,11 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EbayComplianceService } from '../services/ebay-compliance.service.js';
 import { ComplianceAuditService } from '../services/compliance-audit.service.js';
 
+import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
+
 @ApiTags('Catalog Import / Compliance')
 @Controller('catalog-import/compliance')
+@RequirePermissions('catalog.compliance')
 export class ComplianceController {
   constructor(
     private readonly complianceService: EbayComplianceService,

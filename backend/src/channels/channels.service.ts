@@ -321,6 +321,46 @@ export class ChannelsService {
     return this.instanceRepo.save(instance);
   }
 
+  /** Persist channel instance after a successful EbayPublishService publish. */
+  async recordEbayPublishSuccess(
+    connectionId: string,
+    listingId: string,
+    storeId: string,
+    result: { listingId?: string; offerId?: string },
+  ): Promise<ListingChannelInstance> {
+    const conn = await this.connectionRepo.findOneBy({ id: connectionId });
+    if (!conn) throw new NotFoundException('Connection not found');
+
+    const externalId = result.listingId ?? result.offerId ?? '';
+    const externalUrl = result.listingId
+      ? `https://www.ebay.com/itm/${result.listingId}`
+      : null;
+
+    const existing = await this.instanceRepo.findOne({
+      where: { connectionId, listingId, storeId },
+    });
+    if (existing) {
+      existing.externalId = externalId;
+      existing.externalUrl = externalUrl;
+      existing.syncStatus = 'synced';
+      existing.lastSyncedAt = new Date();
+      existing.lastError = null;
+      return this.instanceRepo.save(existing);
+    }
+
+    const instance = this.instanceRepo.create({
+      connectionId,
+      listingId,
+      storeId,
+      channel: conn.channel,
+      externalId,
+      externalUrl,
+      syncStatus: 'synced',
+      lastSyncedAt: new Date(),
+    });
+    return this.instanceRepo.save(instance);
+  }
+
   async enqueueSync(connectionId: string): Promise<{ jobId: string }> {
     const job = await this.channelsQueue.add(
       'sync-inventory',

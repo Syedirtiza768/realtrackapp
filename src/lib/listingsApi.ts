@@ -14,6 +14,7 @@ import type {
   RevisionsResponse,
   UpdateListingResponse,
 } from '../types/listings';
+import { fetchWithAuth } from './authApi';
 
 const API_BASE = '/api';
 
@@ -31,11 +32,7 @@ function buildQueryString(params: Record<string, string | number | undefined>): 
 }
 
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) {
-    throw new Error(`API ${res.status}: ${res.statusText}`);
-  }
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API_BASE}${path}`);
 }
 
 async function apiMutate<T>(
@@ -43,21 +40,10 @@ async function apiMutate<T>(
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  return fetchWithAuth<T>(`${API_BASE}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const errorBody = await res.json().catch(() => ({}));
-    const err = new Error(`API ${res.status}: ${res.statusText}`);
-    (err as ApiError).status = res.status;
-    (err as ApiError).body = errorBody;
-    throw err;
-  }
-  // 204 No Content
-  if (res.status === 204) return undefined as unknown as T;
-  return res.json() as Promise<T>;
 }
 
 export interface ApiError extends Error {
@@ -86,11 +72,9 @@ export function useListings(query: ListingsQuery) {
     setError(null);
     try {
       const qs = buildQueryString(query as Record<string, string | number | undefined>);
-      const res = await fetch(`${API_BASE}/listings${qs}`, {
+      const json = await fetchWithAuth<ListingsResponse>(`${API_BASE}/listings${qs}`, {
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      const json = (await res.json()) as ListingsResponse;
       if (!controller.signal.aborted) {
         setData(json);
       }

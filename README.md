@@ -1,142 +1,88 @@
-# RealTrackApp Prototype
+# RealTrackApp
 
-This is the high-fidelity React prototype for the AI-Powered Motor Parts Listing Platform.
+Full-stack, multi-channel **automotive parts listing & operations platform**
+(internal/DB name: `listingpro`). Ingests product data and images, enriches with
+AI, manages vehicle fitment, and publishes/syncs listings to marketplaces
+(primarily **eBay**), with orders, inventory, pricing, dashboards, automation,
+RBAC, and audit.
 
-## 🚀 Getting Started
+- **Frontend**: React 18 + Vite 6 + TypeScript + Tailwind (dev port 3911, Docker 8050)
+- **Backend**: NestJS 11 + TypeORM + PostgreSQL 16 (port 4191, API prefix `/api`)
+- **Infra**: Redis 7 + BullMQ, Socket.IO, AWS S3, OpenAI; Docker Compose
 
-The project structure is set up, but dependencies need to be installed.
+## Quick start
 
-### 1. Install Dependencies
-```bash
-npm install
-```
-
-### 2. Run the Development Server
-```bash
-npm run dev
-```
-
-## 🏗️ Implemented Views
-- **Dashboard**: Operational command center with mocked data.
-- **Listing Editor**: AI-assisted listing creation with split-pane preview (eBay/Shopify).
-- **Fitment Manager**: Compatibility table with confidence scores.
-- **Catalog**: Enterprise-style automotive search + faceted discovery view.
-
-## 🔍 Catalog Upgrade (Automotive Search v2)
-
-The catalog now includes a production-oriented search and filtering layer while keeping the same route (`/catalog`) and preserving existing app flows.
-
-### Implemented Search Enhancements
-- Year / Make / Model / Trim compatibility selector
-- VIN lookup module (sample decode map)
-- ePID + K-Type exact compatibility support
-- Guaranteed Fit badge and filter
-- Predictive suggestions on search input
-- Synonym dictionary support (e.g. bumper ↔ fascia, tail light ↔ rear lamp)
-- Fuzzy matching for misspellings
-- OEM / aftermarket / SKU part-number recognition and relevance boost
-- Attribute-aware relevance (brand + placement)
-- Popularity-weighted ranking
-
-### Implemented Dynamic Facets
-- Multi-select facets with dynamic counts
-- Brand, condition, placement, availability, shipping type, seller rating
-- Price range controls
-- Real-time updates on every filter/search change
-- URL state sync for deep linking
-
-### Implemented UI Modernization
-- Grid/List toggle
-- Compatibility status badge (Verified Fit / Check Fit)
-- Quick View modal
-- Compare queue (up to 4 items)
-- Watchlist toggle
-- B2B bulk selection + bulk add action bar
-- Lazy-loaded listing images
-- SEO-style product URLs (`/catalog/{slug}-{sku}`)
-
-## 🧱 Data Integration Notes
-
-- A normalized catalog schema is implemented in `src/types/catalog.ts`.
-- Sample inventory is structured in `src/data/inventory.ts` for compatibility-indexable records.
-- Generated import output is written to `src/data/generatedInventory.ts`.
-- Fields are searchable by SKU, brand, OEM and aftermarket part numbers.
-- Source profile reference: `B12_p2_eBay_Verified.xlsx`.
-
-### Import Excel Inventory
-
-Run the importer with default or explicit file path:
+### Docker (full stack, production-like)
 
 ```bash
-npm run import:inventory
+cp .env.example .env          # set JWT_SECRET (required) + any API keys
+docker compose up -d --build  # postgres, redis, backend, frontend
+docker compose logs -f
 ```
+Frontend → http://localhost:8050 · API → http://localhost:4191/api · Swagger → `/api/docs`
+
+### Local dev (hot reload)
 
 ```bash
-npm run import:inventory -- "C:\Users\Irtiza Hassan\Downloads\B12_p2_eBay_Verified.xlsx"
+# Backend (needs Postgres + Redis running)
+cd backend && npm install && npm run start:dev   # :4191
+
+# Frontend (repo root, separate terminal)
+npm install && npm run dev                        # :3911, proxies /api → :4191
 ```
 
-Behavior:
-- Import script normalizes rows and groups fitment by SKU.
-- Catalog automatically uses generated data when `generatedInventory.ts` has records.
-- If generated data is empty, catalog falls back to built-in seed data.
+Full instructions: [docs/development/setup.md](docs/development/setup.md).
 
-## ⚙️ Production Architecture Rollout (No-Downtime)
+## Common commands
 
-Recommended backend rollout path (compatible with current UI/API behavior):
+| Command | Where | Purpose |
+|---------|-------|---------|
+| `npm run dev` | root | Vite dev server |
+| `npm run build` | root | Build frontend |
+| `npm run lint` | root | Lint frontend |
+| `npm run start:dev` | backend | NestJS watch mode |
+| `npm run build` | backend | `nest build` |
+| `npm run test` / `test:e2e` | backend | Jest |
+| `npm run migration:run` / `:generate` / `:revert` / `:show` | backend | TypeORM migrations |
+| `docker compose up -d --build` | root | Full stack |
 
-1. **Dual-read search layer**
-	- Keep current API contract as v1.
-	- Introduce `/api/v2/search` for OpenSearch-backed queries.
-	- Mirror v1 payload shape during migration.
+## Documentation map
 
-2. **Index + compatibility model**
-	- Build document index containing normalized product + compatibility tokens.
-	- Store YMMT, VIN decode attributes, ePID, K-Type as queryable fields.
+Start here, then drill in:
 
-3. **Caching and sync**
-	- Add Redis result caching for hot search/facet combinations.
-	- Use event-driven inventory sync for near real-time quantity/availability.
+| Doc | Purpose |
+|-----|---------|
+| [CONTEXT.md](CONTEXT.md) | Compact project memory (purpose, stack, status, priorities) |
+| [CLAUDE.md](CLAUDE.md) | Working rules for Claude Code |
+| [AGENTS.md](AGENTS.md) | Rules for any AI agent |
+| [CHANGELOG.md](CHANGELOG.md) | Change history |
+| [docs/architecture/overview.md](docs/architecture/overview.md) | System overview |
+| [docs/architecture/codebase-map.md](docs/architecture/codebase-map.md) | Where things live |
+| [docs/architecture/api-map.md](docs/architecture/api-map.md) | Controllers, routes, auth |
+| [docs/architecture/database.md](docs/architecture/database.md) | DB, entities, migrations |
+| [docs/architecture/auth-rbac.md](docs/architecture/auth-rbac.md) | Auth + RBAC |
+| [docs/architecture/integrations.md](docs/architecture/integrations.md) | External APIs + queues |
+| [docs/architecture/deployment.md](docs/architecture/deployment.md) | Deploy topology |
+| [docs/development/setup.md](docs/development/setup.md) | Local setup |
+| [docs/development/environment-variables.md](docs/development/environment-variables.md) | Env var reference |
+| [docs/development/agent-workflow.md](docs/development/agent-workflow.md) | How agents work here |
+| [docs/product/features.md](docs/product/features.md) | Feature inventory + status |
+| [docs/product/known-gaps.md](docs/product/known-gaps.md) | Gaps & caveats |
+| [docs/product/user-roles.md](docs/product/user-roles.md) | Roles & permissions |
+| [docs/operations/deployment-runbook.md](docs/operations/deployment-runbook.md) | Deploy/rollback runbook |
+| [docs/operations/security-checklist.md](docs/operations/security-checklist.md) | Pre-deploy security |
+| [docs/handover/current-state.md](docs/handover/current-state.md) | Snapshot of where things are |
+| [docs/handover/next-steps.md](docs/handover/next-steps.md) | Prioritized next work |
+| [docs/handover/risk-register.md](docs/handover/risk-register.md) | Risks |
+| [docs/decisions/adr-index.md](docs/decisions/adr-index.md) | Architecture decisions |
 
-4. **Safe migration strategy**
-	- Backfill index from existing DB (read-only migration first).
-	- Enable canary traffic split by percentage.
-	- Promote gradually after latency and relevance validation.
+Older reference docs (pre-date this set, preserved as-is):
+`docs/FULL_SYSTEM_AUDIT_AND_ROADMAP.md`, `docs/PRODUCT_FEATURE_CATALOG.md`,
+`docs/RBAC.md`, `docs/ebay-*`, `docs/enterprise-*`, `docs/*-audit-report.md`,
+`docs/search-architecture.md`.
 
-5. **Rollback strategy**
-	- Feature-flag all v2 endpoints.
-	- Keep v1 query path live and switch traffic back instantly if needed.
-	- Avoid destructive schema changes until v2 passes SLO windows.
+## First-read order (new contributors / agents)
 
-## 🧩 Enterprise Platform Blueprint
-
-For full coverage of image ingestion, AI enrichment, fitment extraction, catalog normalization,
-multi-channel sync, inventory events, dashboard analytics, and extensible adapters, see:
-
-- `docs/enterprise-platform-architecture.md`
-
-Core TypeScript scaffolding added for implementation:
-
-- `src/types/platform.ts`
-- `src/lib/ingestionPipeline.ts`
-- `src/lib/channelAdapters.ts`
-- `src/lib/inventorySync.ts`
-- `src/lib/fitmentSearch.ts`
-
-### Ingestion Provider Switch
-
-The ingestion flow supports provider selection via Vite env vars:
-
-- `VITE_INGESTION_PROVIDER=mock` (default)
-- `VITE_INGESTION_PROVIDER=api`
-- `VITE_INGESTION_API_BASE_URL=https://your-api-host` (required when provider is `api`)
-- `VITE_INGESTION_HEALTH_PATH=/v1/health/ingestion` (optional)
-
-Expected API endpoints for `api` provider:
-
-- `POST /v1/vision/identify`
-- `POST /v1/enrichment/generate`
-
-## 🎨 Design System
-- **Framework**: Tailwind CSS (Dark Mode default)
-- **Icons**: Lucide React
-- **Font**: Inter (via Google Fonts/System)
+1. README.md → 2. CONTEXT.md → 3. CLAUDE.md → 4. AGENTS.md →
+5. docs/handover/current-state.md → 6. docs/architecture/overview.md →
+7. docs/product/features.md → 8. docs/product/known-gaps.md

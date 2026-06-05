@@ -9,6 +9,7 @@
 
 import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { authHeaders, fetchDownloadResponse, fetchWithAuth } from './authApi';
 import type {
   CombinedOptimizationResult,
   EnterpriseOptimizationResult,
@@ -96,25 +97,14 @@ function normalizePipelineJob(job: PipelineJobApi): PipelineJob {
 /* ── Helpers ──────────────────────────────────────────────── */
 
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${API}${path}`, { signal });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(`API ${res.status}: ${res.statusText}`), { body });
-  }
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API}${path}`, { signal });
 }
 
 async function postJson<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  return fetchWithAuth<T>(`${API}${path}`, {
     method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(`API ${res.status}: ${res.statusText}`), { body: errBody });
-  }
-  return res.json() as Promise<T>;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -142,6 +132,10 @@ export function useUploadPipelineFile() {
         const response = await new Promise<{ job: PipelineJob }>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', `${API}/pipeline/upload`);
+          const auth = authHeaders();
+          if (auth.Authorization) {
+            xhr.setRequestHeader('Authorization', auth.Authorization);
+          }
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
@@ -277,12 +271,16 @@ export function getDownloadUrl(jobId: string, template: 'us' | 'au' | 'de' | 're
 
 export async function downloadPipelineFile(jobId: string, template: 'us' | 'au' | 'de' | 'report' | 'input'): Promise<void> {
   const url = getDownloadUrl(jobId, template);
+  const res = await fetchDownloadResponse(url);
+  const blob = await res.blob();
   const a = document.createElement('a');
-  a.href = url;
-  a.download = '';
+  a.href = URL.createObjectURL(blob);
+  const disp = res.headers.get('Content-Disposition');
+  a.download = disp?.match(/filename="(.+)"/)?.[1] || `${jobId}-${template}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }
 
 export async function generateEnterpriseOptimization(

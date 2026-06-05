@@ -10,6 +10,7 @@ import type { Queue } from 'bullmq';
 import { EbayListingJob } from '../entities/ebay-listing-job.entity.js';
 import { EbayListingJobTarget } from '../entities/ebay-listing-job-target.entity.js';
 import { EbayListingValidationService } from './ebay-listing-validation.service.js';
+import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
 
 @Injectable()
 export class EbayMultiStoreListingService {
@@ -19,8 +20,18 @@ export class EbayMultiStoreListingService {
     @InjectRepository(EbayListingJobTarget)
     private readonly targetRepo: Repository<EbayListingJobTarget>,
     private readonly validation: EbayListingValidationService,
+    private readonly publishResolver: CatalogPublishResolverService,
     @InjectQueue('ebay-listing-publish') private readonly publishQueue: Queue,
   ) {}
+
+  /** Resolve catalog browse id (listing or catalog) to a catalog_products FK id. */
+  private async resolveCanonicalProductId(productRefId: string): Promise<string> {
+    const resolved = await this.publishResolver.resolve(productRefId);
+    if (!resolved) {
+      throw new BadRequestException('Catalog product or listing record not found');
+    }
+    return resolved.snapshot.catalogProductId;
+  }
 
   async validateTargets(input: {
     organizationId: string;
@@ -51,6 +62,10 @@ export class EbayMultiStoreListingService {
     if (!input.targets.length) {
       throw new BadRequestException('At least one target store is required');
     }
+
+    const canonicalProductId = await this.resolveCanonicalProductId(
+      input.catalogProductId,
+    );
 
     const eligible: { ebayAccountId: string; marketplaceId: string }[] = [];
     const skipped: { ebayAccountId: string; marketplaceId: string; errors: string[] }[] = [];
@@ -101,7 +116,7 @@ export class EbayMultiStoreListingService {
     for (const t of eligible) {
       const row = this.targetRepo.create({
         listingJobId: savedJob.id,
-        catalogProductId: input.catalogProductId,
+        catalogProductId: canonicalProductId,
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
         status: 'pending',
@@ -128,9 +143,18 @@ export class EbayMultiStoreListingService {
 
   async getJobTargets(jobId: string, organizationId: string) {
     const job = await this.getJob(jobId, organizationId);
-    return this.targetRepo.find({
+    const rows = await this.targetRepo.find({
       where: { listingJobId: job.id },
       order: { createdAt: 'ASC' },
     });
+    return rows.map((t) => ({
+      id: t.id,
+      catalogProductId: t.catalogProductId,
+      ebayAccountId: t.ebayAccountId,
+      marketplaceId: t.marketplaceId,
+      status: t.status,
+      resultPayload: t.resultPayload,
+      errorPayload: t.errorPayload,
+    }));
   }
 }

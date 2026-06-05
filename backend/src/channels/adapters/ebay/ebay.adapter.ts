@@ -10,6 +10,12 @@ import type {
   ChannelOrder,
   StoreContext,
 } from '../../channel-adapter.interface.js';
+import { mapToEbayConditionEnum } from '../../ebay/ebay-listing-condition.util.js';
+import { toEbayInventoryApiMarketplaceId } from '../../ebay/ebay-marketplace-headers.util.js';
+import {
+  extractEbayErrorParameter,
+  isEbayOfferAlreadyExistsError,
+} from '../../ebay/ebay-api-error.util.js';
 
 @Injectable()
 export class EbayAdapter implements ChannelAdapter {
@@ -148,6 +154,15 @@ export class EbayAdapter implements ChannelAdapter {
     try {
       // Step 1: Create inventory item
       const sku = (listingData['sku'] as string) || `SKU-${Date.now()}`;
+      const condition = mapToEbayConditionEnum(
+        listingData['condition'] as string | undefined,
+        'USED_EXCELLENT',
+      );
+      const marketplaceRaw =
+        (listingData['marketplaceId'] as string) || 'EBAY_MOTORS_US';
+      const marketplaceId = toEbayInventoryApiMarketplaceId(marketplaceRaw);
+      const authHeaders = { Authorization: `Bearer ${tokens.accessToken}` };
+
       await this.http.put(
         `/sell/inventory/v1/inventory_item/${sku}`,
         {
@@ -156,7 +171,7 @@ export class EbayAdapter implements ChannelAdapter {
               quantity: listingData['quantity'] ?? 1,
             },
           },
-          condition: listingData['condition'] ?? 'USED_EXCELLENT',
+          condition,
           product: {
             title: listingData['title'],
             description: listingData['description'],
@@ -164,32 +179,55 @@ export class EbayAdapter implements ChannelAdapter {
             aspects: listingData['aspects'] ?? {},
           },
         },
-        { headers: { Authorization: `Bearer ${tokens.accessToken}` } },
+        { headers: authHeaders },
       );
 
-      // Step 2: Create offer
-      const { data: offerData } = await this.http.post(
-        '/sell/inventory/v1/offer',
-        {
-          sku,
-          marketplaceId: 'EBAY_MOTORS_US',
-          format: 'FIXED_PRICE',
-          listingDescription: listingData['description'],
-          pricingSummary: {
-            price: {
-              value: String(listingData['price']),
-              currency: 'USD',
-            },
+      const offerPayload: Record<string, unknown> = {
+        sku,
+        marketplaceId,
+        format: 'FIXED_PRICE',
+        listingDescription: listingData['description'],
+        pricingSummary: {
+          price: {
+            value: String(listingData['price']),
+            currency: 'USD',
           },
-          categoryId: listingData['categoryId'],
-          merchantLocationKey: listingData['locationKey'] ?? 'default',
         },
-        { headers: { Authorization: `Bearer ${tokens.accessToken}` } },
-      );
+        categoryId: listingData['categoryId'],
+        merchantLocationKey: listingData['locationKey'] ?? 'default',
+        listingDuration: 'GTC',
+      };
+      if (listingData['fulfillmentPolicyId']) {
+        offerPayload.listingPolicies = {
+          fulfillmentPolicyId: listingData['fulfillmentPolicyId'],
+          paymentPolicyId: listingData['paymentPolicyId'],
+          returnPolicyId: listingData['returnPolicyId'],
+        };
+      }
+
+      let offerId: string;
+      try {
+        const { data: offerData } = await this.http.post(
+          '/sell/inventory/v1/offer',
+          offerPayload,
+          { headers: authHeaders },
+        );
+        offerId = offerData.offerId;
+      } catch (offerErr: unknown) {
+        if (!isEbayOfferAlreadyExistsError(offerErr)) throw offerErr;
+        const existingOfferId = extractEbayErrorParameter(offerErr, 'offerId');
+        if (!existingOfferId) throw offerErr;
+        offerId = existingOfferId;
+        await this.http.put(
+          `/sell/inventory/v1/offer/${offerId}`,
+          offerPayload,
+          { headers: authHeaders },
+        );
+      }
 
       // Step 3: Publish offer
       const { data: publishData } = await this.http.post(
-        `/sell/inventory/v1/offer/${offerData.offerId}/publish`,
+        `/sell/inventory/v1/offer/${offerId}/publish`,
         {},
         { headers: { Authorization: `Bearer ${tokens.accessToken}` } },
       );

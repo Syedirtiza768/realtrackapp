@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Camera, Upload, Layers, Play, Trash2, Sparkles, Download, Filter, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -314,7 +314,7 @@ export default function IngestionManager() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Image Ingestion</h2>
-                    <p className="text-slate-500 text-sm">Capture or upload part images, then run AI recognition and product enrichment.</p>
+                    <p className="text-slate-400 dark:text-slate-500 text-sm">Capture or upload part images, then run AI recognition and product enrichment.</p>
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <Badge variant="outline">Provider: {runtimeConfig.provider}</Badge>
                         <Badge
@@ -335,14 +335,14 @@ export default function IngestionManager() {
                         </p>
                     )}
                     {healthCheckedAt && (
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                             Last checked: {new Date(healthCheckedAt).toLocaleTimeString()}
                         </p>
                     )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                     <button
-                        className="flex items-center gap-2 px-3 py-2 border border-slate-700 text-slate-300 hover:bg-slate-800 rounded-lg text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 rounded-lg text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={() => void runHealthCheck()}
                         disabled={healthLoading}
                     >
@@ -359,7 +359,7 @@ export default function IngestionManager() {
             </div>
 
             <Card>
-                <CardHeader className="border-b border-slate-800">
+                <CardHeader className="border-b border-slate-200 dark:border-slate-800">
                     <CardTitle>Ingestion Input</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-6 space-y-6">
@@ -378,7 +378,7 @@ export default function IngestionManager() {
                                 className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
                                     mode === option.value
                                         ? 'bg-blue-600/10 text-blue-400 border-blue-500/40'
-                                        : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                                        : 'bg-slate-900 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:bg-slate-800'
                                 }`}
                             >
                                 {option.label}
@@ -387,7 +387,7 @@ export default function IngestionManager() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
-                        <label className="flex items-center justify-center gap-2 h-28 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 cursor-pointer text-slate-300">
+                        <label className="flex items-center justify-center gap-2 h-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-900 hover:bg-slate-100 dark:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-300">
                             <Camera size={18} />
                             <span className="text-sm font-medium">Capture via Camera</span>
                             <input
@@ -400,7 +400,7 @@ export default function IngestionManager() {
                             />
                         </label>
 
-                        <label className="flex items-center justify-center gap-2 h-28 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 cursor-pointer text-slate-300">
+                        <label className="flex items-center justify-center gap-2 h-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-900 hover:bg-slate-100 dark:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-300">
                             <Upload size={18} />
                             <span className="text-sm font-medium">Upload from Device</span>
                             <input
@@ -414,14 +414,14 @@ export default function IngestionManager() {
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="text-sm text-slate-400">
+                        <div className="text-sm text-slate-400 dark:text-slate-400">
                             {mode === 'single' && 'Single mode expects one image.'}
                             {mode === 'bulk' && 'Bulk mode accepts multiple images across many parts.'}
                             {mode === 'bundle' && 'Bundle mode groups multi-angle images for one part.'}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                             <button
-                                className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-sm"
+                                className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 text-sm"
                                 onClick={() => setStagedImages([])}
                             >
                                 Clear staged
@@ -439,9 +439,9 @@ export default function IngestionManager() {
                     {stagedImages.length > 0 && (
                         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
                             {stagedImages.map((image) => (
-                                <div key={image.id} className="rounded-lg border border-slate-700 overflow-hidden bg-slate-900">
+                                <div key={image.id} className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-900">
                                     <img src={image.uri} alt="Staged part" className="w-full h-24 object-cover" />
-                                    <div className="p-2 text-xs text-slate-400 flex items-center justify-between">
+                                    <div className="p-2 text-xs text-slate-400 dark:text-slate-400 flex items-center justify-between">
                                         <span>{image.source}</span>
                                         <span>{image.angle ?? 'n/a'}</span>
                                     </div>
@@ -453,15 +453,15 @@ export default function IngestionManager() {
             </Card>
 
             <Card>
-                <CardHeader className="border-b border-slate-800 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardHeader className="border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <CardTitle>Ingestion Job Queue</CardTitle>
                     <div className="flex items-center gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 border border-slate-700 rounded-lg px-2 py-1.5 bg-slate-900">
-                            <Filter size={14} className="text-slate-500" />
+                        <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-slate-900">
+                            <Filter size={14} className="text-slate-400 dark:text-slate-500" />
                             <select
                                 value={statusFilter}
                                 onChange={(event) => setStatusFilter(event.target.value as 'all' | IngestionJob['status'])}
-                                className="bg-transparent text-sm text-slate-300 focus:outline-none"
+                                className="bg-transparent text-sm text-slate-500 dark:text-slate-300 focus:outline-none"
                             >
                                 <option value="all">All statuses</option>
                                 <option value="queued">Queued</option>
@@ -472,14 +472,14 @@ export default function IngestionManager() {
                             </select>
                         </div>
                         <button
-                            className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-sm disabled:opacity-50"
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 text-sm disabled:opacity-50"
                             onClick={toggleSelectVisible}
                             disabled={filteredQueue.length === 0}
                         >
                             {allVisibleSelected ? 'Unselect visible' : 'Select visible'}
                         </button>
                         <button
-                            className="p-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                            className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 disabled:opacity-50"
                             onClick={exportQueue}
                             disabled={filteredQueue.length === 0}
                             title="Export current queue view"
@@ -504,26 +504,26 @@ export default function IngestionManager() {
                 </CardHeader>
                 <CardContent className="pt-6">
                     {filteredQueue.length === 0 ? (
-                        <div className="text-sm text-slate-500">No jobs yet. Stage images and create an ingestion job.</div>
+                        <div className="text-sm text-slate-400 dark:text-slate-500">No jobs yet. Stage images and create an ingestion job.</div>
                     ) : (
                         <div className="space-y-3">
                             {filteredQueue.map((entry) => (
-                                <div key={entry.job.id} className="rounded-lg border border-slate-700 p-4 bg-slate-900/60">
+                                <div key={entry.job.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 bg-white/60 dark:bg-slate-900/60">
                                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                                         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                                             <input
                                                 type="checkbox"
-                                                className="rounded border-slate-700 bg-slate-800"
+                                                className="rounded border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
                                                 checked={selectedJobIds.includes(entry.job.id)}
                                                 onChange={() => toggleJobSelection(entry.job.id)}
                                             />
                                             <Badge variant="outline">{entry.job.mode}</Badge>
-                                            <span className="text-sm text-slate-300">{entry.images.length} images</span>
+                                            <span className="text-sm text-slate-500 dark:text-slate-300">{entry.images.length} images</span>
                                             <Badge variant={statusVariant(entry.job.status)}>{entry.job.status}</Badge>
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <button
-                                                className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                                                className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 disabled:opacity-50"
                                                 onClick={() => processJob(entry.job.id)}
                                                 disabled={entry.job.status !== 'queued' || !ingestionService || !!(runtimeConfig.provider === 'api' && !healthLoading && !health?.healthy)}
                                             >
@@ -537,7 +537,7 @@ export default function IngestionManager() {
                                                 Create listing
                                             </button>
                                             <button
-                                                className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:bg-slate-800"
+                                                className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800"
                                                 onClick={() => setQueue((prev) => prev.filter((jobEntry) => jobEntry.job.id !== entry.job.id))}
                                             >
                                                 <Trash2 size={14} />
@@ -547,23 +547,23 @@ export default function IngestionManager() {
 
                                     {entry.recognition && entry.generatedData && (
                                         <div className="mt-4 grid gap-3 md:grid-cols-2">
-                                            <div className="rounded-lg border border-slate-700 p-3">
-                                                <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Recognition</div>
+                                            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                                                <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Recognition</div>
                                                 <div className="space-y-1 text-sm">
-                                                    <div className="text-slate-200">{entry.recognition.partName}</div>
-                                                    <div className="text-slate-400">{entry.recognition.category}</div>
-                                                    <div className="text-slate-400">Brand: {entry.recognition.brand ?? 'Unknown'}</div>
-                                                    <div className="text-slate-400">Confidence: {entry.recognition.confidence}%</div>
+                                                    <div className="text-slate-600 dark:text-slate-200">{entry.recognition.partName}</div>
+                                                    <div className="text-slate-400 dark:text-slate-400">{entry.recognition.category}</div>
+                                                    <div className="text-slate-400 dark:text-slate-400">Brand: {entry.recognition.brand ?? 'Unknown'}</div>
+                                                    <div className="text-slate-400 dark:text-slate-400">Confidence: {entry.recognition.confidence}%</div>
                                                 </div>
                                             </div>
-                                            <div className="rounded-lg border border-slate-700 p-3">
-                                                <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
+                                            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                                                <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2 flex items-center gap-1">
                                                     <Sparkles size={12} /> Generated Listing Seed
                                                 </div>
                                                 <div className="space-y-1 text-sm">
-                                                    <div className="text-slate-200 line-clamp-1">{entry.generatedData.seoTitle}</div>
-                                                    <div className="text-slate-400">Category: {entry.generatedData.suggestedCategory}</div>
-                                                    <div className="text-slate-400">Specifics: {Object.keys(entry.generatedData.itemSpecifics).length}</div>
+                                                    <div className="text-slate-600 dark:text-slate-200 line-clamp-1">{entry.generatedData.seoTitle}</div>
+                                                    <div className="text-slate-400 dark:text-slate-400">Category: {entry.generatedData.suggestedCategory}</div>
+                                                    <div className="text-slate-400 dark:text-slate-400">Specifics: {Object.keys(entry.generatedData.itemSpecifics).length}</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -576,11 +576,11 @@ export default function IngestionManager() {
             </Card>
 
             <Card>
-                <CardHeader className="border-b border-slate-800">
+                <CardHeader className="border-b border-slate-200 dark:border-slate-800">
                     <CardTitle>Bundled Set Guidance</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6 text-sm text-slate-400 flex items-start gap-3">
-                    <Layers size={16} className="mt-0.5 text-slate-500" />
+                <CardContent className="pt-6 text-sm text-slate-400 dark:text-slate-400 flex items-start gap-3">
+                    <Layers size={16} className="mt-0.5 text-slate-400 dark:text-slate-500" />
                     Bundle mode is intended for one part with multiple angles (front, side, connector, label), improving AI condition and part-type confidence before listing generation.
                 </CardContent>
             </Card>

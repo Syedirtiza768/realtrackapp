@@ -1,4 +1,4 @@
-/* ─── ResponsiveContainer ──────────────────────────────────
+﻿/* ─── ResponsiveContainer ──────────────────────────────────
  *  Reusable responsive layout wrapper with consistent
  *  max-width constraints and responsive padding.
  *
@@ -70,11 +70,11 @@ export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100 truncate">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">
           {title}
         </h2>
         {subtitle && (
-          <div className="text-sm text-slate-500 mt-1">{subtitle}</div>
+          <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">{subtitle}</div>
         )}
       </div>
       {children && (

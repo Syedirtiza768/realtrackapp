@@ -11,6 +11,7 @@ import type {
   SearchResponse,
   SuggestResponse,
 } from '../types/search';
+import { fetchWithAuth } from './authApi';
 
 const API = '/api';
 
@@ -26,9 +27,7 @@ function qs(params: Record<string, string | number | undefined | null>): string 
 }
 
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${API}${path}`, { signal });
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API}${path}`, { signal });
 }
 
 /** Stable serialization of a query object for dependency tracking */

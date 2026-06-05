@@ -1,16 +1,18 @@
 /* ─── Login Page ──────────────────────────────────────────
  *  Email + password login with error handling.
- *  Links to registration and password reset.
+ *  Public branding from GET /api/client-settings/branding.
  * ────────────────────────────────────────────────────────── */
 
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { usePublicBranding } from '../../hooks/usePublicBranding';
 
 export default function LoginPage() {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
+  const { branding, loading: brandingLoading } = usePublicBranding();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -21,23 +23,48 @@ export default function LoginPage() {
     try {
       await login(email, password);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Sign in failed');
     }
   };
 
+  const logoSrc = branding.loginLogoUrl ?? branding.logoUrl;
+  const tagline = branding.footerText ?? 'eBay listing management platform';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="w-full max-w-md">
-        {/* Logo / Brand */}
+    <div
+      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100"
+      style={{
+        // subtle brand tint on background
+        backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${branding.primaryColor} 8%, #f8fafc), #f1f5f9)`,
+      }}
+    >
+      <div className="w-full max-w-md px-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">ListingPro</h1>
-          <p className="text-sm text-slate-500 mt-1">eBay listing management platform</p>
+          {logoSrc ? (
+            <img
+              src={logoSrc}
+              alt={branding.appName}
+              className="h-14 mx-auto mb-3 object-contain"
+            />
+          ) : (
+            <div
+              className="inline-flex h-14 w-14 items-center justify-center rounded-xl text-white text-xl font-bold mb-3"
+              style={{ backgroundColor: branding.primaryColor }}
+            >
+              {(branding.shortName ?? branding.clientName).slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          <h1 className="text-3xl font-bold text-slate-800">
+            {brandingLoading ? '…' : branding.appName}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">{tagline}</p>
         </div>
 
-        {/* Login Card */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-          <h2 className="text-xl font-semibold text-slate-800 mb-6">Sign in to your account</h2>
+          <h2 className="text-xl font-semibold text-slate-800 mb-6">
+            Sign in to {branding.clientName}
+          </h2>
 
           {error && (
             <div className="flex items-center gap-2 px-4 py-3 mb-4 rounded-lg bg-red-50 text-red-700 text-sm">
@@ -58,7 +85,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent"
                 autoComplete="email"
               />
             </div>
@@ -70,7 +97,8 @@ export default function LoginPage() {
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs text-blue-600 hover:text-blue-700"
+                  className="text-xs hover:opacity-80"
+                  style={{ color: branding.primaryColor }}
                 >
                   Forgot password?
                 </Link>
@@ -82,7 +110,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent"
                 autoComplete="current-password"
               />
             </div>
@@ -90,7 +118,8 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-colors"
+              style={{ backgroundColor: branding.primaryColor }}
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -102,12 +131,20 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center text-sm text-slate-500">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-blue-600 font-medium hover:text-blue-700">
+            Don&apos;t have an account?{' '}
+            <Link
+              to="/register"
+              className="font-medium hover:opacity-80"
+              style={{ color: branding.primaryColor }}
+            >
               Create one
             </Link>
           </div>
         </div>
+
+        {branding.poweredByVisible && (
+          <p className="text-center text-xs text-slate-400 mt-6">Powered by RealTrack</p>
+        )}
       </div>
     </div>
   );

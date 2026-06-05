@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+﻿import { useState, useCallback, useRef, useEffect } from 'react';
 import { Upload, FileText, X, Eye, ChevronLeft, ChevronRight, Search, Image as ImageIcon, AlertTriangle, Pencil, Download, LayoutGrid, List } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { parseEbayFileExchangeCsv, generateEbayFileExchangeCsv, type EbayListing, type ParseResult } from '../../lib/ebayFileExchangeParser';
 import EditListingPanel from './EditListingPanel';
+import { fetchWithAuth } from '../../lib/authApi';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -700,9 +701,8 @@ export default function EbayPreviewPage() {
 
     // Sync to catalog backend (fire-and-forget, non-blocking)
     if (stableId) {
-      fetch(`/api/catalog-products/by-sku/${encodeURIComponent(stableId)}`, {
+      void fetchWithAuth(`/api/catalog-products/by-sku/${encodeURIComponent(stableId)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: updated.title,
           description: updated.description,
@@ -747,8 +747,8 @@ export default function EbayPreviewPage() {
         <div className="flex items-center gap-3">
           <Eye className="h-6 w-6 text-blue-400" />
           <div>
-            <h1 className="text-xl font-bold text-slate-100">eBay Listing Preview</h1>
-            <p className="text-sm text-slate-400">Upload a pipeline output CSV to preview exactly how listings will appear on eBay</p>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">eBay Listing Preview</h1>
+            <p className="text-sm text-slate-400 dark:text-slate-400">Upload a pipeline output CSV to preview exactly how listings will appear on eBay</p>
           </div>
         </div>
 
@@ -768,7 +768,7 @@ export default function EbayPreviewPage() {
               className={`
                 relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12
                 transition-all cursor-pointer
-                ${dragOver ? 'border-blue-400 bg-blue-400/10' : 'border-slate-600 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800'}
+                ${dragOver ? 'border-blue-400 bg-blue-400/10' : 'border-slate-300 dark:border-slate-600 bg-slate-100/50 dark:bg-slate-800/50 hover:border-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}
               `}
             >
               <input
@@ -781,11 +781,11 @@ export default function EbayPreviewPage() {
                 }}
                 className="hidden"
               />
-              <Eye className="h-12 w-12 text-slate-400 mb-4" />
-              <p className="text-slate-300 text-sm font-medium">
+              <Eye className="h-12 w-12 text-slate-400 dark:text-slate-400 mb-4" />
+              <p className="text-slate-500 dark:text-slate-300 text-sm font-medium">
                 Drag & drop a pipeline output CSV or Excel file, or click to browse
               </p>
-              <p className="text-slate-500 text-xs mt-2">
+              <p className="text-slate-400 dark:text-slate-500 text-xs mt-2">
                 Supports eBay File Exchange format — CSV or XLSX
               </p>
             </div>
@@ -794,8 +794,8 @@ export default function EbayPreviewPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <h3 className="text-sm font-medium text-slate-300 mb-2">How it works</h3>
-            <ol className="text-sm text-slate-400 space-y-1.5 list-decimal list-inside">
+            <h3 className="text-sm font-medium text-slate-500 dark:text-slate-300 mb-2">How it works</h3>
+            <ol className="text-sm text-slate-400 dark:text-slate-400 space-y-1.5 list-decimal list-inside">
               <li>Run your enrichment pipeline to generate the output CSV</li>
               <li>Upload the CSV file here (or drag and drop it)</li>
               <li>Browse each listing with an exact eBay-style preview</li>
@@ -816,8 +816,8 @@ export default function EbayPreviewPage() {
         <div className="flex items-center gap-3">
           <Eye className="h-6 w-6 text-blue-400" />
           <div>
-            <h1 className="text-xl font-bold text-slate-100">eBay Listing Preview</h1>
-            <p className="text-xs text-slate-400">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">eBay Listing Preview</h1>
+            <p className="text-xs text-slate-400 dark:text-slate-400">
               <FileText className="w-3 h-3 inline mr-1" />
               {fileName} · {formatBytes(fileSize)} · {parseResult.listings.length} listing{parseResult.listings.length !== 1 ? 's' : ''}{parseResult.skippedListings.length > 0 ? ` · ${parseResult.skippedListings.length} skipped` : ''} · {parseResult.compatibilityRows} fitment rows
             </p>
@@ -833,7 +833,7 @@ export default function EbayPreviewPage() {
           </button>
           <button
             onClick={handleReset}
-            className="text-sm text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors"
+            className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 flex items-center gap-1.5 transition-colors"
           >
             <X className="w-4 h-4" />
             Clear & Upload New
@@ -873,10 +873,10 @@ export default function EbayPreviewPage() {
                     ? `${parseResult.skippedListings.length} invalid row${parseResult.skippedListings.length !== 1 ? 's' : ''} skipped`
                     : `${parseResult.warnings.length} warning${parseResult.warnings.length !== 1 ? 's' : ''}`}
                 </p>
-                <ul className="text-xs text-slate-400 space-y-0.5">
+                <ul className="text-xs text-slate-400 dark:text-slate-400 space-y-0.5">
                   {parseResult.warnings.map((w, i) => (
                     <li key={i}>
-                      Row {w.rowIndex}: <span className="text-slate-300">{w.customLabel || '(no SKU)'}</span> — {w.issues.join(', ')}
+                      Row {w.rowIndex}: <span className="text-slate-500 dark:text-slate-300">{w.customLabel || '(no SKU)'}</span> — {w.issues.join(', ')}
                     </li>
                   ))}
                 </ul>
@@ -892,18 +892,18 @@ export default function EbayPreviewPage() {
           <div className="flex items-center gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 dark:text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search listings by title, SKU, or brand..."
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(0); }}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-9 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-9 py-2 text-sm text-slate-600 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => { setSearchQuery(''); setSelectedIndex(0); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
                   aria-label="Clear search"
                 >
                   <X className="w-4 h-4" />
@@ -915,19 +915,19 @@ export default function EbayPreviewPage() {
             <div className="flex items-center border border-slate-700 rounded-lg overflow-hidden">
               <button
                 onClick={() => setViewMode('single')}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${viewMode === 'single' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`px-3 py-2 text-xs font-medium transition-colors ${viewMode === 'single' ? 'bg-blue-600 text-white' : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'}`}
               >
                 Single
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'}`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" /> Grid
               </button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'}`}
               >
                 <List className="w-3.5 h-3.5" /> List
               </button>
@@ -941,7 +941,7 @@ export default function EbayPreviewPage() {
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                     editingIndex !== null
                       ? 'bg-blue-600 text-white border-blue-600'
-                      : 'border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                      : 'border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:border-slate-500'
                   }`}
                 >
                   <Pencil className="w-3.5 h-3.5" />
@@ -950,17 +950,17 @@ export default function EbayPreviewPage() {
                 <button
                   onClick={() => { const newIdx = Math.max(0, selectedIndex - 1); setSelectedIndex(newIdx); if (editingIndex !== null) setEditingIndex(newIdx); }}
                   disabled={selectedIndex === 0}
-                  className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm text-slate-300 min-w-[80px] text-center">
+                <span className="text-sm text-slate-500 dark:text-slate-300 min-w-[80px] text-center">
                   {filteredListings.length > 0 ? `${selectedIndex + 1} / ${filteredListings.length}` : '0 / 0'}
                 </span>
                 <button
                   onClick={() => { const newIdx = Math.min(filteredListings.length - 1, selectedIndex + 1); setSelectedIndex(newIdx); if (editingIndex !== null) setEditingIndex(newIdx); }}
                   disabled={selectedIndex >= filteredListings.length - 1}
-                  className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -993,23 +993,23 @@ export default function EbayPreviewPage() {
             <CardContent className="py-16 text-center space-y-2">
               {searchQuery ? (
                 <>
-                  <p className="text-slate-400">No listings match <span className="text-slate-200">&ldquo;{searchQuery}&rdquo;</span>.</p>
+                  <p className="text-slate-400 dark:text-slate-400">No listings match <span className="text-slate-600 dark:text-slate-200">&ldquo;{searchQuery}&rdquo;</span>.</p>
                   <button onClick={() => { setSearchQuery(''); setSelectedIndex(0); }} className="text-sm text-blue-400 hover:underline">Clear search</button>
                 </>
               ) : (
                 <>
-                  <p className="text-slate-400">
+                  <p className="text-slate-400 dark:text-slate-400">
                     {parseResult && parseResult.skippedListings.length > 0
                       ? `All ${parseResult.skippedListings.length} rows were skipped — check the warnings above.`
                       : 'No listings were found in this file.'}
                   </p>
                   {parseResult && (
-                    <p className="text-xs text-slate-500 mt-3">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">
                       Rows parsed: {parseResult.totalRows} · Compatibility: {parseResult.compatibilityRows} · Skipped: {parseResult.skippedListings.length}
                       {parseResult.errors.length > 0 && <span className="text-red-400"> · Errors: {parseResult.errors.join(', ')}</span>}
                     </p>
                   )}
-                  <p className="text-xs text-slate-600 mt-1">Open browser DevTools (F12 → Console) for detailed parse diagnostics</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-600 mt-1">Open browser DevTools (F12 → Console) for detailed parse diagnostics</p>
                 </>
               )}
             </CardContent>
@@ -1019,7 +1019,7 @@ export default function EbayPreviewPage() {
         /* ── Compact Grid view ── */
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {filteredListings.length === 0 && (
-            <div className="col-span-full text-center py-16 text-slate-400">
+            <div className="col-span-full text-center py-16 text-slate-400 dark:text-slate-400">
               {searchQuery ? (
                 <span>No listings match &ldquo;{searchQuery}&rdquo;. <button onClick={() => { setSearchQuery(''); setSelectedIndex(0); }} className="text-blue-400 hover:underline">Clear search</button></span>
               ) : parseResult && parseResult.skippedListings.length > 0
@@ -1059,7 +1059,7 @@ export default function EbayPreviewPage() {
         /* ── List view ── */
         <div className="rounded-xl border border-slate-700 overflow-hidden">
           {/* Header */}
-          <div className="grid bg-slate-800 border-b border-slate-700 px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider" style={{ gridTemplateColumns: '48px 1fr 130px 90px 110px 110px 70px' }}>
+          <div className="grid bg-slate-800 border-b border-slate-700 px-3 py-2 text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider" style={{ gridTemplateColumns: '48px 1fr 130px 90px 110px 110px 70px' }}>
             <div />
             <div className="pl-2">Title</div>
             <div>SKU</div>
@@ -1069,7 +1069,7 @@ export default function EbayPreviewPage() {
             <div>Fitments</div>
           </div>
           {filteredListings.length === 0 && (
-            <div className="text-center py-16 text-slate-400">
+            <div className="text-center py-16 text-slate-400 dark:text-slate-400">
               {searchQuery ? (
                 <span>No listings match &ldquo;{searchQuery}&rdquo;. <button onClick={() => { setSearchQuery(''); setSelectedIndex(0); }} className="text-blue-400 hover:underline">Clear search</button></span>
               ) : parseResult && parseResult.skippedListings.length > 0
@@ -1081,7 +1081,7 @@ export default function EbayPreviewPage() {
             <div
               key={i}
               onClick={() => { setSelectedIndex(i); setViewMode('single'); }}
-              className="grid items-center px-3 py-1.5 border-b border-slate-700/60 cursor-pointer hover:bg-slate-700/40 transition-colors last:border-b-0"
+              className="grid items-center px-3 py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:bg-slate-200/40 dark:bg-slate-700/40 transition-colors last:border-b-0"
               style={{ gridTemplateColumns: '48px 1fr 130px 90px 110px 110px 70px' }}
             >
               {/* Thumb */}
@@ -1089,25 +1089,25 @@ export default function EbayPreviewPage() {
                 {listing.imageUrls[0] ? (
                   <img src={listing.imageUrls[0]} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <ImageIcon className="w-4 h-4 text-slate-500" />
+                  <ImageIcon className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                 )}
               </div>
               {/* Title */}
               <div className="pl-2 min-w-0">
-                <p className="text-sm text-slate-200 truncate">{listing.title}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-200 truncate">{listing.title}</p>
               </div>
               {/* SKU */}
-              <div className="text-xs text-slate-400 truncate pr-2">{listing.customLabel || '—'}</div>
+              <div className="text-xs text-slate-400 dark:text-slate-400 truncate pr-2">{listing.customLabel || '—'}</div>
               {/* Price */}
-              <div className="text-sm font-semibold text-slate-100">
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 US ${parseFloat(listing.price || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               {/* Condition */}
-              <div className="text-xs text-slate-400 truncate">{listing.conditionLabel || 'Used'}</div>
+              <div className="text-xs text-slate-400 dark:text-slate-400 truncate">{listing.conditionLabel || 'Used'}</div>
               {/* Brand */}
-              <div className="text-xs text-slate-400 truncate">{listing.brand || '—'}</div>
+              <div className="text-xs text-slate-400 dark:text-slate-400 truncate">{listing.brand || '—'}</div>
               {/* Fitments */}
-              <div className="text-xs text-slate-400">{listing.compatibility.length > 0 ? listing.compatibility.length : '—'}</div>
+              <div className="text-xs text-slate-400 dark:text-slate-400">{listing.compatibility.length > 0 ? listing.compatibility.length : '—'}</div>
             </div>
           ))}
         </div>

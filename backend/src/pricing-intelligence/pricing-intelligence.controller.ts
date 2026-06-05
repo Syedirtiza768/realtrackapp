@@ -25,8 +25,11 @@ class CollectPricesDto {
   productId?: string;
 }
 
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+
 @ApiTags('pricing-intelligence')
 @Controller('pricing')
+@RequirePermissions('pricing.view')
 export class PricingIntelligenceController {
   constructor(
     private readonly priceMonitor: PriceMonitorService,
@@ -68,6 +71,7 @@ export class PricingIntelligenceController {
   }
 
   @Post('reprice')
+  @RequirePermissions('pricing.manage')
   @ApiOperation({ summary: 'Auto-reprice a product across eBay stores' })
   reprice(@Body() dto: RepriceDto) {
     return this.autoReprice.repriceProduct(dto.productId, {
@@ -79,6 +83,7 @@ export class PricingIntelligenceController {
   /* ─── Data Collection ─── */
 
   @Post('collect')
+  @RequirePermissions('pricing.manage')
   @ApiOperation({ summary: 'Manually trigger competitor price collection' })
   collectPrices(@Body() dto: CollectPricesDto) {
     if (dto.productId) {

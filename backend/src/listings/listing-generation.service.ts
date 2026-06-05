@@ -10,6 +10,9 @@ import { EbayPublishService } from '../channels/ebay/ebay-publish.service.js';
 import type { PublishRequest, PublishResult } from '../channels/ebay/ebay-publish.service.js';
 import type { ListingGenerationResult } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import type { Store } from '../channels/entities/store.entity.js';
+import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
+import { sanitizeEbayImageUrls } from '../channels/ebay/ebay-listing-images.util.js';
+import { mapToEbayConditionEnum } from '../channels/ebay/ebay-listing-condition.util.js';
 
 /* ── Types ── */
 
@@ -150,7 +153,7 @@ export class ListingGenerationService {
       // Compute per-store overrides from export rules
       const rulePrice = await this.findBestRulePrice(product, storeId);
       const finalPrice = rulePrice ?? generation.pricePositioning.suggestedPrice ?? Number(product.retailPrice) ?? 0;
-      const finalTitle = generation.title.substring(0, 80); // eBay max
+      const finalTitle = truncateEbayTitle(generation.title);
 
       if (offer) {
         // Update existing draft
@@ -202,18 +205,19 @@ export class ListingGenerationService {
     offers: EbayOffer[],
     generation: ListingGenerationResult,
   ): Promise<PublishResult[]> {
+    const images = sanitizeEbayImageUrls(product.imageUrls);
     const publishReq: PublishRequest = {
       listingId: product.id,
       storeIds: offers.map((o) => o.storeId),
       sku: product.sku,
-      title: generation.title.substring(0, 80),
+      title: truncateEbayTitle(generation.title),
       description: generation.description,
       categoryId: product.ebayCategoryId ?? '',
-      condition: product.condition as any,
+      condition: mapToEbayConditionEnum(product.condition),
       conditionDescription: product.conditionDescription ?? undefined,
       price: Number(offers[0].price) || 0,
       quantity: product.totalQuantity,
-      imageUrls: product.imageUrls,
+      imageUrls: images.imageUrls,
       aspects: product.itemSpecifics,
     };
 

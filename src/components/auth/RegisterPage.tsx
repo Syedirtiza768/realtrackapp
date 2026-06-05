@@ -7,9 +7,11 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, UserPlus, AlertCircle } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { usePublicBranding } from '../../hooks/usePublicBranding';
 
 export default function RegisterPage() {
   const { register, loading } = useAuth();
+  const { branding } = usePublicBranding();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -43,8 +45,8 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">ListingPro</h1>
-          <p className="text-sm text-slate-500 mt-1">Create your account</p>
+          <h1 className="text-3xl font-bold text-slate-800">{branding.appName}</h1>
+          <p className="text-sm text-slate-500 mt-1">Create your {branding.clientName} account</p>
         </div>
 
         {/* Register Card */}

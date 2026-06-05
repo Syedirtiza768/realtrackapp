@@ -6,10 +6,21 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: dark;
 
-  /* Responsive base font via clamp: 14px → 16px */
+  --brand-primary: #2563eb;
+  --brand-secondary: #1e293b;
+  --brand-accent: #0ea5e9;
+
+  /* Responsive base font via clamp: 14px -> 16px */
   font-size: clamp(0.875rem, 0.8rem + 0.25vw, 1rem);
+}
+
+html {
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 body {

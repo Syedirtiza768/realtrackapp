@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Store } from '../channels/entities/store.entity.js';
+import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayFulfillmentApiService } from '../channels/ebay/ebay-fulfillment-api.service.js';
 import { OrdersService } from './orders.service.js';
 import { Order } from './entities/order.entity.js';
@@ -25,6 +26,8 @@ export class EbayOrderImportService {
   constructor(
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
+    @InjectRepository(ConnectedEbayAccount)
+    private readonly connectedAccountRepo: Repository<ConnectedEbayAccount>,
     @InjectRepository(Order)
     private readonly orderRepo: Repository<Order>,
     private readonly fulfillmentApi: EbayFulfillmentApiService,
@@ -55,6 +58,27 @@ export class EbayOrderImportService {
     }
 
     return results;
+  }
+
+  /**
+   * Import orders for an org-scoped connected eBay account (uses bridged primary_store_id).
+   */
+  async importFromConnectedAccount(
+    ebayAccountId: string,
+    organizationId: string,
+  ): Promise<{ storeId: string; imported: number; errors: number }> {
+    const account = await this.connectedAccountRepo.findOne({
+      where: { id: ebayAccountId, organizationId },
+    });
+    if (!account) {
+      throw new NotFoundException('eBay account not found for this organization');
+    }
+    if (account.connectionStatus !== 'active') {
+      throw new NotFoundException(
+        `eBay account is not active (${account.connectionStatus})`,
+      );
+    }
+    return this.importFromStore(account.primaryStoreId);
   }
 
   /**

@@ -225,7 +225,7 @@ export default function SearchableSelect({
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       {label && (
-        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
           {label}
         </label>
       )}
@@ -238,12 +238,12 @@ export default function SearchableSelect({
         className={`
           flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors
           ${disabled
-            ? 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
+            ? 'bg-slate-100 dark:bg-slate-900/50 border-slate-300 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
             : error
-              ? 'bg-slate-900 border-red-500/50 text-slate-200 hover:border-red-400'
+              ? 'bg-white dark:bg-slate-900 border-red-500/50 text-slate-700 dark:text-slate-200 hover:border-red-400'
               : isOpen
-                ? 'bg-slate-900 border-blue-500 ring-1 ring-blue-500/20 text-slate-200'
-                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
+                ? 'bg-white dark:bg-slate-900 border-blue-500 ring-1 ring-blue-500/20 text-slate-700 dark:text-slate-200'
+                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500'
           }
         `}
         onClick={() => {
@@ -257,30 +257,30 @@ export default function SearchableSelect({
       >
         {isOpen ? (
           <>
-            <Search size={14} className="text-slate-500 shrink-0" />
+            <Search size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-slate-200 placeholder:text-slate-600 min-w-0"
+              className="flex-1 bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 min-w-0"
               placeholder={placeholder}
               autoComplete="off"
               onClick={(e) => e.stopPropagation()}
             />
           </>
         ) : (
-          <span className={`flex-1 truncate ${!value ? 'text-slate-500' : ''}`}>
+          <span className={`flex-1 truncate ${!value ? 'text-slate-400 dark:text-slate-500' : ''}`}>
             {displayValue || placeholder}
           </span>
         )}
 
-        {loading && <Loader2 size={14} className="text-blue-400 animate-spin shrink-0" />}
+        {loading && <Loader2 size={14} className="text-blue-500 dark:text-blue-400 animate-spin shrink-0" />}
         {value && !disabled && !isOpen && (
           <button
             type="button"
             onClick={handleClear}
-            className="p-0.5 text-slate-500 hover:text-slate-300 shrink-0"
+            className="p-0.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 shrink-0"
             aria-label="Clear selection"
           >
             <X size={14} />
@@ -288,18 +288,18 @@ export default function SearchableSelect({
         )}
         <ChevronDown
           size={14}
-          className={`text-slate-500 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`text-slate-400 dark:text-slate-500 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </div>
 
       {/* ── Error ── */}
       {error && (
-        <p className="mt-1 text-xs text-red-400">{error}</p>
+        <p className="mt-1 text-xs text-red-500 dark:text-red-400">{error}</p>
       )}
 
       {/* ── Dropdown ── */}
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
           <div
             ref={listRef}
             role="listbox"
@@ -307,7 +307,7 @@ export default function SearchableSelect({
             onScroll={handleScroll}
           >
             {options.length === 0 && !loading && (
-              <div className="px-3 py-6 text-center text-slate-500 text-sm">
+              <div className="px-3 py-6 text-center text-slate-400 dark:text-slate-500 text-sm">
                 {query ? 'No results found' : 'Type to search...'}
               </div>
             )}
@@ -320,10 +320,10 @@ export default function SearchableSelect({
                 className={`
                   px-3 py-2 text-sm cursor-pointer transition-colors
                   ${idx === highlightedIndex
-                    ? 'bg-blue-600/20 text-blue-300'
+                    ? 'bg-blue-100 dark:bg-blue-600/20 text-blue-600 dark:text-blue-300'
                     : value?.value === option.value
-                      ? 'bg-slate-800 text-blue-400'
-                      : 'text-slate-300 hover:bg-slate-800'
+                      ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }
                 `}
                 onClick={() => handleSelect(option)}
@@ -334,7 +334,7 @@ export default function SearchableSelect({
             ))}
 
             {loading && (
-              <div className="px-3 py-3 flex items-center justify-center gap-2 text-slate-500 text-sm">
+              <div className="px-3 py-3 flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 text-sm">
                 <Loader2 size={14} className="animate-spin" />
                 Loading...
               </div>

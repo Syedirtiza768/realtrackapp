@@ -11,9 +11,11 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReviewQueueService } from '../services/review-queue.service';
 import { ReviewTaskQueryDto, ResolveReviewTaskDto } from '../dto';
+import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Motors Review Queue')
 @Controller('motors-intelligence/review')
+@RequirePermissions('motors.review')
 export class ReviewQueueController {
   constructor(
     private readonly reviewService: ReviewQueueService,

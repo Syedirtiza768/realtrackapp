@@ -1,11 +1,11 @@
-/* ─── SKU Detail Page ───────────────────────────────────────
+﻿/* ─── SKU Detail Page ───────────────────────────────────────
  *  Full-featured SKU detail view with tabbed interface:
  *  Overview | Channels | Inventory | AI Enhancements | Activity
  * ────────────────────────────────────────────────────────── */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { sanitizeHtml } from '../../lib/sanitize';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Package,
@@ -22,6 +22,8 @@ import {
 import ChannelStorePanel from './ChannelStorePanel';
 import InventoryPanel from './InventoryPanel';
 import AiEnhancementsPanel from './AiEnhancementsPanel';
+import { fetchWithAuth } from '../../lib/authApi';
+import { getAllImageUrls } from '../../lib/listingsApi';
 
 interface ListingDetail {
   id: string;
@@ -67,9 +69,7 @@ export default function SkuDetailPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/listings/${id}`);
-      if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`);
-      const data = await res.json();
+      const data = await fetchWithAuth<ListingDetail>(`/api/listings/${id}`);
       setListing(data);
       setError(null);
     } catch (err: any) {
@@ -101,7 +101,8 @@ export default function SkuDetailPage() {
     );
   }
 
-  const imageUrl = listing.itemPhotoUrl || listing.pictureUrl;
+  const imageUrls = getAllImageUrls(listing.itemPhotoUrl ?? listing.pictureUrl);
+  const imageUrl = imageUrls[0] ?? null;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -111,7 +112,7 @@ export default function SkuDetailPage() {
           onClick={() => navigate('/catalog')}
           className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
         >
-          <ArrowLeft className="w-5 h-5 text-slate-600" />
+          <ArrowLeft className="w-5 h-5 text-slate-500 dark:text-slate-600" />
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -124,12 +125,18 @@ export default function SkuDetailPage() {
             {listing.title}
           </h1>
         </div>
+        <Link
+          to={`/catalog/products/${listing.id}/publish/ebay`}
+          className="px-3 py-1.5 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+        >
+          Publish to eBay
+        </Link>
         <button
           onClick={fetchListing}
           className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
           title="Refresh"
         >
-          <RefreshCw className="w-4 h-4 text-slate-500" />
+          <RefreshCw className="w-4 h-4 text-slate-400 dark:text-slate-500" />
         </button>
       </div>
 
@@ -153,7 +160,7 @@ export default function SkuDetailPage() {
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === tabId
                   ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-700 hover:border-slate-300'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -165,7 +172,7 @@ export default function SkuDetailPage() {
 
       {/* Tab Content */}
       <div className="pb-8">
-        {activeTab === 'overview' && <OverviewTab listing={listing} imageUrl={imageUrl} />}
+        {activeTab === 'overview' && <OverviewTab listing={listing} imageUrl={imageUrl} imageUrls={imageUrls} />}
         {activeTab === 'channels' && <ChannelStorePanel listingId={listing.id} />}
         {activeTab === 'inventory' && <InventoryPanel listingId={listing.id} />}
         {activeTab === 'ai' && <AiEnhancementsPanel listingId={listing.id} />}
@@ -180,7 +187,7 @@ export default function SkuDetailPage() {
 function QuickStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-3">
-      <p className="text-xs text-slate-500 mb-0.5">{label}</p>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
       <p className="text-sm font-semibold text-slate-800 truncate" title={value}>{value}</p>
     </div>
   );
@@ -189,11 +196,11 @@ function QuickStat({ label, value }: { label: string; value: string }) {
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { bg: string; text: string }> = {
     published: { bg: 'bg-green-100', text: 'text-green-700' },
-    draft: { bg: 'bg-slate-100', text: 'text-slate-600' },
+    draft: { bg: 'bg-slate-100', text: 'text-slate-500 dark:text-slate-600' },
     ready: { bg: 'bg-blue-100', text: 'text-blue-700' },
     sold: { bg: 'bg-amber-100', text: 'text-amber-700' },
     delisted: { bg: 'bg-red-100', text: 'text-red-700' },
-    archived: { bg: 'bg-slate-200', text: 'text-slate-500' },
+    archived: { bg: 'bg-slate-200', text: 'text-slate-400 dark:text-slate-500' },
   };
   const c = config[status] ?? config.draft;
 
@@ -206,22 +213,44 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Overview Tab ────────────────────────────────────────
 
-function OverviewTab({ listing, imageUrl }: { listing: ListingDetail; imageUrl: string | null }) {
+function OverviewTab({
+  listing,
+  imageUrl,
+  imageUrls,
+}: {
+  listing: ListingDetail;
+  imageUrl: string | null;
+  imageUrls: string[];
+}) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Image + Basic Info */}
       <div className="lg:col-span-1">
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
           {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={listing.title}
-              className="w-full h-64 object-contain bg-slate-50"
-              onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" x="25" font-size="40">📦</text></svg>'; }}
-            />
+            <>
+              <img
+                src={imageUrl}
+                alt={listing.title}
+                className="w-full h-64 object-contain bg-slate-50"
+                onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" x="25" font-size="40">📦</text></svg>'; }}
+              />
+              {imageUrls.length > 1 && (
+                <div className="flex gap-2 p-3 border-t border-slate-100 overflow-x-auto">
+                  {imageUrls.slice(0, 8).map((url) => (
+                    <img
+                      key={url}
+                      src={url}
+                      alt=""
+                      className="w-14 h-14 object-cover rounded border border-slate-200 flex-shrink-0"
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             <div className="w-full h-64 bg-slate-50 flex items-center justify-center">
-              <Package className="w-16 h-16 text-slate-300" />
+              <Package className="w-16 h-16 text-slate-500 dark:text-slate-300" />
             </div>
           )}
           <div className="p-4 border-t border-slate-100">
@@ -258,7 +287,7 @@ function OverviewTab({ listing, imageUrl }: { listing: ListingDetail; imageUrl: 
         {listing.cFeatures && (
           <div className="bg-white rounded-lg border border-slate-200 p-5">
             <h3 className="font-semibold text-slate-800 mb-3">Features</h3>
-            <p className="text-sm text-slate-600 whitespace-pre-wrap">{listing.cFeatures}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-600 whitespace-pre-wrap">{listing.cFeatures}</p>
           </div>
         )}
 
@@ -266,7 +295,7 @@ function OverviewTab({ listing, imageUrl }: { listing: ListingDetail; imageUrl: 
           <div className="bg-white rounded-lg border border-slate-200 p-5">
             <h3 className="font-semibold text-slate-800 mb-3">Description</h3>
             <div
-              className="text-sm text-slate-600 prose prose-sm max-w-none"
+              className="text-sm text-slate-500 dark:text-slate-600 prose prose-sm max-w-none"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(listing.description) }}
             />
           </div>
@@ -293,7 +322,7 @@ function InfoRow({ label, value, copyable, link }: {
   const display = value ?? '—';
   return (
     <div className="flex justify-between items-center">
-      <dt className="text-slate-500">{label}</dt>
+      <dt className="text-slate-400 dark:text-slate-500">{label}</dt>
       <dd className="text-slate-800 font-medium flex items-center gap-1">
         {link ? (
           <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
@@ -308,7 +337,7 @@ function InfoRow({ label, value, copyable, link }: {
             className="p-0.5 hover:bg-slate-100 rounded"
             title="Copy"
           >
-            <Copy className="w-3 h-3 text-slate-400" />
+            <Copy className="w-3 h-3 text-slate-400 dark:text-slate-400" />
           </button>
         )}
       </dd>
@@ -325,11 +354,10 @@ function ActivityTab({ listingId }: { listingId: string }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/audit-logs?entityId=${listingId}&limit=50`);
-        if (res.ok) {
-          const data = await res.json();
-          setLogs(data.items ?? []);
-        }
+        const data = await fetchWithAuth<{ items?: unknown[] }>(
+          `/api/audit-logs?entityId=${listingId}&limit=50`,
+        );
+        setLogs(data.items ?? []);
       } catch { /* ignore */ }
       setLoading(false);
     })();
@@ -341,8 +369,8 @@ function ActivityTab({ listingId }: { listingId: string }) {
 
   if (logs.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500">
-        <History className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+      <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+        <History className="w-12 h-12 mx-auto mb-3 text-slate-500 dark:text-slate-300" />
         <p className="font-medium">No activity yet</p>
         <p className="text-sm mt-1">Activity will appear as you publish, update, and manage this listing.</p>
       </div>
@@ -354,16 +382,16 @@ function ActivityTab({ listingId }: { listingId: string }) {
       {logs.map((log: any) => (
         <div key={log.id} className="px-4 py-3 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
-            <History className="w-4 h-4 text-slate-500" />
+            <History className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-800">{log.action}</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400 dark:text-slate-500">
               {log.entityType} · {new Date(log.createdAt).toLocaleString()}
             </p>
           </div>
           {log.actorType && (
-            <span className="text-xs text-slate-400">{log.actorType}</span>
+            <span className="text-xs text-slate-400 dark:text-slate-400">{log.actorType}</span>
           )}
         </div>
       ))}

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OrderShipmentPanel.tsx — Phase 4
  *
  * Bulk operations panel for the Orders page:
@@ -162,7 +162,7 @@ export default function OrderShipmentPanel({
             <select
               value={carrier}
               onChange={(e) => setCarrier(e.target.value)}
-              className="rounded-md bg-slate-800 border border-slate-700 text-sm px-2 py-1.5"
+              className="rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm px-2 py-1.5"
             >
               <option value="USPS">USPS</option>
               <option value="UPS">UPS</option>
@@ -176,7 +176,7 @@ export default function OrderShipmentPanel({
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {selectedOrderIds.map((id) => (
                 <div key={id} className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 font-mono w-24 truncate">{id.slice(0, 8)}…</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-400 font-mono w-24 truncate">{id.slice(0, 8)}…</span>
                   <input
                     type="text"
                     placeholder="Tracking number"
@@ -184,7 +184,7 @@ export default function OrderShipmentPanel({
                     onChange={(e) =>
                       setTrackingEntries((prev) => ({ ...prev, [id]: e.target.value }))
                     }
-                    className="flex-1 rounded-md bg-slate-800 border border-slate-700 text-sm px-2 py-1"
+                    className="flex-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm px-2 py-1"
                   />
                 </div>
               ))}
@@ -215,10 +215,10 @@ export default function OrderShipmentPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-slate-400">
-            Upload a CSV with columns: <code className="text-slate-300">orderId</code>,{' '}
-            <code className="text-slate-300">trackingNumber</code>,{' '}
-            <code className="text-slate-300">carrier</code>
+          <p className="text-xs text-slate-400 dark:text-slate-400">
+            Upload a CSV with columns: <code className="text-slate-500 dark:text-slate-300">orderId</code>,{' '}
+            <code className="text-slate-500 dark:text-slate-300">trackingNumber</code>,{' '}
+            <code className="text-slate-500 dark:text-slate-300">carrier</code>
           </p>
 
           <input
@@ -232,7 +232,7 @@ export default function OrderShipmentPanel({
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isAnyPending}
-            className="w-full px-3 py-2 text-sm font-medium rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full px-3 py-2 text-sm font-medium rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {csvMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -243,7 +243,7 @@ export default function OrderShipmentPanel({
           </button>
 
           {csvResult && (
-            <div className="rounded-md bg-slate-800 p-3 text-xs space-y-1">
+            <div className="rounded-md bg-slate-100 dark:bg-slate-800 p-3 text-xs space-y-1">
               <p>
                 <CheckCircle2 className="inline h-3 w-3 text-emerald-400 mr-1" />
                 {csvResult.succeeded}/{csvResult.processed} shipped
@@ -282,7 +282,7 @@ export default function OrderShipmentPanel({
             placeholder="Cancellation reason (optional)"
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
-            className="w-full rounded-md bg-slate-800 border border-slate-700 text-sm px-2 py-1.5"
+            className="w-full rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm px-2 py-1.5"
           />
           <button
             onClick={handleBulkCancel}
@@ -308,7 +308,7 @@ export default function OrderShipmentPanel({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-slate-400 mb-3">
+          <p className="text-xs text-slate-400 dark:text-slate-400 mb-3">
             Manually trigger an eBay order import for all connected stores.
             This normally runs every 15 minutes automatically.
           </p>
@@ -349,14 +349,14 @@ export default function OrderShipmentPanel({
                   ) : (
                     <AlertTriangle className="h-3 w-3 text-red-400 flex-shrink-0" />
                   )}
-                  <span className="font-mono text-slate-400">{r.orderId.slice(0, 8)}…</span>
+                  <span className="font-mono text-slate-400 dark:text-slate-400">{r.orderId.slice(0, 8)}…</span>
                   {r.error && <span className="text-red-400">{r.error}</span>}
                 </div>
               ))}
             </div>
             <button
               onClick={() => setBulkResults(null)}
-              className="mt-2 text-xs text-slate-400 hover:text-slate-300"
+              className="mt-2 text-xs text-slate-400 dark:text-slate-400 hover:text-slate-500 dark:text-slate-300"
             >
               Dismiss
             </button>

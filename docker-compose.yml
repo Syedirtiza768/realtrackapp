@@ -20,6 +20,8 @@ services:
       - "${DB_PORT_EXTERNAL:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./listingpro.dump:/seed/listingpro.dump:ro
+      - ./docker/postgres/init/01-restore-listingpro.sh:/docker-entrypoint-initdb.d/01-restore-listingpro.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-listingpro}"]
       interval: 5s
@@ -67,8 +69,8 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME: ${DB_NAME:-listingpro}
-      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
-      DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-false}
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
+      DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-true}
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
       DB_POOL_MIN: ${DB_POOL_MIN:-5}
       DB_LOGGING: ${DB_LOGGING:-false}
@@ -90,6 +92,14 @@ services:
       EBAY_DEV_ID: ${EBAY_DEV_ID:-}
       EBAY_ENVIRONMENT: ${EBAY_ENVIRONMENT:-SANDBOX}
       EBAY_REDIRECT_URI: ${EBAY_REDIRECT_URI:-}
+      # SellerPundit (optional eBay connection source — set in project root .env)
+      SELLERPUNDIT_API_BASE_URL: ${SELLERPUNDIT_API_BASE_URL:-https://authentication.sellerpundit.com/api/v1}
+      SELLERPUNDIT_MARKETPLACES_URL: ${SELLERPUNDIT_MARKETPLACES_URL:-https://marketplaces.sellerpundit.com}
+      SELLERPUNDIT_EMAIL: ${SELLERPUNDIT_EMAIL:-}
+      SELLERPUNDIT_PASSWORD: ${SELLERPUNDIT_PASSWORD:-}
+      SELLERPUNDIT_ENVIRONMENT: ${SELLERPUNDIT_ENVIRONMENT:-production}
+      SELLERPUNDIT_DEFAULT_MARKETPLACE_ID: ${SELLERPUNDIT_DEFAULT_MARKETPLACE_ID:-EBAY_MOTORS_US}
+      SELLERPUNDIT_POLICY_SYNC_MAX_AGE_HOURS: ${SELLERPUNDIT_POLICY_SYNC_MAX_AGE_HOURS:-24}
       # S3 / Storage (s3://solarrisebackupbucket/mhn/ — set bucket + prefix in .env)
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-${S3_BUCKET:-}}
       AWS_S3_PREFIX: ${AWS_S3_PREFIX:-${S3_PREFIX:-}}
@@ -113,8 +123,8 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4191/api/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 6
-      start_period: 30s
+      retries: 12
+      start_period: 120s
 
   # ── Vite Frontend → Nginx ──────────────────────────────────
   frontend:

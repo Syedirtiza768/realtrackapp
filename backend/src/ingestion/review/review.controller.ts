@@ -9,9 +9,11 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReviewService } from './review.service.js';
 import { ReviewDecisionDto } from '../dto/review-decision.dto.js';
+import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Ingestion Review')
 @Controller('ingestion/review')
+@RequirePermissions('pipeline.review')
 export class ReviewController {
   constructor(private readonly reviewService: ReviewService) {}
 

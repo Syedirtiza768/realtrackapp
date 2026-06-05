@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+﻿import { useState, useCallback, useMemo } from 'react';
 import {
   Package,
   Upload,
@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
+import { fetchWithAuth } from '../../lib/authApi';
+import { publishListingIdsToEbay } from '../../lib/publishApi';
+import { getStoresByChannel } from '../../lib/multiStoreApi';
 
 /* ── Types ── */
 
@@ -42,12 +45,7 @@ interface InventoryItem {
 const API_BASE = '/api';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init);
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`API ${res.status}: ${body || res.statusText}`);
-  }
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API_BASE}${path}`, init);
 }
 
 async function fetchInventory(
@@ -63,16 +61,6 @@ async function fetchInventory(
   if (filters.search) params.set('search', filters.search);
   if (filters.missingImages) params.set('missingImages', 'true');
   return apiFetch(`/inventory/listings?${params.toString()}`);
-}
-
-async function publishToEbay(
-  listingIds: string[],
-): Promise<{ results: Array<{ id: string; success: boolean; error?: string }> }> {
-  return apiFetch('/channels/ebay/publish-batch', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ listingIds }),
-  });
 }
 
 /* ── Status Badge ── */
@@ -131,20 +119,33 @@ export default function InventoryManager() {
     setPublishing(true);
     setPublishResults(null);
     try {
-      const result = await publishToEbay(Array.from(selected));
-      setPublishResults(result.results);
-      // Update items status
-      setItems(prev => prev.map(item => {
-        const res = result.results.find(r => r.id === item.id);
-        if (res) {
+      const stores = await getStoresByChannel('ebay');
+      if (!stores.length) {
+        throw new Error('No eBay stores connected. Connect a store in Channels first.');
+      }
+      const storeIds = stores.map((s) => s.id);
+      const batch = await publishListingIdsToEbay(Array.from(selected), storeIds);
+      const flat = batch.flatMap((entry) =>
+        entry.results.map((r) => ({
+          id: entry.listingId,
+          success: r.success,
+          error: r.error,
+          listingId: r.listingId,
+        })),
+      );
+      setPublishResults(flat);
+      setItems((prev) =>
+        prev.map((item) => {
+          const res = flat.find((r) => r.id === item.id);
+          if (!res) return item;
           return {
             ...item,
-            status: res.success ? 'published' as const : 'error' as const,
+            status: res.success ? ('published' as const) : ('error' as const),
             errorMessage: res.error,
+            ebayListingId: res.listingId ?? item.ebayListingId,
           };
-        }
-        return item;
-      }));
+        }),
+      );
       setSelected(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed');
@@ -183,18 +184,18 @@ export default function InventoryManager() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Package className="h-6 w-6 text-blue-400" />
             Inventory Manager
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
             View, validate, and publish listings to eBay directly from the app
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={loadInventory}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-200 text-sm font-medium hover:bg-slate-600 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 text-sm font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
           >
             <Search className="h-4 w-4" />
             Load Inventory
@@ -221,19 +222,19 @@ export default function InventoryManager() {
         <CardContent className="pt-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-400" />
               <input
                 type="text"
                 placeholder="Search by SKU, title, brand..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-200 focus:outline-none focus:border-blue-500"
             >
               <option value="">All Statuses</option>
               <option value="draft">Draft</option>
@@ -241,12 +242,12 @@ export default function InventoryManager() {
               <option value="published">Published</option>
               <option value="error">Error</option>
             </select>
-            <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-400 cursor-pointer">
               <input
                 type="checkbox"
                 checked={missingImagesFilter}
                 onChange={(e) => setMissingImagesFilter(e.target.checked)}
-                className="rounded border-slate-600 bg-slate-800 text-blue-500"
+                className="rounded border-slate-300 dark:border-slate-600 bg-slate-800 text-blue-500"
               />
               <ImageIcon className="h-4 w-4 text-amber-400" />
               Missing Images Only
@@ -295,7 +296,7 @@ export default function InventoryManager() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium text-slate-300">
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-300">
                 {total} listing{total !== 1 ? 's' : ''} found
                 {selected.size > 0 && (
                   <span className="ml-2 text-blue-400">({selected.size} selected)</span>
@@ -307,13 +308,13 @@ export default function InventoryManager() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700 text-slate-400 text-left">
+                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 text-left">
                     <th className="pb-3 pr-3 w-8">
                       <input
                         type="checkbox"
                         checked={selected.size === items.length && items.length > 0}
                         onChange={toggleAll}
-                        className="rounded border-slate-600 bg-slate-800 text-blue-500"
+                        className="rounded border-slate-300 dark:border-slate-600 bg-slate-800 text-blue-500"
                       />
                     </th>
                     <th className="pb-3 pr-3 w-16">Image</th>
@@ -335,7 +336,7 @@ export default function InventoryManager() {
                   {items.map((item) => (
                     <tr
                       key={item.id}
-                      className="border-b border-slate-800 hover:bg-slate-800/30 transition-colors"
+                      className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-100/30 dark:bg-slate-800/30 transition-colors"
                     >
                       {/* Checkbox */}
                       <td className="py-3 pr-3">
@@ -343,7 +344,7 @@ export default function InventoryManager() {
                           type="checkbox"
                           checked={selected.has(item.id)}
                           onChange={() => toggleSelect(item.id)}
-                          className="rounded border-slate-600 bg-slate-800 text-blue-500"
+                          className="rounded border-slate-300 dark:border-slate-600 bg-slate-800 text-blue-500"
                         />
                       </td>
 
@@ -353,7 +354,7 @@ export default function InventoryManager() {
                           <img
                             src={item.imageUrl}
                             alt={item.title}
-                            className="w-12 h-12 object-cover rounded border border-slate-700"
+                            className="w-12 h-12 object-cover rounded border border-slate-200 dark:border-slate-700"
                             loading="lazy"
                           />
                         ) : (
@@ -365,27 +366,27 @@ export default function InventoryManager() {
 
                       {/* SKU & Title */}
                       <td className="py-3 pr-3 max-w-[300px]">
-                        <div className="text-xs text-slate-500 font-mono">{item.sku}</div>
-                        <div className="text-slate-200 truncate" title={item.title}>{item.title}</div>
+                        <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">{item.sku}</div>
+                        <div className="text-slate-600 dark:text-slate-200 truncate" title={item.title}>{item.title}</div>
                         {item.categoryName && (
-                          <div className="text-xs text-slate-500 mt-0.5">{item.categoryName}</div>
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{item.categoryName}</div>
                         )}
                       </td>
 
                       {/* Brand */}
                       <td className="py-3 pr-3">
-                        <span className={item.brand === 'Generic' ? 'text-amber-400' : 'text-slate-200'}>
+                        <span className={item.brand === 'Generic' ? 'text-amber-400' : 'text-slate-600 dark:text-slate-200'}>
                           {item.brand}
                         </span>
                       </td>
 
                       {/* Price */}
-                      <td className="py-3 pr-3 text-slate-200">
+                      <td className="py-3 pr-3 text-slate-600 dark:text-slate-200">
                         ${item.price.toFixed(2)}
                       </td>
 
                       {/* Quantity */}
-                      <td className="py-3 pr-3 text-slate-200">
+                      <td className="py-3 pr-3 text-slate-600 dark:text-slate-200">
                         {item.quantity}
                       </td>
 
@@ -394,7 +395,7 @@ export default function InventoryManager() {
                         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded ${
                           item.fitmentCount > 0
                             ? 'bg-blue-900/30 text-blue-400'
-                            : 'bg-slate-800 text-slate-500'
+                            : 'bg-slate-800 text-slate-400 dark:text-slate-500'
                         }`}>
                           <Car className="h-3 w-3" />
                           {item.fitmentCount}
@@ -480,22 +481,22 @@ export default function InventoryManager() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-700">
-                <span className="text-xs text-slate-400">
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-400 dark:text-slate-400">
                   Page {page} of {totalPages}
                 </span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="px-3 py-1 rounded bg-slate-800 text-slate-300 text-xs disabled:opacity-50"
+                    className="px-3 py-1 rounded bg-slate-800 text-slate-500 dark:text-slate-300 text-xs disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
-                    className="px-3 py-1 rounded bg-slate-800 text-slate-300 text-xs disabled:opacity-50"
+                    className="px-3 py-1 rounded bg-slate-800 text-slate-500 dark:text-slate-300 text-xs disabled:opacity-50"
                   >
                     Next
                   </button>
@@ -510,11 +511,11 @@ export default function InventoryManager() {
       {!loading && items.length === 0 && !error && (
         <Card>
           <CardContent className="py-12 text-center">
-            <Package className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-400 text-sm">
+            <Package className="h-12 w-12 text-slate-500 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-400 dark:text-slate-400 text-sm">
               Click "Load Inventory" to view your catalog listings.
             </p>
-            <p className="text-slate-500 text-xs mt-1">
+            <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
               You can validate, select, and publish listings to eBay directly from here.
             </p>
           </CardContent>

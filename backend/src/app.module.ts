@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
+import { PermissionsGuard } from './rbac/guards/permissions.guard.js';
+import { RbacModule } from './rbac/rbac.module.js';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -32,6 +35,7 @@ import { MotorsIntelligenceModule } from './motors-intelligence/motors-intellige
 import { OpenAiModule } from './common/openai/openai.module';
 import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intelligence.module';
 import { EbayIntegrationsModule } from './integrations/ebay/ebay-integrations.module';
+import { ClientSettingsModule } from './client-settings/client-settings.module.js';
 
 @Module({
   imports: [
@@ -85,6 +89,7 @@ import { EbayIntegrationsModule } from './integrations/ebay/ebay-integrations.mo
     }),
     ListingsModule,
     HealthModule,
+    RbacModule,
     AuthModule,
     StorageModule,
     IngestionModule,
@@ -104,14 +109,14 @@ import { EbayIntegrationsModule } from './integrations/ebay/ebay-integrations.mo
     OpenAiModule,
     PricingIntelligenceModule,
     EbayIntegrationsModule,
+    ClientSettingsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}

@@ -1,4 +1,4 @@
-/* ─── ListingCard ──────────────────────────────────────────
+﻿/* ─── ListingCard ──────────────────────────────────────────
  *  Product card for grid view.
  *  Features: image with fallback, highlight matched text,
  *  condition badge, price display, lazy loading.
@@ -33,7 +33,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
   const navigate = useNavigate();
 
   return (
-    <article className="border border-slate-700/60 rounded-xl bg-slate-900/50 overflow-hidden flex flex-col group hover:border-slate-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200">
+    <article className="border border-slate-200/60 dark:border-slate-700/60 rounded-xl bg-white/50 dark:bg-slate-900/50 overflow-hidden flex flex-col group hover:border-slate-300 dark:border-slate-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200">
       {/* Image */}
       <div className="relative aspect-[4/3] sm:h-44 sm:aspect-auto bg-slate-800 overflow-hidden">
         {imageUrl && !imgErr ? (
@@ -45,14 +45,14 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center text-slate-700">
+          <div className="h-full w-full flex items-center justify-center text-slate-600 dark:text-slate-700">
             <ImageIcon size={40} />
           </div>
         )}
 
         {/* Condition badge */}
         {item.conditionId && (
-          <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-slate-800/80">
+          <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-slate-100/80 dark:bg-slate-800/80">
             {conditionLabel(item.conditionId)}
           </Badge>
         )}
@@ -81,7 +81,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
         <a
           href="#"
           onClick={(e) => { e.preventDefault(); onQuickView(item.id); }}
-          className="text-sm font-medium text-slate-100 hover:text-blue-400 line-clamp-2 transition-colors"
+          className="text-sm font-medium text-slate-900 dark:text-slate-100 hover:text-blue-400 line-clamp-2 transition-colors"
         >
           {item.titleHighlight ? (
             <span dangerouslySetInnerHTML={{ __html: sanitizeHighlight(item.titleHighlight) }} />
@@ -91,9 +91,9 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
         </a>
 
         {/* SKU + Brand + Fitment */}
-        <div className="text-xs text-slate-500 flex items-center gap-1 flex-wrap">
+        <div className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1 flex-wrap">
           {item.customLabelSku && (
-            <span className="font-mono bg-slate-800/60 rounded px-1 py-0.5">{item.customLabelSku}</span>
+            <span className="font-mono bg-slate-100/60 dark:bg-slate-800/60 rounded px-1 py-0.5">{item.customLabelSku}</span>
           )}
           {item.cBrand && <span>· {item.cBrand}</span>}
           {item.fitmentCount != null && item.fitmentCount > 0 && (
@@ -105,7 +105,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
 
         {/* Category (short) */}
         {item.categoryName && (
-          <div className="text-[11px] text-slate-600 truncate">
+          <div className="text-[11px] text-slate-500 dark:text-slate-600 truncate">
             {(() => {
               const parts = item.categoryName.split('/').filter(Boolean);
               return parts.length > 1 ? parts.slice(-2).join(' › ') : item.categoryName;
@@ -117,12 +117,12 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
         <div className="flex items-end justify-between mt-auto pt-2">
           <div>
             {price !== null ? (
-              <div className="text-lg font-bold text-slate-100">${price.toFixed(2)}</div>
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-100">${price.toFixed(2)}</div>
             ) : (
-              <div className="text-sm text-slate-500">No price</div>
+              <div className="text-sm text-slate-400 dark:text-slate-500">No price</div>
             )}
             {item.quantity && (
-              <div className="text-[11px] text-slate-500">
+              <div className="text-[11px] text-slate-400 dark:text-slate-500">
                 Qty: {item.quantity}
                 {item.format && ` · ${item.format}`}
               </div>
@@ -130,24 +130,24 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
           </div>
           <button
             onClick={() => navigate(`/sku/${item.id}`)}
-            className="px-2 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 hover:text-slate-100 inline-flex items-center gap-1 transition-colors"
+            className="px-2 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1 transition-colors"
           >
             <Eye size={12} /> Details
           </button>
         </div>
 
         {/* Edit / Publish / Delete actions */}
-        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60 flex-wrap">
+        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex-wrap">
           <button
             onClick={() => navigate(`/listings/${item.id}/edit`)}
-            className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-slate-800 hover:text-blue-400 transition-colors"
+            className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-400 transition-colors"
           >
             <Pencil size={11} /> Edit
           </button>
           {onPublish && (
             <button
               onClick={() => onPublish(item.id)}
-              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-blue-900/30 hover:text-blue-400 transition-colors"
+              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 dark:text-slate-400 hover:bg-blue-900/30 hover:text-blue-400 transition-colors"
             >
               <Send size={11} /> Channels
             </button>
@@ -155,7 +155,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
           {onDelete && (
             <button
               onClick={() => onDelete(item.id)}
-              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
+              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 dark:text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
             >
               <Trash2 size={11} /> Delete
             </button>

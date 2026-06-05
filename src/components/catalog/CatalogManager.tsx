@@ -1,4 +1,4 @@
-/* ─── CatalogManager ──────────────────────────────────────
+﻿/* ─── CatalogManager ──────────────────────────────────────
  *  State-of-the-art catalogue search system.
  *  Orchestrates: SearchBar, FilterSidebar, ResultsGrid,
  *  DetailModal, ActiveFilterTags, breadcrumbs, sorting.
@@ -25,6 +25,9 @@ import DetailModal from './DetailModal';
 import PublishModal from '../channels/PublishModal';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
 import { deleteListing } from '../../lib/listingsApi';
+import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
+import type { SearchItem } from '../../types/search';
+import { authHeaders } from '../../lib/authApi';
 import { showCatalogDestructiveUi } from '../../lib/catalogDestructiveUi';
 import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
 import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
@@ -112,6 +115,24 @@ export default function CatalogManager() {
   }, [searchQuery, sortMode, filters]);
 
   const displayItems = infiniteScroll ? accumulatedItems : (data?.items ?? []);
+
+  const { data: publishListingDetail, isLoading: publishListingLoading } =
+    useListingDetailQuery(publishModalOpen ? publishTargetId : null);
+
+  const publishListing: SearchItem | null = useMemo(() => {
+    if (!publishTargetId) return null;
+    const fromGrid = displayItems.find((i) => i.id === publishTargetId);
+    if (fromGrid) return fromGrid;
+    if (!publishListingDetail) return null;
+    return {
+      ...publishListingDetail,
+      relevanceScore: null,
+      titleHighlight: null,
+      fitmentCount: null,
+      cFeatures: null,
+    };
+  }, [publishTargetId, displayItems, publishListingDetail]);
+
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const hasMore = infiniteScroll && data?.nextCursor !== null;
@@ -184,7 +205,7 @@ export default function CatalogManager() {
     try {
       const res = await fetch('/api/catalog-products/export-templates', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ listingIds: Array.from(selectedIds) }),
       });
       if (!res.ok) throw new Error('Export failed');
@@ -212,7 +233,9 @@ export default function CatalogManager() {
       for (const [k, v] of Object.entries(fq)) {
         if (v !== undefined && v !== '') params.set(k, String(v));
       }
-      const res = await fetch(`/api/listings/export?${params.toString()}`);
+      const res = await fetch(`/api/listings/export?${params.toString()}`, {
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -235,7 +258,7 @@ export default function CatalogManager() {
     try {
       const res = await fetch('/api/listings/bulk-delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ ids: Array.from(selectedIds) }),
       });
       if (!res.ok) throw new Error('Bulk delete failed');
@@ -293,17 +316,17 @@ export default function CatalogManager() {
   return (
     <div className="space-y-3 sm:space-y-4 pb-24">
       {/* Breadcrumbs */}
-      <nav className="flex items-center gap-1 text-xs text-slate-500 overflow-x-auto scrollbar-none">
+      <nav className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 overflow-x-auto scrollbar-none">
         {breadcrumbs.map((crumb, i) => (
           <span key={i} className="flex items-center gap-1 whitespace-nowrap">
-            {i > 0 && <ChevronRight size={11} className="text-slate-700 shrink-0" />}
+            {i > 0 && <ChevronRight size={11} className="text-slate-600 dark:text-slate-700 shrink-0" />}
             {i === 0 && <Home size={11} className="shrink-0" />}
             {crumb.onClick ? (
-              <button onClick={crumb.onClick} className="hover:text-slate-300 transition-colors">
+              <button onClick={crumb.onClick} className="hover:text-slate-500 dark:text-slate-300 transition-colors">
                 {crumb.label}
               </button>
             ) : (
-              <span className={i === breadcrumbs.length - 1 ? 'text-slate-300' : ''}>
+              <span className={i === breadcrumbs.length - 1 ? 'text-slate-500 dark:text-slate-300' : ''}>
                 {crumb.label}
               </span>
             )}
@@ -314,8 +337,8 @@ export default function CatalogManager() {
       {/* Header — stacks on mobile, side-by-side on sm+ */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100">Catalog</h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 truncate">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Catalog</h2>
+          <p className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 mt-1 truncate">
             {summary
               ? `${summary.totalRecords.toLocaleString()} listings · ${summary.uniqueSkus.toLocaleString()} unique SKUs · ${summary.files} source files`
               : 'Loading…'}
@@ -339,7 +362,7 @@ export default function CatalogManager() {
             className={`hidden sm:flex items-center gap-1.5 px-3 py-2 border rounded-lg text-xs transition-colors ${
               infiniteScroll
                 ? 'border-blue-600 text-blue-400 bg-blue-600/10'
-                : 'border-slate-700 text-slate-400 hover:bg-slate-800'
+                : 'border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800'
             }`}
           >
             <Zap size={13} />
@@ -348,7 +371,7 @@ export default function CatalogManager() {
           <button
             onClick={handleExportCsv}
             disabled={exporting}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-xs transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 text-xs transition-colors disabled:opacity-50"
           >
             <Download size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
@@ -387,14 +410,14 @@ export default function CatalogManager() {
         {/* Results area */}
         <div className="flex-1 min-w-0">
           <Card>
-            <CardHeader className="border-b border-slate-800 py-3 px-3 sm:px-5">
+            <CardHeader className="border-b border-slate-200 dark:border-slate-800 py-3 px-3 sm:px-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 {/* Left: result info */}
                 <div className="flex items-center gap-3">
                   {/* Mobile filter button */}
                   <button
                     onClick={() => setMobileFilterOpen(true)}
-                    className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 border border-slate-700 rounded-lg text-xs text-slate-300 hover:bg-slate-800 transition-colors"
+                    className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-colors"
                   >
                     <SlidersHorizontal size={13} />
                     Filters
@@ -405,19 +428,19 @@ export default function CatalogManager() {
                     )}
                   </button>
 
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
                     {loading ? (
                       'Searching…'
                     ) : (
                       <>
-                        <span className="text-slate-300 font-semibold">{total.toLocaleString()}</span> results
+                        <span className="text-slate-500 dark:text-slate-300 font-semibold">{total.toLocaleString()}</span> results
                         {queryTimeMs > 0 && (
-                          <span className="text-slate-600"> ({queryTimeMs}ms)</span>
+                          <span className="text-slate-500 dark:text-slate-600"> ({queryTimeMs}ms)</span>
                         )}
                         {!infiniteScroll && totalPages > 1 && (
-                          <span className="text-slate-600">
+                          <span className="text-slate-500 dark:text-slate-600">
                             {' · Page '}
-                            <span className="text-slate-400">{page + 1}</span>
+                            <span className="text-slate-400 dark:text-slate-400">{page + 1}</span>
                             {' of '}
                             {totalPages}
                           </span>
@@ -432,7 +455,7 @@ export default function CatalogManager() {
                   <select
                     value={sortMode}
                     onChange={(e) => setSortMode(e.target.value as SortMode)}
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-500 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                   >
                     <option value="relevance">Relevance</option>
                     <option value="price_asc">Price: Low → High</option>
@@ -499,20 +522,20 @@ export default function CatalogManager() {
       {/* Delete confirmation modal */}
       {showCatalogDestructiveUi && deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDeleteConfirmId(null)}>
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded-full bg-red-500/10">
                 <Trash2 size={20} className="text-red-400" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-100">Delete Listing</h3>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Delete Listing</h3>
             </div>
-            <p className="text-sm text-slate-400 mb-6">
+            <p className="text-sm text-slate-400 dark:text-slate-400 mb-6">
               Are you sure you want to delete this listing? It will be soft-deleted and can be restored later.
             </p>
             <div className="flex items-center gap-3 justify-end">
               <button
                 onClick={() => setDeleteConfirmId(null)}
-                className="px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>
@@ -531,20 +554,20 @@ export default function CatalogManager() {
       {/* Bulk delete confirmation modal */}
       {showCatalogDestructiveUi && bulkDeleteConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBulkDeleteConfirm(false)}>
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded-full bg-red-500/10">
                 <Trash2 size={20} className="text-red-400" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-100">Delete {selectedIds.size} Listings</h3>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Delete {selectedIds.size} Listings</h3>
             </div>
-            <p className="text-sm text-slate-400 mb-6">
-              Are you sure you want to delete <span className="font-semibold text-slate-200">{selectedIds.size}</span> selected listings? They will be soft-deleted and can be restored later.
+            <p className="text-sm text-slate-400 dark:text-slate-400 mb-6">
+              Are you sure you want to delete <span className="font-semibold text-slate-600 dark:text-slate-200">{selectedIds.size}</span> selected listings? They will be soft-deleted and can be restored later.
             </p>
             <div className="flex items-center gap-3 justify-end">
               <button
                 onClick={() => setBulkDeleteConfirm(false)}
-                className="px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>
@@ -561,11 +584,14 @@ export default function CatalogManager() {
       )}
 
       {/* Single-item publish modal */}
-      {publishTargetId && (
+      {publishTargetId && publishModalOpen && (publishListing || publishListingLoading) && (
         <PublishModal
           mode="single"
-          listing={displayItems.find((i) => i.id === publishTargetId) ?? { id: publishTargetId, title: null } as any}
-          open={publishModalOpen}
+          listing={
+            publishListing ??
+            ({ id: publishTargetId, title: null, customLabelSku: null } as SearchItem)
+          }
+          open={publishModalOpen && (!publishListingLoading || !!publishListing)}
           onClose={() => { setPublishModalOpen(false); setPublishTargetId(null); }}
           onComplete={handlePublishComplete}
         />
@@ -582,8 +608,8 @@ export default function CatalogManager() {
 
       {/* Bulk action bar (floating) */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-800 border border-slate-700 rounded-xl px-5 py-3 shadow-2xl shadow-black/50 flex items-center gap-4">
-          <span className="text-sm text-slate-300">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-5 py-3 shadow-2xl shadow-black/50 flex items-center gap-4">
+          <span className="text-sm text-slate-500 dark:text-slate-300">
             <span className="font-semibold text-blue-400">{selectedIds.size}</span> selected
           </span>
           <button
@@ -609,7 +635,7 @@ export default function CatalogManager() {
           )}
           <button
             onClick={() => setSelectedIds(new Set())}
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            className="text-xs text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 transition-colors"
           >
             Clear
           </button>

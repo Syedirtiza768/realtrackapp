@@ -25,6 +25,7 @@ import {
   ToggleLeft,
 } from 'lucide-react';
 import { bulkUpdateListings } from '../../lib/listingsApi';
+import { authPost, fetchWithAuth } from '../../lib/authApi';
 
 const API = '/api';
 
@@ -53,8 +54,9 @@ export default function BulkActionsPage() {
   const doSearch = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/listings?limit=100&q=${encodeURIComponent(search)}`);
-      const data = await res.json();
+      const data = await fetchWithAuth<{ items?: ListingSummary[]; data?: ListingSummary[] }>(
+        `${API}/listings?limit=100&q=${encodeURIComponent(search)}`,
+      );
       setListings(data.items ?? data.data ?? []);
     } catch {
       setListings([]);
@@ -262,13 +264,10 @@ export default function BulkActionsPage() {
           onExecute={async (op) => {
             setProcessing(true);
             try {
-              const res = await fetch(`${API}/listings/bulk-image-ops`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: Array.from(selectedIds), operation: op }),
-              });
-              if (!res.ok) throw new Error(`Failed: ${res.statusText}`);
-              const data = await res.json();
+              const data = await authPost<{ processed?: number }>(
+                `${API}/listings/bulk-image-ops`,
+                { ids: Array.from(selectedIds), operation: op },
+              );
               setActionResult({ ok: true, message: `Image operation "${op}" completed for ${data.processed ?? selectedCount} listings` });
               setActiveAction(null);
               doSearch();

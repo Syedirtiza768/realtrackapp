@@ -20,9 +20,11 @@ import {
   PublishInstanceDto,
   BulkPublishInstancesDto,
 } from './dto/store.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('stores')
 @Controller('stores')
+@RequirePermissions('stores.view')
 export class StoresController {
   constructor(private readonly storesService: StoresService) {}
 
@@ -47,12 +49,14 @@ export class StoresController {
   }
 
   @Post()
+  @RequirePermissions('stores.manage')
   @ApiOperation({ summary: 'Create a new store within a channel connection' })
   createStore(@Body() dto: CreateStoreDto) {
     return this.storesService.createStore(dto);
   }
 
   @Put(':storeId')
+  @RequirePermissions('stores.manage')
   @ApiOperation({ summary: 'Update a store' })
   updateStore(
     @Param('storeId', ParseUUIDPipe) storeId: string,
@@ -62,6 +66,7 @@ export class StoresController {
   }
 
   @Delete(':storeId')
+  @RequirePermissions('stores.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a store' })
   deleteStore(@Param('storeId', ParseUUIDPipe) storeId: string) {
@@ -95,24 +100,28 @@ export class StoresController {
   }
 
   @Post('instances')
+  @RequirePermissions('stores.manage')
   @ApiOperation({ summary: 'Create a listing channel instance (assign listing to store)' })
   createInstance(@Body() dto: CreateInstanceDto) {
     return this.storesService.createInstance(dto);
   }
 
   @Post('instances/publish')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Publish a listing channel instance to marketplace' })
   publishInstance(@Body() dto: PublishInstanceDto) {
     return this.storesService.publishInstance(dto.instanceId);
   }
 
   @Post('instances/bulk-publish')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Bulk publish multiple instances' })
   bulkPublishInstances(@Body() dto: BulkPublishInstancesDto) {
     return this.storesService.bulkPublishInstances(dto.instanceIds);
   }
 
   @Post('instances/:instanceId/end')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'End/delist an instance' })
   endInstance(@Param('instanceId', ParseUUIDPipe) instanceId: string) {
     return this.storesService.endInstance(instanceId);
@@ -121,6 +130,7 @@ export class StoresController {
   // ─── Multi-store publish ───
 
   @Post('publish-multi-store')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Publish a listing to multiple stores at once' })
   publishToMultipleStores(
     @Body()

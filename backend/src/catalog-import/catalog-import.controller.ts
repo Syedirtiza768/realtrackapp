@@ -24,15 +24,18 @@ import {
   ImportRowQueryDto,
   StartImportDto,
 } from './dto/catalog-import.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Catalog Import')
 @Controller('catalog-import')
+@RequirePermissions('catalog.view')
 export class CatalogImportController {
   constructor(private readonly importService: CatalogImportService) {}
 
   /* ── Upload ────────────────────────────────────────────── */
 
   @Post('upload')
+  @RequirePermissions('catalog.import')
   @UseInterceptors(
     FileInterceptor('file', {
       // Use diskStorage so multer streams the file directly to disk.
@@ -98,6 +101,7 @@ export class CatalogImportController {
   /* ── Start processing ──────────────────────────────────── */
 
   @Post('start')
+  @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Start processing an uploaded CSV import' })
   async startImport(@Body() dto: StartImportDto) {
@@ -109,6 +113,7 @@ export class CatalogImportController {
   }
 
   @Post('backfill-listings')
+  @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Backfill listing_records from existing catalog imports' })
   async backfillListings(@Body() dto: BackfillListingsDto) {
@@ -117,6 +122,7 @@ export class CatalogImportController {
   }
 
   @Post('clear-all')
+  @RequirePermissions('catalog.clear')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -178,6 +184,7 @@ export class CatalogImportController {
   /* ── Cancel import ─────────────────────────────────────── */
 
   @Post(':id/cancel')
+  @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a pending or processing import' })
   async cancelImport(@Param('id') id: string) {
@@ -188,6 +195,7 @@ export class CatalogImportController {
   /* ── Retry import ──────────────────────────────────────── */
 
   @Post(':id/retry')
+  @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Retry a failed import (resumes from last row)' })
   async retryImport(@Param('id') id: string) {

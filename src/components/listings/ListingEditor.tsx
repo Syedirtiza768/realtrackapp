@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
     Sparkles,
@@ -219,7 +219,7 @@ export default function ListingEditor() {
                 <div className="min-w-0 flex items-center gap-3">
                     <button
                         onClick={() => navigate(-1)}
-                        className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors shrink-0"
+                        className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:text-slate-200 transition-colors shrink-0"
                     >
                         <ArrowLeft size={16} />
                     </button>
@@ -229,7 +229,7 @@ export default function ListingEditor() {
                             <Badge variant="outline" className="text-base sm:text-lg capitalize">{currentStatus}</Badge>
                             {ingestionSeed && <Badge variant="success">Imported from Ingestion</Badge>}
                         </h2>
-                        <p className="text-slate-500 text-sm mt-1">
+                        <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">
                             {isEditMode
                                 ? `Editing · v${currentVersion}`
                                 : 'AI Analysis complete. Please review before publishing.'}
@@ -239,14 +239,14 @@ export default function ListingEditor() {
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <button
                         onClick={() => navigate(`/listings/${routeId}/history`)}
-                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm ${!isEditMode ? 'hidden' : ''}`}
+                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm ${!isEditMode ? 'hidden' : ''}`}
                     >
                         <Eye size={16} /> History
                     </button>
                     <button
                         onClick={() => handleSave('draft')}
                         disabled={saving}
-                        className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm disabled:opacity-50"
+                        className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm disabled:opacity-50"
                     >
                         {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                         Save Draft
@@ -280,17 +280,17 @@ export default function ListingEditor() {
                         <CardContent className="p-4 space-y-3">
                             <div className="flex items-center gap-2 mb-1">
                                 <Wand2 size={16} className="text-purple-400" />
-                                <h4 className="text-sm font-medium text-slate-200">AI Listing Generation</h4>
+                                <h4 className="text-sm font-medium text-slate-600 dark:text-slate-200">AI Listing Generation</h4>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">
+                                    <label className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
                                         <FileText size={10} className="inline mr-1" />Template
                                     </label>
                                     <select
                                         value={selectedTemplateId}
                                         onChange={(e) => setSelectedTemplateId(e.target.value)}
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                                        className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
                                     >
                                         <option value="">Default template</option>
                                         {templates.map((t) => (
@@ -301,7 +301,7 @@ export default function ListingEditor() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">
+                                    <label className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
                                         eBay Category
                                     </label>
                                     <input
@@ -309,7 +309,7 @@ export default function ListingEditor() {
                                         value={categoryName}
                                         onChange={(e) => setCategoryName(e.target.value)}
                                         placeholder="Auto Parts & Accessories"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                                        className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
                                     />
                                 </div>
                             </div>
@@ -326,7 +326,7 @@ export default function ListingEditor() {
                                 {aiGenMutation.isPending ? 'Generating…' : 'Generate with AI'}
                             </button>
                             {!isEditMode && (
-                                <p className="text-[10px] text-slate-500 text-center">
+                                <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center">
                                     Save the listing first to enable AI generation.
                                 </p>
                             )}
@@ -347,13 +347,13 @@ export default function ListingEditor() {
                         <CardContent className="p-6 space-y-6">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-1">Listing Title</label>
+                                    <label className="block text-sm font-medium text-slate-400 dark:text-slate-400 mb-1">Listing Title</label>
                                     <div className="relative">
                                         <input
                                             type="text"
                                             value={title}
                                             onChange={(event) => setTitle(event.target.value)}
-                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-200 focus:ring-1 focus:ring-blue-500"
+                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500"
                                         />
                                         <Badge variant="success" className="absolute right-3 top-3">{title.length}/80 chars</Badge>
                                     </div>
@@ -361,32 +361,32 @@ export default function ListingEditor() {
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-400 mb-1">Part Number (MPN)</label>
+                                        <label className="block text-sm font-medium text-slate-400 dark:text-slate-400 mb-1">Part Number (MPN)</label>
                                         <input
                                             type="text"
                                             value={mpn}
                                             onChange={(event) => setMpn(event.target.value)}
-                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-200 focus:ring-1 focus:ring-blue-500 font-mono"
+                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 font-mono"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-400 mb-1">Brand</label>
+                                        <label className="block text-sm font-medium text-slate-400 dark:text-slate-400 mb-1">Brand</label>
                                         <input
                                             type="text"
                                             value={brand}
                                             onChange={(event) => setBrand(event.target.value)}
-                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-200 focus:ring-1 focus:ring-blue-500"
+                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-400 mb-1">Condition</label>
+                                        <label className="block text-sm font-medium text-slate-400 dark:text-slate-400 mb-1">Condition</label>
                                         <select
                                             value={condition}
                                             onChange={(event) => setCondition(event.target.value as ProductCondition)}
-                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-200 focus:ring-1 focus:ring-blue-500"
+                                            className="w-full bg-slate-800 border-none rounded-lg p-3 text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500"
                                         >
                                             {CONDITION_OPTIONS.map((option) => (
                                                 <option key={option} value={option}>{toConditionLabel(option)}</option>
@@ -394,23 +394,23 @@ export default function ListingEditor() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-400 mb-1">Price</label>
+                                        <label className="block text-sm font-medium text-slate-400 dark:text-slate-400 mb-1">Price</label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-3 text-slate-500">$</span>
+                                            <span className="absolute left-3 top-3 text-slate-400 dark:text-slate-500">$</span>
                                             <input
                                                 type="text"
                                                 value={price}
                                                 onChange={(event) => setPrice(event.target.value)}
-                                                className="w-full bg-slate-800 border-none rounded-lg p-3 pl-8 text-slate-200 focus:ring-1 focus:ring-blue-500 font-mono"
+                                                className="w-full bg-slate-800 border-none rounded-lg p-3 pl-8 text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 font-mono"
                                             />
                                         </div>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-1">Description</label>
+                                    <label className="block text-sm font-medium text-slate-400 dark:text-slate-400 mb-1">Description</label>
                                     <textarea
-                                        className="w-full h-40 bg-slate-800 border-none rounded-lg p-3 text-slate-200 focus:ring-1 focus:ring-blue-500 resize-none font-sans"
+                                        className="w-full h-40 bg-slate-800 border-none rounded-lg p-3 text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 resize-none font-sans"
                                         value={description}
                                         onChange={(event) => setDescription(event.target.value)}
                                     />
@@ -421,33 +421,33 @@ export default function ListingEditor() {
 
                     <Card>
                         <CardContent className="p-6">
-                            <h3 className="font-medium text-slate-200 mb-4">Gallery</h3>
+                            <h3 className="font-medium text-slate-600 dark:text-slate-200 mb-4">Gallery</h3>
                             {galleryImages.length > 0 ? (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                     {galleryImages.slice(0, 4).map((image, index) => (
-                                        <div key={image.id} className={`aspect-square rounded-lg overflow-hidden relative ${index === 0 ? 'border-2 border-blue-500' : 'border border-slate-700'}`}>
+                                        <div key={image.id} className={`aspect-square rounded-lg overflow-hidden relative ${index === 0 ? 'border-2 border-blue-500' : 'border border-slate-200 dark:border-slate-700'}`}>
                                             <img src={image.uri} alt={image.angle ?? 'Part image'} className="w-full h-full object-cover" />
                                             {index === 0 && <div className="absolute top-2 right-2 bg-blue-600/80 text-white text-[10px] px-1.5 rounded">AI Validated</div>}
                                         </div>
                                     ))}
-                                    <div className="aspect-square bg-slate-800/50 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-700 hover:border-slate-500 cursor-pointer transition-colors">
-                                        <Plus size={24} className="text-slate-600" />
+                                    <div className="aspect-square bg-slate-100/50 dark:bg-slate-800/50 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-slate-500 cursor-pointer transition-colors">
+                                        <Plus size={24} className="text-slate-500 dark:text-slate-600" />
                                     </div>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                     <div className="aspect-square bg-slate-800 rounded-lg flex items-center justify-center border-2 border-blue-500 relative overflow-hidden group">
-                                        <span className="text-slate-600">Main Image</span>
+                                        <span className="text-slate-500 dark:text-slate-600">Main Image</span>
                                         <div className="absolute top-2 right-2 bg-blue-600/80 text-white text-[10px] px-1.5 rounded">AI Validated</div>
                                     </div>
-                                    <div className="aspect-square bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
-                                        <span className="text-slate-600">Side View</span>
+                                    <div className="aspect-square bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+                                        <span className="text-slate-500 dark:text-slate-600">Side View</span>
                                     </div>
-                                    <div className="aspect-square bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
-                                        <span className="text-slate-600">Label</span>
+                                    <div className="aspect-square bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+                                        <span className="text-slate-500 dark:text-slate-600">Label</span>
                                     </div>
-                                    <div className="aspect-square bg-slate-800/50 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-700 hover:border-slate-500 cursor-pointer transition-colors">
-                                        <Plus size={24} className="text-slate-600" />
+                                    <div className="aspect-square bg-slate-100/50 dark:bg-slate-800/50 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-slate-500 cursor-pointer transition-colors">
+                                        <Plus size={24} className="text-slate-500 dark:text-slate-600" />
                                     </div>
                                 </div>
                             )}
@@ -455,9 +455,9 @@ export default function ListingEditor() {
                     </Card>
                 </div>
 
-                <div className="lg:col-span-5 flex flex-col bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-2xl min-h-[400px] lg:min-h-0">
-                    <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Live Preview</span>
+                <div className="lg:col-span-5 flex flex-col bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xl min-h-[400px] lg:min-h-0">
+                    <div className="px-4 py-3 bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Live Preview</span>
                         <div className="flex bg-slate-800 rounded-lg p-1">
                             <button className="p-1 px-3 rounded-md bg-blue-600/20 text-blue-400 text-xs font-medium flex items-center gap-2">
                                 <Monitor size={12} /> eBay
@@ -495,7 +495,7 @@ export default function ListingEditor() {
                             </div>
                         </div>
 
-                        <div className="absolute bottom-0 w-full bg-slate-900/90 p-4 text-white text-xs border-t border-slate-700 flex justify-between items-center">
+                        <div className="absolute bottom-0 w-full bg-white/90 dark:bg-slate-900/90 p-4 text-white text-xs border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                             <div>
                                 <span className="font-bold text-emerald-400">eBay Listing Optimized</span>
                                 <p className="opacity-70">Keywords valid. 0 Policy violations.</p>

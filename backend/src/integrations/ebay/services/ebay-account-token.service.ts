@@ -15,6 +15,7 @@ import { ChannelConnection } from '../../../channels/entities/channel-connection
 import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
 import { EbayOAuthToken } from '../entities/ebay-oauth-token.entity.js';
 import { EBAY_INTEGRATIONS_REDIS } from '../ebay-integrations-redis.connection.js';
+import { SellerpunditTokenSyncService } from '../../sellerpundit/sellerpundit-token-sync.service.js';
 
 interface TokenBlob {
   accessToken: string;
@@ -39,6 +40,7 @@ export class EbayAccountTokenService {
     private readonly accountRepo: Repository<ConnectedEbayAccount>,
     @InjectRepository(ChannelConnection)
     private readonly connectionRepo: Repository<ChannelConnection>,
+    private readonly sellerpunditTokens: SellerpunditTokenSyncService,
   ) {}
 
   private getOAuthBase(environment: 'sandbox' | 'production'): string {
@@ -75,6 +77,10 @@ export class EbayAccountTokenService {
       account.oauthToken.reconnectRequired
     ) {
       throw new UnauthorizedException('eBay reconnect required');
+    }
+
+    if (account.connectionSource === 'sellerpundit') {
+      return this.sellerpunditTokens.ensureFreshAccessToken(ebayAccountId);
     }
 
     const row = account.oauthToken;
@@ -164,6 +170,10 @@ export class EbayAccountTokenService {
       conn.status = 'active';
       conn.lastError = null;
       await this.connectionRepo.save(conn);
+      await this.accountRepo.update(ebayAccountId, {
+        lastTokenRefreshAt: new Date(),
+        connectionStatus: 'active',
+      });
 
       return updated.accessToken;
     } catch (e: unknown) {

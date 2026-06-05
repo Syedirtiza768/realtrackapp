@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { Public } from '../auth/decorators/public.decorator.js';
 import {
   HealthCheck,
   HealthCheckService,
@@ -14,6 +15,7 @@ export class HealthController {
     private memory: MemoryHealthIndicator,
   ) {}
 
+  @Public()
   @Get()
   @HealthCheck()
   check() {

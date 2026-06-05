@@ -12,9 +12,11 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service.js';
 import { NotificationsQueryDto } from './dto/notifications-query.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Notifications')
 @Controller('notifications')
+@RequirePermissions('notifications.view')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
@@ -32,12 +34,14 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
+  @RequirePermissions('notifications.manage')
   @ApiOperation({ summary: 'Mark notification as read' })
   markAsRead(@Param('id') id: string) {
     return this.notificationsService.markAsRead(id);
   }
 
   @Post('mark-all-read')
+  @RequirePermissions('notifications.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark all notifications as read' })
   async markAllAsRead() {
@@ -46,6 +50,7 @@ export class NotificationsController {
   }
 
   @Delete(':id')
+  @RequirePermissions('notifications.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Dismiss notification' })
   dismiss(@Param('id') id: string) {

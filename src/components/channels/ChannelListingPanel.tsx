@@ -1,4 +1,4 @@
-/* ─── ChannelListingPanel ──────────────────────────────────
+﻿/* ─── ChannelListingPanel ──────────────────────────────────
  *  Per-SKU channel status panel. Shows each channel as a
  *  tile with status badge, last sync, and action buttons.
  *  Reusable in DetailModal and any detail page.
@@ -62,7 +62,7 @@ export default function ChannelListingPanel({ listingId, onPublish }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-6">
-        <Loader2 size={18} className="animate-spin text-slate-500" />
+        <Loader2 size={18} className="animate-spin text-slate-400 dark:text-slate-500" />
       </div>
     );
   }
@@ -70,7 +70,7 @@ export default function ChannelListingPanel({ listingId, onPublish }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Channels</h5>
+        <h5 className="text-xs font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Channels</h5>
         {onPublish && (
           <button
             onClick={() => onPublish(listingId)}
@@ -114,12 +114,12 @@ function ChannelTile({
   const isBusy = busy?.endsWith(status.channel);
 
   return (
-    <div className="border border-slate-800 rounded-lg p-3 bg-slate-900/40 space-y-2">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 bg-white/40 dark:bg-slate-900/40 space-y-2">
       {/* Header: channel name + status badge */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm">{meta.icon}</span>
-          <span className="text-sm font-medium text-slate-200">{meta.label}</span>
+          <span className="text-sm font-medium text-slate-600 dark:text-slate-200">{meta.label}</span>
         </div>
         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor(listingStatus)}`}>
           {statusLabel(listingStatus)}
@@ -136,7 +136,7 @@ function ChannelTile({
 
       {/* Last sync info */}
       {status.listing?.lastSyncedAt && (
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
           <Clock size={10} />
           <span>Synced {new Date(status.listing.lastSyncedAt).toLocaleDateString()}</span>
         </div>
@@ -227,7 +227,7 @@ function ActionButton({
   const colors =
     variant === 'danger'
       ? 'text-red-400 hover:bg-red-900/30 hover:text-red-300'
-      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200';
+      : 'text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800 hover:text-slate-600 dark:text-slate-200';
 
   return (
     <button

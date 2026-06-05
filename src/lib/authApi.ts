@@ -57,13 +57,16 @@ export async function fetchWithAuth<T = unknown>(
 
   if (!res.ok) {
     let message = `API ${res.status}: ${res.statusText}`;
+    let body: Record<string, unknown> = {};
     try {
-      const body = await res.json();
-      message = body.message ?? body.error ?? message;
+      body = (await res.json()) as Record<string, unknown>;
+      const raw = (body.message ?? body.error) as string | string[] | undefined;
+      message = raw ? (Array.isArray(raw) ? raw.join('; ') : raw) : message;
     } catch {
       // ignore parse errors
     }
-    throw new Error(message);
+    const err = Object.assign(new Error(message), { responseBody: body });
+    throw err;
   }
 
   // Handle 204 No Content
@@ -112,4 +115,44 @@ export async function authPut<T = unknown>(
  */
 export async function authDelete<T = unknown>(path: string): Promise<T> {
   return fetchWithAuth<T>(path, { method: 'DELETE' });
+}
+
+/**
+ * Authenticated download — returns raw Response for blob/stream handling.
+ * Use this for file downloads where you need .blob() or .text() instead of .json().
+ */
+export async function fetchDownloadResponse(url: string): Promise<Response> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const headers = new Headers();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const res = await fetch(url, { headers });
+
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem('mk_auth_user');
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (!res.ok) {
+    let message = `API ${res.status}: ${res.statusText}`;
+    try {
+      const body = (await res.json()) as {
+        message?: string | string[];
+        error?: string;
+      };
+      const raw = body.message ?? body.error;
+      message = Array.isArray(raw) ? raw.join('; ') : (raw ?? message);
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return res;
 }

@@ -1,4 +1,4 @@
-/* ─── FilterSidebar ────────────────────────────────────────
+﻿/* ─── FilterSidebar ────────────────────────────────────────
  *  Comprehensive filter sidebar with all filter dimensions.
  *  Desktop: visible sidebar with multi-select checkboxes.
  *  Mobile: slide-out drawer panel.
@@ -67,11 +67,11 @@ export function MobileFilterDrawer({
     <div className="fixed inset-0 z-50 lg:hidden" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 animate-fade-in" />
       <div
-        className="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-slate-900 border-r border-slate-700 shadow-2xl flex flex-col animate-slide-in-left"
+        className="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col animate-slide-in-left"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
             <SlidersHorizontal size={16} />
             Filters
             {filterCount > 0 && (
@@ -80,12 +80,12 @@ export function MobileFilterDrawer({
               </span>
             )}
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-100 transition-colors">
+          <button onClick={onClose} className="text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors">
             <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-3">{children}</div>
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
           <button
             onClick={onClose}
             className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -112,7 +112,7 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
     <div className="space-y-1.5">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-200">
           <Filter size={14} />
           Filters
           {activeCount > 0 && (
@@ -280,8 +280,8 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
 
       {/* Footer info */}
       {facets && (
-        <div className="pt-2 border-t border-slate-800">
-          <p className="text-[10px] text-slate-600 text-center">
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+          <p className="text-[10px] text-slate-500 dark:text-slate-600 text-center">
             {facets.totalFiltered.toLocaleString()} matching listings
             {facets.queryTimeMs > 0 && ` · ${facets.queryTimeMs}ms`}
           </p>
@@ -366,17 +366,17 @@ function MultiSelectFacet({
 
   if (buckets.length === 0 && !loading && emptyMessage) {
     return (
-      <div className="border border-slate-800 rounded-lg overflow-hidden">
+      <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-800/40 transition-colors"
+          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 hover:bg-slate-100/40 dark:bg-slate-800/40 transition-colors"
         >
           <span className="flex items-center gap-1.5">{title}</span>
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
         {expanded && (
-          <p className="text-[11px] text-slate-500 px-3 pb-3 leading-relaxed">{emptyMessage}</p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 px-3 pb-3 leading-relaxed">{emptyMessage}</p>
         )}
       </div>
     );
@@ -385,10 +385,10 @@ function MultiSelectFacet({
   if (buckets.length === 0 && !loading && !emptyMessage) return null;
 
   return (
-    <div className="border border-slate-800 rounded-lg overflow-hidden">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-800/40 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 hover:bg-slate-100/40 dark:bg-slate-800/40 transition-colors"
       >
         <span className="flex items-center gap-1.5">
           {title}
@@ -398,7 +398,7 @@ function MultiSelectFacet({
             </span>
           )}
           {loading && buckets.length === 0 && (
-            <span className="text-slate-600 text-[10px] normal-case tracking-normal">loading…</span>
+            <span className="text-slate-500 dark:text-slate-600 text-[10px] normal-case tracking-normal">loading…</span>
           )}
         </span>
         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -413,7 +413,7 @@ function MultiSelectFacet({
               value={filterText}
               onChange={(e) => { setFilterText(e.target.value); setShowAll(true); }}
               placeholder={`Search ${title.toLowerCase()}…`}
-              className="w-full bg-slate-800/60 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 mb-1"
+              className="w-full bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-500 dark:text-slate-300 placeholder:text-slate-500 dark:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 mb-1"
             />
           )}
 
@@ -422,7 +422,7 @@ function MultiSelectFacet({
             <div className="space-y-1.5">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-2 px-1.5 py-1">
-                  <div className="w-3.5 h-3.5 rounded border border-slate-700 bg-slate-800 animate-pulse" />
+                  <div className="w-3.5 h-3.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-800 animate-pulse" />
                   <div className="h-3 bg-slate-800 rounded animate-pulse" style={{ width: `${50 + Math.random() * 40}%` }} />
                 </div>
               ))}
@@ -443,14 +443,14 @@ function MultiSelectFacet({
                 className={`flex items-center gap-2 px-1.5 py-1 rounded-md cursor-pointer text-xs transition-colors ${
                   isSelected
                     ? 'text-blue-300 bg-blue-600/10'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                    : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:bg-slate-100/40 dark:bg-slate-800/40'
                 }`}
               >
                 <div
                   className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
                     isSelected
                       ? 'bg-blue-600 border-blue-600'
-                      : 'border-slate-600 bg-transparent'
+                      : 'border-slate-300 dark:border-slate-600 bg-transparent'
                   }`}
                 >
                   {isSelected && <Check size={10} className="text-white" strokeWidth={3} />}
@@ -462,7 +462,7 @@ function MultiSelectFacet({
                   className="sr-only"
                 />
                 <span className="truncate flex-1">{label}</span>
-                <span className="text-[10px] tabular-nums text-slate-600 shrink-0">
+                <span className="text-[10px] tabular-nums text-slate-500 dark:text-slate-600 shrink-0">
                   {loading ? '…' : b.count.toLocaleString()}
                 </span>
               </label>
@@ -471,7 +471,7 @@ function MultiSelectFacet({
 
           {/* No matches */}
           {filterText.trim() && filtered.length === 0 && (
-            <p className="text-[11px] text-slate-600 px-1.5 py-1">No matching {title.toLowerCase()}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-600 px-1.5 py-1">No matching {title.toLowerCase()}</p>
           )}
 
           {hasMore && (
@@ -487,7 +487,7 @@ function MultiSelectFacet({
           {selected.length > 0 && (
             <button
               onClick={() => onChange([])}
-              className="text-[11px] text-slate-500 hover:text-slate-300 mt-0.5 transition-colors"
+              className="text-[11px] text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:text-slate-300 mt-0.5 transition-colors"
             >
               Clear {title.toLowerCase()}
             </button>
@@ -511,10 +511,10 @@ function ToggleFilterGroup({
   const anyActive = items.some((i) => i.checked);
 
   return (
-    <div className="border border-slate-800 rounded-lg overflow-hidden">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-800/40 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 hover:bg-slate-100/40 dark:bg-slate-800/40 transition-colors"
       >
         <span className="flex items-center gap-1.5">
           {label}
@@ -534,12 +534,12 @@ function ToggleFilterGroup({
               className={`flex items-center gap-2 px-1.5 py-1 rounded-md cursor-pointer text-xs transition-colors ${
                 item.checked
                   ? 'text-blue-300 bg-blue-600/10'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                  : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:bg-slate-100/40 dark:bg-slate-800/40'
               }`}
             >
               <div
                 className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                  item.checked ? 'bg-blue-600 border-blue-600' : 'border-slate-600'
+                  item.checked ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600'
                 }`}
               >
                 {item.checked && <Check size={10} className="text-white" strokeWidth={3} />}
@@ -602,10 +602,10 @@ function PriceRangeFilter({
   };
 
   return (
-    <div className="border border-slate-800 rounded-lg overflow-hidden">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-800/40 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 hover:bg-slate-100/40 dark:bg-slate-800/40 transition-colors"
       >
         <span className="flex items-center gap-1.5">
           Price
@@ -623,13 +623,13 @@ function PriceRangeFilter({
       {expanded && (
         <div className="px-3 pb-3 space-y-2">
           {min != null && max != null && (
-            <p className="text-[10px] text-slate-600">
+            <p className="text-[10px] text-slate-500 dark:text-slate-600">
               Range: ${min.toFixed(0)} — ${max.toFixed(0)}
             </p>
           )}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-600 text-xs">$</span>
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-xs">$</span>
               <input
                 type="number"
                 value={localMin}
@@ -638,12 +638,12 @@ function PriceRangeFilter({
                 onKeyDown={(e) => e.key === 'Enter' && apply()}
                 placeholder="Min"
                 min={0}
-                className="w-full bg-slate-800/60 border border-slate-700 rounded-md pl-5 pr-2 py-1.5 text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                className="w-full bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md pl-5 pr-2 py-1.5 text-xs text-slate-500 dark:text-slate-300 placeholder:text-slate-500 dark:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
               />
             </div>
-            <span className="text-slate-600 text-xs">—</span>
+            <span className="text-slate-500 dark:text-slate-600 text-xs">—</span>
             <div className="relative flex-1">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-600 text-xs">$</span>
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-xs">$</span>
               <input
                 type="number"
                 value={localMax}
@@ -652,21 +652,21 @@ function PriceRangeFilter({
                 onKeyDown={(e) => e.key === 'Enter' && apply()}
                 placeholder="Max"
                 min={0}
-                className="w-full bg-slate-800/60 border border-slate-700 rounded-md pl-5 pr-2 py-1.5 text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                className="w-full bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md pl-5 pr-2 py-1.5 text-xs text-slate-500 dark:text-slate-300 placeholder:text-slate-500 dark:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
               />
             </div>
           </div>
           <div className="flex gap-2">
             <button
               onClick={apply}
-              className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-md text-xs text-slate-300 transition-colors"
+              className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 rounded-md text-xs text-slate-500 dark:text-slate-300 transition-colors"
             >
               Apply
             </button>
             {hasValue && (
               <button
                 onClick={clear}
-                className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                className="px-3 py-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:text-slate-300 transition-colors"
               >
                 Clear
               </button>

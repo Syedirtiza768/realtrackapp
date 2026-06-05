@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import {
     Settings,
     Truck,
@@ -20,6 +20,8 @@ import {
     WifiOff,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { startEbayOAuth } from '../../lib/ebayIntegrationsApi';
+import { authPost, fetchWithAuth } from '../../lib/authApi';
 
 const API = '/api/settings';
 
@@ -65,7 +67,7 @@ interface PricingRule {
 function Spinner() {
     return (
         <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
         </div>
     );
 }
@@ -87,9 +89,9 @@ export default function SettingsPage() {
         setLoading(true);
         try {
             const [sRes, shRes, prRes] = await Promise.all([
-                fetch(API).then(r => r.json()),
-                fetch(`${API}/shipping-profiles/list`).then(r => r.json()),
-                fetch(`${API}/pricing-rules/list`).then(r => r.json()),
+                fetchWithAuth<Record<string, TenantSetting[]>>(API),
+                fetchWithAuth<ShippingProfile[]>(`${API}/shipping-profiles/list`),
+                fetchWithAuth<PricingRule[]>(`${API}/pricing-rules/list`),
             ]);
             setSettings(sRes ?? {});
             setShipping(Array.isArray(shRes) ? shRes : []);
@@ -106,9 +108,8 @@ export default function SettingsPage() {
     const updateSetting = async (category: string, key: string, value: unknown) => {
         setSaving(true);
         try {
-            await fetch(`${API}/${category}/${key}`, {
+            await fetchWithAuth(`${API}/${category}/${key}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ value }),
             });
             await fetchAll();
@@ -119,12 +120,10 @@ export default function SettingsPage() {
 
     const createShippingProfile = async (data: Partial<ShippingProfile>) => {
         try {
-            const res = await fetch(`${API}/shipping-profiles`, {
+            const created = await fetchWithAuth<ShippingProfile>(`${API}/shipping-profiles`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             });
-            const created = await res.json();
             setShipping(s => [...s, created]);
             setShowAddProfile(false);
         } catch (e) {
@@ -134,12 +133,10 @@ export default function SettingsPage() {
 
     const createPricingRule = async (data: Partial<PricingRule>) => {
         try {
-            const res = await fetch(`${API}/pricing-rules`, {
+            const created = await fetchWithAuth<PricingRule>(`${API}/pricing-rules`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             });
-            const created = await res.json();
             setPricing(p => [...p, created]);
             setShowAddRule(false);
         } catch (e) {
@@ -149,13 +146,13 @@ export default function SettingsPage() {
 
     const deleteShippingProfile = async (id: string) => {
         if (!confirm('Delete this shipping profile?')) return;
-        await fetch(`${API}/shipping-profiles/${id}`, { method: 'DELETE' });
+        await fetchWithAuth(`${API}/shipping-profiles/${id}`, { method: 'DELETE' });
         setShipping(s => s.filter(p => p.id !== id));
     };
 
     const deletePricingRule = async (id: string) => {
         if (!confirm('Delete this pricing rule?')) return;
-        await fetch(`${API}/pricing-rules/${id}`, { method: 'DELETE' });
+        await fetchWithAuth(`${API}/pricing-rules/${id}`, { method: 'DELETE' });
         setPricing(p => p.filter(r => r.id !== id));
     };
 
@@ -171,14 +168,14 @@ export default function SettingsPage() {
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h2>
 
             {/* Tabs */}
-            <div className="flex gap-1 bg-slate-800/50 rounded-lg p-1 w-fit">
+            <div className="flex gap-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-1 w-fit">
                 {tabs.map(t => (
                     <button
                         key={t.key}
                         onClick={() => setTab(t.key)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === t.key
-                                ? 'bg-slate-700 text-slate-100'
-                                : 'text-slate-400 hover:text-slate-200'
+                                ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                                : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'
                             }`}
                     >
                         <t.icon size={16} />
@@ -196,7 +193,7 @@ export default function SettingsPage() {
                         <div className="space-y-4">
                             {Object.keys(settings).length === 0 ? (
                                 <Card>
-                                    <CardContent className="py-8 text-center text-slate-500">
+                                    <CardContent className="py-8 text-center text-slate-400 dark:text-slate-500">
                                         No settings configured yet. Settings will appear here once created via the API.
                                     </CardContent>
                                 </Card>
@@ -204,31 +201,31 @@ export default function SettingsPage() {
                                 Object.entries(settings).map(([category, items]) => (
                                     <Card key={category}>
                                         <button
-                                            className="w-full flex items-center justify-between px-4 sm:px-6 py-4 hover:bg-slate-800/50 transition-colors"
+                                            className="w-full flex items-center justify-between px-4 sm:px-6 py-4 hover:bg-slate-100/50 dark:bg-slate-800/50 transition-colors"
                                             onClick={() =>
                                                 setExpandedCategory(expandedCategory === category ? null : category)
                                             }
                                         >
-                                            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+                                            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400">
                                                 {category}
                                             </h3>
                                             {expandedCategory === category ? (
-                                                <ChevronDown size={16} className="text-slate-500" />
+                                                <ChevronDown size={16} className="text-slate-400 dark:text-slate-500" />
                                             ) : (
-                                                <ChevronRight size={16} className="text-slate-500" />
+                                                <ChevronRight size={16} className="text-slate-400 dark:text-slate-500" />
                                             )}
                                         </button>
                                         {expandedCategory === category && (
-                                            <CardContent className="pt-0 divide-y divide-slate-800">
+                                            <CardContent className="pt-0 divide-y divide-slate-200 dark:divide-slate-800">
                                                 {items.map(s => (
                                                     <div
                                                         key={s.id}
                                                         className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3"
                                                     >
                                                         <div className="min-w-0 flex-1">
-                                                            <p className="text-sm font-medium text-slate-200">{s.key}</p>
+                                                            <p className="text-sm font-medium text-slate-600 dark:text-slate-200">{s.key}</p>
                                                             {s.description && (
-                                                                <p className="text-xs text-slate-500 mt-0.5">{s.description}</p>
+                                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{s.description}</p>
                                                             )}
                                                         </div>
                                                         <div className="flex items-center gap-2 shrink-0">
@@ -237,7 +234,7 @@ export default function SettingsPage() {
                                                                     onClick={() =>
                                                                         void updateSetting(s.category, s.key, !s.value)
                                                                     }
-                                                                    className="text-slate-400 hover:text-slate-100 transition-colors"
+                                                                    className="text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors"
                                                                     disabled={saving}
                                                                 >
                                                                     {s.value ? (
@@ -268,7 +265,7 @@ export default function SettingsPage() {
                     {tab === 'shipping' && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm text-slate-400">
+                                <p className="text-sm text-slate-400 dark:text-slate-400">
                                     {shipping.length} shipping profile{shipping.length !== 1 ? 's' : ''}
                                 </p>
                                 <button onClick={() => setShowAddProfile(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
@@ -285,7 +282,7 @@ export default function SettingsPage() {
 
                             {shipping.length === 0 ? (
                                 <Card>
-                                    <CardContent className="py-8 text-center text-slate-500">
+                                    <CardContent className="py-8 text-center text-slate-400 dark:text-slate-500">
                                         No shipping profiles yet. Click "Add Profile" to create one.
                                     </CardContent>
                                 </Card>
@@ -296,7 +293,7 @@ export default function SettingsPage() {
                                             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                                                 <div>
                                                     <CardTitle className="text-base">{sp.name}</CardTitle>
-                                                    <p className="text-xs text-slate-500 mt-1">
+                                                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                                                         {sp.carrier} — {sp.service}
                                                     </p>
                                                 </div>
@@ -308,7 +305,7 @@ export default function SettingsPage() {
                                                     )}
                                                     <button
                                                         onClick={() => void deleteShippingProfile(sp.id)}
-                                                        className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                                                        className="p-1 text-slate-400 dark:text-slate-500 hover:text-red-400 transition-colors"
                                                     >
                                                         <Trash2 size={14} />
                                                     </button>
@@ -316,20 +313,20 @@ export default function SettingsPage() {
                                             </CardHeader>
                                             <CardContent>
                                                 <div className="grid grid-cols-2 gap-y-2 text-sm">
-                                                    <span className="text-slate-500">Cost type</span>
-                                                    <span className="text-slate-200 capitalize">{sp.costType}</span>
+                                                    <span className="text-slate-400 dark:text-slate-500">Cost type</span>
+                                                    <span className="text-slate-600 dark:text-slate-200 capitalize">{sp.costType}</span>
                                                     {sp.costType === 'flat' && sp.flatCost && (
                                                         <>
-                                                            <span className="text-slate-500">Flat cost</span>
-                                                            <span className="text-slate-200">${sp.flatCost}</span>
+                                                            <span className="text-slate-400 dark:text-slate-500">Flat cost</span>
+                                                            <span className="text-slate-600 dark:text-slate-200">${sp.flatCost}</span>
                                                         </>
                                                     )}
-                                                    <span className="text-slate-500">Handling time</span>
-                                                    <span className="text-slate-200">{sp.handlingTime} day{sp.handlingTime !== 1 ? 's' : ''}</span>
-                                                    <span className="text-slate-500">Domestic only</span>
-                                                    <span className="text-slate-200">{sp.domesticOnly ? 'Yes' : 'No'}</span>
-                                                    <span className="text-slate-500">Status</span>
-                                                    <span className={sp.active ? 'text-emerald-500' : 'text-slate-500'}>
+                                                    <span className="text-slate-400 dark:text-slate-500">Handling time</span>
+                                                    <span className="text-slate-600 dark:text-slate-200">{sp.handlingTime} day{sp.handlingTime !== 1 ? 's' : ''}</span>
+                                                    <span className="text-slate-400 dark:text-slate-500">Domestic only</span>
+                                                    <span className="text-slate-600 dark:text-slate-200">{sp.domesticOnly ? 'Yes' : 'No'}</span>
+                                                    <span className="text-slate-400 dark:text-slate-500">Status</span>
+                                                    <span className={sp.active ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}>
                                                         {sp.active ? 'Active' : 'Inactive'}
                                                     </span>
                                                 </div>
@@ -345,7 +342,7 @@ export default function SettingsPage() {
                     {tab === 'pricing' && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm text-slate-400">
+                                <p className="text-sm text-slate-400 dark:text-slate-400">
                                     {pricing.length} pricing rule{pricing.length !== 1 ? 's' : ''}
                                 </p>
                                 <button onClick={() => setShowAddRule(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
@@ -362,7 +359,7 @@ export default function SettingsPage() {
 
                             {pricing.length === 0 ? (
                                 <Card>
-                                    <CardContent className="py-8 text-center text-slate-500">
+                                    <CardContent className="py-8 text-center text-slate-400 dark:text-slate-500">
                                         No pricing rules yet. Click "Add Rule" to create one.
                                     </CardContent>
                                 </Card>
@@ -370,39 +367,39 @@ export default function SettingsPage() {
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
                                         <thead>
-                                            <tr className="border-b border-slate-800">
-                                                <th className="text-left py-3 px-4 text-slate-500 font-medium">Name</th>
-                                                <th className="text-left py-3 px-4 text-slate-500 font-medium">Type</th>
-                                                <th className="text-left py-3 px-4 text-slate-500 font-medium hidden sm:table-cell">Channel</th>
-                                                <th className="text-left py-3 px-4 text-slate-500 font-medium hidden md:table-cell">Brand</th>
-                                                <th className="text-center py-3 px-4 text-slate-500 font-medium">Priority</th>
-                                                <th className="text-center py-3 px-4 text-slate-500 font-medium">Active</th>
+                                            <tr className="border-b border-slate-200 dark:border-slate-800">
+                                                <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Name</th>
+                                                <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Type</th>
+                                                <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium hidden sm:table-cell">Channel</th>
+                                                <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium hidden md:table-cell">Brand</th>
+                                                <th className="text-center py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Priority</th>
+                                                <th className="text-center py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Active</th>
                                                 <th className="text-right py-3 px-4" />
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-800">
+                                        <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                             {pricing.map(rule => (
-                                                <tr key={rule.id} className="hover:bg-slate-800/30 transition-colors">
-                                                    <td className="py-3 px-4 text-slate-200 font-medium">{rule.name}</td>
+                                                <tr key={rule.id} className="hover:bg-slate-100/30 dark:bg-slate-800/30 transition-colors">
+                                                    <td className="py-3 px-4 text-slate-600 dark:text-slate-200 font-medium">{rule.name}</td>
                                                     <td className="py-3 px-4">
-                                                        <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded capitalize">
+                                                        <span className="bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-xs px-2 py-0.5 rounded capitalize">
                                                             {rule.ruleType.replace('_', ' ')}
                                                         </span>
                                                     </td>
-                                                    <td className="py-3 px-4 text-slate-400 hidden sm:table-cell capitalize">
+                                                    <td className="py-3 px-4 text-slate-400 dark:text-slate-400 hidden sm:table-cell capitalize">
                                                         {rule.channel ?? 'All'}
                                                     </td>
-                                                    <td className="py-3 px-4 text-slate-400 hidden md:table-cell">
+                                                    <td className="py-3 px-4 text-slate-400 dark:text-slate-400 hidden md:table-cell">
                                                         {rule.brand ?? 'All'}
                                                     </td>
-                                                    <td className="py-3 px-4 text-center text-slate-300">{rule.priority}</td>
+                                                    <td className="py-3 px-4 text-center text-slate-500 dark:text-slate-300">{rule.priority}</td>
                                                     <td className="py-3 px-4 text-center">
                                                         <span className={`inline-block w-2 h-2 rounded-full ${rule.active ? 'bg-emerald-500' : 'bg-slate-600'}`} />
                                                     </td>
                                                     <td className="py-3 px-4 text-right">
                                                         <button
                                                             onClick={() => void deletePricingRule(rule.id)}
-                                                            className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                                                            className="p-1 text-slate-400 dark:text-slate-500 hover:text-red-400 transition-colors"
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>
@@ -465,7 +462,7 @@ function SettingValueEditor({
                 type="text"
                 value={draft}
                 onChange={e => handleChange(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-40 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-slate-600 dark:text-slate-200 w-40 focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
             {dirty && (
                 <button
@@ -519,7 +516,7 @@ function AddShippingProfileForm({
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-base">New Shipping Profile</CardTitle>
-                <button onClick={onCancel} className="p-1 text-slate-400 hover:text-slate-200">
+                <button onClick={onCancel} className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
                     <X size={16} />
                 </button>
             </CardHeader>
@@ -527,14 +524,14 @@ function AddShippingProfileForm({
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Name *</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Name *</label>
                             <input value={name} onChange={e => setName(e.target.value)} required
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Carrier</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Carrier</label>
                             <select value={carrier} onChange={e => setCarrier(e.target.value)}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
                                 <option value="USPS">USPS</option>
                                 <option value="UPS">UPS</option>
                                 <option value="FedEx">FedEx</option>
@@ -542,19 +539,19 @@ function AddShippingProfileForm({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Service</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Service</label>
                             <input value={service} onChange={e => setService(e.target.value)}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Handling Time (days)</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Handling Time (days)</label>
                             <input type="number" value={handlingTime} onChange={e => setHandlingTime(Number(e.target.value))} min={0}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Cost Type</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Cost Type</label>
                             <select value={costType} onChange={e => setCostType(e.target.value)}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
                                 <option value="flat">Flat Rate</option>
                                 <option value="free">Free</option>
                                 <option value="calculated">Calculated</option>
@@ -563,21 +560,21 @@ function AddShippingProfileForm({
                         </div>
                         {costType === 'flat' && (
                             <div>
-                                <label className="block text-xs text-slate-500 mb-1">Flat Cost ($)</label>
+                                <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Flat Cost ($)</label>
                                 <input value={flatCost} onChange={e => setFlatCost(e.target.value)} placeholder="0.00"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                             </div>
                         )}
                     </div>
                     <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                        <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300 cursor-pointer">
                             <input type="checkbox" checked={domesticOnly} onChange={e => setDomesticOnly(e.target.checked)}
-                                className="rounded bg-slate-800 border-slate-600" />
+                                className="rounded bg-slate-800 border-slate-300 dark:border-slate-600" />
                             Domestic only
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                        <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300 cursor-pointer">
                             <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)}
-                                className="rounded bg-slate-800 border-slate-600" />
+                                className="rounded bg-slate-800 border-slate-300 dark:border-slate-600" />
                             Set as default
                         </label>
                     </div>
@@ -585,7 +582,7 @@ function AddShippingProfileForm({
                         <button type="submit" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                             <Plus size={16} /> Create Profile
                         </button>
-                        <button type="button" onClick={onCancel} className="text-sm text-slate-400 hover:text-slate-200 px-3 py-2 transition-colors">
+                        <button type="button" onClick={onCancel} className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors">
                             Cancel
                         </button>
                     </div>
@@ -629,7 +626,7 @@ function AddPricingRuleForm({
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-base">New Pricing Rule</CardTitle>
-                <button onClick={onCancel} className="p-1 text-slate-400 hover:text-slate-200">
+                <button onClick={onCancel} className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
                     <X size={16} />
                 </button>
             </CardHeader>
@@ -637,14 +634,14 @@ function AddPricingRuleForm({
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Name *</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Name *</label>
                             <input value={name} onChange={e => setName(e.target.value)} required placeholder="e.g., eBay 15% Markup"
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Rule Type</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Rule Type</label>
                             <select value={ruleType} onChange={e => setRuleType(e.target.value)}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
                                 <option value="markup">Markup</option>
                                 <option value="markdown">Markdown</option>
                                 <option value="round">Round</option>
@@ -653,9 +650,9 @@ function AddPricingRuleForm({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Channel (optional)</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Channel (optional)</label>
                             <select value={channel} onChange={e => setChannel(e.target.value)}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none">
                                 <option value="">All Channels</option>
                                 <option value="ebay">eBay</option>
                                 <option value="shopify">Shopify</option>
@@ -664,26 +661,26 @@ function AddPricingRuleForm({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Brand (optional)</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Brand (optional)</label>
                             <input value={brand} onChange={e => setBrand(e.target.value)} placeholder="e.g., ACME"
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Percentage</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Percentage</label>
                             <input type="number" value={percentage} onChange={e => setPercentage(Number(e.target.value))} min={0} step={0.1}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-500 mb-1">Priority</label>
+                            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Priority</label>
                             <input type="number" value={priority} onChange={e => setPriority(Number(e.target.value))}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
                         </div>
                     </div>
                     <div className="flex items-center gap-2 pt-2">
                         <button type="submit" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                             <Plus size={16} /> Create Rule
                         </button>
-                        <button type="button" onClick={onCancel} className="text-sm text-slate-400 hover:text-slate-200 px-3 py-2 transition-colors">
+                        <button type="button" onClick={onCancel} className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors">
                             Cancel
                         </button>
                     </div>
@@ -743,8 +740,8 @@ function ChannelConnectionsTab() {
         setLoading(true);
         try {
             const [connRes, storeRes] = await Promise.all([
-                fetch('/api/channels?userId=system').then(r => r.json()),
-                fetch('/api/stores').then(r => r.json()),
+                fetchWithAuth<ChannelConn[]>('/api/channels?userId=system'),
+                fetchWithAuth<ChannelStore[]>('/api/stores'),
             ]);
             setConnections(Array.isArray(connRes) ? connRes : []);
             setStores(Array.isArray(storeRes) ? storeRes : []);
@@ -761,9 +758,7 @@ function ChannelConnectionsTab() {
         setSeeding(true);
         setMessage(null);
         try {
-            const res = await fetch('/api/channels/demo/seed-ebay', { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message ?? 'Seed failed');
+            const data = await authPost<{ message?: string }>('/api/channels/demo/seed-ebay');
             setMessage({ type: 'success', text: data.message ?? 'Demo eBay store created!' });
             await fetchData();
         } catch (e: any) {
@@ -776,8 +771,19 @@ function ChannelConnectionsTab() {
     const startOAuth = async (channel: string) => {
         setOauthLoading(channel);
         try {
-            const res = await fetch(`/api/channels/${channel}/auth-url?state=connect:system`);
-            const data = await res.json();
+            if (channel === 'ebay') {
+                const data = await startEbayOAuth({
+                    marketplaceId: 'EBAY_MOTORS_US',
+                    environment: 'sandbox',
+                });
+                if (data.authUrl) {
+                    window.location.href = data.authUrl;
+                }
+                return;
+            }
+            const data = await fetchWithAuth<{ url?: string }>(
+                `/api/channels/${channel}/auth-url?state=connect:system`,
+            );
             if (data.url) {
                 window.location.href = data.url;
             }
@@ -793,13 +799,11 @@ function ChannelConnectionsTab() {
         setImportingToken(true);
         setMessage(null);
         try {
-            const res = await fetch('/api/channels/ebay/connect-legacy-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: legacyToken.trim() }),
-            });
-            const data = await res.json();
-            if (!res.ok || data.ok === false) throw new Error(data.error ?? data.message ?? 'Import failed');
+            const data = await authPost<{ ok?: boolean; error?: string; message?: string }>(
+                '/api/channels/ebay/connect-legacy-token',
+                { token: legacyToken.trim() },
+            );
+            if (data.ok === false) throw new Error(data.error ?? data.message ?? 'Import failed');
             setMessage({ type: 'success', text: data.message ?? 'eBay sandbox token imported!' });
             setLegacyToken('');
             setShowTokenForm(false);
@@ -814,8 +818,9 @@ function ChannelConnectionsTab() {
     const testConnection = async (connectionId: string) => {
         setTestResult(null);
         try {
-            const res = await fetch(`/api/channels/${connectionId}/test`, { method: 'POST' });
-            const data = await res.json();
+            const data = await authPost<{ ok: boolean; error?: string }>(
+                `/api/channels/${connectionId}/test`,
+            );
             setTestResult({ id: connectionId, ...data });
         } catch (e: any) {
             setTestResult({ id: connectionId, ok: false, error: e.message });
@@ -825,7 +830,7 @@ function ChannelConnectionsTab() {
     const disconnectChannel = async (connectionId: string) => {
         if (!confirm('Disconnect this channel? This will remove all associated stores.')) return;
         try {
-            await fetch(`/api/channels/${connectionId}`, { method: 'DELETE' });
+            await fetchWithAuth(`/api/channels/${connectionId}`, { method: 'DELETE' });
             setMessage({ type: 'success', text: 'Channel disconnected' });
             await fetchData();
         } catch (e: any) {
@@ -849,7 +854,7 @@ function ChannelConnectionsTab() {
                 }`}>
                     {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                     {message.text}
-                    <button onClick={() => setMessage(null)} className="ml-auto text-slate-400 hover:text-slate-200">
+                    <button onClick={() => setMessage(null)} className="ml-auto text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
                         <X size={14} />
                     </button>
                 </div>
@@ -864,7 +869,7 @@ function ChannelConnectionsTab() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-slate-400 dark:text-slate-400">
                         Click below to create a demo eBay Sandbox connection using your developer credentials.
                         This runs in <span className="text-amber-400 font-medium">demo mode</span> — no real listings will be published.
                     </p>
@@ -872,7 +877,7 @@ function ChannelConnectionsTab() {
                         <button
                             onClick={seedDemoEbay}
                             disabled={seeding || ebayConnected}
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 dark:bg-slate-700 disabled:text-slate-400 dark:text-slate-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                         >
                             {seeding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                             {ebayConnected ? 'eBay Already Connected' : 'Create Demo eBay Store'}
@@ -889,7 +894,7 @@ function ChannelConnectionsTab() {
                                 <button
                                     onClick={() => startOAuth('ebay')}
                                     disabled={!!oauthLoading}
-                                    className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                                    className="flex items-center gap-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                                 >
                                     {oauthLoading === 'ebay' ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
                                     Connect via OAuth (Sandbox)
@@ -900,9 +905,9 @@ function ChannelConnectionsTab() {
 
                     {/* Legacy token paste form */}
                     {showTokenForm && !ebayConnected && (
-                        <div className="space-y-2 bg-slate-800/60 rounded-lg p-4 border border-slate-700/50">
-                            <p className="text-xs text-slate-400">
-                                Paste the <span className="text-slate-200 font-medium">eBay Sandbox User Token</span> from your{' '}
+                        <div className="space-y-2 bg-slate-100/60 dark:bg-slate-800/60 rounded-lg p-4 border border-slate-200/50 dark:border-slate-700/50">
+                            <p className="text-xs text-slate-400 dark:text-slate-400">
+                                Paste the <span className="text-slate-600 dark:text-slate-200 font-medium">eBay Sandbox User Token</span> from your{' '}
                                 <a
                                     href="https://developer.ebay.com/my/auth/sandbox/user"
                                     target="_blank"
@@ -918,20 +923,20 @@ function ChannelConnectionsTab() {
                                 onChange={e => setLegacyToken(e.target.value)}
                                 rows={4}
                                 placeholder="v^1.1#i^1#f^0#p^1#r^0#I^3#t^H4sI..."
-                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-500 dark:text-slate-300 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
                             />
                             <div className="flex gap-2">
                                 <button
                                     onClick={importLegacyToken}
                                     disabled={!legacyToken.trim() || importingToken}
-                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
+                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 dark:bg-slate-700 disabled:text-slate-400 dark:text-slate-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
                                 >
                                     {importingToken ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                                     Import &amp; Connect
                                 </button>
                                 <button
                                     onClick={() => { setShowTokenForm(false); setLegacyToken(''); }}
-                                    className="text-xs text-slate-400 hover:text-slate-200 px-3 py-2 transition-colors"
+                                    className="text-xs text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors"
                                 >
                                     Cancel
                                 </button>
@@ -939,21 +944,21 @@ function ChannelConnectionsTab() {
                         </div>
                     )}
 
-                    <div className="bg-slate-800/50 rounded-lg p-3 text-xs text-slate-500 space-y-1">
-                        <p><span className="text-slate-400 font-medium">App ID:</span> IrtizaHa-listingp-SBX-e6e5fa804-178dade4</p>
-                        <p><span className="text-slate-400 font-medium">Dev ID:</span> 71354d52-d565-49e2-8977-d96caab268ee</p>
-                        <p><span className="text-slate-400 font-medium">Environment:</span> Sandbox</p>
+                    <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3 text-xs text-slate-400 dark:text-slate-500 space-y-1">
+                        <p><span className="text-slate-400 dark:text-slate-400 font-medium">App ID:</span> IrtizaHa-listingp-SBX-e6e5fa804-178dade4</p>
+                        <p><span className="text-slate-400 dark:text-slate-400 font-medium">Dev ID:</span> 71354d52-d565-49e2-8977-d96caab268ee</p>
+                        <p><span className="text-slate-400 dark:text-slate-400 font-medium">Environment:</span> Sandbox</p>
                     </div>
                 </CardContent>
             </Card>
 
             {/* Connected Channels */}
             <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-200">Connected Channels</h3>
+                <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-200">Connected Channels</h3>
                 {connections.length === 0 ? (
                     <Card>
-                        <CardContent className="py-8 text-center text-slate-500">
-                            <WifiOff size={24} className="mx-auto mb-2 text-slate-600" />
+                        <CardContent className="py-8 text-center text-slate-400 dark:text-slate-500">
+                            <WifiOff size={24} className="mx-auto mb-2 text-slate-500 dark:text-slate-600" />
                             No channels connected yet. Use Quick Setup above to get started.
                         </CardContent>
                     </Card>
@@ -972,14 +977,14 @@ function ChannelConnectionsTab() {
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xl">{info.logo}</span>
                                                 <div>
-                                                    <p className="text-sm font-semibold text-slate-200">{info.label}</p>
-                                                    <p className="text-xs text-slate-500">{conn.accountName ?? conn.externalAccountId ?? conn.id.slice(0, 8)}</p>
+                                                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-200">{info.label}</p>
+                                                    <p className="text-xs text-slate-400 dark:text-slate-500">{conn.accountName ?? conn.externalAccountId ?? conn.id.slice(0, 8)}</p>
                                                 </div>
                                             </div>
                                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                                 conn.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' :
                                                 conn.status === 'error' ? 'bg-red-500/15 text-red-400' :
-                                                'bg-slate-700 text-slate-400'
+                                                'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-400'
                                             }`}>
                                                 {conn.status}
                                             </span>
@@ -988,18 +993,18 @@ function ChannelConnectionsTab() {
                                         {/* Stores */}
                                         {connStores.length > 0 && (
                                             <div className="space-y-2">
-                                                <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Stores</p>
+                                                <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-medium">Stores</p>
                                                 {connStores.map(store => (
-                                                    <div key={store.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg px-3 py-2">
+                                                    <div key={store.id} className="flex items-center justify-between bg-slate-100/50 dark:bg-slate-800/50 rounded-lg px-3 py-2">
                                                         <div>
-                                                            <p className="text-sm text-slate-300">{store.storeName}</p>
-                                                            <p className="text-xs text-slate-500">
+                                                            <p className="text-sm text-slate-500 dark:text-slate-300">{store.storeName}</p>
+                                                            <p className="text-xs text-slate-400 dark:text-slate-500">
                                                                 {store.listingCount} listing{store.listingCount !== 1 ? 's' : ''}
                                                                 {store.isPrimary && <span className="ml-1 text-blue-400">• Primary</span>}
                                                             </p>
                                                         </div>
                                                         <span className={`text-xs px-2 py-0.5 rounded ${
-                                                            store.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700 text-slate-400'
+                                                            store.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-400'
                                                         }`}>
                                                             {store.status}
                                                         </span>
@@ -1009,7 +1014,7 @@ function ChannelConnectionsTab() {
                                         )}
 
                                         {/* Connection details */}
-                                        <div className="text-xs text-slate-600 space-y-0.5">
+                                        <div className="text-xs text-slate-500 dark:text-slate-600 space-y-0.5">
                                             <p>Connected: {new Date(conn.createdAt).toLocaleDateString()}</p>
                                             {conn.lastSyncAt && <p>Last sync: {new Date(conn.lastSyncAt).toLocaleString()}</p>}
                                             {conn.lastError && <p className="text-red-400">Error: {conn.lastError}</p>}
@@ -1029,14 +1034,14 @@ function ChannelConnectionsTab() {
                                         <div className="flex gap-2 pt-1">
                                             <button
                                                 onClick={() => testConnection(conn.id)}
-                                                className="text-xs text-slate-400 hover:text-blue-400 transition-colors"
+                                                className="text-xs text-slate-400 dark:text-slate-400 hover:text-blue-400 transition-colors"
                                             >
                                                 Test Connection
                                             </button>
-                                            <span className="text-slate-700">|</span>
+                                            <span className="text-slate-600 dark:text-slate-700">|</span>
                                             <button
                                                 onClick={() => disconnectChannel(conn.id)}
-                                                className="text-xs text-slate-400 hover:text-red-400 transition-colors"
+                                                className="text-xs text-slate-400 dark:text-slate-400 hover:text-red-400 transition-colors"
                                             >
                                                 Disconnect
                                             </button>
@@ -1052,7 +1057,7 @@ function ChannelConnectionsTab() {
             {/* Available Channels (not yet connected) */}
             {(!ebayConnected || !shopifyConnected) && (
                 <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-slate-200">Available Channels</h3>
+                    <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-200">Available Channels</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                         {Object.entries(CHANNEL_INFO)
                             .filter(([key]) => !connections.some(c => c.channel === key && c.status === 'active'))
@@ -1061,12 +1066,12 @@ function ChannelConnectionsTab() {
                                     key={key}
                                     onClick={() => key === 'ebay' ? seedDemoEbay() : startOAuth(key)}
                                     disabled={!!oauthLoading || seeding}
-                                    className="flex items-center gap-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-lg p-4 text-left transition-all"
+                                    className="flex items-center gap-3 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-700/50 hover:border-slate-300 dark:border-slate-600 rounded-lg p-4 text-left transition-all"
                                 >
                                     <span className="text-2xl">{info.logo}</span>
                                     <div>
-                                        <p className="text-sm font-medium text-slate-300">{info.label}</p>
-                                        <p className="text-xs text-slate-500">Click to connect</p>
+                                        <p className="text-sm font-medium text-slate-500 dark:text-slate-300">{info.label}</p>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500">Click to connect</p>
                                     </div>
                                 </button>
                             ))}

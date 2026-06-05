@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -159,8 +159,8 @@ function ReadinessBadge({ row }: { row: CatalogProductRowDto }) {
 
 function FilterDetails({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <details className="group border border-slate-700/80 rounded-lg bg-slate-900/40">
-      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800/60 rounded-lg">
+    <details className="group border border-slate-200/80 dark:border-slate-700/80 rounded-lg bg-white/40 dark:bg-slate-900/40">
+      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-200 hover:bg-slate-100/60 dark:bg-slate-800/60 rounded-lg">
         {title}
       </summary>
       <div className="px-3 pb-3 pt-1 space-y-2 border-t border-slate-800">{children}</div>
@@ -178,10 +178,10 @@ function LabeledCheck({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+    <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300 cursor-pointer">
       <input
         type="checkbox"
-        className="rounded border-slate-600 bg-slate-900"
+        className="rounded border-slate-300 dark:border-slate-600 bg-slate-900"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
@@ -247,22 +247,22 @@ export default function CatalogMotorsFiltersPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 lg:p-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 lg:p-8">
       <div className="max-w-[1600px] mx-auto space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-sm text-slate-400 mb-1">
+            <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-400 mb-1">
               <Link to="/catalog/import" className="hover:text-blue-400">
                 CSV Import
               </Link>
               <span>/</span>
-              <span className="text-slate-200">Motors ops filters</span>
+              <span className="text-slate-600 dark:text-slate-200">Motors ops filters</span>
             </div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Truck className="w-7 h-7 text-blue-500" />
               eBay Motors — catalog listing filters
             </h1>
-            <p className="text-slate-400 text-sm mt-1 max-w-3xl">
+            <p className="text-slate-400 dark:text-slate-400 text-sm mt-1 max-w-3xl">
               Internal filters for imported CSV catalog data only (no margin or sales metrics).
               Readiness and routing fields are derived from your template columns and fitment JSON.
             </p>
@@ -272,7 +272,7 @@ export default function CatalogMotorsFiltersPage() {
               type="button"
               onClick={refresh}
               disabled={!appliedForm || loading}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm border border-slate-600 disabled:opacity-40"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 text-sm border border-slate-300 dark:border-slate-600 disabled:opacity-40"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Refresh
@@ -288,7 +288,7 @@ export default function CatalogMotorsFiltersPage() {
             <button
               type="button"
               onClick={reset}
-              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm border border-slate-600"
+              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 text-sm border border-slate-300 dark:border-slate-600"
             >
               Reset
             </button>
@@ -297,25 +297,25 @@ export default function CatalogMotorsFiltersPage() {
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <div className="xl:col-span-4 space-y-3">
-            <Card className="border-slate-800 bg-slate-900/50">
+            <Card className="border-slate-800 bg-white/50 dark:bg-slate-900/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Search & scope</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <input
-                  className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
+                  className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
                   placeholder="Search title / SKU / brand / MPN / OEM"
                   value={form.search}
                   onChange={(e) => setForm((f) => ({ ...f, search: e.target.value }))}
                 />
                 <input
-                  className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm font-mono"
+                  className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-3 py-2 text-sm font-mono"
                   placeholder="Import ID (UUID)"
                   value={form.importId}
                   onChange={(e) => setForm((f) => ({ ...f, importId: e.target.value }))}
                 />
                 <input
-                  className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
+                  className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
                   placeholder="SKU contains"
                   value={form.sku}
                   onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
@@ -324,9 +324,9 @@ export default function CatalogMotorsFiltersPage() {
             </Card>
 
             <FilterDetails title="1. Listing readiness">
-              <label className="block text-xs text-slate-400 mb-1">Readiness</label>
+              <label className="block text-xs text-slate-400 dark:text-slate-400 mb-1">Readiness</label>
               <select
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 value={form.readinessStatus}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, readinessStatus: e.target.value as Readiness }))
@@ -389,28 +389,28 @@ export default function CatalogMotorsFiltersPage() {
 
             <FilterDetails title="3. Category & brand">
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Category IDs (comma-separated)"
                 value={form.categoryIds}
                 onChange={(e) => setForm((f) => ({ ...f, categoryIds: e.target.value }))}
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400 dark:text-slate-500">
                 Super-categories use server config when category IDs are filled in.
               </p>
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Brands (comma, partial match)"
                 value={form.brands}
                 onChange={(e) => setForm((f) => ({ ...f, brands: e.target.value }))}
               />
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Part types (comma, partial)"
                 value={form.partTypes}
                 onChange={(e) => setForm((f) => ({ ...f, partTypes: e.target.value }))}
               />
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Condition IDs (comma)"
                 value={form.conditionIds}
                 onChange={(e) => setForm((f) => ({ ...f, conditionIds: e.target.value }))}
@@ -419,26 +419,26 @@ export default function CatalogMotorsFiltersPage() {
 
             <FilterDetails title="4. Vehicle compatibility">
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Make contains"
                 value={form.fitmentMake}
                 onChange={(e) => setForm((f) => ({ ...f, fitmentMake: e.target.value }))}
               />
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Model contains"
                 value={form.fitmentModel}
                 onChange={(e) => setForm((f) => ({ ...f, fitmentModel: e.target.value }))}
               />
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Year min"
                   value={form.yearMin}
                   onChange={(e) => setForm((f) => ({ ...f, yearMin: e.target.value }))}
                 />
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Year max"
                   value={form.yearMax}
                   onChange={(e) => setForm((f) => ({ ...f, yearMax: e.target.value }))}
@@ -446,13 +446,13 @@ export default function CatalogMotorsFiltersPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Fitment count min"
                   value={form.fitmentCountMin}
                   onChange={(e) => setForm((f) => ({ ...f, fitmentCountMin: e.target.value }))}
                 />
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Fitment count max"
                   value={form.fitmentCountMax}
                   onChange={(e) => setForm((f) => ({ ...f, fitmentCountMax: e.target.value }))}
@@ -478,21 +478,21 @@ export default function CatalogMotorsFiltersPage() {
             <FilterDetails title="5. Price & images">
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Price min"
                   value={form.priceMin}
                   onChange={(e) => setForm((f) => ({ ...f, priceMin: e.target.value }))}
                 />
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Price max"
                   value={form.priceMax}
                   onChange={(e) => setForm((f) => ({ ...f, priceMax: e.target.value }))}
                 />
               </div>
-              <label className="block text-xs text-slate-400 mb-1">Price band</label>
+              <label className="block text-xs text-slate-400 dark:text-slate-400 mb-1">Price band</label>
               <select
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 value={form.priceBand}
                 onChange={(e) => setForm((f) => ({ ...f, priceBand: e.target.value }))}
               >
@@ -504,7 +504,7 @@ export default function CatalogMotorsFiltersPage() {
                 <option value="1000_plus">$1000+</option>
               </select>
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Min image count"
                 value={form.imageCountMin}
                 onChange={(e) => setForm((f) => ({ ...f, imageCountMin: e.target.value }))}
@@ -513,25 +513,25 @@ export default function CatalogMotorsFiltersPage() {
 
             <FilterDetails title="6. Policies & format">
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Shipping profile contains"
                 value={form.shippingProfile}
                 onChange={(e) => setForm((f) => ({ ...f, shippingProfile: e.target.value }))}
               />
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Return profile contains"
                 value={form.returnProfile}
                 onChange={(e) => setForm((f) => ({ ...f, returnProfile: e.target.value }))}
               />
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Payment profile contains"
                 value={form.paymentProfile}
                 onChange={(e) => setForm((f) => ({ ...f, paymentProfile: e.target.value }))}
               />
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 placeholder="Location contains"
                 value={form.location}
                 onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
@@ -551,13 +551,13 @@ export default function CatalogMotorsFiltersPage() {
             <FilterDetails title="7. Title QC">
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Title len min"
                   value={form.titleLenMin}
                   onChange={(e) => setForm((f) => ({ ...f, titleLenMin: e.target.value }))}
                 />
                 <input
-                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
+                  className="rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                   placeholder="Title len max"
                   value={form.titleLenMax}
                   onChange={(e) => setForm((f) => ({ ...f, titleLenMax: e.target.value }))}
@@ -572,28 +572,28 @@ export default function CatalogMotorsFiltersPage() {
                 {error}
               </div>
             )}
-            <Card className="border-slate-800 bg-slate-900/50">
+            <Card className="border-slate-800 bg-white/50 dark:bg-slate-900/50">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-base">
-                  Results <span className="text-slate-400 font-normal">({total})</span>
+                  Results <span className="text-slate-400 dark:text-slate-400 font-normal">({total})</span>
                 </CardTitle>
                 <div className="flex items-center gap-2 text-sm">
                   <button
                     type="button"
                     disabled={page <= 0 || loading || !appliedForm}
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    className="p-2 rounded-md border border-slate-600 disabled:opacity-40"
+                    className="p-2 rounded-md border border-slate-300 dark:border-slate-600 disabled:opacity-40"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-slate-400">
+                  <span className="text-slate-400 dark:text-slate-400">
                     {page + 1} / {totalPages}
                   </span>
                   <button
                     type="button"
                     disabled={page >= totalPages - 1 || loading || !appliedForm}
                     onClick={() => setPage((p) => p + 1)}
-                    className="p-2 rounded-md border border-slate-600 disabled:opacity-40"
+                    className="p-2 rounded-md border border-slate-300 dark:border-slate-600 disabled:opacity-40"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -602,7 +602,7 @@ export default function CatalogMotorsFiltersPage() {
               <CardContent className="overflow-x-auto p-0">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800 text-left text-slate-400">
+                    <tr className="border-b border-slate-800 text-left text-slate-400 dark:text-slate-400">
                       <th className="px-3 py-2 font-medium">SKU</th>
                       <th className="px-3 py-2 font-medium">Title</th>
                       <th className="px-3 py-2 font-medium">Price</th>
@@ -616,21 +616,21 @@ export default function CatalogMotorsFiltersPage() {
                   <tbody>
                     {!appliedForm && !loading && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400 dark:text-slate-500">
                           Click Apply filters or Refresh (after first apply) to load catalog rows.
                         </td>
                       </tr>
                     )}
                     {appliedForm && rows.length === 0 && !loading && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400 dark:text-slate-500">
                           No rows match.
                         </td>
                       </tr>
                     )}
                     {loading && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400 dark:text-slate-400">
                           <Loader2 className="w-6 h-6 animate-spin inline mr-2" />
                           Loading…
                         </td>
@@ -638,11 +638,11 @@ export default function CatalogMotorsFiltersPage() {
                     )}
                     {!loading &&
                       rows.map((row) => (
-                      <tr key={row.id} className="border-b border-slate-800/80 hover:bg-slate-800/30">
+                      <tr key={row.id} className="border-b border-slate-200/80 dark:border-slate-800/80 hover:bg-slate-100/30 dark:bg-slate-800/30">
                         <td className="px-3 py-2 font-mono text-xs text-blue-300 whitespace-nowrap">
                           {row.sku ?? '—'}
                         </td>
-                        <td className="px-3 py-2 max-w-[280px] truncate text-slate-200" title={row.title}>
+                        <td className="px-3 py-2 max-w-[280px] truncate text-slate-600 dark:text-slate-200" title={row.title}>
                           {row.title}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
@@ -652,11 +652,11 @@ export default function CatalogMotorsFiltersPage() {
                         <td className="px-3 py-2">
                           <ReadinessBadge row={row} />
                         </td>
-                        <td className="px-3 py-2 text-slate-300">
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-300">
                           {row.derived?.data_completeness_score ?? '—'}
                         </td>
-                        <td className="px-3 py-2 text-xs text-slate-400">{row.derived?.price_band ?? '—'}</td>
-                        <td className="px-3 py-2 text-xs text-slate-400">
+                        <td className="px-3 py-2 text-xs text-slate-400 dark:text-slate-400">{row.derived?.price_band ?? '—'}</td>
+                        <td className="px-3 py-2 text-xs text-slate-400 dark:text-slate-400">
                           {row.derived?.fitment_count ?? 0} / {row.derived?.unique_make_count ?? 0}m
                         </td>
                       </tr>
@@ -667,17 +667,17 @@ export default function CatalogMotorsFiltersPage() {
             </Card>
 
             {rows[0]?.derived && (
-              <Card className="border-slate-800 bg-slate-900/50">
+              <Card className="border-slate-800 bg-white/50 dark:bg-slate-900/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">First row — routing & review (sample)</CardTitle>
                 </CardHeader>
-                <CardContent className="text-sm text-slate-300 space-y-2 font-mono text-xs">
+                <CardContent className="text-sm text-slate-500 dark:text-slate-300 space-y-2 font-mono text-xs">
                   <div>
-                    <span className="text-slate-500">Store routing: </span>
+                    <span className="text-slate-400 dark:text-slate-500">Store routing: </span>
                     {rows[0].derived.store_routing_recommendation}
                   </div>
                   <div>
-                    <span className="text-slate-500">Manual review: </span>
+                    <span className="text-slate-400 dark:text-slate-500">Manual review: </span>
                     {rows[0].derived.manual_review_reasons.join(', ') || '—'}
                   </div>
                   <div className="flex flex-wrap gap-2 pt-2">

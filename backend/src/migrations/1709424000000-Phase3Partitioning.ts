@@ -22,6 +22,43 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class Phase3Partitioning1709424000000 implements MigrationInterface {
   name = 'Phase3Partitioning1709424000000';
 
+  private async tableExists(
+    queryRunner: QueryRunner,
+    tableName: string,
+  ): Promise<boolean> {
+    const rows = await queryRunner.query(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = $1
+      ) AS "exists"
+    `,
+      [tableName],
+    );
+    return Boolean(rows[0]?.exists);
+  }
+
+  private async columnExists(
+    queryRunner: QueryRunner,
+    tableName: string,
+    columnName: string,
+  ): Promise<boolean> {
+    const rows = await queryRunner.query(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+      ) AS "exists"
+    `,
+      [tableName, columnName],
+    );
+    return Boolean(rows[0]?.exists);
+  }
+
   public async up(queryRunner: QueryRunner): Promise<void> {
     // ─── Helper: generate partition DDL for 12 months ───
     const now = new Date();
@@ -36,7 +73,10 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
     }
 
     // ──────────────── inventory_events ────────────────
-    await queryRunner.query(`ALTER TABLE IF EXISTS inventory_events RENAME TO inventory_events_old`);
+    const hadInventoryEvents = await this.tableExists(queryRunner, 'inventory_events');
+    if (hadInventoryEvents) {
+      await queryRunner.query(`ALTER TABLE inventory_events RENAME TO inventory_events_old`);
+    }
 
     await queryRunner.query(`
       CREATE TABLE inventory_events (
@@ -46,6 +86,7 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
         quantity_change INTEGER NOT NULL,
         quantity_before INTEGER NOT NULL,
         quantity_after INTEGER NOT NULL,
+        store_id UUID,
         source_channel VARCHAR(30),
         source_order_id VARCHAR(100),
         source_reference TEXT,
@@ -71,19 +112,64 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
       PARTITION OF inventory_events DEFAULT
     `);
 
-    await queryRunner.query(`
-      INSERT INTO inventory_events SELECT * FROM inventory_events_old
-    `);
+    if (hadInventoryEvents) {
+      const oldHasStoreId = await this.columnExists(
+        queryRunner,
+        'inventory_events_old',
+        'store_id',
+      );
+      const storeIdExpr = oldHasStoreId ? 'store_id' : 'NULL::uuid';
+
+      await queryRunner.query(`
+        INSERT INTO inventory_events (
+          id,
+          listing_id,
+          event_type,
+          quantity_change,
+          quantity_before,
+          quantity_after,
+          store_id,
+          source_channel,
+          source_order_id,
+          source_reference,
+          idempotency_key,
+          reason,
+          created_by,
+          created_at
+        )
+        SELECT
+          id,
+          listing_id,
+          event_type,
+          quantity_change,
+          quantity_before,
+          quantity_after,
+          ${storeIdExpr},
+          source_channel,
+          source_order_id,
+          source_reference,
+          idempotency_key,
+          reason,
+          created_by,
+          created_at
+        FROM inventory_events_old
+      `);
+    }
 
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_event_listing_part ON inventory_events(listing_id, created_at)`);
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_event_type_part ON inventory_events(event_type, created_at)`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_event_source_part ON inventory_events(source_channel, source_order_id)`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_inv_event_store_part ON inventory_events(store_id) WHERE store_id IS NOT NULL`);
     // Unique constraint on partitioned table must include the partition key (created_at)
     await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_event_idempotency_part ON inventory_events(idempotency_key, created_at) WHERE idempotency_key IS NOT NULL`);
 
     await queryRunner.query(`DROP TABLE IF EXISTS inventory_events_old`);
 
     // ──────────────── audit_logs ────────────────
-    await queryRunner.query(`ALTER TABLE IF EXISTS audit_logs RENAME TO audit_logs_old`);
+    const hadAuditLogs = await this.tableExists(queryRunner, 'audit_logs');
+    if (hadAuditLogs) {
+      await queryRunner.query(`ALTER TABLE audit_logs RENAME TO audit_logs_old`);
+    }
 
     await queryRunner.query(`
       CREATE TABLE audit_logs (
@@ -114,9 +200,34 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
       PARTITION OF audit_logs DEFAULT
     `);
 
-    await queryRunner.query(`
-      INSERT INTO audit_logs SELECT * FROM audit_logs_old
-    `);
+    if (hadAuditLogs) {
+      await queryRunner.query(`
+        INSERT INTO audit_logs (
+          id,
+          "entityType",
+          "entityId",
+          action,
+          "actorId",
+          "actorType",
+          changes,
+          metadata,
+          "ipAddress",
+          "createdAt"
+        )
+        SELECT
+          id,
+          "entityType",
+          "entityId",
+          action,
+          "actorId",
+          "actorType",
+          changes,
+          metadata,
+          "ipAddress",
+          "createdAt"
+        FROM audit_logs_old
+      `);
+    }
 
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_audit_entity_part ON audit_logs("entityType")`);
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_audit_action_part ON audit_logs(action)`);
@@ -126,7 +237,10 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE IF EXISTS audit_logs_old`);
 
     // ──────────────── channel_webhook_logs ────────────────
-    await queryRunner.query(`ALTER TABLE IF EXISTS channel_webhook_logs RENAME TO channel_webhook_logs_old`);
+    const hadWebhookLogs = await this.tableExists(queryRunner, 'channel_webhook_logs');
+    if (hadWebhookLogs) {
+      await queryRunner.query(`ALTER TABLE channel_webhook_logs RENAME TO channel_webhook_logs_old`);
+    }
 
     await queryRunner.query(`
       CREATE TABLE channel_webhook_logs (
@@ -156,9 +270,32 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
       PARTITION OF channel_webhook_logs DEFAULT
     `);
 
-    await queryRunner.query(`
-      INSERT INTO channel_webhook_logs SELECT * FROM channel_webhook_logs_old
-    `);
+    if (hadWebhookLogs) {
+      await queryRunner.query(`
+        INSERT INTO channel_webhook_logs (
+          id,
+          channel,
+          event_type,
+          external_id,
+          payload,
+          processing_status,
+          processing_error,
+          processed_at,
+          created_at
+        )
+        SELECT
+          id,
+          channel,
+          event_type,
+          external_id,
+          payload,
+          processing_status,
+          processing_error,
+          processed_at,
+          created_at
+        FROM channel_webhook_logs_old
+      `);
+    }
 
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_webhook_log_channel_part ON channel_webhook_logs(channel)`);
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_webhook_log_created_part ON channel_webhook_logs(created_at)`);
@@ -179,6 +316,7 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
         quantity_change INTEGER NOT NULL,
         quantity_before INTEGER NOT NULL,
         quantity_after INTEGER NOT NULL,
+        store_id UUID,
         source_channel VARCHAR(30),
         source_order_id VARCHAR(100),
         source_reference TEXT,
@@ -188,7 +326,40 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await queryRunner.query(`INSERT INTO inventory_events SELECT * FROM inventory_events_partitioned`);
+    await queryRunner.query(`
+      INSERT INTO inventory_events (
+        id,
+        listing_id,
+        event_type,
+        quantity_change,
+        quantity_before,
+        quantity_after,
+        store_id,
+        source_channel,
+        source_order_id,
+        source_reference,
+        idempotency_key,
+        reason,
+        created_by,
+        created_at
+      )
+      SELECT
+        id,
+        listing_id,
+        event_type,
+        quantity_change,
+        quantity_before,
+        quantity_after,
+        store_id,
+        source_channel,
+        source_order_id,
+        source_reference,
+        idempotency_key,
+        reason,
+        created_by,
+        created_at
+      FROM inventory_events_partitioned
+    `);
     await queryRunner.query(`CREATE INDEX idx_event_listing ON inventory_events(listing_id, created_at)`);
     await queryRunner.query(`CREATE INDEX idx_event_type ON inventory_events(event_type, created_at)`);
     await queryRunner.query(`CREATE INDEX idx_event_source ON inventory_events(source_channel, source_order_id)`);
@@ -210,7 +381,32 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
         "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await queryRunner.query(`INSERT INTO audit_logs SELECT * FROM audit_logs_partitioned`);
+    await queryRunner.query(`
+      INSERT INTO audit_logs (
+        id,
+        "entityType",
+        "entityId",
+        action,
+        "actorId",
+        "actorType",
+        changes,
+        metadata,
+        "ipAddress",
+        "createdAt"
+      )
+      SELECT
+        id,
+        "entityType",
+        "entityId",
+        action,
+        "actorId",
+        "actorType",
+        changes,
+        metadata,
+        "ipAddress",
+        "createdAt"
+      FROM audit_logs_partitioned
+    `);
     await queryRunner.query(`CREATE INDEX idx_audit_entity ON audit_logs("entityType")`);
     await queryRunner.query(`CREATE INDEX idx_audit_action ON audit_logs(action)`);
     await queryRunner.query(`CREATE INDEX idx_audit_actor ON audit_logs("actorId")`);
@@ -232,7 +428,30 @@ export class Phase3Partitioning1709424000000 implements MigrationInterface {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await queryRunner.query(`INSERT INTO channel_webhook_logs SELECT * FROM channel_webhook_logs_partitioned`);
+    await queryRunner.query(`
+      INSERT INTO channel_webhook_logs (
+        id,
+        channel,
+        event_type,
+        external_id,
+        payload,
+        processing_status,
+        processing_error,
+        processed_at,
+        created_at
+      )
+      SELECT
+        id,
+        channel,
+        event_type,
+        external_id,
+        payload,
+        processing_status,
+        processing_error,
+        processed_at,
+        created_at
+      FROM channel_webhook_logs_partitioned
+    `);
     await queryRunner.query(`CREATE INDEX idx_webhook_log_channel ON channel_webhook_logs(channel)`);
     await queryRunner.query(`DROP TABLE IF EXISTS channel_webhook_logs_partitioned CASCADE`);
   }

@@ -9,6 +9,7 @@ import { ListingChannelInstance } from './entities/listing-channel-instance.enti
 import { AiEnhancement } from './entities/ai-enhancement.entity.js';
 import { DemoSimulationLog } from './entities/demo-simulation-log.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { ChannelsService } from './channels.service.js';
 import { ChannelsController } from './channels.controller.js';
 import { StoresService } from './stores.service.js';
@@ -30,6 +31,13 @@ import { EbayFulfillmentApiService } from './ebay/ebay-fulfillment-api.service.j
 import { EbayBrowseApiService } from './ebay/ebay-browse-api.service.js';
 import { EbayPublishService } from './ebay/ebay-publish.service.js';
 import { EbayPublishController } from './ebay/ebay-publish.controller.js';
+import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
+import { EbayAccountMarketplace } from '../integrations/ebay/entities/ebay-account-marketplace.entity.js';
+import { EbayBusinessPolicy } from '../integrations/ebay/entities/ebay-business-policy.entity.js';
+import { SellerpunditModule } from '../integrations/sellerpundit/sellerpundit.module.js';
+import { EbayMarketplaceConfigService } from '../integrations/ebay/services/ebay-marketplace-config.service.js';
+import { EbaySellAccountApiService } from '../integrations/ebay/services/ebay-sell-account-api.service.js';
+import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa-return-policy.service.js';
 
 @Module({
   imports: [
@@ -42,8 +50,13 @@ import { EbayPublishController } from './ebay/ebay-publish.controller.js';
       AiEnhancement,
       DemoSimulationLog,
       ListingRecord,
+      CatalogProduct,
       PricingRule,
+      ConnectedEbayAccount,
+      EbayAccountMarketplace,
+      EbayBusinessPolicy,
     ]),
+    SellerpunditModule,
     BullModule.registerQueue({ name: 'channels' }),
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
@@ -65,6 +78,9 @@ import { EbayPublishController } from './ebay/ebay-publish.controller.js';
     EbayFulfillmentApiService,
     EbayBrowseApiService,
     EbayPublishService,
+    EbayMarketplaceConfigService,
+    EbaySellAccountApiService,
+    EbayPaReturnPolicyService,
   ],
   exports: [
     ChannelsService,
@@ -79,6 +95,7 @@ import { EbayPublishController } from './ebay/ebay-publish.controller.js';
     EbayFulfillmentApiService,
     EbayBrowseApiService,
     EbayPublishService,
+    EbayPaReturnPolicyService,
     TokenEncryptionService,
   ],
 })

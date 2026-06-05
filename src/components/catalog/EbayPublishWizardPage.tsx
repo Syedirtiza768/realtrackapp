@@ -1,12 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
-
-const ORG_LS = 'rt_ebay_integration_org_id';
+import {
+  getEbayListingJob,
+  getEbayListingJobTargets,
+  listEbayAccounts,
+  publishEbayListing,
+  validateEbayListing,
+  type EbayListingJobTargetRow,
+} from '../../lib/ebayIntegrationsApi';
+import { useEbayWorkspace } from '../../hooks/useEbayWorkspace';
+import { fetchWithAuth } from '../../lib/authApi';
 
 type AccountRow = {
   id: string;
   accountDisplayName: string;
+  ebayUserId: string;
   connectionStatus: string;
   marketplaces: { marketplaceId: string; enabled: boolean }[];
 };
@@ -20,42 +28,45 @@ type ValidateEntry = {
 
 export default function EbayPublishWizardPage() {
   const { productId } = useParams<{ productId: string }>();
-  const { user } = useAuth();
-  const userId = user?.id;
-  const [orgId, setOrgId] = useState(() => localStorage.getItem(ORG_LS) ?? '');
+  const { signedIn, organizationId, ready } = useEbayWorkspace();
   const [productTitle, setProductTitle] = useState<string>('');
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [validation, setValidation] = useState<ValidateEntry[] | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [jobTargets, setJobTargets] = useState<EbayListingJobTargetRow[] | null>(null);
   const [skippedTargets, setSkippedTargets] = useState<
     { ebayAccountId: string; marketplaceId: string; errors: string[] }[]
   >([]);
   const [message, setMessage] = useState<string | null>(null);
 
-  const headers = useMemo(() => {
-    const h: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) h['x-user-id'] = userId;
-    return h;
-  }, [userId]);
-
   const loadProduct = useCallback(async () => {
     if (!productId) return;
-    const res = await fetch(`/api/catalog-products/${productId}`);
-    const data = await res.json();
-    if (res.ok && data?.title) setProductTitle(data.title as string);
+    try {
+      const data = await fetchWithAuth<{ title?: string }>(`/api/catalog-products/${productId}`);
+      if (data?.title) setProductTitle(data.title);
+      return;
+    } catch {
+      /* catalog product id may be a listing record id from catalog browse */
+    }
+    try {
+      const listing = await fetchWithAuth<{ title?: string }>(`/api/v2/listings/${productId}`);
+      if (listing?.title) setProductTitle(listing.title);
+    } catch {
+      // title is optional in wizard header
+    }
   }, [productId]);
 
   const loadAccounts = useCallback(async () => {
-    if (!orgId.trim() || !userId) return;
-    const res = await fetch(
-      `/api/integrations/ebay/accounts?organizationId=${encodeURIComponent(orgId.trim())}`,
-      { headers },
-    );
-    const data = await res.json();
-    if (res.ok && Array.isArray(data)) setAccounts(data);
-  }, [orgId, userId, headers]);
+    if (!ready) return;
+    try {
+      const data = await listEbayAccounts(organizationId ?? undefined);
+      if (Array.isArray(data)) setAccounts(data as AccountRow[]);
+    } catch {
+      /* ignore until connected */
+    }
+  }, [ready, organizationId]);
 
   useEffect(() => {
     void loadProduct();
@@ -83,32 +94,26 @@ export default function EbayPublishWizardPage() {
   }, [accounts, selected]);
 
   const runValidate = async () => {
-    if (!productId || !orgId.trim() || !userId) {
-      setMessage('Organization ID and sign-in are required');
+    if (!productId || !signedIn) {
+      setMessage('Sign in to validate listings');
       return;
     }
-    localStorage.setItem(ORG_LS, orgId.trim());
     setMessage(null);
-    const res = await fetch('/api/ebay/listings/validate', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        organizationId: orgId.trim(),
+    try {
+      const data = (await validateEbayListing({
+        organizationId: organizationId ?? undefined,
         catalogProductId: productId,
         targets,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setMessage(data.message ?? data.error ?? 'Validation request failed');
-      return;
+      })) as { results?: ValidateEntry[] };
+      setValidation((data.results ?? []) as ValidateEntry[]);
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : 'Validation request failed');
     }
-    setValidation((data.results ?? []) as ValidateEntry[]);
   };
 
   const runPublish = async () => {
-    if (!productId || !orgId.trim() || !userId) {
-      setMessage('Organization ID and sign-in are required');
+    if (!productId || !signedIn) {
+      setMessage('Sign in to publish');
       return;
     }
     if (!targets.length) {
@@ -117,100 +122,118 @@ export default function EbayPublishWizardPage() {
     }
     setMessage(null);
     setSkippedTargets([]);
-    const res = await fetch('/api/ebay/listings/publish', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        organizationId: orgId.trim(),
+    try {
+      const data = (await publishEbayListing({
+        organizationId: organizationId ?? undefined,
         catalogProductId: productId,
         targets,
-        requestedByUserId: userId,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      /** Nest `BadRequestException({ message, failures })` returns that object as JSON (no wrapper). */
-      const msg = data.message as { failures?: unknown[] } | string | undefined;
-      const fails =
-        data.failures ??
-        (typeof msg === 'object' && msg && Array.isArray(msg.failures) ? msg.failures : null);
-      if (Array.isArray(fails) && fails.length) {
-        setSkippedTargets(
-          fails as { ebayAccountId: string; marketplaceId: string; errors: string[] }[],
-        );
-        setMessage(
-          typeof msg === 'string'
-            ? msg
-            : 'No eligible targets — fix errors below or deselect blocked stores.',
-        );
-      } else {
-        setMessage(typeof msg === 'string' ? msg : JSON.stringify(data));
+      })) as {
+        jobId?: string;
+        status?: string;
+        skippedTargets?: { ebayAccountId: string; marketplaceId: string; errors: string[] }[];
+      };
+      setJobId(data.jobId ?? null);
+      setJobStatus(data.status ?? null);
+      const skipped = data.skippedTargets;
+      if (Array.isArray(skipped) && skipped.length) setSkippedTargets(skipped);
+    } catch (e: unknown) {
+      const err = e as Error & { responseBody?: Record<string, unknown> };
+      const failures = err?.responseBody?.failures as { ebayAccountId: string; marketplaceId: string; errors: string[] }[] | undefined;
+      if (failures?.length) {
+        setSkippedTargets(failures);
       }
-      return;
+      setMessage(err?.message ?? 'Publish failed');
     }
-    setJobId(data.jobId as string);
-    setJobStatus(data.status as string);
-    const skipped = data.skippedTargets as
-      | { ebayAccountId: string; marketplaceId: string; errors: string[] }[]
-      | undefined;
-    if (Array.isArray(skipped) && skipped.length) setSkippedTargets(skipped);
   };
 
+  const loadJobTargets = useCallback(async () => {
+    if (!jobId || !signedIn) return;
+    try {
+      const rows = await getEbayListingJobTargets(jobId, organizationId ?? undefined);
+      setJobTargets(Array.isArray(rows) ? rows : []);
+    } catch {
+      setJobTargets(null);
+    }
+  }, [jobId, organizationId, signedIn]);
+
   useEffect(() => {
-    if (!jobId || !orgId.trim() || !userId) return;
-    const t = setInterval(async () => {
-      const res = await fetch(
-        `/api/ebay/listing-jobs/${jobId}?organizationId=${encodeURIComponent(orgId.trim())}`,
-        { headers },
-      );
-      const data = await res.json();
-      if (res.ok && data?.status) {
-        setJobStatus(data.status as string);
-        if (['completed', 'failed', 'completed_with_errors'].includes(data.status)) {
-          clearInterval(t);
+    if (!jobId || !signedIn) return;
+    const poll = async () => {
+      try {
+        const data = (await getEbayListingJob(
+          jobId,
+          organizationId ?? undefined,
+        )) as { status?: string };
+        if (data?.status) {
+          setJobStatus(data.status);
+          if (['completed', 'failed', 'completed_with_errors'].includes(data.status)) {
+            await loadJobTargets();
+            return true;
+          }
         }
+      } catch {
+        /* keep polling */
       }
+      return false;
+    };
+    void poll();
+    const t = setInterval(async () => {
+      const done = await poll();
+      if (done) clearInterval(t);
     }, 2000);
     return () => clearInterval(t);
-  }, [jobId, orgId, userId, headers]);
+  }, [jobId, organizationId, signedIn, loadJobTargets]);
 
   const readyCount =
     validation?.filter((v) => v.status === 'ready' || v.status === 'warnings').length ?? 0;
   const blockedCount = validation?.filter((v) => v.status === 'blocked').length ?? 0;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6 text-slate-100">
+    <div className="max-w-4xl mx-auto p-6 space-y-6 text-slate-900 dark:text-slate-100">
       <Link to="/catalog" className="text-sm text-sky-400 hover:underline">
         ← Catalog
       </Link>
       <h1 className="text-2xl font-semibold">Publish to eBay</h1>
-      <p className="text-slate-400 text-sm">
-        Product: <span className="text-slate-200">{productTitle || productId}</span>
+      <p className="text-slate-400 dark:text-slate-400 text-sm">
+        Product: <span className="text-slate-600 dark:text-slate-200">{productTitle || productId}</span>
       </p>
+      {!signedIn && (
+        <p className="text-amber-300 text-sm">
+          <Link to="/login" className="underline">
+            Sign in
+          </Link>{' '}
+          and connect sellers under{' '}
+          <Link to="/settings/integrations/ebay" className="underline">
+            eBay stores
+          </Link>
+          .
+        </p>
+      )}
 
-      <label className="block text-sm max-w-md">
-        <span className="text-slate-400">Organization ID</span>
-        <input
-          className="mt-1 w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
-          value={orgId}
-          onChange={(e) => setOrgId(e.target.value)}
-        />
-      </label>
-
-      <section className="rounded-xl border border-slate-700 bg-slate-900/60 p-5 space-y-3">
-        <h2 className="text-lg font-medium">Target stores</h2>
-        {!userId && <p className="text-amber-300 text-sm">Sign in to call the API.</p>}
+      <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 p-5 space-y-3">
+        <h2 className="text-lg font-medium">Target sellers</h2>
+        {accounts.length === 0 && signedIn && (
+          <p className="text-slate-400 dark:text-slate-500 text-sm">
+            No connected sellers.{' '}
+            <Link to="/settings/integrations/ebay" className="text-sky-400 underline">
+              Sign in with eBay
+            </Link>{' '}
+            first.
+          </p>
+        )}
         {accounts.map((a) => (
-          <div key={a.id} className="border border-slate-800 rounded-lg p-3 space-y-2">
+          <div key={a.id} className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-2">
             <div className="font-medium">{a.accountDisplayName}</div>
-            <div className="text-xs text-slate-500">{a.connectionStatus}</div>
+            <div className="text-xs text-slate-400 dark:text-slate-500">
+              eBay user {a.ebayUserId} · {a.connectionStatus}
+            </div>
             <div className="flex flex-wrap gap-2">
               {(a.marketplaces ?? []).map((m) => {
                 const key = `${a.id}:${m.marketplaceId}`;
                 return (
                   <label
                     key={key}
-                    className="inline-flex items-center gap-2 text-sm border border-slate-700 rounded px-2 py-1 cursor-pointer"
+                    className="inline-flex items-center gap-2 text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1 cursor-pointer"
                   >
                     <input
                       type="checkbox"
@@ -229,7 +252,7 @@ export default function EbayPublishWizardPage() {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className="rounded-md border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+          className="rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm hover:bg-slate-100 dark:bg-slate-800"
           onClick={() => void runValidate()}
         >
           Validate selection
@@ -245,7 +268,7 @@ export default function EbayPublishWizardPage() {
       </div>
 
       {validation && (
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-slate-500 dark:text-slate-300">
           {readyCount} ready / warnings · {blockedCount} blocked. Blocked stores are skipped on publish
           (eligible stores still queue); if every selection is blocked, publish returns an error.
         </p>
@@ -257,10 +280,10 @@ export default function EbayPublishWizardPage() {
             <li
               key={v.key}
               className={`rounded border px-3 py-2 ${
-                v.status === 'blocked' ? 'border-red-800 bg-red-950/30' : 'border-slate-700'
+                v.status === 'blocked' ? 'border-red-800 bg-red-950/30' : 'border-slate-200 dark:border-slate-700'
               }`}
             >
-              <div className="font-mono text-xs text-slate-400">{v.key}</div>
+              <div className="font-mono text-xs text-slate-400 dark:text-slate-400">{v.key}</div>
               <div>Status: {v.status}</div>
               {v.errors?.length ? (
                 <ul className="text-red-300 list-disc pl-4">
@@ -286,7 +309,7 @@ export default function EbayPublishWizardPage() {
           <div className="font-medium text-amber-200">Skipped (not queued)</div>
           <ul className="space-y-2">
             {skippedTargets.map((s) => (
-              <li key={`${s.ebayAccountId}:${s.marketplaceId}`} className="font-mono text-xs text-slate-300">
+              <li key={`${s.ebayAccountId}:${s.marketplaceId}`} className="font-mono text-xs text-slate-500 dark:text-slate-300">
                 {s.ebayAccountId} / {s.marketplaceId}
                 {s.errors?.length ? (
                   <ul className="text-amber-100 list-disc pl-4 mt-1 font-sans">
@@ -302,9 +325,51 @@ export default function EbayPublishWizardPage() {
       )}
 
       {jobId && (
-        <p className="text-sm text-slate-400">
-          Job {jobId} — status: <strong className="text-slate-200">{jobStatus ?? '…'}</strong> (polls every 2s)
+        <p className="text-sm text-slate-400 dark:text-slate-400">
+          Job {jobId} — status: <strong className="text-slate-600 dark:text-slate-200">{jobStatus ?? '…'}</strong> (polls every 2s)
         </p>
+      )}
+
+      {jobTargets && jobTargets.length > 0 && (
+        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+          <h3 className="text-sm font-medium">Publish results</h3>
+          <ul className="text-sm space-y-2">
+            {jobTargets.map((t) => (
+              <li
+                key={t.id}
+                className={`rounded border px-3 py-2 ${
+                  t.status === 'failed'
+                    ? 'border-red-800 bg-red-950/30'
+                    : t.status === 'success'
+                      ? 'border-emerald-800 bg-emerald-950/20'
+                      : 'border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <div className="font-mono text-xs text-slate-400">
+                  {t.ebayAccountId} / {t.marketplaceId} — {t.status}
+                  {t.errorPayload?.stage ? ` (${t.errorPayload.stage})` : ''}
+                  {t.errorPayload?.source ? ` · ${t.errorPayload.source}` : ''}
+                </div>
+                {t.status === 'success' && t.resultPayload?.listingId && (
+                  <div className="text-emerald-300 text-xs mt-1">
+                    Listing {t.resultPayload.listingId}
+                    {t.resultPayload.offerId ? ` · offer ${t.resultPayload.offerId}` : ''}
+                  </div>
+                )}
+                {t.errorPayload?.message && (
+                  <div className="text-red-300 text-xs mt-1">{t.errorPayload.message}</div>
+                )}
+                {t.errorPayload?.errors?.length ? (
+                  <ul className="text-red-300 list-disc pl-4 mt-1">
+                    {t.errorPayload.errors.map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {message && <p className="text-sm text-amber-300">{message}</p>}

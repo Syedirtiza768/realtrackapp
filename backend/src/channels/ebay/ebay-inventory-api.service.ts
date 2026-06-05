@@ -1,6 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
+import {
+  buildDefaultInventoryLocationPayload,
+  resolvePreferredMerchantLocationKey,
+} from './ebay-inventory-location.util.js';
+import { Store } from '../entities/store.entity.js';
+import { EbayMarketplaceConfigService } from '../../integrations/ebay/services/ebay-marketplace-config.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
+import {
+  marketplaceRequestHeaders,
+  resolveMarketplaceId,
+  toEbayInventoryApiMarketplaceId,
+} from './ebay-marketplace-headers.util.js';
 import type {
   EbayInventoryItem,
   EbayInventoryItemPage,
@@ -33,7 +47,13 @@ export class EbayInventoryApiService {
   private readonly logger = new Logger(EbayInventoryApiService.name);
   private readonly http: AxiosInstance;
 
-  constructor(private readonly auth: EbayAuthService) {
+  constructor(
+    private readonly auth: EbayAuthService,
+    private readonly marketplaceConfig: EbayMarketplaceConfigService,
+    private readonly configService: ConfigService,
+    @InjectRepository(Store)
+    private readonly storeRepo: Repository<Store>,
+  ) {
     const config = this.auth.getApiConfig();
     this.http = axios.create({
       baseURL: `${config.baseUrl}/sell/inventory/v1`,
@@ -49,7 +69,22 @@ export class EbayInventoryApiService {
 
   private async authHeaders(storeId: string): Promise<AxiosRequestConfig> {
     const token = await this.auth.getAccessToken(storeId);
-    return { headers: { Authorization: `Bearer ${token}` } };
+    const baseUrl = await this.auth.getApiBaseUrlForStore(storeId);
+    const store = await this.storeRepo.findOneBy({ id: storeId });
+    const marketplaceId = store ? resolveMarketplaceId(store) : 'EBAY_MOTORS_US';
+    const mpHeaders = marketplaceRequestHeaders(
+      marketplaceId,
+      this.marketplaceConfig.get(marketplaceId),
+    );
+    return {
+      baseURL: `${baseUrl}/sell/inventory/v1`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...mpHeaders,
+      },
+    };
   }
 
   // ──────────────────────────── Inventory Items ────────────────────
@@ -138,9 +173,13 @@ export class EbayInventoryApiService {
     offer: EbayOffer,
   ): Promise<EbayOfferResponse> {
     const cfg = await this.authHeaders(storeId);
+    const payload = {
+      ...offer,
+      marketplaceId: toEbayInventoryApiMarketplaceId(offer.marketplaceId),
+    };
     const { data } = await this.http.post<EbayOfferResponse>(
       `/offer`,
-      offer,
+      payload,
       cfg,
     );
     this.logger.debug(
@@ -158,7 +197,14 @@ export class EbayInventoryApiService {
     offer: Partial<EbayOffer>,
   ): Promise<void> {
     const cfg = await this.authHeaders(storeId);
-    await this.http.put(`/offer/${offerId}`, offer, cfg);
+    const payload =
+      offer.marketplaceId != null
+        ? {
+            ...offer,
+            marketplaceId: toEbayInventoryApiMarketplaceId(offer.marketplaceId),
+          }
+        : offer;
+    await this.http.put(`/offer/${offerId}`, payload, cfg);
     this.logger.debug(
       `Updated offer ${offerId} for store ${storeId}`,
     );
@@ -279,7 +325,7 @@ export class EbayInventoryApiService {
   async createLocation(
     storeId: string,
     merchantLocationKey: string,
-    location: EbayLocation,
+    location: Omit<EbayLocation, 'merchantLocationKey'>,
   ): Promise<void> {
     const cfg = await this.authHeaders(storeId);
     await this.http.post(
@@ -287,7 +333,29 @@ export class EbayInventoryApiService {
       location,
       cfg,
     );
-    this.logger.log(`Created location ${merchantLocationKey}`);
+    this.logger.log(`Created inventory location ${merchantLocationKey} for store ${storeId}`);
+  }
+
+  /**
+   * Get a single inventory location by key.
+   */
+  async getLocation(
+    storeId: string,
+    merchantLocationKey: string,
+  ): Promise<EbayLocation | null> {
+    const cfg = await this.authHeaders(storeId);
+    try {
+      const { data } = await this.http.get<EbayLocation>(
+        `/location/${encodeURIComponent(merchantLocationKey)}`,
+        cfg,
+      );
+      return data?.merchantLocationKey ? data : null;
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   /**
@@ -304,5 +372,53 @@ export class EbayInventoryApiService {
       params: { limit, offset },
     });
     return { locations: data.locations ?? [], total: data.total ?? 0 };
+  }
+
+  /**
+   * Resolve merchantLocationKey for offers: list existing locations, probe preferred key,
+   * or create a default warehouse location when the seller has none configured.
+   */
+  async ensureMerchantLocation(
+    storeId: string,
+    preferredKey?: string | null,
+  ): Promise<string | null> {
+    const store = await this.storeRepo.findOneBy({ id: storeId });
+    const keyHint = resolvePreferredMerchantLocationKey(
+      this.configService,
+      store,
+      preferredKey,
+    );
+
+    try {
+      const preferred = await this.getLocation(storeId, keyHint);
+      if (preferred?.merchantLocationKey) {
+        return preferred.merchantLocationKey;
+      }
+
+      const { locations } = await this.getLocations(storeId);
+      if (locations.length) {
+        const match = locations.find((l) => l.merchantLocationKey === keyHint);
+        return (match ?? locations[0]).merchantLocationKey;
+      }
+
+      const payload = buildDefaultInventoryLocationPayload(this.configService, store);
+      await this.createLocation(storeId, keyHint, payload);
+
+      if (store && !store.locationKey) {
+        store.locationKey = keyHint;
+        await this.storeRepo.save(store);
+      }
+
+      this.logger.log(
+        `Provisioned default inventory location "${keyHint}" for store ${store?.storeName ?? storeId}`,
+      );
+      return keyHint;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Could not ensure inventory location for store ${storeId}: ${message}`,
+      );
+      return null;
+    }
   }
 }

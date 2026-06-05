@@ -17,6 +17,7 @@ import {
   LowStockQueryDto,
   InventoryEventsQueryDto,
 } from './dto/inventory.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('inventory')
 @Controller('inventory')
@@ -24,12 +25,14 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @Get(':listingId')
+  @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'Get inventory ledger and recent events for a listing' })
   getLedger(@Param('listingId', ParseUUIDPipe) listingId: string) {
     return this.inventoryService.getLedger(listingId);
   }
 
   @Post(':listingId/adjust')
+  @RequirePermissions('inventory.adjust')
   @ApiOperation({ summary: 'Adjust inventory quantity (idempotent)' })
   adjust(
     @Param('listingId', ParseUUIDPipe) listingId: string,
@@ -45,6 +48,7 @@ export class InventoryController {
   }
 
   @Post(':listingId/reserve')
+  @RequirePermissions('inventory.allocate')
   @ApiOperation({ summary: 'Reserve inventory for a pending order' })
   reserve(
     @Param('listingId', ParseUUIDPipe) listingId: string,
@@ -54,6 +58,7 @@ export class InventoryController {
   }
 
   @Post(':listingId/release')
+  @RequirePermissions('inventory.allocate')
   @ApiOperation({ summary: 'Release a reservation (e.g. order cancelled)' })
   release(
     @Param('listingId', ParseUUIDPipe) listingId: string,
@@ -63,18 +68,21 @@ export class InventoryController {
   }
 
   @Get('alerts/low-stock')
+  @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'Get items below low-stock threshold' })
   lowStock(@Query() dto: LowStockQueryDto) {
     return this.inventoryService.getLowStock(dto.threshold, dto.limit);
   }
 
   @Post('reconcile')
+  @RequirePermissions('inventory.reconcile')
   @ApiOperation({ summary: 'Reconcile inventory for specified listings' })
   reconcile(@Body() dto: ReconcileDto) {
     return this.inventoryService.reconcile(dto.listingIds);
   }
 
   @Get('events/log')
+  @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'Query inventory events' })
   events(@Query() dto: InventoryEventsQueryDto) {
     return this.inventoryService.getEvents(
@@ -87,6 +95,7 @@ export class InventoryController {
   }
 
   @Get('duplicates/scan')
+  @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'Find duplicate listings by SKU/MPN/title similarity' })
   duplicates(@Query('confidence') confidence?: string) {
     return this.inventoryService.findDuplicates(
@@ -97,6 +106,7 @@ export class InventoryController {
   // ─── Per-Store Allocation (gated by per_store_inventory flag) ───
 
   @Get(':listingId/allocations')
+  @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'Get per-store allocations for a listing' })
   getAllocations(
     @Param('listingId', ParseUUIDPipe) listingId: string,
@@ -106,6 +116,7 @@ export class InventoryController {
   }
 
   @Post(':listingId/allocations')
+  @RequirePermissions('inventory.allocate')
   @ApiOperation({ summary: 'Allocate inventory to a specific store' })
   allocateToStore(
     @Param('listingId', ParseUUIDPipe) listingId: string,
@@ -115,6 +126,7 @@ export class InventoryController {
   }
 
   @Post(':listingId/allocations/reserve')
+  @RequirePermissions('inventory.allocate')
   @ApiOperation({ summary: 'Reserve from store allocation (order placed on store)' })
   reserveFromStore(
     @Param('listingId', ParseUUIDPipe) listingId: string,

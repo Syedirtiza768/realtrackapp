@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -7,6 +8,7 @@ import {
   Param,
   Query,
   Req,
+  Res,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
@@ -14,7 +16,7 @@ import {
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { ChannelsService } from './channels.service.js';
 import { StoresService } from './stores.service.js';
 import { InventoryRealtimeSyncService } from './inventory-realtime-sync.service.js';
@@ -24,9 +26,12 @@ import {
   PublishMultiDto,
   BulkPublishDto,
 } from './dto/channel.dto.js';
+import { Public } from '../auth/decorators/public.decorator.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('channels')
 @Controller('channels')
+@RequirePermissions('channels.view')
 export class ChannelsController {
   constructor(
     private readonly channelsService: ChannelsService,
@@ -41,29 +46,56 @@ export class ChannelsController {
     return this.channelsService.getConnections(userId);
   }
 
+  @Public()
   @Get(':channel/auth-url')
   @ApiOperation({ summary: 'Get OAuth authorization URL for a channel' })
   getAuthUrl(
     @Param('channel') channel: string,
     @Query('state') state: string,
   ) {
+    if (channel === 'ebay') {
+      throw new BadRequestException({
+        message:
+          'Legacy eBay OAuth is retired. Sign in to RealTrack, then POST /api/integrations/ebay/oauth/start (JWT). Seller identity comes from Sign in with eBay.',
+        migration: 'integrations-ebay-oauth',
+        replacement: {
+          method: 'POST',
+          path: '/api/integrations/ebay/oauth/start',
+        },
+      });
+    }
     const url = this.channelsService.getAuthUrl(channel, state);
     return { url };
   }
 
+  @Public()
   @Get(':channel/callback')
   @ApiOperation({ summary: 'Handle OAuth callback' })
   async handleCallback(
     @Param('channel') channel: string,
     @Query('code') code: string,
     @Query('state') state: string,
+    @Res() res: Response,
   ) {
-    // In production, decode userId from the state parameter
+    if (channel === 'ebay') {
+      const qs = new URLSearchParams();
+      if (code) qs.set('code', code);
+      if (state) qs.set('state', state);
+      const suffix = qs.toString() ? `?${qs.toString()}` : '';
+      res.redirect(302, `/api/integrations/ebay/oauth/callback${suffix}`);
+      return;
+    }
     const userId = state.split(':')[1] ?? 'system';
-    return this.channelsService.handleOAuthCallback(channel, code, userId);
+    const result = await this.channelsService.handleOAuthCallback(
+      channel,
+      code,
+      userId,
+    );
+    res.json(result);
   }
 
   @Delete(':connectionId')
+  @RequirePermissions('channels.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Disconnect a channel' })
   disconnect(@Param('connectionId', ParseUUIDPipe) connectionId: string) {
@@ -71,18 +103,21 @@ export class ChannelsController {
   }
 
   @Post(':connectionId/test')
+  @RequirePermissions('channels.manage')
   @ApiOperation({ summary: 'Test a channel connection' })
   testConnection(@Param('connectionId', ParseUUIDPipe) connectionId: string) {
     return this.channelsService.testConnection(connectionId);
   }
 
   @Post('publish')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Publish a listing to a marketplace (async via queue)' })
   publish(@Body() dto: PublishListingDto) {
     return this.channelsService.enqueuePublish(dto.connectionId, dto.listingId);
   }
 
   @Post('sync')
+  @RequirePermissions('channels.sync')
   @ApiOperation({ summary: 'Sync inventory to a marketplace (async via queue)' })
   syncInventory(@Body() dto: SyncInventoryDto) {
     return this.channelsService.enqueueSync(dto.connectionId);
@@ -105,12 +140,14 @@ export class ChannelsController {
   }
 
   @Post('publish-multi')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Publish a listing to multiple channels at once' })
   publishMulti(@Body() dto: PublishMultiDto) {
     return this.channelsService.publishMulti(dto.listingId, dto.channels, dto.overrides);
   }
 
   @Post('listings/:listingId/channel/:channel/update')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Update a listing on a specific channel' })
   updateChannelListing(
     @Param('listingId') listingId: string,
@@ -120,6 +157,7 @@ export class ChannelsController {
   }
 
   @Post('listings/:listingId/channel/:channel/end')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'End/delist a listing on a specific channel' })
   endChannelListing(
     @Param('listingId') listingId: string,
@@ -129,6 +167,7 @@ export class ChannelsController {
   }
 
   @Post('bulk-publish')
+  @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Publish multiple listings to multiple channels' })
   bulkPublish(@Body() dto: BulkPublishDto) {
     return this.channelsService.bulkPublish(dto.listingIds, dto.channels);
@@ -137,6 +176,7 @@ export class ChannelsController {
   // ─── Demo store setup ───
 
   @Post('demo/seed-ebay')
+  @RequirePermissions('channels.manage')
   @ApiOperation({ summary: 'Create a demo eBay sandbox connection + store' })
   async seedDemoEbay() {
     return this.channelsService.seedDemoEbayConnection(this.storesService);
@@ -170,6 +210,7 @@ export class ChannelsController {
 
   // ─── Webhooks ───
 
+  @Public()
   @Post('webhooks/ebay')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'eBay webhook endpoint' })
@@ -196,6 +237,7 @@ export class ChannelsController {
     return { status: 'received' };
   }
 
+  @Public()
   @Post('webhooks/shopify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Shopify webhook endpoint' })
@@ -221,6 +263,7 @@ export class ChannelsController {
     return { status: 'received' };
   }
 
+  @Public()
   @Post('webhooks/amazon')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Amazon EventBridge webhook endpoint' })
@@ -242,6 +285,7 @@ export class ChannelsController {
     return { status: 'received' };
   }
 
+  @Public()
   @Post('webhooks/walmart')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Walmart webhook endpoint' })

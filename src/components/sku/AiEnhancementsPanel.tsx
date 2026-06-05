@@ -1,4 +1,4 @@
-/* ─── AI Enhancements Panel ─────────────────────────────────
+﻿/* ─── AI Enhancements Panel ─────────────────────────────────
  *  AI-powered listing enhancement management for a single SKU.
  *  Supports: title optimization, description generation,
  *            item specifics, fitment detection, image enhancement.
@@ -46,7 +46,7 @@ const TYPE_ICONS: Record<string, React.ComponentType<any>> = {
 };
 
 const STATUS_CONFIG: Record<string, { icon: React.ComponentType<any>; bg: string; text: string; label: string }> = {
-  requested: { icon: Clock, bg: 'bg-slate-100', text: 'text-slate-600', label: 'Requested' },
+  requested: { icon: Clock, bg: 'bg-slate-100', text: 'text-slate-500 dark:text-slate-600', label: 'Requested' },
   processing: { icon: Loader2, bg: 'bg-blue-100', text: 'text-blue-700', label: 'Processing' },
   generated: { icon: Sparkles, bg: 'bg-purple-100', text: 'text-purple-700', label: 'Generated' },
   approved: { icon: CheckCircle2, bg: 'bg-green-100', text: 'text-green-700', label: 'Approved' },
@@ -140,8 +140,8 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-700">AI-Powered Listing Enhancements</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-700">AI-Powered Listing Enhancements</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             {enhancements.length} enhancements
             {' · '}
             {enhancements.filter((e) => e.status === 'approved').length} approved
@@ -154,7 +154,7 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
             onClick={() => refresh()}
             className="p-1.5 rounded hover:bg-slate-100 transition-colors"
           >
-            <RefreshCw className="w-4 h-4 text-slate-500" />
+            <RefreshCw className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           </button>
           <button
             onClick={handleRequestAll}
@@ -192,10 +192,10 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
                   <span className="text-sm font-semibold text-slate-800">{meta.label}</span>
                   {latest && <StatusBadge status={latest.status} />}
                   {latest?.enhancementVersion && latest.enhancementVersion > 1 && (
-                    <span className="text-[10px] text-slate-400">v{latest.enhancementVersion}</span>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-400">v{latest.enhancementVersion}</span>
                   )}
                 </div>
-                <p className="text-xs text-slate-500">{meta.description}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">{meta.description}</p>
               </div>
 
               {/* Actions */}
@@ -241,7 +241,7 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
                     onClick={() => setExpandedId(expandedId === latest.id ? null : latest.id)}
                     className="p-1 rounded hover:bg-slate-100 transition-colors"
                   >
-                    {expandedId === latest.id ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                    {expandedId === latest.id ? <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-400" />}
                   </button>
                 )}
               </div>
@@ -252,15 +252,15 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
               <div className="border-t border-slate-100 p-4 bg-slate-50 space-y-3">
                 {latest.confidenceScore != null && (
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-slate-500" />
-                    <span className="text-xs text-slate-600">
+                    <BarChart3 className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    <span className="text-xs text-slate-500 dark:text-slate-600">
                       Confidence: <strong>{(latest.confidenceScore * 100).toFixed(1)}%</strong>
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-400 dark:text-slate-400">
                       | {latest.tokensUsed ?? 0} tokens | {latest.latencyMs ?? 0}ms
                     </span>
                     {latest.provider && (
-                      <span className="px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded text-[10px]">
+                      <span className="px-1.5 py-0.5 bg-slate-200 text-slate-500 dark:text-slate-600 rounded text-[10px]">
                         {latest.provider}/{latest.model}
                       </span>
                     )}
@@ -270,8 +270,8 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
                 {/* Original vs Enhanced */}
                 {latest.originalValue && (
                   <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-1">Original</p>
-                    <div className="p-2 bg-white rounded border border-slate-200 text-xs text-slate-600 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                    <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1">Original</p>
+                    <div className="p-2 bg-white rounded border border-slate-200 text-xs text-slate-500 dark:text-slate-600 max-h-32 overflow-y-auto whitespace-pre-wrap">
                       {latest.originalValue.slice(0, 500)}{latest.originalValue.length > 500 ? '…' : ''}
                     </div>
                   </div>
@@ -279,7 +279,7 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
                 {latest.enhancedValue && (
                   <div>
                     <p className="text-xs font-semibold text-green-600 mb-1">Enhanced</p>
-                    <div className="p-2 bg-green-50 rounded border border-green-200 text-xs text-slate-700 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                    <div className="p-2 bg-green-50 rounded border border-green-200 text-xs text-slate-600 dark:text-slate-700 max-h-48 overflow-y-auto whitespace-pre-wrap">
                       {type === 'description_generation' ? (
                         <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(latest.enhancedValue) }} />
                       ) : (
@@ -292,8 +292,8 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
                 {/* Diff/Changes */}
                 {latest.diff && (latest.diff as any).changes && (
                   <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-1">Changes</p>
-                    <ul className="list-disc list-inside text-xs text-slate-600 space-y-0.5">
+                    <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1">Changes</p>
+                    <ul className="list-disc list-inside text-xs text-slate-500 dark:text-slate-600 space-y-0.5">
                       {((latest.diff as any).changes as string[]).map((c, i) => (
                         <li key={i}>{c}</li>
                       ))}
@@ -304,11 +304,11 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
                 {/* Structured Data (item_specifics, fitment) */}
                 {latest.enhancedData && type === 'item_specifics' && (latest.enhancedData as any).specifics && (
                   <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-1">Item Specifics</p>
+                    <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1">Item Specifics</p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {Object.entries((latest.enhancedData as any).specifics).map(([k, v]) => (
                         <div key={k} className="flex justify-between bg-white rounded px-2 py-1 border border-slate-200">
-                          <span className="text-[11px] text-slate-500">{k}</span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500">{k}</span>
                           <span className="text-[11px] text-slate-800 font-medium">{String(v)}</span>
                         </div>
                       ))}
@@ -318,13 +318,13 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
 
                 {latest.enhancedData && type === 'fitment_detection' && (latest.enhancedData as any).fitments && (
                   <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-1">Detected Fitments</p>
+                    <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1">Detected Fitments</p>
                     <div className="space-y-1">
                       {((latest.enhancedData as any).fitments as Array<{ year: string; make: string; model: string }>).map((f, i) => (
                         <div key={i} className="flex gap-2 bg-white rounded px-2 py-1 border border-slate-200 text-[11px]">
                           <span className="font-medium text-slate-800">{f.year}</span>
-                          <span className="text-slate-600">{f.make}</span>
-                          <span className="text-slate-500">{f.model}</span>
+                          <span className="text-slate-500 dark:text-slate-600">{f.make}</span>
+                          <span className="text-slate-400 dark:text-slate-500">{f.model}</span>
                         </div>
                       ))}
                     </div>

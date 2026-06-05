@@ -20,6 +20,7 @@ import { PipelineService } from './pipeline.service.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import type { CombinedOptimizationResult } from './pipeline.service.js';
 import type { EnterpriseOptimizationResult } from './pipeline.service.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 const PROJECT_ROOT = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 const UPLOAD_DIR = path.resolve(PROJECT_ROOT, 'uploads', 'pipeline');
@@ -36,6 +37,7 @@ export class PipelineController {
   constructor(private readonly pipelineService: PipelineService) {}
 
   @Post('jobs/:id/enterprise-optimize')
+  @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -55,12 +57,14 @@ export class PipelineController {
   }
 
   @Get('jobs/:id/optimization')
+  @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get mandatory listing optimization status for a pipeline job' })
   async getOptimizationStatus(@Param('id') id: string) {
     return this.pipelineService.getOptimizationStatus(id);
   }
 
   @Get('jobs/:id/products/:productId/optimization')
+  @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get optimization details for a single catalog product' })
   async getProductOptimization(
     @Param('id') _jobId: string,
@@ -70,6 +74,7 @@ export class PipelineController {
   }
 
   @Post('jobs/:id/products/:productId/rerun-optimization')
+  @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Admin/debug: force re-run optimization for one product' })
   async rerunProductOptimization(
@@ -84,6 +89,7 @@ export class PipelineController {
   }
 
   @Post('jobs/:id/products/:productId/manual-review')
+  @RequirePermissions('pipeline.review')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send product to manual review queue' })
   async markManualReview(
@@ -98,6 +104,7 @@ export class PipelineController {
   }
 
   @Post('jobs/:id/optimize-all')
+  @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Re-run mandatory listing optimization for entire job (admin/debug)',
@@ -116,6 +123,7 @@ export class PipelineController {
   }
 
   @Post('upload')
+  @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
@@ -147,6 +155,7 @@ export class PipelineController {
   }
 
   @Get('jobs')
+  @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'List pipeline jobs' })
   async listJobs(
     @Query('status') status?: string,
@@ -157,6 +166,7 @@ export class PipelineController {
   }
 
   @Get('jobs/:id')
+  @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get pipeline job details' })
   async getJob(@Param('id') id: string) {
     const job = await this.pipelineService.getJob(id);
@@ -164,6 +174,7 @@ export class PipelineController {
   }
 
   @Post('jobs/:id/retry')
+  @RequirePermissions('pipeline.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Retry a failed pipeline job' })
   async retryJob(@Param('id') id: string) {
@@ -172,6 +183,7 @@ export class PipelineController {
   }
 
   @Post('jobs/:id/cancel')
+  @RequirePermissions('pipeline.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a pending/processing pipeline job' })
   async cancelJob(@Param('id') id: string) {
@@ -180,12 +192,14 @@ export class PipelineController {
   }
 
   @Get('stats')
+  @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get pipeline aggregate stats' })
   async getStats() {
     return this.pipelineService.getStats();
   }
 
   @Get('jobs/:id/download/:template')
+  @RequirePermissions('pipeline.export')
   @ApiOperation({ summary: 'Download pipeline output file (us, au, de, report)' })
   async downloadOutput(
     @Param('id') id: string,

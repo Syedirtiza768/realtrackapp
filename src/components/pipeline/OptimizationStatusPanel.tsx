@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -21,7 +21,7 @@ import type { JobOptimizationStatus, OptimizationStatus, PipelineJob, ProductOpt
 
 function optimizationBadge(status: OptimizationStatus | undefined) {
   const map: Record<string, { label: string; className: string }> = {
-    pending: { label: 'Optimization queued', className: 'bg-slate-600/40 text-slate-300' },
+    pending: { label: 'Optimization queued', className: 'bg-slate-600/40 text-slate-500 dark:text-slate-300' },
     running: { label: 'Optimizing…', className: 'bg-indigo-500/20 text-indigo-300' },
     completed: { label: 'Optimization completed', className: 'bg-green-500/20 text-green-400' },
     failed: { label: 'Blocked: unresolved errors', className: 'bg-red-500/20 text-red-400' },
@@ -113,13 +113,13 @@ function ProductRow({
   };
 
   return (
-    <div className="rounded-lg border border-slate-700/80 bg-slate-800/40 p-3 space-y-2">
+    <div className="rounded-lg border border-slate-200/80 dark:border-slate-700/80 bg-slate-100/40 dark:bg-slate-800/40 p-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm text-slate-100 truncate">
+          <p className="text-sm text-slate-900 dark:text-slate-100 truncate">
             {product.optimizedTitle ?? product.sku ?? product.productId.slice(0, 8)}
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-400 dark:text-slate-500">
             SKU {product.sku ?? '—'} · Readiness {Math.round(product.uploadReadinessScore * 100)}%
           </p>
         </div>
@@ -137,7 +137,7 @@ function ProductRow({
           type="button"
           onClick={loadDetail}
           disabled={loading}
-          className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center gap-1"
+          className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center gap-1"
         >
           <Eye className="h-3 w-3" /> View optimization details
         </button>
@@ -145,7 +145,7 @@ function ProductRow({
           type="button"
           onClick={loadFitment}
           disabled={loading}
-          className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center gap-1"
+          className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center gap-1"
         >
           <Table className="h-3 w-3" /> View fitment table ({product.fitmentRowCount})
         </button>
@@ -165,14 +165,14 @@ function ProductRow({
             await rerunProductOptimization(jobId, product.productId);
             onRefresh();
           }}
-          className="text-xs px-2 py-1 rounded bg-slate-700/50 hover:bg-slate-600 text-slate-400 flex items-center gap-1"
+          className="text-xs px-2 py-1 rounded bg-slate-200/50 dark:bg-slate-700/50 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-400 dark:text-slate-400 flex items-center gap-1"
           title="Admin/debug only"
         >
           <RotateCcw className="h-3 w-3" /> Re-run optimization
         </button>
       </div>
       {detailOpen && detail && (
-        <pre className="text-[10px] text-slate-400 bg-slate-900/80 p-2 rounded max-h-48 overflow-auto">
+        <pre className="text-[10px] text-slate-400 dark:text-slate-400 bg-white/80 dark:bg-slate-900/80 p-2 rounded max-h-48 overflow-auto">
           {JSON.stringify(detail.optimizationPayload ?? detail, null, 2)}
         </pre>
       )}
@@ -180,7 +180,7 @@ function ProductRow({
         <div className="overflow-x-auto">
           {Array.isArray(detail.fitmentRows) && (detail.fitmentRows as unknown[]).length > 0 ? (
           <table className="w-full text-xs text-left">
-            <thead className="text-slate-500">
+            <thead className="text-slate-400 dark:text-slate-500">
               <tr>
                 <th className="p-1">Year</th>
                 <th className="p-1">Make</th>
@@ -191,9 +191,9 @@ function ProductRow({
                 <th className="p-1">Status</th>
               </tr>
             </thead>
-            <tbody className="text-slate-300">
+            <tbody className="text-slate-500 dark:text-slate-300">
               {(detail.fitmentRows as Array<Record<string, string>>).map((row, i) => (
-                <tr key={i} className="border-t border-slate-700/50">
+                <tr key={i} className="border-t border-slate-200/50 dark:border-slate-700/50">
                   <td className="p-1">{row.year ?? row.Year}</td>
                   <td className="p-1">{row.make ?? row.Make}</td>
                   <td className="p-1">{row.model ?? row.Model}</td>
@@ -211,16 +211,16 @@ function ProductRow({
                 Catalog fitment loaded — re-run optimization to validate against eBay MVL.
               </p>
               <table className="w-full text-xs text-left">
-                <thead className="text-slate-500">
+                <thead className="text-slate-400 dark:text-slate-500">
                   <tr>
                     <th className="p-1">Year</th>
                     <th className="p-1">Make</th>
                     <th className="p-1">Model</th>
                   </tr>
                 </thead>
-                <tbody className="text-slate-300">
+                <tbody className="text-slate-500 dark:text-slate-300">
                   {(detail.fitmentData as Array<Record<string, string>>).map((row, i) => (
-                    <tr key={i} className="border-t border-slate-700/50">
+                    <tr key={i} className="border-t border-slate-200/50 dark:border-slate-700/50">
                       <td className="p-1">{row.Year ?? row.year}</td>
                       <td className="p-1">{row.Make ?? row.make}</td>
                       <td className="p-1">{row.Model ?? row.model}</td>
@@ -230,7 +230,7 @@ function ProductRow({
               </table>
             </div>
           ) : (
-            <p className="text-xs text-slate-400 border border-slate-700/60 rounded-md p-3 bg-slate-900/50">
+            <p className="text-xs text-slate-400 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 rounded-md p-3 bg-white/50 dark:bg-slate-900/50">
               Fitment data not available for this listing. Use Admin / debug → Re-run optimization for
               the job after enrichment completes, or confirm the US export includes Compatibility rows.
             </p>
@@ -272,7 +272,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
           <Wrench className="h-5 w-5 text-indigo-400" />
           Mandatory listing optimization
         </CardTitle>
-        <p className="text-xs text-slate-400 mt-1">
+        <p className="text-xs text-slate-400 dark:text-slate-400 mt-1">
           Max SEO + comprehensive optimization runs automatically after enrichment. Publish and export stay
           blocked until optimization finishes or is flagged for manual review.
         </p>
@@ -285,7 +285,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
 
         {enabled && (optStatus === 'running' || optStatus === 'pending') && (
           <div>
-            <div className="flex justify-between text-xs text-slate-400 mb-1">
+            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
               <span>Optimizing listings ({processed}/{total})</span>
               <span>{optPct}%</span>
             </div>
@@ -315,7 +315,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
         )}
 
         {isLoading && !optimization && (
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading optimization status…
           </div>
         )}
@@ -326,7 +326,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
               <ProductRow key={p.productId} jobId={job.id} product={p} onRefresh={() => refetch()} />
             ))}
             {optimization.products.length > 50 && (
-              <p className="text-xs text-slate-500 text-center">
+              <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
                 Showing 50 of {optimization.products.length} listings
               </p>
             )}
@@ -334,7 +334,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
         )}
 
         <details className="text-xs">
-          <summary className="text-slate-500 cursor-pointer hover:text-slate-300">Admin / debug</summary>
+          <summary className="text-slate-400 dark:text-slate-500 cursor-pointer hover:text-slate-500 dark:text-slate-300">Admin / debug</summary>
           <div className="mt-2">
             <button
               type="button"
@@ -348,7 +348,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
                   setAdminRerun(false);
                 }
               }}
-              className="px-3 py-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50"
+              className="px-3 py-1.5 rounded bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
             >
               {adminRerun ? 'Re-running…' : 'Re-run optimization for entire job'}
             </button>
@@ -361,9 +361,9 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg bg-slate-800/60 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="text-lg font-semibold text-slate-100">{value}</p>
+    <div className="rounded-lg bg-slate-100/60 dark:bg-slate-800/60 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   );
 }

@@ -10,6 +10,14 @@ import {
   type EbayPolicyListItem,
 } from './ebay-sell-account-api.service.js';
 import { ListingActionLogWriterService } from './listing-action-log-writer.service.js';
+import { SellerpunditPolicySyncService } from '../../sellerpundit/sellerpundit-policy-sync.service.js';
+import { EbayInventoryApiService } from '../../../channels/ebay/ebay-inventory-api.service.js';
+import { EbayAuthService } from '../../../channels/ebay/ebay-auth.service.js';
+import {
+  coalesceValidPolicyId,
+  isLikelyEbayRestPolicyId,
+  pickReturnPolicyIdForListing,
+} from './ebay-business-policy.util.js';
 
 @Injectable()
 export class EbayPolicySyncService {
@@ -25,6 +33,9 @@ export class EbayPolicySyncService {
     private readonly tokens: EbayAccountTokenService,
     private readonly sellAccount: EbaySellAccountApiService,
     private readonly logWriter: ListingActionLogWriterService,
+    private readonly sellerpunditPolicies: SellerpunditPolicySyncService,
+    private readonly inventoryApi: EbayInventoryApiService,
+    private readonly ebayAuth: EbayAuthService,
   ) {}
 
   private baseUrl(env: ConnectedEbayAccount['environment']): string {
@@ -47,6 +58,26 @@ export class EbayPolicySyncService {
     });
     if (!account) {
       throw new NotFoundException('eBay account not found');
+    }
+
+    if (account.connectionSource === 'sellerpundit') {
+      const spResult = await this.sellerpunditPolicies.syncPolicies(
+        ebayAccountId,
+        organizationId,
+        userId,
+      );
+      const overlaySynced = await this.overlaySellerpunditPoliciesFromEbayApi(
+        account,
+      );
+      await this.hydrateInventoryLocationsFromStore(account);
+      return {
+        ...spResult,
+        synced: spResult.synced + overlaySynced,
+        message:
+          overlaySynced > 0
+            ? `${spResult.message} Overlaid ${overlaySynced} row(s) from eBay Account API.`
+            : spResult.message,
+      };
     }
 
     const rel = account.marketplaces ?? [];
@@ -166,6 +197,8 @@ export class EbayPolicySyncService {
     }
 
     account.lastVerifiedAt = new Date();
+    account.lastPoliciesFetchedCount = synced;
+    account.lastSuccessfulSyncAt = new Date();
     await this.accountRepo.save(account);
 
     await this.logWriter.write({
@@ -185,5 +218,159 @@ export class EbayPolicySyncService {
       synced,
       message: `Synced ${synced} policy rows across ${marketplaces.length} marketplace(s).`,
     };
+  }
+
+  /**
+   * When SellerPundit policy sync stores internal ids, overlay authoritative eBay
+   * Account API policies using the linked store OAuth token.
+   */
+  private async overlaySellerpunditPoliciesFromEbayApi(
+    account: ConnectedEbayAccount,
+  ): Promise<number> {
+    if (!account.primaryStoreId) return 0;
+
+    let token: string;
+    try {
+      token = await this.ebayAuth.getAccessToken(account.primaryStoreId, {
+        forceRefresh: true,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `SellerPundit Account API policy overlay skipped (token): ${msg}`,
+      );
+      return 0;
+    }
+
+    const baseUrl = this.baseUrl(account.environment);
+    const marketplaces = await this.mpRepo.find({
+      where: { ebayAccountId: account.id, enabled: true },
+    });
+    let synced = 0;
+
+    for (const mp of marketplaces) {
+      try {
+        const [fulfill, payment, ret] = await Promise.all([
+          this.sellAccount.listFulfillmentPolicies(
+            token,
+            baseUrl,
+            mp.marketplaceId,
+          ),
+          this.sellAccount.listPaymentPolicies(
+            token,
+            baseUrl,
+            mp.marketplaceId,
+          ),
+          this.sellAccount.listReturnPolicies(token, baseUrl, mp.marketplaceId),
+        ]);
+        if (!fulfill.length && !payment.length && !ret.length) continue;
+
+        await this.policyRepo.delete({
+          ebayAccountId: account.id,
+          marketplaceId: mp.marketplaceId,
+        });
+
+        for (const p of fulfill) {
+          if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
+          await this.policyRepo.save(
+            this.policyRepo.create({
+              ebayAccountId: account.id,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'fulfillment',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+        for (const p of payment) {
+          if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
+          await this.policyRepo.save(
+            this.policyRepo.create({
+              ebayAccountId: account.id,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'payment',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+        for (const p of ret) {
+          if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
+          await this.policyRepo.save(
+            this.policyRepo.create({
+              ebayAccountId: account.id,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'return',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+
+        const pick = (items: EbayPolicyListItem[]) =>
+          items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId;
+        const fulfillmentPolicyId = coalesceValidPolicyId(pick(fulfill));
+        const paymentPolicyId = coalesceValidPolicyId(pick(payment));
+        const returnPolicyId = coalesceValidPolicyId(
+          pickReturnPolicyIdForListing(
+            ret.map((r) => ({
+              ebayPolicyId: r.ebayPolicyId,
+              isDefault: r.isDefault,
+              geoSite: null,
+              rawPayload: r.raw,
+            })),
+            mp.marketplaceId,
+          ),
+        );
+
+        if (fulfillmentPolicyId) {
+          mp.defaultFulfillmentPolicyId = fulfillmentPolicyId;
+        }
+        if (paymentPolicyId) mp.defaultPaymentPolicyId = paymentPolicyId;
+        if (returnPolicyId) mp.defaultReturnPolicyId = returnPolicyId;
+        await this.mpRepo.save(mp);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(
+          `Account API policy overlay failed for ${mp.marketplaceId}: ${msg}`,
+        );
+      }
+    }
+
+    return synced;
+  }
+
+  /**
+   * SellerPundit policy sync does not return inventory locations — hydrate from eBay
+   * Inventory API using the linked legacy store token (or create a default location).
+   */
+  private async hydrateInventoryLocationsFromStore(
+    account: ConnectedEbayAccount,
+  ): Promise<void> {
+    if (!account.primaryStoreId) return;
+
+    const key = await this.inventoryApi.ensureMerchantLocation(
+      account.primaryStoreId,
+    );
+    if (!key) return;
+
+    const marketplaces = await this.mpRepo.find({
+      where: { ebayAccountId: account.id },
+    });
+    for (const mp of marketplaces) {
+      if (!mp.defaultInventoryLocationKey) {
+        mp.defaultInventoryLocationKey = key;
+        await this.mpRepo.save(mp);
+      }
+    }
   }
 }

@@ -20,9 +20,11 @@ import { StorageService } from './storage.service.js';
 import { RequestUploadDto } from './dto/request-upload.dto.js';
 import { UpdateAssetDto } from './dto/image-transform.dto.js';
 import type { ThumbnailJobData } from './processors/thumbnail.processor.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Storage')
 @Controller('storage')
+@RequirePermissions('storage.view')
 export class StorageController {
   constructor(
     private readonly storageService: StorageService,
@@ -36,6 +38,7 @@ export class StorageController {
    * Generate a pre-signed S3 upload URL.
    */
   @Post('upload-url')
+  @RequirePermissions('storage.upload')
   @ApiOperation({ summary: 'Get pre-signed S3 upload URL' })
   async getUploadUrl(@Body() dto: RequestUploadDto) {
     const { uploadUrl, s3Key, assetId } = await this.storageService.generateUploadUrl(
@@ -63,6 +66,7 @@ export class StorageController {
    * Confirm an upload completed and trigger thumbnail generation.
    */
   @Post('confirm')
+  @RequirePermissions('storage.upload')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm upload and trigger thumbnail processing' })
   async confirmUpload(@Body() body: { assetId: string; listingId?: string }) {
@@ -115,6 +119,7 @@ export class StorageController {
    * Update image metadata (sort order, primary flag).
    */
   @Patch(':assetId')
+  @RequirePermissions('storage.manage')
   @ApiOperation({ summary: 'Update image sort order or primary flag' })
   async updateAsset(
     @Param('assetId') assetId: string,
@@ -142,6 +147,7 @@ export class StorageController {
    * Soft-delete an image.
    */
   @Delete(':assetId')
+  @RequirePermissions('storage.manage')
   @ApiOperation({ summary: 'Soft-delete an image' })
   async deleteAsset(@Param('assetId') assetId: string) {
     const asset = await this.assetRepo.findOneBy({ id: assetId });
@@ -156,6 +162,7 @@ export class StorageController {
    * Generate multiple pre-signed upload URLs at once.
    */
   @Post('bulk-upload-urls')
+  @RequirePermissions('storage.upload')
   @ApiOperation({ summary: 'Generate multiple pre-signed upload URLs' })
   async getBulkUploadUrls(
     @Body() body: { files: Array<{ filename: string; mimeType: string }>; listingId?: string },

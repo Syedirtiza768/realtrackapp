@@ -24,30 +24,43 @@ import {
     Filter,
     ShoppingBag,
 } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
+import { useBranding } from '../../contexts/BrandingContext';
+import { usePermissions } from '../../hooks/usePermissions';
 
-const NAV_ITEMS = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: Camera, label: 'Ingestion', path: '/ingestion' },
-    { icon: Cpu, label: 'Motors Intel', path: '/motors' },
-    { icon: ClipboardList, label: 'Review Queue', path: '/motors/review' },
-    { icon: PlusCircle, label: 'New Listing', path: '/listings/new' },
-    { icon: ScanLine, label: 'Fitment', path: '/fitment' },
-    { icon: Car, label: 'VIN Lookup', path: '/fitment/vin' },
-    { icon: Database, label: 'Catalog', path: '/catalog' },
-    { icon: Upload, label: 'CSV Import', path: '/catalog/import' },
-    { icon: Filter, label: 'Motors CSV filters', path: '/catalog/motors-filters' },
-    { icon: Package, label: 'Inventory', path: '/inventory' },
-    { icon: Workflow, label: 'Pipeline', path: '/pipeline' },
-    { icon: Eye, label: 'eBay Preview', path: '/preview' },
-    { icon: Layers, label: 'Bulk Actions', path: '/bulk-actions' },
-    { icon: Package, label: 'Orders', path: '/orders' },
-    { icon: Zap, label: 'Automation', path: '/automation' },
-    { icon: FileText, label: 'Templates', path: '/templates' },
-    { icon: ScrollText, label: 'Audit Trail', path: '/audit' },
-    { icon: Bell, label: 'Notifications', path: '/notifications' },
-    { icon: Settings, label: 'Settings', path: '/settings' },
-    { icon: ShoppingBag, label: 'eBay stores', path: '/settings/integrations/ebay' },
+type NavItem = {
+    icon: typeof LayoutDashboard;
+    label: string;
+    path: string;
+    permission?: string;
+};
+
+const NAV_ITEMS: NavItem[] = [
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/', permission: 'dashboard.view' },
+    { icon: Camera, label: 'Ingestion', path: '/ingestion', permission: 'ingestion.view' },
+    { icon: Cpu, label: 'Motors Intel', path: '/motors', permission: 'motors.view' },
+    { icon: ClipboardList, label: 'Review Queue', path: '/motors/review', permission: 'motors.review' },
+    { icon: PlusCircle, label: 'New Listing', path: '/listings/new', permission: 'listings.create' },
+    { icon: ScanLine, label: 'Fitment', path: '/fitment', permission: 'fitment.view' },
+    { icon: Car, label: 'VIN Lookup', path: '/fitment/vin', permission: 'fitment.view' },
+    { icon: Database, label: 'Catalog', path: '/catalog', permission: 'catalog.view' },
+    { icon: Upload, label: 'CSV Import', path: '/catalog/import', permission: 'catalog.import' },
+    { icon: Filter, label: 'Motors CSV filters', path: '/catalog/motors-filters', permission: 'catalog.view' },
+    { icon: Package, label: 'Inventory', path: '/inventory', permission: 'inventory.view' },
+    { icon: Workflow, label: 'Pipeline', path: '/pipeline', permission: 'pipeline.view' },
+    { icon: Eye, label: 'eBay Preview', path: '/preview', permission: 'listings.view' },
+    { icon: Layers, label: 'Bulk Actions', path: '/bulk-actions', permission: 'listings.update' },
+    { icon: Package, label: 'Orders', path: '/orders', permission: 'orders.view' },
+    { icon: Zap, label: 'Automation', path: '/automation', permission: 'automation.view' },
+    { icon: FileText, label: 'Templates', path: '/templates', permission: 'templates.view' },
+    { icon: ScrollText, label: 'Audit Trail', path: '/audit', permission: 'audit.view' },
+    { icon: Bell, label: 'Notifications', path: '/notifications', permission: 'notifications.view' },
+    { icon: Settings, label: 'Settings', path: '/settings', permission: 'settings.view' },
+    { icon: Settings, label: 'Users', path: '/settings/users', permission: 'users.view' },
+    { icon: Settings, label: 'Permissions', path: '/settings/permissions', permission: 'roles.view' },
+    { icon: Settings, label: 'Client settings', path: '/settings/client', permission: 'client_settings.view' },
+    { icon: ShoppingBag, label: 'eBay stores', path: '/settings/integrations/ebay', permission: 'ebay.view' },
 ];
 
 /* ── Sidebar content (shared between desktop & mobile drawer) ── */
@@ -57,22 +70,47 @@ function SidebarContent({
     onNavClick?: () => void;
 }) {
     const location = useLocation();
+    const { user, logout } = useAuth();
+    const { branding } = useBranding();
+    const { has } = usePermissions();
+    const navigate = useNavigate();
+
+    const shortLabel = (branding.shortName || branding.appName || 'RT').slice(0, 2).toUpperCase();
+    const appTitle = branding.appName || 'RealTrackApp';
+
+    const visibleNav = NAV_ITEMS.filter(
+        (item) => !item.permission || has(item.permission),
+    );
+
+    const handleLogout = async () => {
+        await logout();
+        navigate('/login');
+    };
 
     return (
         <>
             <div className="p-4 lg:p-6">
-                <h1 className="text-lg lg:text-xl font-bold tracking-tight flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center font-mono text-lg shrink-0">
-                        RT
-                    </div>
-                    <span className="truncate">
-                        RealTrack<span className="text-blue-500">App</span>
-                    </span>
+                <h1 className="text-lg lg:text-xl font-bold tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                    {branding.logoUrl ? (
+                        <img
+                            src={branding.logoUrl}
+                            alt=""
+                            className="w-8 h-8 rounded-md object-contain shrink-0"
+                        />
+                    ) : (
+                        <div
+                            className="w-8 h-8 rounded-md flex items-center justify-center font-mono text-sm shrink-0 text-white"
+                            style={{ backgroundColor: 'var(--brand-primary)' }}
+                        >
+                            {shortLabel}
+                        </div>
+                    )}
+                    <span className="truncate">{appTitle}</span>
                 </h1>
             </div>
 
             <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-                {NAV_ITEMS.map((item) => {
+                {visibleNav.map((item) => {
                     const isActive = location.pathname === item.path;
                     return (
                         <Link
@@ -82,9 +120,18 @@ function SidebarContent({
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
                                 min-h-[44px]
                                 ${isActive
-                                    ? 'bg-blue-600/10 text-blue-400'
-                                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                                    ? 'text-slate-900 dark:text-slate-100'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/50'
                                 }`}
+                            style={
+                                isActive
+                                    ? {
+                                          backgroundColor:
+                                              'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+                                          color: 'var(--brand-accent)',
+                                      }
+                                    : undefined
+                            }
                         >
                             <item.icon size={18} className="shrink-0" />
                             {item.label}
@@ -93,14 +140,27 @@ function SidebarContent({
                 })}
             </nav>
 
-            <div className="p-4 border-t border-slate-800">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-700 shrink-0" />
-                    <div className="text-sm min-w-0">
-                        <div className="font-medium text-slate-200 truncate">Demo User</div>
-                        <div className="text-xs text-slate-500">Pro Seller</div>
+                    <div className="w-8 h-8 rounded-full bg-slate-300 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+                        {(user?.name ?? user?.email ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="text-sm min-w-0 flex-1">
+                        <div className="font-medium text-slate-700 dark:text-slate-200 truncate">
+                            {user?.name ?? user?.email ?? 'User'}
+                        </div>
+                        <div className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                            {user?.roleName ?? user?.roleSlug ?? ''}
+                        </div>
                     </div>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => void handleLogout()}
+                    className="w-full text-left text-xs text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800/50"
+                >
+                    Sign out
+                </button>
             </div>
         </>
     );
@@ -138,7 +198,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
     return (
-        <div className="flex h-[100dvh] bg-slate-900 text-slate-100 overflow-hidden font-sans">
+        <div className="flex h-[100dvh] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
             {/* ── Mobile navigation drawer overlay ──────────── */}
             {mobileNavOpen && (
                 <div
@@ -150,13 +210,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
                     {/* Drawer panel */}
                     <aside
-                        className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 flex flex-col shadow-2xl animate-slide-in-left"
+                        className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-2xl animate-slide-in-left"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Close button */}
                         <button
                             onClick={closeMobileNav}
-                            className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors z-10"
+                            className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10"
                             aria-label="Close navigation"
                         >
                             <X size={20} />
@@ -168,42 +228,49 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             )}
 
             {/* ── Desktop persistent sidebar ───────────────── */}
-            <aside className="hidden lg:flex w-64 bg-slate-950 border-r border-slate-800 flex-col shrink-0">
+            <aside className="hidden lg:flex w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex-col shrink-0">
                 <SidebarContent />
             </aside>
 
             {/* ── Main content area ────────────────────────── */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-14 sm:h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm flex items-center justify-between px-3 sm:px-4 lg:px-6 sticky top-0 z-30 gap-2 shrink-0">
+                <header className="h-14 sm:h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/50 backdrop-blur-sm flex items-center justify-between px-3 sm:px-4 lg:px-6 sticky top-0 z-30 gap-2 shrink-0">
                     {/* Left: hamburger + search */}
                     <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 max-w-xl">
                         {/* Hamburger — mobile/tablet only */}
                         <button
                             onClick={() => setMobileNavOpen(true)}
-                            className="lg:hidden p-2 -ml-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors shrink-0"
+                            className="lg:hidden p-2 -ml-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
                             aria-label="Open navigation"
                         >
                             <Menu size={22} />
                         </button>
 
                         <div className="relative flex-1 min-w-0">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
                             <input
                                 type="text"
                                 placeholder="Search inventory, listings, parts..."
-                                className="w-full bg-slate-800 border-none rounded-lg pl-9 pr-4 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none placeholder:text-slate-600"
+                                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-lg pl-9 pr-4 py-2 text-sm text-slate-700 dark:text-slate-200 focus:ring-1 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                                style={{ ['--tw-ring-color' as string]: 'var(--brand-primary)' }}
+                                onFocus={(e) => {
+                                    e.currentTarget.style.boxShadow = '0 0 0 1px var(--brand-primary)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.boxShadow = '';
+                                }}
                             />
                         </div>
                     </div>
 
                     {/* Right: status indicators */}
                     <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                        <button className="relative p-2 text-slate-400 hover:text-slate-100 transition-colors">
+                        <button className="relative p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 transition-colors">
                             <Bell size={20} />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-slate-900" />
+                            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-900" />
                         </button>
-                        <div className="hidden sm:block h-6 w-px bg-slate-800" />
+                        <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800" />
                         <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                             <span className="text-xs font-medium text-emerald-400">Systems Operational</span>
@@ -212,7 +279,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 </header>
 
                 {/* Page content — responsive padding */}
-                <div className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                <div className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
                     {children}
                 </div>
             </main>

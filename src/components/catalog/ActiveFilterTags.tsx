@@ -1,4 +1,4 @@
-/* ─── ActiveFilterTags ─────────────────────────────────────
+﻿/* ─── ActiveFilterTags ─────────────────────────────────────
  *  Shows active filter chips with quick removal.
  * ────────────────────────────────────────────────────────── */
 
@@ -203,7 +203,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
             onChange(EMPTY_FILTERS);
             onClearSearch();
           }}
-          className="text-[11px] text-slate-500 hover:text-slate-300 ml-1"
+          className="text-[11px] text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:text-slate-300 ml-1"
         >
           Clear all ({total})
         </button>

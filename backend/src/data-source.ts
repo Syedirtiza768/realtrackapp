@@ -14,4 +14,6 @@ export default new DataSource({
   entities: [path.join(__dirname, '**', '*.entity{.ts,.js}')],
   migrations: [path.join(__dirname, 'migrations', '*{.ts,.js}')],
   migrationsTableName: 'typeorm_migrations',
+  // Commit each migration separately so a later failure does not roll back earlier ones.
+  migrationsTransactionMode: 'each',
 });

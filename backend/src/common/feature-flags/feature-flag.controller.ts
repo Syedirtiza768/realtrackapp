@@ -1,9 +1,11 @@
 import { Controller, Get, Patch, Param, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { FeatureFlagService } from './feature-flag.service.js';
+import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('feature-flags')
 @Controller('api/feature-flags')
+@RequirePermissions('feature_flags.view')
 export class FeatureFlagController {
   constructor(private readonly flagService: FeatureFlagService) {}
 
@@ -20,6 +22,7 @@ export class FeatureFlagController {
   }
 
   @Patch(':key')
+  @RequirePermissions('feature_flags.manage')
   @ApiOperation({ summary: 'Update a feature flag' })
   async update(
     @Param('key') key: string,
@@ -29,6 +32,7 @@ export class FeatureFlagController {
   }
 
   @Patch(':key/toggle')
+  @RequirePermissions('feature_flags.manage')
   @ApiOperation({ summary: 'Toggle a feature flag' })
   async toggle(@Param('key') key: string) {
     return this.flagService.toggle(key);

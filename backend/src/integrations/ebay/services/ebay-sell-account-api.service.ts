@@ -73,6 +73,51 @@ export class EbaySellAccountApiService {
     );
   }
 
+  async createReturnPolicy(
+    accessToken: string,
+    baseUrl: string,
+    marketplaceId: string,
+    body: Record<string, unknown>,
+  ): Promise<{ returnPolicyId: string; raw: Record<string, unknown> }> {
+    const http = this.client(baseUrl);
+    const { data, headers } = await http.post('/sell/account/v1/return_policy', body, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+      },
+    });
+    const row = (data ?? {}) as Record<string, unknown>;
+    const fromBody = String(row.returnPolicyId ?? row.return_policy_id ?? '');
+    const location = String(headers.location ?? headers.Location ?? '');
+    const fromLocation = location.match(/return_policy\/(\d+)/i)?.[1] ?? '';
+    const returnPolicyId = fromBody || fromLocation;
+    if (!returnPolicyId) {
+      throw new Error('eBay createReturnPolicy did not return returnPolicyId');
+    }
+    return { returnPolicyId, raw: row };
+  }
+
+  async updateReturnPolicy(
+    accessToken: string,
+    baseUrl: string,
+    marketplaceId: string,
+    returnPolicyId: string,
+    body: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const http = this.client(baseUrl);
+    const { data } = await http.put(
+      `/sell/account/v1/return_policy/${encodeURIComponent(returnPolicyId)}`,
+      body,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+        },
+      },
+    );
+    return (data ?? {}) as Record<string, unknown>;
+  }
+
   async listReturnPolicies(
     accessToken: string,
     baseUrl: string,

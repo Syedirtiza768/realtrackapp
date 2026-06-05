@@ -13,31 +13,21 @@ import type {
   ChannelActionResponse,
   SkuChannelStatus,
 } from '../types/channels';
+import { fetchWithAuth } from './authApi';
 
 const API = '/api';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${API}${path}`, { signal });
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<T>;
+  return fetchWithAuth<T>(`${API}${path}`, { signal });
 }
 
 async function postJson<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  return fetchWithAuth<T>(`${API}${path}`, {
     method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    const err = new Error(`API ${res.status}: ${res.statusText}`);
-    (err as any).body = errBody;
-    throw err;
-  }
-  if (res.status === 204) return undefined as unknown as T;
-  return res.json() as Promise<T>;
 }
 
 /* ── Connections (tenant-level) ───────────────────────────── */
@@ -60,8 +50,7 @@ export async function testConnection(connectionId: string): Promise<{ ok: boolea
 
 /** Disconnect a channel */
 export async function disconnectChannel(connectionId: string): Promise<void> {
-  const res = await fetch(`${API}/channels/${connectionId}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`API ${res.status}`);
+  await fetchWithAuth(`${API}/channels/${connectionId}`, { method: 'DELETE' });
 }
 
 /* ── Per-SKU channel statuses ─────────────────────────────── */

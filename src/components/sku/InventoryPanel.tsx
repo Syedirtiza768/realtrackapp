@@ -1,4 +1,4 @@
-/* ─── Inventory Panel ───────────────────────────────────────
+﻿/* ─── Inventory Panel ───────────────────────────────────────
  *  Centralized inventory management for a single SKU.
  *  Shows: current stock levels, adjust quantity, event history.
  * ────────────────────────────────────────────────────────── */
@@ -113,7 +113,7 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
           label="Low Stock Threshold"
           value={ledger?.lowStockThreshold ?? 2}
           icon={AlertTriangle}
-          color="text-slate-600 bg-slate-50"
+          color="text-slate-500 dark:text-slate-600 bg-slate-50"
         />
       </div>
 
@@ -138,13 +138,13 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
         <h3 className="font-semibold text-slate-800 mb-3">Adjust Inventory</h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Qty Change</label>
+            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Qty Change</label>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setAdjustAmount((v) => v - 1)}
                 className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 transition-colors"
               >
-                <Minus className="w-4 h-4 text-slate-600" />
+                <Minus className="w-4 h-4 text-slate-500 dark:text-slate-600" />
               </button>
               <input
                 type="number"
@@ -156,12 +156,12 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
                 onClick={() => setAdjustAmount((v) => v + 1)}
                 className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 transition-colors"
               >
-                <Plus className="w-4 h-4 text-slate-600" />
+                <Plus className="w-4 h-4 text-slate-500 dark:text-slate-600" />
               </button>
             </div>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs text-slate-500 mb-1">Reason</label>
+            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Reason</label>
             <input
               type="text"
               value={adjustReason}
@@ -190,8 +190,8 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
           <h3 className="font-semibold text-slate-800">Recent Inventory Events</h3>
         </div>
         {events.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+          <div className="p-8 text-center text-slate-400 dark:text-slate-500">
+            <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-500 dark:text-slate-300" />
             <p className="text-sm">No inventory events yet</p>
           </div>
         ) : (
@@ -210,15 +210,15 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
                     <span className={`text-sm font-semibold ${evt.quantityChange > 0 ? 'text-green-700' : 'text-red-700'}`}>
                       {evt.quantityChange > 0 ? '+' : ''}{evt.quantityChange}
                     </span>
-                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium uppercase">
+                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 dark:text-slate-600 rounded text-[10px] font-medium uppercase">
                       {evt.eventType.replace(/_/g, ' ')}
                     </span>
                   </div>
-                  {evt.reason && <p className="text-xs text-slate-500 mt-0.5">{evt.reason}</p>}
+                  {evt.reason && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{evt.reason}</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-xs text-slate-500">{evt.quantityBefore} → {evt.quantityAfter}</p>
-                  <p className="text-[10px] text-slate-400">{new Date(evt.createdAt).toLocaleString()}</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">{evt.quantityBefore} → {evt.quantityAfter}</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-400">{new Date(evt.createdAt).toLocaleString()}</p>
                 </div>
               </div>
             ))}
@@ -244,7 +244,7 @@ function StockCard({
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-slate-500">{label}</span>
+        <span className="text-xs text-slate-400 dark:text-slate-500">{label}</span>
         <div className={`w-7 h-7 rounded-md flex items-center justify-center ${bgColor}`}>
           <Icon className={`w-4 h-4 ${iconColor}`} />
         </div>

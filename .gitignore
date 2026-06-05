@@ -15,3 +15,7 @@ output/
 
 # PM2 logs
 logs/
+
+# Sensitive tokens
+sellerpundit-tokens.html
+sellerpundit-tokens.json

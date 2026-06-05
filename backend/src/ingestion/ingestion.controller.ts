@@ -11,6 +11,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IngestionService } from './ingestion.service.js';
 import { CreateJobDto } from './dto/create-job.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('Ingestion')
 @Controller('ingestion')
@@ -18,6 +19,7 @@ export class IngestionController {
   constructor(private readonly ingestionService: IngestionService) {}
 
   @Post('jobs')
+  @RequirePermissions('ingestion.create')
   @ApiOperation({ summary: 'Create a new AI ingestion job' })
   async createJob(@Body() dto: CreateJobDto) {
     // TODO: extract user ID from JWT when auth guards are wired
@@ -26,6 +28,7 @@ export class IngestionController {
   }
 
   @Get('jobs')
+  @RequirePermissions('ingestion.view')
   @ApiOperation({ summary: 'List ingestion jobs with optional status filter' })
   async listJobs(
     @Query('status') status?: string,
@@ -36,12 +39,14 @@ export class IngestionController {
   }
 
   @Get('jobs/:id')
+  @RequirePermissions('ingestion.view')
   @ApiOperation({ summary: 'Get ingestion job details with AI result and images' })
   async getJob(@Param('id') id: string) {
     return this.ingestionService.getJob(id);
   }
 
   @Post('jobs/:id/retry')
+  @RequirePermissions('ingestion.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Retry a failed ingestion job' })
   async retryJob(@Param('id') id: string) {
@@ -50,6 +55,7 @@ export class IngestionController {
   }
 
   @Post('jobs/:id/cancel')
+  @RequirePermissions('ingestion.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a pending/processing job' })
   async cancelJob(@Param('id') id: string) {
@@ -58,6 +64,7 @@ export class IngestionController {
   }
 
   @Get('stats')
+  @RequirePermissions('ingestion.view')
   @ApiOperation({ summary: 'Get ingestion pipeline aggregate stats' })
   async getStats() {
     const stats = await this.ingestionService.getStats();

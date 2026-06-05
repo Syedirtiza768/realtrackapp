@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import {
     ShoppingCart,
     Truck,
@@ -13,8 +13,7 @@ import {
     Copy,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-
-const API = '/api/orders';
+import { getOrders, getOrder, getOrderStats } from '../../lib/ordersApi';
 
 /* ─── Types ─── */
 
@@ -89,7 +88,7 @@ const statusConfigs: Record<string, { color: string; icon: React.ReactNode }> = 
     completed: { color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: <PackageCheck size={12} /> },
 };
 
-const defaultStatus = { color: 'bg-slate-500/10 text-slate-400 border-slate-500/20', icon: <Clock size={12} /> };
+const defaultStatus = { color: 'bg-slate-500/10 text-slate-400 dark:text-slate-400 border-slate-500/20', icon: <Clock size={12} /> };
 
 function fmtDate(iso: string): string {
     return new Date(iso).toLocaleDateString('en-US', {
@@ -125,18 +124,17 @@ export default function OrdersPage() {
     const fetchOrders = useCallback(async () => {
         setLoading(true);
         try {
-            const params = new URLSearchParams();
-            if (statusFilter) params.set('status', statusFilter);
-            if (channelFilter) params.set('channel', channelFilter);
-            if (storeFilter) params.set('storeId', storeFilter);
-            params.set('limit', String(limit));
-            params.set('offset', String(page * limit));
-
             const [listRes, statsRes] = await Promise.all([
-                fetch(`${API}?${params}`).then(r => r.json()),
-                fetch(`${API}/stats`).then(r => r.json()),
+                getOrders({
+                    status: statusFilter || undefined,
+                    channel: channelFilter || undefined,
+                    storeId: storeFilter || undefined,
+                    limit,
+                    offset: page * limit,
+                }),
+                getOrderStats(),
             ]);
-            setOrders(listRes.items ?? listRes.orders ?? []);
+            setOrders(listRes.orders ?? []);
             setTotal(listRes.total ?? 0);
             setStats(statsRes ?? {});
         } catch (e) {
@@ -151,8 +149,8 @@ export default function OrdersPage() {
     const openDetail = async (id: string) => {
         setDetailLoading(true);
         try {
-            const res = await fetch(`${API}/${id}`).then(r => r.json());
-            setSelectedOrder(res);
+            const res = await getOrder(id);
+            setSelectedOrder({ ...res.order, items: res.items } as OrderDetail);
         } catch (e) {
             console.error('Order detail error', e);
         } finally {
@@ -178,8 +176,8 @@ export default function OrdersPage() {
             <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400">Total Orders</CardTitle>
-                        <ShoppingCart className="h-4 w-4 text-slate-500" />
+                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Total Orders</CardTitle>
+                        <ShoppingCart className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">{totalOrders}</div>
@@ -187,7 +185,7 @@ export default function OrdersPage() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400">Pending</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Pending</CardTitle>
                         <Clock className="h-4 w-4 text-yellow-500" />
                     </CardHeader>
                     <CardContent>
@@ -198,7 +196,7 @@ export default function OrdersPage() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400">Shipped</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Shipped</CardTitle>
                         <Truck className="h-4 w-4 text-purple-500" />
                     </CardHeader>
                     <CardContent>
@@ -209,7 +207,7 @@ export default function OrdersPage() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400">Completed</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Completed</CardTitle>
                         <PackageCheck className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
@@ -223,19 +221,19 @@ export default function OrdersPage() {
             {/* ─── Filters ─── */}
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                 <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
                     <input
                         type="text"
                         placeholder="Search order ID, buyer..."
                         value={searchQ}
                         onChange={e => setSearchQ(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none placeholder:text-slate-600"
+                        className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none placeholder:text-slate-500 dark:text-slate-600"
                     />
                 </div>
                 <select
                     value={statusFilter}
                     onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 >
                     <option value="">All Statuses</option>
                     {Object.keys(statusConfigs).map(s => (
@@ -245,7 +243,7 @@ export default function OrdersPage() {
                 <select
                     value={channelFilter}
                     onChange={e => { setChannelFilter(e.target.value); setPage(0); }}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 >
                     <option value="">All Channels</option>
                     <option value="ebay">eBay</option>
@@ -257,33 +255,33 @@ export default function OrdersPage() {
                     placeholder="Filter by Store ID..."
                     value={storeFilter}
                     onChange={e => { setStoreFilter(e.target.value); setPage(0); }}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-600"
+                    className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-500 dark:text-slate-600"
                 />
             </div>
 
             {/* ─── Orders Table ─── */}
             {loading ? (
                 <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
                 </div>
             ) : (
                 <>
-                    <div className="overflow-x-auto rounded-lg border border-slate-800">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-slate-800 bg-slate-800/30">
-                                    <th className="text-left py-3 px-4 text-slate-500 font-medium">Order</th>
-                                    <th className="text-left py-3 px-4 text-slate-500 font-medium hidden sm:table-cell">Buyer</th>
-                                    <th className="text-left py-3 px-4 text-slate-500 font-medium">Status</th>
-                                    <th className="text-left py-3 px-4 text-slate-500 font-medium hidden md:table-cell">Channel</th>
-                                    <th className="text-right py-3 px-4 text-slate-500 font-medium">Total</th>
-                                    <th className="text-right py-3 px-4 text-slate-500 font-medium hidden lg:table-cell">Date</th>
+                                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-800/30">
+                                    <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Order</th>
+                                    <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium hidden sm:table-cell">Buyer</th>
+                                    <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Status</th>
+                                    <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium hidden md:table-cell">Channel</th>
+                                    <th className="text-right py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Total</th>
+                                    <th className="text-right py-3 px-4 text-slate-400 dark:text-slate-500 font-medium hidden lg:table-cell">Date</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-800">
+                            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {filteredOrders.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="py-8 text-center text-slate-500">
+                                        <td colSpan={6} className="py-8 text-center text-slate-400 dark:text-slate-500">
                                             No orders found
                                         </td>
                                     </tr>
@@ -293,15 +291,15 @@ export default function OrdersPage() {
                                         return (
                                             <tr
                                                 key={order.id}
-                                                className="hover:bg-slate-800/30 transition-colors cursor-pointer"
+                                                className="hover:bg-slate-100/30 dark:bg-slate-800/30 transition-colors cursor-pointer"
                                                 onClick={() => void openDetail(order.id)}
                                             >
                                                 <td className="py-3 px-4">
-                                                    <div className="font-medium text-slate-200 font-mono text-xs">
+                                                    <div className="font-medium text-slate-600 dark:text-slate-200 font-mono text-xs">
                                                         {order.externalOrderId ?? order.id.substring(0, 8)}
                                                     </div>
                                                 </td>
-                                                <td className="py-3 px-4 text-slate-400 hidden sm:table-cell">
+                                                <td className="py-3 px-4 text-slate-400 dark:text-slate-400 hidden sm:table-cell">
                                                     {order.buyerName ?? order.buyerUsername ?? '—'}
                                                 </td>
                                                 <td className="py-3 px-4">
@@ -311,12 +309,12 @@ export default function OrdersPage() {
                                                     </span>
                                                 </td>
                                                 <td className="py-3 px-4 hidden md:table-cell">
-                                                    <span className="text-slate-400 capitalize">{order.channel}</span>
+                                                    <span className="text-slate-400 dark:text-slate-400 capitalize">{order.channel}</span>
                                                 </td>
-                                                <td className="py-3 px-4 text-right font-medium text-slate-200">
+                                                <td className="py-3 px-4 text-right font-medium text-slate-600 dark:text-slate-200">
                                                     {fmtCurrency(order.totalAmount, order.currency)}
                                                 </td>
-                                                <td className="py-3 px-4 text-right text-slate-400 hidden lg:table-cell">
+                                                <td className="py-3 px-4 text-right text-slate-400 dark:text-slate-400 hidden lg:table-cell">
                                                     {fmtDate(order.orderedAt)}
                                                 </td>
                                             </tr>
@@ -330,21 +328,21 @@ export default function OrdersPage() {
                     {/* Pagination */}
                     {total > limit && (
                         <div className="flex items-center justify-between pt-2">
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-slate-400 dark:text-slate-500">
                                 Showing {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total}
                             </p>
                             <div className="flex gap-2">
                                 <button
                                     disabled={page === 0}
                                     onClick={() => setPage(p => p - 1)}
-                                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     <ChevronLeft size={16} />
                                 </button>
                                 <button
                                     disabled={(page + 1) * limit >= total}
                                     onClick={() => setPage(p => p + 1)}
-                                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     <ChevronRight size={16} />
                                 </button>
@@ -361,18 +359,18 @@ export default function OrdersPage() {
                     onClick={() => !detailLoading && setSelectedOrder(null)}
                 >
                     <div
-                        className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
                         onClick={e => e.stopPropagation()}
                     >
                         {detailLoading ? (
                             <div className="flex items-center justify-center py-16">
-                                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+                                <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
                             </div>
                         ) : selectedOrder && (
                             <>
-                                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-800">
+                                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800">
                                     <div>
-                                        <h3 className="text-lg font-bold text-slate-100">
+                                        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
                                             Order #{selectedOrder.externalOrderId ?? selectedOrder.id.substring(0, 8)}
                                         </h3>
                                         <div className="flex items-center gap-2 mt-1">
@@ -380,12 +378,12 @@ export default function OrdersPage() {
                                                 {(statusConfigs[selectedOrder.status] ?? defaultStatus).icon}
                                                 <span className="capitalize">{selectedOrder.status.replace('_', ' ')}</span>
                                             </span>
-                                            <span className="text-xs text-slate-500 capitalize">{selectedOrder.channel}</span>
+                                            <span className="text-xs text-slate-400 dark:text-slate-500 capitalize">{selectedOrder.channel}</span>
                                         </div>
                                     </div>
                                     <button
                                         onClick={() => setSelectedOrder(null)}
-                                        className="p-2 text-slate-400 hover:text-slate-100 transition-colors"
+                                        className="p-2 text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors"
                                     >
                                         <X size={20} />
                                     </button>
@@ -395,62 +393,62 @@ export default function OrdersPage() {
                                     {/* Amounts */}
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                         <div>
-                                            <span className="text-xs text-slate-500 block">Subtotal</span>
-                                            <span className="text-sm font-medium text-slate-200">{fmtCurrency(selectedOrder.subtotal)}</span>
+                                            <span className="text-xs text-slate-400 dark:text-slate-500 block">Subtotal</span>
+                                            <span className="text-sm font-medium text-slate-600 dark:text-slate-200">{fmtCurrency(selectedOrder.subtotal)}</span>
                                         </div>
                                         <div>
-                                            <span className="text-xs text-slate-500 block">Shipping</span>
-                                            <span className="text-sm font-medium text-slate-200">{fmtCurrency(selectedOrder.shippingCost)}</span>
+                                            <span className="text-xs text-slate-400 dark:text-slate-500 block">Shipping</span>
+                                            <span className="text-sm font-medium text-slate-600 dark:text-slate-200">{fmtCurrency(selectedOrder.shippingCost)}</span>
                                         </div>
                                         <div>
-                                            <span className="text-xs text-slate-500 block">Tax</span>
-                                            <span className="text-sm font-medium text-slate-200">{fmtCurrency(selectedOrder.taxAmount)}</span>
+                                            <span className="text-xs text-slate-400 dark:text-slate-500 block">Tax</span>
+                                            <span className="text-sm font-medium text-slate-600 dark:text-slate-200">{fmtCurrency(selectedOrder.taxAmount)}</span>
                                         </div>
                                         <div>
-                                            <span className="text-xs text-slate-500 block">Total</span>
-                                            <span className="text-lg font-bold text-slate-100">{fmtCurrency(selectedOrder.totalAmount)}</span>
+                                            <span className="text-xs text-slate-400 dark:text-slate-500 block">Total</span>
+                                            <span className="text-lg font-bold text-slate-900 dark:text-slate-100">{fmtCurrency(selectedOrder.totalAmount)}</span>
                                         </div>
                                     </div>
 
                                     {/* Buyer & Shipping */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                         <div>
-                                            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Buyer</h4>
-                                            <div className="text-sm text-slate-300 space-y-1">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Buyer</h4>
+                                            <div className="text-sm text-slate-500 dark:text-slate-300 space-y-1">
                                                 {selectedOrder.buyerName && <p>{selectedOrder.buyerName}</p>}
-                                                {selectedOrder.buyerUsername && <p className="text-slate-400">@{selectedOrder.buyerUsername}</p>}
-                                                {selectedOrder.buyerEmail && <p className="text-slate-400">{selectedOrder.buyerEmail}</p>}
+                                                {selectedOrder.buyerUsername && <p className="text-slate-400 dark:text-slate-400">@{selectedOrder.buyerUsername}</p>}
+                                                {selectedOrder.buyerEmail && <p className="text-slate-400 dark:text-slate-400">{selectedOrder.buyerEmail}</p>}
                                             </div>
                                         </div>
                                         <div>
-                                            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Ship To</h4>
-                                            <div className="text-sm text-slate-300 space-y-1">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Ship To</h4>
+                                            <div className="text-sm text-slate-500 dark:text-slate-300 space-y-1">
                                                 {selectedOrder.shippingName && <p>{selectedOrder.shippingName}</p>}
-                                                {selectedOrder.shippingAddress1 && <p className="text-slate-400">{selectedOrder.shippingAddress1}</p>}
-                                                {selectedOrder.shippingAddress2 && <p className="text-slate-400">{selectedOrder.shippingAddress2}</p>}
+                                                {selectedOrder.shippingAddress1 && <p className="text-slate-400 dark:text-slate-400">{selectedOrder.shippingAddress1}</p>}
+                                                {selectedOrder.shippingAddress2 && <p className="text-slate-400 dark:text-slate-400">{selectedOrder.shippingAddress2}</p>}
                                                 {(selectedOrder.shippingCity || selectedOrder.shippingState) && (
-                                                    <p className="text-slate-400">
+                                                    <p className="text-slate-400 dark:text-slate-400">
                                                         {[selectedOrder.shippingCity, selectedOrder.shippingState, selectedOrder.shippingZip].filter(Boolean).join(', ')}
                                                     </p>
                                                 )}
-                                                {selectedOrder.shippingCountry && <p className="text-slate-400">{selectedOrder.shippingCountry}</p>}
+                                                {selectedOrder.shippingCountry && <p className="text-slate-400 dark:text-slate-400">{selectedOrder.shippingCountry}</p>}
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Tracking */}
                                     {selectedOrder.trackingNumber && (
-                                        <div className="bg-slate-800/50 rounded-lg p-3 flex items-center justify-between">
+                                        <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3 flex items-center justify-between">
                                             <div>
-                                                <span className="text-xs text-slate-500 block">Tracking</span>
-                                                <span className="text-sm font-mono text-slate-200">
+                                                <span className="text-xs text-slate-400 dark:text-slate-500 block">Tracking</span>
+                                                <span className="text-sm font-mono text-slate-600 dark:text-slate-200">
                                                     {selectedOrder.trackingCarrier ? `${selectedOrder.trackingCarrier}: ` : ''}
                                                     {selectedOrder.trackingNumber}
                                                 </span>
                                             </div>
                                             <button
                                                 onClick={() => void navigator.clipboard.writeText(selectedOrder.trackingNumber!)}
-                                                className="p-1.5 text-slate-400 hover:text-slate-100 transition-colors"
+                                                className="p-1.5 text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors"
                                                 title="Copy tracking number"
                                             >
                                                 <Copy size={14} />
@@ -460,25 +458,25 @@ export default function OrdersPage() {
 
                                     {/* Line Items */}
                                     <div>
-                                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Items</h4>
-                                        <div className="border border-slate-800 rounded-lg overflow-hidden">
+                                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Items</h4>
+                                        <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
                                             <table className="w-full text-sm">
                                                 <thead>
-                                                    <tr className="border-b border-slate-800 bg-slate-800/30">
-                                                        <th className="text-left py-2 px-3 text-slate-500 font-medium">Item</th>
-                                                        <th className="text-center py-2 px-3 text-slate-500 font-medium">Qty</th>
-                                                        <th className="text-right py-2 px-3 text-slate-500 font-medium">Price</th>
+                                                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-800/30">
+                                                        <th className="text-left py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">Item</th>
+                                                        <th className="text-center py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">Qty</th>
+                                                        <th className="text-right py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">Price</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-slate-800">
+                                                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                                     {(selectedOrder.items ?? []).map(item => (
                                                         <tr key={item.id}>
                                                             <td className="py-2 px-3">
-                                                                <p className="text-slate-200">{item.title}</p>
-                                                                {item.sku && <p className="text-xs text-slate-500 mt-0.5">SKU: {item.sku}</p>}
+                                                                <p className="text-slate-600 dark:text-slate-200">{item.title}</p>
+                                                                {item.sku && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">SKU: {item.sku}</p>}
                                                             </td>
-                                                            <td className="py-2 px-3 text-center text-slate-300">{item.quantity}</td>
-                                                            <td className="py-2 px-3 text-right text-slate-200">{fmtCurrency(item.totalPrice)}</td>
+                                                            <td className="py-2 px-3 text-center text-slate-500 dark:text-slate-300">{item.quantity}</td>
+                                                            <td className="py-2 px-3 text-right text-slate-600 dark:text-slate-200">{fmtCurrency(item.totalPrice)}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>

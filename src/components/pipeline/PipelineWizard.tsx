@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Upload,
   FileSpreadsheet,
@@ -41,12 +41,12 @@ const STATUS_COLORS: Record<string, string> = {
   output_generation: 'bg-blue-500/20 text-blue-400',
   completed: 'bg-green-500/20 text-green-400',
   failed: 'bg-red-500/20 text-red-400',
-  cancelled: 'bg-slate-500/20 text-slate-400',
+  cancelled: 'bg-slate-500/20 text-slate-400 dark:text-slate-400',
 };
 
 function statusBadge(status: string) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-slate-600 text-slate-300'}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-slate-600 text-slate-500 dark:text-slate-300'}`}>
       {status.replace(/_/g, ' ')}
     </span>
   );
@@ -106,11 +106,11 @@ export default function PipelineWizard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Workflow className="h-7 w-7 text-blue-400" />
             Enrichment Pipeline
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-slate-400 dark:text-slate-400 mt-1">
             Upload an Excel file with VIN/parts data and generate enriched eBay listings (US, AU, DE)
           </p>
         </div>
@@ -118,7 +118,7 @@ export default function PipelineWizard() {
           <button
             onClick={() => setStep('upload')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              step === 'upload' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              step === 'upload' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
             }`}
           >
             New Job
@@ -126,7 +126,7 @@ export default function PipelineWizard() {
           <button
             onClick={() => setStep('history')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              step === 'history' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              step === 'history' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
             }`}
           >
             History
@@ -156,7 +156,7 @@ function PipelineStatsBar() {
   if (!stats) return null;
 
   const items = [
-    { label: 'Total', value: stats.total, color: 'text-slate-100' },
+    { label: 'Total', value: stats.total, color: 'text-slate-900 dark:text-slate-100' },
     { label: 'Processing', value: stats.processing, color: 'text-blue-400' },
     { label: 'Completed', value: stats.completed, color: 'text-green-400' },
     { label: 'Failed', value: stats.failed, color: 'text-red-400' },
@@ -167,7 +167,7 @@ function PipelineStatsBar() {
       {items.map((item) => (
         <Card key={item.label}>
           <CardContent className="p-4">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">{item.label}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400 uppercase tracking-wider">{item.label}</p>
             <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
           </CardContent>
         </Card>
@@ -230,7 +230,7 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
             border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition
             ${dragOver
               ? 'border-blue-400 bg-blue-500/10'
-              : 'border-slate-600 hover:border-slate-500 hover:bg-slate-700/50'
+              : 'border-slate-300 dark:border-slate-600 hover:border-slate-500 hover:bg-slate-200/50 dark:bg-slate-700/50'
             }
             ${uploading ? 'pointer-events-none opacity-60' : ''}
           `}
@@ -249,7 +249,7 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
           {uploading ? (
             <div className="space-y-3">
               <Loader2 className="h-10 w-10 text-blue-400 animate-spin mx-auto" />
-              <p className="text-slate-300">Uploading... {progress}%</p>
+              <p className="text-slate-500 dark:text-slate-300">Uploading... {progress}%</p>
               <div className="w-64 mx-auto bg-slate-700 rounded-full h-2">
                 <div
                   className="bg-blue-500 h-2 rounded-full transition-all"
@@ -259,10 +259,10 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
             </div>
           ) : (
             <div className="space-y-3">
-              <FileSpreadsheet className="h-12 w-12 text-slate-500 mx-auto" />
+              <FileSpreadsheet className="h-12 w-12 text-slate-400 dark:text-slate-500 mx-auto" />
               <div>
-                <p className="text-slate-200 font-medium">Drop your Excel or CSV file here</p>
-                <p className="text-sm text-slate-400 mt-1">
+                <p className="text-slate-600 dark:text-slate-200 font-medium">Drop your Excel or CSV file here</p>
+                <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
                   Supports .xlsx, .xls, .csv — VIN Report / Parts Inventory
                 </p>
               </div>
@@ -308,7 +308,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
       <Card>
         <CardContent className="p-8 text-center">
           <Loader2 className="h-8 w-8 text-blue-400 animate-spin mx-auto" />
-          <p className="text-slate-400 mt-2">Loading job...</p>
+          <p className="text-slate-400 dark:text-slate-400 mt-2">Loading job...</p>
         </CardContent>
       </Card>
     );
@@ -337,7 +337,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
             </CardTitle>
             <div className="flex items-center gap-2">
               {!terminal && (
-                <span className="flex items-center gap-1 text-xs text-slate-400">
+                <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-400">
                   <Clock className="h-3.5 w-3.5" />
                   {formatElapsed(elapsed)}
                 </span>
@@ -366,7 +366,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
           {/* Progress bar — always shown during processing */}
           {!terminal && (
             <div className="mb-4">
-              <div className="flex justify-between text-xs text-slate-400 mb-1">
+              <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
                 <span>
                   {hasPartCounts
                     ? `${job.processedParts} / ${job.totalParts} parts`
@@ -397,7 +397,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
               return (
                 <div key={stage.key} className="flex items-center">
                   {i > 0 && (
-                    <ChevronRight className={`h-4 w-4 mx-1 ${isDone ? 'text-green-500' : 'text-slate-600'}`} />
+                    <ChevronRight className={`h-4 w-4 mx-1 ${isDone ? 'text-green-500' : 'text-slate-500 dark:text-slate-600'}`} />
                   )}
                   <div
                     className={`
@@ -405,7 +405,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
                       ${isDone ? 'bg-green-500/20 text-green-400' : ''}
                       ${isActive ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50' : ''}
                       ${isFailed ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50' : ''}
-                      ${!isDone && !isActive && !isFailed ? 'bg-slate-700/50 text-slate-500' : ''}
+                      ${!isDone && !isActive && !isFailed ? 'bg-slate-200/50 dark:bg-slate-700/50 text-slate-400 dark:text-slate-500' : ''}
                     `}
                   >
                     {isDone && <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -427,8 +427,8 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
 
           {/* Input file download – always available */}
           {job.storedFilePath && (
-            <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Original input file</span>
+            <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
+              <span className="text-xs text-slate-400 dark:text-slate-500">Original input file</span>
               <DownloadButton label={job.originalFilename} template="input" jobId={job.id} variant="subtle" />
             </div>
           )}
@@ -487,7 +487,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
         })) : undefined}
       />
 
-      <button onClick={onBack} className="text-sm text-slate-400 hover:text-slate-200 transition">
+      <button onClick={onBack} className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 transition">
         &larr; Back to history
       </button>
     </div>
@@ -498,9 +498,9 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs text-slate-400 uppercase tracking-wider">{label}</p>
-        <p className="text-xl font-bold text-slate-100">{value}</p>
-        {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+        <p className="text-xs text-slate-400 dark:text-slate-400 uppercase tracking-wider">{label}</p>
+        <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
+        {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
       </CardContent>
     </Card>
   );
@@ -512,12 +512,12 @@ function DownloadButton({ label, template, jobId, variant = 'default' }: { label
       onClick={() => downloadPipelineFile(jobId, template)}
       className={`flex items-center gap-2 p-3 border rounded-lg transition text-left ${
         variant === 'subtle'
-          ? 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700'
-          : 'bg-slate-700/50 hover:bg-slate-600/50 border-slate-600'
+          ? 'bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200/50 dark:bg-slate-700/50 border-slate-700'
+          : 'bg-slate-200/50 dark:bg-slate-700/50 hover:bg-slate-600/50 border-slate-300 dark:border-slate-600'
       }`}
     >
-      <Download className={`h-4 w-4 flex-shrink-0 ${variant === 'subtle' ? 'text-slate-400' : 'text-green-400'}`} />
-      <span className="text-sm text-slate-200">{label}</span>
+      <Download className={`h-4 w-4 flex-shrink-0 ${variant === 'subtle' ? 'text-slate-400 dark:text-slate-400' : 'text-green-400'}`} />
+      <span className="text-sm text-slate-600 dark:text-slate-200">{label}</span>
     </button>
   );
 }
@@ -541,37 +541,37 @@ function HistoryStep({ onViewJob }: { onViewJob: (id: string) => void }) {
             <Loader2 className="h-6 w-6 text-blue-400 animate-spin" />
           </div>
         ) : jobs.length === 0 ? (
-          <p className="text-slate-400 text-center py-8">No pipeline jobs yet. Upload a file to get started.</p>
+          <p className="text-slate-400 dark:text-slate-400 text-center py-8">No pipeline jobs yet. Upload a file to get started.</p>
         ) : (
           <div className="space-y-2">
             {jobs.map((job) => (
               <button
                 key={job.id}
                 onClick={() => onViewJob(job.id)}
-                className="w-full flex items-center justify-between p-4 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg transition text-left"
+                className="w-full flex items-center justify-between p-4 bg-slate-200/30 dark:bg-slate-700/30 hover:bg-slate-200/50 dark:bg-slate-700/50 rounded-lg transition text-left"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <FileSpreadsheet className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                  <FileSpreadsheet className="h-5 w-5 text-slate-400 dark:text-slate-400 flex-shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm text-slate-200 truncate">{job.originalFilename}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm text-slate-600 dark:text-slate-200 truncate">{job.originalFilename}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
                       {new Date(job.createdAt).toLocaleString()} &middot; {formatBytes(job.fileSizeBytes)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   {job.totalParts > 0 && (
-                    <span className="text-xs text-slate-400">{job.processedParts}/{job.totalParts} parts</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-400">{job.processedParts}/{job.totalParts} parts</span>
                   )}
                   {statusBadge(job.status)}
                   <button
                     onClick={(e) => { e.stopPropagation(); downloadPipelineFile(job.id, 'input'); }}
                     title="Download original input file"
-                    className="p-1.5 text-slate-500 hover:text-blue-400 transition rounded"
+                    className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-blue-400 transition rounded"
                   >
                     <Download className="h-4 w-4" />
                   </button>
-                  <ChevronRight className="h-4 w-4 text-slate-500" />
+                  <ChevronRight className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                 </div>
               </button>
             ))}

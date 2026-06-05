@@ -9,8 +9,10 @@ import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.
 import { EbayListingChannel } from '../entities/ebay-listing-channel.entity.js';
 import { EbayListingValidationService } from '../services/ebay-listing-validation.service.js';
 import { ListingBuilderService } from '../services/listing-builder.service.js';
+import { CatalogPublishResolverService } from '../services/catalog-publish-resolver.service.js';
 import { EbayPublishService } from '../../../channels/ebay/ebay-publish.service.js';
 import { Store } from '../../../channels/entities/store.entity.js';
+import type { PublishErrorPayload } from '../../sellerpundit/sellerpundit.types.js';
 
 @Processor('ebay-listing-publish')
 export class EbayListingPublishProcessor extends WorkerHost {
@@ -29,6 +31,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
     private readonly storeRepo: Repository<Store>,
     private readonly validation: EbayListingValidationService,
     private readonly builder: ListingBuilderService,
+    private readonly publishResolver: CatalogPublishResolverService,
     private readonly ebayPublish: EbayPublishService,
   ) {
     super();
@@ -62,7 +65,13 @@ export class EbayListingPublishProcessor extends WorkerHost {
     if (v.status === 'blocked') {
       await this.targetRepo.update(target.id, {
         status: 'failed',
-        errorPayload: { errors: v.errors, warnings: v.warnings },
+        errorPayload: {
+          source: 'internal',
+          stage: 'validation',
+          message: 'Publish validation blocked',
+          errors: v.errors,
+          warnings: v.warnings,
+        } satisfies PublishErrorPayload,
       });
       await this.refreshJobStatus(listingJob.id);
       return;
@@ -87,18 +96,25 @@ export class EbayListingPublishProcessor extends WorkerHost {
       await this.storeRepo.save(store);
     }
 
+    const resolved = await this.publishResolver.resolve(target.catalogProductId);
     const built = await this.builder.build({
       catalogProductId: target.catalogProductId,
       ebayAccountId: target.ebayAccountId,
       marketplaceId: target.marketplaceId,
-      listingRecordId: target.catalogProductId,
+      listingRecordId:
+        resolved?.snapshot.listingRecordId ?? target.catalogProductId,
       storeId: account.primaryStoreId,
     });
 
     if (built.blockingErrors.length) {
       await this.targetRepo.update(target.id, {
         status: 'failed',
-        errorPayload: { errors: built.blockingErrors },
+        errorPayload: {
+          source: 'internal',
+          stage: 'build',
+          message: 'Listing build failed',
+          errors: built.blockingErrors,
+        } satisfies PublishErrorPayload,
       });
       await this.refreshJobStatus(listingJob.id);
       return;
@@ -150,7 +166,12 @@ export class EbayListingPublishProcessor extends WorkerHost {
     } else {
       await this.targetRepo.update(target.id, {
         status: 'failed',
-        errorPayload: { message: r?.error ?? 'Publish failed' },
+        errorPayload: {
+          source: 'ebay',
+          stage: 'bulk_create',
+          message: r?.error ?? 'Publish failed',
+          errors: [r?.error ?? 'Publish failed'],
+        } satisfies PublishErrorPayload,
       });
     }
 

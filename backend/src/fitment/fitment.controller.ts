@@ -20,9 +20,11 @@ import { EbayMvlService, type FitmentSelection } from './ebay-mvl.service.js';
 import { VinDecodeService } from './vin-decode.service.js';
 import { CreateFitmentDto, VerifyFitmentDto, FitmentDetectionDto } from './dto/create-fitment.dto.js';
 import { SearchFitmentDto } from './dto/search-fitment.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('fitment')
 @Controller('fitment')
+@RequirePermissions('fitment.view')
 export class FitmentController {
   constructor(
     private readonly fitmentService: FitmentService,
@@ -81,6 +83,7 @@ export class FitmentController {
   }
 
   @Post('listing/:listingId')
+  @RequirePermissions('fitment.manage')
   @ApiOperation({ summary: 'Add fitment to a listing' })
   createFitment(
     @Param('listingId', ParseUUIDPipe) listingId: string,
@@ -90,6 +93,7 @@ export class FitmentController {
   }
 
   @Delete(':fitmentId')
+  @RequirePermissions('fitment.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a fitment record' })
   deleteFitment(@Param('fitmentId', ParseUUIDPipe) fitmentId: string) {
@@ -97,6 +101,7 @@ export class FitmentController {
   }
 
   @Patch(':fitmentId/verify')
+  @RequirePermissions('fitment.manage')
   @ApiOperation({ summary: 'Verify or unverify a fitment record' })
   verifyFitment(
     @Param('fitmentId', ParseUUIDPipe) fitmentId: string,
@@ -108,6 +113,7 @@ export class FitmentController {
   // ─── AI detection ───
 
   @Post('detect')
+  @RequirePermissions('fitment.manage')
   @ApiOperation({ summary: 'Detect fitment from raw text via AI/regex' })
   detectFitment(@Body() dto: FitmentDetectionDto) {
     return this.matcherService.detectFromText(dto.text ?? '');
@@ -116,6 +122,7 @@ export class FitmentController {
   // ─── Bulk import ───
 
   @Post('bulk-import')
+  @RequirePermissions('fitment.manage')
   @ApiOperation({ summary: 'Enqueue ACES XML/CSV bulk import' })
   bulkImport(@Body() body: { rows: AcesVehicleRow[] }) {
     return this.importService.enqueueBulkImport(body.rows);
@@ -172,6 +179,7 @@ export class FitmentController {
   }
 
   @Post('build-compatibility')
+  @RequirePermissions('fitment.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Convert fitment selections to eBay compatibility JSON' })
   buildCompatibility(@Body() body: { selections: FitmentSelection[] }) {

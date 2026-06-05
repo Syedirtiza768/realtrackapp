@@ -16,9 +16,11 @@ import {
   RejectEnhancementDto,
   EnhancementQueryDto,
 } from './dto/ai-enhancement.dto.js';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('ai-enhancements')
 @Controller('ai-enhancements')
+@RequirePermissions('listings.view')
 export class AiEnhancementController {
   constructor(private readonly aiService: AiEnhancementService) {}
 
@@ -47,6 +49,7 @@ export class AiEnhancementController {
   }
 
   @Post('request')
+  @RequirePermissions('listings.update')
   @ApiOperation({ summary: 'Request an AI enhancement for a listing' })
   requestEnhancement(@Body() dto: RequestEnhancementDto) {
     return this.aiService.requestEnhancement({
@@ -57,6 +60,7 @@ export class AiEnhancementController {
   }
 
   @Post('bulk-request')
+  @RequirePermissions('listings.update')
   @ApiOperation({ summary: 'Request AI enhancements for multiple listings' })
   bulkRequest(@Body() dto: BulkRequestEnhancementDto) {
     return this.aiService.bulkRequestEnhancements(
@@ -66,6 +70,7 @@ export class AiEnhancementController {
   }
 
   @Post(':id/approve')
+  @RequirePermissions('listings.update')
   @ApiOperation({ summary: 'Approve a generated AI enhancement' })
   approve(
     @Param('id', ParseUUIDPipe) id: string,
@@ -75,12 +80,14 @@ export class AiEnhancementController {
   }
 
   @Post(':id/apply')
+  @RequirePermissions('listings.update')
   @ApiOperation({ summary: 'Apply an approved enhancement to the listing' })
   apply(@Param('id', ParseUUIDPipe) id: string) {
     return this.aiService.applyEnhancement(id);
   }
 
   @Post(':id/reject')
+  @RequirePermissions('listings.update')
   @ApiOperation({ summary: 'Reject a generated AI enhancement' })
   reject(
     @Param('id', ParseUUIDPipe) id: string,

@@ -1,4 +1,4 @@
-/* ── eBay Compliance Panel ─────────────────────────────────
+﻿/* ── eBay Compliance Panel ─────────────────────────────────
  *  Shows compliance validation results and auto-corrections
  *  for imported catalog products.
  * ────────────────────────────────────────────────────────── */
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
+import { authPost, fetchWithAuth } from '../../lib/authApi';
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -132,13 +133,10 @@ async function validateBatch(
   productIds: string[],
   autoFix = true,
 ): Promise<BatchComplianceResult> {
-  const res = await fetch('/api/catalog-import/compliance/validate-batch', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ productIds, autoFix }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
+  return authPost<BatchComplianceResult>(
+    '/api/catalog-import/compliance/validate-batch',
+    { productIds, autoFix },
+  );
 }
 
 async function validateProduct(
@@ -146,11 +144,10 @@ async function validateProduct(
   autoFix = true,
 ): Promise<ComplianceResult> {
   const qs = autoFix ? '' : '?autoFix=false';
-  const res = await fetch(`/api/catalog-import/compliance/validate/${productId}${qs}`, {
-    method: 'POST',
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
+  return fetchWithAuth<ComplianceResult>(
+    `/api/catalog-import/compliance/validate/${productId}${qs}`,
+    { method: 'POST' },
+  );
 }
 
 /* ── Main Component ───────────────────────────────────────── */
@@ -221,12 +218,12 @@ export default function CompliancePanel({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+              <label className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-400 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={autoFix}
                   onChange={(e) => setAutoFix(e.target.checked)}
-                  className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 h-3.5 w-3.5"
+                  className="rounded border-slate-300 dark:border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 h-3.5 w-3.5"
                 />
                 Auto-fix
               </label>
@@ -246,7 +243,7 @@ export default function CompliancePanel({
           )}
 
           {!isReady && importStatus !== 'completed' && (
-            <p className="text-sm text-slate-500">Compliance validation is available after import completes.</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500">Compliance validation is available after import completes.</p>
           )}
 
           {validating && (
@@ -271,7 +268,7 @@ export default function CompliancePanel({
               {/* Top issues */}
               {batchResult.summary.topIssues.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-2">Top Issues</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-400 mb-2">Top Issues</p>
                   <div className="flex flex-wrap gap-1">
                     {batchResult.summary.topIssues.slice(0, 8).map((issue) => (
                       <Badge key={issue.code} variant="secondary">
@@ -295,7 +292,7 @@ export default function CompliancePanel({
               onClick={() => setExpandedSection(expandedSection === 'records' ? null : 'records')}
             >
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-slate-400" />
+                <FileText className="h-5 w-5 text-slate-400 dark:text-slate-400" />
                 Record Details
                 <Badge variant="secondary">{batchResult.results.length}</Badge>
               </div>
@@ -335,7 +332,7 @@ export default function CompliancePanel({
 function ComplianceSummary({ result }: { result: BatchComplianceResult }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-      <MiniStat label="Total" value={String(result.totalRecords)} color="text-slate-200" />
+      <MiniStat label="Total" value={String(result.totalRecords)} color="text-slate-600 dark:text-slate-200" />
       <MiniStat
         label="Compliant"
         value={String(result.compliantRecords)}
@@ -384,7 +381,7 @@ function ComplianceResultRow({
     <button
       onClick={onSelect}
       className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition ${
-        isSelected ? 'bg-blue-500/10 ring-1 ring-blue-500/30' : 'bg-slate-700/30 hover:bg-slate-700/50'
+        isSelected ? 'bg-blue-500/10 ring-1 ring-blue-500/30' : 'bg-slate-200/30 dark:bg-slate-700/30 hover:bg-slate-200/50 dark:bg-slate-700/50'
       }`}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -396,8 +393,8 @@ function ComplianceResultRow({
           )}
         </div>
         <div className="min-w-0">
-          <p className="text-sm text-slate-200 truncate">{result.sku || result.productId.slice(0, 8)}</p>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <p className="text-sm text-slate-600 dark:text-slate-200 truncate">{result.sku || result.productId.slice(0, 8)}</p>
+          <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
             <span>Score: {Math.round(result.complianceScore * 100)}%</span>
             {result.autoCorrections.length > 0 && (
               <span className="text-purple-400">{result.autoCorrections.length} auto-fixed</span>
@@ -412,7 +409,7 @@ function ComplianceResultRow({
         {result.compliant && <Badge variant="success">Compliant</Badge>}
         <button
           onClick={(e) => { e.stopPropagation(); onRevalidate(); }}
-          className="p-1 text-slate-400 hover:text-slate-200"
+          className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
           title="Re-validate"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -512,9 +509,9 @@ function ComplianceDetail({ result }: { result: ComplianceResult }) {
                 <div key={i} className="flex items-start gap-2 text-xs p-2 bg-purple-500/10 rounded">
                   <Zap className="h-3.5 w-3.5 text-purple-400 mt-0.5 flex-shrink-0" />
                   <div>
-                    <span className="text-slate-200">{c.message}</span>
+                    <span className="text-slate-600 dark:text-slate-200">{c.message}</span>
                     {c.originalValue && c.fixedValue && (
-                      <div className="mt-0.5 text-slate-500">
+                      <div className="mt-0.5 text-slate-400 dark:text-slate-500">
                         <span className="line-through">{c.originalValue.slice(0, 50)}</span>
                         {' → '}
                         <span className="text-green-400">{c.fixedValue.slice(0, 50)}</span>
@@ -584,8 +581,8 @@ function SpecificsSection({ data }: { data: ItemSpecificsResult }) {
   return (
     <div className="text-xs space-y-2">
       <div className="flex items-center gap-4">
-        <span className="text-slate-400">Coverage: {data.coveragePercent}%</span>
-        <span className="text-slate-400">Present: {data.totalPresent}/{data.totalRequired}</span>
+        <span className="text-slate-400 dark:text-slate-400">Coverage: {data.coveragePercent}%</span>
+        <span className="text-slate-400 dark:text-slate-400">Present: {data.totalPresent}/{data.totalRequired}</span>
       </div>
       {data.missingRequired.length > 0 && (
         <div>
@@ -599,7 +596,7 @@ function SpecificsSection({ data }: { data: ItemSpecificsResult }) {
         <div>
           <p className="text-purple-400 mb-1">Auto-Filled:</p>
           {data.autoFilled.map((f, i) => (
-            <div key={i} className="flex items-center gap-2 text-slate-300">
+            <div key={i} className="flex items-center gap-2 text-slate-500 dark:text-slate-300">
               <Sparkles className="h-3 w-3 text-purple-400" />
               {f.field}: <span className="text-green-400">{f.value}</span>
             </div>
@@ -614,12 +611,12 @@ function TitleSection({ data }: { data: TitleOptimizationResult }) {
   return (
     <div className="text-xs space-y-2">
       <div className="flex items-center gap-3">
-        <span className="text-slate-400">Length: {data.originalTitle.length}/80 {data.lengthOk ? '✓' : '✗'}</span>
-        <span className="text-slate-400">SEO: {Math.round(data.seoScore * 100)}%</span>
+        <span className="text-slate-400 dark:text-slate-400">Length: {data.originalTitle.length}/80 {data.lengthOk ? '✓' : '✗'}</span>
+        <span className="text-slate-400 dark:text-slate-400">SEO: {Math.round(data.seoScore * 100)}%</span>
       </div>
       {data.applied && data.optimizedTitle !== data.originalTitle && (
         <div className="p-2 bg-purple-500/10 rounded">
-          <p className="text-slate-500 line-through mb-0.5">{data.originalTitle}</p>
+          <p className="text-slate-400 dark:text-slate-500 line-through mb-0.5">{data.originalTitle}</p>
           <p className="text-green-400">{data.optimizedTitle}</p>
         </div>
       )}
@@ -705,14 +702,14 @@ function SectionToggle({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-slate-700/50 rounded-lg overflow-hidden">
+    <div className="border border-slate-200/50 dark:border-slate-700/50 rounded-lg overflow-hidden">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-2.5 hover:bg-slate-700/30 transition text-left"
+        className="w-full flex items-center justify-between p-2.5 hover:bg-slate-200/30 dark:bg-slate-700/30 transition text-left"
       >
         <div className="flex items-center gap-2">
           {icon}
-          <span className="text-sm text-slate-200">{label}</span>
+          <span className="text-sm text-slate-600 dark:text-slate-200">{label}</span>
         </div>
         <div className="flex items-center gap-2">
           {status !== undefined && (
@@ -720,7 +717,7 @@ function SectionToggle({
               ? <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
               : <XCircle className="h-3.5 w-3.5 text-red-400" />
           )}
-          {open ? <ChevronUp className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
+          {open ? <ChevronUp className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />}
         </div>
       </button>
       {open && (
@@ -748,9 +745,9 @@ function IssueRow({ issue }: { issue: ComplianceIssue }) {
     <div className={`flex items-start gap-2 p-1.5 rounded text-xs ${colors[issue.severity]}`}>
       {icons[issue.severity]}
       <div className="min-w-0">
-        <span className="text-slate-300">{issue.message}</span>
+        <span className="text-slate-500 dark:text-slate-300">{issue.message}</span>
         {issue.suggestion && (
-          <p className="text-slate-500 mt-0.5">💡 {issue.suggestion}</p>
+          <p className="text-slate-400 dark:text-slate-500 mt-0.5">💡 {issue.suggestion}</p>
         )}
         {issue.autoFixed && (
           <span className="text-purple-400 ml-1">(auto-fixed)</span>
@@ -778,8 +775,8 @@ function MiniStat({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="p-2 rounded bg-slate-700/40">
-      <p className="text-xs text-slate-400">{label}</p>
+    <div className="p-2 rounded bg-slate-200/40 dark:bg-slate-700/40">
+      <p className="text-xs text-slate-400 dark:text-slate-400">{label}</p>
       <p className={`text-sm font-semibold ${color} flex items-center gap-1`}>
         {icon}
         {value}

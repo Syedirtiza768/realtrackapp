@@ -73,7 +73,11 @@ export interface EbayInventoryItemPage {
 export interface EbayOffer {
   offerId?: string;
   sku: string;
-  marketplaceId: string; // 'EBAY_US' | 'EBAY_MOTORS_US'
+  /** Inventory API MarketplaceEnum (e.g. EBAY_MOTORS, not EBAY_MOTORS_US). */
+  marketplaceId: string;
+  /** Present on published offers returned from Inventory API */
+  listingId?: string;
+  status?: string;
   format: 'FIXED_PRICE' | 'AUCTION';
   listingDescription?: string;
   availableQuantity?: number;

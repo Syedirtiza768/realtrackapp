@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+﻿import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Check,
@@ -290,14 +290,14 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
     };
 
     const confidenceColor = (c: number | null) => {
-        if (!c) return 'text-slate-500';
+        if (!c) return 'text-slate-400 dark:text-slate-500';
         if (c > 90) return 'text-emerald-500';
         if (c > 50) return 'text-amber-500';
         return 'text-red-500';
     };
 
     const confidenceBg = (c: number | null) => {
-        if (!c) return 'bg-slate-700';
+        if (!c) return 'bg-slate-200 dark:bg-slate-700';
         if (c > 90) return 'bg-emerald-500';
         if (c > 50) return 'bg-amber-500';
         return 'bg-red-500';
@@ -309,12 +309,12 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Fitment Manager</h2>
-                    <p className="text-slate-500 text-sm">
+                    <p className="text-slate-400 dark:text-slate-500 text-sm">
                         {fitments.length} fitment{fitments.length !== 1 ? 's' : ''} assigned
                     </p>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                    <button className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
+                    <button className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">
                         <Download size={16} /> Import/Export
                     </button>
                     <button
@@ -329,10 +329,10 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
             {/* ── Add Fitment Panel ── */}
             {showAddPanel && (
                 <Card>
-                    <CardHeader className="border-b border-slate-800 pb-4">
+                    <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-semibold text-slate-200">Add Vehicle Fitment</h3>
-                            <button onClick={resetAddForm} className="p-1 hover:bg-slate-800 rounded text-slate-400">
+                            <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-200">Add Vehicle Fitment</h3>
+                            <button onClick={resetAddForm} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 dark:text-slate-400">
                                 <X size={18} />
                             </button>
                         </div>
@@ -341,7 +341,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                         {/* VIN Lookup */}
                         <div className="flex flex-col sm:flex-row gap-2">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">
+                                <label className="block text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1.5">
                                     Quick Fill via VIN
                                 </label>
                                 <div className="flex gap-2">
@@ -351,11 +351,11 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                         onChange={(e) => setVinInput(e.target.value.toUpperCase())}
                                         placeholder="Enter 17-character VIN..."
                                         maxLength={17}
-                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none font-mono tracking-wider"
+                                        className="flex-1 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 placeholder:text-slate-500 dark:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none font-mono tracking-wider"
                                     />
                                     <button
                                         onClick={handleVinLookup}
-                                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-slate-300"
+                                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-500 dark:text-slate-300"
                                     >
                                         <Barcode size={16} /> Decode
                                     </button>
@@ -419,7 +419,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                         <div className="flex justify-end gap-2 pt-2">
                             <button
                                 onClick={resetAddForm}
-                                className="px-4 py-2 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-800 text-sm"
+                                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                             >
                                 Cancel
                             </button>
@@ -438,20 +438,20 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
 
             {/* ── Fitment Table ── */}
             <Card>
-                <CardHeader className="border-b border-slate-800 pb-4">
+                <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 w-full sm:max-w-sm lg:max-w-md">
-                            <Search size={16} className="text-slate-500 shrink-0" />
+                        <div className="flex items-center gap-2 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 w-full sm:max-w-sm lg:max-w-md">
+                            <Search size={16} className="text-slate-400 dark:text-slate-500 shrink-0" />
                             <input
                                 type="text"
                                 value={filterText}
                                 onChange={(e) => setFilterText(e.target.value)}
                                 placeholder="Filter by Make, Model, or Year..."
-                                className="bg-transparent border-none focus:outline-none text-sm w-full text-slate-200 placeholder:text-slate-600"
+                                className="bg-transparent border-none focus:outline-none text-sm w-full text-slate-600 dark:text-slate-200 placeholder:text-slate-500 dark:text-slate-600"
                             />
                         </div>
                         <div className="flex items-center gap-2">
-                            <button className="p-2 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400">
+                            <button className="p-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400">
                                 <Filter size={16} />
                             </button>
                         </div>
@@ -459,7 +459,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                 </CardHeader>
                 <CardContent className="p-0">
                     {isLoading && (
-                        <div className="flex items-center justify-center py-12 gap-2 text-slate-500">
+                        <div className="flex items-center justify-center py-12 gap-2 text-slate-400 dark:text-slate-500">
                             <Loader2 size={20} className="animate-spin" /> Loading fitments...
                         </div>
                     )}
@@ -471,7 +471,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                     )}
 
                     {!isLoading && !listError && filteredFitments.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
                             <Search size={32} className="mb-2 opacity-50" />
                             <p className="text-sm">{fitments.length === 0 ? 'No fitments yet. Click "Add Fitment" to begin.' : 'No fitments match your filter.'}</p>
                         </div>
@@ -482,12 +482,12 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                             {/* Desktop table view (md+) */}
                             <div className="hidden md:block relative w-full overflow-auto">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="text-xs uppercase bg-slate-900/50 text-slate-400 font-medium">
+                                    <thead className="text-xs uppercase bg-white/50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-400 font-medium">
                                         <tr>
                                             <th className="p-4 w-10">
                                                 <input
                                                     type="checkbox"
-                                                    className="rounded border-slate-700 bg-slate-800"
+                                                    className="rounded border-slate-200 dark:border-slate-700 bg-slate-800"
                                                     checked={selected.length === filteredFitments.length && filteredFitments.length > 0}
                                                     onChange={toggleAll}
                                                 />
@@ -500,27 +500,27 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                             <th className="p-4 text-right">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-800">
+                                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                         {filteredFitments.map((row) => (
-                                            <tr key={row.id} className="hover:bg-slate-800/50 transition-colors">
+                                            <tr key={row.id} className="hover:bg-slate-100/50 dark:bg-slate-800/50 transition-colors">
                                                 <td className="p-4">
                                                     <input
                                                         type="checkbox"
-                                                        className="rounded border-slate-700 bg-slate-800"
+                                                        className="rounded border-slate-200 dark:border-slate-700 bg-slate-800"
                                                         checked={selected.includes(row.id)}
                                                         onChange={() => toggleSelect(row.id)}
                                                     />
                                                 </td>
                                                 <td className="p-4">
-                                                    <div className="font-medium text-slate-200">{formatVehicle(row)}</div>
-                                                    <div className="text-xs text-slate-500">ID: {row.id.slice(0, 8)}…</div>
+                                                    <div className="font-medium text-slate-600 dark:text-slate-200">{formatVehicle(row)}</div>
+                                                    <div className="text-xs text-slate-400 dark:text-slate-500">ID: {row.id.slice(0, 8)}…</div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <div className="text-slate-300">{row.submodel?.name ?? '—'}</div>
-                                                    <div className="text-xs text-slate-500">{row.engine?.name ?? '—'}</div>
+                                                    <div className="text-slate-500 dark:text-slate-300">{row.submodel?.name ?? '—'}</div>
+                                                    <div className="text-xs text-slate-400 dark:text-slate-500">{row.engine?.name ?? '—'}</div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 capitalize">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-500 dark:text-slate-300 capitalize">
                                                         {row.source.replace('_', ' ')}
                                                     </span>
                                                 </td>
@@ -551,18 +551,18 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                         <button
                                                             title={row.verified ? 'Unverify' : 'Verify'}
                                                             onClick={() => verifyMut.mutate({ id: row.id, verified: !row.verified })}
-                                                            className="p-1.5 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-500 rounded"
+                                                            className="p-1.5 hover:bg-emerald-500/10 text-slate-400 dark:text-slate-400 hover:text-emerald-500 rounded"
                                                         >
                                                             <Check size={16} />
                                                         </button>
                                                         <button
                                                             title="Delete"
                                                             onClick={() => deleteMut.mutate(row.id)}
-                                                            className="p-1.5 hover:bg-red-500/10 text-slate-400 hover:text-red-500 rounded"
+                                                            className="p-1.5 hover:bg-red-500/10 text-slate-400 dark:text-slate-400 hover:text-red-500 rounded"
                                                         >
                                                             <X size={16} />
                                                         </button>
-                                                        <button className="p-1.5 hover:bg-slate-800 text-slate-400 rounded">
+                                                        <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 rounded">
                                                             <MoreHorizontal size={16} />
                                                         </button>
                                                     </div>
@@ -574,20 +574,20 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                             </div>
 
                             {/* Mobile card view (<md) */}
-                            <div className="md:hidden divide-y divide-slate-800">
+                            <div className="md:hidden divide-y divide-slate-200 dark:divide-slate-800">
                                 {filteredFitments.map((row) => (
                                     <div key={row.id} className="p-3 sm:p-4 space-y-2">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex items-start gap-2">
                                                 <input
                                                     type="checkbox"
-                                                    className="rounded border-slate-700 bg-slate-800 mt-1"
+                                                    className="rounded border-slate-200 dark:border-slate-700 bg-slate-800 mt-1"
                                                     checked={selected.includes(row.id)}
                                                     onChange={() => toggleSelect(row.id)}
                                                 />
                                                 <div>
-                                                    <div className="font-medium text-slate-200 text-sm">{formatVehicle(row)}</div>
-                                                    <div className="text-xs text-slate-500">
+                                                    <div className="font-medium text-slate-600 dark:text-slate-200 text-sm">{formatVehicle(row)}</div>
+                                                    <div className="text-xs text-slate-400 dark:text-slate-500">
                                                         {row.submodel?.name ?? '—'} · {row.engine?.name ?? '—'}
                                                     </div>
                                                 </div>
@@ -595,17 +595,17 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                             <div className="flex items-center gap-1">
                                                 <button
                                                     onClick={() => verifyMut.mutate({ id: row.id, verified: !row.verified })}
-                                                    className="p-1.5 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-500 rounded"
+                                                    className="p-1.5 hover:bg-emerald-500/10 text-slate-400 dark:text-slate-400 hover:text-emerald-500 rounded"
                                                 >
                                                     <Check size={14} />
                                                 </button>
                                                 <button
                                                     onClick={() => deleteMut.mutate(row.id)}
-                                                    className="p-1.5 hover:bg-red-500/10 text-slate-400 hover:text-red-500 rounded"
+                                                    className="p-1.5 hover:bg-red-500/10 text-slate-400 dark:text-slate-400 hover:text-red-500 rounded"
                                                 >
                                                     <X size={14} />
                                                 </button>
-                                                <button className="p-1.5 hover:bg-slate-800 text-slate-400 rounded">
+                                                <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 rounded">
                                                     <MoreHorizontal size={14} />
                                                 </button>
                                             </div>
@@ -636,9 +636,9 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
 
             {/* ── Bulk Actions Bar ── */}
             {selected.length > 0 && (
-                <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 shadow-xl rounded-full px-4 sm:px-6 py-2.5 sm:py-3 flex items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom-4 z-40 max-w-[90vw]">
-                    <span className="text-xs sm:text-sm font-medium text-slate-200 whitespace-nowrap">{selected.length} selected</span>
-                    <div className="h-4 w-px bg-slate-700" />
+                <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-4 sm:px-6 py-2.5 sm:py-3 flex items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom-4 z-40 max-w-[90vw]">
+                    <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-200 whitespace-nowrap">{selected.length} selected</span>
+                    <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
                     <button
                         onClick={handleBulkVerify}
                         className="text-xs sm:text-sm text-emerald-400 hover:text-emerald-300 font-medium whitespace-nowrap"

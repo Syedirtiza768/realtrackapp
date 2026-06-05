@@ -22,8 +22,11 @@ import { RedisCacheInterceptor, CacheTTL } from '../common/cache/index.js';
  * - quantity → number | null
  * - All shipping costs → number | null
  */
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+
 @Controller('v2/listings')
 @UseInterceptors(RedisCacheInterceptor)
+@RequirePermissions('listings.view')
 export class ListingsV2Controller {
   constructor(
     private readonly listingsService: ListingsService,

@@ -9,8 +9,10 @@ import {
 } from 'class-validator';
 
 export class EbayOAuthStartDto {
+  /** RealTrack workspace (internal). Omit to use the user's default workspace. */
+  @IsOptional()
   @IsUUID()
-  organizationId!: string;
+  organizationId?: string;
 
   @IsOptional()
   @IsUUID()
@@ -22,13 +24,10 @@ export class EbayOAuthStartDto {
   @IsIn(['sandbox', 'production'])
   environment!: 'sandbox' | 'production';
 
-  @IsString()
-  accountDisplayName!: string;
-
-  /** Dev-only until JWT exposes `sub` on every request */
+  /** Optional label in RealTrack; defaults to eBay username after OAuth. */
   @IsOptional()
-  @IsUUID()
-  userId?: string;
+  @IsString()
+  accountDisplayName?: string;
 }
 
 export class EbayPublishTargetDto {
@@ -40,8 +39,9 @@ export class EbayPublishTargetDto {
 }
 
 export class EbayPublishJobDto {
+  @IsOptional()
   @IsUUID()
-  organizationId!: string;
+  organizationId?: string;
 
   @IsUUID()
   catalogProductId!: string;
@@ -73,15 +73,12 @@ export class EbayReconnectBodyDto {
   @IsOptional()
   @IsUUID()
   internalStoreId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  userId?: string;
 }
 
 export class EbayValidateDto {
+  @IsOptional()
   @IsUUID()
-  organizationId!: string;
+  organizationId?: string;
 
   @IsUUID()
   catalogProductId!: string;
