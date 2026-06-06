@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/AUTH_RBAC.md](AUTH_RBAC.md) (2026-06-06)
+
 # Auth & RBAC
 
 > This expands and supersedes the short `docs/RBAC.md`. Keep both in sync; this is

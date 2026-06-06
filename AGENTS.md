@@ -6,7 +6,7 @@ Keep it short; this is a contract, not a tutorial.
 ## First read
 
 `README.md` → `CONTEXT.md` → `CLAUDE.md` → this file →
-`docs/handover/current-state.md` → `docs/architecture/overview.md`.
+`docs/context/CURRENT_STATE.md` → `docs/architecture/ARCHITECTURE.md`.
 Then inspect the actual code. **Trust code over docs when they conflict, and fix
 the doc.**
 
@@ -70,15 +70,15 @@ Whenever any agent changes code, database schema, API behavior, UI flow, RBAC lo
 
 | Change Type | Documentation to Update |
 |-------------|------------------------|
-| New/modified API endpoint | `/docs/architecture/api-map.md`, relevant module docs |
-| New/modified database entity | `/docs/architecture/database.md`, `/docs/DATABASE_MAP.md` |
-| New/modified permission | `/docs/architecture/auth-rbac.md`, `/docs/RBAC_AND_SECURITY.md` |
-| New/modified feature | `/docs/product/features.md` |
-| New/modified route | `/docs/FRONTEND_MAP.md`, `src/App.tsx` comments |
-| Architecture change | `/docs/architecture/overview.md`, `/docs/SYSTEM_OVERVIEW.md` |
-| New module/component | `/docs/CODEMAP.md`, `/docs/BACKEND_MAP.md` or `/docs/FRONTEND_MAP.md` |
-| Security change | `/docs/RBAC_AND_SECURITY.md`, `/docs/KNOWN_GAPS_AND_RISKS.md` |
-| Deployment change | `/docs/SETUP_AND_DEPLOYMENT.md` |
+| New/modified API endpoint | `docs/architecture/API_CONTRACTS.md`, relevant module docs |
+| New/modified database entity | `docs/architecture/DATABASE_SCHEMA.md`, `docs/backend/DATABASE_MODELS.md` |
+| New/modified permission | `docs/architecture/AUTH_RBAC.md`, `docs/architecture/SECURITY.md` |
+| New/modified feature | `docs/context/FEATURE_REGISTRY.md` |
+| New/modified route | `docs/frontend/ROUTES_AND_SCREENS.md`, `src/App.tsx` comments |
+| Architecture change | `docs/architecture/ARCHITECTURE.md`, `docs/context/SYSTEM_MAP.md` |
+| New module/component | `docs/context/SYSTEM_MAP.md`, `docs/backend/MODULE_MAP.md` or `docs/frontend/COMPONENT_MAP.md` |
+| Security change | `docs/architecture/SECURITY.md`, `docs/context/KNOWN_ISSUES.md` |
+| Deployment change | `docs/operations/SETUP.md`, `docs/architecture/DEPLOYMENT.md` |
 | Bug fix | `CHANGELOG.md`, relevant docs if behavior changed |
 | Breaking change | All relevant docs + `CHANGELOG.md` + migration notes |
 
@@ -99,4 +99,4 @@ All future agents MUST first read `/docs/AGENT_SYSTEM_MEMORY.md` before any codi
 
 ## Definition of done
 
-Follow `docs/development/task-completion-checklist.md`.
+Follow `docs/operations/TESTING.md`.

@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Superseded by /docs/architecture/INTEGRATIONS.md. Preserved for reference.
+
 # eBay multi-store architecture
 
 ## Overview

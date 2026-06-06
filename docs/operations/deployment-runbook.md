@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/operations/TROUBLESHOOTING.md](TROUBLESHOOTING.md) and [/docs/architecture/DEPLOYMENT.md](../architecture/DEPLOYMENT.md) (2026-06-06)
+
 # Deployment Runbook
 
 Architecture context: [/docs/architecture/deployment.md](../architecture/deployment.md).

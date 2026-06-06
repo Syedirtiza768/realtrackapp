@@ -199,13 +199,37 @@ export class EbayPublishService {
     return initial;
   }
 
+  /**
+   * Bulk/stub publish payloads (inventory manager, channel queue) send placeholder
+   * fields including `condition: 'NEW'`. Do not let that override listing_records.
+   */
+  private publishRequestLooksLikeStub(req: PublishRequest): boolean {
+    return (
+      !req.title?.trim() &&
+      !req.description?.trim() &&
+      !req.categoryId?.trim() &&
+      req.price === 0 &&
+      req.quantity === 0 &&
+      !req.imageUrls?.length &&
+      (req.sku === req.listingId || !req.sku?.trim())
+    );
+  }
+
   /** Backfill SKU, text, category, condition, and pricing from listing_records when the client sends stubs. */
   private async enrichPublishRequest(req: PublishRequest): Promise<PublishRequest> {
     const listing = await this.listingRepo.findOne({
       where: { id: req.listingId },
     });
 
-    const conditionSource = req.condition ?? listing?.conditionId ?? undefined;
+    const looksStub = this.publishRequestLooksLikeStub(req);
+    const listingCondition = listing?.conditionId?.trim() || undefined;
+    // PublishModal and bulk stubs send `condition: 'NEW'` when conditionId was not loaded.
+    const clientSentNewPlaceholder =
+      req.condition === 'NEW' && !!listingCondition;
+    const conditionSource =
+      looksStub || clientSentNewPlaceholder
+        ? listingCondition
+        : (req.condition ?? listingCondition ?? undefined);
     const mappedCondition = mapToEbayConditionEnum(
       typeof conditionSource === 'string' ? conditionSource : undefined,
     );
@@ -227,9 +251,9 @@ export class EbayPublishService {
       !req.sku?.trim() ||
       req.sku === req.listingId ||
       req.sku === listing.id;
-    const sku = skuLooksLikeListingId
+    const sku = (skuLooksLikeListingId
       ? listing.customLabelSku?.trim() || req.sku
-      : req.sku.trim();
+      : req.sku.trim()) + 'IGBC';
 
     const parsedPrice = parseFloat(listing.startPrice ?? '');
     const parsedQty = parseInt(listing.quantity ?? '', 10);
@@ -398,6 +422,7 @@ export class EbayPublishService {
       title: '',
       description: '',
       categoryId: '',
+      // Placeholder only — enrichPublishRequest reads listing_records.conditionId.
       condition: 'NEW',
       price: 0,
       quantity: 0,

@@ -3,6 +3,7 @@
  */
 
 import { fetchWithAuth } from './authApi';
+import { autoForeground, hoverColor } from './contrast';
 
 export type PublicBranding = {
   appName: string;
@@ -72,9 +73,21 @@ function resolveThemeMode(themeMode: string): 'light' | 'dark' {
 /** Apply theme tokens to document root (login + shell). */
 export function applyBrandingToDocument(branding: PublicBranding): void {
   const root = document.documentElement;
+
+  // Brand background colors
   root.style.setProperty('--brand-primary', branding.primaryColor);
   root.style.setProperty('--brand-secondary', branding.secondaryColor);
   root.style.setProperty('--brand-accent', branding.accentColor);
+
+  // Contrast-safe foregrounds (white or black based on luminance)
+  root.style.setProperty('--brand-primary-fg', autoForeground(branding.primaryColor));
+  root.style.setProperty('--brand-secondary-fg', autoForeground(branding.secondaryColor));
+  root.style.setProperty('--brand-accent-fg', autoForeground(branding.accentColor));
+
+  // Hover states (±10% brightness)
+  root.style.setProperty('--brand-primary-hover', hoverColor(branding.primaryColor));
+  root.style.setProperty('--brand-secondary-hover', hoverColor(branding.secondaryColor));
+  root.style.setProperty('--brand-accent-hover', hoverColor(branding.accentColor));
 
   const resolved = resolveThemeMode(branding.themeMode);
   root.setAttribute('data-theme', resolved);

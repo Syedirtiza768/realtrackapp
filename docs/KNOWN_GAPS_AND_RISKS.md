@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/KNOWN_ISSUES.md](context/KNOWN_ISSUES.md) (2026-06-06)
+
 # Known Gaps and Risks
 
 > Comprehensive inventory of known issues, risks, and technical debt.

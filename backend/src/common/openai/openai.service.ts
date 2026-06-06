@@ -10,16 +10,16 @@ import type {
 import { estimateCost } from './openai.types.js';
 
 /**
- * OpenAiService — Central OpenAI client with rate-limit awareness.
+ * OpenAiService — Central AI client (OpenRouter-compatible) with rate-limit awareness.
  *
  * Provides:
- *  - Chat completions (text + vision)
- *  - Embeddings
+ *  - Chat completions (text + vision via MiniMax M3)
+ *  - Embeddings (currently unused)
  *  - Automatic retry with exponential backoff on rate limits
  *  - Cost tracking per call
  *  - Configurable model selection
  *
- * All OpenAI interactions across the app should go through this service,
+ * All AI interactions across the app should go through this service,
  * NOT through the `openai` package directly.
  */
 @Injectable()
@@ -40,7 +40,7 @@ export class OpenAiService implements OnModuleInit {
   private sessionCostUsd = 0;
 
   constructor(private readonly config: ConfigService) {
-    this.chatModel = this.config.get<string>('OPENAI_CHAT_MODEL', 'gpt-5.4');
+    this.chatModel = this.config.get<string>('OPENAI_CHAT_MODEL', 'minimax/minimax-m3');
     this.embeddingModel = this.config.get<string>(
       'OPENAI_EMBEDDING_MODEL',
       'text-embedding-3-small',
@@ -49,18 +49,24 @@ export class OpenAiService implements OnModuleInit {
 
   onModuleInit() {
     const apiKey = this.config.get<string>('OPENAI_API_KEY', '');
+    const baseURL = this.config.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1');
     if (!apiKey) {
       this.logger.warn(
-        'OPENAI_API_KEY not set — OpenAI calls will fail. Set the env var to enable AI features.',
+        'OPENAI_API_KEY not set — AI calls will fail. Set the env var to enable AI features.',
       );
     }
     this.client = new OpenAI({
       apiKey,
-      maxRetries: 0, // We handle retries ourselves
+      baseURL,
+      maxRetries: 0,
       timeout: 60_000,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://realtrackapp.com',
+        'X-Title': 'RealTrackApp',
+      },
     });
     this.logger.log(
-      `OpenAI client initialized (chat=${this.chatModel}, embed=${this.embeddingModel})`,
+      `AI client initialized (baseURL=${baseURL}, chat=${this.chatModel}, embed=${this.embeddingModel})`,
     );
   }
 
@@ -123,7 +129,7 @@ export class OpenAiService implements OnModuleInit {
       try {
         content = JSON.parse(rawContent);
       } catch {
-        this.logger.warn('Failed to parse JSON response from OpenAI');
+        this.logger.warn('Failed to parse JSON response from AI model');
       }
     }
 
@@ -142,6 +148,8 @@ export class OpenAiService implements OnModuleInit {
 
   /**
    * Generate embeddings for one or more text inputs.
+   * NOTE: MiniMax M3 does not support embeddings. This endpoint will
+   * only work if OPENAI_EMBEDDING_MODEL points to a compatible provider.
    */
   async embed(req: OpenAiEmbeddingRequest): Promise<OpenAiEmbeddingResponse> {
     const model = req.model ?? this.embeddingModel;
@@ -196,8 +204,6 @@ export class OpenAiService implements OnModuleInit {
     try {
       const result = await fn();
 
-      // Update rate limit tracking from headers (OpenAI SDK exposes them on responses)
-      // The SDK doesn't directly expose headers, but we reset state on success
       this.rateLimitRemainingRequests = Infinity;
       this.rateLimitResetMs = 0;
 
@@ -210,7 +216,7 @@ export class OpenAiService implements OnModuleInit {
       if ((isRateLimit || isServerError) && attempt < maxRetries) {
         const delayMs = Math.pow(4, attempt) * 1000; // 1s, 4s, 16s
         this.logger.warn(
-          `OpenAI ${isRateLimit ? 'rate-limited' : 'server error'} (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms`,
+          `AI ${isRateLimit ? 'rate-limited' : 'server error'} (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms`,
         );
 
         if (isRateLimit) {

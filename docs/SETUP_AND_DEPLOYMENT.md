@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/operations/SETUP.md](operations/SETUP.md) and [/docs/architecture/DEPLOYMENT.md](architecture/DEPLOYMENT.md) (2026-06-06)
+
 # Setup and Deployment
 
 > Complete guide for setting up and deploying RealTrackApp.

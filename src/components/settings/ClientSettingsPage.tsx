@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Palette, Save } from 'lucide-react';
 import {
   COLOR_PRESETS,
@@ -125,14 +125,14 @@ function ClientSettingsForm() {
 
       {message && (
         <p
-          className={`text-sm ${message.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}
+          className={`text-sm ${message.type === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-400'}`}
         >
           {message.text}
         </p>
       )}
 
       {!canManage && (
-        <p className="text-sm text-amber-300/90 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <p className="text-sm text-amber-600 dark:text-amber-300 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           You have view-only access. Contact a Super Admin to change branding.
         </p>
       )}
@@ -222,9 +222,9 @@ function ClientSettingsForm() {
           onChange={(v) => update({ accentColor: v })}
         />
         <label className="block text-sm">
-          <span className="text-slate-400 dark:text-slate-400">Theme mode</span>
+          <span className="text-slate-500 dark:text-slate-400">Theme mode</span>
           <select
-            className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm disabled:opacity-60"
+            className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 disabled:opacity-60"
             value={data.themeMode}
             disabled={!canManage}
             onChange={(e) => update({ themeMode: e.target.value })}
@@ -259,8 +259,17 @@ function ClientSettingsForm() {
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          style={{ backgroundColor: 'var(--brand-primary)' }}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 border-none transition-colors"
+          style={{
+            backgroundColor: 'var(--brand-primary)',
+            color: 'var(--brand-primary-fg)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--brand-primary-hover)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--brand-primary)';
+          }}
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save changes
@@ -284,8 +293,11 @@ function ThemePreview({ data }: { data: ClientSettingsRecord }) {
       >
         <div className="flex items-center gap-2">
           <div
-            className="w-8 h-8 rounded-md flex items-center justify-center text-sm font-bold text-white"
-            style={{ backgroundColor: data.primaryColor }}
+            className="w-8 h-8 rounded-md flex items-center justify-center text-sm font-bold"
+            style={{
+              backgroundColor: data.primaryColor,
+              color: 'var(--brand-primary-fg)',
+            }}
           >
             {short}
           </div>
@@ -294,25 +306,31 @@ function ThemePreview({ data }: { data: ClientSettingsRecord }) {
         <div className="flex gap-2">
           <button
             type="button"
-            className="px-3 py-1.5 rounded-md text-xs font-medium text-white"
-            style={{ backgroundColor: data.primaryColor }}
+            className="px-3 py-1.5 rounded-md text-xs font-medium border-none"
+            style={{
+              backgroundColor: data.primaryColor,
+              color: 'var(--brand-primary-fg)',
+            }}
           >
             Primary button
           </button>
           <button
             type="button"
-            className="px-3 py-1.5 rounded-md text-xs font-medium text-white"
-            style={{ backgroundColor: data.accentColor }}
+            className="px-3 py-1.5 rounded-md text-xs font-medium border-none"
+            style={{
+              backgroundColor: data.accentColor,
+              color: 'var(--brand-accent-fg)',
+            }}
           >
             Accent
           </button>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-400">
-          Theme: <span className="text-slate-500 dark:text-slate-300">{data.themeMode}</span>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Theme: <span className="text-slate-600 dark:text-slate-300">{data.themeMode}</span>
           {data.footerText && (
             <>
               {' '}
-              · Footer: <span className="text-slate-500 dark:text-slate-300">{data.footerText}</span>
+              · Footer: <span className="text-slate-600 dark:text-slate-300">{data.footerText}</span>
             </>
           )}
         </p>
@@ -338,17 +356,17 @@ function ColorField({
   const hex = normalizeHexColor(value, '#2563eb');
   return (
     <label className="block text-sm">
-      <span className="text-slate-400 dark:text-slate-400">{label}</span>
+      <span className="text-slate-500 dark:text-slate-400">{label}</span>
       <div className="mt-1 flex gap-2 items-center">
         <input
           type="color"
           disabled={disabled}
           value={hex}
           onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-12 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 cursor-pointer disabled:opacity-50"
+          className="h-10 w-12 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 cursor-pointer disabled:opacity-50"
         />
         <input
-          className="flex-1 rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 font-mono disabled:opacity-60"
+          className="flex-1 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 font-mono disabled:opacity-60"
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
@@ -372,9 +390,9 @@ function Field({
 }) {
   return (
     <label className="block text-sm">
-      <span className="text-slate-400 dark:text-slate-400">{label}</span>
+      <span className="text-slate-500 dark:text-slate-400">{label}</span>
       <input
-        className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 disabled:opacity-60"
+        className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 disabled:opacity-60"
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}

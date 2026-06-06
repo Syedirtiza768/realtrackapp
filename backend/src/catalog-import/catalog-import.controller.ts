@@ -56,25 +56,30 @@ export class CatalogImportController {
       }),
       limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB max
       fileFilter: (_req, file, cb) => {
+        const name = file.originalname.toLowerCase();
         if (
           file.mimetype === 'text/csv' ||
-          file.originalname.toLowerCase().endsWith('.csv')
+          name.endsWith('.csv') ||
+          file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+          name.endsWith('.xlsx') ||
+          file.mimetype === 'application/vnd.ms-excel' ||
+          name.endsWith('.xls')
         ) {
           cb(null, true);
         } else {
-          cb(new Error('Only CSV files are accepted'), false);
+          cb(new Error('Only CSV and Excel (.xlsx, .xls) files are accepted'), false);
         }
       },
     }),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload a CSV catalog file for import' })
+  @ApiOperation({ summary: 'Upload a CSV or Excel catalog file for import' })
   async uploadCsv(
     @UploadedFile() file: Express.Multer.File,
     @Body('columnMapping') columnMappingStr?: string,
   ) {
     if (!file) {
-      throw new BadRequestException('CSV file is required');
+      throw new BadRequestException('CSV or Excel file is required');
     }
 
     let columnMapping: Record<string, string> | undefined;

@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/frontend/COMPONENT_MAP.md](frontend/COMPONENT_MAP.md) (2026-06-06)
+
 # Frontend Map
 
 > Complete reference for the React frontend structure.

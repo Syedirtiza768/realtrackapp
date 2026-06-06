@@ -2,6 +2,8 @@
 
 > **START HERE** — This is the primary entry point for any AI agent working on RealTrackApp.
 > Read this first, then follow the links to deeper documentation.
+> 
+> **Note (2026-06-06)**: The documentation has been reorganized into the Self-Sustaining AI Project Context framework. See individual `/docs/context/`, `/docs/architecture/`, `/docs/frontend/`, `/docs/backend/`, `/docs/planning/`, `/docs/operations/` directories for the new structure.
 
 ---
 
@@ -359,17 +361,24 @@ See `/docs/KNOWN_GAPS_AND_RISKS.md` for full details. Critical items:
 
 | Topic | File |
 |-------|------|
-| Architecture | `/docs/architecture/overview.md` |
-| API Map | `/docs/architecture/api-map.md` |
-| Database | `/docs/architecture/database.md` |
-| Auth/RBAC | `/docs/architecture/auth-rbac.md` |
-| Codebase Map | `/docs/architecture/codebase-map.md` |
-| Features | `/docs/product/features.md` |
-| Known Gaps | `/docs/product/known-gaps.md` |
+| Project Overview | `/docs/context/PROJECT_OVERVIEW.md` |
+| System Map | `/docs/context/SYSTEM_MAP.md` |
+| Current State | `/docs/context/CURRENT_STATE.md` |
+| Feature Registry | `/docs/context/FEATURE_REGISTRY.md` |
+| Known Issues | `/docs/context/KNOWN_ISSUES.md` |
+| Next Steps | `/docs/context/NEXT_STEPS.md` |
+| Architecture | `/docs/architecture/ARCHITECTURE.md` |
+| API Contracts | `/docs/architecture/API_CONTRACTS.md` |
+| Database Schema | `/docs/architecture/DATABASE_SCHEMA.md` |
+| Auth/RBAC | `/docs/architecture/AUTH_RBAC.md` |
+| Integrations | `/docs/architecture/INTEGRATIONS.md` |
+| Security | `/docs/architecture/SECURITY.md` |
+| Frontend Map | `/docs/frontend/COMPONENT_MAP.md` |
+| Backend Map | `/docs/backend/MODULE_MAP.md` |
+| Setup | `/docs/operations/SETUP.md` |
+| Environment Variables | `/docs/operations/ENVIRONMENT_VARIABLES.md` |
 | Risk Register | `/docs/handover/risk-register.md` |
-| Next Steps | `/docs/handover/next-steps.md` |
-| Setup | `/docs/development/setup.md` |
-| Environment | `/docs/development/environment-variables.md` |
+| Decision Log | `/docs/context/DECISION_LOG.md` |
 
 ---
 

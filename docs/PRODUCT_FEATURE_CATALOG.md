@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Superseded by /docs/context/FEATURE_REGISTRY.md and /docs/context/PRODUCT_REQUIREMENTS.md. Preserved for business narrative context.
+
 # RealTrackApp — Product Feature Catalog
 
 **Document type:** Product & business feature inventory  

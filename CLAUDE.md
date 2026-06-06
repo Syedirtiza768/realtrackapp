@@ -11,8 +11,8 @@ RealTrackApp is a full-stack eBay listing management and inventory pipeline tool
 ## First read (project memory)
 
 Before any meaningful change, read in order:
-`README.md` → `CONTEXT.md` → `AGENTS.md` → `docs/handover/current-state.md` →
-`docs/architecture/overview.md`. Trust code over docs when they conflict — then
+`README.md` → `CONTEXT.md` → `AGENTS.md` → `docs/context/CURRENT_STATE.md` →
+`docs/architecture/ARCHITECTURE.md`. Trust code over docs when they conflict — then
 fix the doc.
 
 ## Dev commands
@@ -118,4 +118,6 @@ When the user's request matches an available skill, invoke it via the Skill tool
 - Code review/diff check → /review
 - Visual polish → /design-review
 - Ship/deploy/PR → /ship or /land-and-deploy
+- Security audit → /cso
+p/deploy/PR → /ship or /land-and-deploy
 - Security audit → /cso

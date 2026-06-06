@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md) (2026-06-06)
+
 # Known Gaps
 
 Curated from code inspection plus prior audits (`docs/FULL_SYSTEM_AUDIT_AND_ROADMAP.md`,

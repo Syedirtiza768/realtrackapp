@@ -107,6 +107,8 @@ export class SellerpunditListingAdapter {
           returnPolicyId,
           raw: returnRow?.rawPayload,
           storeName: account.accountDisplayName ?? account.ebayUsername ?? undefined,
+          marketplaceId,
+          condition: req.condition,
         });
         return {
           success: false,

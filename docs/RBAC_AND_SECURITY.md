@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/AUTH_RBAC.md](architecture/AUTH_RBAC.md) (auth) and [/docs/architecture/SECURITY.md](architecture/SECURITY.md) (security) (2026-06-06)
+
 # RBAC and Security
 
 > Authentication, authorization, and security model for RealTrackApp.

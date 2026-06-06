@@ -12,6 +12,7 @@ import {
   pickReturnPolicyIdForListing,
   paReturnPolicyBlockedMessage,
   pickReturnPolicyUpgradeCandidate,
+  policyMatchesMarketplaceGeo,
   readPolicyGeoSite,
   summarizeReturnPolicyState,
 } from './ebay-business-policy.util.js';
@@ -33,6 +34,45 @@ describe('ebay-business-policy.util', () => {
     };
     expect(extractEbayRestPolicyId(raw, 'fulfillment')).toBe('410665908022');
     expect(readPolicyGeoSite(raw)).toBe('EBAY_US');
+  });
+
+  it('does not assign EBAY_DE policies to EBAY_MOTORS_US defaults', () => {
+    const items = [
+      {
+        ebayPolicyId: '287569277015',
+        isDefault: true,
+        geoSite: 'EBAY_DE',
+        rawPayload: {
+          returnsAccepted: true,
+          returnPeriod: { value: 30, unit: 'DAY' },
+          returnShippingCostPayer: 'BUYER',
+        },
+      },
+    ];
+    expect(pickPolicyIdForMarketplace(items, 'EBAY_MOTORS_US')).toBeNull();
+    expect(
+      pickReturnPolicyIdForListing(
+        items,
+        'EBAY_MOTORS_US',
+        '33684',
+        'USED_EXCELLENT',
+      ),
+    ).toBeNull();
+    expect(policyMatchesMarketplaceGeo('EBAY_DE', 'EBAY_MOTORS_US')).toBe(false);
+    expect(policyMatchesMarketplaceGeo('EBAY_DE', 'EBAY_DE')).toBe(true);
+  });
+
+  it('does not apply US P&A return mandate on EBAY_DE', () => {
+    expect(
+      marketplaceRequiresPartsAccessoriesReturnPolicy('EBAY_DE', '33684'),
+    ).toBe(false);
+    expect(
+      listingRequiresPartsAccessoriesReturnPolicy(
+        'EBAY_DE',
+        '33684',
+        'NEW',
+      ),
+    ).toBe(false);
   });
 
   it('prefers marketplace geoSite when picking defaults', () => {

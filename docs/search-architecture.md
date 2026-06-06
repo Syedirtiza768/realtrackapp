@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Search architecture blueprint preserved for reference.
+
 # eBay Motors Search Architecture Upgrade Blueprint
 
 ## Scope

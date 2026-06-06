@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/SYSTEM_MAP.md](context/SYSTEM_MAP.md) (2026-06-06)
+
 # Codebase Map
 
 > File and module reference for navigating the RealTrackApp codebase.

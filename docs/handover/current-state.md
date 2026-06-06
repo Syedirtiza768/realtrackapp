@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/CURRENT_STATE.md](../context/CURRENT_STATE.md) (2026-06-06)
+
 # Current State
 
 _Snapshot date: 2026-05-29. This file is frozen-in-time; for live state use

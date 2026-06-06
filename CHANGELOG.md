@@ -17,6 +17,16 @@ for every meaningful change (Continuous Documentation Protocol).
   page; SellerPundit badge on store detail (native listing/order sync hidden).
 
 ### Fixed
+- Bulk/stub eBay publish no longer forces `condition: NEW` over
+  `listing_records.conditionId`, which incorrectly required seller-paid P&A return
+  policies for used salvage parts (buyer-paid 30-day returns are valid for Used).
+- Publish enrichment and the inventory Publish modal no longer default missing
+  condition to `NEW`; salvage listings keep `3000` / Used so buyer-paid 30-day
+  return policies (e.g. `287569277015`) are accepted.
+- SellerPundit policy sync no longer assigns cross-geo defaults (e.g. `EBAY_DE`
+  return policy `287569277015` on `EBAY_MOTORS_US`). US P&A return blocking is
+  scoped to US marketplaces only; blocked messages include listing condition and
+  geo mismatch hints.
 - Catalog → SellerPundit store publish no longer hits `API 504: Gateway Time-out`
   as often: removed redundant policy sync on every publish, parallelized SP
   `get-all-policies` fetches, stopped forcing full `get-all-tokens` refresh before
@@ -126,6 +136,18 @@ for every meaningful change (Continuous Documentation Protocol).
   RBAC was enabled.
 
 ### Documentation
+- **Documentation reorganization (2026-06-06):** Reorganized all documentation into the
+  Self-Sustaining AI Project Context framework. Created 4 new directories
+  (`docs/context/`, `docs/planning/`, `docs/frontend/`, `docs/backend/`) with 37
+  target files, consolidating content where there was genuine redundancy (e.g.,
+  `docs/RBAC_AND_SECURITY.md` + `docs/architecture/auth-rbac.md` →
+  `docs/architecture/AUTH_RBAC.md`). Anchor files preserved intact
+  (`API_MAP.md` → `API_CONTRACTS.md`, `DATABASE_MAP.md` → `DATABASE_SCHEMA.md`,
+  `BACKEND_MAP.md` → `MODULE_MAP.md`, `FRONTEND_MAP.md` → `COMPONENT_MAP.md`).
+  12 new-gap stubs created with honest scope notes. Marked 30+ superseded files
+  with redirect headers and 13 legacy files with LEGACY REFERENCE headers.
+  Updated AGENTS.md, CLAUDE.md, README.md, CONTEXT.md, and
+  AGENT_SYSTEM_MEMORY.md with all new paths. No existing content deleted.
 - Established a documentation/memory system as the authoritative project handover
   (2026-05-29): added `CONTEXT.md`, `AGENTS.md`, this `CHANGELOG.md`; rewrote
   `README.md` as a full-stack overview with a docs map and first-read order;

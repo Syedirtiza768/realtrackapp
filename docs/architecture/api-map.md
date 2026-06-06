@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/API_CONTRACTS.md](API_CONTRACTS.md) (2026-06-06)
+
 # API Map
 
 All routes are served under the **global prefix `/api`** (`app.setGlobalPrefix('api')`

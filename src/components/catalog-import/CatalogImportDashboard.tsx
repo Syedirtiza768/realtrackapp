@@ -217,7 +217,7 @@ export default function CatalogImportDashboard() {
             Catalog Import
           </h1>
           <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
-            Import CSV catalog files into the master product database.{' '}
+            Import CSV, .xlsx, or .xls catalog files into the master product database.{' '}
             <Link to="/catalog/motors-filters" className="text-blue-400 hover:underline">
               Browse with Motors ops filters
             </Link>
@@ -456,7 +456,7 @@ export default function CatalogImportDashboard() {
             ) : null}
             {!listLoading && !listError && importListData && importListData.imports.length === 0 && (
               <p className="text-slate-400 dark:text-slate-500 text-sm text-center py-6">
-                No imports yet. Upload a CSV file to get started.
+                No imports yet. Upload a CSV or Excel file to get started.
               </p>
             )}
           </CardContent>

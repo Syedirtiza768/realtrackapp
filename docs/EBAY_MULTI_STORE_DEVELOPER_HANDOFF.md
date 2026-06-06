@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Superseded by /docs/architecture/INTEGRATIONS.md. Domain-specific developer handoff preserved for reference.
+
 # eBay multi-store — developer handoff
 
 This document answers architecture questions, maps the spec to this repo, and explains how to run and extend the feature end-to-end.

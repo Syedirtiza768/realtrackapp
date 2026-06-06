@@ -99,7 +99,14 @@ export class EbayPaReturnPolicyService {
       this.logger.warn(
         `Cannot ensure P&A return policy for "${store.storeName}": ${msg}`,
       );
-      return this.blockNonCompliant(currentReturnPolicyId, cachedCurrent?.rawPayload, store.storeName, accountApiUnavailable);
+      return this.blockNonCompliant(
+        currentReturnPolicyId,
+        cachedCurrent?.rawPayload,
+        store.storeName,
+        accountApiUnavailable,
+        marketplaceId,
+        condition,
+      );
     }
 
     let policies: EbayPolicyListItem[] = [];
@@ -120,6 +127,8 @@ export class EbayPaReturnPolicyService {
         cachedCurrent?.rawPayload,
         store.storeName,
         accountApiUnavailable,
+        marketplaceId,
+        condition,
       );
     }
 
@@ -248,6 +257,8 @@ export class EbayPaReturnPolicyService {
       cachedCurrent?.rawPayload,
       store.storeName,
       accountApiUnavailable,
+      marketplaceId,
+      condition,
     );
   }
 
@@ -256,6 +267,8 @@ export class EbayPaReturnPolicyService {
     raw: Record<string, unknown> | undefined,
     storeName: string,
     accountApiUnavailable: boolean,
+    marketplaceId?: string,
+    condition?: string,
   ): PaReturnPolicyEnsureResult {
     if (!returnPolicyId) {
       return {
@@ -273,6 +286,8 @@ export class EbayPaReturnPolicyService {
         returnPolicyId,
         raw,
         storeName,
+        marketplaceId,
+        condition,
         accountApiUnavailable,
       }),
     };

@@ -6,6 +6,7 @@ import { DataSource, Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { StringDecoder } from 'node:string_decoder';
+import * as XLSX from 'xlsx';
 import { CatalogImport } from './entities/catalog-import.entity.js';
 import { CatalogImportRow } from './entities/catalog-import-row.entity.js';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
@@ -219,22 +220,36 @@ export class CatalogImportService {
   }
 
   /**
-   * Handle uploaded CSV file — detect headers, create import record.
-   * With diskStorage the file is already on disk at file.path; we just read it.
+   * Handle uploaded file — detect headers, create import record.
+   * For Excel files (.xlsx/.xls), converts to CSV first so the existing
+   * streaming CSV pipeline works unchanged.
    */
   async handleUpload(
     file: Express.Multer.File,
     columnMapping?: Record<string, string>,
     userId?: string,
   ): Promise<CatalogImport> {
-    // Validate file
-    if (!file.originalname.toLowerCase().endsWith('.csv')) {
-      throw new BadRequestException('Only CSV files are supported');
+    const ext = path.extname(file.originalname).toLowerCase();
+    const isCsv = ext === '.csv';
+    const isExcel = ext === '.xlsx' || ext === '.xls';
+
+    if (!isCsv && !isExcel) {
+      throw new BadRequestException('Only CSV and Excel (.xlsx, .xls) files are supported');
     }
 
-    // diskStorage already wrote the file to disk at file.path.
-    // Stream the file for header detection / row counting so large CSVs do not OOM the process (nginx 502).
-    const filePath = file.path;
+    let filePath = file.path;
+    let fileName = file.originalname;
+    let mimeType = file.mimetype;
+
+    // Convert Excel to CSV on disk so the streaming CSV pipeline works unchanged
+    if (isExcel) {
+      const csvPath = filePath.replace(/\.[^.]*$/, '') + '.csv';
+      this.convertExcelToCsv(filePath, csvPath);
+      filePath = csvPath;
+      // Keep the original mimeType / extension in metadata so the UI knows it was Excel
+    }
+
+    // Stream the file for header detection / row counting so large files do not OOM the process (nginx 502).
     const { detectedHeaders, totalRows } = await this.scanUploadedCsvForMetadata(filePath);
 
     // Auto-generate column mapping if not provided
@@ -242,10 +257,10 @@ export class CatalogImportService {
 
     // Create import record
     const catalogImport = this.importRepo.create({
-      fileName: file.originalname,
+      fileName,
       filePath,
       fileSizeBytes: file.size,
-      mimeType: file.mimetype,
+      mimeType,
       detectedHeaders,
       columnMapping: resolvedMapping,
       totalRows,
@@ -255,10 +270,34 @@ export class CatalogImportService {
 
     const saved = await this.importRepo.save(catalogImport);
     this.logger.log(
-      `Uploaded CSV "${file.originalname}" → import ${saved.id} (${totalRows} data rows, ${detectedHeaders.length} columns)`,
+      `Uploaded ${fileName} → import ${saved.id} (${totalRows} data rows, ${detectedHeaders.length} columns)`,
     );
 
     return saved;
+  }
+
+  /**
+   * Convert an Excel file (.xlsx / .xls) to CSV using the xlsx library.
+   * Uses the first worksheet only.
+   */
+  private convertExcelToCsv(xlsxPath: string, csvPath: string): void {
+    const workbook = XLSX.readFile(xlsxPath, { cellDates: false });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      throw new BadRequestException('Excel file has no worksheets');
+    }
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+      throw new BadRequestException(`Worksheet "${sheetName}" not found`);
+    }
+    const csvContent = XLSX.utils.sheet_to_csv(sheet, {
+      forceQuotes: false,
+      blankrows: false,
+    });
+    fs.writeFileSync(csvPath, csvContent, 'utf-8');
+    this.logger.log(
+      `Converted Excel → CSV: ${path.basename(xlsxPath)} → ${path.basename(csvPath)} (${(csvContent.length / 1024).toFixed(0)} KB)`,
+    );
   }
 
   /**

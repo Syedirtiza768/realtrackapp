@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Enterprise feature documentation preserved for reference.
+
 # RealTrackApp Enterprise Platform Architecture
 
 ## Objective

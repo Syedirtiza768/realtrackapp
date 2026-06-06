@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/DEPLOYMENT.md](DEPLOYMENT.md) (2026-06-06)
+
 # Deployment Architecture
 
 ## Topology

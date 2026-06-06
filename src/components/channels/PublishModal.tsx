@@ -172,7 +172,7 @@ export default function PublishModal(props: Props) {
         title: ov?.title ?? listing.title ?? '',
         description: listing.description ?? '',
         categoryId: listing.categoryId ?? '',
-        condition: listing.conditionId ?? 'NEW',
+        condition: listing.conditionId ?? '3000',
         price: ov?.price ?? parseFloat(listing.startPrice ?? '0'),
         quantity: ov?.quantity ?? parseInt(listing.quantity ?? '0', 10),
         imageUrls: getAllImageUrls(listing.itemPhotoUrl),

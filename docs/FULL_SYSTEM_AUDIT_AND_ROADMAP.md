@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Created 2026-02-28. Superseded by /docs/context/PROJECT_OVERVIEW.md, /docs/context/KNOWN_ISSUES.md, and /docs/context/ROADMAP.md. Preserved for historical audit detail.
+
 # ListingPro → MergeKart: Full System Audit & Implementation Roadmap
 
 **Date:** 2026-02-28  

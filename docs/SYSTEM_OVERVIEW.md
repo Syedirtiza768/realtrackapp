@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/PROJECT_OVERVIEW.md](context/PROJECT_OVERVIEW.md) (2026-06-06)
+
 # System Overview
 
 > High-level summary of RealTrackApp's purpose, architecture, and data flows.

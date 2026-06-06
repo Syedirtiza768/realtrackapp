@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { estimateCost } from '../../common/openai/openai.types.js';
 import {
   ExtractedAttribute,
   ExtractionSource,
@@ -101,8 +102,16 @@ export class VisionExtractionService {
     private readonly configService: ConfigService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const baseURL = this.configService.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1');
     if (apiKey) {
-      this.openai = new OpenAI({ apiKey });
+      this.openai = new OpenAI({
+        apiKey,
+        baseURL,
+        defaultHeaders: {
+          'HTTP-Referer': 'https://realtrackapp.com',
+          'X-Title': 'RealTrackApp',
+        },
+      });
     }
   }
 
@@ -111,10 +120,10 @@ export class VisionExtractionService {
     imageUrls: string[],
   ): Promise<ExtractedAttribute> {
     const startTime = Date.now();
-    const model = this.configService.get<string>('OPENAI_VISION_MODEL') || 'gpt-4o';
+    const model = this.configService.get<string>('OPENAI_VISION_MODEL') || 'minimax/minimax-m3';
 
     if (!this.openai) {
-      throw new Error('OpenAI API key not configured');
+      throw new Error('AI API key not configured');
     }
 
     const imageContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = imageUrls.map((url) => ({
@@ -146,8 +155,12 @@ export class VisionExtractionService {
       const latencyMs = Date.now() - startTime;
       const rawContent = response.choices[0]?.message?.content || '{}';
       const parsed = JSON.parse(rawContent);
-      const tokensUsed = response.usage?.total_tokens || 0;
-      const costUsd = this.estimateCost(tokensUsed, imageUrls.length);
+      const usage = response.usage;
+      const promptTokens = usage?.prompt_tokens ?? 0;
+      const completionTokens = usage?.completion_tokens ?? 0;
+      const tokensUsed = promptTokens + completionTokens;
+      const costUsd = estimateCost(model, promptTokens, completionTokens)
+        + (imageUrls.length * 0.025);
 
       const result = this.mapVisionResponse(parsed);
 
@@ -178,7 +191,7 @@ export class VisionExtractionService {
         packagingIdentifiers: result.packagingIdentifiers,
         confidenceScores: result.confidenceScores,
         normalizedOutput,
-        aiProvider: 'openai',
+        aiProvider: 'minimax-m3',
         aiModel: model,
         tokensUsed,
         latencyMs,
@@ -401,10 +414,5 @@ export class VisionExtractionService {
 
   private escapeRegex(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  private estimateCost(tokens: number, imageCount: number): number {
-    // Approximate cost: $0.025 per image + $0.01 per 1K tokens
-    return (imageCount * 0.025) + (tokens / 1000 * 0.01);
   }
 }

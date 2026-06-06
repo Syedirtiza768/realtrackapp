@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/API_CONTRACTS.md](architecture/API_CONTRACTS.md) (2026-06-06)
+
 # API Map
 
 > Complete API endpoint reference for RealTrackApp.

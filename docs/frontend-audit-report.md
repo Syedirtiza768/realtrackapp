@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Superseded by /docs/context/KNOWN_ISSUES.md. Preserved for historical context.
+
 # Frontend Codebase Audit Report
 
 **Application:** ListingPro (package name: `realtrackapp`)  

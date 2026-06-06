@@ -39,10 +39,10 @@ listing-optimization.
 ## Status
 
 Architecture is mature; feature maturity varies. eBay is the only fully-developed
-marketplace integration. See [docs/product/features.md](docs/product/features.md)
+marketplace integration. See [docs/context/FEATURE_REGISTRY.md](docs/context/FEATURE_REGISTRY.md)
 for per-feature Implemented/Partial/Missing status.
 
-## Priorities (see handover/next-steps)
+## Priorities (see context/NEXT_STEPS)
 
 1. Fix double-`/api` prefix controllers (feature-flags, export-rules).
 2. Triage/commit the large uncommitted working tree.
@@ -53,12 +53,12 @@ for per-feature Implemented/Partial/Missing status.
 
 Sparse tests; client-side-only logout; inconsistent tenant isolation; DB typing/FK
 debt (prior audit); branding inconsistency (RealTrackApp vs ListingPro); non-eBay
-channels are scaffolding. Details: [docs/product/known-gaps.md](docs/product/known-gaps.md),
+channels are scaffolding. Details: [docs/context/KNOWN_ISSUES.md](docs/context/KNOWN_ISSUES.md),
 [docs/handover/risk-register.md](docs/handover/risk-register.md).
 
 ## Conventions
 
 - Schema changes via migrations only (`DB_SYNCHRONIZE=false`).
 - New routes are protected by default; register permissions in the registry.
-- Secrets in env vars only (see [docs/development/environment-variables.md](docs/development/environment-variables.md)).
+- Secrets in env vars only (see [docs/operations/ENVIRONMENT_VARIABLES.md](docs/operations/ENVIRONMENT_VARIABLES.md)).
 - Update docs with every meaningful change (Continuous Documentation Protocol).

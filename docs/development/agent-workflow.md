@@ -1,3 +1,5 @@
+> ⚠️ MOVED — Integrated into AGENTS.md and CLAUDE.md Continuous Documentation Protocol (2026-06-06).
+
 # Agent Workflow
 
 How AI agents (and humans) should work in this repo so project memory stays intact.

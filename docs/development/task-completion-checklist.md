@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/operations/TESTING.md](../operations/TESTING.md) (2026-06-06)
+
 # Task Completion Checklist
 
 - [ ] Code compiles where applicable

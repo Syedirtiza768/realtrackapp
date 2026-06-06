@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/operations/ENVIRONMENT_VARIABLES.md](../operations/ENVIRONMENT_VARIABLES.md) (2026-06-06)
+
 # Environment Variables
 
 Source of truth: `.env.example` (copy to `.env`). Docker passes these via

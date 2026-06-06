@@ -56,25 +56,30 @@ Start here, then drill in:
 | [CLAUDE.md](CLAUDE.md) | Working rules for Claude Code |
 | [AGENTS.md](AGENTS.md) | Rules for any AI agent |
 | [CHANGELOG.md](CHANGELOG.md) | Change history |
-| [docs/architecture/overview.md](docs/architecture/overview.md) | System overview |
-| [docs/architecture/codebase-map.md](docs/architecture/codebase-map.md) | Where things live |
-| [docs/architecture/api-map.md](docs/architecture/api-map.md) | Controllers, routes, auth |
-| [docs/architecture/database.md](docs/architecture/database.md) | DB, entities, migrations |
-| [docs/architecture/auth-rbac.md](docs/architecture/auth-rbac.md) | Auth + RBAC |
-| [docs/architecture/integrations.md](docs/architecture/integrations.md) | External APIs + queues |
-| [docs/architecture/deployment.md](docs/architecture/deployment.md) | Deploy topology |
-| [docs/development/setup.md](docs/development/setup.md) | Local setup |
-| [docs/development/environment-variables.md](docs/development/environment-variables.md) | Env var reference |
-| [docs/development/agent-workflow.md](docs/development/agent-workflow.md) | How agents work here |
-| [docs/product/features.md](docs/product/features.md) | Feature inventory + status |
-| [docs/product/known-gaps.md](docs/product/known-gaps.md) | Gaps & caveats |
-| [docs/product/user-roles.md](docs/product/user-roles.md) | Roles & permissions |
-| [docs/operations/deployment-runbook.md](docs/operations/deployment-runbook.md) | Deploy/rollback runbook |
-| [docs/operations/security-checklist.md](docs/operations/security-checklist.md) | Pre-deploy security |
-| [docs/handover/current-state.md](docs/handover/current-state.md) | Snapshot of where things are |
-| [docs/handover/next-steps.md](docs/handover/next-steps.md) | Prioritized next work |
-| [docs/handover/risk-register.md](docs/handover/risk-register.md) | Risks |
+| [docs/context/PROJECT_OVERVIEW.md](docs/context/PROJECT_OVERVIEW.md) | Project overview |
+| [docs/context/SYSTEM_MAP.md](docs/context/SYSTEM_MAP.md) | Where things live |
+| [docs/context/CURRENT_STATE.md](docs/context/CURRENT_STATE.md) | Current development state |
+| [docs/context/FEATURE_REGISTRY.md](docs/context/FEATURE_REGISTRY.md) | Feature inventory + status |
+| [docs/context/KNOWN_ISSUES.md](docs/context/KNOWN_ISSUES.md) | Known issues & risks |
+| [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Architecture deep dive |
+| [docs/architecture/API_CONTRACTS.md](docs/architecture/API_CONTRACTS.md) | Controllers, routes, auth |
+| [docs/architecture/DATABASE_SCHEMA.md](docs/architecture/DATABASE_SCHEMA.md) | DB, entities, migrations |
+| [docs/architecture/AUTH_RBAC.md](docs/architecture/AUTH_RBAC.md) | Auth + RBAC |
+| [docs/architecture/INTEGRATIONS.md](docs/architecture/INTEGRATIONS.md) | External APIs + queues |
+| [docs/architecture/DEPLOYMENT.md](docs/architecture/DEPLOYMENT.md) | Deploy topology |
+| [docs/architecture/SECURITY.md](docs/architecture/SECURITY.md) | Security model + checklist |
+| [docs/frontend/COMPONENT_MAP.md](docs/frontend/COMPONENT_MAP.md) | Frontend structure |
+| [docs/frontend/ROUTES_AND_SCREENS.md](docs/frontend/ROUTES_AND_SCREENS.md) | Routes & screens |
+| [docs/backend/MODULE_MAP.md](docs/backend/MODULE_MAP.md) | Backend modules |
+| [docs/operations/SETUP.md](docs/operations/SETUP.md) | Local setup |
+| [docs/operations/ENVIRONMENT_VARIABLES.md](docs/operations/ENVIRONMENT_VARIABLES.md) | Env var reference |
+| [docs/operations/TROUBLESHOOTING.md](docs/operations/TROUBLESHOOTING.md) | Common issues |
+| [docs/operations/TESTING.md](docs/operations/TESTING.md) | Testing |
+| [docs/planning/USER_ROLES.md](docs/planning/USER_ROLES.md) | Roles & permissions |
+| [docs/planning/USER_FLOWS.md](docs/planning/USER_FLOWS.md) | User journeys |
+| [docs/handover/risk-register.md](docs/handover/risk-register.md) | Risk register |
 | [docs/decisions/adr-index.md](docs/decisions/adr-index.md) | Architecture decisions |
+| [docs/AGENT_SYSTEM_MEMORY.md](docs/AGENT_SYSTEM_MEMORY.md) | Master entry point for AI agents |
 
 Older reference docs (pre-date this set, preserved as-is):
 `docs/FULL_SYSTEM_AUDIT_AND_ROADMAP.md`, `docs/PRODUCT_FEATURE_CATALOG.md`,
@@ -84,5 +89,5 @@ Older reference docs (pre-date this set, preserved as-is):
 ## First-read order (new contributors / agents)
 
 1. README.md → 2. CONTEXT.md → 3. CLAUDE.md → 4. AGENTS.md →
-5. docs/handover/current-state.md → 6. docs/architecture/overview.md →
-7. docs/product/features.md → 8. docs/product/known-gaps.md
+5. docs/context/CURRENT_STATE.md → 6. docs/architecture/ARCHITECTURE.md →
+7. docs/context/FEATURE_REGISTRY.md → 8. docs/context/KNOWN_ISSUES.md

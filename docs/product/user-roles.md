@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/planning/USER_ROLES.md](../planning/USER_ROLES.md) (2026-06-06)
+
 # User Roles
 
 Roles and permissions are defined in `backend/src/rbac/permission-registry.ts`

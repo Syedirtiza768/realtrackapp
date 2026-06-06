@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/DECISION_LOG.md](../context/DECISION_LOG.md) (2026-06-06)
+
 # Architecture Decision Records (ADR) Index
 
 ADRs capture significant, hard-to-reverse decisions and their rationale. Add a new

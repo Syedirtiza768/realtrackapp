@@ -36,11 +36,15 @@ export default function CsvUploader({
       setValidationError(null);
 
       // Validate file type
-      if (
-        !file.name.toLowerCase().endsWith('.csv') &&
-        file.type !== 'text/csv'
-      ) {
-        setValidationError('Only CSV files are supported. Please select a .csv file.');
+      const ext = file.name.toLowerCase();
+      const isCsv = ext.endsWith('.csv') || file.type === 'text/csv';
+      const isExcel =
+        ext.endsWith('.xlsx') ||
+        ext.endsWith('.xls') ||
+        file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        file.type === 'application/vnd.ms-excel';
+      if (!isCsv && !isExcel) {
+        setValidationError('Only CSV and Excel (.xlsx, .xls) files are supported.');
         return;
       }
 
@@ -101,7 +105,7 @@ export default function CsvUploader({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Upload className="h-5 w-5 text-blue-400" />
-          Upload CSV Catalog File
+          Upload Catalog File
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -127,7 +131,7 @@ export default function CsvUploader({
           <input
             ref={inputRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             onChange={handleChange}
             className="hidden"
             disabled={uploading}
@@ -137,10 +141,10 @@ export default function CsvUploader({
             <>
               <Upload className="h-10 w-10 text-slate-400 dark:text-slate-400 mb-3" />
               <p className="text-slate-500 dark:text-slate-300 text-sm font-medium">
-                Drag & drop a CSV file here, or click to browse
+                Drag & drop a CSV or Excel file here, or click to browse
               </p>
               <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
-                Supports .csv files up to 200 MB (50,000+ rows)
+                Supports .csv, .xlsx, and .xls files up to 200 MB (50,000+ rows)
               </p>
             </>
           )}
@@ -211,6 +215,7 @@ export default function CsvUploader({
         <div className="mt-4 flex items-center gap-2 flex-wrap">
           <span className="text-slate-400 dark:text-slate-500 text-xs">Supported:</span>
           <Badge variant="secondary">.csv</Badge>
+          <Badge variant="secondary">.xlsx / .xls</Badge>
           <Badge variant="secondary">eBay File Exchange</Badge>
           <Badge variant="secondary">Custom CSV</Badge>
         </div>

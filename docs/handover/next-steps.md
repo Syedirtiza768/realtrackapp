@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/NEXT_STEPS.md](../context/NEXT_STEPS.md) (2026-06-06)
+
 # Next Steps
 
 Recommended, roughly prioritized. Verify each against current code first — some

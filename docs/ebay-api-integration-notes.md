@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Integration-specific notes preserved for operational reference.
+
 # eBay API integration notes
 
 ## APIs used
@@ -96,8 +98,11 @@ parallel policy fetch, 504 retry on bulk-create, nginx 600s timeout on publish
 routes, and `auto` fallback to direct eBay Inventory API on SP 504/platform errors.
 
 P&A return-policy errors on **used** listings are not blocked locally; mandatory
-seller-paid applies to **New / New Other** only. SP 504 / platform errors fall back
-to direct eBay in `auto` mode (`SELLERPUNDIT_PUBLISH_FALLBACK`).
+seller-paid applies to **New / New Other** on **US** marketplaces only
+(`EBAY_US`, `EBAY_MOTORS_US`). Policy picks are geo-scoped — an `EBAY_DE` return
+policy must not be used as the default for `EBAY_MOTORS_US` (SellerPundit accounts
+like SVG-DE often only have DE policies). SP 504 / platform errors fall back to
+direct eBay in `auto` mode (`SELLERPUNDIT_PUBLISH_FALLBACK`).
 
 **Item condition:** Legacy File Exchange `3000-Used` maps to Inventory API enum
 `USED_EXCELLENT` (`ebay-listing-condition.util.ts`). Many Motors P&A categories

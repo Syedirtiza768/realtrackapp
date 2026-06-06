@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/DATABASE_SCHEMA.md](architecture/DATABASE_SCHEMA.md) (2026-06-06)
+
 # Database Map
 
 > Comprehensive database schema reference for RealTrackApp.

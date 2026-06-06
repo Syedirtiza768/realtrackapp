@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Superseded by /docs/architecture/AUTH_RBAC.md. Preserved for historical context.
+
 # RBAC & Authentication
 
 ## Architecture

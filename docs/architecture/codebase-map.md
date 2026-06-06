@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/SYSTEM_MAP.md](../context/SYSTEM_MAP.md) and [/docs/backend/SERVICES_AND_CONTROLLERS.md](../backend/SERVICES_AND_CONTROLLERS.md) (2026-06-06)
+
 # Codebase Map
 
 Repository root: `F:\apps\realtrackapp`. Monorepo-style: frontend at root `src/`,

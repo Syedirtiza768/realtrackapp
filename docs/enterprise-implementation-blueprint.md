@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Enterprise feature documentation preserved for reference.
+
 # RealTrackApp — Enterprise Implementation Blueprint
 
 > **Version:** 1.0  

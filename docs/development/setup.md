@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/operations/SETUP.md](../operations/SETUP.md) (2026-06-06)
+
 # Development Setup
 
 ## Prerequisites

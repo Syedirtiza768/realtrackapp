@@ -99,8 +99,11 @@ function SidebarContent({
                         />
                     ) : (
                         <div
-                            className="w-8 h-8 rounded-md flex items-center justify-center font-mono text-sm shrink-0 text-white"
-                            style={{ backgroundColor: 'var(--brand-primary)' }}
+                            className="w-8 h-8 rounded-md flex items-center justify-center font-mono text-sm shrink-0"
+                            style={{
+                                backgroundColor: 'var(--brand-primary)',
+                                color: 'var(--brand-primary-fg)',
+                            }}
                         >
                             {shortLabel}
                         </div>
@@ -128,7 +131,8 @@ function SidebarContent({
                                     ? {
                                           backgroundColor:
                                               'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
-                                          color: 'var(--brand-accent)',
+                                          color: 'var(--brand-primary)',
+                                          fontWeight: 600,
                                       }
                                     : undefined
                             }
@@ -273,7 +277,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                         <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800" />
                         <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-xs font-medium text-emerald-400">Systems Operational</span>
+                            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Systems Operational</span>
                         </div>
                     </div>
                 </header>

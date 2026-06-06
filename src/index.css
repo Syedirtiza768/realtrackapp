@@ -11,6 +11,16 @@
   --brand-secondary: #1e293b;
   --brand-accent: #0ea5e9;
 
+  /* Contrast-safe foregrounds — populated at runtime by applyBrandingToDocument */
+  --brand-primary-fg: #ffffff;
+  --brand-secondary-fg: #ffffff;
+  --brand-accent-fg: #ffffff;
+
+  /* Hover states */
+  --brand-primary-hover: #1d4ed8;
+  --brand-secondary-hover: #334155;
+  --brand-accent-hover: #0284c7;
+
   /* Responsive base font via clamp: 14px -> 16px */
   font-size: clamp(0.875rem, 0.8rem + 0.25vw, 1rem);
 }

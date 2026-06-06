@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Client-facing onboarding guide preserved as-is.
+
 # eBay client onboarding
 
 ## What clients do **not** provide

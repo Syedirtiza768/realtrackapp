@@ -189,9 +189,9 @@ export class SellerpunditPolicySyncService {
         mp.marketplaceId,
       );
 
-      if (fulfillPick) mp.defaultFulfillmentPolicyId = fulfillPick;
-      if (paymentPick) mp.defaultPaymentPolicyId = paymentPick;
-      if (returnPick) mp.defaultReturnPolicyId = returnPick;
+      mp.defaultFulfillmentPolicyId = fulfillPick ?? null;
+      mp.defaultPaymentPolicyId = paymentPick ?? null;
+      mp.defaultReturnPolicyId = returnPick ?? null;
       await this.mpRepo.save(mp);
     }
 

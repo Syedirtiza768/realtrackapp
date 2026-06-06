@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/SECURITY.md](../architecture/SECURITY.md) (2026-06-06)
+
 # Security Checklist
 
 Operational security baseline for RealTrackApp. Re-run before each production

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import type { AiRawResponse, AiVisionProvider } from './ai-provider.interface.js';
+import { estimateCost } from '../../common/openai/openai.types.js';
 
 /**
  * Structured prompt for motor parts image analysis.
@@ -55,8 +56,13 @@ export class OpenAiVisionProvider implements AiVisionProvider {
   constructor(private readonly config: ConfigService) {
     this.client = new OpenAI({
       apiKey: this.config.get<string>('OPENAI_API_KEY', ''),
+      baseURL: this.config.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1'),
+      defaultHeaders: {
+        'HTTP-Referer': 'https://realtrackapp.com',
+        'X-Title': 'RealTrackApp',
+      },
     });
-    this.model = this.config.get<string>('OPENAI_VISION_MODEL', 'gpt-4o');
+    this.model = this.config.get<string>('OPENAI_VISION_MODEL', 'minimax/minimax-m3');
   }
 
   async analyzeImages(
@@ -88,7 +94,9 @@ export class OpenAiVisionProvider implements AiVisionProvider {
       });
 
       const latencyMs = Date.now() - startMs;
-      const tokensUsed = response.usage?.total_tokens ?? 0;
+      const usage = response.usage;
+      const promptTokens = usage?.prompt_tokens ?? 0;
+      const completionTokens = usage?.completion_tokens ?? 0;
       const rawText = response.choices[0]?.message?.content ?? '{}';
 
       let raw: Record<string, unknown>;
@@ -103,24 +111,18 @@ export class OpenAiVisionProvider implements AiVisionProvider {
         raw,
         provider: this.name,
         model: this.model,
-        tokensUsed,
+        tokensUsed: promptTokens + completionTokens,
         latencyMs,
-        estimatedCostUsd: this.estimateCostFromTokens(tokensUsed),
+        estimatedCostUsd: estimateCost(this.model, promptTokens, completionTokens),
       };
     } catch (err) {
-      this.logger.error('OpenAI Vision API call failed', err);
+      this.logger.error('AI Vision API call failed', err);
       throw err;
     }
   }
 
   estimateCost(imageCount: number): number {
-    // Rough estimate: $0.01-0.04 per image for GPT-4o Vision
+    // MiniMax M3 vision: ~$0.025 per image average
     return imageCount * 0.025;
-  }
-
-  private estimateCostFromTokens(tokens: number): number {
-    // GPT-4o pricing: ~$5/1M input, ~$15/1M output
-    // Rough average: $10/1M tokens
-    return (tokens / 1_000_000) * 10;
   }
 }

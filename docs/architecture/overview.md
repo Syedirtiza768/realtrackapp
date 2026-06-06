@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/architecture/ARCHITECTURE.md](ARCHITECTURE.md) (2026-06-06)
+
 # Architecture Overview
 
 > Authoritative high-level map of RealTrackApp. For deeper detail see the sibling

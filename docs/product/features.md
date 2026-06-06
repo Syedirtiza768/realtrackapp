@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/FEATURE_REGISTRY.md](../context/FEATURE_REGISTRY.md) (2026-06-06)
+
 # Product Features
 
 Status legend: **Implemented** (working end-to-end) · **Partial** (present but

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { estimateCost } from '../../common/openai/openai.types.js';
 import {
   MotorsProduct,
   ListingGeneration,
@@ -225,8 +226,16 @@ export class ListingGeneratorService {
     private readonly configService: ConfigService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const baseURL = this.configService.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1');
     if (apiKey) {
-      this.openai = new OpenAI({ apiKey });
+      this.openai = new OpenAI({
+        apiKey,
+        baseURL,
+        defaultHeaders: {
+          'HTTP-Referer': 'https://realtrackapp.com',
+          'X-Title': 'RealTrackApp',
+        },
+      });
     }
   }
 
@@ -235,7 +244,7 @@ export class ListingGeneratorService {
     input: ListingGenerationInput,
   ): Promise<ListingGeneration> {
     const startTime = Date.now();
-    const model = this.configService.get<string>('OPENAI_LISTING_MODEL') || 'gpt-4o';
+    const model = this.configService.get<string>('OPENAI_LISTING_MODEL') || 'minimax/minimax-m3';
 
     // Get category aspects
     const aspects = await this.aspectRequirementRepo.find({
@@ -367,7 +376,7 @@ export class ListingGeneratorService {
     startTime: number,
   ): Promise<ListingGeneration> {
     if (!this.openai) {
-      throw new Error('OpenAI API key not configured');
+      throw new Error('AI API key not configured');
     }
 
     const prompt = LISTING_GENERATION_PROMPT
@@ -403,7 +412,10 @@ export class ListingGeneratorService {
       const latencyMs = Date.now() - startTime;
       const rawContent = response.choices[0]?.message?.content || '{}';
       const parsed = JSON.parse(rawContent);
-      const tokensUsed = response.usage?.total_tokens || 0;
+      const usage = response.usage;
+      const promptTokens = usage?.prompt_tokens ?? 0;
+      const completionTokens = usage?.completion_tokens ?? 0;
+      const tokensUsed = promptTokens + completionTokens;
 
       // Validate title length
       let title = parsed.title || '';
@@ -422,12 +434,12 @@ export class ListingGeneratorService {
         generatedHtmlDescription: parsed.html_description || '',
         keywordRationale: parsed.keyword_rationale || '',
         searchTags: parsed.search_tags || [],
-        aiProvider: 'openai',
+        aiProvider: 'minimax-m3',
         aiModel: model,
         aiRawResponse: parsed,
         tokensUsed,
         latencyMs,
-        costUsd: (tokensUsed / 1000) * 0.01,
+        costUsd: estimateCost(model, promptTokens, completionTokens),
         titleQualityScore: parsed.quality_assessment?.title_score || null,
         descriptionQualityScore: parsed.quality_assessment?.description_score || null,
         overallQualityScore:

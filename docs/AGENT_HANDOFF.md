@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/context/AGENT_HANDOFF.md](context/AGENT_HANDOFF.md) (2026-06-06)
+
 # Agent Handoff Template
 
 > Template for documenting work-in-progress and context for future agents.

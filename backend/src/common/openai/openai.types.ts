@@ -122,7 +122,10 @@ export interface PromptTemplate {
  *  Output: $0.60 / 1M tokens
  */
 export const OPENAI_PRICING: Record<string, { input: number; output: number }> = {
-  // Keep in sync with OpenAI pricing updates.
+  // MiniMax M3 via OpenRouter (text pricing; vision is ~2x)
+  'minimax/minimax-m3': { input: 0.50, output: 2.00 },
+
+  // Legacy OpenAI models
   'gpt-5.4': { input: 2.5, output: 10.0 },
   'gpt-4o': { input: 2.5, output: 10.0 },
   'gpt-4o-mini': { input: 0.15, output: 0.6 },
@@ -136,7 +139,7 @@ export function estimateCost(
   promptTokens: number,
   completionTokens: number,
 ): number {
-  const pricing = OPENAI_PRICING[model] ?? OPENAI_PRICING['gpt-4o'];
+  const pricing = OPENAI_PRICING[model] ?? OPENAI_PRICING['minimax/minimax-m3'];
   return (
     (promptTokens / 1_000_000) * pricing.input +
     (completionTokens / 1_000_000) * pricing.output

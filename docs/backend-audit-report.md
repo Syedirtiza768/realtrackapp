@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Superseded by /docs/context/KNOWN_ISSUES.md. Preserved for historical context.
+
 # ListingPro Backend — Comprehensive Production Audit Report
 
 **Generated:** 2025  

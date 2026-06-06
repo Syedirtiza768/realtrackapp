@@ -1,3 +1,5 @@
+> ⚠️ MOVED → [/docs/backend/MODULE_MAP.md](backend/MODULE_MAP.md) (2026-06-06)
+
 # Backend Map
 
 > Complete reference for the NestJS backend structure.

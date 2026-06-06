@@ -1,3 +1,5 @@
+> ⚠️ LEGACY REFERENCE — Upgrade blueprint preserved for reference.
+
 # RealTrackApp — eBay Multi-Store + OpenAI Upgrade Blueprint
 
 > **Version:** 2.0  
