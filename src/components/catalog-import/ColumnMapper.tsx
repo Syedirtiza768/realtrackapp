@@ -75,10 +75,10 @@ export default function ColumnMapper({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700">
-                <th className="text-left text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">CSV Column</th>
-                <th className="text-center text-slate-400 dark:text-slate-400 py-2 w-12"></th>
-                <th className="text-left text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Catalog Field</th>
-                <th className="text-center text-slate-400 dark:text-slate-400 py-2 px-3 font-medium w-16">Status</th>
+                <th className="text-left text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">CSV Column</th>
+                <th className="text-center text-slate-500 dark:text-slate-400 py-2 w-12"></th>
+                <th className="text-left text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">Catalog Field</th>
+                <th className="text-center text-slate-500 dark:text-slate-400 py-2 px-3 font-medium w-16">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -96,7 +96,7 @@ export default function ColumnMapper({
                       </code>
                     </td>
                     <td className="text-center">
-                      <ArrowRight className="h-3 w-3 text-slate-400 dark:text-slate-500 mx-auto" />
+                      <ArrowRight className="h-3 w-3 text-slate-500 dark:text-slate-400 mx-auto" />
                     </td>
                     <td className="py-2 px-3">
                       <select

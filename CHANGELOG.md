@@ -27,6 +27,10 @@ for every meaningful change (Continuous Documentation Protocol).
   return policy `287569277015` on `EBAY_MOTORS_US`). US P&A return blocking is
   scoped to US marketplaces only; blocked messages include listing condition and
   geo mismatch hints.
+- SellerPundit import/publish now infers marketplace from account names like
+  `(SVG-DE) German Salvage Dismantlers` → `EBAY_DE`, fixing "Missing business
+  policy IDs after sync" when DE-only policies were synced against a US default
+  marketplace row.
 - Catalog → SellerPundit store publish no longer hits `API 504: Gateway Time-out`
   as often: removed redundant policy sync on every publish, parallelized SP
   `get-all-policies` fetches, stopped forcing full `get-all-tokens` refresh before

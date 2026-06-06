@@ -50,6 +50,7 @@ import { ListingActionLogWriterService } from '../ebay/services/listing-action-l
     SellerpunditAccountSyncService,
     SellerpunditPolicySyncService,
     SellerpunditListingAdapter,
+    SellerpunditMarketplaceRegistry,
   ],
 })
 export class SellerpunditModule {}

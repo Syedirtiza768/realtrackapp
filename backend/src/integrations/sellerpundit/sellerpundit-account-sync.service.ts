@@ -60,7 +60,7 @@ export class SellerpunditAccountSyncService {
         ? 'sandbox'
         : 'production') as 'sandbox' | 'production';
 
-    const defaultMp =
+    const configDefaultMp =
       this.config.get<string>('SELLERPUNDIT_DEFAULT_MARKETPLACE_ID', 'EBAY_MOTORS_US') ||
       'EBAY_MOTORS_US';
 
@@ -80,12 +80,18 @@ export class SellerpunditAccountSyncService {
 
       if (existing) {
         await this.tokenSync.persistTokenRow(existing, row);
-        existing.accountDisplayName = row.accountName.trim();
-        existing.sellerpunditAccountName = row.accountName.trim();
+        const displayName = row.accountName.trim();
+        existing.accountDisplayName = displayName;
+        existing.sellerpunditAccountName = displayName;
         existing.sellerpunditMarketplaceId = row.marketPlaceId;
         existing.sellerpunditLastSyncAt = new Date();
         if (row.sellerId) existing.ebayUserId = String(row.sellerId);
         await this.accountRepo.save(existing);
+        const marketplaceId = this.registry.resolveMarketplaceForAccount(
+          displayName,
+          configDefaultMp,
+        );
+        await this.alignAccountMarketplace(existing, marketplaceId);
         updated++;
         accountIds.push(existing.id);
         continue;
@@ -106,13 +112,17 @@ export class SellerpunditAccountSyncService {
         continue;
       }
 
+      const marketplaceId = this.registry.resolveMarketplaceForAccount(
+        row.accountName.trim(),
+        configDefaultMp,
+      );
       const acctId = await this.createAccountFromToken({
         organizationId,
         userId,
         row,
         ebayUserId,
         environment,
-        defaultMarketplaceId: defaultMp,
+        defaultMarketplaceId: marketplaceId,
       });
       imported++;
       accountIds.push(acctId);
@@ -241,6 +251,15 @@ export class SellerpunditAccountSyncService {
         }
       }
 
+      savedStore.ebayMarketplaceId = input.defaultMarketplaceId;
+      savedStore.config = {
+        ...(savedStore.config ?? {}),
+        marketplace: input.defaultMarketplaceId,
+        sellerpundit: true,
+        sellerpunditTokenId: input.row.id,
+      };
+      await qr.manager.save(savedStore);
+
       await qr.commitTransaction();
       return savedAcct.id;
     } catch (e) {
@@ -248,6 +267,44 @@ export class SellerpunditAccountSyncService {
       throw e;
     } finally {
       await qr.release();
+    }
+  }
+
+  /** Ensure the inferred marketplace row exists and the primary store points at it. */
+  private async alignAccountMarketplace(
+    account: ConnectedEbayAccount,
+    marketplaceId: string,
+  ): Promise<void> {
+    let mpRow = await this.mpRepo.findOne({
+      where: { ebayAccountId: account.id, marketplaceId },
+    });
+    if (!mpRow) {
+      const mp = this.mpConfig.require(marketplaceId);
+      mpRow = this.mpRepo.create({
+        ebayAccountId: account.id,
+        marketplaceId,
+        currency: mp.currency,
+        locale: mp.locale,
+        enabled: true,
+      });
+      await this.mpRepo.save(mpRow);
+    } else if (!mpRow.enabled) {
+      mpRow.enabled = true;
+      await this.mpRepo.save(mpRow);
+    }
+
+    if (account.primaryStoreId) {
+      const store = await this.storeRepo.findOne({
+        where: { id: account.primaryStoreId },
+      });
+      if (store && store.ebayMarketplaceId !== marketplaceId) {
+        store.ebayMarketplaceId = marketplaceId;
+        store.config = {
+          ...(store.config ?? {}),
+          marketplace: marketplaceId,
+        };
+        await this.storeRepo.save(store);
+      }
     }
   }
 

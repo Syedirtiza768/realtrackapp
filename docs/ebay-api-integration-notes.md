@@ -101,7 +101,10 @@ P&A return-policy errors on **used** listings are not blocked locally; mandatory
 seller-paid applies to **New / New Other** on **US** marketplaces only
 (`EBAY_US`, `EBAY_MOTORS_US`). Policy picks are geo-scoped — an `EBAY_DE` return
 policy must not be used as the default for `EBAY_MOTORS_US` (SellerPundit accounts
-like SVG-DE often only have DE policies). SP 504 / platform errors fall back to
+like SVG-DE often only have DE policies). SellerPundit store import and publish
+infer marketplace from account names (`(SVG-DE)` → `EBAY_DE`, `(SVG-UK)` →
+`EBAY_GB`, `(SVG-AU)` → `EBAY_AU`) instead of defaulting every token to
+`EBAY_MOTORS_US`. SP 504 / platform errors fall back to
 direct eBay in `auto` mode (`SELLERPUNDIT_PUBLISH_FALLBACK`).
 
 **Item condition:** Legacy File Exchange `3000-Used` maps to Inventory API enum

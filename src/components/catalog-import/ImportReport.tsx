@@ -71,7 +71,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
       </CardHeader>
       <CardContent>
         {/* File info */}
-        <div className="text-sm text-slate-400 dark:text-slate-400 mb-4">
+        <div className="text-sm text-slate-500 dark:text-slate-400 mb-4">
           <span className="text-slate-600 dark:text-slate-200 font-medium">{importRecord.fileName}</span>
           {importRecord.fileSizeBytes && (
             <span className="ml-2">
@@ -83,7 +83,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
         {/* Progress bar (while processing) */}
         {isProcessing && (
           <div className="mb-4">
-            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
+            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
               <span>
                 {isFinalizing
                   ? 'Writing search index and finishing…'
@@ -107,7 +107,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
         {/* Stats grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <StatCard
-            icon={<FileText className="h-4 w-4 text-slate-400 dark:text-slate-400" />}
+            icon={<FileText className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
             label="Total Rows"
             value={importRecord.totalRows.toLocaleString()}
           />
@@ -136,7 +136,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
             variant="error"
           />
           <StatCard
-            icon={<Clock className="h-4 w-4 text-slate-400 dark:text-slate-400" />}
+            icon={<Clock className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
             label="Duration"
             value={formatDuration(importRecord.startedAt, importRecord.completedAt)}
           />
@@ -239,7 +239,7 @@ function StatCard({
     <div className="p-3 rounded-lg bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
       <div className="flex items-center gap-1.5 mb-1">
         {icon}
-        <span className="text-xs text-slate-400 dark:text-slate-400">{label}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
       </div>
       <p className={`text-lg font-semibold ${variant ? valueColors[variant] : 'text-slate-600 dark:text-slate-200'}`}>
         {value}

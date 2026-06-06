@@ -87,11 +87,29 @@ export default function CatalogImportDashboard() {
     async (file: File) => {
       try {
         const response = await upload(file);
-        if (response) {
-          setDetectedHeaders(response.detectedHeaders);
-          setColumnMapping(response.columnMapping);
-          setCatalogFields(response.catalogFields);
-          setActiveImportId(response.import.id);
+        if (!response) return;
+        const { detectedHeaders: headers, columnMapping: mapping, catalogFields: fields, import: imp } = response;
+        setDetectedHeaders(headers);
+        setColumnMapping(mapping);
+        setCatalogFields(fields);
+        setActiveImportId(imp.id);
+
+        // Auto-start if all headers are mapped and the required title field is present
+        const mappedValues = Object.values(mapping);
+        const hasTitle = mappedValues.includes('title');
+        const unmappedHeaders = headers.filter((h) => !mapping[h]);
+
+        if (hasTitle && unmappedHeaders.length === 0) {
+          try {
+            setStartImportError(null);
+            await startImport(imp.id, mapping);
+            setStep('processing');
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to start import. Is Redis running?';
+            setStartImportError(msg);
+            setStep('mapping');
+          }
+        } else {
           setStep('mapping');
         }
       } catch {
@@ -216,7 +234,7 @@ export default function CatalogImportDashboard() {
             <Database className="h-6 w-6 text-blue-400" />
             Catalog Import
           </h1>
-          <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Import CSV, .xlsx, or .xls catalog files into the master product database.{' '}
             <Link to="/catalog/motors-filters" className="text-blue-400 hover:underline">
               Browse with Motors ops filters
@@ -262,7 +280,7 @@ export default function CatalogImportDashboard() {
 
       {/* Stats bar */}
       {statsLoading && !stats && !statsError && (
-        <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 px-4 py-3 text-sm text-slate-400 dark:text-slate-400">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
           Loading catalog stats…
         </div>
@@ -373,7 +391,7 @@ export default function CatalogImportDashboard() {
             onClick={() => setShowHistory(!showHistory)}
           >
             <div className="flex items-center gap-2">
-              <History className="h-5 w-5 text-slate-400 dark:text-slate-400" />
+              <History className="h-5 w-5 text-slate-500 dark:text-slate-400" />
               Import History
               {importListData && (
                 <Badge variant="secondary">{importListData.total}</Badge>
@@ -386,14 +404,14 @@ export default function CatalogImportDashboard() {
                   refreshList();
                   refreshStats();
                 }}
-                className="text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
               >
                 <RefreshCw className={`h-4 w-4 ${listLoading ? 'animate-spin' : ''}`} />
               </button>
               {showHistory ? (
-                <ChevronUp className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               ) : (
-                <ChevronDown className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               )}
             </div>
           </CardTitle>
@@ -401,7 +419,7 @@ export default function CatalogImportDashboard() {
         {showHistory && (
           <CardContent>
             {listLoading && !importListData && !listError && (
-              <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400 dark:text-slate-400">
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500 dark:text-slate-400">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 Loading import history…
               </div>
@@ -416,13 +434,13 @@ export default function CatalogImportDashboard() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-700">
-                      <th className="text-left text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">File</th>
-                      <th className="text-left text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Date</th>
-                      <th className="text-center text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Status</th>
-                      <th className="text-right text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Rows</th>
-                      <th className="text-right text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Inserted</th>
-                      <th className="text-right text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Skipped</th>
-                      <th className="text-center text-slate-400 dark:text-slate-400 py-2 px-3 font-medium">Actions</th>
+                      <th className="text-left text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">File</th>
+                      <th className="text-left text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">Date</th>
+                      <th className="text-center text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">Status</th>
+                      <th className="text-right text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">Rows</th>
+                      <th className="text-right text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">Inserted</th>
+                      <th className="text-right text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">Skipped</th>
+                      <th className="text-center text-slate-500 dark:text-slate-400 py-2 px-3 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -455,7 +473,7 @@ export default function CatalogImportDashboard() {
               </div>
             ) : null}
             {!listLoading && !listError && importListData && importListData.imports.length === 0 && (
-              <p className="text-slate-400 dark:text-slate-500 text-sm text-center py-6">
+              <p className="text-slate-500 dark:text-slate-400 text-sm text-center py-6">
                 No imports yet. Upload a CSV or Excel file to get started.
               </p>
             )}
@@ -482,7 +500,7 @@ export default function CatalogImportDashboard() {
                 type="button"
                 onClick={closeClearCatalogModal}
                 disabled={clearCatalogBusy}
-                className="rounded p-1 text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:text-slate-200 disabled:opacity-40"
+                className="rounded p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:text-slate-200 disabled:opacity-40"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -497,7 +515,7 @@ export default function CatalogImportDashboard() {
                 generated listing id.
               </p>
               <label className="block">
-                <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-400">
+                <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Type <span className="font-mono text-slate-600 dark:text-slate-200">DELETE_ALL_CATALOG</span> to confirm
                 </span>
                 <input
@@ -563,7 +581,7 @@ export default function CatalogImportDashboard() {
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="p-3 rounded-lg bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
-      <p className="text-xs text-slate-400 dark:text-slate-400">{label}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="text-lg font-semibold text-slate-600 dark:text-slate-200 mt-0.5">{value}</p>
     </div>
   );
@@ -607,7 +625,7 @@ function ImportHistoryRow({
           {importRecord.fileName}
         </button>
       </td>
-      <td className="py-2 px-3 text-slate-400 dark:text-slate-400">
+      <td className="py-2 px-3 text-slate-500 dark:text-slate-400">
         {new Date(importRecord.createdAt).toLocaleDateString()}
       </td>
       <td className="py-2 px-3 text-center">
@@ -646,7 +664,7 @@ function ImportHistoryRow({
           )}
           <button
             onClick={() => onView(importRecord.id, importRecord.status)}
-            className="text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 p-1"
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 p-1"
             title="View details"
           >
             <BarChart3 className="h-3.5 w-3.5" />

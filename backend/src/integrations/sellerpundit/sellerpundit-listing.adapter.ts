@@ -21,6 +21,7 @@ import {
   paReturnPolicyBlockedMessage,
   partsAccessoriesReturnPolicyGuidance,
   pickReturnPolicyIdForListing,
+  policyMatchesMarketplaceGeo,
   readPolicyGeoSite,
 } from '../ebay/services/ebay-business-policy.util.js';
 
@@ -119,11 +120,17 @@ export class SellerpunditListingAdapter {
     }
 
     if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
+      const hint = await this.missingPolicyHint(
+        account.id,
+        marketplaceId,
+        account.sellerpunditAccountName ?? account.accountDisplayName,
+      );
       return {
         success: false,
-        error: 'Missing business policy IDs after sync',
+        error: hint ?? 'Missing business policy IDs after sync',
         errors: [
-          'Fulfillment, payment, and return policies are required — sync SellerPundit policies and map defaults.',
+          hint ??
+            'Fulfillment, payment, and return policies are required — sync SellerPundit policies and map defaults.',
         ],
       };
     }
@@ -337,6 +344,46 @@ export class SellerpunditListingAdapter {
         condition,
       ) ?? undefined
     );
+  }
+
+  private async missingPolicyHint(
+    ebayAccountId: string,
+    marketplaceId: string,
+    accountName?: string | null,
+  ): Promise<string | null> {
+    const rows = await this.policyRepo.find({ where: { ebayAccountId } });
+    if (!rows.length) {
+      return 'No business policies found — open Settings → eBay Integrations, sync SellerPundit policies, then retry publish.';
+    }
+
+    const geoSites = [
+      ...new Set(
+        rows
+          .map((r) => readPolicyGeoSite(r.rawPayload ?? {}))
+          .filter((g): g is string => Boolean(g?.trim())),
+      ),
+    ];
+    const matchingGeo = geoSites.filter((g) =>
+      policyMatchesMarketplaceGeo(g, marketplaceId),
+    );
+    if (geoSites.length && !matchingGeo.length) {
+      const inferred = accountName
+        ? this.registry.inferMarketplaceFromAccountName(accountName)
+        : null;
+      const geoList = geoSites.join(', ');
+      if (inferred && inferred !== marketplaceId) {
+        return (
+          `Synced policies are for ${geoList}, but this store is publishing to ${marketplaceId}. ` +
+          `Re-sync SellerPundit stores so "${accountName}" maps to ${inferred}, then sync policies and publish again.`
+        );
+      }
+      return (
+        `Synced policies are for ${geoList}, but this store is publishing to ${marketplaceId}. ` +
+        'Create or enable matching business policies in eBay Seller Hub, sync policies, or publish to the correct marketplace.'
+      );
+    }
+
+    return null;
   }
 
   private conditionIdFromEnum(condition: string): number {

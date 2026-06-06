@@ -139,11 +139,11 @@ export default function CsvUploader({
 
           {!selectedFile && !uploaded && (
             <>
-              <Upload className="h-10 w-10 text-slate-400 dark:text-slate-400 mb-3" />
+              <Upload className="h-10 w-10 text-slate-500 dark:text-slate-400 mb-3" />
               <p className="text-slate-500 dark:text-slate-300 text-sm font-medium">
                 Drag & drop a CSV or Excel file here, or click to browse
               </p>
-              <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
                 Supports .csv, .xlsx, and .xls files up to 200 MB (50,000+ rows)
               </p>
             </>
@@ -154,7 +154,7 @@ export default function CsvUploader({
               <FileText className="h-8 w-8 text-blue-400" />
               <div>
                 <p className="text-slate-600 dark:text-slate-200 text-sm font-medium">{selectedFile.name}</p>
-                <p className="text-slate-400 dark:text-slate-400 text-xs">{formatBytes(selectedFile.size)}</p>
+                <p className="text-slate-500 dark:text-slate-400 text-xs">{formatBytes(selectedFile.size)}</p>
               </div>
               {!uploading && (
                 <button
@@ -162,7 +162,7 @@ export default function CsvUploader({
                     e.stopPropagation();
                     handleClear();
                   }}
-                  className="ml-2 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
+                  className="ml-2 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -177,7 +177,7 @@ export default function CsvUploader({
                 <p className="text-emerald-300 text-sm font-medium">
                   {selectedFile.name} uploaded successfully
                 </p>
-                <p className="text-slate-400 dark:text-slate-400 text-xs">{formatBytes(selectedFile.size)}</p>
+                <p className="text-slate-500 dark:text-slate-400 text-xs">{formatBytes(selectedFile.size)}</p>
               </div>
             </div>
           )}
@@ -186,7 +186,7 @@ export default function CsvUploader({
         {/* Upload progress bar */}
         {uploading && (
           <div className="mt-4">
-            <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
               <span>
                 {progress >= 100
                   ? 'Finishing upload on server…'
@@ -213,7 +213,7 @@ export default function CsvUploader({
 
         {/* Supported formats */}
         <div className="mt-4 flex items-center gap-2 flex-wrap">
-          <span className="text-slate-400 dark:text-slate-500 text-xs">Supported:</span>
+          <span className="text-slate-500 dark:text-slate-400 text-xs">Supported:</span>
           <Badge variant="secondary">.csv</Badge>
           <Badge variant="secondary">.xlsx / .xls</Badge>
           <Badge variant="secondary">eBay File Exchange</Badge>

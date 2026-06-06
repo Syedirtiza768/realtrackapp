@@ -36,7 +36,7 @@ const FILTER_OPTIONS: Array<{ value: RowFilter; label: string; color: string }> 
   { value: 'invalid', label: 'Invalid', color: 'text-red-400' },
   { value: 'error', label: 'Errors', color: 'text-red-400' },
   { value: 'duplicate_flagged', label: 'Flagged Duplicates', color: 'text-amber-400' },
-  { value: 'duplicate_skipped', label: 'Skipped Duplicates', color: 'text-slate-400 dark:text-slate-400' },
+  { value: 'duplicate_skipped', label: 'Skipped Duplicates', color: 'text-slate-500 dark:text-slate-400' },
 ];
 
 function RowStatusBadge({ status }: { status: ImportRowStatus }) {
@@ -115,9 +115,9 @@ export default function ImportErrorViewer({
             <Badge variant="warning">{issueCount}</Badge>
           </div>
           {expanded ? (
-            <ChevronUp className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           )}
         </CardTitle>
       </CardHeader>
@@ -133,7 +133,7 @@ export default function ImportErrorViewer({
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   filter === opt.value
                     ? 'bg-blue-600/20 text-blue-400 border border-blue-600/50'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:bg-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:bg-slate-700'
                 }`}
               >
                 {opt.label}
@@ -150,7 +150,7 @@ export default function ImportErrorViewer({
           )}
 
           {loading && (
-            <div className="py-6 text-center text-slate-400 dark:text-slate-400 text-sm">Loading rows...</div>
+            <div className="py-6 text-center text-slate-500 dark:text-slate-400 text-sm">Loading rows...</div>
           )}
 
           {/* Rows table */}
@@ -158,7 +158,7 @@ export default function ImportErrorViewer({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 text-left">
+                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-left">
                     <th className="pb-2 pr-3 w-16">Row #</th>
                     <th className="pb-2 pr-3">Status</th>
                     <th className="pb-2 pr-3">Issue</th>
@@ -169,7 +169,7 @@ export default function ImportErrorViewer({
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="border-b border-slate-800">
-                      <td className="py-2 pr-3 text-slate-400 dark:text-slate-400 font-mono text-xs">
+                      <td className="py-2 pr-3 text-slate-500 dark:text-slate-400 font-mono text-xs">
                         {row.rowNumber}
                       </td>
                       <td className="py-2 pr-3">
@@ -191,12 +191,12 @@ export default function ImportErrorViewer({
                           </button>
                         )}
                         {expandedRow === row.id && row.rawData && (
-                          <div className="mt-2 p-2 rounded bg-white dark:bg-slate-900 text-xs text-slate-400 dark:text-slate-400 max-h-[200px] overflow-auto">
+                          <div className="mt-2 p-2 rounded bg-white dark:bg-slate-900 text-xs text-slate-500 dark:text-slate-400 max-h-[200px] overflow-auto">
                             <table className="w-full">
                               <tbody>
                                 {Object.entries(row.rawData).map(([key, val]) => (
                                   <tr key={key} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                                    <td className="py-0.5 pr-2 font-mono text-slate-400 dark:text-slate-500 whitespace-nowrap">{key}</td>
+                                    <td className="py-0.5 pr-2 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">{key}</td>
                                     <td className="py-0.5 text-slate-500 dark:text-slate-300 break-all">{val}</td>
                                   </tr>
                                 ))}
@@ -213,7 +213,7 @@ export default function ImportErrorViewer({
           )}
 
           {!loading && rows.length === 0 && !error && (
-            <p className="text-slate-400 dark:text-slate-500 text-sm text-center py-4">
+            <p className="text-slate-500 dark:text-slate-400 text-sm text-center py-4">
               No issues found with this filter.
             </p>
           )}

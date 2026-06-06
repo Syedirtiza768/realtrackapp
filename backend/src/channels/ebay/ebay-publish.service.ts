@@ -57,6 +57,8 @@ import {
   readPolicyGeoSite,
 } from '../../integrations/ebay/services/ebay-business-policy.util.js';
 import { SellerpunditTokenSyncService } from '../../integrations/sellerpundit/sellerpundit-token-sync.service.js';
+import { SellerpunditMarketplaceRegistry } from '../../integrations/sellerpundit/sellerpundit-marketplace.registry.js';
+import { EbayMarketplaceConfigService } from '../../integrations/ebay/services/ebay-marketplace-config.service.js';
 import {
   buildListingAspects,
   isUsedEbayCondition,
@@ -152,6 +154,8 @@ export class EbayPublishService {
     private readonly sellerpunditListing: SellerpunditListingAdapter,
     private readonly sellerpunditPolicies: SellerpunditPolicySyncService,
     private readonly sellerpunditTokens: SellerpunditTokenSyncService,
+    private readonly sellerpunditRegistry: SellerpunditMarketplaceRegistry,
+    private readonly mpConfig: EbayMarketplaceConfigService,
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
     @InjectRepository(ConnectedEbayAccount)
@@ -649,16 +653,65 @@ export class EbayPublishService {
     };
   }
 
+  private resolvePublishMarketplaceId(
+    account: ConnectedEbayAccount,
+    store: Store,
+  ): string {
+    const fromStore = resolveMarketplaceId(store);
+    if (account.connectionSource !== 'sellerpundit') return fromStore;
+    return this.sellerpunditRegistry.resolveMarketplaceForAccount(
+      account.sellerpunditAccountName ??
+        account.accountDisplayName ??
+        store.storeName ??
+        '',
+      fromStore,
+    );
+  }
+
+  private async ensureMarketplaceRow(
+    ebayAccountId: string,
+    marketplaceId: string,
+  ): Promise<EbayAccountMarketplace> {
+    let mpRow = await this.mpRepo.findOne({
+      where: { ebayAccountId, marketplaceId },
+    });
+    if (!mpRow) {
+      const mp = this.mpConfig.require(marketplaceId);
+      mpRow = this.mpRepo.create({
+        ebayAccountId,
+        marketplaceId,
+        currency: mp.currency,
+        locale: mp.locale,
+        enabled: true,
+      });
+      mpRow = await this.mpRepo.save(mpRow);
+    } else if (!mpRow.enabled) {
+      mpRow.enabled = true;
+      mpRow = await this.mpRepo.save(mpRow);
+    }
+    return mpRow;
+  }
+
   private async enrichPoliciesFromMarketplace(
     account: ConnectedEbayAccount,
     store: Store,
     req: PublishRequest,
   ): Promise<PublishRequest> {
-    const marketplaceId = resolveMarketplaceId(store);
+    const marketplaceId = this.resolvePublishMarketplaceId(account, store);
 
-    let mpRow = await this.mpRepo.findOne({
-      where: { ebayAccountId: account.id, marketplaceId },
-    });
+    if (
+      account.connectionSource === 'sellerpundit' &&
+      store.ebayMarketplaceId !== marketplaceId
+    ) {
+      store.ebayMarketplaceId = marketplaceId;
+      store.config = {
+        ...(store.config ?? {}),
+        marketplace: marketplaceId,
+      };
+      await this.storeRepo.save(store);
+    }
+
+    let mpRow = await this.ensureMarketplaceRow(account.id, marketplaceId);
 
     if (account.connectionSource === 'sellerpundit') {
       const policyCount = await this.policyRepo.count({
@@ -673,9 +726,7 @@ export class EbayPublishService {
         if (!policyResult.ok) {
           throw new BadRequestException(policyResult.message);
         }
-        mpRow = await this.mpRepo.findOne({
-          where: { ebayAccountId: account.id, marketplaceId },
-        });
+        mpRow = await this.ensureMarketplaceRow(account.id, marketplaceId);
       }
     }
 
@@ -1117,7 +1168,7 @@ export class EbayPublishService {
     account: ConnectedEbayAccount,
     req: PublishRequest,
   ): Promise<PublishResult> {
-    const marketplaceId = resolveMarketplaceId(store);
+    const marketplaceId = this.resolvePublishMarketplaceId(account, store);
 
     let enrichedReq: PublishRequest;
     try {
