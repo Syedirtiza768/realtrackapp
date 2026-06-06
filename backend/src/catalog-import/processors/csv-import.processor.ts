@@ -109,6 +109,7 @@ export class CsvImportProcessor extends WorkerHost {
       }
 
       let insertedRows = importRecord.insertedRows || 0;
+      let updatedRows = importRecord.updatedRows || 0;
       let skippedDuplicates = importRecord.skippedDuplicates || 0;
       let flaggedForReview = importRecord.flaggedForReview || 0;
       let invalidRows = importRecord.invalidRows || 0;
@@ -325,21 +326,40 @@ export class CsvImportProcessor extends WorkerHost {
         // Process each valid row
         const productsToInsert: Partial<CatalogProduct>[] = [];
         const listingsToInsert: Partial<ListingRecord>[] = [];
+        const productsToUpdate: { product: Partial<CatalogProduct>; productId: string }[] = [];
+        const listingsToUpdate: { listing: Partial<ListingRecord>; key: { sourceFileName: string; sheetName: string; sourceRowNumber: number } }[] = [];
 
         for (let i = 0; i < uniqueRows.length; i++) {
           const row = uniqueRows[i];
           const dupResult = dupResults.get(i);
 
           if (dupResult?.isDuplicate) {
-            // Exact duplicate — skip
-            skippedDuplicates++;
+            const productUpdate = this.mapToProduct(row.data, importId, row.rowNumber);
+            productsToUpdate.push({ product: productUpdate, productId: dupResult.matchedProductId! });
+
+            listingsToUpdate.push({
+              listing: this.mapToListingRecord(
+                row.data,
+                row.rowNumber,
+                importRecord.fileName,
+                filePath,
+                listingSheetName,
+              ),
+              key: {
+                sourceFileName: importRecord.fileName,
+                sheetName: listingSheetName,
+                sourceRowNumber: row.rowNumber,
+              },
+            });
+
+            updatedRows++;
             importRowEntries.push({
               importId,
               rowNumber: row.rowNumber,
-              status: 'duplicate_skipped',
+              status: 'updated',
               matchStrategy: dupResult.matchStrategy,
               matchedProductId: dupResult.matchedProductId,
-              message: `Exact duplicate detected via ${dupResult.matchStrategy}`,
+              message: `Duplicate detected via ${dupResult.matchStrategy} — updating existing product`,
               rawData: row.data,
             });
           } else if (dupResult?.isPartialMatch) {
@@ -377,9 +397,9 @@ export class CsvImportProcessor extends WorkerHost {
           }
         }
 
-        // Transactional batch insert
+        // Transactional batch insert + update
         let savedBatchProducts: CatalogProduct[] = [];
-        if (productsToInsert.length > 0 || importRowEntries.length > 0) {
+        if (productsToInsert.length > 0 || productsToUpdate.length > 0 || importRowEntries.length > 0) {
           await this.dataSource.transaction(async (manager) => {
             if (productsToInsert.length > 0) {
               savedBatchProducts = await manager
@@ -397,6 +417,20 @@ export class CsvImportProcessor extends WorkerHost {
                   entry.createdProductId = savedBatchProducts[insertIdx].id;
                   insertIdx++;
                 }
+              }
+            }
+
+            if (productsToUpdate.length > 0) {
+              for (const { product, productId } of productsToUpdate) {
+                await manager
+                  .getRepository(CatalogProduct)
+                  .update(productId, product as any);
+              }
+
+              for (const { listing, key } of listingsToUpdate) {
+                await manager
+                  .getRepository(ListingRecord)
+                  .upsert(listing as ListingRecord, ['sourceFileName', 'sheetName', 'sourceRowNumber']);
               }
             }
 
@@ -428,6 +462,7 @@ export class CsvImportProcessor extends WorkerHost {
           await this.importRepo.update(importId, {
             processedRows: physicalCursor,
             insertedRows,
+            updatedRows,
             skippedDuplicates,
             flaggedForReview,
             invalidRows,
@@ -440,6 +475,7 @@ export class CsvImportProcessor extends WorkerHost {
             processedRows: physicalCursor,
             totalRows,
             insertedRows,
+            updatedRows,
             skippedDuplicates,
             flaggedForReview,
             invalidRows,
@@ -492,6 +528,7 @@ export class CsvImportProcessor extends WorkerHost {
         status: 'completed',
         processedRows: totalRows,
         insertedRows,
+        updatedRows,
         skippedDuplicates,
         flaggedForReview,
         invalidRows,
@@ -501,12 +538,13 @@ export class CsvImportProcessor extends WorkerHost {
       });
 
       this.logger.log(
-        `Import ${importId} completed: ${insertedRows} inserted, ${skippedDuplicates} duplicates, ${flaggedForReview} flagged, ${invalidRows} invalid`,
+        `Import ${importId} completed: ${insertedRows} inserted, ${updatedRows} updated, ${skippedDuplicates} duplicates, ${flaggedForReview} flagged, ${invalidRows} invalid`,
       );
 
       this.eventEmitter.emit('catalog-import.completed', {
         importId,
         insertedRows,
+        updatedRows,
         skippedDuplicates,
         flaggedForReview,
         invalidRows,
