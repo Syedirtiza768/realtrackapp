@@ -1,4 +1,4 @@
-/* ── Types matching the NestJS ListingRecord entity ──────── */
+﻿/* ── Types matching the NestJS ListingRecord entity ──────── */
 
 /** Listing lifecycle status */
 export type ListingStatus = 'draft' | 'ready' | 'published' | 'sold' | 'delisted' | 'archived';
@@ -134,6 +134,7 @@ export interface ListingRevision {
 export interface CreateListingResponse {
   listing: ListingRecordFull;
   revision: ListingRevision;
+  updated?: boolean;
 }
 
 export interface UpdateListingResponse {

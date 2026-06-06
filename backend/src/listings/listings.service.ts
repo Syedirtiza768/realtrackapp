@@ -1,4 +1,4 @@
-import {
+﻿import {
   ConflictException,
   Injectable,
   Logger,
@@ -316,6 +316,50 @@ export class ListingsService {
         sheetName: 'manual',
         sourceRowNumber: 0,
       } as Partial<ListingRecord>);
+
+      const sku = dto.customLabelSku?.trim();
+      let existing: ListingRecord | null = null;
+
+      if (sku) {
+        existing = await em.findOne(ListingRecord, {
+          where: { customLabelSku: sku },
+        });
+      }
+
+      if (existing) {
+        const oldStatus = existing.status;
+        const changes: Partial<CreateListingDto> = { ...dto };
+        delete changes.status;
+        Object.assign(existing, changes);
+        if (dto.status) {
+          existing.status = dto.status;
+        }
+
+        const savedExisting = await em.save(ListingRecord, existing);
+
+        const revision = em.create(ListingRevision, {
+          listingId: savedExisting.id,
+          version: savedExisting.version,
+          statusBefore: oldStatus,
+          statusAfter: savedExisting.status,
+          snapshot: { ...savedExisting } as unknown as Record<string, unknown>,
+          changeReason: 'update_via_create',
+          changedBy: null,
+        });
+        await em.save(ListingRevision, revision);
+
+        return { listing: savedExisting, revision, updated: true };
+      }
+
+      const maxRow = await em
+        .createQueryBuilder(ListingRecord, 'r')
+        .select('MAX(r.sourceRowNumber)', 'max')
+        .where('r.sourceFileName = :src', { src: 'manual' })
+        .withDeleted()
+        .getRawOne<{ max: string | null }>();
+      const nextRow = (Number(maxRow?.max) || 0) + 1;
+
+      listing.sourceRowNumber = nextRow;
       const saved = await em.save(ListingRecord, listing);
 
       const revision = em.create(ListingRevision, {
