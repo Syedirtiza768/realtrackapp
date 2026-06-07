@@ -61,11 +61,27 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `OPENAI_API_KEY` | — | **Secret.** OpenAI key |
-| `OPENAI_CHAT_MODEL` | `minimax/minimax-m3` | Chat model (OpenRouter) |
-| `OPENAI_VISION_MODEL` | `minimax/minimax-m3` | Vision model (OpenRouter) |
-| `OPENAI_LISTING_MODEL` | `minimax/minimax-m3` | Listing generation model (OpenRouter) |
+| `OPENAI_MODEL_DEFAULT` | `openai/gpt-4.1-mini` | Default full enrichment lane |
+| `OPENAI_MODEL_FLAGSHIP` | `google/gemini-2.5-flash` | High-value / fitment-critical lane |
+| `OPENAI_MODEL_BULK` | `deepseek/deepseek-chat-v3-0324` | Bulk overnight lane |
+| `OPENAI_MODEL_TEXT` | `openai/gpt-4o-mini` | Text-only cleanup (no fitment) |
+| `OPENAI_MODEL_ESCALATION` | `google/gemini-2.5-flash` | One retry after hard validation fail |
+| `OPENAI_CHAT_MODEL` | alias → `OPENAI_MODEL_DEFAULT` | Legacy chat model env |
+| `OPENAI_VISION_MODEL` | `google/gemini-2.5-flash` | Vision model (OpenRouter); router avoids bulk/text-only models |
+| `OPENAI_LISTING_MODEL` | `openai/gpt-4.1-mini` | Listing generation model |
 | `OPENAI_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
+| `OPENAI_TIMEOUT_MS` | `120000` | Chat completion timeout (ms) |
+| `OPENAI_MODEL_FLAGSHIP_MIN_PRICE` | `200` | Price threshold for flagship lane |
+| `AI_FITMENT_MIN_ROWS` | `5` | Soft-fail threshold for fitment rows |
+| `AI_AUTO_APPROVE_MIN_SCORE` | `85` | Min validator score for auto-approve learning |
+| `AI_ROUTING_POLICY_PATH` | `config/ai-routing-policy.json` | Learned routing policy file |
+| `AI_OPTIMIZER_ENABLED` | `false` | Nightly optimizer cron |
+| `AI_OPTIMIZER_CANARY_PERCENT` | `10` | % of SKUs on new policy first |
+| `AI_LEARNING_MIN_SAMPLES` | `20` | Min outcomes before optimizer changes segment |
+| `AI_PROMPT_VERSION` | `enrichment-v1` | Logged on every `ai_run_logs` row |
+| `AI_RUN_MODE` | `default` | Pipeline run mode: `default` \| `bulk` |
+| `AI_TAXONOMY_VALIDATION_ENABLED` | `false` | When `true`, validate category leaf + required aspects from cached `ebay_categories` |
 
 ## eBay Developer API
 

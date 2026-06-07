@@ -23,6 +23,8 @@ import http from 'http';
 import XLSX from 'xlsx';
 import OpenAI from 'openai';
 import axios from 'axios';
+import { createModelRouter } from './lib/model-router.mjs';
+import { applyListingGuards, validateListing } from './lib/listing-quality.mjs';
 
 // ── HTTP connection pooling — reuse TCP sockets across requests ──
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 15, maxFreeSockets: 5 });
@@ -65,12 +67,13 @@ for (const key of [
   'OPENAI_CHAT_MODEL',
   'EBAY_CLIENT_ID',
   'EBAY_CLIENT_SECRET',
+  'EBAY_ENVIRONMENT',
   'EBAY_SANDBOX',
 ]) {
   if (!env[key] && process.env[key]) env[key] = process.env[key];
 }
 
-const DEFAULT_CHAT_MODEL = 'minimax/minimax-m3';
+const DEFAULT_CHAT_MODEL = 'openai/gpt-4.1-mini';
 
 const CONFIG = {
   openai: {
@@ -87,7 +90,15 @@ const CONFIG = {
   ebay: {
     clientId: env.EBAY_CLIENT_ID,
     clientSecret: env.EBAY_CLIENT_SECRET,
-    sandbox: env.EBAY_SANDBOX === 'true',
+    marketplaceId: 'EBAY_MOTORS_US',
+    sandbox: (() => {
+      const override = env.EBAY_SANDBOX;
+      if (override != null && String(override).trim() !== '') {
+        return String(override).toLowerCase() === 'true';
+      }
+      const environment = String(env.EBAY_ENVIRONMENT || '').trim().toUpperCase();
+      return environment !== 'PRODUCTION';
+    })(),
     get baseUrl() {
       return this.sandbox
         ? 'https://api.sandbox.ebay.com'
@@ -108,8 +119,15 @@ const CONFIG = {
   location: 'Dubai, AE',
 };
 
-// Override model from env if set
-if (env.OPENAI_CHAT_MODEL) CONFIG.openai.model = env.OPENAI_CHAT_MODEL;
+// Model lanes — OPENAI_CHAT_MODEL kept as alias for OPENAI_MODEL_DEFAULT
+CONFIG.openai.model =
+  env.OPENAI_MODEL_DEFAULT ||
+  env.OPENAI_CHAT_MODEL ||
+  DEFAULT_CHAT_MODEL;
+
+const RUN_MODE = env.AI_RUN_MODE || 'default';
+const PROMPT_VERSION = env.AI_PROMPT_VERSION || 'enrichment-v1';
+const modelRouter = createModelRouter(env);
 
 // Image enrichment API — uses internal Docker hostname when running from the
 // backend processor (PIPELINE_JOB_ID is set by the NestJS worker), otherwise localhost.
@@ -785,6 +803,15 @@ const REPORT = {
     incomplete: [],          // SKUs with partial fitment data
     noFitment: [],           // SKUs with no fitment at all
   },
+  aiRunLogs: [],
+  routing: {
+    policyVersion: modelRouter.policy?.version ?? null,
+    escalations: 0,
+    guardFixes: 0,
+    validationFails: 0,
+    attemptsByLane: {},
+    estimatedCostByLane: {},
+  },
 };
 
 const log = {
@@ -875,6 +902,7 @@ async function decodeVin(vin) {
 
 let ebayAppToken = null;
 let ebayTokenExpiry = 0;
+let motorsCategoryTreeId = null;
 
 async function getEbayAppToken() {
   if (ebayAppToken && Date.now() < ebayTokenExpiry - 60000) return ebayAppToken;
@@ -907,6 +935,32 @@ async function getEbayAppToken() {
 
 const categorySuggestionCache = new Map();
 
+async function getMotorsCategoryTreeId() {
+  if (motorsCategoryTreeId) return motorsCategoryTreeId;
+
+  const token = await getEbayAppToken();
+  if (!token) return null;
+
+  try {
+    const { data } = await axios.get(
+      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/get_default_category_tree_id`,
+      {
+        params: { marketplace_id: CONFIG.ebay.marketplaceId },
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 15000,
+      }
+    );
+    motorsCategoryTreeId = data.categoryTreeId;
+    if (motorsCategoryTreeId) {
+      log.info(`eBay Motors category tree: ${motorsCategoryTreeId}`);
+    }
+    return motorsCategoryTreeId;
+  } catch (err) {
+    log.warn(`Failed to resolve Motors category tree: ${err.response?.data?.errors?.[0]?.message || err.message}`);
+    return null;
+  }
+}
+
 async function suggestCategory(keywords) {
   const cacheKey = keywords.toLowerCase().trim();
   if (categorySuggestionCache.has(cacheKey)) return categorySuggestionCache.get(cacheKey);
@@ -914,9 +968,12 @@ async function suggestCategory(keywords) {
   const token = await getEbayAppToken();
   if (!token) return null;
 
+  const treeId = await getMotorsCategoryTreeId();
+  if (!treeId) return null;
+
   try {
     const { data } = await axios.get(
-      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/category_tree/0/get_category_suggestions`,
+      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
       {
         params: { q: keywords },
         headers: { Authorization: `Bearer ${token}` },
@@ -952,9 +1009,12 @@ async function getCategoryAspects(categoryId) {
   const token = await getEbayAppToken();
   if (!token) return null;
 
+  const treeId = await getMotorsCategoryTreeId();
+  if (!treeId) return null;
+
   try {
     const { data } = await axios.get(
-      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category`,
+      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category`,
       {
         params: { category_id: categoryId },
         headers: { Authorization: `Bearer ${token}` },
@@ -1750,7 +1810,7 @@ async function validateOpenAiKey() {
     const response = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content: 'Reply with OK' }],
-      max_tokens: 5,
+      max_tokens: 16,
     });
     if (response.choices?.[0]?.message?.content) {
       openaiAvailable = true;
@@ -1768,7 +1828,44 @@ async function validateOpenAiKey() {
   return false;
 }
 
-async function enrichBatch(batchParts, vinData) {
+function logAiRun(part, route, validation, attempt, guardFixes = []) {
+  const entry = {
+    sku: part.sku,
+    partNumber: part.partNumber,
+    partType: route.segmentKey?.split('|')[0] ?? 'general',
+    price: part.price,
+    lane: route.lane,
+    model: route.model,
+    attempt,
+    promptVersion: PROMPT_VERSION,
+    routingPolicyVersion: route.policyVersion,
+    validationScore: validation?.score ?? null,
+    hardFails: validation?.hardFails ?? [],
+    softFails: validation?.softFails ?? [],
+    escalated: attempt > 1,
+    passedGate: validation?.pass ?? false,
+    fitmentRowCount: validation?.fitmentRowCount ?? 0,
+    guardFixes,
+    createdAt: new Date().toISOString(),
+  };
+  REPORT.aiRunLogs.push(entry);
+  REPORT.routing.attemptsByLane[route.lane] =
+    (REPORT.routing.attemptsByLane[route.lane] ?? 0) + 1;
+}
+
+function finalizeRoutingCostByLane() {
+  const totalAttempts = REPORT.aiRunLogs.length;
+  if (!totalAttempts) return;
+  const estimatedTotalUsd = REPORT.openaiTokensUsed * 0.0000005;
+  for (const log of REPORT.aiRunLogs) {
+    const share = estimatedTotalUsd / totalAttempts;
+    REPORT.routing.estimatedCostByLane[log.lane] =
+      (REPORT.routing.estimatedCostByLane[log.lane] ?? 0) + share;
+  }
+}
+
+async function enrichBatch(batchParts, vinData, options = {}) {
+  const model = options.model ?? CONFIG.openai.model;
   const partsForPrompt = batchParts.map((part, idx) => {
     const vehicle = getVehicleInfo(part, vinData);
     const decoded = vinData.get(part.vin);
@@ -1935,7 +2032,7 @@ ${JSON.stringify(partsForPrompt)}`;
   for (let attempt = 1; attempt <= CONFIG.openai.maxRetries; attempt++) {
     try {
       const response = await client.chat.completions.create({
-        model: CONFIG.openai.model,
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -2014,8 +2111,91 @@ function tryJsonParse(text) {
   }
 }
 
+async function enrichBatchWithRouting(batchParts, vinData) {
+  const representative = batchParts[0];
+  const route = modelRouter.selectRoute(
+    {
+      sku: representative.sku,
+      partNumber: representative.partNumber,
+      partName: representative.partName,
+      price: representative.price,
+    },
+    RUN_MODE,
+  );
+  const batchConfig = modelRouter.getBatchConfig(route.lane);
+  CONFIG.openai.batchSize = batchConfig.batchSize;
+  CONFIG.openai.concurrency = batchConfig.concurrency;
+
+  let items = await enrichBatch(batchParts, vinData, { model: route.model });
+  if (!items) return null;
+
+  const thresholds = modelRouter.getThresholds();
+  const validated = [];
+  let needsEscalation = false;
+
+  for (let i = 0; i < items.length; i++) {
+    const srcPart = batchParts[i] ?? batchParts[items[i].index ?? i];
+    const vehicle = getVehicleInfo(srcPart, vinData);
+    const { item: guarded, fixes } = applyListingGuards(items[i], {
+      partNumber: srcPart.partNumber,
+    });
+    if (fixes.length) REPORT.routing.guardFixes += fixes.length;
+
+    const validation = validateListing(guarded, {
+      partNumber: srcPart.partNumber,
+      donorMake: vehicle.make,
+    }, {
+      fitmentMinRows: thresholds.fitmentMinRows,
+      expectedBatchSize: batchParts.length,
+      actualBatchSize: items.length,
+    });
+
+    logAiRun(srcPart, route, validation, 1, fixes);
+    if (!validation.pass && validation.escalate) {
+      needsEscalation = true;
+      REPORT.routing.validationFails++;
+    }
+    validated.push({ ...guarded, index: items[i].index ?? i });
+  }
+
+  if (needsEscalation) {
+    const escalationModel = modelRouter.getEscalationModel(route.model, route.lane);
+    if (escalationModel) {
+      REPORT.routing.escalations++;
+      log.info(`Escalating batch (${batchParts.length} parts) → ${escalationModel}`);
+      const escalatedItems = await enrichBatch(batchParts, vinData, {
+        model: escalationModel,
+      });
+      if (escalatedItems) {
+        items = escalatedItems;
+        for (let i = 0; i < items.length; i++) {
+          const srcPart = batchParts[i] ?? batchParts[items[i].index ?? i];
+          const vehicle = getVehicleInfo(srcPart, vinData);
+          const { item: guarded, fixes } = applyListingGuards(items[i], {
+            partNumber: srcPart.partNumber,
+          });
+          const validation = validateListing(guarded, {
+            partNumber: srcPart.partNumber,
+            donorMake: vehicle.make,
+          }, { fitmentMinRows: thresholds.fitmentMinRows });
+          logAiRun(
+            srcPart,
+            { ...route, lane: 'escalation', model: escalationModel },
+            validation,
+            2,
+            fixes,
+          );
+          validated[i] = { ...guarded, index: items[i].index ?? i };
+        }
+      }
+    }
+  }
+
+  return validated;
+}
+
 async function enrichBatchAdaptive(batchParts, vinData, depth = 0) {
-  const enriched = await enrichBatch(batchParts, vinData);
+  const enriched = await enrichBatchWithRouting(batchParts, vinData);
   if (enriched) return enriched;
 
   // Split failed batches recursively to isolate problematic rows/payload size.
@@ -3741,14 +3921,24 @@ function generateReport() {
         : '0%',
     },
     openai: {
+      defaultModel: CONFIG.openai.model,
       totalCalls: REPORT.openaiCalls,
       totalTokens: REPORT.openaiTokensUsed,
       errors: REPORT.openaiErrors,
       specificsEnrichedCount: REPORT.specificsEnrichedCount,
-      estimatedCost: `$${(REPORT.openaiTokensUsed * 0.00000050).toFixed(4)}`, // MiniMax M3 input pricing (approx)
+      estimatedCost: `$${(REPORT.openaiTokensUsed * 0.00000050).toFixed(4)}`,
       enrichmentRate: REPORT.totalInput > 0
         ? `${((REPORT.totalProcessed / REPORT.totalInput) * 100).toFixed(1)}%`
         : '0%',
+    },
+    aiRouting: {
+      policyVersion: REPORT.routing.policyVersion,
+      runMode: RUN_MODE,
+      promptVersion: PROMPT_VERSION,
+      escalations: REPORT.routing.escalations,
+      guardFixes: REPORT.routing.guardFixes,
+      validationFails: REPORT.routing.validationFails,
+      runLogCount: REPORT.aiRunLogs.length,
     },
     validationFixes: REPORT.validationFixes.slice(0, 100),
     missingRequiredSpecifics: REPORT.missingSpecifics.slice(0, 100),
@@ -3874,6 +4064,26 @@ async function main() {
   const report = generateReport();
   const reportPath = path.join(CONFIG.outputDir, `enrichment-report-${new Date().toISOString().slice(0,10)}.json`);
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+  finalizeRoutingCostByLane();
+  const aiRunLogsPath = path.join(CONFIG.outputDir, 'ai-run-logs.json');
+  fs.writeFileSync(
+    aiRunLogsPath,
+    JSON.stringify(
+      {
+        logs: REPORT.aiRunLogs,
+        summary: {
+          total: REPORT.aiRunLogs.length,
+          attemptsByLane: REPORT.routing.attemptsByLane,
+          estimatedCostByLane: REPORT.routing.estimatedCostByLane,
+          policyVersion: REPORT.routing.policyVersion,
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  log.info(`  ✓ AI run logs: ${aiRunLogsPath} (${REPORT.aiRunLogs.length} entries)`);
 
   console.log('\n' + JSON.stringify(report.summary, null, 2));
   console.log(`\nFull report: ${reportPath}`);

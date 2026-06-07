@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PipelineJob } from '../entities/pipeline-job.entity.js';
 import { OpenAiService } from '../../common/openai/openai.service.js';
+import { ModelRouter } from '../../common/openai/model-router.js';
+import { AiRunLogService } from '../../common/openai/ai-run-log.service.js';
 import { ImageSearchService } from './image-search.service.js';
 import { ImageOptimizerService, type OptimizedImage } from './image-optimizer.service.js';
 
@@ -93,14 +95,20 @@ const imageHashSet = new Set<string>();
 export class ImageEnrichmentService {
   private readonly logger = new Logger(ImageEnrichmentService.name);
 
+  private readonly promptVersion: string;
+
   constructor(
     @InjectRepository(PipelineJob)
     private readonly jobRepo: Repository<PipelineJob>,
     private readonly openai: OpenAiService,
+    private readonly modelRouter: ModelRouter,
+    private readonly runLogService: AiRunLogService,
     private readonly config: ConfigService,
     private readonly imageSearch: ImageSearchService,
     private readonly imageOptimizer: ImageOptimizerService,
-  ) {}
+  ) {
+    this.promptVersion = this.config.get('AI_PROMPT_VERSION', 'enrichment-v1');
+  }
 
   /**
    * Enrich a batch of parts with images.
@@ -422,8 +430,9 @@ export class ImageEnrichmentService {
 
     // Source 2: AI-suggested URLs from known automotive databases
     try {
-      const response = await this.openai.chat({
-        systemPrompt: `You are an automotive parts image specialist. Given an auto part, suggest realistic image URLs from well-known OEM and aftermarket databases. Return a JSON array of objects with: url, source, estimatedWidth, estimatedHeight, format.
+      const response = await this.routedImageChat(
+        part,
+        `You are an automotive parts image specialist. Given an auto part, suggest realistic image URLs from well-known OEM and aftermarket databases. Return a JSON array of objects with: url, source, estimatedWidth, estimatedHeight, format.
 
 Rules:
 - Only suggest URLs from real, reputable automotive parts databases
@@ -431,16 +440,16 @@ Rules:
 - Avoid watermarked stock photos
 - Include manufacturer catalog images when possible
 - Format: return ONLY valid JSON array, no markdown`,
-        userPrompt: `Find product images for this auto part:
+        `Find product images for this auto part:
 Part Number: ${part.partNumber}
 Title: ${part.title}
 Brand: ${part.brand || 'Unknown'}
 Search queries: ${queries.join(' | ')}
 
 Return up to 6 candidate image URLs as JSON array.`,
-        maxTokens: 800,
-        temperature: 0.3,
-      });
+        'image_suggestion',
+        { maxTokens: 800, temperature: 0.3 },
+      );
 
       try {
         const text = (response.content as string).replace(/```json?\n?/g, '').replace(/```/g, '').trim();
@@ -538,8 +547,9 @@ Return up to 6 candidate image URLs as JSON array.`,
     if (candidates.length === 0) return [];
 
     try {
-      const response = await this.openai.chat({
-        systemPrompt: `You are an image quality assessor for automotive parts listings. Score each image candidate on relevance (how well it matches the part) and quality (resolution, clarity, professional presentation). Return JSON array with: index, relevanceScore (0-1), qualityScore (0-1), hasWatermark (boolean), rejected (boolean), rejectReason.
+      const response = await this.routedImageChat(
+        part,
+        `You are an image quality assessor for automotive parts listings. Score each image candidate on relevance (how well it matches the part) and quality (resolution, clarity, professional presentation). Return JSON array with: index, relevanceScore (0-1), qualityScore (0-1), hasWatermark (boolean), rejected (boolean), rejectReason.
 
 Scoring criteria:
 - relevanceScore 0.9+: Exact part match with correct brand/number
@@ -551,16 +561,16 @@ Scoring criteria:
 - qualityScore <0.7: Low quality or issues present
 
 Return ONLY valid JSON array.`,
-        userPrompt: `Validate these image candidates for:
+        `Validate these image candidates for:
 Part: ${part.partNumber} - ${part.title} (${part.brand || 'Unknown'})
 
 Candidates:
 ${candidates.map((c, i) => `[${i}] ${c.url} (source: ${c.source}, ${c.width}x${c.height})`).join('\n')}
 
 Score each candidate.`,
-        maxTokens: 600,
-        temperature: 0.1,
-      });
+        'image_validation',
+        { maxTokens: 600, temperature: 0.1 },
+      );
 
       progress.openaiTokensUsed += response.usage?.totalTokens ?? 0;
 
@@ -734,5 +744,44 @@ Score each candidate.`,
       }
       return { url, accessible: false, issues };
     }
+  }
+
+  private async routedImageChat(
+    part: { partNumber: string; title: string; brand?: string; mpn?: string },
+    systemPrompt: string,
+    userPrompt: string,
+    task: 'image_suggestion' | 'image_validation',
+    options: { maxTokens: number; temperature: number },
+  ) {
+    const route = this.modelRouter.selectTextRoute({
+      partNumber: part.partNumber ?? part.mpn,
+      partName: part.title,
+      partType: task,
+    });
+    const response = await this.openai.chat({
+      systemPrompt,
+      userPrompt,
+      model: route.model,
+      costLane: route.lane,
+      maxTokens: options.maxTokens,
+      temperature: options.temperature,
+    });
+    await this.runLogService.logRun({
+      sku: null,
+      partNumber: part.partNumber ?? part.mpn ?? null,
+      partType: task,
+      lane: route.lane,
+      model: route.model,
+      attempt: 1,
+      promptVersion: this.promptVersion,
+      routingPolicyVersion: route.policyVersion,
+      inputTokens: response.usage.promptTokens,
+      outputTokens: response.usage.completionTokens,
+      costUsd: response.estimatedCostUsd,
+      latencyMs: response.latencyMs,
+      passedGate: true,
+      escalated: false,
+    });
+    return response;
   }
 }

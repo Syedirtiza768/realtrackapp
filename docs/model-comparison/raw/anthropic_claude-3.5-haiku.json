@@ -1,0 +1,16 @@
+{
+  "model": "anthropic/claude-3.5-haiku",
+  "ok": false,
+  "attempts": 1,
+  "latencyMs": 39387,
+  "promptTokens": 3436,
+  "completionTokens": 3140,
+  "totalTokens": 6576,
+  "costUsd": 0.0153088,
+  "inputPerM": 0.7999999999999999,
+  "outputPerM": 4,
+  "rawLength": 8146,
+  "schemaValid": false,
+  "parseError": "parse-failed",
+  "rawSample": "I'll analyze each part comprehensively, focusing on OEM interchange, cross-platform compatibility, and detailed fitment information.\n\n1. Complete Engine (Part Number: 272.970)\n{\n  \"items\": [{\n    \"index\": 0,\n    \"title\": \"2005-2011 Mercedes-Benz C-Class W204 3.5L V6 Complete Engine M272 OEM\",\n    \"brand\": \"Mercedes-Benz\",\n    \"type\": \"Complete Engine\",\n    \"mpn\": \"272.970\",\n    \"placement\": \"Engine\",\n    \"compatibility\": [\n      {\"year\": \"2005\", \"make\": \"Mercedes-Benz\", \"model\": \"C-Class\", \"chas"
+}

@@ -11,6 +11,7 @@ import { ListingRecord } from '../listings/listing-record.entity.js';
 import { EnrichmentPipeline } from '../common/openai/pipelines/enrichment.pipeline.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import { OpenAiService } from '../common/openai/openai.service.js';
+import { AiRunLogService } from '../common/openai/ai-run-log.service.js';
 
 /**
  * AI Enhancement Service — generates and manages AI-powered listing improvements.
@@ -28,6 +29,7 @@ export class AiEnhancementService {
     private readonly enrichmentPipeline: EnrichmentPipeline,
     private readonly listingGenPipeline: ListingGenerationPipeline,
     private readonly openAiService: OpenAiService,
+    private readonly aiRunLogService: AiRunLogService,
   ) {}
 
   // ─── Query ───
@@ -145,7 +147,7 @@ export class AiEnhancementService {
       enh.diff = result.diff ?? null;
       enh.confidenceScore = result.confidenceScore;
       enh.provider = result.provider ?? 'openai';
-      enh.model = result.model ?? 'minimax/minimax-m3';
+      enh.model = result.model ?? 'openai/gpt-4.1-mini';
       enh.tokensUsed = result.tokensUsed;
       enh.latencyMs = Date.now() - startMs;
       enh.costUsd = result.costUsd ?? 0;
@@ -174,6 +176,7 @@ export class AiEnhancementService {
     enh.approvedAt = new Date();
 
     const saved = await this.enhancementRepo.save(enh);
+    await this.aiRunLogService.backfillApproval(enhancementId, true);
     this.logger.log(`Approved enhancement ${enhancementId}`);
 
     return saved;
@@ -210,7 +213,9 @@ export class AiEnhancementService {
     enh.status = 'rejected';
     enh.rejectionReason = reason;
 
-    return this.enhancementRepo.save(enh);
+    const saved = await this.enhancementRepo.save(enh);
+    await this.aiRunLogService.backfillApproval(enhancementId, false, reason);
+    return saved;
   }
 
   // ─── Summary stats ───
@@ -270,9 +275,9 @@ export class AiEnhancementService {
       case 'description_generation':
         return this.generateListingContent(enh.enhancementType, original, input);
       case 'item_specifics':
-        return this.generateItemSpecificsAI(input);
+        return this.generateItemSpecificsAI(input, enh.id);
       case 'fitment_detection':
-        return this.generateFitmentDetectionAI(input);
+        return this.generateFitmentDetectionAI(input, enh.id);
       case 'image_enhancement':
         return this.generateImageEnhancement(input);
       default:
@@ -317,7 +322,7 @@ export class AiEnhancementService {
         confidenceScore: 0.88,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.rawResponse?.model ?? 'minimax/minimax-m3',
+        model: result.rawResponse?.model ?? 'openai/gpt-4.1-mini',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
@@ -329,9 +334,17 @@ export class AiEnhancementService {
   /**
    * Use EnrichmentPipeline for item specifics.
    */
-  private async generateItemSpecificsAI(input: Record<string, unknown>) {
+  private async generateItemSpecificsAI(
+    input: Record<string, unknown>,
+    enhancementId: string,
+  ) {
     try {
-      const result = await this.enrichmentPipeline.enrich(input);
+      const result = await this.enrichmentPipeline.enrich(input, {
+        enhancementId,
+        productId: this.str(input.productId ?? input.catalogProductId),
+        importId: this.str(input.importId),
+        marketplace: this.str(input.marketplace) ?? 'US',
+      });
 
       const specifics: Record<string, string> = {
         Brand: result.brand ?? String(input['brand'] ?? 'Unbranded'),
@@ -349,7 +362,7 @@ export class AiEnhancementService {
         confidenceScore: result.confidence?.overall ?? 0.85,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.rawResponse?.model ?? 'minimax/minimax-m3',
+        model: result.model ?? result.rawResponse?.model ?? 'openai/gpt-4.1-mini',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
@@ -361,12 +374,23 @@ export class AiEnhancementService {
   /**
    * Use EnrichmentPipeline for fitment detection.
    */
-  private async generateFitmentDetectionAI(input: Record<string, unknown>) {
+  private async generateFitmentDetectionAI(
+    input: Record<string, unknown>,
+    enhancementId: string,
+  ) {
     try {
-      const result = await this.enrichmentPipeline.enrich({
-        ...input,
-        extractFitment: true,
-      });
+      const result = await this.enrichmentPipeline.enrich(
+        {
+          ...input,
+          extractFitment: true,
+        },
+        {
+          enhancementId,
+          productId: this.str(input.productId ?? input.catalogProductId),
+          importId: this.str(input.importId),
+          marketplace: this.str(input.marketplace) ?? 'US',
+        },
+      );
 
       const fitments = result.itemSpecifics?.fitments
         ? JSON.parse(String(result.itemSpecifics.fitments))
@@ -379,7 +403,7 @@ export class AiEnhancementService {
         confidenceScore: result.confidence?.overall ?? 0.75,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.rawResponse?.model ?? 'minimax/minimax-m3',
+        model: result.model ?? result.rawResponse?.model ?? 'openai/gpt-4.1-mini',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
@@ -553,5 +577,9 @@ export class AiEnhancementService {
         break;
       // fitment_detection and image_enhancement don't directly modify listing fields
     }
+  }
+
+  private str(val: unknown): string | undefined {
+    return typeof val === 'string' && val.trim().length > 0 ? val.trim() : undefined;
   }
 }

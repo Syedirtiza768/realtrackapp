@@ -99,6 +99,22 @@ services:
       OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-minimax/minimax-m3}
       OPENAI_LISTING_MODEL: ${OPENAI_LISTING_MODEL:-minimax/minimax-m3}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_MODEL_DEFAULT: ${OPENAI_MODEL_DEFAULT:-openai/gpt-4.1-mini}
+      OPENAI_MODEL_FLAGSHIP: ${OPENAI_MODEL_FLAGSHIP:-google/gemini-2.5-flash}
+      OPENAI_MODEL_BULK: ${OPENAI_MODEL_BULK:-deepseek/deepseek-chat-v3-0324}
+      OPENAI_MODEL_TEXT: ${OPENAI_MODEL_TEXT:-openai/gpt-4o-mini}
+      OPENAI_MODEL_ESCALATION: ${OPENAI_MODEL_ESCALATION:-google/gemini-2.5-flash}
+      OPENAI_MODEL_FLAGSHIP_MIN_PRICE: ${OPENAI_MODEL_FLAGSHIP_MIN_PRICE:-200}
+      AI_FITMENT_MIN_ROWS: ${AI_FITMENT_MIN_ROWS:-5}
+      AI_AUTO_APPROVE_MIN_SCORE: ${AI_AUTO_APPROVE_MIN_SCORE:-85}
+      AI_ROUTING_POLICY_PATH: ${AI_ROUTING_POLICY_PATH:-/app/config/ai-routing-policy.json}
+      AI_OPTIMIZER_ENABLED: ${AI_OPTIMIZER_ENABLED:-false}
+      AI_OPTIMIZER_CANARY_PERCENT: ${AI_OPTIMIZER_CANARY_PERCENT:-10}
+      AI_LEARNING_MIN_SAMPLES: ${AI_LEARNING_MIN_SAMPLES:-20}
+      AI_PROMPT_VERSION: ${AI_PROMPT_VERSION:-enrichment-v1}
+      AI_RUN_MODE: ${AI_RUN_MODE:-default}
+      AI_TAXONOMY_VALIDATION_ENABLED: ${AI_TAXONOMY_VALIDATION_ENABLED:-true}
+      RBAC_SYNC_PERMISSIONS: ${RBAC_SYNC_PERMISSIONS:-true}
       # eBay
       EBAY_CLIENT_ID: ${EBAY_CLIENT_ID:-}
       EBAY_CLIENT_SECRET: ${EBAY_CLIENT_SECRET:-}
@@ -125,6 +141,8 @@ services:
       - uploads:/app/uploads
       - ./scripts:/app/scripts:ro
       - ./output:/app/output
+      - ./config:/app/config
+      - ./docs:/app/docs:ro
       # Optional: add your own env file (must be a real file, not a directory):
       #   - ./.env:/app/.env:ro
       - ./eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:/app/eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:ro

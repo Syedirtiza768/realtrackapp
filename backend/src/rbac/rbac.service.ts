@@ -31,6 +31,7 @@ export type AuthProfile = {
 @Injectable()
 export class RbacService implements OnModuleInit {
   private readonly logger = new Logger(RbacService.name);
+  private syncInFlight: Promise<void> | null = null;
 
   constructor(
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>,
@@ -53,6 +54,16 @@ export class RbacService implements OnModuleInit {
   }
 
   async syncFromRegistry(): Promise<void> {
+    if (this.syncInFlight) {
+      return this.syncInFlight;
+    }
+    this.syncInFlight = this.doSyncFromRegistry().finally(() => {
+      this.syncInFlight = null;
+    });
+    return this.syncInFlight;
+  }
+
+  private async doSyncFromRegistry(): Promise<void> {
     for (const def of PERMISSION_REGISTRY) {
       let perm = await this.permissionRepo.findOne({ where: { key: def.key } });
       if (!perm) {
@@ -97,13 +108,24 @@ export class RbacService implements OnModuleInit {
       const existingIds = new Set(existing.map((e) => e.permissionId));
 
       for (const perm of permissions) {
-        if (!existingIds.has(perm.id)) {
+        if (existingIds.has(perm.id)) continue;
+        const exists = await this.rolePermissionRepo.findOne({
+          where: { roleId: role.id, permissionId: perm.id },
+        });
+        if (exists) continue;
+        try {
           await this.rolePermissionRepo.save(
             this.rolePermissionRepo.create({
               roleId: role.id,
               permissionId: perm.id,
             }),
           );
+        } catch (err: unknown) {
+          const code =
+            err && typeof err === 'object' && 'code' in err
+              ? String((err as { code: unknown }).code)
+              : '';
+          if (code !== '23505') throw err;
         }
       }
 

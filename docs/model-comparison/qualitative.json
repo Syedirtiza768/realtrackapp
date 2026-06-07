@@ -1,0 +1,1107 @@
+{
+  "openai_gpt-4.1-mini": [
+    {
+      "idx": 0,
+      "title": "2005-2011 Mercedes-Benz C-Class W204 3.5L V6 M272 Engine 272.970 OEM",
+      "titleLen": 68,
+      "brand": "Mercedes-Benz",
+      "type": "Engine",
+      "mpn": "272.970",
+      "oem": "272.970",
+      "placement": "Engine Bay",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 24,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "E-Class",
+        "CLK-Class",
+        "SLK-Class"
+      ],
+      "yearsSpan": "2005-2011",
+      "techNotes": "Requires professional installation and ECU programming to match VIN and vehicle configuration. Compatible only with gasoline RWD models equipped with M272 3.5L V6 engine.",
+      "descLen": 1207,
+      "descSnippet": "<h3>Mercedes-Benz M272 3.5L V6 Engine 272.970</h3><p>This is a complete, tested, and working M272 3.5L V6 engine, part number 272.970, removed from a 2008 Mercedes-Benz C350 W204 Sedan (AMG/Sport trim, RWD).</p><h4>Detai"
+    },
+    {
+      "idx": 1,
+      "title": "2008-2014 Mercedes-Benz C-Class W204 Front Right Door Window Regulator A2047200679 OEM",
+      "titleLen": 86,
+      "brand": "Mercedes-Benz",
+      "type": "Door Window Regulator",
+      "mpn": "A 204 720 06 79",
+      "oem": "A 204 720 06 79",
+      "placement": "Front Right",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Wagon"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "No coding required. Fits both RWD and 4MATIC models. Verify door style (sedan vs wagon) before installation.",
+      "descLen": 765,
+      "descSnippet": "<h3>Mercedes-Benz Front Right Door Window Regulator A2047200679</h3><p>Used OEM front right door window regulator compatible with Mercedes-Benz C-Class W204 models.</p><h4>Details</h4><ul><li>Part Number: A 204 720 06 79"
+    },
+    {
+      "idx": 2,
+      "title": "2008-2014 Mercedes-Benz C-Class W204 Front Left Door Window Glass A2047250110 OEM",
+      "titleLen": 81,
+      "brand": "Mercedes-Benz",
+      "type": "Door Window Glass",
+      "mpn": "A 204 725 01 10",
+      "oem": "A 204 725 01 10",
+      "placement": "Front Left",
+      "material": "Glass",
+      "color": "Clear",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Wagon"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "No special installation requirements. Verify correct door and window style before installation.",
+      "descLen": 734,
+      "descSnippet": "<h3>Mercedes-Benz Front Left Door Window Glass A2047250110</h3><p>Used OEM front left door window glass for Mercedes-Benz C-Class W204 models.</p><h4>Details</h4><ul><li>Part Number: A 204 725 01 10</li><li>Placement: Fr"
+    },
+    {
+      "idx": 3,
+      "title": "2008-2014 Mercedes-Benz C-Class W204 Front Right Door Panel A2047209562 OEM",
+      "titleLen": 75,
+      "brand": "Mercedes-Benz",
+      "type": "Door Panel",
+      "mpn": "A 204 720 95 62 8N28",
+      "oem": "A 204 720 95 62 8N28",
+      "placement": "Front Right",
+      "material": "Plastic/Trim",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Wagon"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Trim and interior color matching recommended. No coding required.",
+      "descLen": 707,
+      "descSnippet": "<h3>Mercedes-Benz Front Right Door Panel A2047209562</h3><p>Used OEM front right door panel for Mercedes-Benz C-Class W204 Sedan and Wagon.</p><h4>Details</h4><ul><li>Part Number: A 204 720 95 62 8N28</li><li>Placement: "
+    },
+    {
+      "idx": 4,
+      "title": "2008-2014 Mercedes-Benz C-Class W204 Front Right Door Panel Tweeter Speaker A2047200248 OEM",
+      "titleLen": 91,
+      "brand": "Mercedes-Benz",
+      "type": "Tweeter Speaker",
+      "mpn": "A 204 720 02 48 9051",
+      "oem": "A 204 720 02 48 9051",
+      "placement": "Front Right Door Panel",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Wagon"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Only compatible with factory premium or Harman Kardon sound systems. No coding required.",
+      "descLen": 810,
+      "descSnippet": "<h3>Mercedes-Benz Front Right Door Panel Tweeter Speaker A2047200248</h3><p>Used OEM tweeter speaker for front right door panel of Mercedes-Benz C-Class W204.</p><h4>Details</h4><ul><li>Part Number: A 204 720 02 48 9051<"
+    },
+    {
+      "idx": 5,
+      "title": "2008-2014 Mercedes-Benz C-Class W204 Rear Right Door Upper Hinge A2047300237 OEM",
+      "titleLen": 80,
+      "brand": "Mercedes-Benz",
+      "type": "Door Hinge",
+      "mpn": "A 204 730 02 37",
+      "oem": "A 204 730 02 37",
+      "placement": "Rear Right Upper",
+      "material": "Metal",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Wagon"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "No special installation or coding requirements. Verify door alignment after installation.",
+      "descLen": 747,
+      "descSnippet": "<h3>Mercedes-Benz Rear Right Door Upper Hinge A2047300237</h3><p>Used OEM rear right door upper hinge for Mercedes-Benz C-Class W204 Sedan and Wagon.</p><h4>Details</h4><ul><li>Part Number: A 204 730 02 37</li><li>Placem"
+    },
+    {
+      "idx": 6,
+      "title": "2008-2014 Mercedes-Benz C-Class W204 Rear Left Door Lock Latch Actuator A2047300835 OEM",
+      "titleLen": 87,
+      "brand": "Mercedes-Benz",
+      "type": "Door Lock Latch Actuator",
+      "mpn": "A 204 730 08 35",
+      "oem": "A 204 730 08 35",
+      "placement": "Rear Left",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Wagon"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "No coding required. Verify door lock system compatibility before installation.",
+      "descLen": 737,
+      "descSnippet": "<h3>Mercedes-Benz Rear Left Door Lock Latch Actuator A2047300835</h3><p>Used OEM rear left door lock latch actuator for Mercedes-Benz C-Class W204 Sedan and Wagon.</p><h4>Details</h4><ul><li>Part Number: A 204 730 08 35<"
+    },
+    {
+      "idx": 7,
+      "title": "2008-2014 Mercedes-Benz C-Class W204 Rear Left Driver Side Door Shell A2047302100 OEM",
+      "titleLen": 85,
+      "brand": "Mercedes-Benz",
+      "type": "Door Shell",
+      "mpn": "A 204 730 21 00",
+      "oem": "A 204 730 21 00",
+      "placement": "Rear Left",
+      "material": "Metal",
+      "color": "Maroon",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Wagon"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Door shell only, no hardware included. Requires professional installation and paint matching. No coding required.",
+      "descLen": 812,
+      "descSnippet": "<h3>Mercedes-Benz Rear Left Driver Side Door Shell A2047302100</h3><p>Used OEM rear left driver side door shell in maroon color for Mercedes-Benz C-Class W204 Sedan and Wagon.</p><h4>Details</h4><ul><li>Part Number: A 20"
+    }
+  ],
+  "google_gemini-2.5-flash": [
+    {
+      "idx": 0,
+      "title": "2006-2011 Mercedes C-Class CLK E-Class SLK M272 3.5L V6 Engine 272.970 OEM",
+      "titleLen": 74,
+      "brand": "Mercedes-Benz",
+      "type": "Engine Assembly",
+      "mpn": "272.970",
+      "oem": "272.970",
+      "placement": "Front",
+      "material": "Aluminum",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 32,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C280",
+        "C350",
+        "C300",
+        "CLK350",
+        "E350",
+        "SLK280",
+        "SLK300",
+        "SLK350"
+      ],
+      "yearsSpan": "2006-2011",
+      "techNotes": "Professional installation is highly recommended. ECU programming/coding may be necessary to match the engine to your vehicle's immobilizer system and ensure optimal performance.",
+      "descLen": 2866,
+      "descSnippet": "<h3>2006-2011 Mercedes-Benz M272 3.5L V6 Engine (272.970)</h3><p>This is a complete, tested M272 3.5L V6 engine, part number 272.970, removed from a running 2008 Mercedes-Benz C350 (W204 chassis). This engine is known fo"
+    },
+    {
+      "idx": 1,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Window Regulator A2047200679 OEM",
+      "titleLen": 76,
+      "brand": "Mercedes-Benz",
+      "type": "Window Regulator",
+      "mpn": "A 204 720 06 79",
+      "oem": "A 204 720 06 79",
+      "placement": "Front Right",
+      "material": "Metal, Plastic",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 30,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C230",
+        "C250",
+        "C300",
+        "C350",
+        "C63 AMG"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "This part is for the front right (passenger side) door only. No special coding or programming is typically required for this mechanical component, but professional installation is recommended.",
+      "descLen": 2147,
+      "descSnippet": "<h3>2008-2014 Mercedes-Benz C-Class W204 Front Right Side Door Window Regulator</h3><p>This is a used OEM front right (passenger side) door window regulator, part number A 204 720 06 79, removed from a 2008 Mercedes-Benz"
+    },
+    {
+      "idx": 2,
+      "title": "2008-2014 Mercedes C-Class W204 Front Left Door Window Glass A2047250110 OEM",
+      "titleLen": 76,
+      "brand": "Mercedes-Benz",
+      "type": "Door Window Glass",
+      "mpn": "A 204 725 01 10",
+      "oem": "A 204 725 01 10",
+      "placement": "Front Left",
+      "material": "Glass",
+      "color": "Clear",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 30,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C230",
+        "C250",
+        "C300",
+        "C350",
+        "C63 AMG"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "This part is for the front left (driver side) door only. Professional installation is recommended to ensure proper sealing and operation.",
+      "descLen": 2074,
+      "descSnippet": "<h3>2008-2014 Mercedes-Benz C-Class W204 Front Left Door Window Glass</h3><p>This is a used OEM front left (driver side) door window glass, part number A 204 725 01 10, removed from a 2008 Mercedes-Benz C350 (W204 chassi"
+    },
+    {
+      "idx": 3,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Door Panel A2047209562 OEM",
+      "titleLen": 70,
+      "brand": "Mercedes-Benz",
+      "type": "Door Panel",
+      "mpn": "A 204 720 95 62 8N28",
+      "oem": "A 204 720 95 62 8N28",
+      "placement": "Front Right",
+      "material": "Plastic, Vinyl",
+      "color": "Black",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 30,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C230",
+        "C250",
+        "C300",
+        "C350",
+        "C63 AMG"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "This part is for the front right (passenger side) door only. Compatibility is dependent on matching the interior trim code (8N28). Please verify this code against your vehicle's specifications before purchase. This panel may or may not include switches, handles, or other components; please refer to images for exact contents.",
+      "descLen": 2403,
+      "descSnippet": "<h3>2008-2014 Mercedes-Benz C-Class W204 Front Right Side Door Panel</h3><p>This is a used OEM front right (passenger side) door panel, part number A 204 720 95 62 8N28, removed from a 2008 Mercedes-Benz C350 (W204 chass"
+    },
+    {
+      "idx": 4,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Door Tweeter Speaker A2047200248 OEM",
+      "titleLen": 80,
+      "brand": "Mercedes-Benz",
+      "type": "Tweeter Speaker",
+      "mpn": "A 204 720 02 48 9051",
+      "oem": "A 204 720 02 48 9051",
+      "placement": "Front Right",
+      "material": "Plastic, Metal",
+      "color": "Black",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 30,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C230",
+        "C250",
+        "C300",
+        "C350",
+        "C63 AMG"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "This part is for the front right (passenger side) door panel only. Ensure your vehicle's sound system configuration is compatible with this specific tweeter. No special coding is typically required for speaker replacement.",
+      "descLen": 2251,
+      "descSnippet": "<h3>2008-2014 Mercedes-Benz C-Class W204 Front Right Side Door Panel Tweeter Speaker</h3><p>This is a used OEM front right (passenger side) door panel tweeter speaker, part number A 204 720 02 48 9051, removed from a 200"
+    },
+    {
+      "idx": 5,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Right Door Upper Hinge A2047300237 OEM",
+      "titleLen": 75,
+      "brand": "Mercedes-Benz",
+      "type": "Door Hinge",
+      "mpn": "A 204 730 02 37",
+      "oem": "A 204 730 02 37",
+      "placement": "Rear Right, Upper",
+      "material": "Steel",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 30,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C230",
+        "C250",
+        "C300",
+        "C350",
+        "C63 AMG"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "This part is for the rear right (passenger side) door, upper position only. Professional installation is recommended to ensure proper door alignment and function.",
+      "descLen": 2138,
+      "descSnippet": "<h3>2008-2014 Mercedes-Benz C-Class W204 Rear Right Door Upper Hinge</h3><p>This is a used OEM rear right (passenger side) door upper hinge, part number A 204 730 02 37, removed from a 2008 Mercedes-Benz C350 (W204 chass"
+    },
+    {
+      "idx": 6,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Left Door Lock Actuator A2047300835 OEM",
+      "titleLen": 76,
+      "brand": "Mercedes-Benz",
+      "type": "Door Lock Actuator",
+      "mpn": "A 204 730 08 35",
+      "oem": "A 204 730 08 35",
+      "placement": "Rear Left",
+      "material": "Plastic, Metal",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 30,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C230",
+        "C250",
+        "C300",
+        "C350",
+        "C63 AMG"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "This part is for the rear left (driver side) door only. While often plug-and-play, some vehicles may require basic diagnostic tool reset or adaptation after installation to clear fault codes or ensure proper synchronization with the central locking system. Professional installation is recommended.",
+      "descLen": 2291,
+      "descSnippet": "<h3>2008-2014 Mercedes-Benz C-Class W204 Rear Left Door Lock Latch Actuator</h3><p>This is a used OEM rear left (driver side) door lock latch actuator, part number A 204 730 08 35, removed from a 2008 Mercedes-Benz C350 "
+    },
+    {
+      "idx": 7,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Left Door Shell Maroon A2047302100 OEM",
+      "titleLen": 75,
+      "brand": "Mercedes-Benz",
+      "type": "Door Shell",
+      "mpn": "A 204 730 21 00",
+      "oem": "A 204 730 21 00",
+      "placement": "Rear Left",
+      "material": "Steel",
+      "color": "Maroon",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 30,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C230",
+        "C250",
+        "C300",
+        "C350",
+        "C63 AMG"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "This part is for the rear left (driver side) door only. This is a bare door shell and does not include internal components such as window regulators, glass, door panels, wiring, or trim. Professional body shop installation and paint matching are highly recommended.",
+      "descLen": 2423,
+      "descSnippet": "<h3>2008-2014 Mercedes-Benz C-Class W204 Rear Left Driver Side Door Shell - Maroon</h3><p>This is a used OEM rear left (driver side) door shell, part number A 204 730 21 00, in maroon color, removed from a 2008 Mercedes-"
+    }
+  ],
+  "deepseek_deepseek-chat-v3-0324": [
+    {
+      "idx": 0,
+      "title": "2006-2011 Mercedes M272 3.5L V6 Engine 272.970 Tested OEM C-Class E-Class",
+      "titleLen": 73,
+      "brand": "Mercedes-Benz",
+      "type": "Engine Assembly",
+      "mpn": "272.970",
+      "oem": "272.970",
+      "placement": "",
+      "material": "Aluminum",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 24,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "E-Class",
+        "CLK-Class",
+        "SLK-Class",
+        "R-Class",
+        "ML-Class"
+      ],
+      "yearsSpan": "2006-2011",
+      "techNotes": "Requires ECU from donor vehicle or reprogramming. Verify transmission compatibility (722.6 or 722.9).",
+      "descLen": 876,
+      "descSnippet": "<h3>Mercedes-Benz M272 3.5L V6 Engine Assembly</h3><p>Complete tested engine removed from a 2008 C350. Includes all internal components, sensors, and accessories as shown. Engine code M272.970.</p><h4>Details</h4><ul><li"
+    },
+    {
+      "idx": 1,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Window Regulator A2047200679 OEM",
+      "titleLen": 76,
+      "brand": "Mercedes-Benz",
+      "type": "Window Regulator",
+      "mpn": "A 204 720 06 79",
+      "oem": "A 204 720 06 79",
+      "placement": "Front Right",
+      "material": "Steel/Plastic",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 21,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "May require window motor initialization procedure after installation.",
+      "descLen": 729,
+      "descSnippet": "<h3>Mercedes-Benz Front Right Window Regulator</h3><p>OEM window regulator removed from a 2008 C350. Part number A2047200679. Includes motor and all mounting hardware.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 72"
+    },
+    {
+      "idx": 2,
+      "title": "2008-2014 Mercedes C-Class W204 Front Left Window Glass A2047250110 OEM",
+      "titleLen": 71,
+      "brand": "Mercedes-Benz",
+      "type": "Window Glass",
+      "mpn": "A 204 725 01 10",
+      "oem": "A 204 725 01 10",
+      "placement": "Front Left",
+      "material": "Glass",
+      "color": "Tinted",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 21,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Verify glass run channel condition during installation.",
+      "descLen": 739,
+      "descSnippet": "<h3>Mercedes-Benz Front Left Door Window Glass</h3><p>OEM window glass removed from a 2008 C350. Part number A2047250110. Tinted glass in good condition with no cracks or deep scratches.</p><h4>Details</h4><ul><li>OEM Pa"
+    },
+    {
+      "idx": 3,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Door Panel A20472095628N28 OEM",
+      "titleLen": 74,
+      "brand": "Mercedes-Benz",
+      "type": "Door Panel",
+      "mpn": "A 204 720 95 62 8N28",
+      "oem": "A 204 720 95 62 8N28",
+      "placement": "Front Right",
+      "material": "Plastic/Leatherette",
+      "color": "Black",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 21,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Verify interior color match (8N28 = Black). Sport/AMG trim only.",
+      "descLen": 853,
+      "descSnippet": "<h3>Mercedes-Benz Front Right Door Panel</h3><p>OEM door panel removed from a 2008 C350 AMG/Sport. Part number A20472095628N28. Includes all mounting clips and hardware as shown.</p><h4>Details</h4><ul><li>OEM Part Numbe"
+    },
+    {
+      "idx": 4,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Tweeter Speaker A20472002489051",
+      "titleLen": 75,
+      "brand": "Mercedes-Benz",
+      "type": "Tweeter Speaker",
+      "mpn": "A 204 720 02 48 9051",
+      "oem": "A 204 720 02 48 9051",
+      "placement": "Front Right",
+      "material": "Plastic/Metal",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 21,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Standard audio system only. Not compatible with premium sound packages.",
+      "descLen": 752,
+      "descSnippet": "<h3>Mercedes-Benz Front Right Tweeter Speaker</h3><p>OEM tweeter speaker removed from a 2008 C350 door panel. Part number A20472002489051. Includes mounting bracket.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 720 "
+    },
+    {
+      "idx": 5,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Right Door Hinge A2047300237 OEM",
+      "titleLen": 69,
+      "brand": "Mercedes-Benz",
+      "type": "Door Hinge",
+      "mpn": "A 204 730 02 37",
+      "oem": "A 204 730 02 37",
+      "placement": "Rear Right Upper",
+      "material": "Steel",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Requires door realignment after installation.",
+      "descLen": 645,
+      "descSnippet": "<h3>Mercedes-Benz Rear Right Door Upper Hinge</h3><p>OEM door hinge removed from a 2008 C350. Part number A2047300237. Includes all mounting hardware.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 730 02 37</li><li>P"
+    },
+    {
+      "idx": 6,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Left Door Lock Actuator A2047300835 OEM",
+      "titleLen": 76,
+      "brand": "Mercedes-Benz",
+      "type": "Door Lock Actuator",
+      "mpn": "A 204 730 08 35",
+      "oem": "A 204 730 08 35",
+      "placement": "Rear Left",
+      "material": "Plastic/Metal",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "May require central locking system reset after installation.",
+      "descLen": 662,
+      "descSnippet": "<h3>Mercedes-Benz Rear Left Door Lock Actuator</h3><p>OEM door lock actuator removed from a 2008 C350. Part number A2047300835. Includes all mounting hardware.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 730 08 35<"
+    },
+    {
+      "idx": 7,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Left Door Shell A2047302100 Maroon OEM",
+      "titleLen": 75,
+      "brand": "Mercedes-Benz",
+      "type": "Door Shell",
+      "mpn": "A 204 730 21 00",
+      "oem": "A 204 730 21 00",
+      "placement": "Rear Left",
+      "material": "Steel",
+      "color": "Maroon",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 14,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2008-2014",
+      "techNotes": "Door shell only - components not included. Requires transfer of all hardware from original door. Verify color match before purchase.",
+      "descLen": 752,
+      "descSnippet": "<h3>Mercedes-Benz Rear Left Door Shell</h3><p>OEM door shell removed from a 2008 C350. Part number A2047302100. Color code 8N28 (Maroon). Includes inner structure but no components.</p><h4>Details</h4><ul><li>OEM Part Nu"
+    }
+  ],
+  "minimax_minimax-m3": [
+    {
+      "idx": 0,
+      "title": "2007-2011 Mercedes C-Class W204 C350 M272 3.5L V6 Engine 272.970 OEM",
+      "titleLen": 68,
+      "brand": "Mercedes-Benz",
+      "type": "Complete Engine Long Block",
+      "mpn": "272.970",
+      "oem": "272.970",
+      "placement": "Front",
+      "material": "Aluminum/Steel",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 5,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2007-2011",
+      "techNotes": "M272.970 is the specific engine code for the W204 C350 RWD (2007-2011). M272 family variants were used in W211 E350, W212 E350, W221 S350, R171 SLK350, R230 SL350, W164 ML350, W251 R350, X164 GL450 — but each has a different suffix code. Buyer must verify exact engine code matches. Professional installation recommended. ECU may need re-coding.",
+      "descLen": 1509,
+      "descSnippet": "<h3>2007-2011 Mercedes-Benz W204 C350 M272 3.5L V6 Complete Engine</h3><p>Complete running M272 3.5L V6 engine removed from a 2008 Mercedes-Benz C350 (W204 chassis). Engine was tested prior to removal and is in good work"
+    },
+    {
+      "idx": 1,
+      "title": "2007-2014 Mercedes C-Class W204 Front Right Window Regulator A2047200679",
+      "titleLen": 72,
+      "brand": "Mercedes-Benz",
+      "type": "Window Regulator",
+      "mpn": "A 204 720 06 79",
+      "oem": "A 204 720 06 79",
+      "placement": "Front Right",
+      "material": "Steel/Plastic",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 13,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Coupe"
+      ],
+      "yearsSpan": "2007-2015",
+      "techNotes": "Direct bolt-on replacement, no coding required. Verify position (Front Right = passenger side in US market). Fits sedan, coupe (C204), and wagon (S204) variants. Window regulator design unchanged through LCI facelift.",
+      "descLen": 1020,
+      "descSnippet": "<h3>2007-2014 Mercedes-Benz W204 Front Right Door Window Regulator</h3><p>Genuine OEM power window regulator for the front right (passenger side) door. Removed from a 2008 C350 Sport. Tested and confirmed working. Includ"
+    },
+    {
+      "idx": 2,
+      "title": "2007-2014 Mercedes C-Class W204 Front Left Door Window Glass A2047250110",
+      "titleLen": 72,
+      "brand": "Mercedes-Benz",
+      "type": "Door Window Glass",
+      "mpn": "A 204 725 01 10",
+      "oem": "A 204 725 01 10",
+      "placement": "Front Left",
+      "material": "Laminated Glass",
+      "color": "Tinted (Green)",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 13,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Coupe"
+      ],
+      "yearsSpan": "2007-2015",
+      "techNotes": "Verify glass variant (standard, acoustic, IR-reflective) before purchase. A 204 725 01 10 is the base laminated green-tinted version. Professional installation recommended to ensure proper sealing and to avoid regulator damage.",
+      "descLen": 1149,
+      "descSnippet": "<h3>2007-2014 Mercedes-Benz W204 Front Left Door Window Glass</h3><p>Genuine OEM front left (driver side) door window glass for W204 C-Class. Includes factory tint and UV coating as equipped from the factory. Removed fro"
+    },
+    {
+      "idx": 3,
+      "title": "2007-2014 Mercedes C-Class W204 Front Right Door Panel Black A2047209562",
+      "titleLen": 72,
+      "brand": "Mercedes-Benz",
+      "type": "Interior Door Panel",
+      "mpn": "A 204 720 95 62 8N28",
+      "oem": "A 204 720 95 62 8N28",
+      "placement": "Front Right",
+      "material": "Plastic/Vinyl",
+      "color": "Black (8N28)",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 8,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2007-2014",
+      "techNotes": "Color code 8N28 = Black. MUST match your vehicle's interior color. Other W204 colors: 8L40 Almond Beige, 8K12 Alpaca Grey, 8J52 Sahara Beige, 8N05 Grey, 8T82 Black (different). Part design unchanged through LCI. Transfer of switches, tweeter, and handle required from old panel.",
+      "descLen": 1420,
+      "descSnippet": "<h3>2007-2014 Mercedes-Benz W204 Front Right Door Panel — Black (8N28)</h3><p>Genuine OEM interior door panel for the front right (passenger side) door. Color code 8N28 = Black. Removed from a 2008 C350 Sport. In good co"
+    },
+    {
+      "idx": 4,
+      "title": "2008-2014 Mercedes C-Class W204 Door Panel Tweeter Speaker A2047200248",
+      "titleLen": 70,
+      "brand": "Mercedes-Benz",
+      "type": "Tweeter Speaker",
+      "mpn": "A 204 720 02 48 9051",
+      "oem": "A 204 720 02 48 9051",
+      "placement": "Front Door (Sail Panel)",
+      "material": "Plastic",
+      "color": "Black",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 13,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class",
+        "C-Class Coupe"
+      ],
+      "yearsSpan": "2007-2015",
+      "techNotes": "Plug-and-play installation. No coding required. Pops into door sail panel. Compatible with both standard and harman/kardon audio systems.",
+      "descLen": 1028,
+      "descSnippet": "<h3>Mercedes-Benz W204 Door Panel Tweeter Speaker — Genuine OEM</h3><p>Factory tweeter speaker for the W204 C-Class front door mirror triangle / sail panel mount. Removed from a 2008 C350 Sport. Tested and working.</p><h"
+    },
+    {
+      "idx": 5,
+      "title": "2007-2014 Mercedes C-Class W204 Rear Right Upper Door Hinge A2047300237",
+      "titleLen": 71,
+      "brand": "Mercedes-Benz",
+      "type": "Door Hinge",
+      "mpn": "A 204 730 02 37",
+      "oem": "A 204 730 02 37",
+      "placement": "Rear Right Upper",
+      "material": "Steel",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 8,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2007-2014",
+      "techNotes": "Sedan and Wagon only — not for C204 Coupe. Door support required during installation. Replace upper and lower hinges on the same side together if experiencing sag. Torx bolts used.",
+      "descLen": 1127,
+      "descSnippet": "<h3>2007-2014 Mercedes-Benz W204 Rear Right Upper Door Hinge</h3><p>Genuine OEM upper door hinge for the rear right (passenger side) door. Removed from a 2008 C350 Sport. In good working condition with normal wear. Hinge"
+    },
+    {
+      "idx": 6,
+      "title": "2007-2014 Mercedes C-Class W204 Rear Left Door Lock Latch A2047300835",
+      "titleLen": 69,
+      "brand": "Mercedes-Benz",
+      "type": "Door Lock Actuator",
+      "mpn": "A 204 730 08 35",
+      "oem": "A 204 730 08 35",
+      "placement": "Rear Left",
+      "material": "Steel/Plastic",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 8,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2007-2014",
+      "techNotes": "Sedan and Wagon only — not for C204 Coupe. No coding required for basic function on most W204. If vehicle has Keyless-Go or advanced comfort features, STAR/DAS coding may be required. Verify driver vs passenger side per your market.",
+      "descLen": 1242,
+      "descSnippet": "<h3>2007-2014 Mercedes-Benz W204 Rear Left Door Lock Actuator / Latch</h3><p>Genuine OEM rear left (driver side) door lock latch and actuator assembly. Removed from a 2008 C350 Sport. Tested and confirmed functional. Inc"
+    },
+    {
+      "idx": 7,
+      "title": "2007-2014 Mercedes C-Class W204 Rear Left Door Shell Maroon A2047302100",
+      "titleLen": 71,
+      "brand": "Mercedes-Benz",
+      "type": "Door Shell",
+      "mpn": "A 204 730 21 00",
+      "oem": "A 204 730 21 00",
+      "placement": "Rear Left",
+      "material": "Steel",
+      "color": "Maroon",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 8,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2007-2014",
+      "techNotes": "Sedan and Wagon only — not for C204 Coupe. Heavy item, freight shipping required. Bare metal shell only — does NOT include glass, regulator, lock actuator, hinges, door panel, or weatherstripping (transfer from old door or purchase separately). Verify paint code matches vehicle before purchase.",
+      "descLen": 1701,
+      "descSnippet": "<h3>2007-2014 Mercedes-Benz W204 Rear Left Door Shell — Maroon</h3><p>Genuine OEM bare metal door shell (skin/frame) for the rear left (driver side) door. Painted Maroon per donor vehicle. Removed from a 2008 C350 Sport."
+    }
+  ],
+  "openai_gpt-4o-mini": [
+    {
+      "idx": 0,
+      "title": "2008 Mercedes C-Class W204 Complete Engine M272 3.5L V6 272.970 OEM",
+      "titleLen": 67,
+      "brand": "Mercedes-Benz",
+      "type": "Complete Engine",
+      "mpn": "272.970",
+      "oem": "272.970",
+      "placement": "",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 4,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "E-Class",
+        "CLS-Class",
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Requires dealer coding after installation",
+      "descLen": 721,
+      "descSnippet": "<h3>Complete Engine M272 3.5L V6</h3><p>This is a complete working engine removed from a 2008 Mercedes-Benz C-350. The engine has been tested and is in excellent working condition.</p><h4>Details</h4><ul><li>Part Number:"
+    },
+    {
+      "idx": 1,
+      "title": "2008 Mercedes C-Class W204 Front Right Window Regulator A 204 720 06 79 OEM",
+      "titleLen": 75,
+      "brand": "Mercedes-Benz",
+      "type": "Window Regulator",
+      "mpn": "A 204 720 06 79",
+      "oem": "A 204 720 06 79",
+      "placement": "Front Right",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 3,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Direct replacement for models with standard window operation",
+      "descLen": 605,
+      "descSnippet": "<h3>Front Right Window Regulator</h3><p>This is a used OEM front right side door window regulator removed from a 2008 Mercedes-Benz C-350.</p><h4>Details</h4><ul><li>Part Number: A 204 720 06 79</li><li>Placement: Front "
+    },
+    {
+      "idx": 2,
+      "title": "2008 Mercedes C-Class W204 Front Left Window Glass A 204 725 01 10 OEM",
+      "titleLen": 70,
+      "brand": "Mercedes-Benz",
+      "type": "Window Glass",
+      "mpn": "A 204 725 01 10",
+      "oem": "A 204 725 01 10",
+      "placement": "Front Left",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 3,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Direct replacement for all models",
+      "descLen": 562,
+      "descSnippet": "<h3>Front Left Window Glass</h3><p>This is a used OEM front left door window glass removed from a 2008 Mercedes-Benz C-350.</p><h4>Details</h4><ul><li>Part Number: A 204 725 01 10</li><li>Placement: Front Left</li></ul><"
+    },
+    {
+      "idx": 3,
+      "title": "2008 Mercedes C-Class W204 Front Right Door Panel A 204 720 95 62 8N28 OEM",
+      "titleLen": 74,
+      "brand": "Mercedes-Benz",
+      "type": "Door Panel",
+      "mpn": "A 204 720 95 62 8N28",
+      "oem": "A 204 720 95 62 8N28",
+      "placement": "Front Right",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 3,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Direct replacement for models with AMG/Sport trim",
+      "descLen": 577,
+      "descSnippet": "<h3>Front Right Door Panel</h3><p>This is a used OEM front right door panel removed from a 2008 Mercedes-Benz C-350.</p><h4>Details</h4><ul><li>Part Number: A 204 720 95 62 8N28</li><li>Placement: Front Right</li></ul><h"
+    },
+    {
+      "idx": 4,
+      "title": "2008 Mercedes C-Class W204 Front Right Tweeter Speaker A 204 720 02 48 9051 OEM",
+      "titleLen": 79,
+      "brand": "Mercedes-Benz",
+      "type": "Tweeter Speaker",
+      "mpn": "A 204 720 02 48 9051",
+      "oem": "A 204 720 02 48 9051",
+      "placement": "Front Right",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 3,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Direct replacement for models with premium audio system",
+      "descLen": 609,
+      "descSnippet": "<h3>Front Right Tweeter Speaker</h3><p>This is a used OEM front right side door panel tweeter speaker removed from a 2008 Mercedes-Benz C-350.</p><h4>Details</h4><ul><li>Part Number: A 204 720 02 48 9051</li><li>Placemen"
+    },
+    {
+      "idx": 5,
+      "title": "2008 Mercedes C-Class W204 Rear Right Door Upper Hinge A 204 730 02 37 OEM",
+      "titleLen": 74,
+      "brand": "Mercedes-Benz",
+      "type": "Door Hinge",
+      "mpn": "A 204 730 02 37",
+      "oem": "A 204 730 02 37",
+      "placement": "Rear Right",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 3,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Direct replacement for all models",
+      "descLen": 565,
+      "descSnippet": "<h3>Rear Right Door Upper Hinge</h3><p>This is a used OEM rear right door upper hinge removed from a 2008 Mercedes-Benz C-350.</p><h4>Details</h4><ul><li>Part Number: A 204 730 02 37</li><li>Placement: Rear Right</li></u"
+    },
+    {
+      "idx": 6,
+      "title": "2008 Mercedes C-Class W204 Rear Left Door Lock Latch Actuator A 204 730 08 35 OEM",
+      "titleLen": 81,
+      "brand": "Mercedes-Benz",
+      "type": "Door Lock Actuator",
+      "mpn": "A 204 730 08 35",
+      "oem": "A 204 730 08 35",
+      "placement": "Rear Left",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 3,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Direct replacement for all models",
+      "descLen": 578,
+      "descSnippet": "<h3>Rear Left Door Lock Latch Actuator</h3><p>This is a used OEM rear left door lock latch actuator removed from a 2008 Mercedes-Benz C-350.</p><h4>Details</h4><ul><li>Part Number: A 204 730 08 35</li><li>Placement: Rear"
+    },
+    {
+      "idx": 7,
+      "title": "2008 Mercedes C-Class W204 Rear Left Door Shell A 204 730 21 00 OEM",
+      "titleLen": 67,
+      "brand": "Mercedes-Benz",
+      "type": "Door Shell",
+      "mpn": "A 204 730 21 00",
+      "oem": "A 204 730 21 00",
+      "placement": "Rear Left",
+      "material": "",
+      "color": "",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "interchange": "",
+      "fitmentRows": 3,
+      "fitmentMakes": [
+        "Mercedes-Benz"
+      ],
+      "fitmentModels": [
+        "C-Class"
+      ],
+      "yearsSpan": "2006-2008",
+      "techNotes": "Direct replacement for all models",
+      "descLen": 562,
+      "descSnippet": "<h3>Rear Left Door Shell</h3><p>This is a used OEM rear left driver side door shell removed from a 2008 Mercedes-Benz C-350.</p><h4>Details</h4><ul><li>Part Number: A 204 730 21 00</li><li>Placement: Rear Left</li></ul><"
+    }
+  ]
+}

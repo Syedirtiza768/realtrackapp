@@ -15,6 +15,10 @@ export interface AiRawResponse {
   latencyMs: number;
   /** Estimated cost in USD */
   estimatedCostUsd: number;
+  /** Listing quality gate score (vision pipeline) */
+  validationScore?: number;
+  passedGate?: boolean;
+  guardFixes?: string[];
 }
 
 export interface NormalizedAiFields {
@@ -43,7 +47,8 @@ export interface AiVisionProvider {
    */
   analyzeImages(
     imageUrls: string[],
-    prompt: string,
+    prompt?: string,
+    partContext?: Record<string, unknown>,
   ): Promise<AiRawResponse>;
 
   /**

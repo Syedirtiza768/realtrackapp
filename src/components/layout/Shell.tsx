@@ -61,6 +61,7 @@ const NAV_ITEMS: NavItem[] = [
     { icon: Settings, label: 'Permissions', path: '/settings/permissions', permission: 'roles.view' },
     { icon: Settings, label: 'Client settings', path: '/settings/client', permission: 'client_settings.view' },
     { icon: ShoppingBag, label: 'eBay stores', path: '/settings/integrations/ebay', permission: 'ebay.view' },
+    { icon: Cpu, label: 'AI routing', path: '/settings/ai-routing', permission: 'ai.routing.view' },
 ];
 
 /* ── Sidebar content (shared between desktop & mobile drawer) ── */

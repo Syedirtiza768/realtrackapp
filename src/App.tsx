@@ -45,6 +45,7 @@ import VinListingsPage from './components/fitment/VinListingsPage';
 import ClientSettingsPage from './components/settings/ClientSettingsPage';
 import UsersAdminPage from './components/settings/UsersAdminPage';
 import PermissionsPage from './components/settings/PermissionsPage';
+import AiRoutingDashboardPage from './components/settings/AiRoutingDashboardPage';
 
 
 function App() {
@@ -82,6 +83,7 @@ function App() {
                             <Route path="/settings/client" element={<ClientSettingsPage />} />
                             <Route path="/settings/users" element={<UsersAdminPage />} />
                             <Route path="/settings/permissions" element={<PermissionsPage />} />
+                            <Route path="/settings/ai-routing" element={<AiRoutingDashboardPage />} />
                             <Route path="/settings/integrations/ebay" element={<ProtectedRoute permissions={['ebay.view']}><EbayStoresSettingsPage /></ProtectedRoute>} />
                             <Route path="/settings/integrations/ebay/:accountId" element={<ProtectedRoute permissions={['ebay.view']}><EbayStoreDetailPage /></ProtectedRoute>} />
                             <Route path="/settings/integrations/ebay/:accountId/policies" element={<ProtectedRoute permissions={['ebay.manage']}><EbayPolicyMappingPage /></ProtectedRoute>} />

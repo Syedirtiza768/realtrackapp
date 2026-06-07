@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { OpenAiService } from '../../common/openai/openai.service.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
 import { ComplianceAuditService } from './compliance-audit.service.js';
+import { AiRunLogService } from '../../common/openai/ai-run-log.service.js';
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -158,7 +159,23 @@ export class EbayComplianceService {
     private readonly openai: OpenAiService,
     private readonly config: ConfigService,
     private readonly auditService: ComplianceAuditService,
+    private readonly aiRunLogService: AiRunLogService,
   ) {}
+
+  /** Feed eBay publish outcomes into the AI learning dataset. */
+  async recordPublishOutcome(
+    sku: string,
+    published: boolean,
+    publishError?: string,
+    ebayCategoryId?: string,
+  ): Promise<void> {
+    await this.aiRunLogService.recordPublishOutcome(
+      sku,
+      published,
+      publishError,
+      ebayCategoryId,
+    );
+  }
 
   /**
    * Validate and optionally auto-correct a batch of catalog products.
@@ -297,6 +314,13 @@ export class EbayComplianceService {
 
     // Log to compliance audit trail
     await this.logComplianceAudit(productId, product.importId, complianceScore, issues, autoCorrections);
+
+    if (product.sku) {
+      await this.aiRunLogService.recordComplianceOutcome(
+        product.sku,
+        complianceScore,
+      );
+    }
 
     return {
       productId,

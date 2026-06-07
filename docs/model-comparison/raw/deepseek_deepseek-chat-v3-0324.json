@@ -1,0 +1,1848 @@
+{
+  "model": "deepseek/deepseek-chat-v3-0324",
+  "ok": true,
+  "attempts": 1,
+  "latencyMs": 307859,
+  "promptTokens": 2976,
+  "completionTokens": 11339,
+  "totalTokens": 14315,
+  "costUsd": 0.009326230000000001,
+  "inputPerM": 0.19999999999999998,
+  "outputPerM": 0.77,
+  "rawLength": 34392,
+  "schemaRepaired": true,
+  "itemCount": 8,
+  "schemaValid": true,
+  "items": [
+    {
+      "index": 0,
+      "title": "2006-2011 Mercedes M272 3.5L V6 Engine 272.970 Tested OEM C-Class E-Class",
+      "description": "<h3>Mercedes-Benz M272 3.5L V6 Engine Assembly</h3><p>Complete tested engine removed from a 2008 C350. Includes all internal components, sensors, and accessories as shown. Engine code M272.970.</p><h4>Details</h4><ul><li>OEM Part Number: 272.970</li><li>Engine Type: 3.5L V6 (M272)</li><li>Condition: Used - Removed from running vehicle. Inspected and tested.</li></ul><h4>Compatibility</h4><p>Fits 2006-2011 Mercedes-Benz models with M272 3.5L V6 engine:</p><ul><li>2008-2011 C-Class (W204) C300, C350</li><li>2006-2009 E-Class (W211) E350</li><li>2006-2009 CLK-Class (A209) CLK350</li><li>2006-2009 SLK-Class (R171) SLK350</li><li>2006-2009 R-Class (W251) R350</li><li>2006-2009 ML-Class (W164) ML350</li></ul><h4>Technical Notes</h4><p>Requires ECU from donor vehicle or reprogramming. Verify transmission compatibility (722.6 or 722.9). Includes all accessories shown.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Engine Assembly",
+      "mpn": "272.970",
+      "oemNumber": "272.970",
+      "placement": "",
+      "material": "Aluminum",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "272.970",
+        "Type": "Engine Assembly",
+        "Placement on Vehicle": "",
+        "Material": "Aluminum",
+        "Color": ""
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2006",
+          "make": "Mercedes-Benz",
+          "model": "E-Class",
+          "chassisCode": "W211",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2007",
+          "make": "Mercedes-Benz",
+          "model": "E-Class",
+          "chassisCode": "W211",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "E-Class",
+          "chassisCode": "W211",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "E-Class",
+          "chassisCode": "W211",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2006",
+          "make": "Mercedes-Benz",
+          "model": "CLK-Class",
+          "chassisCode": "A209",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2007",
+          "make": "Mercedes-Benz",
+          "model": "CLK-Class",
+          "chassisCode": "A209",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "CLK-Class",
+          "chassisCode": "A209",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "CLK-Class",
+          "chassisCode": "A209",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2006",
+          "make": "Mercedes-Benz",
+          "model": "SLK-Class",
+          "chassisCode": "R171",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2007",
+          "make": "Mercedes-Benz",
+          "model": "SLK-Class",
+          "chassisCode": "R171",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "SLK-Class",
+          "chassisCode": "R171",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "SLK-Class",
+          "chassisCode": "R171",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2006",
+          "make": "Mercedes-Benz",
+          "model": "R-Class",
+          "chassisCode": "W251",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2007",
+          "make": "Mercedes-Benz",
+          "model": "R-Class",
+          "chassisCode": "W251",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "R-Class",
+          "chassisCode": "W251",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "R-Class",
+          "chassisCode": "W251",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2006",
+          "make": "Mercedes-Benz",
+          "model": "ML-Class",
+          "chassisCode": "W164",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2007",
+          "make": "Mercedes-Benz",
+          "model": "ML-Class",
+          "chassisCode": "W164",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "ML-Class",
+          "chassisCode": "W164",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "ML-Class",
+          "chassisCode": "W164",
+          "trim": "",
+          "engine": "3.5L V6",
+          "notes": ""
+        }
+      ],
+      "technicalNotes": "Requires ECU from donor vehicle or reprogramming. Verify transmission compatibility (722.6 or 722.9)."
+    },
+    {
+      "index": 1,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Window Regulator A2047200679 OEM",
+      "description": "<h3>Mercedes-Benz Front Right Window Regulator</h3><p>OEM window regulator removed from a 2008 C350. Part number A2047200679. Includes motor and all mounting hardware.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 720 06 79</li><li>Position: Front Right (Passenger Side)</li><li>Condition: Used - Removed from working vehicle. Tested operation.</li></ul><h4>Compatibility</h4><p>Fits 2008-2014 Mercedes-Benz W204 models:</p><ul><li>2008-2014 C-Class Sedan (W204)</li><li>2008-2014 C-Class Coupe (C204)</li><li>2008-2014 C-Class Wagon (S204)</li><li>Includes all trims: Luxury, Sport, AMG</li></ul><h4>Technical Notes</h4><p>Direct bolt-on replacement. May require window motor initialization procedure after installation.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Window Regulator",
+      "mpn": "A 204 720 06 79",
+      "oemNumber": "A 204 720 06 79",
+      "placement": "Front Right",
+      "material": "Steel/Plastic",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "A 204 720 06 79",
+        "Type": "Window Regulator",
+        "Placement on Vehicle": "Front Right",
+        "Material": "Steel/Plastic",
+        "Color": ""
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        }
+      ],
+      "technicalNotes": "May require window motor initialization procedure after installation."
+    },
+    {
+      "index": 2,
+      "title": "2008-2014 Mercedes C-Class W204 Front Left Window Glass A2047250110 OEM",
+      "description": "<h3>Mercedes-Benz Front Left Door Window Glass</h3><p>OEM window glass removed from a 2008 C350. Part number A2047250110. Tinted glass in good condition with no cracks or deep scratches.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 725 01 10</li><li>Position: Front Left (Driver Side)</li><li>Condition: Used - Removed from vehicle. No cracks or chips.</li></ul><h4>Compatibility</h4><p>Fits 2008-2014 Mercedes-Benz W204 models:</p><ul><li>2008-2014 C-Class Sedan (W204)</li><li>2008-2014 C-Class Coupe (C204)</li><li>2008-2014 C-Class Wagon (S204)</li><li>Includes all trims: Luxury, Sport, AMG</li></ul><h4>Technical Notes</h4><p>Direct replacement. Includes factory tint. Verify glass run channel condition during installation.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Window Glass",
+      "mpn": "A 204 725 01 10",
+      "oemNumber": "A 204 725 01 10",
+      "placement": "Front Left",
+      "material": "Glass",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "Tinted",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "A 204 725 01 10",
+        "Type": "Window Glass",
+        "Placement on Vehicle": "Front Left",
+        "Material": "Glass",
+        "Color": "Tinted"
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        }
+      ],
+      "technicalNotes": "Verify glass run channel condition during installation."
+    },
+    {
+      "index": 3,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Door Panel A20472095628N28 OEM",
+      "description": "<h3>Mercedes-Benz Front Right Door Panel</h3><p>OEM door panel removed from a 2008 C350 AMG/Sport. Part number A20472095628N28. Includes all mounting clips and hardware as shown.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 720 95 62 8N28</li><li>Position: Front Right (Passenger Side)</li><li>Color Code: 8N28 (Black)</li><li>Condition: Used - Removed from vehicle. Normal wear.</li></ul><h4>Compatibility</h4><p>Fits 2008-2014 Mercedes-Benz W204 models with Sport/AMG interior:</p><ul><li>2008-2014 C-Class Sedan (W204) with Sport Package</li><li>2008-2014 C-Class Coupe (C204) with Sport Package</li><li>2008-2014 C-Class Wagon (S204) with Sport Package</li><li>Includes C300, C350, C63 AMG with Sport interior</li></ul><h4>Technical Notes</h4><p>Verify interior color match (8N28 = Black). Includes all mounting points and hardware pockets.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Door Panel",
+      "mpn": "A 204 720 95 62 8N28",
+      "oemNumber": "A 204 720 95 62 8N28",
+      "placement": "Front Right",
+      "material": "Plastic/Leatherette",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "Black",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "A 204 720 95 62 8N28",
+        "Type": "Door Panel",
+        "Placement on Vehicle": "Front Right",
+        "Material": "Plastic/Leatherette",
+        "Color": "Black"
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Sport/AMG",
+          "engine": "",
+          "notes": "Wagon"
+        }
+      ],
+      "technicalNotes": "Verify interior color match (8N28 = Black). Sport/AMG trim only."
+    },
+    {
+      "index": 4,
+      "title": "2008-2014 Mercedes C-Class W204 Front Right Tweeter Speaker A20472002489051",
+      "description": "<h3>Mercedes-Benz Front Right Tweeter Speaker</h3><p>OEM tweeter speaker removed from a 2008 C350 door panel. Part number A20472002489051. Includes mounting bracket.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 720 02 48 9051</li><li>Position: Front Right (Passenger Side Door Panel)</li><li>Condition: Used - Removed from working vehicle. Tested operation.</li></ul><h4>Compatibility</h4><p>Fits 2008-2014 Mercedes-Benz W204 models with standard audio system:</p><ul><li>2008-2014 C-Class Sedan (W204)</li><li>2008-2014 C-Class Coupe (C204)</li><li>2008-2014 C-Class Wagon (S204)</li><li>All trims except Harman Kardon or Bose systems</li></ul><h4>Technical Notes</h4><p>Standard audio system only. Not compatible with premium sound packages.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Tweeter Speaker",
+      "mpn": "A 204 720 02 48 9051",
+      "oemNumber": "A 204 720 02 48 9051",
+      "placement": "Front Right",
+      "material": "Plastic/Metal",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "A 204 720 02 48 9051",
+        "Type": "Tweeter Speaker",
+        "Placement on Vehicle": "Front Right",
+        "Material": "Plastic/Metal",
+        "Color": ""
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "C204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Coupe"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "Standard Audio",
+          "engine": "",
+          "notes": "Wagon"
+        }
+      ],
+      "technicalNotes": "Standard audio system only. Not compatible with premium sound packages."
+    },
+    {
+      "index": 5,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Right Door Hinge A2047300237 OEM",
+      "description": "<h3>Mercedes-Benz Rear Right Door Upper Hinge</h3><p>OEM door hinge removed from a 2008 C350. Part number A2047300237. Includes all mounting hardware.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 730 02 37</li><li>Position: Rear Right Upper (Passenger Side)</li><li>Condition: Used - Removed from vehicle. No damage or excessive wear.</li></ul><h4>Compatibility</h4><p>Fits 2008-2014 Mercedes-Benz W204 models:</p><ul><li>2008-2014 C-Class Sedan (W204)</li><li>2008-2014 C-Class Wagon (S204)</li><li>All trims and engine types</li></ul><h4>Technical Notes</h4><p>Direct bolt-on replacement. Requires door realignment after installation.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Door Hinge",
+      "mpn": "A 204 730 02 37",
+      "oemNumber": "A 204 730 02 37",
+      "placement": "Rear Right Upper",
+      "material": "Steel",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "A 204 730 02 37",
+        "Type": "Door Hinge",
+        "Placement on Vehicle": "Rear Right Upper",
+        "Material": "Steel",
+        "Color": ""
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        }
+      ],
+      "technicalNotes": "Requires door realignment after installation."
+    },
+    {
+      "index": 6,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Left Door Lock Actuator A2047300835 OEM",
+      "description": "<h3>Mercedes-Benz Rear Left Door Lock Actuator</h3><p>OEM door lock actuator removed from a 2008 C350. Part number A2047300835. Includes all mounting hardware.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 730 08 35</li><li>Position: Rear Left (Driver Side)</li><li>Condition: Used - Removed from working vehicle. Tested operation.</li></ul><h4>Compatibility</h4><p>Fits 2008-2014 Mercedes-Benz W204 models:</p><ul><li>2008-2014 C-Class Sedan (W204)</li><li>2008-2014 C-Class Wagon (S204)</li><li>All trims and engine types</li></ul><h4>Technical Notes</h4><p>Direct plug-and-play replacement. May require central locking system reset after installation.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Door Lock Actuator",
+      "mpn": "A 204 730 08 35",
+      "oemNumber": "A 204 730 08 35",
+      "placement": "Rear Left",
+      "material": "Plastic/Metal",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "A 204 730 08 35",
+        "Type": "Door Lock Actuator",
+        "Placement on Vehicle": "Rear Left",
+        "Material": "Plastic/Metal",
+        "Color": ""
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        }
+      ],
+      "technicalNotes": "May require central locking system reset after installation."
+    },
+    {
+      "index": 7,
+      "title": "2008-2014 Mercedes C-Class W204 Rear Left Door Shell A2047302100 Maroon OEM",
+      "description": "<h3>Mercedes-Benz Rear Left Door Shell</h3><p>OEM door shell removed from a 2008 C350. Part number A2047302100. Color code 8N28 (Maroon). Includes inner structure but no components.</p><h4>Details</h4><ul><li>OEM Part Number: A 204 730 21 00</li><li>Position: Rear Left (Driver Side)</li><li>Color: Maroon (Code 8N28)</li><li>Condition: Used - Removed from vehicle. No structural damage.</li></ul><h4>Compatibility</h4><p>Fits 2008-2014 Mercedes-Benz W204 models:</p><ul><li>2008-2014 C-Class Sedan (W204)</li><li>2008-2014 C-Class Wagon (S204)</li><li>All trims and engine types</li></ul><h4>Technical Notes</h4><p>Door shell only - components not included. Requires transfer of all hardware from original door. Verify color match before purchase.</p>",
+      "brand": "Mercedes-Benz",
+      "type": "Door Shell",
+      "mpn": "A 204 730 21 00",
+      "oemNumber": "A 204 730 21 00",
+      "placement": "Rear Left",
+      "material": "Steel",
+      "warranty": "No Warranty",
+      "fitmentType": "Direct Replacement",
+      "color": "Maroon",
+      "interchangeNumber": "",
+      "itemSpecifics": {
+        "Brand": "Mercedes-Benz",
+        "Manufacturer Part Number": "A 204 730 21 00",
+        "Type": "Door Shell",
+        "Placement on Vehicle": "Rear Left",
+        "Material": "Steel",
+        "Color": "Maroon"
+      },
+      "compatibility": [
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "W204",
+          "trim": "",
+          "engine": "",
+          "notes": "Sedan"
+        },
+        {
+          "year": "2008",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2009",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2010",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2011",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2012",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2013",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        },
+        {
+          "year": "2014",
+          "make": "Mercedes-Benz",
+          "model": "C-Class",
+          "chassisCode": "S204",
+          "trim": "",
+          "engine": "",
+          "notes": "Wagon"
+        }
+      ],
+      "technicalNotes": "Door shell only - components not included. Requires transfer of all hardware from original door. Verify color match before purchase."
+    }
+  ],
+  "scores": [
+    {
+      "flags": [],
+      "titleLen": 73,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": false,
+      "titleHasCondition": true,
+      "titleNoAllCaps": true,
+      "titleScore": 5,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 876,
+      "descScore": 4,
+      "requiredSpecificsFilled": 3,
+      "optionalSpecificsFilled": 1,
+      "brandNormalized": true,
+      "hasPlacement": false,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 24,
+      "fitmentDistinctYears": 6,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 87
+    },
+    {
+      "flags": [],
+      "titleLen": 76,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": true,
+      "titleHasCondition": true,
+      "titleNoAllCaps": true,
+      "titleScore": 6,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 729,
+      "descScore": 4,
+      "requiredSpecificsFilled": 4,
+      "optionalSpecificsFilled": 1,
+      "brandNormalized": true,
+      "hasPlacement": true,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 21,
+      "fitmentDistinctYears": 7,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 96
+    },
+    {
+      "flags": [],
+      "titleLen": 71,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": true,
+      "titleHasCondition": true,
+      "titleNoAllCaps": true,
+      "titleScore": 6,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 739,
+      "descScore": 4,
+      "requiredSpecificsFilled": 4,
+      "optionalSpecificsFilled": 2,
+      "brandNormalized": true,
+      "hasPlacement": true,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 21,
+      "fitmentDistinctYears": 7,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 96
+    },
+    {
+      "flags": [],
+      "titleLen": 74,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": true,
+      "titleHasCondition": true,
+      "titleNoAllCaps": true,
+      "titleScore": 6,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 853,
+      "descScore": 4,
+      "requiredSpecificsFilled": 4,
+      "optionalSpecificsFilled": 2,
+      "brandNormalized": true,
+      "hasPlacement": true,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 21,
+      "fitmentDistinctYears": 7,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 96
+    },
+    {
+      "flags": [],
+      "titleLen": 75,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": true,
+      "titleHasCondition": false,
+      "titleNoAllCaps": true,
+      "titleScore": 5,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 752,
+      "descScore": 4,
+      "requiredSpecificsFilled": 4,
+      "optionalSpecificsFilled": 1,
+      "brandNormalized": true,
+      "hasPlacement": true,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 21,
+      "fitmentDistinctYears": 7,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 92
+    },
+    {
+      "flags": [],
+      "titleLen": 69,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": true,
+      "titleHasCondition": true,
+      "titleNoAllCaps": true,
+      "titleScore": 6,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 645,
+      "descScore": 4,
+      "requiredSpecificsFilled": 4,
+      "optionalSpecificsFilled": 1,
+      "brandNormalized": true,
+      "hasPlacement": true,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 14,
+      "fitmentDistinctYears": 7,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 96
+    },
+    {
+      "flags": [],
+      "titleLen": 76,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": true,
+      "titleHasCondition": true,
+      "titleNoAllCaps": true,
+      "titleScore": 6,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 662,
+      "descScore": 4,
+      "requiredSpecificsFilled": 4,
+      "optionalSpecificsFilled": 1,
+      "brandNormalized": true,
+      "hasPlacement": true,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 14,
+      "fitmentDistinctYears": 7,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 96
+    },
+    {
+      "flags": [],
+      "titleLen": 75,
+      "titleWithinLimit": true,
+      "titleHasYear": true,
+      "titleHasMake": true,
+      "titleHasModel": true,
+      "titleHasChassis": true,
+      "titleHasCondition": true,
+      "titleNoAllCaps": true,
+      "titleScore": 6,
+      "descHasHtml": true,
+      "descHasVerify": false,
+      "descHasCompat": true,
+      "descHasCondition": true,
+      "descLen": 752,
+      "descScore": 4,
+      "requiredSpecificsFilled": 4,
+      "optionalSpecificsFilled": 2,
+      "brandNormalized": true,
+      "hasPlacement": true,
+      "hasType": true,
+      "hasWarranty": true,
+      "hasFitmentType": true,
+      "mpnMatchesProvided": true,
+      "fitmentRows": 14,
+      "fitmentDistinctYears": 7,
+      "fitmentExpandedBeyondDonor": true,
+      "fitmentHasChassis": true,
+      "fitmentAllMercedes": true,
+      "composite": 96
+    }
+  ],
+  "agg": {
+    "composite": 94,
+    "titleScore": 5.75,
+    "titleWithinLimit": 8,
+    "descScore": 4,
+    "requiredSpecificsFilled": 3.88,
+    "fitmentRows": 18.8,
+    "fitmentDistinctYears": 6.9,
+    "expandedBeyondDonor": 8,
+    "hasChassis": 8,
+    "mpnFidelity": 8,
+    "totalFlags": 0,
+    "flags": []
+  }
+}

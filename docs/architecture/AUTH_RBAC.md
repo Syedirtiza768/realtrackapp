@@ -106,6 +106,7 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 | client_settings | `client_settings.view`, `client_settings.manage`, `client_settings.branding`, `client_settings.theme`, `client_settings.whitelabel` |
 | dashboard | `dashboard.view` |
 | listings | `listings.view`, `listings.create`, `listings.update`, `listings.delete`, `listings.publish`, `listings.import`, `listings.export`, `listings.generate` |
+| ai | `ai.routing.view`, `ai.routing.manage` |
 | ingestion | `ingestion.view`, `ingestion.create`, `ingestion.manage` |
 | pipeline | `pipeline.view`, `pipeline.run`, `pipeline.manage`, `pipeline.review`, `pipeline.export` |
 | catalog | `catalog.view`, `catalog.update`, `catalog.import`, `catalog.clear`, `catalog.export`, `catalog.compliance` |

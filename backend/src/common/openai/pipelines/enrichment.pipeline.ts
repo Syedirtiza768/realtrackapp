@@ -1,8 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OpenAiService } from '../openai.service.js';
+import { ModelRouter, inferPartType } from '../model-router.js';
+import { ListingQualityValidator } from '../listing-quality.validator.js';
+import { applyListingGuards } from '../listing-guards.js';
+import { AiRunLogService } from '../ai-run-log.service.js';
+import { ListingGuardAuditService } from '../listing-guard-audit.service.js';
 import { renderPrompt } from '../prompts/index.js';
 import { DATA_ENRICHMENT_PROMPT } from '../prompts/data-enrichment.prompt.js';
 import type { OpenAiChatResponse } from '../openai.types.js';
+import type { RunMode } from '../ai-routing-policy.types.js';
 
 /**
  * Result from the enrichment pipeline.
@@ -20,53 +27,174 @@ export interface EnrichmentResult {
   itemSpecifics: Record<string, string>;
   searchKeywords: string[];
   confidence: Record<string, number>;
+  compatibility?: Array<Record<string, unknown>>;
+  validationScore?: number;
+  passedGate?: boolean;
+  escalated?: boolean;
+  model?: string;
+  lane?: string;
+  guardFixes?: string[];
   /** Raw AI response for auditing */
   rawResponse: OpenAiChatResponse;
 }
 
-/**
- * EnrichmentPipeline — Orchestrates AI-powered data enrichment.
- *
- * Takes partial/raw product data (from spreadsheet imports, image analysis, etc.)
- * and uses OpenAI to fill in missing fields, validate existing ones, and
- * generate eBay-optimized content.
- */
 @Injectable()
 export class EnrichmentPipeline {
   private readonly logger = new Logger(EnrichmentPipeline.name);
+  private readonly promptVersion: string;
 
-  constructor(private readonly openai: OpenAiService) {}
+  constructor(
+    private readonly openai: OpenAiService,
+    private readonly modelRouter: ModelRouter,
+    private readonly validator: ListingQualityValidator,
+    private readonly runLogService: AiRunLogService,
+    private readonly guardAudit: ListingGuardAuditService,
+    private readonly config: ConfigService,
+  ) {
+    this.promptVersion = this.config.get('AI_PROMPT_VERSION', 'enrichment-v1');
+  }
 
   /**
    * Enrich a product with AI-generated data.
    */
-  async enrich(rawData: Record<string, unknown>): Promise<EnrichmentResult> {
-    const { systemPrompt, userPrompt } = renderPrompt(
-      DATA_ENRICHMENT_PROMPT,
-      { rawData: JSON.stringify(rawData, null, 2) },
+  async enrich(
+    rawData: Record<string, unknown>,
+    options?: {
+      runMode?: RunMode;
+      marketplace?: string;
+      enhancementId?: string;
+      productId?: string;
+      importId?: string;
+    },
+  ): Promise<EnrichmentResult> {
+    const partContext = {
+      sku: this.str(rawData.sku) ?? undefined,
+      partNumber: this.str(rawData.partNumber ?? rawData.mpn) ?? undefined,
+      partName: this.str(rawData.partName ?? rawData.title) ?? undefined,
+      partType: this.str(rawData.partType) ?? undefined,
+      price: typeof rawData.price === 'number' ? rawData.price : Number(rawData.price) || undefined,
+      marketplace: options?.marketplace ?? 'US',
+    };
+    partContext.partType = partContext.partType ?? inferPartType(partContext);
+
+    const route = this.modelRouter.selectRoute(partContext, options?.runMode ?? 'default');
+    let attempt = 1;
+    let model = route.model;
+    let lane = route.lane;
+    let escalated = false;
+
+    const runOnce = async (useModel: string, useLane: string, useAttempt: number) => {
+      const { systemPrompt, userPrompt } = renderPrompt(DATA_ENRICHMENT_PROMPT, {
+        rawData: JSON.stringify(rawData, null, 2),
+      });
+
+      const response = await this.openai.chat({
+        systemPrompt,
+        userPrompt,
+        model: useModel,
+        costLane: useLane,
+        jsonMode: true,
+        temperature: DATA_ENRICHMENT_PROMPT.temperature,
+        maxTokens: DATA_ENRICHMENT_PROMPT.maxTokens,
+      });
+
+      let parsed = response.content as Record<string, unknown>;
+      const srcPart = {
+        partNumber: partContext.partNumber,
+        donorMake: this.str(rawData.donorMake ?? rawData.brand) ?? 'mercedes',
+      };
+
+      let guardFixes: string[] = [];
+      if (parsed.title || parsed.compatibility) {
+        const beforeGuard = { ...parsed };
+        const guarded = applyListingGuards(parsed, srcPart);
+        parsed = guarded.item;
+        guardFixes = guarded.fixes;
+        if (guardFixes.length) {
+          await this.guardAudit.logGuardFixes(guardFixes, {
+            productId:
+              options?.productId ??
+              this.str(rawData.productId) ??
+              null,
+            importId:
+              options?.importId ??
+              this.str(rawData.importId) ??
+              null,
+            sku: partContext.sku ?? null,
+            before: beforeGuard,
+            after: parsed,
+          });
+        }
+      }
+
+      const ebayCategoryId =
+        this.str(rawData.ebayCategoryId ?? rawData.categoryId) ?? undefined;
+      const validation = await this.validator.validateWithTaxonomy(
+        parsed,
+        srcPart,
+        { ebayCategoryId },
+      );
+      await this.runLogService.logRun({
+        sku: partContext.sku ?? null,
+        partNumber: partContext.partNumber ?? null,
+        partType: partContext.partType ?? null,
+        price: partContext.price ?? null,
+        marketplace: partContext.marketplace ?? null,
+        enhancementId: options?.enhancementId ?? null,
+        lane: useLane,
+        model: useModel,
+        attempt: useAttempt,
+        promptVersion: this.promptVersion,
+        routingPolicyVersion: route.policyVersion,
+        inputTokens: response.usage.promptTokens,
+        outputTokens: response.usage.completionTokens,
+        costUsd: response.estimatedCostUsd,
+        latencyMs: response.latencyMs,
+        validationScore: validation.score,
+        hardFails: validation.hardFails,
+        softFails: validation.softFails,
+        escalated: useAttempt > 1,
+        passedGate: validation.pass,
+        fitmentRowCount: validation.fitmentRowCount,
+        guardFixes,
+      });
+
+      return { parsed, response, validation, guardFixes };
+    };
+
+    let { parsed, response, validation, guardFixes } = await runOnce(
+      model,
+      lane,
+      attempt,
     );
 
-    const response = await this.openai.chat({
-      systemPrompt,
-      userPrompt,
-      jsonMode: true,
-      temperature: DATA_ENRICHMENT_PROMPT.temperature,
-      maxTokens: DATA_ENRICHMENT_PROMPT.maxTokens,
-    });
-
-    const parsed = response.content as Record<string, unknown>;
+    if (!validation.pass && validation.escalate) {
+      const escalationModel = this.modelRouter.getEscalationModel(model, lane);
+      if (escalationModel) {
+        attempt = 2;
+        escalated = true;
+        model = escalationModel;
+        lane = 'escalation';
+        this.logger.warn(
+          `Escalating enrichment for ${partContext.sku ?? partContext.partNumber} → ${model}`,
+        );
+        ({ parsed, response, validation, guardFixes } = await runOnce(
+          model,
+          lane,
+          attempt,
+        ));
+      }
+    }
 
     const result: EnrichmentResult = {
       title: this.str(parsed.title),
       brand: this.str(parsed.brand),
       mpn: this.str(parsed.mpn),
       oemNumber: this.str(parsed.oemNumber),
-      partType: this.str(parsed.partType),
+      partType: this.str(parsed.partType) ?? partContext.partType ?? null,
       condition: this.str(parsed.condition),
       description: this.str(parsed.description),
-      features: Array.isArray(parsed.features)
-        ? (parsed.features as string[])
-        : [],
+      features: Array.isArray(parsed.features) ? (parsed.features as string[]) : [],
       suggestedCategory: this.str(parsed.suggestedCategory),
       itemSpecifics:
         typeof parsed.itemSpecifics === 'object' && parsed.itemSpecifics
@@ -79,11 +207,20 @@ export class EnrichmentPipeline {
         typeof parsed.confidence === 'object' && parsed.confidence
           ? (parsed.confidence as Record<string, number>)
           : {},
+      compatibility: Array.isArray(parsed.compatibility)
+        ? (parsed.compatibility as Array<Record<string, unknown>>)
+        : undefined,
+      validationScore: validation.score,
+      passedGate: validation.pass,
+      escalated,
+      model,
+      lane,
+      guardFixes,
       rawResponse: response,
     };
 
     this.logger.log(
-      `Enriched product: title="${result.title}" confidence=${result.confidence.overall ?? 'N/A'} cost=$${response.estimatedCostUsd.toFixed(4)}`,
+      `Enriched product: title="${result.title}" model=${model} score=${validation.score} pass=${validation.pass} cost=$${response.estimatedCostUsd.toFixed(4)}`,
     );
 
     return result;
@@ -91,16 +228,15 @@ export class EnrichmentPipeline {
 
   /**
    * Batch enrich multiple products.
-   * Processes sequentially to respect rate limits.
    */
   async enrichBatch(
     items: Record<string, unknown>[],
+    options?: { runMode?: RunMode; marketplace?: string },
   ): Promise<EnrichmentResult[]> {
     const results: EnrichmentResult[] = [];
     for (let i = 0; i < items.length; i++) {
       this.logger.debug(`Enriching item ${i + 1}/${items.length}`);
-      const result = await this.enrich(items[i]);
-      results.push(result);
+      results.push(await this.enrich(items[i], options));
     }
     return results;
   }

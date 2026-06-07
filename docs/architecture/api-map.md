@@ -55,6 +55,7 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 | channels | `channels.controller.ts` | `/channels` | `channels.view` |
 | channels | `stores.controller.ts` | `/stores` | `stores.view` |
 | channels | `ai-enhancement.controller.ts` | `/ai-enhancements` | `listings.view` |
+| openai | `ai-routing.controller.ts` | `/ai/routing` | `ai.routing.view` / `ai.routing.manage` |
 | channels | `ebay-publish.controller.ts` | `/channels/ebay` | `ebay.publish` |
 | integrations/ebay | `integrations-ebay.controller.ts` | `/integrations/ebay` | `ebay.view` |
 | integrations/ebay | `ebay-multi-store.controller.ts` | `/ebay` | `ebay.view` |

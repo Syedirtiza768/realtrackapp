@@ -119,6 +119,10 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('listings.export', 'Export listings', 'listings', READ_ONLY),
   p('listings.generate', 'AI-generate listings', 'listings', READ_WRITE),
 
+  // ── AI routing ──
+  p('ai.routing.view', 'View AI routing stats and policy', 'ai', READ_ONLY),
+  p('ai.routing.manage', 'Run AI routing optimizer', 'ai', ADMIN_UP),
+
   // ── Ingestion & pipeline ──
   p('ingestion.view', 'View ingestion jobs', 'ingestion', READ_ONLY),
   p('ingestion.create', 'Create ingestion jobs', 'ingestion', READ_WRITE),

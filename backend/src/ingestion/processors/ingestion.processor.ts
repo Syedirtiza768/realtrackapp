@@ -109,8 +109,9 @@ export class IngestionProcessor extends WorkerHost {
       await this.aiResultRepo.save(aiResult);
 
       // 6. Determine review status based on confidence
+      const passedQualityGate = aiResponse.passedGate !== false;
       const reviewStatus =
-        normalized.confidenceOverall >= AUTO_APPROVE_THRESHOLD
+        passedQualityGate && normalized.confidenceOverall >= AUTO_APPROVE_THRESHOLD
           ? 'auto_approved'
           : 'needs_review';
 

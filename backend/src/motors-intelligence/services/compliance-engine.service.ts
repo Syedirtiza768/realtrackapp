@@ -10,6 +10,8 @@ import {
   EbayAspectRequirement,
   AspectRequirementLevel,
 } from '../entities';
+import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
+import { AiRunLogService } from '../../common/openai/ai-run-log.service.js';
 
 export interface ComplianceCheckResult {
   publishable: boolean;
@@ -57,6 +59,9 @@ export class ComplianceEngineService {
     private readonly categoryMappingRepo: Repository<EbayCategoryMapping>,
     @InjectRepository(EbayAspectRequirement)
     private readonly aspectRequirementRepo: Repository<EbayAspectRequirement>,
+    @InjectRepository(CatalogProduct)
+    private readonly catalogProductRepo: Repository<CatalogProduct>,
+    private readonly aiRunLogService: AiRunLogService,
   ) {}
 
   async validateProduct(motorsProductId: string): Promise<ValidationResult> {
@@ -114,7 +119,21 @@ export class ComplianceEngineService {
       fullPayload: this.buildFullPayload(product),
     });
 
-    return this.validationResultRepo.save(validationResult);
+    const saved = await this.validationResultRepo.save(validationResult);
+
+    if (product.catalogProductId) {
+      const catalog = await this.catalogProductRepo.findOne({
+        where: { id: product.catalogProductId },
+      });
+      if (catalog?.sku) {
+        await this.aiRunLogService.recordComplianceOutcome(
+          catalog.sku,
+          overallScore,
+        );
+      }
+    }
+
+    return saved;
   }
 
   private async validateCategory(

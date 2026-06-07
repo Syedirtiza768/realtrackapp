@@ -1,0 +1,16 @@
+{
+  "model": "amazon/nova-lite-v1",
+  "ok": false,
+  "attempts": 1,
+  "latencyMs": 25289,
+  "promptTokens": 3240,
+  "completionTokens": 5120,
+  "totalTokens": 8360,
+  "costUsd": 0.0014232000000000001,
+  "inputPerM": 0.06,
+  "outputPerM": 0.24,
+  "rawLength": 14394,
+  "schemaValid": false,
+  "parseError": "parse-failed",
+  "rawSample": "```json\n{\n  \"items\": [\n    {\n      \"index\": 0,\n      \"title\": \"2008 Mercedes-Benz C-Class W204 Engine M272 3.5L V6 OEM\",\n      \"description\": \"<h3>2008 Mercedes-Benz C-Class W204 Engine M272 3.5L V6 OEM</h3><p>Complete working engine tested. Removed from 2008 Mercedes-Benz C-350 AMG / Sport.</p><h4>Details</h4><ul><li>Engine M272 3.5L V6</li><li>RWD</li><li>Gasoline</li></ul><h4>Compatibility</h4><p>Mercedes-Benz C-Class W204 (2007-2014)</p><h4>Technical Notes</h4><p>Requires professional instal"
+}

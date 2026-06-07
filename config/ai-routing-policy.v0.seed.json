@@ -1,0 +1,27 @@
+{
+  "version": 0,
+  "generatedAt": "2026-06-07T00:00:00.000Z",
+  "canaryPercent": 0,
+  "source": "model-comparison-benchmark",
+  "segments": {
+    "complete_engine|*": { "lane": "flagship", "model": "google/gemini-2.5-flash" },
+    "transmission|*": { "lane": "flagship", "model": "google/gemini-2.5-flash" },
+    "ecu|*": { "lane": "flagship", "model": "google/gemini-2.5-flash" },
+    "abs_module|*": { "lane": "flagship", "model": "google/gemini-2.5-flash" },
+    "*|200-*": { "lane": "flagship", "model": "google/gemini-2.5-flash" },
+    "*|*|bulk": { "lane": "bulk", "model": "deepseek/deepseek-chat-v3-0324" },
+    "*|*": { "lane": "default", "model": "openai/gpt-4.1-mini" }
+  },
+  "thresholds": {
+    "flagshipMinPrice": 200,
+    "fitmentMinRows": 5,
+    "autoApproveMinScore": 85
+  },
+  "escalationChain": ["openai/gpt-4.1-mini", "google/gemini-2.5-flash"],
+  "blocklist": [
+    "amazon/nova-lite-v1",
+    "anthropic/claude-3.5-haiku",
+    "meta-llama/llama-3.3-70b-instruct"
+  ],
+  "pins": {}
+}

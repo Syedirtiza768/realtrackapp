@@ -4,38 +4,52 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OpenAiService } from './openai.service.js';
 import { OpenAiQueueService, OpenAiQueueProcessor } from './openai-queue.service.js';
 import { EnrichmentPipeline } from './pipelines/enrichment.pipeline.js';
+import { VisionEnrichmentPipeline } from './pipelines/vision-enrichment.pipeline.js';
 import { ListingGenerationPipeline } from './pipelines/listing-generation.pipeline.js';
 import { CompetitiveAnalysisPipeline } from './pipelines/competitive-analysis.pipeline.js';
 import { CrossReferencePipeline } from './pipelines/cross-reference.pipeline.js';
 import { PricingAnalysisPipeline } from './pipelines/pricing-analysis.pipeline.js';
 import { CrossReference } from '../../listings/entities/cross-reference.entity.js';
+import { AiRunLog } from './entities/ai-run-log.entity.js';
+import { AiRoutingPolicyHistory } from './entities/ai-routing-policy-history.entity.js';
+import { ComplianceAuditLog } from '../../catalog-import/entities/compliance-audit-log.entity.js';
+import { ModelRouter } from './model-router.js';
+import { ListingQualityValidator } from './listing-quality.validator.js';
+import { AiRunLogService } from './ai-run-log.service.js';
+import { AiOptimizerService } from './ai-optimizer.service.js';
+import { ListingGuardAuditService } from './listing-guard-audit.service.js';
+import { AiRoutingController } from './ai-routing.controller.js';
+import { EbayTaxonomyTruthService } from './ebay-taxonomy-truth.service.js';
+import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
 
 /**
  * OpenAiModule — Global module providing centralised OpenAI access.
- *
- * @Global so every module can inject OpenAiService, pipelines, and queue
- * without importing OpenAiModule explicitly.
- *
- * Provides:
- *  - OpenAiService        → low-level chat/embed calls with retry + cost tracking
- *  - OpenAiQueueService   → BullMQ-backed async prompt queue
- *  - EnrichmentPipeline   → data enrichment (spreadsheet import, image analysis)
- *  - ListingGenerationPipeline → eBay listing content generation
- *  - CompetitiveAnalysisPipeline → competitive pricing intelligence
- *  - CrossReferencePipeline → OEM ↔ aftermarket cross-reference extraction
- *  - PricingAnalysisPipeline → AI pricing suggestions with cost/MAP enforcement
  */
 @Global()
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'openai' }),
-    TypeOrmModule.forFeature([CrossReference]),
+    TypeOrmModule.forFeature([
+      CrossReference,
+      AiRunLog,
+      AiRoutingPolicyHistory,
+      ComplianceAuditLog,
+      EbayCategory,
+    ]),
   ],
+  controllers: [AiRoutingController],
   providers: [
     OpenAiService,
     OpenAiQueueService,
     OpenAiQueueProcessor,
+    ModelRouter,
+    ListingQualityValidator,
+    AiRunLogService,
+    AiOptimizerService,
+    ListingGuardAuditService,
+    EbayTaxonomyTruthService,
     EnrichmentPipeline,
+    VisionEnrichmentPipeline,
     ListingGenerationPipeline,
     CompetitiveAnalysisPipeline,
     CrossReferencePipeline,
@@ -44,7 +58,12 @@ import { CrossReference } from '../../listings/entities/cross-reference.entity.j
   exports: [
     OpenAiService,
     OpenAiQueueService,
+    ModelRouter,
+    ListingQualityValidator,
+    AiRunLogService,
+    AiOptimizerService,
     EnrichmentPipeline,
+    VisionEnrichmentPipeline,
     ListingGenerationPipeline,
     CompetitiveAnalysisPipeline,
     CrossReferencePipeline,

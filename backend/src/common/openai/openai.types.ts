@@ -21,6 +21,8 @@ export interface OpenAiChatRequest {
   jsonMode?: boolean;
   /** Optional metadata for logging */
   metadata?: Record<string, unknown>;
+  /** Lane label for per-lane session cost tracking */
+  costLane?: string;
 }
 
 export interface OpenAiEmbeddingRequest {
@@ -122,8 +124,13 @@ export interface PromptTemplate {
  *  Output: $0.60 / 1M tokens
  */
 export const OPENAI_PRICING: Record<string, { input: number; output: number }> = {
-  // MiniMax M3 via OpenRouter (text pricing; vision is ~2x)
-  'minimax/minimax-m3': { input: 0.50, output: 2.00 },
+  // Production enrichment lanes (OpenRouter catalog pricing)
+  'openai/gpt-4.1-mini': { input: 0.4, output: 1.6 },
+  'google/gemini-2.5-flash': { input: 0.3, output: 2.5 },
+  'deepseek/deepseek-chat-v3-0324': { input: 0.27, output: 1.1 },
+  'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
+  // MiniMax M3 via OpenRouter (legacy default; vision is ~2x)
+  'minimax/minimax-m3': { input: 0.30, output: 1.2 },
 
   // Legacy OpenAI models
   'gpt-5.4': { input: 2.5, output: 10.0 },
@@ -139,7 +146,8 @@ export function estimateCost(
   promptTokens: number,
   completionTokens: number,
 ): number {
-  const pricing = OPENAI_PRICING[model] ?? OPENAI_PRICING['minimax/minimax-m3'];
+  const pricing =
+    OPENAI_PRICING[model] ?? OPENAI_PRICING['openai/gpt-4.1-mini'];
   return (
     (promptTokens / 1_000_000) * pricing.input +
     (completionTokens / 1_000_000) * pricing.output

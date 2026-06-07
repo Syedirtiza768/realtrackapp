@@ -37,6 +37,7 @@ export class AiService {
   async analyzeImages(
     imageUrls: string[],
     preferredProvider?: string,
+    partContext?: Record<string, unknown>,
   ): Promise<AiRawResponse> {
     const provider = this.getProvider(preferredProvider);
     this.logger.log(
@@ -44,7 +45,7 @@ export class AiService {
     );
 
     try {
-      return await provider.analyzeImages(imageUrls, '');
+      return await provider.analyzeImages(imageUrls, '', partContext);
     } catch (err) {
       // If primary fails and we have a fallback, try it
       if (preferredProvider === 'openai' && this.providers.has('google')) {

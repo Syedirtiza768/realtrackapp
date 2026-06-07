@@ -50,6 +50,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | `/settings/client` | `ClientSettingsPage` | (super_admin) | White-label settings |
 | `/settings/users` | `UsersAdminPage` | (implicit) | User management |
 | `/settings/permissions` | `PermissionsPage` | (implicit) | Permission management |
+| `/settings/ai-routing` | `AiRoutingDashboardPage` | `ai.routing.view` | AI routing stats, policy, optimizer |
 | `/settings/integrations/ebay` | `EbayStoresSettingsPage` | `ebay.view` | eBay + SellerPundit import/sync |
 | `/settings/integrations/ebay/:accountId` | `EbayStoreDetailPage` | `ebay.view` | Store detail |
 | `/settings/integrations/ebay/:accountId/policies` | `EbayPolicyMappingPage` | `ebay.manage` | Policy mapping |

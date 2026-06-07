@@ -38,9 +38,12 @@ export class OpenAiService implements OnModuleInit {
 
   /** Cumulative cost tracker (resets on app restart) */
   private sessionCostUsd = 0;
+  private sessionCostByLane = new Map<string, number>();
 
   constructor(private readonly config: ConfigService) {
-    this.chatModel = this.config.get<string>('OPENAI_CHAT_MODEL', 'minimax/minimax-m3');
+    this.chatModel =
+      this.config.get<string>('OPENAI_MODEL_DEFAULT') ||
+      this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4.1-mini');
     this.embeddingModel = this.config.get<string>(
       'OPENAI_EMBEDDING_MODEL',
       'text-embedding-3-small',
@@ -59,7 +62,7 @@ export class OpenAiService implements OnModuleInit {
       apiKey,
       baseURL,
       maxRetries: 0,
-      timeout: 60_000,
+      timeout: Number(this.config.get('OPENAI_TIMEOUT_MS', '120000')),
       defaultHeaders: {
         'HTTP-Referer': 'https://realtrackapp.com',
         'X-Title': 'RealTrackApp',
@@ -122,6 +125,11 @@ export class OpenAiService implements OnModuleInit {
     const totalTokens = promptTokens + completionTokens;
     const cost = estimateCost(model, promptTokens, completionTokens);
     this.sessionCostUsd += cost;
+    const laneKey = req.costLane ?? model;
+    this.sessionCostByLane.set(
+      laneKey,
+      (this.sessionCostByLane.get(laneKey) ?? 0) + cost,
+    );
 
     // Parse content
     let content: unknown = rawContent;
@@ -180,6 +188,14 @@ export class OpenAiService implements OnModuleInit {
    */
   getSessionCost(): number {
     return Math.round(this.sessionCostUsd * 10000) / 10000;
+  }
+
+  getSessionCostByLane(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [lane, cost] of this.sessionCostByLane) {
+      out[lane] = Math.round(cost * 10000) / 10000;
+    }
+    return out;
   }
 
   /**

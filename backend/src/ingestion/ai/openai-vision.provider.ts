@@ -1,119 +1,36 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import type { AiRawResponse, AiVisionProvider } from './ai-provider.interface.js';
-import { estimateCost } from '../../common/openai/openai.types.js';
-
-/**
- * Structured prompt for motor parts image analysis.
- */
-const MOTOR_PARTS_PROMPT = `Analyze this motor part image and extract:
-1. Part title (max 80 chars, eBay-optimized)
-2. Brand name
-3. Manufacturer Part Number (MPN)
-4. OE/OEM Part Number
-5. Part type/category
-6. Condition (New/Used/Refurbished)
-7. Estimated market value (USD)
-8. Description (250 chars)
-9. Key features (array)
-10. Vehicle fitment (make, model, year range, engine if visible)
-11. Dimensions if measurable
-12. Any visible defects or wear
-
-Return JSON only with these exact keys:
-{
-  "title": string,
-  "brand": string | null,
-  "mpn": string | null,
-  "oemNumber": string | null,
-  "partType": string | null,
-  "condition": "New" | "Used" | "Refurbished",
-  "priceEstimate": number | null,
-  "description": string,
-  "features": string[],
-  "fitment": { "make": string, "model": string, "yearStart": number, "yearEnd": number, "engine": string | null } | null,
-  "dimensions": { "length": string, "width": string, "height": string, "weight": string } | null,
-  "defects": string[],
-  "confidence": {
-    "title": number,
-    "brand": number,
-    "mpn": number,
-    "partType": number,
-    "overall": number
-  }
-}
-
-Include confidence 0.0-1.0 for each field. Be conservative with confidence scores.`;
+import { VisionEnrichmentPipeline } from '../../common/openai/pipelines/vision-enrichment.pipeline.js';
+import type { PartContext } from '../../common/openai/ai-routing-policy.types.js';
 
 @Injectable()
 export class OpenAiVisionProvider implements AiVisionProvider {
   readonly name = 'openai_vision';
   private readonly logger = new Logger(OpenAiVisionProvider.name);
-  private readonly client: OpenAI;
-  private readonly model: string;
 
-  constructor(private readonly config: ConfigService) {
-    this.client = new OpenAI({
-      apiKey: this.config.get<string>('OPENAI_API_KEY', ''),
-      baseURL: this.config.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1'),
-      defaultHeaders: {
-        'HTTP-Referer': 'https://realtrackapp.com',
-        'X-Title': 'RealTrackApp',
-      },
-    });
-    this.model = this.config.get<string>('OPENAI_VISION_MODEL', 'minimax/minimax-m3');
-  }
+  constructor(private readonly visionPipeline: VisionEnrichmentPipeline) {}
 
   async analyzeImages(
     imageUrls: string[],
     prompt?: string,
+    partContext?: PartContext,
   ): Promise<AiRawResponse> {
-    const startMs = Date.now();
-    const finalPrompt = prompt ?? MOTOR_PARTS_PROMPT;
-
-    // Build content array with images
-    const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
-      { type: 'text', text: finalPrompt },
-      ...imageUrls.map(
-        (url) =>
-          ({
-            type: 'image_url' as const,
-            image_url: { url, detail: 'high' as const },
-          }),
-      ),
-    ];
-
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [{ role: 'user', content }],
-        max_tokens: 2000,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-      });
-
-      const latencyMs = Date.now() - startMs;
-      const usage = response.usage;
-      const promptTokens = usage?.prompt_tokens ?? 0;
-      const completionTokens = usage?.completion_tokens ?? 0;
-      const rawText = response.choices[0]?.message?.content ?? '{}';
-
-      let raw: Record<string, unknown>;
-      try {
-        raw = JSON.parse(rawText) as Record<string, unknown>;
-      } catch {
-        this.logger.warn('Failed to parse AI JSON response, wrapping raw text');
-        raw = { _raw: rawText };
-      }
-
+      const result = await this.visionPipeline.analyze(
+        imageUrls,
+        partContext ?? {},
+        prompt,
+      );
       return {
-        raw,
-        provider: this.name,
-        model: this.model,
-        tokensUsed: promptTokens + completionTokens,
-        latencyMs,
-        estimatedCostUsd: estimateCost(this.model, promptTokens, completionTokens),
+        raw: result.raw,
+        provider: result.provider,
+        model: result.model,
+        tokensUsed: result.tokensUsed,
+        latencyMs: result.latencyMs,
+        estimatedCostUsd: result.estimatedCostUsd,
+        validationScore: result.validationScore,
+        passedGate: result.passedGate,
+        guardFixes: result.guardFixes,
       };
     } catch (err) {
       this.logger.error('AI Vision API call failed', err);
@@ -122,7 +39,6 @@ export class OpenAiVisionProvider implements AiVisionProvider {
   }
 
   estimateCost(imageCount: number): number {
-    // MiniMax M3 vision: ~$0.025 per image average
-    return imageCount * 0.025;
+    return imageCount * 0.0025;
   }
 }

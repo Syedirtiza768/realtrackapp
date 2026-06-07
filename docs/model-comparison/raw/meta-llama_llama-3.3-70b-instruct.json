@@ -1,0 +1,16 @@
+{
+  "model": "meta-llama/llama-3.3-70b-instruct",
+  "ok": false,
+  "attempts": 1,
+  "latencyMs": 601208,
+  "promptTokens": 2918,
+  "completionTokens": 10036,
+  "totalTokens": 12954,
+  "costUsd": 0.00350332,
+  "inputPerM": 0.09999999999999999,
+  "outputPerM": 0.32,
+  "rawLength": 31365,
+  "schemaValid": false,
+  "parseError": "parse-failed",
+  "rawSample": "Here are the analyzed parts with optimized eBay Motors listings, comprehensive vehicle compatibility, and technical installation requirements:\n\n**Part 1: Engine (M272 3.5L V6)**\n* Title: 2007-2014 Mercedes-Benz C-Class W204 3.5L V6 Engine M272 272.970 OEM\n* Description: <h3>Mercedes-Benz C-Class W204 3.5L V6 Engine</h3><p>This is a used OEM engine removed from a 2008 Mercedes-Benz C-350. The engine has been tested and is in good working condition.</p><h4>Details</h4><ul><li>Part Number: 272.970<"
+}

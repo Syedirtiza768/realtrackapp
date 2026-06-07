@@ -1,0 +1,33 @@
+name: AI routing regression
+
+on:
+  pull_request:
+    paths:
+      - 'backend/src/common/openai/**'
+      - 'scripts/lib/**'
+      - 'scripts/model-comparison/**'
+      - 'scripts/ebay-enrichment-pipeline.mjs'
+      - 'config/ai-routing-policy*.json'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/common/openai/**'
+      - 'scripts/lib/**'
+      - 'scripts/model-comparison/**'
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Backend build
+        working-directory: backend
+        run: npm ci && npm run build
+
+      - name: Offline gpt-4.1-mini regression (cached benchmark)
+        run: node scripts/model-comparison/regression-check.mjs

@@ -6,7 +6,65 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Fixed
+- **eBay Taxonomy API fallbacks:** Production `EBAY_CLIENT_*` credentials added to
+  root and `backend/.env`; backend container restarted via Compose. Enrichment
+  pipeline now resolves `EBAY_MOTORS_US` category tree (not hardcoded tree `0`)
+  for `get_category_suggestions` and `get_item_aspects_for_category`.
+- **RBAC sync race on boot:** `RbacService.syncFromRegistry()` is now single-flight
+  and tolerates duplicate `role_permissions` inserts so backend starts cleanly
+  when permissions are added.
+- **Pipeline OpenRouter validation:** `validateOpenAiKey()` uses `max_tokens: 16`
+  (gpt-4.1-mini minimum) instead of 5, which blocked all enrichment runs.
+
 ### Added
+- **Production AI routing enablement scripts:** `scripts/import-ai-run-logs.mjs`,
+  `scripts/seed-ebay-categories-from-mappings.mjs`, and SQL helpers to seed
+  `ebay_categories` from mappings and bulk-load pipeline `ai-run-logs.json` into
+  PostgreSQL for the optimizer dashboard.
+- **AI routing dashboard + Phase 4 completion:** `/settings/ai-routing` UI for segment
+  stats, optimizer recommendations, and policy JSON. `EbayTaxonomyTruthService`
+  (opt-in via `AI_TAXONOMY_VALIDATION_ENABLED`) validates cached eBay category
+  leaf + required aspects. Optimizer reward uses `compliance_score`, `hardFailRate`,
+  and `publishErrorRate` from `ai_run_logs`. Compliance outcomes backfilled from
+  catalog `EbayComplianceService` and motors `ComplianceEngineService`. Unit tests
+  for reward, canary hash, and listing guards. Migration `1775710000000`.
+- **Ingestion routing parity:** `VisionEnrichmentPipeline` routes vision ingestion through
+  `ModelRouter`, guards, validator, and `ai_run_logs`; image enrichment uses `text` lane
+  with run logging. Offline regression gate `scripts/model-comparison/regression-check.mjs`
+  + GitHub workflow `ai-routing-regression.yml`. Pipeline `ai-run-logs.json` includes
+  per-lane attempt/cost summary.
+- **AI routing API + backlog wiring:** `GET/POST /api/ai/routing/*` for segment stats,
+  recommendations, policy read, and optimizer run (`ai.routing.view` /
+  `ai.routing.manage`). Optimizer writes `ai_routing_policy_history`; guard fixes
+  log to `compliance_audit_logs` when product/import context exists;
+  `AiRunLog.enhancement_id` set on enrichment create; per-lane session cost
+  tracking; CLI `--apply` appends `config/ai-routing-policy-history.json`.
+- **eBay Motors AI model comparison:** Benchmark harness + report under
+  `scripts/model-comparison/` and `docs/model-comparison/`. Runs the production
+  enrichment prompt over a representative 8-part sample from
+  `docs/2008 Mercedes C350 AMG.xlsx` across 8 OpenRouter models, scoring
+  title/description/specifics/fitment, schema reliability, live cost, and latency.
+  Finding: recommend switching default from `minimax/minimax-m3` to
+  `openai/gpt-4.1-mini` (deeper legitimate fitment, faster, ~$2.10/1k); use
+  `deepseek/deepseek-chat-v3-0324` for low-cost bulk and `google/gemini-2.5-flash`
+  for flagship listings. `nova-lite`, `claude-3.5-haiku`, and `llama-3.3-70b`
+  failed to return valid JSON at batch size 8. See `docs/model-comparison/REPORT.md`.
+- **AI optimization implementation plan:** `docs/ai-optimization/IMPLEMENTATION_PLAN.md`
+  — multi-model router, quality gates, escalation, `ai_run_logs` learning loop,
+  nightly optimizer, and phased rollout (5 phases).
+- **AI optimization plan status:** `docs/ai-optimization/IMPLEMENTATION_PLAN.md` updated
+  with Phase 0–3 completion markers, file map, backlog (§9.4), and ops reference (§22).
+- **AI optimization system (Phase 1–3 foundation):** Multi-model `ModelRouter`
+  (`backend/src/common/openai/model-router.ts`, `scripts/lib/model-router.mjs`)
+  with seeded policy `config/ai-routing-policy.json`. Default lane
+  `openai/gpt-4.1-mini`; flagship `google/gemini-2.5-flash`; bulk
+  `deepseek/deepseek-chat-v3-0324`. Deterministic guards + `ListingQualityValidator`
+  with one-shot escalation. `ai_run_logs` table + `AiRunLogService`; approve/reject
+  backfill in `AiEnhancementService`; publish outcome hook in `EbayComplianceService`.
+  Pipeline writes `output/ai-run-logs.json`. Advisor CLI:
+  `scripts/ai-optimize-routing.mjs`. Nightly `AiOptimizerService` (opt-in via
+  `AI_OPTIMIZER_ENABLED`). Operator guide: `docs/ai-optimization/README.md`.
 - **SellerPundit eBay connection source:** Import eBay stores from SellerPundit
   (`connection_source = sellerpundit`) without a new channel type. Backend module
   `backend/src/integrations/sellerpundit/` handles login, store/token sync,
