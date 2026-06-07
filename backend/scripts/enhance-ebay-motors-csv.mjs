@@ -46,8 +46,18 @@ async function main() {
   const document = parseCsvDocument(sourceText);
   const inspection = inspectStructure(document);
   const itemRows = getItemRows(document, inspection).slice(0, options.maxItems);
+  const baseURL = process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
   const client = apiKey
-    ? new OpenAI({ apiKey, maxRetries: 0, timeout: 60_000 })
+    ? new OpenAI({
+        apiKey,
+        baseURL,
+        maxRetries: 0,
+        timeout: 60_000,
+        defaultHeaders: {
+          'HTTP-Referer': 'https://realtrackapp.com',
+          'X-Title': 'RealTrackApp',
+        },
+      })
     : null;
 
   if (!client && !options.dryRun && !options.allowMissingKey) {
@@ -55,7 +65,7 @@ async function main() {
   }
 
   const report = {
-    model: options.model || DEFAULT_MODEL,
+    model: options.model || process.env.OPENAI_CHAT_MODEL || DEFAULT_MODEL,
     source: sourcePath,
     output: outputPath,
     report: reportPath,

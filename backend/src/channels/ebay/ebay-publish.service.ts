@@ -863,9 +863,12 @@ export class EbayPublishService {
       }
     }
 
+    const currency = this.mpConfig.require(marketplaceId).currency;
+
     if (!mpRow) {
       return {
         ...req,
+        currency,
         fulfillmentPolicyId:
           fulfillmentPolicyId ?? store.fulfillmentPolicyId ?? undefined,
         paymentPolicyId: paymentPolicyId ?? store.paymentPolicyId ?? undefined,
@@ -876,6 +879,7 @@ export class EbayPublishService {
 
     return {
       ...req,
+      currency,
       fulfillmentPolicyId,
       paymentPolicyId,
       returnPolicyId,
@@ -1431,7 +1435,7 @@ export class EbayPublishService {
       pricingSummary: {
         price: {
           value: req.price.toFixed(2),
-          currency: req.currency ?? 'USD',
+          currency: req.currency ?? this.mpConfig.require(marketplace).currency,
         },
       },
       categoryId: req.categoryId,

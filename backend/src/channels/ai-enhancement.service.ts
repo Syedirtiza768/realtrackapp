@@ -145,7 +145,7 @@ export class AiEnhancementService {
       enh.diff = result.diff ?? null;
       enh.confidenceScore = result.confidenceScore;
       enh.provider = result.provider ?? 'openai';
-      enh.model = result.model ?? 'gpt-4o';
+      enh.model = result.model ?? 'minimax/minimax-m3';
       enh.tokensUsed = result.tokensUsed;
       enh.latencyMs = Date.now() - startMs;
       enh.costUsd = result.costUsd ?? 0;
@@ -317,7 +317,7 @@ export class AiEnhancementService {
         confidenceScore: 0.88,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.rawResponse?.model ?? 'gpt-4o',
+        model: result.rawResponse?.model ?? 'minimax/minimax-m3',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
@@ -349,7 +349,7 @@ export class AiEnhancementService {
         confidenceScore: result.confidence?.overall ?? 0.85,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.rawResponse?.model ?? 'gpt-4o',
+        model: result.rawResponse?.model ?? 'minimax/minimax-m3',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
@@ -379,7 +379,7 @@ export class AiEnhancementService {
         confidenceScore: result.confidence?.overall ?? 0.75,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.rawResponse?.model ?? 'gpt-4o',
+        model: result.rawResponse?.model ?? 'minimax/minimax-m3',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {

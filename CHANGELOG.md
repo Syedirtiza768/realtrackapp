@@ -17,6 +17,9 @@ for every meaningful change (Continuous Documentation Protocol).
   page; SellerPundit badge on store detail (native listing/order sync hidden).
 
 ### Fixed
+- OpenRouter AI calls now use **MiniMax M3 only** (`minimax/minimax-m3`):
+  enrichment pipeline no longer falls back to GPT-4o/GPT-5.x; pipeline script
+  routes through `OPENAI_BASE_URL`; model env vars added to `backend/.env`.
 - Bulk/stub eBay publish no longer forces `condition: NEW` over
   `listing_records.conditionId`, which incorrectly required seller-paid P&A return
   policies for used salvage parts (buyer-paid 30-day returns are valid for Used).

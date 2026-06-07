@@ -177,7 +177,7 @@ docker compose logs -f postgres redis
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | For AI features | OpenAI API key |
-| `OPENAI_CHAT_MODEL` | No | Default: `gpt-4o-mini` |
+| `OPENAI_CHAT_MODEL` | No | Default: `minimax/minimax-m3` (OpenRouter) |
 | `OPENAI_EMBEDDING_MODEL` | No | Default: `text-embedding-3-small` |
 
 ### AWS S3 Storage

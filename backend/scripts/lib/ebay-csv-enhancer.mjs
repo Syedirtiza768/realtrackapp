@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-export const DEFAULT_MODEL = 'gpt-5.4';
+export const DEFAULT_MODEL = 'minimax/minimax-m3';
 export const MAX_EBAY_TITLE_LENGTH = 80;
 
 const PART_NUMBER_PATTERN = /\b[A-Z0-9][A-Z0-9-]{4,}\b/g;

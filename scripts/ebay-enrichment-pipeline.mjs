@@ -59,14 +59,24 @@ const env = { ...backendEnv, ...rootEnv };
 
 // Fallback to process.env for critical keys not found in .env files
 // (Docker passes env vars via process.env, not .env files)
-for (const key of ['OPENAI_API_KEY', 'OPENAI_CHAT_MODEL', 'EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET', 'EBAY_SANDBOX']) {
+for (const key of [
+  'OPENAI_API_KEY',
+  'OPENAI_BASE_URL',
+  'OPENAI_CHAT_MODEL',
+  'EBAY_CLIENT_ID',
+  'EBAY_CLIENT_SECRET',
+  'EBAY_SANDBOX',
+]) {
   if (!env[key] && process.env[key]) env[key] = process.env[key];
 }
+
+const DEFAULT_CHAT_MODEL = 'minimax/minimax-m3';
 
 const CONFIG = {
   openai: {
     apiKey: env.OPENAI_API_KEY,
-    model: 'gpt-5.4',              // default high-quality model; override with OPENAI_CHAT_MODEL
+    baseURL: env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1',
+    model: DEFAULT_CHAT_MODEL,
     batchSize: 8,                  // safer JSON payload size for structured output
     concurrency: 2,                // reduce malformed/truncated output risk under heavy load
     temperature: 0.25,
@@ -1718,7 +1728,14 @@ function getOpenAI() {
       log.warn('OPENAI_API_KEY not set — AI enrichment will use fallback mode');
       return null;
     }
-    _openai = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+    _openai = new OpenAI({
+      apiKey: CONFIG.openai.apiKey,
+      baseURL: CONFIG.openai.baseURL,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://realtrackapp.com',
+        'X-Title': 'RealTrackApp',
+      },
+    });
   }
   return _openai;
 }
@@ -1727,46 +1744,26 @@ async function validateOpenAiKey() {
   const client = getOpenAI();
   if (!client) return false;
 
-  const preferredModel = CONFIG.openai.model;
-  const candidateModels = [
-    preferredModel,
-    'gpt-5.4',
-    'gpt-4o',
-    'gpt-4o-mini',
-    'gpt-4-turbo',
-  ].filter(Boolean);
-  const uniqueModels = [...new Set(candidateModels)];
+  const model = CONFIG.openai.model;
 
   try {
-    for (const model of uniqueModels) {
-      try {
-        const response = await client.chat.completions.create({
-          model,
-          messages: [{ role: 'user', content: 'Reply with OK' }],
-          max_tokens: 5,
-        });
-        if (response.choices?.[0]?.message?.content) {
-          openaiAvailable = true;
-          if (CONFIG.openai.model !== model) {
-            log.warn(
-              `Preferred model "${CONFIG.openai.model}" unavailable. Falling back to "${model}" for enrichment.`,
-            );
-            CONFIG.openai.model = model;
-          }
-          log.info(`OpenAI API key validated successfully (model=${CONFIG.openai.model})`);
-          return true;
-        }
-      } catch (modelErr) {
-        const message = modelErr instanceof Error ? modelErr.message : String(modelErr);
-        log.warn(`OpenAI validation failed for model "${model}": ${message}`);
-      }
+    const response = await client.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: 'Reply with OK' }],
+      max_tokens: 5,
+    });
+    if (response.choices?.[0]?.message?.content) {
+      openaiAvailable = true;
+      log.info(`OpenRouter validated (baseURL=${CONFIG.openai.baseURL}, model=${model})`);
+      return true;
     }
   } catch (err) {
-    log.error(`OpenAI API key invalid: ${err.message}`);
+    const message = err instanceof Error ? err.message : String(err);
+    log.error(`OpenRouter validation failed for model "${model}": ${message}`);
   }
   REPORT.errors.push({
     type: 'openai',
-    message: `OpenAI validation failed for all candidate models: ${uniqueModels.join(', ')}`,
+    message: `OpenRouter validation failed for model "${model}" at ${CONFIG.openai.baseURL}`,
   });
   return false;
 }
@@ -3748,7 +3745,7 @@ function generateReport() {
       totalTokens: REPORT.openaiTokensUsed,
       errors: REPORT.openaiErrors,
       specificsEnrichedCount: REPORT.specificsEnrichedCount,
-      estimatedCost: `$${(REPORT.openaiTokensUsed * 0.00000015).toFixed(4)}`, // gpt-4o-mini pricing
+      estimatedCost: `$${(REPORT.openaiTokensUsed * 0.00000050).toFixed(4)}`, // MiniMax M3 input pricing (approx)
       enrichmentRate: REPORT.totalInput > 0
         ? `${((REPORT.totalProcessed / REPORT.totalInput) * 100).toFixed(1)}%`
         : '0%',

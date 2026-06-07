@@ -61,7 +61,10 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `OPENAI_API_KEY` | — | **Secret.** OpenAI key |
-| `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Chat/vision model |
+| `OPENAI_CHAT_MODEL` | `minimax/minimax-m3` | Chat model (OpenRouter) |
+| `OPENAI_VISION_MODEL` | `minimax/minimax-m3` | Vision model (OpenRouter) |
+| `OPENAI_LISTING_MODEL` | `minimax/minimax-m3` | Listing generation model (OpenRouter) |
+| `OPENAI_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
 
 ## eBay Developer API
