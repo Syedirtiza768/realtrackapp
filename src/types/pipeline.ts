@@ -28,6 +28,37 @@ export type FitmentStatus =
   | 'failed'
   | 'needs_review';
 
+export type EnrichmentMode = 'ai' | 'fallback' | 'mixed' | 'none';
+
+export interface PipelineCategoryMappingSummary {
+  apiMapped?: number;
+  fallbackMapped?: number;
+  apiRate?: string;
+  apiSkippedReason?: string | null;
+  treeCacheHit?: boolean;
+  treeCacheSource?: string | null;
+  taxonomyErrors?: Array<{ type?: string; message: string; source?: string; status?: number | null }>;
+}
+
+export interface PipelineEnrichmentSummary {
+  enrichmentMode?: EnrichmentMode;
+  totalAiEnriched?: number;
+  totalFallbackEnrichment?: number;
+  totalListingsGenerated?: number;
+  openRouterModel?: string;
+  openRouterProbeErrors?: Array<{ type?: string; message: string }>;
+  enrichmentErrors?: Array<{ type?: string; message: string; batchSize?: number }>;
+  categoryMapping?: PipelineCategoryMappingSummary;
+  categoryTaxonomyBackoff?: boolean;
+  localization?: {
+    auAiTranslated?: number;
+    deAiTranslated?: number;
+    auRuleOnly?: number;
+    deRuleOnly?: number;
+    errors?: number;
+  };
+}
+
 export interface PipelineJob {
   id: string;
   status: PipelineJobStatus;

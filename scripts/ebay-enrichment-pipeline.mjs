@@ -15,6 +15,7 @@
  * ═══════════════════════════════════════════════════════════════════════
  */
 
+import './lib/ipv4-network-bootstrap.mjs';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,6 +26,7 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import { createModelRouter } from './lib/model-router.mjs';
 import { applyListingGuards, validateListing } from './lib/listing-quality.mjs';
+import { createConcurrencyPool, isRateLimitError } from './lib/concurrency-pool.mjs';
 
 // ── HTTP connection pooling — reuse TCP sockets across requests ──
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 15, maxFreeSockets: 5 });
@@ -80,12 +82,19 @@ const CONFIG = {
     apiKey: env.OPENAI_API_KEY,
     baseURL: env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1',
     model: DEFAULT_CHAT_MODEL,
-    batchSize: 8,                  // safer JSON payload size for structured output
-    concurrency: 2,                // reduce malformed/truncated output risk under heavy load
+    batchSize: 8,                  // unchanged — quality gate for structured JSON
+    concurrency: 8,                // parallel OpenRouter batches (override: PIPELINE_AI_CONCURRENCY)
     temperature: 0.25,
     maxTokens: undefined,          // allow model to use full response budget unless explicitly configured
     maxRetries: 3,
-    delayBetweenCallsMs: 50,      // minimal delay — rate limits handled by retry
+    delayBetweenCallsMs: 50,      // minimal delay — 429s use longer backoff in enrichBatch
+  },
+  pipeline: {
+    aiConcurrency: 8,
+    localizationConcurrency: 6,
+    imageConcurrency: 6,
+    categoryConcurrency: 3,
+    vinBatchConcurrency: 6,
   },
   ebay: {
     clientId: env.EBAY_CLIENT_ID,
@@ -124,6 +133,23 @@ CONFIG.openai.model =
   env.OPENAI_MODEL_DEFAULT ||
   env.OPENAI_CHAT_MODEL ||
   DEFAULT_CHAT_MODEL;
+
+// Pipeline parallelism — env overrides (rate-limit aware defaults)
+const aiConcurrency = Number(env.PIPELINE_AI_CONCURRENCY || env.OPENAI_CONCURRENCY);
+if (aiConcurrency > 0) {
+  CONFIG.openai.concurrency = aiConcurrency;
+  CONFIG.pipeline.aiConcurrency = aiConcurrency;
+}
+const aiBatchSize = Number(env.PIPELINE_AI_BATCH_SIZE);
+if (aiBatchSize > 0) CONFIG.openai.batchSize = aiBatchSize;
+const locConcurrency = Number(env.PIPELINE_LOCALIZATION_CONCURRENCY);
+if (locConcurrency > 0) CONFIG.pipeline.localizationConcurrency = locConcurrency;
+const imageConcurrency = Number(env.PIPELINE_IMAGE_CONCURRENCY);
+if (imageConcurrency > 0) CONFIG.pipeline.imageConcurrency = imageConcurrency;
+const categoryConcurrency = Number(env.PIPELINE_CATEGORY_CONCURRENCY);
+if (categoryConcurrency > 0) CONFIG.pipeline.categoryConcurrency = categoryConcurrency;
+const vinBatchConcurrency = Number(env.PIPELINE_VIN_BATCH_CONCURRENCY);
+if (vinBatchConcurrency > 0) CONFIG.pipeline.vinBatchConcurrency = vinBatchConcurrency;
 
 const RUN_MODE = env.AI_RUN_MODE || 'default';
 const PROMPT_VERSION = env.AI_PROMPT_VERSION || 'enrichment-v1';
@@ -766,6 +792,10 @@ const REPORT = {
   vinDecodeFail: 0,
   categoryMappingApi: 0,
   categoryMappingFallback: 0,
+  taxonomyErrors: [],
+  taxonomyTreeCacheHit: false,
+  taxonomyTreeCacheSource: null,
+  taxonomyApiSkippedReason: null,
   openaiCalls: 0,
   openaiTokensUsed: 0,
   openaiErrors: 0,
@@ -811,6 +841,13 @@ const REPORT = {
     validationFails: 0,
     attemptsByLane: {},
     estimatedCostByLane: {},
+  },
+  localization: {
+    auAiTranslated: 0,
+    deAiTranslated: 0,
+    auRuleOnly: 0,
+    deRuleOnly: 0,
+    errors: 0,
   },
 };
 
@@ -903,9 +940,111 @@ async function decodeVin(vin) {
 let ebayAppToken = null;
 let ebayTokenExpiry = 0;
 let motorsCategoryTreeId = null;
+let motorsCategoryTreeVersion = null;
+let treeIdResolvePromise = null;
+let taxonomyApiEnabled = true;
+
+const TAXONOMY_BACKOFF_MS = {
+  429: 15 * 60 * 1000,
+  default: 5 * 60 * 1000,
+};
+
+function taxonomyDiskCachePath() {
+  return path.resolve(ROOT, 'output', '.ebay-taxonomy-cache.json');
+}
+
+function taxonomyCacheScopeKey() {
+  return `${CONFIG.ebay.marketplaceId}:${CONFIG.ebay.sandbox ? 'sandbox' : 'production'}`;
+}
+
+function loadTaxonomyDiskCache() {
+  const cachePath = taxonomyDiskCachePath();
+  if (!fs.existsSync(cachePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    const entry = parsed?.entries?.[taxonomyCacheScopeKey()];
+    return entry && typeof entry === 'object' ? entry : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveTaxonomyDiskCache(entry) {
+  const cachePath = taxonomyDiskCachePath();
+  let parsed = { version: 1, entries: {} };
+  if (fs.existsSync(cachePath)) {
+    try {
+      parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      if (!parsed.entries || typeof parsed.entries !== 'object') parsed.entries = {};
+    } catch {
+      parsed = { version: 1, entries: {} };
+    }
+  }
+  parsed.entries[taxonomyCacheScopeKey()] = {
+    ...entry,
+    marketplaceId: CONFIG.ebay.marketplaceId,
+    sandbox: CONFIG.ebay.sandbox,
+    updatedAt: new Date().toISOString(),
+  };
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  fs.writeFileSync(cachePath, JSON.stringify(parsed, null, 2));
+}
+
+function isTaxonomyInBackoff(entry) {
+  if (!entry?.treeFailure?.retryAfter) return false;
+  return Date.now() < Date.parse(entry.treeFailure.retryAfter);
+}
+
+function taxonomyBackoffMs(status) {
+  return TAXONOMY_BACKOFF_MS[status] ?? TAXONOMY_BACKOFF_MS.default;
+}
+
+function recordTaxonomyError(message, status, source) {
+  const text = clean(message);
+  if (!text) return;
+  const dedupeKey = `${source}:${status ?? 'unknown'}:${text}`;
+  if (!REPORT._taxonomyErrorKeys) REPORT._taxonomyErrorKeys = new Set();
+  if (REPORT._taxonomyErrorKeys.has(dedupeKey)) return;
+  REPORT._taxonomyErrorKeys.add(dedupeKey);
+
+  const payload = { type: 'taxonomy', source, status: status ?? null, message: text };
+  REPORT.taxonomyErrors.push(payload);
+  if (REPORT.errors.length < 50) {
+    REPORT.errors.push({ type: 'taxonomy', message: `[${source}] ${text}` });
+  }
+}
+
+function markTaxonomyBackoff(message, status, source) {
+  const backoffMs = taxonomyBackoffMs(status);
+  const retryAfter = new Date(Date.now() + backoffMs).toISOString();
+  const diskEntry = loadTaxonomyDiskCache() ?? {};
+  saveTaxonomyDiskCache({
+    categoryTreeId: diskEntry.categoryTreeId ?? motorsCategoryTreeId ?? null,
+    categoryTreeVersion: diskEntry.categoryTreeVersion ?? motorsCategoryTreeVersion ?? null,
+    treeFailure: {
+      message,
+      status: status ?? null,
+      source,
+      failedAt: new Date().toISOString(),
+      retryAfter,
+    },
+  });
+  taxonomyApiEnabled = false;
+  REPORT.taxonomyApiSkippedReason = message;
+  recordTaxonomyError(`${message} (retry after ${retryAfter})`, status, source);
+  log.warn(`eBay taxonomy backoff until ${retryAfter}: ${message}`);
+}
 
 async function getEbayAppToken() {
   if (ebayAppToken && Date.now() < ebayTokenExpiry - 60000) return ebayAppToken;
+
+  if (!CONFIG.ebay.clientId || !CONFIG.ebay.clientSecret) {
+    const message = 'EBAY_CLIENT_ID / EBAY_CLIENT_SECRET not configured';
+    recordTaxonomyError(message, null, 'oauth');
+    REPORT.taxonomyApiSkippedReason = message;
+    taxonomyApiEnabled = false;
+    return null;
+  }
 
   const basic = Buffer.from(
     `${CONFIG.ebay.clientId}:${CONFIG.ebay.clientSecret}`
@@ -928,16 +1067,18 @@ async function getEbayAppToken() {
     log.info('eBay application token acquired');
     return ebayAppToken;
   } catch (err) {
-    log.error(`eBay token acquisition failed: ${err.response?.data?.error_description || err.message}`);
+    const message = err.response?.data?.error_description || err.message;
+    log.error(`eBay token acquisition failed: ${message}`);
+    recordTaxonomyError(message, err.response?.status ?? null, 'oauth');
+    REPORT.taxonomyApiSkippedReason = message;
+    taxonomyApiEnabled = false;
     return null;
   }
 }
 
 const categorySuggestionCache = new Map();
 
-async function getMotorsCategoryTreeId() {
-  if (motorsCategoryTreeId) return motorsCategoryTreeId;
-
+async function fetchMotorsCategoryTreeIdFromApi() {
   const token = await getEbayAppToken();
   if (!token) return null;
 
@@ -951,17 +1092,62 @@ async function getMotorsCategoryTreeId() {
       }
     );
     motorsCategoryTreeId = data.categoryTreeId;
+    motorsCategoryTreeVersion = data.categoryTreeVersion ?? null;
     if (motorsCategoryTreeId) {
       log.info(`eBay Motors category tree: ${motorsCategoryTreeId}`);
+      REPORT.taxonomyTreeCacheSource = 'api';
+      saveTaxonomyDiskCache({
+        categoryTreeId: motorsCategoryTreeId,
+        categoryTreeVersion: motorsCategoryTreeVersion,
+        treeFailure: null,
+      });
     }
     return motorsCategoryTreeId;
   } catch (err) {
-    log.warn(`Failed to resolve Motors category tree: ${err.response?.data?.errors?.[0]?.message || err.message}`);
+    const status = err.response?.status ?? null;
+    const message = err.response?.data?.errors?.[0]?.message || err.message;
+    log.warn(`Failed to resolve Motors category tree: ${message}`);
+    markTaxonomyBackoff(message, status, 'category_tree');
     return null;
   }
 }
 
+async function getMotorsCategoryTreeId() {
+  if (motorsCategoryTreeId) return motorsCategoryTreeId;
+
+  const diskEntry = loadTaxonomyDiskCache();
+  if (isTaxonomyInBackoff(diskEntry)) {
+    const message = diskEntry.treeFailure.message;
+    REPORT.taxonomyApiSkippedReason = message;
+    taxonomyApiEnabled = false;
+    recordTaxonomyError(
+      `${message} (retry after ${diskEntry.treeFailure.retryAfter})`,
+      diskEntry.treeFailure.status,
+      diskEntry.treeFailure.source || 'category_tree',
+    );
+    return null;
+  }
+
+  if (diskEntry?.categoryTreeId) {
+    motorsCategoryTreeId = diskEntry.categoryTreeId;
+    motorsCategoryTreeVersion = diskEntry.categoryTreeVersion ?? null;
+    REPORT.taxonomyTreeCacheHit = true;
+    REPORT.taxonomyTreeCacheSource = 'disk';
+    log.info(`eBay Motors category tree loaded from disk cache: ${motorsCategoryTreeId}`);
+    return motorsCategoryTreeId;
+  }
+
+  if (!treeIdResolvePromise) {
+    treeIdResolvePromise = fetchMotorsCategoryTreeIdFromApi().finally(() => {
+      treeIdResolvePromise = null;
+    });
+  }
+  return treeIdResolvePromise;
+}
+
 async function suggestCategory(keywords) {
+  if (!taxonomyApiEnabled) return null;
+
   const cacheKey = keywords.toLowerCase().trim();
   if (categorySuggestionCache.has(cacheKey)) return categorySuggestionCache.get(cacheKey);
 
@@ -994,7 +1180,13 @@ async function suggestCategory(keywords) {
       return result;
     }
   } catch (err) {
-    log.warn(`eBay category suggestion failed for "${keywords}": ${err.message}`);
+    const status = err.response?.status ?? null;
+    const message = err.response?.data?.errors?.[0]?.message || err.message;
+    log.warn(`eBay category suggestion failed for "${keywords}": ${message}`);
+    recordTaxonomyError(message, status, 'category_suggestion');
+    if (status === 429) {
+      markTaxonomyBackoff(message, status, 'category_suggestion');
+    }
   }
 
   categorySuggestionCache.set(cacheKey, null);
@@ -1302,6 +1494,7 @@ function parseVehicleFromSheetName(sheetName) {
 function extractGridxPart(row, colMap, sheetName, vehicleInfo) {
   const getVal = (idx) => idx >= 0 && idx < row.length ? clean(row[idx]) : '';
   const desc = getVal(colMap.description);
+  const shortName = extractPartNameFromDescription(desc, vehicleInfo);
 
   return {
     vin: sheetName,    // Use sheet name as VIN placeholder (VIN decode will skip non-VIN strings)
@@ -1310,8 +1503,9 @@ function extractGridxPart(row, colMap, sheetName, vehicleInfo) {
     sku: getVal(colMap.sku),
     category: '',
     partNumber: getVal(colMap.partNumber),
-    partName: desc,     // Description serves as partName
-    note: desc,         // Also use as note for placement extraction
+    partName: shortName || desc,
+    note: desc,
+    _shortPartName: shortName,
     code: '',
     price: parseFloat(row[colMap.price >= 0 ? colMap.price : -1]) || 0,
     // GridX-specific fields preserved for downstream use
@@ -1453,6 +1647,104 @@ function parseVehicleFromDescription(desc, brand) {
   };
 }
 
+/**
+ * Derive a concise part name from GridX/supplier description text.
+ * Strips donor-vehicle boilerplate (year, make, VIN, "this is C-350 2008 model", etc.)
+ * so titles and item specifics use the actual component name.
+ */
+function extractPartNameFromDescription(desc, vehicle = {}) {
+  if (!desc) return '';
+  let text = clean(desc);
+
+  text = text
+    .replace(/\bthis is\b[^,]*,?\s*/gi, '')
+    .replace(/\bvin\s+[A-HJ-NPR-Z0-9]{11,17}\b/gi, '')
+    .replace(/\b(?:19|20)\d{2}\s*model\b/gi, '')
+    .replace(/\bengine type model\s+[\d.]+\b/gi, '')
+    .replace(/\bit is\b/gi, '')
+    .replace(/\b(?:complete working engine tested|tested)\.?$/gi, '')
+    .trim();
+
+  // Strip leading "2008 MERCEDES C-350" / year + make + model prefixes
+  text = text.replace(
+    /^(?:19|20)\d{2}\s+(?:MERCEDES(?:-BENZ)?|BMW|AUDI|VOLKSWAGEN|TOYOTA|HONDA|FORD|JAGUAR|LAND ROVER|PORSCHE)[\s\w-]*?\s+/i,
+    '',
+  ).trim();
+
+  if (vehicle.make) {
+    const makeEsc = vehicle.make.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const modelEsc = (vehicle.model || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (modelEsc) {
+      text = text.replace(
+        new RegExp(`^(?:19|20)\\d{2}\\s+${makeEsc}\\s+${modelEsc}\\s+`, 'i'),
+        '',
+      ).trim();
+    }
+    text = text.replace(new RegExp(`^${makeEsc}\\s+`, 'i'), '').trim();
+  }
+
+  text = text.replace(/\b(?:used|oem|genuine|new)\s*$/gi, '').trim();
+
+  // GridX engine rows: "VIN ... M - Engine type model 204.056 it is complete working engine"
+  const dashSegment = text.split(/\s+-\s+/).pop()?.trim();
+  if (dashSegment && dashSegment.length >= 8 && dashSegment.length <= 90) {
+    text = dashSegment;
+  }
+
+  if (/\bcomplete working engine\b/i.test(text)) {
+    text = 'Complete Working Engine';
+  } else if (/\bengine assembly\b/i.test(text)) {
+    text = 'Engine Assembly';
+  } else if (/^\s*engine\b/i.test(text) || /\bengine\b/i.test(text) && text.length <= 40) {
+    text = text
+      .replace(/\bengine type model\s+[\d.]+\b/gi, '')
+      .replace(/\bit is\b/gi, '')
+      .trim();
+    if (/^engine\b/i.test(text)) text = titleCase(text);
+  }
+
+  // Strip Mercedes chassis/trim tokens left in part names (C-350, C350, W204)
+  text = text
+    .replace(/\bC-?\d{3}(?:\s*AMG)?\b/gi, '')
+    .replace(/\bW\d{3}\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (text.length > 70 || /\bvin\b/i.test(text)) {
+    const clause = text.split(/[.;]/)[0].trim();
+    if (clause.length >= 8) text = clause;
+  }
+
+  if (text.length > 80) {
+    text = text.slice(0, 77).trim() + '...';
+  }
+
+  return titleCase(text) || titleCase(desc.split(/[.;]/)[0].slice(0, 60));
+}
+
+/** Resolve eBay MVL-compatible model + trim from donor vehicle strings. */
+function getEbayFitmentModelFields(make, model, trim = '') {
+  const makeName = normalizeBrand(make);
+  const rawModel = clean(model);
+  const platformModel = normalizeModelForPlatform(makeName, rawModel);
+  const mappedToClass =
+    platformModel !== rawModel &&
+    (platformModel.includes('-Class') || platformModel.includes(' Series') || /^[A-Z]\d{1,2}$/i.test(platformModel));
+
+  const ebayModel = mappedToClass ? platformModel : rawModel;
+  let ebayTrim = clean(trim);
+  if (mappedToClass && !ebayTrim) {
+    ebayTrim = rawModel;
+  }
+  return { model: ebayModel, trim: ebayTrim };
+}
+
+function resolvePartDisplayName(part, vehicle) {
+  return part._shortPartName ||
+    extractPartNameFromDescription(part.partName || part.note, vehicle) ||
+    titleCase(part.partName || '');
+}
+
 function buildColumnMap(headers) {
   const map = {
     sku: -1, brand: -1, model: -1, vin: -1,
@@ -1565,7 +1857,7 @@ async function decodeAllVins(parts) {
   // NHTSA Batch API: decode up to 50 VINs in a single POST (massively faster)
   // Process multiple batches in parallel (up to 3 concurrent API requests)
   const vinBatches = chunk(uniqueVins, 50);
-  const VIN_BATCH_CONCURRENCY = 3;
+  const VIN_BATCH_CONCURRENCY = CONFIG.pipeline.vinBatchConcurrency;
 
   for (let batchGroupStart = 0; batchGroupStart < vinBatches.length; batchGroupStart += VIN_BATCH_CONCURRENCY) {
     const batchGroup = vinBatches.slice(batchGroupStart, batchGroupStart + VIN_BATCH_CONCURRENCY);
@@ -1707,6 +1999,18 @@ function getVehicleInfo(part, vinData) {
 async function mapCategories(parts, vinData) {
   log.step('Category Mapping (eBay Taxonomy API + Fallback)');
 
+  // Resolve tree once — disk cache, single-flight API, or backoff skip
+  const treeId = await getMotorsCategoryTreeId();
+  const useTaxonomyApi = Boolean(treeId) && taxonomyApiEnabled;
+
+  if (!useTaxonomyApi) {
+    const reason = REPORT.taxonomyApiSkippedReason || 'eBay taxonomy unavailable';
+    log.warn(`Skipping eBay category API for this run: ${reason}`);
+    recordTaxonomyError(reason, null, 'category_mapping');
+  } else if (REPORT.taxonomyTreeCacheHit) {
+    log.info('Using cached eBay Motors category tree (disk)');
+  }
+
   // First pass: deduplicate lookups by partKey
   const partTypeCache = new Map();
   const uniqueLookups = []; // { partKey, keywords, parts: [part, ...] }
@@ -1732,36 +2036,56 @@ async function mapCategories(parts, vinData) {
 
   log.info(`${uniqueLookups.length} unique category lookups needed for ${parts.length} parts`);
 
-  // Second pass: parallel category lookups with concurrency control
-  const CAT_CONCURRENCY = 10;
-  let apiAttempts = 0;
+  if (!useTaxonomyApi) {
+    for (const lookup of uniqueLookups) {
+      const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
+      partTypeCache.set(lookup.partKey, category);
+      REPORT.categoryMappingFallback++;
+    }
+  } else {
+    // Second pass: parallel category lookups with concurrency control
+    const CAT_CONCURRENCY = CONFIG.pipeline.categoryConcurrency;
+    let apiAttempts = 0;
 
-  for (let i = 0; i < uniqueLookups.length; i += CAT_CONCURRENCY) {
-    const group = uniqueLookups.slice(i, i + CAT_CONCURRENCY);
+    for (let i = 0; i < uniqueLookups.length; i += CAT_CONCURRENCY) {
+      if (!taxonomyApiEnabled) break;
 
-    const results = await Promise.allSettled(
-      group.map(async (lookup) => {
-        let category = null;
-        if (apiAttempts < 5000) {
-          category = await suggestCategory(lookup.keywords);
-          apiAttempts++;
+      const group = uniqueLookups.slice(i, i + CAT_CONCURRENCY);
+
+      const results = await Promise.allSettled(
+        group.map(async (lookup) => {
+          let category = null;
+          if (apiAttempts < 5000) {
+            category = await suggestCategory(lookup.keywords);
+            apiAttempts++;
+          }
+          if (!category) {
+            category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
+            REPORT.categoryMappingFallback++;
+          }
+          return { partKey: lookup.partKey, category };
+        })
+      );
+
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          partTypeCache.set(r.value.partKey, r.value.category);
         }
-        if (!category) {
-          category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
-          REPORT.categoryMappingFallback++;
-        }
-        return { partKey: lookup.partKey, category };
-      })
-    );
-
-    for (const r of results) {
-      if (r.status === 'fulfilled') {
-        partTypeCache.set(r.value.partKey, r.value.category);
       }
+
+      // Light rate limiting — only every 60 calls
+      if (apiAttempts > 0 && apiAttempts % 60 === 0) await sleep(200);
     }
 
-    // Light rate limiting — only every 60 calls
-    if (apiAttempts > 0 && apiAttempts % 60 === 0) await sleep(200);
+    // If taxonomy was disabled mid-run, fallback remaining unique keys
+    if (!taxonomyApiEnabled) {
+      for (const lookup of uniqueLookups) {
+        if (partTypeCache.get(lookup.partKey)) continue;
+        const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
+        partTypeCache.set(lookup.partKey, category);
+        REPORT.categoryMappingFallback++;
+      }
+    }
   }
 
   // Apply cached results to all parts
@@ -1772,7 +2096,13 @@ async function mapCategories(parts, vinData) {
   }
 
   log.info(`Category mapping: ${REPORT.categoryMappingApi} via API, ${REPORT.categoryMappingFallback} fallback`);
-  log.progress({ stage: 'category_mapping', cat_api: REPORT.categoryMappingApi, cat_fallback: REPORT.categoryMappingFallback, total_parts: parts.length });
+  log.progress({
+    stage: 'category_mapping',
+    cat_api: REPORT.categoryMappingApi,
+    cat_fallback: REPORT.categoryMappingFallback,
+    cat_taxonomy_backoff: REPORT.taxonomyApiSkippedReason ? 1 : 0,
+    total_parts: parts.length,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1802,28 +2132,52 @@ function getOpenAI() {
 
 async function validateOpenAiKey() {
   const client = getOpenAI();
-  if (!client) return false;
-
-  const model = CONFIG.openai.model;
-
-  try {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [{ role: 'user', content: 'Reply with OK' }],
-      max_tokens: 16,
-    });
-    if (response.choices?.[0]?.message?.content) {
-      openaiAvailable = true;
-      log.info(`OpenRouter validated (baseURL=${CONFIG.openai.baseURL}, model=${model})`);
-      return true;
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    log.error(`OpenRouter validation failed for model "${model}": ${message}`);
+  if (!client) {
+    REPORT.errors.push({ type: 'openai', message: 'OPENAI_API_KEY not configured' });
+    return false;
   }
+
+  const candidates = [...new Set([
+    CONFIG.openai.model,
+    env.OPENAI_MODEL_DEFAULT,
+    env.OPENAI_CHAT_MODEL,
+    env.OPENAI_MODEL_TEXT,
+    env.OPENAI_MODEL_BULK,
+    DEFAULT_CHAT_MODEL,
+    'openai/gpt-4o-mini',
+    'deepseek/deepseek-chat-v3-0324',
+  ].filter(Boolean))];
+
+  const probeErrors = [];
+
+  for (const model of candidates) {
+    try {
+      const response = await client.chat.completions.create({
+        model,
+        messages: [{ role: 'user', content: 'Reply with OK' }],
+        max_tokens: 16,
+      });
+      if (response.choices?.[0]?.message?.content) {
+        openaiAvailable = true;
+        if (CONFIG.openai.model !== model) {
+          log.warn(`Primary model "${CONFIG.openai.model}" unavailable; using "${model}" for this run`);
+        }
+        CONFIG.openai.model = model;
+        log.info(`OpenRouter validated (baseURL=${CONFIG.openai.baseURL}, model=${model})`);
+        return true;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      probeErrors.push(`${model}: ${message}`);
+      log.warn(`OpenRouter probe failed for "${model}": ${message}`);
+    }
+  }
+
+  const detail = probeErrors.slice(0, 3).join(' | ');
+  log.error(`OpenRouter validation failed for all candidate models at ${CONFIG.openai.baseURL}`);
   REPORT.errors.push({
     type: 'openai',
-    message: `OpenRouter validation failed for model "${model}" at ${CONFIG.openai.baseURL}`,
+    message: `OpenRouter validation failed at ${CONFIG.openai.baseURL}${detail ? `: ${detail}` : ''}`,
   });
   return false;
 }
@@ -2057,8 +2411,13 @@ ${JSON.stringify(partsForPrompt)}`;
     } catch (err) {
       REPORT.openaiErrors++;
       if (attempt < CONFIG.openai.maxRetries) {
-        const delay = Math.pow(2, attempt) * 1000;
-        log.warn(`OpenAI call failed (attempt ${attempt}/${CONFIG.openai.maxRetries}): ${err.message}. Retrying in ${delay}ms...`);
+        const rateLimited = isRateLimitError(err);
+        const delay = rateLimited
+          ? Math.pow(2, attempt) * 3000
+          : Math.pow(2, attempt) * 1000;
+        log.warn(
+          `OpenAI call failed (attempt ${attempt}/${CONFIG.openai.maxRetries})${rateLimited ? ' [rate limit]' : ''}: ${err.message}. Retrying in ${delay}ms...`,
+        );
         await sleep(delay);
       } else {
         log.error(`OpenAI enrichment failed after ${CONFIG.openai.maxRetries} attempts: ${err.message}`);
@@ -2122,9 +2481,6 @@ async function enrichBatchWithRouting(batchParts, vinData) {
     },
     RUN_MODE,
   );
-  const batchConfig = modelRouter.getBatchConfig(route.lane);
-  CONFIG.openai.batchSize = batchConfig.batchSize;
-  CONFIG.openai.concurrency = batchConfig.concurrency;
 
   let items = await enrichBatch(batchParts, vinData, { model: route.model });
   if (!items) return null;
@@ -2225,6 +2581,96 @@ async function enrichBatchAdaptive(batchParts, vinData, depth = 0) {
   return merged;
 }
 
+function applyBasicFallbackEnrichment(part, vinData, { countAsFailed = true } = {}) {
+  const vehicle = getVehicleInfo(part, vinData);
+  const pn = normalizePN(part.partNumber);
+  const displayName = resolvePartDisplayName(part, vehicle);
+  part._shortPartName = displayName;
+
+  const makeLower = (vehicle.make || '').toLowerCase();
+  const countryOfMfg = makeLower.includes('mercedes') || makeLower.includes('bmw') || makeLower.includes('audi') || makeLower.includes('volkswagen') || makeLower.includes('porsche')
+    ? 'Germany'
+    : makeLower.includes('toyota') || makeLower.includes('honda') || makeLower.includes('nissan') || makeLower.includes('lexus') || makeLower.includes('mazda') || makeLower.includes('subaru')
+      ? 'Japan'
+      : makeLower.includes('ford') || makeLower.includes('chevrolet') || makeLower.includes('gm') || makeLower.includes('chrysler') || makeLower.includes('dodge') || makeLower.includes('jeep')
+        ? 'United States'
+        : '';
+
+  part._enriched = {
+    title: buildSeoTitle(vehicle, part, pn),
+    description: buildBasicDescription(part, vehicle),
+    brand: normalizeBrand(part.brand) || vehicle.make,
+    type: displayName,
+    mpn: pn,
+    oemNumber: expandOemNumbers(part.partNumber),
+    placement: extractPlacement(part.note),
+    material: '',
+    warranty: 'No Warranty',
+    fitmentType: 'Direct Replacement',
+    color: '',
+    interchangeNumber: '',
+    surfaceFinish: '',
+    performanceType: '',
+    bundleDescription: '',
+    countryOfManufacture: countryOfMfg,
+    itemSpecifics: buildFallbackItemSpecifics(part, vehicle),
+  };
+
+  if (countAsFailed) REPORT.totalFailed++;
+}
+
+/** Apply one enrichment batch to parts; returns counts for progress reporting. */
+function applyEnrichmentBatchResults(batch, enrichedItems, vinData) {
+  let enriched = 0;
+  let failed = 0;
+
+  if (enrichedItems) {
+    for (const item of enrichedItems) {
+      const idx = item.index ?? enrichedItems.indexOf(item);
+      if (idx < 0 || idx >= batch.length) continue;
+      const part = batch[idx];
+      part._enriched = {
+        title: clean(item.title).slice(0, 80),
+        description: clean(item.description),
+        brand: clean(item.brand),
+        type: clean(item.type),
+        mpn: clean(item.mpn),
+        oemNumber: clean(item.oemNumber),
+        placement: clean(item.placement),
+        material: clean(item.material),
+        warranty: clean(item.warranty) || 'No Warranty',
+        fitmentType: clean(item.fitmentType) || 'Direct Replacement',
+        color: clean(item.color),
+        interchangeNumber: clean(item.interchangeNumber),
+        surfaceFinish: clean(item.surfaceFinish),
+        performanceType: clean(item.performanceType),
+        bundleDescription: clean(item.bundleDescription),
+        itemSpecifics: sanitizeItemSpecifics(item.itemSpecifics),
+        compatibility: Array.isArray(item.compatibility) ? item.compatibility : [],
+        technicalNotes: clean(item.technicalNotes),
+      };
+      const vehicle = getVehicleInfo(part, vinData);
+      const fallbackSpecifics = buildFallbackItemSpecifics(part, vehicle);
+      const mergedSpecifics = mergeAiSpecificsOnly(
+        fallbackSpecifics,
+        part._enriched.itemSpecifics,
+      );
+      if (countAdditionalSpecifics(fallbackSpecifics, mergedSpecifics) > 0) {
+        REPORT.specificsEnrichedCount++;
+      }
+      part._enriched.itemSpecifics = mergedSpecifics;
+      enriched++;
+    }
+  } else {
+    for (const part of batch) {
+      applyBasicFallbackEnrichment(part, vinData);
+      failed++;
+    }
+  }
+
+  return { enriched, failed };
+}
+
 async function enrichAllParts(parts, vinData) {
   log.step('OpenAI Enrichment');
 
@@ -2232,142 +2678,71 @@ async function enrichAllParts(parts, vinData) {
   if (!await validateOpenAiKey()) {
     log.warn('OpenAI unavailable — using fallback enrichment for all parts');
     for (const part of parts) {
-      const vehicle = getVehicleInfo(part, vinData);
-      const pn = normalizePN(part.partNumber);
-      // Determine country of manufacture from make
-      const makeLower = (vehicle.make || '').toLowerCase();
-      const countryOfMfg = makeLower.includes('mercedes') || makeLower.includes('bmw') || makeLower.includes('audi') || makeLower.includes('volkswagen') || makeLower.includes('porsche')
-        ? 'Germany'
-        : makeLower.includes('toyota') || makeLower.includes('honda') || makeLower.includes('nissan') || makeLower.includes('lexus') || makeLower.includes('mazda') || makeLower.includes('subaru')
-          ? 'Japan'
-          : makeLower.includes('ford') || makeLower.includes('chevrolet') || makeLower.includes('gm') || makeLower.includes('chrysler') || makeLower.includes('dodge') || makeLower.includes('jeep')
-            ? 'United States'
-            : '';
-      part._enriched = {
-        title: buildSeoTitle(vehicle, part, pn),
-        description: buildBasicDescription(part, vehicle),
-        brand: normalizeBrand(part.brand) || vehicle.make,
-        type: titleCase(part.partName),
-        mpn: pn,
-        oemNumber: expandOemNumbers(part.partNumber),
-        placement: extractPlacement(part.note),
-        material: '',
-        warranty: 'No Warranty',
-        fitmentType: 'Direct Replacement',
-        color: '',
-        interchangeNumber: '',
-        surfaceFinish: '',
-        performanceType: '',
-        bundleDescription: '',
-        countryOfManufacture: countryOfMfg,
-        itemSpecifics: buildFallbackItemSpecifics(part, vehicle),
-      };
-      REPORT.totalFailed++;
+      applyBasicFallbackEnrichment(part, vinData);
     }
+    REPORT.totalFailed = parts.length;
+    log.progress({
+      stage: 'enrichment_done',
+      enriched: 0,
+      failed: parts.length,
+      total_parts: parts.length,
+      processed: parts.length,
+      enrichment_mode: 'fallback',
+    });
     return;
   }
 
   const batches = chunk(parts, CONFIG.openai.batchSize);
-  log.info(`Processing ${parts.length} parts in ${batches.length} batches of ${CONFIG.openai.batchSize}...`);
+  log.info(`Processing ${parts.length} parts in ${batches.length} batches of ${CONFIG.openai.batchSize} (concurrency ${CONFIG.openai.concurrency})...`);
   log.progress({ stage: 'enrichment', enriched: 0, failed: 0, total_parts: parts.length, processed: 0 });
 
   let enrichedCount = 0;
   let failedCount = 0;
   const concurrency = CONFIG.openai.concurrency;
+  const pool = createConcurrencyPool(concurrency);
 
-  // Process batches in parallel groups
-  for (let groupStart = 0; groupStart < batches.length; groupStart += concurrency) {
-    const groupBatches = batches.slice(groupStart, groupStart + concurrency);
+  const emitEnrichmentProgress = () => {
+    log.progress({
+      stage: 'enrichment',
+      enriched: enrichedCount,
+      failed: failedCount,
+      total_parts: parts.length,
+      processed: enrichedCount + failedCount,
+      tokens: REPORT.openaiTokensUsed,
+    });
+  };
 
-    log.info(`  Batches ${groupStart + 1}-${Math.min(groupStart + concurrency, batches.length)}/${batches.length} (${groupBatches.reduce((s, b) => s + b.length, 0)} parts)...`);
-
-    const results = await Promise.allSettled(
-      groupBatches.map(batch => enrichBatchAdaptive(batch, vinData))
-    );
-
-    for (let i = 0; i < results.length; i++) {
-      const batch = groupBatches[i];
-      const result = results[i];
-      const enrichedItems = result.status === 'fulfilled' ? result.value : null;
-
-      if (enrichedItems) {
-        for (const enriched of enrichedItems) {
-          const idx = enriched.index ?? enrichedItems.indexOf(enriched);
-          if (idx >= 0 && idx < batch.length) {
-            const part = batch[idx];
-            part._enriched = {
-              title: clean(enriched.title).slice(0, 80),
-              description: clean(enriched.description),
-              brand: clean(enriched.brand),
-              type: clean(enriched.type),
-              mpn: clean(enriched.mpn),
-              oemNumber: clean(enriched.oemNumber),
-              placement: clean(enriched.placement),
-              material: clean(enriched.material),
-              warranty: clean(enriched.warranty) || 'No Warranty',
-              fitmentType: clean(enriched.fitmentType) || 'Direct Replacement',
-              color: clean(enriched.color),
-              interchangeNumber: clean(enriched.interchangeNumber),
-              surfaceFinish: clean(enriched.surfaceFinish),
-              performanceType: clean(enriched.performanceType),
-              bundleDescription: clean(enriched.bundleDescription),
-              itemSpecifics: sanitizeItemSpecifics(enriched.itemSpecifics),
-              compatibility: Array.isArray(enriched.compatibility) ? enriched.compatibility : [],
-              technicalNotes: clean(enriched.technicalNotes),
-            };
-            const vehicle = getVehicleInfo(part, vinData);
-            const fallbackSpecifics = buildFallbackItemSpecifics(part, vehicle);
-            const mergedSpecifics = mergeAiSpecificsOnly(
-              fallbackSpecifics,
-              part._enriched.itemSpecifics,
-            );
-            if (countAdditionalSpecifics(fallbackSpecifics, mergedSpecifics) > 0) {
-              REPORT.specificsEnrichedCount++;
-            }
-            part._enriched.itemSpecifics = mergedSpecifics;
-            enrichedCount++;
-          }
+  // Keep N AI batches in flight; emit [PROGRESS] as each batch settles (not after all finish).
+  await Promise.allSettled(
+    batches.map((batch) =>
+      pool.run(async () => {
+        let enrichedItems = null;
+        try {
+          enrichedItems = await enrichBatchAdaptive(batch, vinData);
+        } catch {
+          enrichedItems = null;
         }
-      } else {
-        for (const part of batch) {
-          const vehicle = getVehicleInfo(part, vinData);
-          const pn = normalizePN(part.partNumber);
-          part._enriched = {
-            title: buildSeoTitle(vehicle, part, pn),
-            description: buildBasicDescription(part, vehicle),
-            brand: titleCase(part.brand) || vehicle.make,
-            type: titleCase(part.partName),
-            mpn: pn,
-            oemNumber: expandOemNumbers(part.partNumber),
-            placement: extractPlacement(part.note),
-            material: '',
-            warranty: 'No Warranty',
-            fitmentType: 'Direct Replacement',
-            color: '',
-            interchangeNumber: '',
-            surfaceFinish: '',
-            performanceType: '',
-            bundleDescription: '',
-            itemSpecifics: buildFallbackItemSpecifics(part, vehicle),
-          };
-          failedCount++;
-        }
-      }
-    }
 
-    // Emit progress after each parallel group
-    log.progress({ stage: 'enrichment', enriched: enrichedCount, failed: failedCount, total_parts: parts.length, processed: enrichedCount + failedCount, tokens: REPORT.openaiTokensUsed });
-
-    // Rate limiting between parallel groups
-    if (groupStart + concurrency < batches.length) {
-      await sleep(CONFIG.openai.delayBetweenCallsMs);
-    }
-  }
+        const counts = applyEnrichmentBatchResults(batch, enrichedItems, vinData);
+        enrichedCount += counts.enriched;
+        failedCount += counts.failed;
+        emitEnrichmentProgress();
+      }),
+    ),
+  );
 
   REPORT.totalProcessed = enrichedCount;
   REPORT.totalFailed = failedCount;
   log.info(`Enrichment complete: ${enrichedCount} enriched, ${failedCount} basic fallback`);
-  log.progress({ stage: 'enrichment_done', enriched: enrichedCount, failed: failedCount, total_parts: parts.length, processed: parts.length, tokens: REPORT.openaiTokensUsed });
+  log.progress({
+    stage: 'enrichment_done',
+    enriched: enrichedCount,
+    failed: failedCount,
+    total_parts: parts.length,
+    processed: parts.length,
+    tokens: REPORT.openaiTokensUsed,
+    enrichment_mode: getEnrichmentMode(),
+  });
 }
 
 /**
@@ -2377,13 +2752,13 @@ async function enrichAllParts(parts, vinData) {
  */
 function buildSeoTitle(vehicle, part, normalizedPN) {
   const placement = extractPlacement(part.note);
-  const partName = titleCase(part.partName);
+  const partName = resolvePartDisplayName(part, vehicle);
 
   // Build title segments in priority order
   const segments = [
     vehicle.year,
     vehicle.make,
-    vehicle.model,
+    normalizeModelForPlatform(vehicle.make, vehicle.model) || vehicle.model,
     partName,
   ].filter(Boolean);
 
@@ -2408,12 +2783,13 @@ function buildSeoTitle(vehicle, part, normalizedPN) {
 }
 
 function buildBasicDescription(part, vehicle) {
-  const partName = titleCase(part.partName);
+  const partName = resolvePartDisplayName(part, vehicle);
   const brandName = normalizeBrand(part.brand) || vehicle.make;
   const pn = part.partNumber || '';
+  const modelLabel = normalizeModelForPlatform(vehicle.make, vehicle.model) || vehicle.model;
 
   // Generate a descriptive text paragraph
-  const descText = `Genuine OEM ${partName}${pn ? ` part number ${pn}` : ''} for ${vehicle.year ? vehicle.year + ' ' : ''}${vehicle.make} ${vehicle.model}${vehicle.trim ? ' ' + vehicle.trim : ''}. This part has been carefully removed and inspected for quality assurance. Please verify part number compatibility with your vehicle before purchasing.`;
+  const descText = `Genuine OEM ${partName}${pn ? ` part number ${pn}` : ''} for ${vehicle.year ? vehicle.year + ' ' : ''}${brandName} ${modelLabel}${vehicle.trim ? ' ' + vehicle.trim : ''}. This part has been carefully removed and inspected for quality assurance. Please verify part number compatibility with your vehicle before purchasing.`;
 
   return descText;
 }
@@ -2431,7 +2807,111 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-function wrapInTabbedDescription(descriptionText, fitments) {
+const MARKETPLACE_TAB_SHELLS = {
+  'en-US': {
+    productTitle: 'Product Information',
+    fitmentHeading: (n) => `Vehicle Compatibility (${n} applications)`,
+    fitmentIntro: 'Complete fitment list — verify part number before purchasing.',
+    fitmentCols: ['Year', 'Make', 'Model', 'Submodel', 'Trim', 'Engine'],
+    tabs: ['Payment Policy', 'Shipping Policy', 'Returns Policy', 'Handling Time', 'International Buyers'],
+    policies: [
+      '- We accept only online payment methods provided by eBay at checkout.',
+      '- We provide worldwide shipping to most countries using reputed couriers like DHL, FedEx or Aramex.',
+      '- We accept 14-day returns. Please clarify all doubts before purchasing.',
+      '- All packages are shipped within 3 working days.',
+      '- Import duties, taxes and charges are not included in the item price or shipping cost. These charges are the buyer\'s responsibility. Please check with your country\'s customs office before buying.',
+    ],
+  },
+  'en-AU': {
+    productTitle: 'Product Information',
+    fitmentHeading: (n) => `Vehicle Compatibility (${n} applications)`,
+    fitmentIntro: 'Complete fitment list — please verify part number compatibility before purchasing.',
+    fitmentCols: ['Year', 'Make', 'Model', 'Submodel', 'Trim', 'Engine'],
+    tabs: ['Payment Policy', 'Shipping Policy', 'Returns Policy', 'Handling Time', 'International Buyers'],
+    policies: [
+      '- We accept only online payment methods provided by eBay at checkout.',
+      '- We ship Australia-wide and internationally via DHL, FedEx or Aramex.',
+      '- We accept 14-day returns. Please clarify all doubts before purchasing.',
+      '- All packages are dispatched within 3 business days.',
+      '- Import duties, taxes and charges are not included in the item price or shipping cost. These charges are the buyer\'s responsibility. Please check with your country\'s customs office before buying.',
+    ],
+  },
+  'de-DE': {
+    productTitle: 'Produktinformationen',
+    fitmentHeading: (n) => `Fahrzeugkompatibilität (${n} Anwendungen)`,
+    fitmentIntro: 'Vollständige Passgenauigkeitsliste — bitte prüfen Sie die Teilenummer vor dem Kauf.',
+    fitmentCols: ['Baujahr', 'Marke', 'Modell', 'Untermodell', 'Ausstattung', 'Motor'],
+    tabs: ['Zahlungsrichtlinie', 'Versandrichtlinie', 'Rückgaberichtlinie', 'Bearbeitungszeit', 'Internationale Käufer'],
+    policies: [
+      '- Wir akzeptieren ausschließlich die bei eBay angebotenen Online-Zahlungsmethoden.',
+      '- Wir versenden weltweit mit DHL, FedEx oder Aramex.',
+      '- 14-tägige Rückgabe möglich. Bitte klären Sie alle Fragen vor dem Kauf.',
+      '- Alle Pakete werden innerhalb von 3 Werktagen versendet.',
+      '- Einfuhrzölle, Steuern und Gebühren sind nicht im Artikel- oder Versandpreis enthalten. Diese Kosten trägt der Käufer. Bitte erkundigen Sie sich vor dem Kauf bei Ihrem Zollamt.',
+    ],
+  },
+};
+
+const DE_VALUE_MAP = {
+  'No Warranty': 'Keine Garantie',
+  'Direct Replacement': 'Direkter Ersatz',
+  'Does not apply': 'Nicht zutreffend',
+  'Used': 'Gebraucht',
+  'New': 'Neu',
+  'Front': 'Vorne',
+  'Rear': 'Hinten',
+  'Left': 'Links',
+  'Right': 'Rechts',
+  'Upper': 'Oben',
+  'Lower': 'Unten',
+  'Driver Side': 'Fahrerseite',
+  'Passenger Side': 'Beifahrerseite',
+};
+
+function mapLocalizedTokens(value, tokenMap) {
+  if (!value) return value;
+  let out = String(value);
+  for (const [en, localized] of Object.entries(tokenMap)) {
+    out = out.replace(new RegExp(`\\b${en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), localized);
+  }
+  return out;
+}
+
+function applyRuleBasedLocalization(enriched, locale) {
+  const copy = {
+    title: enriched.title,
+    description: enriched.description,
+    brand: enriched.brand,
+    type: enriched.type,
+    placement: enriched.placement,
+    warranty: enriched.warranty || 'No Warranty',
+    fitmentType: enriched.fitmentType || 'Direct Replacement',
+    material: enriched.material,
+    color: enriched.color,
+    surfaceFinish: enriched.surfaceFinish,
+    bundleDescription: enriched.bundleDescription,
+    itemSpecifics: enriched.itemSpecifics ? { ...enriched.itemSpecifics } : {},
+    aiTranslated: false,
+  };
+
+  if (locale === 'de-DE') {
+    copy.warranty = DE_VALUE_MAP[copy.warranty] || copy.warranty;
+    copy.fitmentType = DE_VALUE_MAP[copy.fitmentType] || copy.fitmentType;
+    copy.placement = mapLocalizedTokens(copy.placement, DE_VALUE_MAP);
+    copy.type = mapLocalizedTokens(copy.type, DE_VALUE_MAP);
+    copy.material = mapLocalizedTokens(copy.material, DE_VALUE_MAP);
+    copy.color = mapLocalizedTokens(copy.color, DE_VALUE_MAP);
+    copy.surfaceFinish = mapLocalizedTokens(copy.surfaceFinish, DE_VALUE_MAP);
+    for (const [key, val] of Object.entries(copy.itemSpecifics)) {
+      copy.itemSpecifics[key] = mapLocalizedTokens(val, DE_VALUE_MAP);
+    }
+  }
+
+  return copy;
+}
+
+function wrapInTabbedDescriptionLocalized(descriptionText, fitments, locale = 'en-US') {
+  const shell = MARKETPLACE_TAB_SHELLS[locale] || MARKETPLACE_TAB_SHELLS['en-US'];
   const rows = (fitments || []).filter(f => f.make && f.model && f.year);
   const fitmentTableRows = rows
     .map(
@@ -2441,11 +2921,159 @@ function wrapInTabbedDescription(descriptionText, fitments) {
     .join('');
 
   const fitmentCount = rows.length;
+  const [cYear, cMake, cModel, cSub, cTrim, cEngine] = shell.fitmentCols;
   const fitmentSection = fitmentTableRows
-    ? `<div class="fitment-section" style="margin-top: 15px;"><h3 style="font-size: 16px;font-weight: bold;margin-bottom: 10px;color: #333;">Vehicle Compatibility (${fitmentCount} applications)</h3><p style="font-size: 13px;color: #555;margin-bottom: 8px;">Complete fitment list — verify part number before purchasing.</p><table class="fitment" style="width: 100%;border-collapse: collapse;margin-bottom: 10px;font-size: 13px;"><thead><tr style="background-color: #333;color: white;"><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Year</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Make</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Model</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Submodel</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Trim</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">Engine</th></tr></thead><tbody>${fitmentTableRows}</tbody></table></div>`
+    ? `<div class="fitment-section" style="margin-top: 15px;"><h3 style="font-size: 16px;font-weight: bold;margin-bottom: 10px;color: #333;">${shell.fitmentHeading(fitmentCount)}</h3><p style="font-size: 13px;color: #555;margin-bottom: 8px;">${shell.fitmentIntro}</p><table class="fitment" style="width: 100%;border-collapse: collapse;margin-bottom: 10px;font-size: 13px;"><thead><tr style="background-color: #333;color: white;"><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cYear}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cMake}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cModel}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cSub}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cTrim}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cEngine}</th></tr></thead><tbody>${fitmentTableRows}</tbody></table></div>`
     : '';
 
-  return `<style>.tab-wrap {font-family: Arial, sans-serif;font-size: 14px;color: #333;max-width: 800px;margin: auto;}.tab-title {background-color: #222;color: #fff;padding: 12px;font-size: 18px;font-weight: bold;text-align: center;}.product-description {padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;margin-bottom: 10px;}.fitment tbody tr:nth-child(even) {background-color: #f9f9f9;}.fitment tbody tr:nth-child(odd) {background-color: #fff;}.fitment tbody td {padding: 8px;border: 1px solid #ddd;}input[type="radio"] {display: none;}.tab-labels {display: flex;flex-wrap: wrap;background-color: #333;}.tab-labels label {flex: 1;text-align: center;padding: 10px;font-weight: bold;cursor: pointer;background-color: #333;color: white;border-right: 1px solid #444;transition: background 0.3s;}.tab-labels label:hover {background-color: #444;}.tab-content {display: none;padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;}#tab1:checked ~ .tabs #content1,#tab2:checked ~ .tabs #content2,#tab3:checked ~ .tabs #content3,#tab4:checked ~ .tabs #content4,#tab5:checked ~ .tabs #content5 {display: block;}#tab1:checked ~ .tab-labels label[for="tab1"],#tab2:checked ~ .tab-labels label[for="tab2"],#tab3:checked ~ .tab-labels label[for="tab3"],#tab4:checked ~ .tab-labels label[for="tab4"],#tab5:checked ~ .tab-labels label[for="tab5"] {background-color: #fff;color: #000;border-bottom: none;}</style><div class="tab-wrap"><div class="tab-title">Product Information</div><div class="product-description">${descriptionText}</div>${fitmentSection}<input type="radio" name="tab" id="tab1" checked><input type="radio" name="tab" id="tab2"><input type="radio" name="tab" id="tab3"><input type="radio" name="tab" id="tab4"><input type="radio" name="tab" id="tab5"><div class="tab-labels"><label for="tab1">Payment Policy</label><label for="tab2">Shipping Policy</label><label for="tab3">Returns Policy</label><label for="tab4">Handling Time</label><label for="tab5">International Buyers</label></div><div class="tabs"><div id="content1" class="tab-content">- We accept only online payment methods provided by eBay at checkout.</div><div id="content2" class="tab-content">- We provide worldwide shipping to most countries using reputed couriers like DHL, FedEx or Aramex.</div><div id="content3" class="tab-content">- We accept 14-day returns. Please clarify all doubts before purchasing.</div><div id="content4" class="tab-content">- All packages are shipped within 3 working days.</div><div id="content5" class="tab-content">- Import Duties, Taxes and charges are not included in the item price or shipping cost. These charges are Buyer's responsibility. Please check with your country's customs office before buying.</div></div></div>`;
+  const tabLabels = shell.tabs.map((label, i) => `<label for="tab${i + 1}">${label}</label>`).join('');
+  const tabContents = shell.policies.map((text, i) => `<div id="content${i + 1}" class="tab-content">${text}</div>`).join('');
+
+  return `<style>.tab-wrap {font-family: Arial, sans-serif;font-size: 14px;color: #333;max-width: 800px;margin: auto;}.tab-title {background-color: #222;color: #fff;padding: 12px;font-size: 18px;font-weight: bold;text-align: center;}.product-description {padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;margin-bottom: 10px;}.fitment tbody tr:nth-child(even) {background-color: #f9f9f9;}.fitment tbody tr:nth-child(odd) {background-color: #fff;}.fitment tbody td {padding: 8px;border: 1px solid #ddd;}input[type="radio"] {display: none;}.tab-labels {display: flex;flex-wrap: wrap;background-color: #333;}.tab-labels label {flex: 1;text-align: center;padding: 10px;font-weight: bold;cursor: pointer;background-color: #333;color: white;border-right: 1px solid #444;transition: background 0.3s;}.tab-labels label:hover {background-color: #444;}.tab-content {display: none;padding: 15px;border: 1px solid #ddd;background-color: #f9f9f9;}#tab1:checked ~ .tabs #content1,#tab2:checked ~ .tabs #content2,#tab3:checked ~ .tabs #content3,#tab4:checked ~ .tabs #content4,#tab5:checked ~ .tabs #content5 {display: block;}#tab1:checked ~ .tab-labels label[for="tab1"],#tab2:checked ~ .tab-labels label[for="tab2"],#tab3:checked ~ .tab-labels label[for="tab3"],#tab4:checked ~ .tab-labels label[for="tab4"],#tab5:checked ~ .tab-labels label[for="tab5"] {background-color: #fff;color: #000;border-bottom: none;}</style><div class="tab-wrap"><div class="tab-title">${shell.productTitle}</div><div class="product-description">${descriptionText}</div>${fitmentSection}<input type="radio" name="tab" id="tab1" checked><input type="radio" name="tab" id="tab2"><input type="radio" name="tab" id="tab3"><input type="radio" name="tab" id="tab4"><input type="radio" name="tab" id="tab5"><div class="tab-labels">${tabLabels}</div><div class="tabs">${tabContents}</div></div>`;
+}
+
+function wrapInTabbedDescription(descriptionText, fitments) {
+  return wrapInTabbedDescriptionLocalized(descriptionText, fitments, 'en-US');
+}
+
+function getEnrichmentMode() {
+  if (REPORT.totalProcessed > 0) {
+    return REPORT.totalFailed > 0 ? 'mixed' : 'ai';
+  }
+  return REPORT.totalFailed > 0 ? 'fallback' : 'none';
+}
+
+async function localizeBatchForMarketplace(batchParts, marketplace, locale) {
+  const itemsForPrompt = batchParts.map((part, idx) => ({
+    index: idx,
+    title: part._enriched.title,
+    description: part._enriched.description,
+    type: part._enriched.type,
+    placement: part._enriched.placement,
+    material: part._enriched.material,
+    color: part._enriched.color,
+    bundleDescription: part._enriched.bundleDescription,
+  }));
+
+  const localeGuide = marketplace === 'DE'
+    ? 'Translate into natural German for eBay.de automotive parts listings. Use German automotive terminology (OEM, Ersatzteil, Einbauposition). Preserve HTML tags in descriptions. Title max 80 characters. Keep part numbers and chassis codes unchanged.'
+    : 'Adapt into Australian English for eBay.com.au automotive listings. Use AU spelling (colour, metre, organise, dispatch). Preserve HTML tags. Title max 80 characters. Keep part numbers and chassis codes unchanged.';
+
+  const systemPrompt = `You localize eBay Motors listing copy for marketplace ${marketplace}.
+${localeGuide}
+Return JSON: { "items": [{ "index": N, "title": "...", "description": "...", "type": "...", "placement": "...", "material": "...", "color": "...", "bundleDescription": "..." }] }`;
+
+  const client = getOpenAI();
+  if (!client) return null;
+
+  try {
+    const response = await client.chat.completions.create({
+      model: CONFIG.openai.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: JSON.stringify(itemsForPrompt) },
+      ],
+      temperature: 0.3,
+      max_tokens: 8192,
+      response_format: { type: 'json_object' },
+    });
+
+    REPORT.openaiCalls++;
+    if (response.usage) REPORT.openaiTokensUsed += (response.usage.total_tokens || 0);
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new Error('Empty localization response');
+
+    const parsed = parseOpenAiJson(content);
+    return Array.isArray(parsed) ? parsed : (parsed.items || parsed.results || []);
+  } catch (err) {
+    REPORT.localization.errors++;
+    REPORT.errors.push({
+      type: 'localization',
+      message: `${marketplace} localization batch failed: ${err.message}`,
+      batchSize: batchParts.length,
+    });
+    return null;
+  }
+}
+
+async function localizeMarketplaceCopy(parts, marketplace, locale) {
+  const enriched = parts.filter(p => p._enriched);
+  if (!enriched.length) return;
+
+  for (const part of enriched) {
+    if (!part._localized) part._localized = {};
+    part._localized[marketplace] = applyRuleBasedLocalization(part._enriched, locale);
+  }
+
+  if (!openaiAvailable) {
+    for (const part of enriched) {
+      if (marketplace === 'AU') REPORT.localization.auRuleOnly++;
+      if (marketplace === 'DE') REPORT.localization.deRuleOnly++;
+    }
+    return;
+  }
+
+  const batches = chunk(enriched, CONFIG.openai.batchSize);
+  const locPool = createConcurrencyPool(CONFIG.pipeline.localizationConcurrency);
+
+  await Promise.allSettled(
+    batches.map((batch) =>
+      locPool.run(async () => {
+        const items = await localizeBatchForMarketplace(batch, marketplace, locale);
+        if (!items) {
+          for (const part of batch) {
+            if (marketplace === 'AU') REPORT.localization.auRuleOnly++;
+            if (marketplace === 'DE') REPORT.localization.deRuleOnly++;
+          }
+          return;
+        }
+
+        for (const item of items) {
+          const idx = item.index ?? items.indexOf(item);
+          if (idx < 0 || idx >= batch.length) continue;
+          const part = batch[idx];
+          const base = part._localized[marketplace];
+          part._localized[marketplace] = {
+            ...base,
+            title: clean(item.title || base.title).slice(0, 80),
+            description: clean(item.description || base.description),
+            type: clean(item.type || base.type),
+            placement: clean(item.placement || base.placement),
+            material: clean(item.material || base.material),
+            color: clean(item.color || base.color),
+            bundleDescription: clean(item.bundleDescription || base.bundleDescription),
+            aiTranslated: true,
+          };
+          if (marketplace === 'AU') REPORT.localization.auAiTranslated++;
+          if (marketplace === 'DE') REPORT.localization.deAiTranslated++;
+        }
+      }),
+    ),
+  );
+}
+
+async function localizeAllMarketplaceCopy(parts) {
+  log.step('Marketplace Copy Localization (AU · DE)');
+  log.progress({ stage: 'output_generation', localization: 'started' });
+
+  // AU and DE are independent — run in parallel
+  await Promise.all([
+    localizeMarketplaceCopy(parts, 'AU', 'en-AU'),
+    localizeMarketplaceCopy(parts, 'DE', 'de-DE'),
+  ]);
+
+  log.info(
+    `Localization: AU ${REPORT.localization.auAiTranslated} AI / ${REPORT.localization.auRuleOnly} rule-only; ` +
+    `DE ${REPORT.localization.deAiTranslated} AI / ${REPORT.localization.deRuleOnly} rule-only`,
+  );
+}
+
+function getMarketplaceListingCopy(part, marketplace) {
+  const base = part._enriched;
+  const localized = part._localized?.[marketplace];
+  if (!localized) return base;
+  return { ...base, ...localized };
 }
 
 function extractPlacement(note) {
@@ -2593,10 +3221,11 @@ function sanitizeItemSpecifics(rawSpecifics) {
 
 function buildFallbackItemSpecifics(part, vehicle) {
   const pn = normalizePN(part.partNumber || '');
+  const displayName = resolvePartDisplayName(part, vehicle);
   return sanitizeItemSpecifics({
     Brand: normalizeBrand(part.brand) || vehicle.make || '',
     'Manufacturer Part Number': pn || part.partNumber || '',
-    Type: titleCase(part.partName || ''),
+    Type: displayName,
     'Placement on Vehicle': extractPlacement(part.note || ''),
     'Fitment Type': 'Direct Replacement',
     Warranty: 'No Warranty',
@@ -2751,15 +3380,17 @@ function expandFitments(parts, vinData) {
   let crossRefExpanded = 0;
   let aiInterchangeUsed = 0;
   let sharedPlatformExpanded = 0;
+  let singleVehicle = 0;
 
   for (const part of parts) {
     const vehicle = getVehicleInfo(part, vinData);
     const decoded = vinData.get(part.vin);
 
     if (!vehicle.make || !vehicle.model || !vehicle.year) {
+      const ebayFitment = getEbayFitmentModelFields(vehicle.make, vehicle.model, vehicle.trim);
       part._fitments = vehicle.year ? [{
-        year: vehicle.year, make: normalizeBrand(vehicle.make), model: vehicle.model,
-        trim: '', engine: '', submodel: '', bodyType: decoded?.bodyClass || '', notes: '',
+        year: vehicle.year, make: normalizeBrand(vehicle.make), model: ebayFitment.model,
+        trim: ebayFitment.trim || '', engine: '', submodel: '', bodyType: decoded?.bodyClass || '', notes: '',
       }] : [];
       REPORT.fitment.noFitment.push(part.sku || part.partNumber);
       generateFitmentOutput(part);
@@ -2768,6 +3399,7 @@ function expandFitments(parts, vinData) {
 
     const makeName = normalizeBrand(vehicle.make);
     const normalizedModel = normalizeModelForPlatform(makeName, vehicle.model);
+    const ebayFitment = getEbayFitmentModelFields(makeName, vehicle.model, vehicle.trim);
     const platformKey = `${makeName}|${normalizedModel}`;
     const platforms = PLATFORM_RANGES[platformKey];
     const yearNum = parseInt(vehicle.year) || 0;
@@ -2782,8 +3414,8 @@ function expandFitments(parts, vinData) {
         let added = 0;
         for (let y = gen.start; y <= gen.end; y++) {
           if (addUniqueFitment(fitments, seen, {
-            year: String(y), make: makeName, model: vehicle.model,
-            trim: '', engine: '',
+            year: String(y), make: makeName, model: ebayFitment.model,
+            trim: ebayFitment.trim || '', engine: '',
             submodel: gen.code,
             bodyType: decoded?.bodyClass || '',
             notes: `Platform ${gen.code}`,
@@ -2799,11 +3431,12 @@ function expandFitments(parts, vinData) {
       let added = 0;
       for (const c of aiCompat) {
         if (!c.year || !c.make || !c.model) continue;
+        const aiFields = getEbayFitmentModelFields(c.make, c.model, c.trim);
         if (addUniqueFitment(fitments, seen, {
           year: String(c.year),
           make: normalizeBrand(c.make),
-          model: c.model,
-          trim: c.trim || '',
+          model: aiFields.model,
+          trim: aiFields.trim || c.trim || '',
           engine: c.engine || '',
           submodel: c.chassisCode || '',
           bodyType: c.bodyType || '',
@@ -2818,8 +3451,8 @@ function expandFitments(parts, vinData) {
       let added = 0;
       for (const yr of part._descYears) {
         if (addUniqueFitment(fitments, seen, {
-          year: yr, make: makeName, model: vehicle.model,
-          trim: '', engine: '', submodel: '',
+          year: yr, make: makeName, model: ebayFitment.model,
+          trim: ebayFitment.trim || '', engine: '', submodel: '',
           bodyType: '', notes: 'Year range from description',
         })) added++;
       }
@@ -2849,12 +3482,13 @@ function expandFitments(parts, vinData) {
     // ── Single-vehicle fallback ──
     if (fitments.length === 0) {
       addUniqueFitment(fitments, seen, {
-        year: vehicle.year, make: makeName, model: vehicle.model,
-        trim: vehicle.trim || '', engine: vehicle.engine || '',
+        year: vehicle.year, make: makeName, model: ebayFitment.model,
+        trim: ebayFitment.trim || vehicle.trim || '', engine: vehicle.engine || '',
         submodel: generationCode || '',
         bodyType: decoded?.bodyClass || '',
         notes: vehicle.trim ? `Trim: ${vehicle.trim}` : '',
       });
+      singleVehicle++;
     }
 
     // ── Shared platform expansion ──
@@ -2914,7 +3548,7 @@ function expandFitments(parts, vinData) {
   REPORT.fitment.crossRefExpanded = crossRefExpanded;
   REPORT.fitment.aiInterchangeUsed = aiInterchangeUsed || 0;
   REPORT.fitment.sharedPlatformExpanded = sharedPlatformExpanded || 0;
-  REPORT.fitment.singleVehicle = parts.length - platformExpanded - crossRefExpanded - aiInterchangeUsed;
+  REPORT.fitment.singleVehicle = singleVehicle;
   REPORT.fitment.totalCompatEntries = parts.reduce((s, p) => s + (p._fitments?.length || 0), 0);
 
   log.info(`Fitment expansion: ${aiInterchangeUsed} AI-interchange, ${platformExpanded} platform, ${crossRefExpanded} cross-ref, ${sharedPlatformExpanded} shared-platform, ${parts.length - platformExpanded - crossRefExpanded - aiInterchangeUsed} single-vehicle`);
@@ -3017,6 +3651,7 @@ async function fetchImages(parts) {
   log.step('Image Enrichment & Validation');
 
   // Pre-populate images for GridX Connect parts that already have image URLs
+  let gridxImageParts = 0;
   for (const p of parts) {
     if (p._gridx?.images && !p._images) {
       const urls = p._gridx.images.split(/[|,;]/).map(u => u.trim()).filter(Boolean);
@@ -3029,30 +3664,34 @@ async function fetchImages(parts) {
           enriched_image_urls: urls.slice(0, 12),
           confidence: 1.0,
         };
+        gridxImageParts++;
+        REPORT.images.withPrimary++;
+        REPORT.images.totalUrls += urls.length;
       }
     }
   }
+  if (gridxImageParts > 0) {
+    log.info(`Preloaded GridX images for ${gridxImageParts} parts`);
+  }
 
   const toBeFetched = parts.filter(p => p._enriched && (!p._images || p._images.length === 0));
+  REPORT.images.totalParts = parts.filter(p => p._enriched).length;
   if (!toBeFetched.length) {
-    log.info('No enriched parts to fetch images for');
+    log.info('No additional image API fetch needed — all parts have source images or none require enrichment');
     return;
   }
 
-  REPORT.images.totalParts = toBeFetched.length;
   log.info(`Fetching images for ${toBeFetched.length} parts via ${IMAGE_API_URL}...`);
 
   const IMAGE_BATCH_SIZE = 25;
   const MAX_RETRIES = 2;
-  const IMAGE_CONCURRENCY = 3; // parallel image API requests
+  const IMAGE_CONCURRENCY = CONFIG.pipeline.imageConcurrency;
   const batches = chunk(toBeFetched, IMAGE_BATCH_SIZE);
+  const imagePool = createConcurrencyPool(IMAGE_CONCURRENCY);
 
-  // Process image batches with concurrency control
-  for (let groupStart = 0; groupStart < batches.length; groupStart += IMAGE_CONCURRENCY) {
-    const batchGroup = batches.slice(groupStart, groupStart + IMAGE_CONCURRENCY);
-
-    await Promise.allSettled(batchGroup.map(async (batch, groupIdx) => {
-    const batchIdx = groupStart + groupIdx;
+  await Promise.allSettled(
+    batches.map((batch, batchIdx) =>
+      imagePool.run(async () => {
 
     // Check cache first — bypass API for cached results
     const uncached = [];
@@ -3114,8 +3753,9 @@ async function fetchImages(parts) {
         log.warn(`Image enrichment failed for ${p.partNumber} — no images available`);
       }
     }
-    }));
-  }
+      }),
+    ),
+  );
 
   // ── URL validation pass (parallel) ──
   log.info('Validating enriched image URLs...');
@@ -3568,7 +4208,7 @@ function generateAUOutput(parts, vinData) {
 
   for (const part of parts) {
     if (!part._enriched) continue;
-    const e = part._enriched;
+    const e = getMarketplaceListingCopy(part, 'AU');
     const vehicle = getVehicleInfo(part, vinData);
 
     const row = new Array(fullHeaders.length).fill(null);
@@ -3586,7 +4226,7 @@ function generateAUOutput(parts, vinData) {
     set('Start price', Math.round(part.price * 1.55 * 100) / 100); // ~USD→AUD
     set('Quantity', part._gridx?.quantity || part._quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
-    set('Description', wrapInTabbedDescription(e.description, part._fitments || []));
+    set('Description', wrapInTabbedDescriptionLocalized(e.description, part._fitments || [], 'en-AU'));
     set('Format', CONFIG.defaultFormat);
     set('Duration', CONFIG.defaultDuration);
     set('Best Offer Enabled', 1);
@@ -3694,7 +4334,7 @@ function generateDEOutput(parts, vinData) {
 
   for (const part of parts) {
     if (!part._enriched) continue;
-    const e = part._enriched;
+    const e = getMarketplaceListingCopy(part, 'DE');
     const vehicle = getVehicleInfo(part, vinData);
 
     const row = new Array(fullHeaders.length).fill(null);
@@ -3712,7 +4352,7 @@ function generateDEOutput(parts, vinData) {
     set('Start price', Math.round(part.price * 0.92 * 100) / 100); // ~USD→EUR
     set('Quantity', part._gridx?.quantity || part._quantity || CONFIG.defaultQuantity);
     set('Condition ID', CONFIG.defaultConditionId);
-    set('Description', wrapInTabbedDescription(e.description, part._fitments || []));
+    set('Description', wrapInTabbedDescriptionLocalized(e.description, part._fitments || [], 'de-DE'));
     set('Format', CONFIG.defaultFormat);
     set('Duration', CONFIG.defaultDuration);
     set('Best Offer Enabled', 1);
@@ -3902,6 +4542,10 @@ function generateReport() {
       totalInputParts: REPORT.totalInput,
       totalProcessed: REPORT.totalProcessed,
       totalFailedEnrichment: REPORT.totalFailed,
+      totalListingsGenerated: REPORT.totalInput - REPORT.totalSkipped,
+      totalAiEnriched: REPORT.totalProcessed,
+      totalFallbackEnrichment: REPORT.totalFailed,
+      enrichmentMode: getEnrichmentMode(),
       totalSkipped: REPORT.totalSkipped,
       processingTimeSeconds: parseFloat(elapsed),
       templatesGenerated: ['US-Motors', 'AU-Category', 'DE-Category'],
@@ -3919,6 +4563,10 @@ function generateReport() {
       apiRate: REPORT.categoryMappingApi > 0
         ? `${((REPORT.categoryMappingApi / (REPORT.categoryMappingApi + REPORT.categoryMappingFallback)) * 100).toFixed(1)}%`
         : '0%',
+      taxonomyErrors: REPORT.taxonomyErrors.slice(0, 20),
+      apiSkippedReason: REPORT.taxonomyApiSkippedReason,
+      treeCacheHit: REPORT.taxonomyTreeCacheHit,
+      treeCacheSource: REPORT.taxonomyTreeCacheSource,
     },
     openai: {
       defaultModel: CONFIG.openai.model,
@@ -3943,6 +4591,13 @@ function generateReport() {
     validationFixes: REPORT.validationFixes.slice(0, 100),
     missingRequiredSpecifics: REPORT.missingSpecifics.slice(0, 100),
     errors: REPORT.errors.slice(0, 50),
+    localization: {
+      auAiTranslated: REPORT.localization.auAiTranslated,
+      deAiTranslated: REPORT.localization.deAiTranslated,
+      auRuleOnly: REPORT.localization.auRuleOnly,
+      deRuleOnly: REPORT.localization.deRuleOnly,
+      errors: REPORT.localization.errors,
+    },
     imageEnrichment: {
       totalParts: REPORT.images.totalParts,
       withPrimaryImage: REPORT.images.withPrimary,
@@ -4028,12 +4683,16 @@ async function main() {
   log.progress({ stage: 'validation', total_parts: parts.length, processed: parts.filter(p => p._enriched).length });
 
   const enrichedParts = parts.filter(p => p._enriched);
-  log.info(`${enrichedParts.length} enriched parts ready for validation + image enrichment`);
+  log.info(`${enrichedParts.length} enriched parts ready for validation + image + localization`);
 
-  // Run validation (sync/CPU) and image enrichment (async/IO) in parallel
-  const imagePromise = fetchImages(enrichedParts);
+  // Validation is sync and mutates _enriched — must finish before localization reads copy
   validateAndFix(parts);
-  await imagePromise;
+
+  // Images and AU/DE localization are independent — run together (~2× vs sequential)
+  await Promise.all([
+    fetchImages(enrichedParts),
+    localizeAllMarketplaceCopy(parts),
+  ]);
 
   // ── Step 7: Generate Template Outputs (parallel) ──
   log.step('Generating Output Templates');

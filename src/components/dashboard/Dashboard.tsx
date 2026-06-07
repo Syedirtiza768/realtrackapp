@@ -1,4 +1,4 @@
-ï»¿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     BarChart3,
     Package,
@@ -185,7 +185,7 @@ export default function Dashboard() {
                         placeholder="Filter by Store ID..."
                         value={selectedStoreId}
                         onChange={e => setSelectedStoreId(e.target.value)}
-                        className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-500 dark:text-slate-600"
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                     <span className="text-xs sm:text-sm text-slate-400 dark:text-slate-500">
                         Last sync: {relativeTime(lastRefresh.toISOString())}
@@ -209,7 +209,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
-                            {summary?.totalListings != null ? summary.totalListings.toLocaleString() : 'â€”'}
+                            {summary?.totalListings != null ? summary.totalListings.toLocaleString() : '—'}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">All listings</p>
                     </CardContent>
@@ -222,7 +222,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold text-emerald-500">
-                            {summary?.activeListings != null ? summary.activeListings.toLocaleString() : 'â€”'}
+                            {summary?.activeListings != null ? summary.activeListings.toLocaleString() : '—'}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                             {summary?.channelBreakdown?.length
@@ -239,7 +239,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
-                            {summary?.revenue != null ? fmtCurrency(summary.revenue) : 'â€”'}
+                            {summary?.revenue != null ? fmtCurrency(summary.revenue) : '—'}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center mt-1">
                             <ArrowUpRight className="h-3 w-3 text-emerald-500 mr-1" />
@@ -367,7 +367,7 @@ export default function Dashboard() {
                                             <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Channel Instances</p>
                                             {multiStore.instances.map((inst) => (
                                                 <div key={`${inst.channel}-${inst.syncStatus}`} className="flex items-center justify-between text-xs">
-                                                    <span className="text-slate-400 dark:text-slate-400 capitalize">{inst.channel} Â· {inst.syncStatus}</span>
+                                                    <span className="text-slate-400 dark:text-slate-400 capitalize">{inst.channel} · {inst.syncStatus}</span>
                                                     <span className="text-slate-500 dark:text-slate-300 font-mono">{inst.count}</span>
                                                 </div>
                                             ))}
@@ -576,16 +576,16 @@ export default function Dashboard() {
                                 <tbody>
                                     {outOfStock.slice(0, 5).map((item) => (
                                         <tr key={item.listingId} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? 'â€”'}</td>
-                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? 'â€”'}</td>
+                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? '—'}</td>
+                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? '—'}</td>
                                             <td className="py-2 pr-4 text-right text-red-500 font-bold">{item.available}</td>
                                             <td className="py-2 text-right"><Badge variant="destructive">Out of Stock</Badge></td>
                                         </tr>
                                     ))}
                                     {lowStock.slice(0, 5).map((item) => (
                                         <tr key={item.listingId} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? 'â€”'}</td>
-                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? 'â€”'}</td>
+                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? '—'}</td>
+                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? '—'}</td>
                                             <td className="py-2 pr-4 text-right text-amber-500 font-bold">{item.available}</td>
                                             <td className="py-2 text-right"><Badge variant="warning">Low Stock</Badge></td>
                                         </tr>

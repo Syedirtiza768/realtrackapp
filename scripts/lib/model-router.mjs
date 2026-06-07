@@ -193,13 +193,16 @@ export function createModelRouter(env = {}) {
 
   function getBatchConfig(lane) {
     const configs = {
-      default: { batchSize: 8, concurrency: 2 },
-      flagship: { batchSize: 6, concurrency: 2 },
-      bulk: { batchSize: 8, concurrency: 3 },
-      escalation: { batchSize: 6, concurrency: 2 },
-      text: { batchSize: 8, concurrency: 4 },
+      default: { batchSize: 8, concurrency: 8 },
+      flagship: { batchSize: 6, concurrency: 4 },
+      bulk: { batchSize: 8, concurrency: 8 },
+      escalation: { batchSize: 6, concurrency: 4 },
+      text: { batchSize: 8, concurrency: 6 },
     };
-    return configs[lane] ?? configs.default;
+    const base = configs[lane] ?? configs.default;
+    const override = Number(env.PIPELINE_AI_CONCURRENCY || env.OPENAI_CONCURRENCY);
+    if (override > 0) return { ...base, concurrency: override };
+    return base;
   }
 
   return {

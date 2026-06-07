@@ -3,6 +3,34 @@
 Production multi-model routing, quality gates, and self-learning for eBay Motors
 enrichment. Full architecture: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
 
+## Pipeline enrichment report
+
+After `scripts/ebay-enrichment-pipeline.mjs` (or UI upload → BullMQ job), read
+`output/pipeline-*/enrichment-report-*.json`:
+
+| Field | Meaning |
+|-------|---------|
+| `totalAiEnriched` / `totalProcessed` | Parts enriched by OpenRouter (structured JSON) |
+| `totalFallbackEnrichment` / `totalFailedEnrichment` | Parts that used rule-based fallback titles/descriptions |
+| `totalListingsGenerated` | Parts written to US/AU/DE templates (includes fallback) |
+| `enrichmentMode` | `ai`, `fallback`, `mixed`, or `none` |
+
+If OpenRouter validation fails, the pipeline still emits listings using fallback
+logic — check `errors[]` for probe details. GridX Connect inputs map the
+**Description** column through `extractPartNameFromDescription()` so fallback
+titles are not the raw donor paragraph.
+
+**AU/DE localization:** After AI enrichment, a second pass localizes AU and DE
+template copy (titles, HTML descriptions, marketplace-specific policy tabs). Report
+field `localization` tracks AI-translated vs rule-only counts per marketplace.
+
+**UI:** Pipeline job detail (`/pipeline`) shows `enrichmentMode`, OpenRouter probe
+errors, and localization stats in the Enrichment status panel (sourced from job
+`stageDetails` after the report is written).
+
+Docker Compose mounts `./.env` at `/app/.env` so the pipeline child process and
+script file loader see `OPENAI_*` / `EBAY_*` keys in container runs.
+
 ## Quick reference
 
 | Lane | Default model | Use when |

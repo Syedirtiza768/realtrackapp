@@ -1,4 +1,4 @@
-ï»¿import { useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Barcode, AlertCircle, Loader2, Search } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/card';
@@ -32,7 +32,7 @@ export default function VinListingsPage() {
   };
 
   const vehicleSummary = data?.vehicle
-    ? `${data.vehicle.year || 'â€”'} ${data.vehicle.make || ''} ${data.vehicle.model || ''}`.trim()
+    ? `${data.vehicle.year || '—'} ${data.vehicle.make || ''} ${data.vehicle.model || ''}`.trim()
     : '';
 
   return (
@@ -61,7 +61,7 @@ export default function VinListingsPage() {
                     onChange={(e) => setVinInput(e.target.value.toUpperCase())}
                     placeholder="1HGCV1F34LA000001"
                     maxLength={17}
-                    className="flex-1 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 placeholder:text-slate-500 dark:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none font-mono tracking-wider"
+                    className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none font-mono tracking-wider"
                   />
                   <button
                     onClick={handleSubmit}
@@ -87,7 +87,7 @@ export default function VinListingsPage() {
         <CardContent className="p-0">
           {isLoading && (
             <div className="flex items-center justify-center py-12 gap-2 text-slate-400 dark:text-slate-500">
-              <Loader2 size={20} className="animate-spin" /> Fetching listings for VINâ€¦
+              <Loader2 size={20} className="animate-spin" /> Fetching listings for VIN…
             </div>
           )}
 
@@ -134,7 +134,7 @@ export default function VinListingsPage() {
                     <span className="font-semibold text-slate-600 dark:text-slate-200">{data.totalListings}</span>{' '}
                     listing{data.totalListings === 1 ? '' : 's'}
                   </span>
-                  <span className="hidden sm:inline">â€¢</span>
+                  <span className="hidden sm:inline">•</span>
                   <span>
                     <span className="font-semibold text-slate-600 dark:text-slate-200">{data.totalFitments}</span>{' '}
                     fitment record{data.totalFitments === 1 ? '' : 's'}
@@ -152,7 +152,7 @@ export default function VinListingsPage() {
               ) : (
                 <div className="relative w-full overflow-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="text-xs uppercase bg-white/50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-400 font-medium">
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-medium">
                       <tr>
                         <th className="p-3 sm:p-4">Listing</th>
                         <th className="p-3 sm:p-4">Brand / Part #</th>
@@ -174,7 +174,7 @@ export default function VinListingsPage() {
                                   className="w-12 h-12 rounded-md object-cover bg-slate-800 shrink-0"
                                 />
                               ) : (
-                                <div className="w-12 h-12 rounded-md bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+                                <div className="w-12 h-12 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-[10px] text-slate-500 dark:text-slate-400 shrink-0">
                                   No Image
                                 </div>
                               )}
@@ -185,7 +185,7 @@ export default function VinListingsPage() {
                                 <div className="text-xs text-slate-400 dark:text-slate-500">
                                   SKU:{' '}
                                   <span className="font-mono">
-                                    {row.customLabelSku || 'â€”'}
+                                    {row.customLabelSku || '—'}
                                   </span>
                                 </div>
                               </div>
@@ -193,42 +193,42 @@ export default function VinListingsPage() {
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="text-slate-600 dark:text-slate-200">
-                              {row.cBrand || <span className="text-slate-400 dark:text-slate-500">â€”</span>}
+                              {row.cBrand || <span className="text-slate-400 dark:text-slate-500">—</span>}
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500">
                               MPN:{' '}
                               <span className="font-mono">
-                                {row.cManufacturerPartNumber || 'â€”'}
+                                {row.cManufacturerPartNumber || '—'}
                               </span>
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500">
                               OEM:{' '}
                               <span className="font-mono">
-                                {row.cOeOemPartNumber || 'â€”'}
+                                {row.cOeOemPartNumber || '—'}
                               </span>
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="text-slate-600 dark:text-slate-200">
-                              {row.categoryName || <span className="text-slate-400 dark:text-slate-500">â€”</span>}
+                              {row.categoryName || <span className="text-slate-400 dark:text-slate-500">—</span>}
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500">
-                              ID: {row.categoryId || 'â€”'}
+                              ID: {row.categoryId || '—'}
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="font-medium text-slate-900 dark:text-slate-100">
-                              {row.startPrice ? `$${row.startPrice}` : 'â€”'}
+                              {row.startPrice ? `$${row.startPrice}` : '—'}
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="text-slate-600 dark:text-slate-200">
-                              {row.quantity || 'â€”'}
+                              {row.quantity || '—'}
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
-                            <div className="text-xs inline-flex px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 dark:text-slate-300">
-                              {row.conditionId || 'â€”'}
+                            <div className="text-xs inline-flex px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200">
+                              {row.conditionId || '—'}
                             </div>
                           </td>
                         </tr>

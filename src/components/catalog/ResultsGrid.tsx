@@ -181,7 +181,7 @@ export default function ResultsGrid({
       {viewMode === 'list' && items.length > 0 && (
         <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden overflow-x-auto">
           <table className="w-full text-sm text-left min-w-[480px]">
-            <thead className="text-xs uppercase bg-white/80 dark:bg-slate-900/80 text-slate-400 dark:text-slate-500 font-medium sticky top-0">
+            <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 font-medium sticky top-0">
               <tr>
                 {onToggleSelect && <th className="p-2 sm:p-3 w-8"></th>}
                 <th className="p-2 sm:p-3 w-12 sm:w-16">Image</th>

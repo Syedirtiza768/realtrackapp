@@ -22,7 +22,7 @@ export default function ProtectedRoute({
 
   if (initializing) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-900 text-slate-400">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );

@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Package,
   Upload,
@@ -20,7 +20,7 @@ import { fetchWithAuth } from '../../lib/authApi';
 import { publishListingIdsToEbay } from '../../lib/publishApi';
 import { getStoresByChannel } from '../../lib/multiStoreApi';
 
-/* ── Types ── */
+/* -- Types -- */
 
 interface InventoryItem {
   id: string;
@@ -40,7 +40,7 @@ interface InventoryItem {
   errorMessage?: string;
 }
 
-/* ── Simulated API (replace with real API calls) ── */
+/* -- Simulated API (replace with real API calls) -- */
 
 const API_BASE = '/api';
 
@@ -63,7 +63,7 @@ async function fetchInventory(
   return apiFetch(`/inventory/listings?${params.toString()}`);
 }
 
-/* ── Status Badge ── */
+/* -- Status Badge -- */
 
 function StatusBadge({ status }: { status: InventoryItem['status'] }) {
   const config: Record<string, { variant: 'default' | 'success' | 'destructive' | 'warning' | 'secondary'; label: string }> = {
@@ -77,7 +77,7 @@ function StatusBadge({ status }: { status: InventoryItem['status'] }) {
   return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
 }
 
-/* ── Main Component ── */
+/* -- Main Component -- */
 
 export default function InventoryManager() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -94,7 +94,7 @@ export default function InventoryManager() {
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
   const limit = 25;
 
-  /* ── Load inventory ── */
+  /* -- Load inventory -- */
   const loadInventory = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -113,7 +113,7 @@ export default function InventoryManager() {
     }
   }, [page, limit, statusFilter, search, missingImagesFilter]);
 
-  /* ── Publish selected items ── */
+  /* -- Publish selected items -- */
   const handlePublish = useCallback(async () => {
     if (selected.size === 0) return;
     setPublishing(true);
@@ -154,7 +154,7 @@ export default function InventoryManager() {
     }
   }, [selected]);
 
-  /* ── Selection helpers ── */
+  /* -- Selection helpers -- */
   const toggleSelect = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -395,7 +395,7 @@ export default function InventoryManager() {
                         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded ${
                           item.fitmentCount > 0
                             ? 'bg-blue-900/30 text-blue-400'
-                            : 'bg-slate-800 text-slate-400 dark:text-slate-500'
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                         }`}>
                           <Car className="h-3 w-3" />
                           {item.fitmentCount}
@@ -430,7 +430,7 @@ export default function InventoryManager() {
                         {expandedErrors.has(item.id) && item.missingFields.length > 0 && (
                           <div className="mt-1 text-xs text-amber-400/80 space-y-0.5">
                             {item.missingFields.map((f, i) => (
-                              <div key={i}>• {f}</div>
+                              <div key={i}>� {f}</div>
                             ))}
                           </div>
                         )}
@@ -489,14 +489,14 @@ export default function InventoryManager() {
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="px-3 py-1 rounded bg-slate-800 text-slate-500 dark:text-slate-300 text-xs disabled:opacity-50"
+                    className="px-3 py-1 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200 text-xs disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
-                    className="px-3 py-1 rounded bg-slate-800 text-slate-500 dark:text-slate-300 text-xs disabled:opacity-50"
+                    className="px-3 py-1 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200 text-xs disabled:opacity-50"
                   >
                     Next
                   </button>

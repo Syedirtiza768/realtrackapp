@@ -659,7 +659,7 @@ function PriceRangeFilter({
           <div className="flex gap-2">
             <button
               onClick={apply}
-              className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 rounded-md text-xs text-slate-500 dark:text-slate-300 transition-colors"
+              className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md text-xs text-slate-600 dark:text-slate-300 transition-colors"
             >
               Apply
             </button>

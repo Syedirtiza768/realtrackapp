@@ -36,8 +36,11 @@ Four Docker Compose services (`docker-compose.yml`):
 - Backend container: `NODE_ENV=production`, `IGNORE_ENV_FILE=true` (config comes
   from compose `environment`, not a mounted `.env`), `PORT=4191`,
   `PIPELINE_PROJECT_ROOT=/app`.
-- `NODE_OPTIONS=--max-old-space-size=8192` (default) — large CSV catalog imports
-  load the file into the V8 heap; default ~2GB OOMs. Tune to instance RAM.
+- `NODE_OPTIONS=--max-old-space-size=1536` (default, AWS t3.medium / 4 GB RAM) —
+  large CSV catalog imports load the file into the V8 heap. Raise on larger
+  instances (e.g. `3072` on t3.large). Includes IPv4-first DNS for Docker.
+- Postgres container: `shared_buffers=128MB`, `max_connections=50` (t3.medium).
+- Redis container: `maxmemory 128mb`, `allkeys-lru`.
 - `JWT_SECRET` is **required** (compose fails fast if unset).
 - `DB_MIGRATIONS_RUN=true` by default → migrations run on backend boot.
 - Postgres seeds from `listingpro.dump` on first volume init (idempotent-ish;

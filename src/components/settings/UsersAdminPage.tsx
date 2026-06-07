@@ -83,7 +83,7 @@ function UsersAdmin() {
 
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[600px]">
-          <thead className="bg-white/80 dark:bg-slate-900/80 text-slate-400 dark:text-slate-400 text-left">
+          <thead className="bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 text-left">
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Email</th>

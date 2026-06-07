@@ -123,7 +123,7 @@ export default function RevisionHistory() {
                       {/* Version indicator */}
                       <div className="relative flex flex-col items-center shrink-0">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${
-                          isLatest ? 'border-blue-500 bg-blue-500/10 text-blue-400' : 'border-slate-200 dark:border-slate-700 bg-slate-800 text-slate-400 dark:text-slate-400'
+                          isLatest ? 'border-blue-500 bg-blue-500/10 text-blue-400' : 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                         }`}>
                           v{rev.version}
                         </div>

@@ -32,7 +32,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | `/catalog/motors-filters` | `CatalogMotorsFiltersPage` | `catalog.view` | Motors filters |
 | `/catalog/products/:productId/publish/ebay` | `EbayPublishWizardPage` | `ebay.publish` | Publish to eBay |
 | `/ingestion` | `IngestionManager` | `ingestion.view` | Ingestion dashboard |
-| `/pipeline` | `PipelineWizard` | `pipeline.view` | Pipeline wizard |
+| `/pipeline` | `PipelineWizard` | `pipeline.view` | Upload → enrich → US/AU/DE export; shows enrichment mode, OpenRouter probe errors, localization stats |
 | `/fitment` | `FitmentManager` | `fitment.view` | Fitment management |
 | `/fitment/vin` | `VinListingsPage` | `fitment.view` | VIN lookup |
 | `/inventory` | `InventoryManager` | `inventory.view` | Inventory; bulk eBay publish |

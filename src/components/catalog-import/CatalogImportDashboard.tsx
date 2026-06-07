@@ -280,7 +280,7 @@ export default function CatalogImportDashboard() {
 
       {/* Stats bar */}
       {statsLoading && !stats && !statsError && (
-        <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
           Loading catalog stats…
         </div>

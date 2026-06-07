@@ -22,7 +22,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `DB_NAME` | `listingpro` | Database name |
 | `DB_SYNCHRONIZE` | `false` | TypeORM auto-sync (keep false) |
 | `DB_MIGRATIONS_RUN` | `true` | Run migrations on boot |
-| `DB_POOL_MAX` / `DB_POOL_MIN` | `20` / `5` | Connection pool |
+| `DB_POOL_MAX` / `DB_POOL_MIN` | `10` / `2` (t3.medium) | Connection pool |
 | `DB_LOGGING` | `false` | SQL logging |
 
 ## Redis
@@ -135,9 +135,19 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `NODE_ENV` | `production` (Docker) | Env mode; gates Swagger |
-| `NODE_OPTIONS` | `--max-old-space-size=8192` | V8 heap (large CSV imports) |
+| `NODE_OPTIONS` | `--max-old-space-size=1536` (t3.medium) | V8 heap; raise on larger instances |
 | `IGNORE_ENV_FILE` | `true` (Docker) | Ignore host `.env` in container |
 | `PIPELINE_PROJECT_ROOT` | `/app` | Root for pipeline scripts/output |
+| `PIPELINE_AI_CONCURRENCY` | `3` (t3.medium) | Max parallel OpenRouter enrichment batches |
+| `PIPELINE_AI_BATCH_SIZE` | `6` (t3.medium) | Parts per AI batch (structured JSON) |
+| `PIPELINE_LOCALIZATION_CONCURRENCY` | `3` (t3.medium) | Parallel AU/DE localization batches |
+| `PIPELINE_IMAGE_CONCURRENCY` | `3` (t3.medium) | Parallel image-enrichment API batches |
+| `PIPELINE_CATEGORY_CONCURRENCY` | `2` (t3.medium) | Parallel eBay taxonomy lookups |
+| `PIPELINE_VIN_BATCH_CONCURRENCY` | `3` (t3.medium) | Parallel NHTSA VIN decode batches |
+| `PIPELINE_IMAGE_SKU_CONCURRENCY` | `2` (t3.medium) | Parallel S3 image mirror per SKU |
+| `CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY` | `2` (t3.medium) | eBay browse calls during CSV import |
+| `CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY` | `2` (t3.medium) | Image mirror concurrency during CSV import |
+| `OPENAI_CONCURRENCY` | — | Alias for `PIPELINE_AI_CONCURRENCY` |
 
 ## Frontend (Vite) — optional ingestion provider
 

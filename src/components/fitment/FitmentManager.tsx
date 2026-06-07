@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Check,
@@ -29,7 +29,7 @@ import {
     type FitmentSelection,
 } from '../../lib/fitmentApi';
 
-/* ── Constants ── */
+/* -- Constants -- */
 const CATEGORY_ID = '6000'; // eBay Motors Parts & Accessories
 const PAGE_SIZE = 50;
 
@@ -40,7 +40,7 @@ export interface FitmentManagerProps {
 export default function FitmentManager({ listingId = '' }: FitmentManagerProps) {
     const queryClient = useQueryClient();
 
-    /* ── State ── */
+    /* -- State -- */
     const [selected, setSelected] = useState<string[]>([]);
     const [filterText, setFilterText] = useState('');
     const [showAddPanel, setShowAddPanel] = useState(false);
@@ -54,7 +54,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
     const [trimSelection, setTrimSelection] = useState<SelectOption | null>(null);
     const [engineSelection, setEngineSelection] = useState<SelectOption | null>(null);
 
-    /* ── Queries ── */
+    /* -- Queries -- */
 
     const { data: fitments = [], isLoading, error: listError } = useQuery({
         queryKey: ['fitments', listingId],
@@ -62,7 +62,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         enabled: !!listingId,
     });
 
-    /* ── Mutations ── */
+    /* -- Mutations -- */
 
     const deleteMut = useMutation({
         mutationFn: deleteFitment,
@@ -84,7 +84,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         },
     });
 
-    /* ── Filtered data ── */
+    /* -- Filtered data -- */
 
     const filteredFitments = useMemo(() => {
         if (!filterText.trim()) return fitments;
@@ -102,7 +102,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         });
     }, [fitments, filterText]);
 
-    /* ── Selection helpers ── */
+    /* -- Selection helpers -- */
 
     const toggleSelect = (id: string) => {
         setSelected((prev) =>
@@ -118,7 +118,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         }
     };
 
-    /* ── SearchableSelect fetch callbacks ── */
+    /* -- SearchableSelect fetch callbacks -- */
 
     const fetchMakes = useCallback(
         async (query: string, page: number) => {
@@ -197,7 +197,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         [makeSelection, modelSelection, yearSelection, trimSelection],
     );
 
-    /* ── Add fitment from selections ── */
+    /* -- Add fitment from selections -- */
 
     const handleAddFromSelections = async () => {
         if (!makeSelection || !modelSelection || !yearSelection) return;
@@ -214,7 +214,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         try {
             await buildCompatibility([selection]);
         } catch {
-            // Non-blocking — compatibility build is optional
+            // Non-blocking � compatibility build is optional
         }
 
         // We add through the existing CRUD endpoint using numeric IDs.
@@ -230,7 +230,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         });
     };
 
-    /* ── VIN decode → auto-fill ── */
+    /* -- VIN decode ? auto-fill -- */
 
     const handleVinLookup = async () => {
         const vin = vinInput.trim().toUpperCase();
@@ -255,7 +255,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         }
     };
 
-    /* ── Reset add form ── */
+    /* -- Reset add form -- */
 
     const resetAddForm = () => {
         setMakeSelection(null);
@@ -268,7 +268,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         setShowAddPanel(false);
     };
 
-    /* ── Bulk actions ── */
+    /* -- Bulk actions -- */
 
     const handleBulkVerify = () => {
         selected.forEach((id) => verifyMut.mutate({ id, verified: true }));
@@ -280,12 +280,12 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         setSelected([]);
     };
 
-    /* ── Row helpers ── */
+    /* -- Row helpers -- */
 
     const formatVehicle = (row: PartFitmentRow) => {
         const yearRange = row.yearStart === row.yearEnd
             ? String(row.yearStart)
-            : `${row.yearStart}–${row.yearEnd}`;
+            : `${row.yearStart}�${row.yearEnd}`;
         return `${yearRange} ${row.make?.name ?? '?'} ${row.model?.name ?? '?'}`;
     };
 
@@ -305,7 +305,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
 
     return (
         <div className="space-y-4 sm:space-y-6">
-            {/* ── Header ── */}
+            {/* -- Header -- */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Fitment Manager</h2>
@@ -326,7 +326,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                 </div>
             </div>
 
-            {/* ── Add Fitment Panel ── */}
+            {/* -- Add Fitment Panel -- */}
             {showAddPanel && (
                 <Card>
                     <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
@@ -351,11 +351,11 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                         onChange={(e) => setVinInput(e.target.value.toUpperCase())}
                                         placeholder="Enter 17-character VIN..."
                                         maxLength={17}
-                                        className="flex-1 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 placeholder:text-slate-500 dark:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none font-mono tracking-wider"
+                                        className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none font-mono tracking-wider"
                                     />
                                     <button
                                         onClick={handleVinLookup}
-                                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-500 dark:text-slate-300"
+                                        className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-600 dark:text-slate-200"
                                     >
                                         <Barcode size={16} /> Decode
                                     </button>
@@ -436,11 +436,11 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                 </Card>
             )}
 
-            {/* ── Fitment Table ── */}
+            {/* -- Fitment Table -- */}
             <Card>
                 <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-2 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 w-full sm:max-w-sm lg:max-w-md">
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 w-full sm:max-w-sm lg:max-w-md">
                             <Search size={16} className="text-slate-400 dark:text-slate-500 shrink-0" />
                             <input
                                 type="text"
@@ -482,12 +482,12 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                             {/* Desktop table view (md+) */}
                             <div className="hidden md:block relative w-full overflow-auto">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="text-xs uppercase bg-white/50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-400 font-medium">
+                                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-medium">
                                         <tr>
                                             <th className="p-4 w-10">
                                                 <input
                                                     type="checkbox"
-                                                    className="rounded border-slate-200 dark:border-slate-700 bg-slate-800"
+                                                    className="rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
                                                     checked={selected.length === filteredFitments.length && filteredFitments.length > 0}
                                                     onChange={toggleAll}
                                                 />
@@ -506,21 +506,21 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 <td className="p-4">
                                                     <input
                                                         type="checkbox"
-                                                        className="rounded border-slate-200 dark:border-slate-700 bg-slate-800"
+                                                        className="rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
                                                         checked={selected.includes(row.id)}
                                                         onChange={() => toggleSelect(row.id)}
                                                     />
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-medium text-slate-600 dark:text-slate-200">{formatVehicle(row)}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">ID: {row.id.slice(0, 8)}…</div>
+                                                    <div className="text-xs text-slate-400 dark:text-slate-500">ID: {row.id.slice(0, 8)}�</div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <div className="text-slate-500 dark:text-slate-300">{row.submodel?.name ?? '—'}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">{row.engine?.name ?? '—'}</div>
+                                                    <div className="text-slate-500 dark:text-slate-300">{row.submodel?.name ?? '�'}</div>
+                                                    <div className="text-xs text-slate-400 dark:text-slate-500">{row.engine?.name ?? '�'}</div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-500 dark:text-slate-300 capitalize">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
                                                         {row.source.replace('_', ' ')}
                                                     </span>
                                                 </td>
@@ -533,7 +533,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                             />
                                                         </div>
                                                         <span className={`text-xs font-medium ${confidenceColor(row.confidence)}`}>
-                                                            {row.confidence ?? '—'}%
+                                                            {row.confidence ?? '�'}%
                                                         </span>
                                                     </div>
                                                 </td>
@@ -588,7 +588,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 <div>
                                                     <div className="font-medium text-slate-600 dark:text-slate-200 text-sm">{formatVehicle(row)}</div>
                                                     <div className="text-xs text-slate-400 dark:text-slate-500">
-                                                        {row.submodel?.name ?? '—'} · {row.engine?.name ?? '—'}
+                                                        {row.submodel?.name ?? '�'} � {row.engine?.name ?? '�'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -618,7 +618,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 />
                                             </div>
                                             <span className={`text-xs font-medium ${confidenceColor(row.confidence)}`}>
-                                                {row.confidence ?? '—'}%
+                                                {row.confidence ?? '�'}%
                                             </span>
                                             <span className={`ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                                                 row.verified ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
@@ -634,7 +634,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                 </CardContent>
             </Card>
 
-            {/* ── Bulk Actions Bar ── */}
+            {/* -- Bulk Actions Bar -- */}
             {selected.length > 0 && (
                 <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-4 sm:px-6 py-2.5 sm:py-3 flex items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom-4 z-40 max-w-[90vw]">
                     <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-200 whitespace-nowrap">{selected.length} selected</span>

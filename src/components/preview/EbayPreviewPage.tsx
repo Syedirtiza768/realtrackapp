@@ -1059,7 +1059,7 @@ export default function EbayPreviewPage() {
         /* ── List view ── */
         <div className="rounded-xl border border-slate-700 overflow-hidden">
           {/* Header */}
-          <div className="grid bg-slate-800 border-b border-slate-700 px-3 py-2 text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider" style={{ gridTemplateColumns: '48px 1fr 130px 90px 110px 110px 70px' }}>
+          <div className="grid bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider" style={{ gridTemplateColumns: '48px 1fr 130px 90px 110px 110px 70px' }}>
             <div />
             <div className="pl-2">Title</div>
             <div>SKU</div>

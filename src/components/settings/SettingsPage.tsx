@@ -944,7 +944,7 @@ function ChannelConnectionsTab() {
                         </div>
                     )}
 
-                    <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3 text-xs text-slate-400 dark:text-slate-500 space-y-1">
+                    <div className="bg-slate-100/70 dark:bg-slate-800/70 rounded-lg p-3 text-xs text-slate-500 dark:text-slate-400 space-y-1">
                         <p><span className="text-slate-400 dark:text-slate-400 font-medium">App ID:</span> IrtizaHa-listingp-SBX-e6e5fa804-178dade4</p>
                         <p><span className="text-slate-400 dark:text-slate-400 font-medium">Dev ID:</span> 71354d52-d565-49e2-8977-d96caab268ee</p>
                         <p><span className="text-slate-400 dark:text-slate-400 font-medium">Environment:</span> Sandbox</p>

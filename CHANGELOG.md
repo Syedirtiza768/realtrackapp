@@ -6,7 +6,40 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Changed
+- **AWS t3.medium tuning:** Default env profile for 2 vCPU / 4 GB RAM — Node heap
+  **1536 MB** (was 8192), DB pool **10/2** (was 20/5), pipeline concurrency **3**
+  (was 6–8), catalog import concurrency **2**, Postgres `shared_buffers=128MB`,
+  Redis `maxmemory 128mb`. See `.env.example` and `docker-compose.yml`.
+- **Pipeline eBay taxonomy hardening:** Category tree ID is cached on disk
+  (`output/.ebay-taxonomy-cache.json`), rate-limit failures use negative cache
+  with backoff (15 min for HTTP 429), tree resolution is single-flight, default
+  taxonomy concurrency lowered to **3**, and taxonomy errors surface in the
+  enrichment report + pipeline UI when keyword fallback is used for all categories.
+- **Pipeline parallel processing:** Enrichment, localization (AU+DE), and image
+  fetch stages now use a continuous concurrency pool (default **8** AI batches in
+  flight). Removed global `CONFIG` mutation race in batch routing. OpenRouter
+  429 responses get longer exponential backoff. Post-enrichment: validation runs
+  first, then **images + localization in parallel** (was sequential). Tunable via
+  `PIPELINE_AI_CONCURRENCY`, `PIPELINE_LOCALIZATION_CONCURRENCY`, etc.
+
 ### Fixed
+- **Pipeline zombie jobs after Docker restart:** On backend boot, pipeline jobs still
+  marked in-flight but absent from the BullMQ queue are failed with a retry hint
+  instead of showing endless `enrichment` at 0/N. Stats API now returns
+  `processing` / `pending` counts expected by the UI (was only `byStatus`).
+- **Pipeline processing UX:** Processing view shows time since last progress update
+  and a stale-progress hint when enrichment pauses for several minutes.
+- **Pipeline enrichment progress frozen at 0%:** `[PROGRESS]` markers were only
+  emitted after *all* AI batches finished (`Promise.allSettled` then loop), so
+  large jobs (e.g. 958 parts) showed `0 / N` for the entire enrichment phase.
+  Progress now updates as each batch completes. UI shows a clear **queued**
+  message when status is `pending` (worker concurrency is 1).
+- **Docker OpenRouter probe failures:** Backend `NODE_OPTIONS` now sets
+  `--dns-result-order=ipv4first` and `--no-network-family-autoselection` so Node
+  reaches `openrouter.ai` inside Docker Desktop (IPv6 connect was timing out with
+  `Connection error` / `ETIMEDOUT`). Pipeline script imports the same IPv4
+  bootstrap before OpenAI calls.
 - **eBay Taxonomy API fallbacks:** Production `EBAY_CLIENT_*` credentials added to
   root and `backend/.env`; backend container restarted via Compose. Enrichment
   pipeline now resolves `EBAY_MOTORS_US` category tree (not hardcoded tree `0`)
@@ -15,9 +48,22 @@ for every meaningful change (Continuous Documentation Protocol).
   and tolerates duplicate `role_permissions` inserts so backend starts cleanly
   when permissions are added.
 - **Pipeline OpenRouter validation:** `validateOpenAiKey()` uses `max_tokens: 16`
-  (gpt-4.1-mini minimum) instead of 5, which blocked all enrichment runs.
+  (gpt-4.1-mini minimum) instead of 5, which blocked all enrichment runs. Probes
+  a fallback model list when the configured default is unavailable.
+- **GridX / fallback listing quality:** `extractPartNameFromDescription()` strips
+  donor boilerplate (VIN, year/make noise) so fallback titles and item specifics
+  use the actual part name. Fitment export now maps Mercedes C350/C300-style
+  donor models to eBay MVL `C-Class` with trim preserved. Enrichment report
+  adds `totalListingsGenerated`, `totalAiEnriched`, and `enrichmentMode` so
+  fallback runs are not misread as zero listings.
 
 ### Added
+- **AU/DE marketplace copy localization:** Post-enrichment pass translates titles,
+  descriptions, and tabbed policy shells for AU (`en-AU`) and DE (`de-DE`) outputs.
+  Rule-based German enum mapping applies when OpenRouter is unavailable.
+- **Pipeline enrichment status panel:** `/pipeline` job view surfaces `enrichmentMode`,
+  AI vs fallback counts, OpenRouter probe errors, and localization stats from the
+  enrichment report via `stageDetails`.
 - **Production AI routing enablement scripts:** `scripts/import-ai-run-logs.mjs`,
   `scripts/seed-ebay-categories-from-mappings.mjs`, and SQL helpers to seed
   `ebay_categories` from mappings and bulk-load pipeline `ai-run-logs.json` into

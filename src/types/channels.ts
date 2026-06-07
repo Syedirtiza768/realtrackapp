@@ -129,7 +129,7 @@ export function statusColor(s: ChannelListingStatus): string {
     publishing: 'bg-blue-900/60 text-blue-300',
     active: 'bg-emerald-900/60 text-emerald-300',
     failed: 'bg-red-900/60 text-red-300',
-    ended: 'bg-slate-800 text-slate-400',
+    ended: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300',
   };
   return map[s];
 }

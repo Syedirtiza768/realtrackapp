@@ -25,6 +25,7 @@ import {
 import type { PipelineJob, PipelineJobStatus } from '../../types/pipeline';
 import { PIPELINE_STAGES } from '../../types/pipeline';
 import ImageEnrichmentPanel from './ImageEnrichmentPanel';
+import EnrichmentStatusPanel from './EnrichmentStatusPanel';
 import OptimizationStatusPanel, { useOptimizationDownloadGate } from './OptimizationStatusPanel';
 
 type WizardStep = 'upload' | 'processing' | 'complete' | 'history';
@@ -315,13 +316,26 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   }
 
   const terminal = isTerminal(job.status);
+  const isQueued = job.status === 'pending';
   const hasPartCounts = job.totalParts > 0;
-  const progressPct = hasPartCounts
-    ? Math.round((job.processedParts / job.totalParts) * 100)
-    : stageProgress(job.status);
+  const progressPct = isQueued
+    ? 0
+    : hasPartCounts
+      ? Math.round((job.processedParts / job.totalParts) * 100)
+      : stageProgress(job.status);
+
+  const secondsSinceUpdate = job.updatedAt
+    ? Math.floor((Date.now() - new Date(job.updatedAt).getTime()) / 1000)
+    : 0;
+  const progressLooksStale = !terminal && !isQueued && secondsSinceUpdate > 180;
 
   // Current stage description
   const currentStage = PIPELINE_STAGES.find((s) => s.key === job.status);
+  const statusLabel = isQueued
+    ? 'Queued — waiting for the pipeline worker (one job runs at a time)'
+    : hasPartCounts
+      ? `${job.processedParts} / ${job.totalParts} parts`
+      : currentStage?.description ?? 'Processing...';
 
   return (
     <div className="space-y-4">
@@ -367,12 +381,8 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
           {!terminal && (
             <div className="mb-4">
               <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
-                <span>
-                  {hasPartCounts
-                    ? `${job.processedParts} / ${job.totalParts} parts`
-                    : currentStage?.description ?? 'Processing...'}
-                </span>
-                <span>{progressPct}%</span>
+                <span>{statusLabel}</span>
+                <span>{isQueued ? 'queued' : `${progressPct}%`}</span>
               </div>
               <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
                 <div
@@ -382,13 +392,34 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
                   style={{ width: `${Math.max(progressPct, 2)}%` }}
                 />
               </div>
+              {!isQueued && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Last update {formatElapsed(secondsSinceUpdate)} ago
+                  {progressLooksStale && ' — AI batches can pause for several minutes on slow OpenRouter responses'}
+                </p>
+              )}
             </div>
           )}
 
+          {progressLooksStale && (
+            <p className="text-sm text-amber-400/90 mb-3">
+              No progress updates for a while. If this persists, cancel and retry from History, or check backend logs
+              (`docker compose logs backend`).
+            </p>
+          )}
+
           {/* Stage stepper */}
+          {isQueued && (
+            <p className="text-sm text-yellow-400/90 mb-3">
+              Your file is uploaded. It will start automatically when the current job finishes.
+            </p>
+          )}
+
           <div className="flex items-center gap-1 overflow-x-auto pb-2">
             {PIPELINE_STAGES.map((stage, i) => {
-              const stageIdx = PIPELINE_STAGES.findIndex((s) => s.key === job.status);
+              const stageIdx = isQueued
+                ? -1
+                : PIPELINE_STAGES.findIndex((s) => s.key === job.status);
               const thisIdx = i;
               const isDone = job.status === 'completed' || thisIdx < stageIdx;
               const isActive = thisIdx === stageIdx && !terminal;
@@ -438,10 +469,25 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
       {/* Stats grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="VIN Decoded" value={job.vinDecodeSuccess} sub={`${job.vinDecodeFailed} failed`} />
-        <StatCard label="Categories" value={job.categoryApiCount} sub={`${job.categoryFallbackCount} fallback`} />
+        <StatCard
+          label="Categories"
+          value={job.categoryApiCount}
+          sub={
+            job.categoryApiCount === 0 && job.categoryFallbackCount > 0
+              ? `${job.categoryFallbackCount} fallback (Taxonomy API skipped or rate-limited)`
+              : `${job.categoryFallbackCount} fallback`
+          }
+          subClassName={
+            job.categoryApiCount === 0 && job.categoryFallbackCount > 0
+              ? 'text-amber-400'
+              : undefined
+          }
+        />
         <StatCard label="Enriched" value={job.enrichedCount} sub={`${job.fallbackCount} fallback`} />
         <StatCard label="AI Tokens" value={job.openaiTokensUsed.toLocaleString()} sub={`$${(job.openaiCostUsd ?? 0).toFixed(4)}`} />
       </div>
+
+      <EnrichmentStatusPanel job={job} />
 
       {job.status === 'completed' && <OptimizationStatusPanel job={job} />}
 
@@ -494,13 +540,25 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  subClassName,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  subClassName?: string;
+}) {
   return (
     <Card>
       <CardContent className="p-4">
         <p className="text-xs text-slate-400 dark:text-slate-400 uppercase tracking-wider">{label}</p>
         <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
-        {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
+        {sub && (
+          <p className={`text-xs mt-0.5 ${subClassName ?? 'text-slate-400 dark:text-slate-500'}`}>{sub}</p>
+        )}
       </CardContent>
     </Card>
   );

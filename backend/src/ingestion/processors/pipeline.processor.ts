@@ -1,9 +1,9 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job, Queue } from 'bullmq';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { PipelineJob, PipelineJobStatus } from '../entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
@@ -27,12 +27,23 @@ export interface PipelineJobData {
  * monitors its stdout for progress, and updates the PipelineJob entity
  * through the lifecycle stages.
  */
+const ACTIVE_PIPELINE_STATUSES: PipelineJobStatus[] = [
+  'pending',
+  'uploading',
+  'vin_decode',
+  'category_mapping',
+  'enrichment',
+  'validation',
+  'output_generation',
+];
+
 @Processor('pipeline', { concurrency: 1 })
-export class PipelineProcessor extends WorkerHost {
+export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(PipelineProcessor.name);
 
   // Debounce progress DB writes — accumulate updates and flush periodically
   private pendingUpdate: Partial<PipelineJob> | null = null;
+  private pendingStageDetails: Record<string, unknown> | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private lastFlushJobId: string | null = null;
   private static readonly FLUSH_INTERVAL_MS = 1500; // flush at most every 1.5s
@@ -44,11 +55,51 @@ export class PipelineProcessor extends WorkerHost {
     private readonly productRepo: Repository<CatalogProduct>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectQueue('pipeline')
+    private readonly pipelineQueue: Queue,
     @InjectQueue('listing-optimization')
     private readonly optimizationQueue: Queue,
     private readonly pipelineOutputImages: PipelineOutputImageService,
   ) {
     super();
+  }
+
+  /** Mark DB rows left in-flight after a worker restart (no matching BullMQ job). */
+  async onModuleInit(): Promise<void> {
+    try {
+      const activeJobs = await this.jobRepo.find({
+        where: { status: In(ACTIVE_PIPELINE_STATUSES) },
+      });
+      if (activeJobs.length === 0) return;
+
+      const [queued, active, delayed] = await Promise.all([
+        this.pipelineQueue.getWaiting(),
+        this.pipelineQueue.getActive(),
+        this.pipelineQueue.getDelayed(),
+      ]);
+      const liveJobIds = new Set(
+        [...queued, ...active, ...delayed].map(
+          (entry) => (entry.data as PipelineJobData).jobId,
+        ),
+      );
+
+      for (const job of activeJobs) {
+        if (liveJobIds.has(job.id)) continue;
+        await this.jobRepo.update(job.id, {
+          status: 'failed',
+          lastError:
+            'Job interrupted (worker restart). Open History and use Retry to run again.',
+          completedAt: new Date(),
+        });
+        this.logger.warn(
+          `Recovered orphaned pipeline job ${job.id} (${job.originalFilename})`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to recover orphaned pipeline jobs: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   async process(job: Job<PipelineJobData>): Promise<void> {
@@ -212,6 +263,16 @@ export class PipelineProcessor extends WorkerHost {
       if (fields.vin_failed) this.pendingUpdate.vinDecodeFailed = parseInt(fields.vin_failed, 10);
       if (fields.cat_api) this.pendingUpdate.categoryApiCount = parseInt(fields.cat_api, 10);
       if (fields.cat_fallback) this.pendingUpdate.categoryFallbackCount = parseInt(fields.cat_fallback, 10);
+      if (fields.cat_taxonomy_backoff === '1') {
+        if (!this.pendingStageDetails) this.pendingStageDetails = {};
+        this.pendingStageDetails.categoryTaxonomyBackoff = true;
+        hasStageChange = true;
+      }
+      if (fields.enrichment_mode) {
+        if (!this.pendingStageDetails) this.pendingStageDetails = {};
+        this.pendingStageDetails.enrichmentMode = fields.enrichment_mode;
+        hasStageChange = true;
+      }
     }
 
     // Stage changes flush immediately for responsive UI
@@ -231,12 +292,26 @@ export class PipelineProcessor extends WorkerHost {
     }
 
     const update = this.pendingUpdate;
+    const stagePatch = this.pendingStageDetails;
     this.pendingUpdate = null;
+    this.pendingStageDetails = null;
 
-    if (update && Object.keys(update).length > 0) {
-      await this.jobRepo.update(jobId, update as any);
-      if (update.status) {
-        this.logger.log(`Job ${jobId} → ${update.status} (parts: ${update.processedParts ?? '?'}/${update.totalParts ?? '?'})`);
+    if (!update && !stagePatch) return;
+
+    const merged: Partial<PipelineJob> = { ...(update ?? {}) };
+
+    if (stagePatch && Object.keys(stagePatch).length > 0) {
+      const job = await this.jobRepo.findOneBy({ id: jobId });
+      merged.stageDetails = {
+        ...(job?.stageDetails ?? {}),
+        ...stagePatch,
+      };
+    }
+
+    if (Object.keys(merged).length > 0) {
+      await this.jobRepo.update(jobId, merged as any);
+      if (merged.status) {
+        this.logger.log(`Job ${jobId} → ${merged.status} (parts: ${merged.processedParts ?? '?'}/${merged.totalParts ?? '?'})`);
       }
     }
   }
@@ -274,13 +349,69 @@ export class PipelineProcessor extends WorkerHost {
         try {
           const report = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
           const summary = report.summary ?? report;
-          if (summary.totalInput) update.totalParts = summary.totalInput;
-          if (summary.vinDecodeSuccess) update.vinDecodeSuccess = summary.vinDecodeSuccess;
-          if (summary.vinDecodeFail) update.vinDecodeFailed = summary.vinDecodeFail;
-          if (summary.categoryMappingApi) update.categoryApiCount = summary.categoryMappingApi;
-          if (summary.categoryMappingFallback) update.categoryFallbackCount = summary.categoryMappingFallback;
-          if (summary.openaiTokensUsed) update.openaiTokensUsed = summary.openaiTokensUsed;
-          if (summary.totalProcessed) update.enrichedCount = summary.totalProcessed;
+          const summaryAny = summary as Record<string, unknown>;
+          if (summaryAny.totalInputParts) update.totalParts = summaryAny.totalInputParts as number;
+          else if (summaryAny.totalInput) update.totalParts = summaryAny.totalInput as number;
+          if (summaryAny.vinDecodeSuccess) update.vinDecodeSuccess = summaryAny.vinDecodeSuccess as number;
+          if (summaryAny.vinDecodeFail) update.vinDecodeFailed = summaryAny.vinDecodeFail as number;
+          if (report.categoryMapping?.apiMapped != null) {
+            update.categoryApiCount = report.categoryMapping.apiMapped;
+          }
+          if (report.categoryMapping?.fallbackMapped != null) {
+            update.categoryFallbackCount = report.categoryMapping.fallbackMapped;
+          }
+          if (report.openai?.totalTokens) update.openaiTokensUsed = report.openai.totalTokens;
+          if (summaryAny.totalAiEnriched != null) {
+            update.enrichedCount = summaryAny.totalAiEnriched as number;
+          } else if (summaryAny.totalProcessed) {
+            update.enrichedCount = summaryAny.totalProcessed as number;
+          }
+          if (summaryAny.totalFallbackEnrichment != null) {
+            update.fallbackCount = summaryAny.totalFallbackEnrichment as number;
+          } else if (summaryAny.totalFailedEnrichment != null) {
+            update.fallbackCount = summaryAny.totalFailedEnrichment as number;
+          }
+
+          const probeErrors = (report.errors ?? []).filter(
+            (e: { type?: string }) => e.type === 'openai',
+          );
+          const taxonomyErrors = (report.categoryMapping?.taxonomyErrors ??
+            (report.errors ?? []).filter((e: { type?: string }) => e.type === 'taxonomy')) as Array<{
+            type?: string;
+            message: string;
+            source?: string;
+            status?: number | null;
+          }>;
+          update.stageDetails = {
+            enrichmentMode: summaryAny.enrichmentMode ?? null,
+            totalAiEnriched: summaryAny.totalAiEnriched ?? summaryAny.totalProcessed ?? 0,
+            totalFallbackEnrichment:
+              summaryAny.totalFallbackEnrichment ?? summaryAny.totalFailedEnrichment ?? 0,
+            totalListingsGenerated: summaryAny.totalListingsGenerated ?? null,
+            openRouterModel: report.openai?.defaultModel ?? null,
+            openRouterProbeErrors: probeErrors,
+            enrichmentErrors: (report.errors ?? []).slice(0, 20),
+            localization: report.localization ?? null,
+            categoryMapping: {
+              apiMapped: report.categoryMapping?.apiMapped ?? 0,
+              fallbackMapped: report.categoryMapping?.fallbackMapped ?? 0,
+              apiRate: report.categoryMapping?.apiRate ?? '0%',
+              apiSkippedReason: report.categoryMapping?.apiSkippedReason ?? null,
+              treeCacheHit: report.categoryMapping?.treeCacheHit ?? false,
+              treeCacheSource: report.categoryMapping?.treeCacheSource ?? null,
+              taxonomyErrors,
+            },
+          };
+          if (
+            probeErrors.length > 0 ||
+            summaryAny.enrichmentMode === 'fallback' ||
+            taxonomyErrors.length > 0
+          ) {
+            update.errorCount =
+              probeErrors.length +
+              (summaryAny.enrichmentMode === 'fallback' ? 1 : 0) +
+              taxonomyErrors.length;
+          }
         } catch {
           // Non-critical
         }
@@ -302,6 +433,10 @@ export class PipelineProcessor extends WorkerHost {
     }
 
     if (Object.keys(update).length > 0) {
+      const existing = await this.jobRepo.findOneBy({ id: jobId });
+      if (update.stageDetails && existing?.stageDetails) {
+        update.stageDetails = { ...existing.stageDetails, ...update.stageDetails };
+      }
       await this.jobRepo.update(jobId, update as any);
     }
   }

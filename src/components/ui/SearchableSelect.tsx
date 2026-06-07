@@ -238,7 +238,7 @@ export default function SearchableSelect({
         className={`
           flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors
           ${disabled
-            ? 'bg-slate-100 dark:bg-slate-900/50 border-slate-300 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+            ? 'bg-slate-200/50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-500 cursor-not-allowed'
             : error
               ? 'bg-white dark:bg-slate-900 border-red-500/50 text-slate-700 dark:text-slate-200 hover:border-red-400'
               : isOpen

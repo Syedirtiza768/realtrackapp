@@ -185,7 +185,7 @@ function AiRoutingDashboard() {
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500">
+            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-2">Segment</th>
                 <th className="px-4 py-2">Model</th>
@@ -232,7 +232,7 @@ function AiRoutingDashboard() {
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500">
+            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-2">Segment</th>
                 <th className="px-4 py-2">Model</th>

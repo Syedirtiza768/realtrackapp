@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     ShoppingCart,
     Truck,
@@ -15,7 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { getOrders, getOrder, getOrderStats } from '../../lib/ordersApi';
 
-/* ─── Types ─── */
+/* --- Types --- */
 
 interface OrderSummary {
     id: string;
@@ -73,7 +73,7 @@ interface OrderStats {
     [status: string]: number;
 }
 
-/* ─── Helpers ─── */
+/* --- Helpers --- */
 
 const statusConfigs: Record<string, { color: string; icon: React.ReactNode }> = {
     pending: { color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', icon: <Clock size={12} /> },
@@ -103,7 +103,7 @@ function fmtCurrency(amount: string | number, currency = 'USD'): string {
     });
 }
 
-/* ─── Component ─── */
+/* --- Component --- */
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<OrderSummary[]>([]);
@@ -172,7 +172,7 @@ export default function OrdersPage() {
         <div className="space-y-4 sm:space-y-6">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Orders</h2>
 
-            {/* ─── Stats Cards ─── */}
+            {/* --- Stats Cards --- */}
             <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -218,7 +218,7 @@ export default function OrdersPage() {
                 </Card>
             </div>
 
-            {/* ─── Filters ─── */}
+            {/* --- Filters --- */}
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
@@ -227,7 +227,7 @@ export default function OrdersPage() {
                         placeholder="Search order ID, buyer..."
                         value={searchQ}
                         onChange={e => setSearchQ(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none placeholder:text-slate-500 dark:text-slate-600"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                 </div>
                 <select
@@ -255,11 +255,11 @@ export default function OrdersPage() {
                     placeholder="Filter by Store ID..."
                     value={storeFilter}
                     onChange={e => { setStoreFilter(e.target.value); setPage(0); }}
-                    className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-500 dark:text-slate-600"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
             </div>
 
-            {/* ─── Orders Table ─── */}
+            {/* --- Orders Table --- */}
             {loading ? (
                 <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
@@ -300,7 +300,7 @@ export default function OrdersPage() {
                                                     </div>
                                                 </td>
                                                 <td className="py-3 px-4 text-slate-400 dark:text-slate-400 hidden sm:table-cell">
-                                                    {order.buyerName ?? order.buyerUsername ?? '—'}
+                                                    {order.buyerName ?? order.buyerUsername ?? '�'}
                                                 </td>
                                                 <td className="py-3 px-4">
                                                     <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border ${sc.color}`}>
@@ -329,7 +329,7 @@ export default function OrdersPage() {
                     {total > limit && (
                         <div className="flex items-center justify-between pt-2">
                             <p className="text-sm text-slate-400 dark:text-slate-500">
-                                Showing {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total}
+                                Showing {page * limit + 1}�{Math.min((page + 1) * limit, total)} of {total}
                             </p>
                             <div className="flex gap-2">
                                 <button
@@ -352,7 +352,7 @@ export default function OrdersPage() {
                 </>
             )}
 
-            {/* ─── Order Detail Modal ─── */}
+            {/* --- Order Detail Modal --- */}
             {(selectedOrder || detailLoading) && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"

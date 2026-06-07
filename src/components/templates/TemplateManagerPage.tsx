@@ -229,7 +229,7 @@ export default function TemplateManagerPage() {
                   )}
                 </div>
 
-                <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded p-2 mb-3 max-h-20 overflow-hidden text-xs font-mono text-slate-400 dark:text-slate-400">
+                <div className="bg-slate-100 dark:bg-slate-800/70 rounded p-2 mb-3 max-h-20 overflow-hidden text-xs font-mono text-slate-500 dark:text-slate-400">
                   {template.content.slice(0, 200)}
                   {template.content.length > 200 && '...'}
                 </div>

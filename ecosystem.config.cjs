@@ -12,7 +12,7 @@ module.exports = {
       },
       env_file: './backend/.env',
       watch: false,
-      max_memory_restart: '500M',
+      max_memory_restart: '1800M',
       error_file: '../logs/backend-error.log',
       out_file: '../logs/backend-out.log',
       merge_logs: true,

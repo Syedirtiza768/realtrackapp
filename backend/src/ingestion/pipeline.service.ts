@@ -18,6 +18,11 @@ export interface CreatePipelineJobDto {
 
 export interface PipelineJobSummary {
   total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
   byStatus: Record<string, number>;
   totalPartsProcessed: number;
   totalEnriched: number;
@@ -214,8 +219,21 @@ export class PipelineService {
       totalTokens += parseInt(row.totalTokens, 10) || 0;
     }
 
+    const pending = byStatus.pending ?? 0;
+    const completed = byStatus.completed ?? 0;
+    const failed = byStatus.failed ?? 0;
+    const cancelled = byStatus.cancelled ?? 0;
+    const processing = Object.entries(byStatus)
+      .filter(([status]) => !['completed', 'failed', 'cancelled', 'pending'].includes(status))
+      .reduce((sum, [, count]) => sum + count, 0);
+
     return {
       total,
+      pending,
+      processing,
+      completed,
+      failed,
+      cancelled,
       byStatus,
       totalPartsProcessed,
       totalEnriched,

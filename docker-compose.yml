@@ -12,6 +12,14 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    # t3.medium (4 GB): cap Postgres ~512 MB shared_buffers budget
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c effective_cache_size=512MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=50
     environment:
       POSTGRES_DB: ${DB_NAME:-listingpro}
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -34,6 +42,8 @@ services:
     restart: unless-stopped
     command: >
       redis-server
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
       ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     ports:
       - "${REDIS_PORT_EXTERNAL:-6379}:6379"
@@ -59,7 +69,8 @@ services:
     environment:
       NODE_ENV: production
       # Catalog CSV import loads the full file into JS heap (see CsvImportProcessor); default ~2GB OOMs on large files
-      NODE_OPTIONS: "${NODE_OPTIONS:---max-old-space-size=8192}"
+      # Prefer IPv4 for outbound HTTPS (Docker Desktop IPv6 to OpenRouter often ETIMEDOUT)
+      NODE_OPTIONS: "${NODE_OPTIONS:---max-old-space-size=1536 --dns-result-order=ipv4first --no-network-family-autoselection}"
       # Use compose `environment` only; do not read a host .env file in the container
       IGNORE_ENV_FILE: "true"
       PORT: 4191
@@ -71,8 +82,8 @@ services:
       DB_NAME: ${DB_NAME:-listingpro}
       DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
       DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-true}
-      DB_POOL_MAX: ${DB_POOL_MAX:-20}
-      DB_POOL_MIN: ${DB_POOL_MIN:-5}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      DB_POOL_MIN: ${DB_POOL_MIN:-2}
       DB_LOGGING: ${DB_LOGGING:-false}
       # Redis
       REDIS_HOST: redis
@@ -115,6 +126,16 @@ services:
       AI_RUN_MODE: ${AI_RUN_MODE:-default}
       AI_TAXONOMY_VALIDATION_ENABLED: ${AI_TAXONOMY_VALIDATION_ENABLED:-true}
       RBAC_SYNC_PERMISSIONS: ${RBAC_SYNC_PERMISSIONS:-true}
+      # Pipeline / catalog import (t3.medium defaults — override in .env)
+      PIPELINE_AI_CONCURRENCY: ${PIPELINE_AI_CONCURRENCY:-3}
+      PIPELINE_AI_BATCH_SIZE: ${PIPELINE_AI_BATCH_SIZE:-6}
+      PIPELINE_LOCALIZATION_CONCURRENCY: ${PIPELINE_LOCALIZATION_CONCURRENCY:-3}
+      PIPELINE_IMAGE_CONCURRENCY: ${PIPELINE_IMAGE_CONCURRENCY:-3}
+      PIPELINE_CATEGORY_CONCURRENCY: ${PIPELINE_CATEGORY_CONCURRENCY:-2}
+      PIPELINE_VIN_BATCH_CONCURRENCY: ${PIPELINE_VIN_BATCH_CONCURRENCY:-3}
+      PIPELINE_IMAGE_SKU_CONCURRENCY: ${PIPELINE_IMAGE_SKU_CONCURRENCY:-2}
+      CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY: ${CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY:-2}
+      CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY: ${CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY:-2}
       # eBay
       EBAY_CLIENT_ID: ${EBAY_CLIENT_ID:-}
       EBAY_CLIENT_SECRET: ${EBAY_CLIENT_SECRET:-}
@@ -143,8 +164,8 @@ services:
       - ./output:/app/output
       - ./config:/app/config
       - ./docs:/app/docs:ro
-      # Optional: add your own env file (must be a real file, not a directory):
-      #   - ./.env:/app/.env:ro
+      # Optional: project env for pipeline child process (OpenRouter, eBay, AI routing)
+      - ./.env:/app/.env:ro
       - ./eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:/app/eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:ro
       - ./eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:ro
       - ./eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:ro
