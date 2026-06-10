@@ -30,6 +30,7 @@ export class OpenAiService implements OnModuleInit {
   /** Default models (overridable per-call) */
   private chatModel: string;
   private embeddingModel: string;
+  private visionDetail: 'low' | 'auto' | 'high';
 
   /** Rate-limit tracking */
   private rateLimitRemainingRequests = Infinity;
@@ -48,6 +49,9 @@ export class OpenAiService implements OnModuleInit {
       'OPENAI_EMBEDDING_MODEL',
       'text-embedding-3-small',
     );
+    const detail = this.config.get<string>('OPENAI_VISION_DETAIL', 'auto');
+    this.visionDetail =
+      detail === 'low' || detail === 'high' ? detail : 'auto';
   }
 
   onModuleInit() {
@@ -97,7 +101,13 @@ export class OpenAiService implements OnModuleInit {
           (url) =>
             ({
               type: 'image_url' as const,
-              image_url: { url, detail: 'high' as const },
+              image_url: {
+                url,
+                detail: (req.imageDetail ?? this.visionDetail) as
+                  | 'low'
+                  | 'auto'
+                  | 'high',
+              },
             }),
         ),
       ];

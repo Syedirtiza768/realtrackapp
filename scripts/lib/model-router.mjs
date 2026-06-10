@@ -62,6 +62,7 @@ function loadEnvDefaults(env = {}) {
       env.OPENAI_MODEL_ESCALATION || 'google/gemini-2.5-flash',
     text: env.OPENAI_MODEL_TEXT || 'openai/gpt-4o-mini',
     flagshipMinPrice: Number(env.OPENAI_MODEL_FLAGSHIP_MIN_PRICE || 200),
+    lowValueMaxPrice: Number(env.AI_LOW_VALUE_MAX_PRICE || 50),
     fitmentMinRows: Number(env.AI_FITMENT_MIN_ROWS || 5),
     blocklist: DEFAULT_BLOCKLIST,
   };
@@ -217,6 +218,8 @@ export function createModelRouter(env = {}) {
         policy?.thresholds?.fitmentMinRows ?? defaults.fitmentMinRows,
       flagshipMinPrice:
         policy?.thresholds?.flagshipMinPrice ?? defaults.flagshipMinPrice,
+      lowValueMaxPrice:
+        policy?.thresholds?.lowValueMaxPrice ?? defaults.lowValueMaxPrice,
     }),
     policy,
     defaults,

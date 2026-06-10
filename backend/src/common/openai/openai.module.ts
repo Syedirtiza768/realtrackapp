@@ -20,6 +20,7 @@ import { AiOptimizerService } from './ai-optimizer.service.js';
 import { ListingGuardAuditService } from './listing-guard-audit.service.js';
 import { AiRoutingController } from './ai-routing.controller.js';
 import { EbayTaxonomyTruthService } from './ebay-taxonomy-truth.service.js';
+import { EnrichmentCacheService } from './enrichment-cache.service.js';
 import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
 
 /**
@@ -48,6 +49,7 @@ import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
     AiOptimizerService,
     ListingGuardAuditService,
     EbayTaxonomyTruthService,
+    EnrichmentCacheService,
     EnrichmentPipeline,
     VisionEnrichmentPipeline,
     ListingGenerationPipeline,
@@ -62,6 +64,7 @@ import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
     ListingQualityValidator,
     AiRunLogService,
     AiOptimizerService,
+    EnrichmentCacheService,
     EnrichmentPipeline,
     VisionEnrichmentPipeline,
     ListingGenerationPipeline,

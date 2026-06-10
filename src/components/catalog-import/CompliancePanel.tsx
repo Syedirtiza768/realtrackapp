@@ -272,7 +272,7 @@ export default function CompliancePanel({
                   <div className="flex flex-wrap gap-1">
                     {batchResult.summary.topIssues.slice(0, 8).map((issue) => (
                       <Badge key={issue.code} variant="secondary">
-                        {issue.code.replace(/_/g, ' ')} ({issue.count})
+                        {(issue.code ?? '').replace(/_/g, ' ')} ({issue.count})
                       </Badge>
                     ))}
                   </div>

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   Eye,
   Table,
   RotateCcw,
+  Unlock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
@@ -15,6 +16,7 @@ import {
   markProductManualReview,
   rerunJobOptimization,
   rerunProductOptimization,
+  bypassJobOptimization,
   useJobOptimization,
 } from '../../lib/pipelineApi';
 import type { JobOptimizationStatus, OptimizationStatus, PipelineJob, ProductOptimizationSummary } from '../../types/pipeline';
@@ -22,7 +24,7 @@ import type { JobOptimizationStatus, OptimizationStatus, PipelineJob, ProductOpt
 function optimizationBadge(status: OptimizationStatus | undefined) {
   const map: Record<string, { label: string; className: string }> = {
     pending: { label: 'Optimization queued', className: 'bg-slate-600/40 text-slate-500 dark:text-slate-300' },
-    running: { label: 'Optimizing…', className: 'bg-indigo-500/20 text-indigo-300' },
+    running: { label: 'Optimizing\u2026', className: 'bg-indigo-500/20 text-indigo-300' },
     completed: { label: 'Optimization completed', className: 'bg-green-500/20 text-green-400' },
     failed: { label: 'Blocked: unresolved errors', className: 'bg-red-500/20 text-red-400' },
     needs_review: { label: 'Fitment needs review', className: 'bg-amber-500/20 text-amber-300' },
@@ -44,7 +46,7 @@ function readinessBadge(job: PipelineJob, optimization: JobOptimizationStatus | 
   if (opt === 'running' || opt === 'pending') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-indigo-500/20 text-indigo-300">
-        <Loader2 className="h-3 w-3 animate-spin" /> Preparing listings…
+        <Loader2 className="h-3 w-3 animate-spin" /> Preparing listings\u2026
       </span>
     );
   }
@@ -120,7 +122,7 @@ function ProductRow({
             {product.optimizedTitle ?? product.sku ?? product.productId.slice(0, 8)}
           </p>
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            SKU {product.sku ?? '—'} · Readiness {Math.round(product.uploadReadinessScore * 100)}%
+            SKU {product.sku ?? '\u2014'} \u00b7 Readiness {Math.round(product.uploadReadinessScore * 100)}%
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -197,10 +199,10 @@ function ProductRow({
                   <td className="p-1">{row.year ?? row.Year}</td>
                   <td className="p-1">{row.make ?? row.Make}</td>
                   <td className="p-1">{row.model ?? row.Model}</td>
-                  <td className="p-1">{row.trim ?? '—'}</td>
-                  <td className="p-1">{row.engine ?? '—'}</td>
-                  <td className="p-1">{row.source ?? row.Source ?? '—'}</td>
-                  <td className="p-1">{row.validationStatus ?? '—'}</td>
+                  <td className="p-1">{row.trim ?? '\u2014'}</td>
+                  <td className="p-1">{row.engine ?? '\u2014'}</td>
+                  <td className="p-1">{row.source ?? row.Source ?? '\u2014'}</td>
+                  <td className="p-1">{row.validationStatus ?? '\u2014'}</td>
                 </tr>
               ))}
             </tbody>
@@ -208,7 +210,7 @@ function ProductRow({
           ) : Array.isArray(detail.fitmentData) && (detail.fitmentData as unknown[]).length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs text-amber-300">
-                Catalog fitment loaded — re-run optimization to validate against eBay MVL.
+                Catalog fitment loaded \u2014 re-run optimization to validate against eBay MVL.
               </p>
               <table className="w-full text-xs text-left">
                 <thead className="text-slate-400 dark:text-slate-500">
@@ -231,7 +233,7 @@ function ProductRow({
             </div>
           ) : (
             <p className="text-xs text-slate-400 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 rounded-md p-3 bg-white/50 dark:bg-slate-900/50">
-              Fitment data not available for this listing. Use Admin / debug → Re-run optimization for
+              Fitment data not available for this listing. Use Admin / debug \u2192 Re-run optimization for
               the job after enrichment completes, or confirm the US export includes Compatibility rows.
             </p>
           )}
@@ -253,10 +255,18 @@ export function useOptimizationDownloadGate(job: PipelineJob | null | undefined)
   return { canDownload, optimization, optStatus };
 }
 
+type MktTab = 'all' | 'US' | 'AU' | 'DE';
+
 export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
   const enabled = job.status === 'completed';
-  const { data: optimization, refetch, isLoading } = useJobOptimization(job.id, enabled);
+  const [activeTab, setActiveTab] = useState<MktTab>('all');
+  const { data: optimizationAll, refetch, isLoading } = useJobOptimization(job.id, enabled);
+  const { data: optimizationMkt } = useJobOptimization(job.id, enabled && activeTab !== 'all', activeTab !== 'all' ? activeTab : undefined);
   const [adminRerun, setAdminRerun] = useState(false);
+  const [bypassing, setBypassing] = useState(false);
+
+  // Use marketplace-specific data when a marketplace tab is selected, otherwise use aggregate
+  const optimization = activeTab !== 'all' ? (optimizationMkt ?? optimizationAll) : optimizationAll;
 
   const optStatus = optimization?.optimizationStatus ?? job.optimizationStatus ?? 'pending';
   const canDownload = optStatus !== 'running' && optStatus !== 'pending';
@@ -264,6 +274,9 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
   const processed = optimization?.processed ?? job.optimizationProcessed ?? 0;
   const total = optimization?.total ?? job.optimizationTotal ?? 0;
   const optPct = total > 0 ? Math.round((processed / total) * 100) : 0;
+
+  const byMkt = optimizationAll?.byMarketplace ?? {};
+  const tabs: MktTab[] = ['all', 'US', 'AU', 'DE'];
 
   return (
     <Card>
@@ -278,6 +291,35 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Marketplace tabs */}
+        {Object.keys(byMkt).length > 0 && (
+          <div className="flex gap-1 border-b border-slate-700/50 pb-1">
+            {tabs.map((tab) => {
+              const mktStatus = tab === 'all' ? null : byMkt[tab];
+              const tabLabel = tab === 'all' ? 'All' : tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
+                    activeTab === tab
+                      ? 'bg-slate-700/50 text-blue-400 border-b-2 border-blue-500'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {tabLabel}
+                  {mktStatus && mktStatus.status === 'completed' && (
+                    <CheckCircle2 className="inline h-3 w-3 ml-1 text-green-400" />
+                  )}
+                  {mktStatus && mktStatus.status === 'running' && (
+                    <Loader2 className="inline h-3 w-3 ml-1 animate-spin text-indigo-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {optimizationBadge(optStatus)}
           {readinessBadge(job, optimization)}
@@ -316,8 +358,29 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
 
         {isLoading && !optimization && (
           <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading optimization status…
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading optimization status\u2026
           </div>
+        )}
+
+        {enabled && !canDownload && (
+          <button
+            type="button"
+            disabled={bypassing}
+            onClick={async () => {
+              setBypassing(true);
+              try {
+                await bypassJobOptimization(job.id);
+                await refetch();
+              } finally {
+                setBypassing(false);
+              }
+            }}
+            className="w-full px-3 py-2 rounded bg-red-900/40 hover:bg-red-800/50 text-red-200 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            title="Bypass: mark all products as optimization completed to unlock downloads"
+          >
+            <Unlock className="h-4 w-4" />
+            {bypassing ? 'Bypassing\u2026' : 'Bypass Optimization (Force Unlock Downloads)'}
+          </button>
         )}
 
         {optimization && optimization.products.length > 0 && (
@@ -350,7 +413,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
               }}
               className="px-3 py-1.5 rounded bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
             >
-              {adminRerun ? 'Re-running…' : 'Re-run optimization for entire job'}
+              {adminRerun ? 'Re-running\u2026' : 'Re-run optimization for entire job'}
             </button>
           </div>
         </details>

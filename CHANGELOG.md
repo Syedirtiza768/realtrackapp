@@ -6,7 +6,21 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Fixed
+- **Pipeline mandatory listing optimization stuck:** Catalog upsert after enrichment used
+  camelCase column names in `ON CONFLICT DO UPDATE` (`brandNormalized` etc.) while PostgreSQL
+  expects snake_case (`brand_normalized`), so products never saved and optimization ran on 0
+  listings. Parallel US/AU/DE optimization jobs also raced on `optimization_by_marketplace`
+  JSONB updates, leaving `optimization_status` stuck at `running`.
+
 ### Changed
+- **AI token optimization (models unchanged):** Compact Motors enrichment prompts
+  (`enrichment-v2-compact`), year-range fitment output with code-side expansion,
+  MPN enrichment file cache (`config/.enrichment-cache.json`), compact JSON inputs,
+  low-value SKUs (&lt;$50, `AI_LOW_VALUE_MAX_PRICE`) skip LLM fitment generation,
+  localization translates metadata fields only (not full HTML descriptions),
+  vision defaults to `OPENAI_VISION_DETAIL=auto`, and backend `EnrichmentCacheService`
+  for duplicate MPN hits.
 - **AWS t3.medium tuning:** Default env profile for 2 vCPU / 4 GB RAM — Node heap
   **1536 MB** (was 8192), DB pool **10/2** (was 20/5), pipeline concurrency **3**
   (was 6–8), catalog import concurrency **2**, Postgres `shared_buffers=128MB`,

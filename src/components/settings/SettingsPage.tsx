@@ -383,7 +383,7 @@ export default function SettingsPage() {
                                                     <td className="py-3 px-4 text-slate-600 dark:text-slate-200 font-medium">{rule.name}</td>
                                                     <td className="py-3 px-4">
                                                         <span className="bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-xs px-2 py-0.5 rounded capitalize">
-                                                            {rule.ruleType.replace('_', ' ')}
+                                                            {(rule.ruleType ?? '').replace('_', ' ')}
                                                         </span>
                                                     </td>
                                                     <td className="py-3 px-4 text-slate-400 dark:text-slate-400 hidden sm:table-cell capitalize">

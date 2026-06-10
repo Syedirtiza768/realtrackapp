@@ -11,6 +11,8 @@ export interface OpenAiChatRequest {
   userPrompt: string;
   /** Images to include (Vision) */
   imageUrls?: string[];
+  /** Vision detail level (default from OPENAI_VISION_DETAIL env, usually auto) */
+  imageDetail?: 'low' | 'auto' | 'high';
   /** Model override (default from config) */
   model?: string;
   /** Temperature 0-2 (default 0.2) */

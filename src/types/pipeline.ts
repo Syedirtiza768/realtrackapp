@@ -119,6 +119,14 @@ export interface JobOptimizationStatus {
   passCount: number;
   reviewCount: number;
   blockCount: number;
+  byMarketplace?: Record<string, {
+    status: string;
+    passCount: number;
+    reviewCount: number;
+    blockCount: number;
+    processed?: number;
+    total?: number;
+  }>;
   products: ProductOptimizationSummary[];
 }
 

@@ -39,7 +39,7 @@ const STATUS_CONFIG: Record<ReviewTaskStatus, { label: string; color: string }> 
 };
 
 function formatReason(reason: ReviewReason): string {
-  return reason
+  return (reason ?? '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }

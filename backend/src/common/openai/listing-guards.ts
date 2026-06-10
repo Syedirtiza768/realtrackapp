@@ -3,6 +3,7 @@
  */
 
 import type { GuardResult } from './ai-routing-policy.types.js';
+import { expandFitmentYearRanges } from './fitment-year-expand.js';
 
 const BRAND_MAP: Record<string, string> = {
   mercedes: 'Mercedes-Benz',
@@ -125,12 +126,12 @@ export function applyListingGuards(
   }
 
   if (Array.isArray(out.compatibility)) {
-    const before = out.compatibility.length;
-    const deduped = dedupeFitment(
-      out.compatibility as Array<Record<string, unknown>>,
-    );
+    const rawCompat = out.compatibility as Array<Record<string, unknown>>;
+    const expanded = expandFitmentYearRanges(rawCompat);
+    const deduped = dedupeFitment(expanded);
     out.compatibility = deduped;
-    if (deduped.length < before) fixes.push('FITMENT_DEDUPED');
+    if (deduped.length < expanded.length) fixes.push('FITMENT_DEDUPED');
+    if (expanded.length > rawCompat.length) fixes.push('FITMENT_YEAR_RANGES_EXPANDED');
   }
 
   return { item: out, fixes };

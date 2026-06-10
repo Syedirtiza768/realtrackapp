@@ -11,6 +11,7 @@ import type {
   AiRoutingPolicy,
   PartContext,
   RouteSelection,
+  RoutingThresholds,
   RunMode,
 } from './ai-routing-policy.types.js';
 
@@ -258,18 +259,22 @@ export class ModelRouter implements OnModuleInit {
     return model;
   }
 
-  getThresholds() {
-    return (
-      this.policy?.thresholds ?? {
-        flagshipMinPrice: Number(
-          this.config.get('OPENAI_MODEL_FLAGSHIP_MIN_PRICE', '200'),
-        ),
-        fitmentMinRows: Number(this.config.get('AI_FITMENT_MIN_ROWS', '5')),
-        autoApproveMinScore: Number(
-          this.config.get('AI_AUTO_APPROVE_MIN_SCORE', '85'),
-        ),
-      }
-    );
+  getThresholds(): RoutingThresholds {
+    const defaults: RoutingThresholds = {
+      flagshipMinPrice: Number(
+        this.config.get('OPENAI_MODEL_FLAGSHIP_MIN_PRICE', '200'),
+      ),
+      lowValueMaxPrice: Number(
+        this.config.get('AI_LOW_VALUE_MAX_PRICE', '50'),
+      ),
+      fitmentMinRows: Number(this.config.get('AI_FITMENT_MIN_ROWS', '5')),
+      autoApproveMinScore: Number(
+        this.config.get('AI_AUTO_APPROVE_MIN_SCORE', '85'),
+      ),
+    };
+    return this.policy?.thresholds
+      ? { ...defaults, ...this.policy.thresholds }
+      : defaults;
   }
 
   private resolvePolicyPath(): string | null {

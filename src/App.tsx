@@ -18,6 +18,7 @@ import BulkActionsPage from './components/catalog/BulkActionsPage';
 import CatalogImportDashboard from './components/catalog-import/CatalogImportDashboard';
 import CatalogMotorsFiltersPage from './components/catalog-import/CatalogMotorsFiltersPage';
 import EbayPublishWizardPage from './components/catalog/EbayPublishWizardPage';
+import CatalogProductDetail from './components/catalog/CatalogProductDetail';
 import IngestionManager from './components/ingestion/IngestionManager';
 import OrdersPage from './components/orders/OrdersPage';
 import SettingsPage from './components/settings/SettingsPage';
@@ -87,6 +88,7 @@ function App() {
                             <Route path="/settings/integrations/ebay" element={<ProtectedRoute permissions={['ebay.view']}><EbayStoresSettingsPage /></ProtectedRoute>} />
                             <Route path="/settings/integrations/ebay/:accountId" element={<ProtectedRoute permissions={['ebay.view']}><EbayStoreDetailPage /></ProtectedRoute>} />
                             <Route path="/settings/integrations/ebay/:accountId/policies" element={<ProtectedRoute permissions={['ebay.manage']}><EbayPolicyMappingPage /></ProtectedRoute>} />
+                            <Route path="/catalog/products/:id" element={<ProtectedRoute permissions={["catalog.view"]}><CatalogProductDetail /></ProtectedRoute>} />
                             <Route path="/catalog/products/:productId/publish/ebay" element={<ProtectedRoute permissions={['ebay.publish']}><EbayPublishWizardPage /></ProtectedRoute>} />
                             <Route path="/automation" element={<ProtectedRoute permissions={['automation.view']}><AutomationRulesPage /></ProtectedRoute>} />
                             <Route path="/templates" element={<ProtectedRoute permissions={['templates.view']}><TemplateManagerPage /></ProtectedRoute>} />

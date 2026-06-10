@@ -214,7 +214,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
         try {
             await buildCompatibility([selection]);
         } catch {
-            // Non-blocking — compatibility build is optional
+            // Non-blocking ï¿½ compatibility build is optional
         }
 
         // We add through the existing CRUD endpoint using numeric IDs.
@@ -285,7 +285,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
     const formatVehicle = (row: PartFitmentRow) => {
         const yearRange = row.yearStart === row.yearEnd
             ? String(row.yearStart)
-            : `${row.yearStart}–${row.yearEnd}`;
+            : `${row.yearStart}ï¿½${row.yearEnd}`;
         return `${yearRange} ${row.make?.name ?? '?'} ${row.model?.name ?? '?'}`;
     };
 
@@ -513,15 +513,15 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-medium text-slate-600 dark:text-slate-200">{formatVehicle(row)}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">ID: {row.id.slice(0, 8)}…</div>
+                                                    <div className="text-xs text-slate-400 dark:text-slate-500">ID: {row.id.slice(0, 8)}ï¿½</div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <div className="text-slate-500 dark:text-slate-300">{row.submodel?.name ?? '—'}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">{row.engine?.name ?? '—'}</div>
+                                                    <div className="text-slate-500 dark:text-slate-300">{row.submodel?.name ?? 'ï¿½'}</div>
+                                                    <div className="text-xs text-slate-400 dark:text-slate-500">{row.engine?.name ?? 'ï¿½'}</div>
                                                 </td>
                                                 <td className="p-4">
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
-                                                        {row.source.replace('_', ' ')}
+                                                        {(row.source ?? '').replace('_', ' ')}
                                                     </span>
                                                 </td>
                                                 <td className="p-4">
@@ -533,7 +533,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                             />
                                                         </div>
                                                         <span className={`text-xs font-medium ${confidenceColor(row.confidence)}`}>
-                                                            {row.confidence ?? '—'}%
+                                                            {row.confidence ?? 'ï¿½'}%
                                                         </span>
                                                     </div>
                                                 </td>
@@ -588,7 +588,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 <div>
                                                     <div className="font-medium text-slate-600 dark:text-slate-200 text-sm">{formatVehicle(row)}</div>
                                                     <div className="text-xs text-slate-400 dark:text-slate-500">
-                                                        {row.submodel?.name ?? '—'} · {row.engine?.name ?? '—'}
+                                                        {row.submodel?.name ?? 'ï¿½'} ï¿½ {row.engine?.name ?? 'ï¿½'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -618,7 +618,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 />
                                             </div>
                                             <span className={`text-xs font-medium ${confidenceColor(row.confidence)}`}>
-                                                {row.confidence ?? '—'}%
+                                                {row.confidence ?? 'ï¿½'}%
                                             </span>
                                             <span className={`ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                                                 row.verified ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'

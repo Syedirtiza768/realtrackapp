@@ -1,7 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import type { Job } from 'bullmq';
+import { In, Repository } from 'typeorm';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
 import { EnterpriseListingIntelligenceService } from '../ingestion/enterprise-listing-intelligence.service.js';
 import { FitmentDiscoveryService } from './fitment-discovery.service.js';
@@ -22,40 +24,111 @@ export class ListingOptimizationService {
   constructor(
     @InjectRepository(CatalogProduct)
     private readonly productRepo: Repository<CatalogProduct>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
     @InjectRepository(PipelineJob)
     private readonly jobRepo: Repository<PipelineJob>,
     private readonly fitmentDiscovery: FitmentDiscoveryService,
     private readonly enterprise: EnterpriseListingIntelligenceService,
   ) {}
 
-  async enqueueJobOptimization(jobId: string, marketplace: 'US' | 'DE' | 'AU' = 'US'): Promise<void> {
-    await this.jobRepo.update(jobId, {
-      optimizationStatus: 'pending',
-      optimizationProcessed: 0,
-    } as any);
+  async enqueueJobOptimization(
+    jobId: string,
+    marketplace: 'US' | 'DE' | 'AU' = 'US',
+    bullJob?: Job,
+  ): Promise<void> {
+    const pipelineJob = await this.jobRepo.findOneBy({ id: jobId });
+    const byMkt = (pipelineJob?.optimizationByMarketplace ?? {}) as Record<string, any>;
+    const existingStatus = byMkt[marketplace]?.status;
 
-    const products = await this.productRepo.find({
-      where: { pipelineJobId: jobId },
-      select: ['id'],
-    });
-
-    await this.jobRepo.update(jobId, {
-      optimizationTotal: products.length,
-      optimizationStatus: 'running',
-    } as any);
-
-    for (const { id } of products) {
-      try {
-        await this.optimizeProduct(id, marketplace, { force: false });
-      } catch (err) {
-        this.logger.error(`Optimization failed for product ${id}: ${String(err)}`);
-      }
-      await this.refreshJobOptimizationCounts(jobId);
+    if (existingStatus === 'completed' || existingStatus === 'needs_review') {
+      this.logger.log(`Optimization for job ${jobId} [${marketplace}] already completed, skipping`);
+      await this.refreshJobOptimizationAggregate(jobId);
+      return;
     }
 
+    const isRetry = existingStatus === 'running';
+    const existingCounts = isRetry ? byMkt[marketplace] ?? {} : {};
+
+    await this.mergeOptimizationByMarketplace(jobId, marketplace, {
+      status: 'running',
+      passCount: isRetry ? (existingCounts.passCount ?? 0) : 0,
+      reviewCount: isRetry ? (existingCounts.reviewCount ?? 0) : 0,
+      blockCount: isRetry ? (existingCounts.blockCount ?? 0) : 0,
+      processed: isRetry ? (existingCounts.processed ?? 0) : 0,
+      total: isRetry ? (existingCounts.total ?? 0) : 0,
+    });
     await this.jobRepo.update(jobId, {
-      optimizationStatus: 'completed',
+      optimizationStatus: 'running',
+      optimizationProcessed: isRetry ? (existingCounts.processed ?? 0) : 0,
     } as any);
+
+    // Filter products by marketplace: only optimize products that have a listing_record for this marketplace
+    const marketplaceListingSkus = await this.listingRepo
+      .createQueryBuilder('lr')
+      .select('lr.customLabelSku', 'sku')
+      .where('lr.pipelineJobId = :jobId', { jobId })
+      .andWhere('lr.marketplace = :marketplace', { marketplace })
+      .andWhere('lr.customLabelSku IS NOT NULL')
+      .getRawMany<{ sku: string }>();
+
+    const marketplaceSkus = new Set(marketplaceListingSkus.map(r => r.sku));
+
+    let products = await this.productRepo.find({
+      where: { pipelineJobId: jobId },
+      select: ['id', 'sku'],
+    });
+
+    // Only process products that have a listing_record for this marketplace
+    if (marketplaceSkus.size > 0) {
+      products = products.filter(p => p.sku && marketplaceSkus.has(p.sku));
+    }
+
+    await this.jobRepo.update(jobId, { optimizationTotal: products.length } as any);
+
+    const PRODUCT_TIMEOUT_MS = 60_000;
+    const EXTEND_LOCK_INTERVAL = 10; // extend BullMQ lock every 10 products
+    const EXTEND_LOCK_MS = 10 * 60 * 1000; // 10 min extension
+
+    let completedCount = isRetry ? (existingCounts.processed ?? 0) : 0;
+    const startIndex = completedCount;
+
+    this.logger.log(
+      `Optimization for job ${jobId} [${marketplace}]: ${products.length} total, starting at index ${startIndex}${isRetry ? ' (retry)' : ''}`,
+    );
+
+    for (let i = startIndex; i < products.length; i++) {
+      const { id } = products[i];
+
+      if (bullJob && i > 0 && i % EXTEND_LOCK_INTERVAL === 0) {
+        try {
+          await bullJob.extendLock(bullJob.token!, EXTEND_LOCK_MS);
+        } catch (e) {
+          this.logger.warn(`Failed to extend lock for job ${jobId} [${marketplace}]: ${String(e)}`);
+        }
+        const pct = Math.floor((i / products.length) * 100);
+        try {
+          await bullJob.updateProgress(pct);
+        } catch {
+          // progress update is best-effort
+        }
+      }
+
+      try {
+        await Promise.race([
+          this.optimizeProduct(id, marketplace, { force: false }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Product ${id} optimization timed out after ${PRODUCT_TIMEOUT_MS}ms`)), PRODUCT_TIMEOUT_MS),
+          ),
+        ]);
+      } catch (err) {
+        this.logger.error(`Optimization failed for product ${id} [${marketplace}]: ${String(err)}`);
+      }
+      completedCount++;
+      await this.refreshJobOptimizationCounts(jobId, marketplace);
+    }
+
+    await this.refreshJobOptimizationAggregate(jobId);
   }
 
   async optimizeProduct(
@@ -155,13 +228,16 @@ export class ListingOptimizationService {
     } as any);
 
     if (product.pipelineJobId) {
-      await this.refreshJobOptimizationCounts(product.pipelineJobId);
+      await this.refreshJobOptimizationCounts(product.pipelineJobId, marketplace);
     }
 
     return this.productRepo.findOneByOrFail({ id: productId });
   }
 
-  async getJobOptimizationStatus(jobId: string): Promise<JobOptimizationStatus> {
+  async getJobOptimizationStatus(
+    jobId: string,
+    marketplace?: string,
+  ): Promise<JobOptimizationStatus> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
     if (!job) throw new NotFoundException(`Pipeline job ${jobId} not found`);
 
@@ -170,14 +246,18 @@ export class ListingOptimizationService {
       order: { sourceRow: 'ASC' },
     });
 
+    const byMkt = (job.optimizationByMarketplace ?? {}) as Record<string, any>;
+    const mktData = marketplace ? byMkt[marketplace] : null;
+
     return {
       jobId,
       optimizationStatus: (job.optimizationStatus as OptimizationStatus) ?? 'pending',
-      processed: job.optimizationProcessed ?? 0,
-      total: job.optimizationTotal ?? products.length,
-      passCount: job.optimizationPassCount ?? 0,
-      reviewCount: job.optimizationReviewCount ?? 0,
-      blockCount: job.optimizationBlockCount ?? 0,
+      processed: mktData?.processed ?? job.optimizationProcessed ?? 0,
+      total: mktData?.total ?? job.optimizationTotal ?? products.length,
+      passCount: mktData?.passCount ?? job.optimizationPassCount ?? 0,
+      reviewCount: mktData?.reviewCount ?? job.optimizationReviewCount ?? 0,
+      blockCount: mktData?.blockCount ?? job.optimizationBlockCount ?? 0,
+      byMarketplace: byMkt,
       products: products.map((p) => this.toProductSummary(p)),
     };
   }
@@ -203,6 +283,40 @@ export class ListingOptimizationService {
       optimizationStatus: enabled ? 'needs_review' : 'completed',
     } as any);
     return this.productRepo.findOneByOrFail({ id: productId });
+  }
+
+  async bypassJobOptimization(jobId: string): Promise<{ updatedCount: number }> {
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    if (!job) throw new NotFoundException(`Pipeline job ${jobId} not found`);
+
+    const result = await this.productRepo.update(
+      { pipelineJobId: jobId },
+      {
+        optimizationStatus: 'completed',
+        manualReview: false,
+        optimizationErrors: [],
+        optimizationWarnings: [],
+      } as any,
+    );
+
+    this.logger.warn(`Optimization bypassed for job ${jobId} — ${result.affected ?? 0} products updated`);
+
+    await this.productRepo
+      .createQueryBuilder()
+      .update(CatalogProduct)
+      .set({ optimizationPayload: () => `jsonb_set(COALESCE(optimization_payload, '{}'), '{validationStatus}', '"pass"')` })
+      .where('pipeline_job_id = :jobId', { jobId })
+      .execute();
+
+    await this.jobRepo.update(jobId, {
+      optimizationStatus: 'completed',
+      optimizationProcessed: result.affected ?? 0,
+      optimizationPassCount: result.affected ?? 0,
+      optimizationReviewCount: 0,
+      optimizationBlockCount: 0,
+    } as any);
+
+    return { updatedCount: result.affected ?? 0 };
   }
 
   canPublish(product: CatalogProduct): boolean {
@@ -245,7 +359,10 @@ export class ListingOptimizationService {
     };
   }
 
-  private async refreshJobOptimizationCounts(jobId: string): Promise<void> {
+  private async refreshJobOptimizationCounts(
+    jobId: string,
+    marketplace?: string,
+  ): Promise<void> {
     const products = await this.productRepo.find({
       where: { pipelineJobId: jobId },
       select: ['optimizationStatus', 'optimizationPayload', 'manualReview', 'optimizationErrors'],
@@ -268,11 +385,63 @@ export class ListingOptimizationService {
       else reviewCount++;
     }
 
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+
+    if (marketplace) {
+      await this.mergeOptimizationByMarketplace(jobId, marketplace, {
+        status:
+          blockCount > 0 && passCount === 0
+            ? 'failed'
+            : reviewCount > 0
+              ? 'needs_review'
+              : 'completed',
+        passCount,
+        reviewCount,
+        blockCount,
+        processed,
+        total: job?.optimizationTotal ?? 0,
+      });
+    }
+
     await this.jobRepo.update(jobId, {
       optimizationProcessed: processed,
       optimizationPassCount: passCount,
       optimizationReviewCount: reviewCount,
       optimizationBlockCount: blockCount,
+    } as any);
+  }
+
+  /** Atomically merge one marketplace slice into optimization_by_marketplace (avoids lost updates when US/AU/DE run in parallel). */
+  private async mergeOptimizationByMarketplace(
+    jobId: string,
+    marketplace: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await this.jobRepo.query(
+      `UPDATE pipeline_jobs
+       SET optimization_by_marketplace = COALESCE(optimization_by_marketplace, '{}'::jsonb) || $2::jsonb
+       WHERE id = $1`,
+      [jobId, JSON.stringify({ [marketplace]: data })],
+    );
+  }
+
+  private async refreshJobOptimizationAggregate(jobId: string): Promise<void> {
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    if (!job) return;
+
+    const byMkt = (job.optimizationByMarketplace ?? {}) as Record<string, any>;
+    const statuses = Object.values(byMkt).map((v: any) => v.status ?? 'pending');
+
+    let aggregateStatus = 'completed';
+    if (statuses.length === 0) aggregateStatus = 'pending';
+    else if (statuses.some((s: string) => s === 'running')) aggregateStatus = 'running';
+    else if (statuses.some((s: string) => s === 'failed')) aggregateStatus = 'needs_review';
+    else if (statuses.some((s: string) => s === 'needs_review')) aggregateStatus = 'needs_review';
+    else if (statuses.some((s: string) => s === 'pending')) aggregateStatus = 'pending';
+
+    await this.jobRepo.update(jobId, {
+      optimizationStatus: aggregateStatus,
+      optimizationByMarketplace: byMkt,
     } as any);
   }
 }

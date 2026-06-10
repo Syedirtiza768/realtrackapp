@@ -113,6 +113,17 @@ export class PipelineJob {
   @Column({ name: 'optimization_block_count', type: 'integer', default: 0 })
   optimizationBlockCount!: number;
 
+  // ─── Per-marketplace optimization tracking (JSONB) ───
+  @Column({ name: 'optimization_by_marketplace', type: 'jsonb', default: '{}' })
+  optimizationByMarketplace!: Record<string, {
+    status: string;
+    passCount: number;
+    reviewCount: number;
+    blockCount: number;
+    processed?: number;
+    total?: number;
+  }>;
+
   // ─── Progress detail (JSON for real-time update) ───
   @Column({ name: 'stage_details', type: 'jsonb', default: '{}' })
   stageDetails!: Record<string, unknown>;

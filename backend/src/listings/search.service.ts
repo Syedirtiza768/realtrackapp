@@ -99,6 +99,8 @@ export interface DynamicFacets {
   mpns: FacetBucket[];
   makes: FacetBucket[];
   models: FacetBucket[];
+  pipelineJobs: FacetBucket[];
+  marketplaces: FacetBucket[];
   priceRange: { min: number | null; max: number | null };
   totalFiltered: number;
   queryTimeMs: number;
@@ -628,6 +630,15 @@ export class SearchService {
       if (excludeDimension !== 'model' && modelArr.length) {
         fb.andWhere(`r."extractedModel" IN (:...facetModels)`, { facetModels: modelArr });
       }
+      // Pipeline / marketplace cross-filters
+      const pjArr = splitFilter(dto.pipelineJobIds);
+      const mktArr = splitFilter(dto.marketplaces);
+      if (excludeDimension !== 'pipelineJob' && pjArr.length) {
+        fb.andWhere(`r."pipeline_job_id" IN (:...facetPj)`, { facetPj: pjArr });
+      }
+      if (excludeDimension !== 'marketplace' && mktArr.length) {
+        fb.andWhere(`r.marketplace IN (:...facetMkt)`, { facetMkt: mktArr });
+      }
       return fb;
     };
 
@@ -636,6 +647,7 @@ export class SearchService {
       brandsRaw, catsRaw, condsRaw, typesRaw, srcRaw,
       formatsRaw, locationsRaw, mpnsRaw,
       makesRaw, modelsRaw,
+      pipelineJobsRaw, marketplacesRaw,
       priceRaw, totalFiltered,
     ] = await Promise.all([
         // Brands facet
@@ -736,6 +748,25 @@ export class SearchService {
           .limit(100)
           .getRawMany<{ value: string; count: string }>(),
 
+        // Pipeline Jobs facet
+        buildFacetQb('pipelineJob')
+          .select('r."pipeline_job_id"', 'value')
+          .addSelect('COUNT(*)', 'count')
+          .andWhere(`r."pipeline_job_id" IS NOT NULL`)
+          .groupBy('r."pipeline_job_id"')
+          .orderBy('count', 'DESC')
+          .limit(50)
+          .getRawMany<{ value: string; count: string }>(),
+
+        // Marketplaces facet
+        buildFacetQb('marketplace')
+          .select('r.marketplace', 'value')
+          .addSelect('COUNT(*)', 'count')
+          .andWhere(`r.marketplace IS NOT NULL AND r.marketplace != ''`)
+          .groupBy('r.marketplace')
+          .orderBy('count', 'DESC')
+          .getRawMany<{ value: string; count: string }>(),
+
         // Price range (within filtered set)
         (() => {
           const pqb = buildBaseQb();
@@ -765,6 +796,8 @@ export class SearchService {
       mpns: mpnsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       makes: makesRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       models: modelsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      pipelineJobs: pipelineJobsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      marketplaces: marketplacesRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       priceRange: {
         min: priceRaw?.min != null ? parseFloat(priceRaw.min) : null,
         max: priceRaw?.max != null ? parseFloat(priceRaw.max) : null,
@@ -819,6 +852,16 @@ export class SearchService {
     }
     if (mpnArr.length) {
       qb.andWhere(`r."cManufacturerPartNumber" IN (:...mpns)`, { mpns: mpnArr });
+    }
+
+    // Pipeline job / marketplace filters
+    const pjArr = splitFilter(dto.pipelineJobIds);
+    const mktArr = splitFilter(dto.marketplaces);
+    if (pjArr.length) {
+      qb.andWhere(`r."pipeline_job_id" IN (:...pipelineJobIds)`, { pipelineJobIds: pjArr });
+    }
+    if (mktArr.length) {
+      qb.andWhere(`r.marketplace IN (:...marketplaces)`, { marketplaces: mktArr });
     }
 
     // Make/Model filters (direct columns on listing_records)

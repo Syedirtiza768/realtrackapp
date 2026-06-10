@@ -844,8 +844,12 @@ Missing fields: ${missingFields.join(', ')}`,
     // SEO scoring
     const seoScore = this.calculateTitleSeoScore(originalTitle, product);
 
-    // Auto-optimize if needed
-    if (autoFix && (issues.some((i) => i.severity === 'error') || seoScore < 0.6)) {
+    // Auto-optimize only when title has errors or poor SEO (skip redundant AI calls)
+    if (
+      autoFix &&
+      originalTitle.length > 0 &&
+      (issues.some((i) => i.severity === 'error') || seoScore < 0.6)
+    ) {
       optimizedTitle = await this.generateOptimizedTitle(product);
       if (optimizedTitle && optimizedTitle !== originalTitle) {
         applied = true;
@@ -988,7 +992,7 @@ Part Type: ${product.partType || 'N/A'}
 Placement: ${product.placement || 'N/A'}
 Material: ${product.material || 'N/A'}
 Features: ${product.features || 'N/A'}
-Current Description: ${(product.description || '').slice(0, 200)}`,
+Current Description: ${(product.description || '').slice(0, 120)}`,
         maxTokens: 600,
         temperature: 0.3,
       });

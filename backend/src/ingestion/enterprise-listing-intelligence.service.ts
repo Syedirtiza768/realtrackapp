@@ -144,7 +144,6 @@ export class EnterpriseListingIntelligenceService {
       ? await this.listingPipeline.generateBatch(
           aiProducts.map((product) => ({
             productData: {
-              sku: product.sku,
               brand: product.brand,
               mpn: product.mpn,
               part_type: product.partType,
@@ -154,10 +153,6 @@ export class EnterpriseListingIntelligenceService {
               fitment: this.normalizeCompatibility(product.fitmentData).filter(
                 (row) => row.source === 'source_data',
               ),
-              image_count: product.imageUrls.length,
-              item_specifics: this.extractBaseSpecifics(product),
-              optimization_profile: options.listingQualityProfile,
-              content_requirements: this.getContentRequirements(options.listingQualityProfile),
             },
             categoryName: product.categoryName ?? 'eBay Motors Parts & Accessories',
             condition: product.conditionLabel ?? product.conditionId ?? 'Used',
@@ -225,7 +220,6 @@ export class EnterpriseListingIntelligenceService {
     const aiResults = await this.listingPipeline.generateBatch([
       {
         productData: {
-          sku: product.sku,
           brand: product.brand,
           mpn: product.mpn,
           part_type: product.partType,
@@ -235,10 +229,6 @@ export class EnterpriseListingIntelligenceService {
           fitment: this.normalizeCompatibility(product.fitmentData).filter(
             (row) => row.source === 'source_data',
           ),
-          image_count: product.imageUrls.length,
-          item_specifics: this.extractBaseSpecifics(product),
-          optimization_profile: options.listingQualityProfile,
-          content_requirements: this.getContentRequirements(options.listingQualityProfile),
         },
         categoryName: product.categoryName ?? 'eBay Motors Parts & Accessories',
         condition: product.conditionLabel ?? product.conditionId ?? 'Used',

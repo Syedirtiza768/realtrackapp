@@ -73,6 +73,8 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
 | `OPENAI_TIMEOUT_MS` | `120000` | Chat completion timeout (ms) |
 | `OPENAI_MODEL_FLAGSHIP_MIN_PRICE` | `200` | Price threshold for flagship lane |
+| `AI_LOW_VALUE_MAX_PRICE` | `50` | SKUs below this use compact enrichment (no LLM fitment) |
+| `OPENAI_VISION_DETAIL` | `auto` | Vision image detail: `low`, `auto`, or `high` |
 | `AI_FITMENT_MIN_ROWS` | `5` | Soft-fail threshold for fitment rows |
 | `AI_AUTO_APPROVE_MIN_SCORE` | `85` | Min validator score for auto-approve learning |
 | `AI_ROUTING_POLICY_PATH` | `config/ai-routing-policy.json` | Learned routing policy file |

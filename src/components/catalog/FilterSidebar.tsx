@@ -1,4 +1,4 @@
-﻿/* ─── FilterSidebar ────────────────────────────────────────
+/* ─── FilterSidebar ────────────────────────────────────────
  *  Comprehensive filter sidebar with all filter dimensions.
  *  Desktop: visible sidebar with multi-select checkboxes.
  *  Mobile: slide-out drawer panel.
@@ -16,6 +16,8 @@
  *  10. Location
  *  11. MPN
  *  12. Source File
+ *  13. Marketplace
+ *  14. Pipeline Job
  *
  *  Each section: collapsible, quick-filter search, show all,
  *  selected count badge, dynamic counts from facets API.
@@ -164,13 +166,12 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         buckets={facets?.makes ?? []}
         selected={filters.makes}
         onChange={(vals) => {
-          // When makes change, reset models to avoid stale selections
           onChange({ ...filters, makes: vals, makeNames: vals, models: [], modelNames: [] });
         }}
         getLabel={(b) => b.value}
         loading={loading}
         defaultExpanded
-        emptyMessage="No vehicle makes in the current result set. Motors listings usually use a title like “2015–2018 BMW X5 …”."
+        emptyMessage="No vehicle makes in the current result set. Motors listings usually use a title like \u201c2015\u20132018 BMW X5 \u2026\u201d."
       />
 
       {/* ── 4. Model (vehicle model from title) ──── */}
@@ -278,12 +279,35 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         loading={loading}
       />
 
+      {/* ── 13. Marketplace ───────────────────────────────── */}
+      <MultiSelectFacet
+        title="Marketplace"
+        buckets={facets?.marketplaces ?? []}
+        selected={filters.marketplaces}
+        onChange={(vals) => onChange({ ...filters, marketplaces: vals })}
+        getLabel={(b) => b.value}
+        loading={loading}
+        defaultExpanded
+      />
+
+      {/* ── 14. Pipeline Job ──────────────────────────────── */}
+      <MultiSelectFacet
+        title="Pipeline Job"
+        buckets={facets?.pipelineJobs ?? []}
+        selected={filters.pipelineJobIds}
+        onChange={(vals) => onChange({ ...filters, pipelineJobIds: vals })}
+        getLabel={(b) => b.value.slice(0, 8)}
+        getTooltip={(b) => b.value}
+        loading={loading}
+        initialShowCount={5}
+      />
+
       {/* Footer info */}
       {facets && (
         <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
           <p className="text-[10px] text-slate-500 dark:text-slate-600 text-center">
             {facets.totalFiltered.toLocaleString()} matching listings
-            {facets.queryTimeMs > 0 && ` · ${facets.queryTimeMs}ms`}
+            {facets.queryTimeMs > 0 && ` \u00b7 ${facets.queryTimeMs}ms`}
           </p>
         </div>
       )}
@@ -316,14 +340,12 @@ function MultiSelectFacet({
   loading?: boolean;
   defaultExpanded?: boolean;
   initialShowCount?: number;
-  /** When set, section stays visible with this hint if there are no facet buckets */
   emptyMessage?: string;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [filterText, setFilterText] = useState('');
   const [showAll, setShowAll] = useState(false);
 
-  // Auto-expand if there are selected values in this section
   useEffect(() => {
     if (selected.length > 0) setExpanded(true);
   }, [selected.length]);
@@ -331,7 +353,6 @@ function MultiSelectFacet({
   const keyFn = getKey ?? ((b: FacetBucket) => b.value);
   const labelFn = getLabel ?? ((b: FacetBucket) => b.value);
 
-  // Sort: selected items first, then by count descending
   const sorted = useMemo(() => {
     if (!buckets.length) return [];
     return [...buckets].sort((a, b) => {
@@ -398,7 +419,7 @@ function MultiSelectFacet({
             </span>
           )}
           {loading && buckets.length === 0 && (
-            <span className="text-slate-500 dark:text-slate-600 text-[10px] normal-case tracking-normal">loading…</span>
+            <span className="text-slate-500 dark:text-slate-600 text-[10px] normal-case tracking-normal">loading\u2026</span>
           )}
         </span>
         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -406,18 +427,16 @@ function MultiSelectFacet({
 
       {expanded && (
         <div className="px-3 pb-3 space-y-1">
-          {/* Quick filter within facets */}
           {buckets.length > 6 && (
             <input
               type="text"
               value={filterText}
               onChange={(e) => { setFilterText(e.target.value); setShowAll(true); }}
-              placeholder={`Search ${title.toLowerCase()}…`}
+              placeholder={`Search ${title.toLowerCase()}\u2026`}
               className="w-full bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-500 dark:text-slate-300 placeholder:text-slate-500 dark:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 mb-1"
             />
           )}
 
-          {/* Loading skeleton */}
           {loading && buckets.length === 0 && (
             <div className="space-y-1.5">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -429,7 +448,6 @@ function MultiSelectFacet({
             </div>
           )}
 
-          {/* Checkbox list — selected pinned to top */}
           {visible.map((b) => {
             const key = keyFn(b);
             const isSelected = selected.includes(key);
@@ -463,13 +481,12 @@ function MultiSelectFacet({
                 />
                 <span className="truncate flex-1">{label}</span>
                 <span className="text-[10px] tabular-nums text-slate-500 dark:text-slate-600 shrink-0">
-                  {loading ? '…' : b.count.toLocaleString()}
+                  {loading ? '\u2026' : b.count.toLocaleString()}
                 </span>
               </label>
             );
           })}
 
-          {/* No matches */}
           {filterText.trim() && filtered.length === 0 && (
             <p className="text-[11px] text-slate-500 dark:text-slate-600 px-1.5 py-1">No matching {title.toLowerCase()}</p>
           )}
@@ -483,7 +500,6 @@ function MultiSelectFacet({
             </button>
           )}
 
-          {/* Quick clear for this section */}
           {selected.length > 0 && (
             <button
               onClick={() => onChange([])}
@@ -578,7 +594,6 @@ function PriceRangeFilter({
   const [localMin, setLocalMin] = useState(currentMin?.toString() ?? '');
   const [localMax, setLocalMax] = useState(currentMax?.toString() ?? '');
 
-  // Sync when external value resets (e.g., clear all)
   useEffect(() => {
     setLocalMin(currentMin?.toString() ?? '');
     setLocalMax(currentMax?.toString() ?? '');
@@ -612,7 +627,7 @@ function PriceRangeFilter({
           {hasValue && (
             <span className="text-blue-400 normal-case font-normal tracking-normal text-[10px]">
               {currentMin != null ? `$${currentMin}` : '$0'}
-              {' — '}
+              {' \u2014 '}
               {currentMax != null ? `$${currentMax}` : 'Any'}
             </span>
           )}
@@ -624,7 +639,7 @@ function PriceRangeFilter({
         <div className="px-3 pb-3 space-y-2">
           {min != null && max != null && (
             <p className="text-[10px] text-slate-500 dark:text-slate-600">
-              Range: ${min.toFixed(0)} — ${max.toFixed(0)}
+              Range: ${min.toFixed(0)} \u2014 ${max.toFixed(0)}
             </p>
           )}
           <div className="flex items-center gap-2">
@@ -641,7 +656,7 @@ function PriceRangeFilter({
                 className="w-full bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md pl-5 pr-2 py-1.5 text-xs text-slate-500 dark:text-slate-300 placeholder:text-slate-500 dark:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
               />
             </div>
-            <span className="text-slate-500 dark:text-slate-600 text-xs">—</span>
+            <span className="text-slate-500 dark:text-slate-600 text-xs">\u2014</span>
             <div className="relative flex-1">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-xs">$</span>
               <input

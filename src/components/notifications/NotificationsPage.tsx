@@ -182,7 +182,7 @@ export default function NotificationsPage() {
                     >
                         <option value="">All Types</option>
                         {uniqueTypes.map(t => (
-                            <option key={t} value={t}>{t.replace(/[._]/g, ' ')}</option>
+                            <option key={t} value={t}>{(t ?? '').replace(/[._]/g, ' ')}</option>
                         ))}
                     </select>
                 )}
@@ -233,7 +233,7 @@ export default function NotificationsPage() {
                                                     {relativeTime(notif.createdAt)}
                                                 </span>
                                                 <span className="text-[11px] text-slate-500 dark:text-slate-600 capitalize">
-                                                    {notif.type.replace(/[._]/g, ' ')}
+                                                    {(notif.type ?? '').replace(/[._]/g, ' ')}
                                                 </span>
                                             </div>
                                         </div>

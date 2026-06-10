@@ -27,6 +27,16 @@ import axios from 'axios';
 import { createModelRouter } from './lib/model-router.mjs';
 import { applyListingGuards, validateListing } from './lib/listing-quality.mjs';
 import { createConcurrencyPool, isRateLimitError } from './lib/concurrency-pool.mjs';
+import {
+  PROMPT_VERSION as MOTORS_PROMPT_VERSION,
+  buildMotorsEnrichmentSystemPrompt,
+  buildMotorsEnrichmentUserPrompt,
+} from './lib/motors-enrichment-prompt.mjs';
+import { createEnrichmentCache } from './lib/enrichment-cache.mjs';
+import {
+  getEnrichmentProfile,
+  getLowValueMaxPrice,
+} from './lib/token-optimization.mjs';
 
 // ── HTTP connection pooling — reuse TCP sockets across requests ──
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 15, maxFreeSockets: 5 });
@@ -152,8 +162,10 @@ const vinBatchConcurrency = Number(env.PIPELINE_VIN_BATCH_CONCURRENCY);
 if (vinBatchConcurrency > 0) CONFIG.pipeline.vinBatchConcurrency = vinBatchConcurrency;
 
 const RUN_MODE = env.AI_RUN_MODE || 'default';
-const PROMPT_VERSION = env.AI_PROMPT_VERSION || 'enrichment-v1';
+const PROMPT_VERSION = env.AI_PROMPT_VERSION || MOTORS_PROMPT_VERSION;
+const LOW_VALUE_MAX_PRICE = getLowValueMaxPrice(env);
 const modelRouter = createModelRouter(env);
+const enrichmentCache = createEnrichmentCache(ROOT, PROMPT_VERSION);
 
 // Image enrichment API — uses internal Docker hostname when running from the
 // backend processor (PIPELINE_JOB_ID is set by the NestJS worker), otherwise localhost.
@@ -839,6 +851,7 @@ const REPORT = {
     escalations: 0,
     guardFixes: 0,
     validationFails: 0,
+    enrichmentCacheHits: 0,
     attemptsByLane: {},
     estimatedCostByLane: {},
   },
@@ -990,7 +1003,10 @@ function saveTaxonomyDiskCache(entry) {
   fs.writeFileSync(cachePath, JSON.stringify(parsed, null, 2));
 }
 
+const TAXONOMY_FORCE = String(env.PIPELINE_TAXONOMY_FORCE || '').toLowerCase() === 'true';
+
 function isTaxonomyInBackoff(entry) {
+  if (TAXONOMY_FORCE) return false;
   if (!entry?.treeFailure?.retryAfter) return false;
   return Date.now() < Date.parse(entry.treeFailure.retryAfter);
 }
@@ -2223,8 +2239,10 @@ async function enrichBatch(batchParts, vinData, options = {}) {
   const partsForPrompt = batchParts.map((part, idx) => {
     const vehicle = getVehicleInfo(part, vinData);
     const decoded = vinData.get(part.vin);
+    const profile = getEnrichmentProfile(part.price, LOW_VALUE_MAX_PRICE);
     const obj = {
       index: idx,
+      profile,
       sku: part.sku,
       brand: part.brand,
       vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
@@ -2232,8 +2250,6 @@ async function enrichBatch(batchParts, vinData, options = {}) {
       vehicleEngine: vehicle.engine || decoded?.engineModel || '',
       vehicleBodyClass: vehicle.bodyClass || decoded?.bodyClass || '',
       vehicleDriveType: vehicle.driveType || decoded?.driveType || '',
-      vehicleFuelType: vehicle.fuelType || decoded?.fuelType || '',
-      vehicleEngineDisplacement: vehicle.engineDisplacement || decoded?.engineDisplacement || '',
       partName: part.partName,
       partNumber: part.partNumber,
       note: part.note,
@@ -2247,138 +2263,8 @@ async function enrichBatch(batchParts, vinData, options = {}) {
     return obj;
   });
 
-  const systemPrompt = `Role: You are a Senior Automotive Parts Interchange Specialist with 20+ years of experience in OEM parts databases (EPCs), cross-reference systems, and eBay Motors listing optimization. You have deep expertise across ALL makes — European, Japanese, American, Korean, and specialty manufacturers.
-
-TASK: Analyze each provided automotive part and generate:
-1. An optimized eBay Motors listing (title, description, specifics)
-2. Comprehensive vehicle compatibility / interchange data
-3. Technical installation requirements and notes
-
-═══ INTERCHANGE & COMPATIBILITY RULES ═══
-
-** CRITICAL — AVOID DONOR-ONLY DATA **
-The vehicle each part was removed from is the "donor vehicle". You MUST NOT limit compatibility to ONLY the donor.
-- Use the Part Number (MPN) to research the FULL OEM application range
-- Expand fitment to ALL vehicles that use this exact part number across all shared platforms
-- If the donor is a 2018 Mercedes C300, but the same part fits 2015-2023 C-Class, E-Class, and GLC — list ALL of them
-- Cross-reference luxury/standard brand siblings (e.g., Camry↔ES, 3-Series↔Supra, Tucson↔Sportage)
-- The goal is MAXIMUM legitimate fitment coverage for eBay Motors Master Vehicle List (MVL)
-
-For EACH part, you MUST:
-
-A) OEM Interchange Research:
-   - Identify every Make, Model, and Year range that used this exact part from the factory
-   - Use the provided MPN/Part Number to determine the full OEM application range
-   - Parts often span multiple model years within a generation/platform
-
-B) Cross-Platform Compatibility:
-   - Identify shared platforms where the part may fit with different branding:
-     • VW Group: VW / Audi / Porsche / Bentley / Lamborghini (MQB, MLB, PQ35)
-     • Toyota / Lexus (TNGA), Honda / Acura, Nissan / Infiniti
-     • GM: Chevrolet / GMC / Cadillac / Buick (shared truck/SUV platforms)
-     • Ford / Lincoln, Stellantis: Dodge / Jeep / Ram / Chrysler
-     • Jaguar / Land Rover (PLA, iQ, D7a), Hyundai / Kia / Genesis
-     • Subaru / Toyota (shared BRZ/86 platform)
-   - Only include cross-platform fits when the SAME part number is used
-
-C) Chassis/Body Codes:
-   - ALWAYS include the chassis or body code in the compatibility data:
-     • BMW: E46, F30, G20, etc.  • Mercedes: W204, W205, W206, etc.
-     • Audi: B8, C7, 8V, etc.  • Toyota: XV70, XA50, E210, etc.
-     • Honda: FC/FK, CV, etc.  • Porsche: 996, 997, 991, 992, etc.
-   - Include these codes in the title when space allows
-
-D) Technical Requirements — flag if the part requires:
-   - Coding/Programming (VIN-unlocking, dealer-only activation, ECU coding)
-   - Specific Trims only (e.g., "Only for models with Bose Audio", "Sport package only")
-   - Engine-specific (e.g., "2.0T only", "Non-Turbo models only", "V6 only")
-   - Positioning (e.g., "Front Left / Driver Side only", "Passenger side")
-   - Drive type restrictions (e.g., "AWD only", "RWD only", "4WD only")
-
-═══ LISTING RULES ═══
-
-TITLE (max 80 chars):
-- Format: [Year Range] [Make] [Model] [Chassis] [PartName] [MPN] [OEM/Genuine]
-- Lead with highest-value search terms (year+make+model+chassis)
-- Include condition: "OEM", "Genuine", or "Used OEM"
-- Include placement (Left/Right/Front/Rear) when relevant
-- End with MPN or OEM number if space permits
-- Never use ALL CAPS, special chars (!@#$%), or filler words
-- Examples:
-  "2015-2021 Mercedes C-Class W205 Front Left Door Lock Actuator A2057200135 OEM"
-  "2018-2023 Toyota Camry XV70 Brake Caliper Front Right 47730-06330 OEM"
-  "2014-2020 BMW 3 Series F30 Headlight Control Module 63117316217 Genuine"
-
-DESCRIPTION:
-- Professional HTML with structured sections
-- Include: Part identification, Full vehicle fitment list, Condition, Technical notes
-- Always include: "Please verify part number compatibility before purchasing"
-- Format: <h3>Title</h3><p>intro</p><h4>Details</h4><ul><li>...</li></ul><h4>Compatibility</h4><p>Full vehicle list with chassis codes</p><h4>Technical Notes</h4><p>Any coding/programming/trim requirements</p><h4>Condition</h4><p>Used - Removed from running vehicle. Inspected and tested.</p>
-
-SPECIFICS:
-- brand: OEM manufacturer name (e.g., "Mercedes-Benz" not "Mercedes", "BMW" not "Bmw")
-- type: Specific part type (e.g., "Door Lock Actuator" not "Door Parts")
-- mpn: ONLY use the provided partNumber — NEVER fabricate
-- oemNumber: Same as mpn unless explicitly different
-- placement: Extract from notes/name (e.g., "Front Left", "Rear Right", "Upper", "Lower")
-- material: Only if determinable from part type
-- warranty: "No Warranty" for used parts
-- fitmentType: "Direct Replacement" for OEM parts
-- color: Only if determinable from notes (never guess)
-- interchangeNumber: Only if known from cross-reference — NEVER fabricate
-
-INTERCHANGE OUTPUT (eBay MVL Format):
-- Return a "compatibility" array with EVERY vehicle that uses this part — NOT just the donor
-- Each entry: { year, make, model, chassisCode, trim, engine, notes }
-- Include cross-platform vehicles if same part number applies
-- Expand year ranges: list EACH year individually (e.g., 2015, 2016, 2017, 2018 — not just 2015-2018)
-- "technicalNotes": any coding/programming/trim/engine restrictions as a string
-- The compatibility array will be formatted as eBay File Exchange / MIP pipe-separated strings:
-  Year=YYYY|Make=XXX|Model=YYY|Submodel=ZZZ|Trim=TTT|Engine=EEE
-
-Return JSON:
-{
-  "items": [{
-    "index": N,
-    "title": "...",
-    "description": "<h3>...</h3>...",
-    "brand": "...",
-    "type": "...",
-    "mpn": "...",
-    "oemNumber": "...",
-    "placement": "...",
-    "material": "...",
-    "warranty": "No Warranty",
-    "fitmentType": "Direct Replacement",
-    "color": "",
-    "interchangeNumber": "",
-    "surfaceFinish": "",
-    "performanceType": "",
-    "bundleDescription": "",
-    "itemSpecifics": {
-      "Brand": "...",
-      "Manufacturer Part Number": "...",
-      "Type": "...",
-      "Placement on Vehicle": "...",
-      "Material": "...",
-      "Color": "..."
-    },
-    "compatibility": [
-      { "year": "2015", "make": "Mercedes-Benz", "model": "C-Class", "chassisCode": "W205", "trim": "", "engine": "", "notes": "" }
-    ],
-    "technicalNotes": "Requires dealer coding after installation"
-  }]
-}`;
-
-  const userPrompt = `Analyze these ${partsForPrompt.length} automotive parts as a Senior Interchange Specialist. For each part:
-1. Research the Part Number (MPN) to identify ALL Makes, Models, and Year ranges that use this exact part
-2. Check for cross-platform compatibility (shared platforms between luxury/standard brands)
-3. Include chassis/body codes for every compatible vehicle
-4. Note any technical requirements (coding, trim-specific, engine-specific, positioning)
-
-Each part was removed from a real vehicle identified by VIN. Use the decoded vehicle data (including engine, body class, drive type) for accurate fitment.
-
-${JSON.stringify(partsForPrompt)}`;
+  const systemPrompt = buildMotorsEnrichmentSystemPrompt();
+  const userPrompt = buildMotorsEnrichmentUserPrompt(partsForPrompt);
 
   const client = getOpenAI();
   if (!client) return null;
@@ -2482,28 +2368,80 @@ async function enrichBatchWithRouting(batchParts, vinData) {
     RUN_MODE,
   );
 
-  let items = await enrichBatch(batchParts, vinData, { model: route.model });
-  if (!items) return null;
-
   const thresholds = modelRouter.getThresholds();
-  const validated = [];
-  let needsEscalation = false;
+  const lowValueMax = thresholds.lowValueMaxPrice ?? LOW_VALUE_MAX_PRICE;
+  const validated = new Array(batchParts.length);
+  const uncachedParts = [];
+  const uncachedIndices = [];
 
-  for (let i = 0; i < items.length; i++) {
-    const srcPart = batchParts[i] ?? batchParts[items[i].index ?? i];
+  for (let i = 0; i < batchParts.length; i++) {
+    const srcPart = batchParts[i];
+    const profile = getEnrichmentProfile(srcPart.price, lowValueMax);
+    const cached = enrichmentCache.get(srcPart.partNumber, profile);
+    if (cached) {
+      REPORT.routing.enrichmentCacheHits++;
+      const vehicle = getVehicleInfo(srcPart, vinData);
+      const { item: guarded, fixes } = applyListingGuards(
+        { ...cached, index: i },
+        { partNumber: srcPart.partNumber },
+      );
+      if (fixes.length) REPORT.routing.guardFixes += fixes.length;
+      const validation = validateListing(
+        guarded,
+        { partNumber: srcPart.partNumber, donorMake: vehicle.make },
+        {
+          fitmentMinRows: thresholds.fitmentMinRows,
+          lowValueMaxPrice: lowValueMax,
+          price: srcPart.price,
+          compactProfile: profile === 'compact',
+        },
+      );
+      logAiRun(srcPart, { ...route, lane: 'cache' }, validation, 0, fixes);
+      validated[i] = { ...guarded, index: i };
+    } else {
+      uncachedParts.push(srcPart);
+      uncachedIndices.push(i);
+    }
+  }
+
+  let items = null;
+  if (uncachedParts.length > 0) {
+    items = await enrichBatch(uncachedParts, vinData, { model: route.model });
+    if (!items) {
+      if (validated.every((v) => v != null)) return validated;
+      return null;
+    }
+  }
+
+  let needsEscalation = false;
+  let uncachedItemIdx = 0;
+
+  for (let i = 0; i < batchParts.length; i++) {
+    if (validated[i]) continue;
+
+    const srcPart = batchParts[i];
     const vehicle = getVehicleInfo(srcPart, vinData);
-    const { item: guarded, fixes } = applyListingGuards(items[i], {
+    const profile = getEnrichmentProfile(srcPart.price, lowValueMax);
+    const rawItem = items[uncachedItemIdx++] ?? items[items[uncachedItemIdx - 1]];
+    const { item: guarded, fixes } = applyListingGuards(rawItem, {
       partNumber: srcPart.partNumber,
     });
     if (fixes.length) REPORT.routing.guardFixes += fixes.length;
+
+    if (srcPart.partNumber) {
+      enrichmentCache.set(srcPart.partNumber, profile, guarded);
+    }
 
     const validation = validateListing(guarded, {
       partNumber: srcPart.partNumber,
       donorMake: vehicle.make,
     }, {
       fitmentMinRows: thresholds.fitmentMinRows,
-      expectedBatchSize: batchParts.length,
-      actualBatchSize: items.length,
+      lowValueMaxPrice: lowValueMax,
+      price: srcPart.price,
+      compactProfile: profile === 'compact',
+      expectedBatchSize: uncachedParts.length,
+      actualBatchSize: items?.length,
     });
 
     logAiRun(srcPart, route, validation, 1, fixes);
@@ -2511,29 +2449,39 @@ async function enrichBatchWithRouting(batchParts, vinData) {
       needsEscalation = true;
       REPORT.routing.validationFails++;
     }
-    validated.push({ ...guarded, index: items[i].index ?? i });
+    validated[i] = { ...guarded, index: rawItem.index ?? i };
   }
 
-  if (needsEscalation) {
+  if (needsEscalation && uncachedParts.length > 0) {
     const escalationModel = modelRouter.getEscalationModel(route.model, route.lane);
     if (escalationModel) {
       REPORT.routing.escalations++;
       log.info(`Escalating batch (${batchParts.length} parts) → ${escalationModel}`);
-      const escalatedItems = await enrichBatch(batchParts, vinData, {
+      const escalatedItems = await enrichBatch(uncachedParts, vinData, {
         model: escalationModel,
       });
       if (escalatedItems) {
-        items = escalatedItems;
-        for (let i = 0; i < items.length; i++) {
-          const srcPart = batchParts[i] ?? batchParts[items[i].index ?? i];
+        for (let u = 0; u < uncachedIndices.length; u++) {
+          const i = uncachedIndices[u];
+          const srcPart = batchParts[i];
           const vehicle = getVehicleInfo(srcPart, vinData);
-          const { item: guarded, fixes } = applyListingGuards(items[i], {
+          const profile = getEnrichmentProfile(srcPart.price, lowValueMax);
+          const rawItem = escalatedItems[u] ?? escalatedItems[u - 1];
+          const { item: guarded, fixes } = applyListingGuards(rawItem, {
             partNumber: srcPart.partNumber,
           });
+          if (srcPart.partNumber) {
+            enrichmentCache.set(srcPart.partNumber, profile, guarded);
+          }
           const validation = validateListing(guarded, {
             partNumber: srcPart.partNumber,
             donorMake: vehicle.make,
-          }, { fitmentMinRows: thresholds.fitmentMinRows });
+          }, {
+            fitmentMinRows: thresholds.fitmentMinRows,
+            lowValueMaxPrice: lowValueMax,
+            price: srcPart.price,
+            compactProfile: profile === 'compact',
+          });
           logAiRun(
             srcPart,
             { ...route, lane: 'escalation', model: escalationModel },
@@ -2541,7 +2489,7 @@ async function enrichBatchWithRouting(batchParts, vinData) {
             2,
             fixes,
           );
-          validated[i] = { ...guarded, index: items[i].index ?? i };
+          validated[i] = { ...guarded, index: rawItem.index ?? i };
         }
       }
     }
@@ -2947,7 +2895,6 @@ async function localizeBatchForMarketplace(batchParts, marketplace, locale) {
   const itemsForPrompt = batchParts.map((part, idx) => ({
     index: idx,
     title: part._enriched.title,
-    description: part._enriched.description,
     type: part._enriched.type,
     placement: part._enriched.placement,
     material: part._enriched.material,
@@ -2956,12 +2903,12 @@ async function localizeBatchForMarketplace(batchParts, marketplace, locale) {
   }));
 
   const localeGuide = marketplace === 'DE'
-    ? 'Translate into natural German for eBay.de automotive parts listings. Use German automotive terminology (OEM, Ersatzteil, Einbauposition). Preserve HTML tags in descriptions. Title max 80 characters. Keep part numbers and chassis codes unchanged.'
-    : 'Adapt into Australian English for eBay.com.au automotive listings. Use AU spelling (colour, metre, organise, dispatch). Preserve HTML tags. Title max 80 characters. Keep part numbers and chassis codes unchanged.';
+    ? 'Translate into natural German for eBay.de. Keep part numbers and chassis codes unchanged. Title max 80 chars.'
+    : 'Australian English spelling (colour, metre, organise). Title max 80 chars. Keep part numbers unchanged.';
 
-  const systemPrompt = `You localize eBay Motors listing copy for marketplace ${marketplace}.
-${localeGuide}
-Return JSON: { "items": [{ "index": N, "title": "...", "description": "...", "type": "...", "placement": "...", "material": "...", "color": "...", "bundleDescription": "..." }] }`;
+  const systemPrompt = `Localize eBay Motors listing fields for ${marketplace}. ${localeGuide}
+Do NOT translate HTML descriptions — only the fields in the user JSON.
+Return JSON: { "items": [{ "index": N, "title": "...", "type": "...", "placement": "...", "material": "...", "color": "...", "bundleDescription": "..." }] }`;
 
   const client = getOpenAI();
   if (!client) return null;
@@ -3037,7 +2984,7 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
           part._localized[marketplace] = {
             ...base,
             title: clean(item.title || base.title).slice(0, 80),
-            description: clean(item.description || base.description),
+            description: base.description,
             type: clean(item.type || base.type),
             placement: clean(item.placement || base.placement),
             material: clean(item.material || base.material),
@@ -4586,6 +4533,7 @@ function generateReport() {
       escalations: REPORT.routing.escalations,
       guardFixes: REPORT.routing.guardFixes,
       validationFails: REPORT.routing.validationFails,
+      enrichmentCacheHits: REPORT.routing.enrichmentCacheHits,
       runLogCount: REPORT.aiRunLogs.length,
     },
     validationFixes: REPORT.validationFixes.slice(0, 100),

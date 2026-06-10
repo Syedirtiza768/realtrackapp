@@ -214,10 +214,11 @@ export function usePipelineJob(id: string | null) {
   });
 }
 
-export function useJobOptimization(jobId: string | null, enabled = true) {
+export function useJobOptimization(jobId: string | null, enabled = true, marketplace?: string) {
+  const qs = marketplace ? `?marketplace=${marketplace}` : '';
   return useQuery<JobOptimizationStatus>({
-    queryKey: ['pipeline-optimization', jobId],
-    queryFn: ({ signal }) => fetchJson(`/pipeline/jobs/${jobId}/optimization`, signal),
+    queryKey: ['pipeline-optimization', jobId, marketplace ?? 'all'],
+    queryFn: ({ signal }) => fetchJson(`/pipeline/jobs/${jobId}/optimization${qs}`, signal),
     enabled: !!jobId && enabled,
     refetchInterval: (query) => {
       const status = query.state.data?.optimizationStatus;
@@ -330,4 +331,8 @@ export async function rerunProductOptimization(
   await postJson(`/pipeline/jobs/${jobId}/products/${productId}/rerun-optimization`, {
     marketplace,
   });
+}
+
+export async function bypassJobOptimization(jobId: string): Promise<{ updatedCount: number }> {
+  return postJson(`/pipeline/jobs/${jobId}/bypass-optimization`);
 }

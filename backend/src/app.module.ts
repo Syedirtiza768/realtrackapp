@@ -85,6 +85,11 @@ import { ClientSettingsModule } from './client-settings/client-settings.module.j
           port: Number(config.get<string>('REDIS_PORT', '6379')),
           password: config.get<string>('REDIS_PASSWORD', '') || undefined,
         },
+        defaultJobOptions: {
+          attempts: 3,
+          removeOnComplete: { count: 100 },
+          removeOnFail: { count: 200 },
+        },
       }),
     }),
     ListingsModule,

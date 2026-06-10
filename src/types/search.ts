@@ -1,9 +1,9 @@
-/* ─── Search Types ─────────────────────────────────────────
+/* --- Search Types -----------------------------------------------------
  *  Types for the advanced search API.
  *  Separate from the legacy listings.ts types.
- * ────────────────────────────────────────────────────────── */
+ * -------------------------------------------------------------------- */
 
-/* ── Search Query ─────────────────────────────────────────── */
+/* -- Search Query ---------------------------------------------------- */
 
 export interface SearchQuery {
   limit?: number;
@@ -22,6 +22,8 @@ export interface SearchQuery {
   mpns?: string;
   makes?: string;         // comma-separated fitment make IDs
   models?: string;        // comma-separated fitment model IDs
+  pipelineJobIds?: string; // comma-separated pipeline job UUIDs
+  marketplaces?: string;  // comma-separated marketplace codes
   minPrice?: number;
   maxPrice?: number;
   hasImage?: string;
@@ -39,7 +41,7 @@ export type SortMode =
   | 'title_desc'
   | 'sku_asc';
 
-/* ── Search Response ──────────────────────────────────────── */
+/* -- Search Response ------------------------------------------------- */
 
 export interface SearchResponse {
   total: number;
@@ -77,7 +79,7 @@ export interface SearchItem {
   fitmentCount: number | null;
 }
 
-/* ── Suggestions ──────────────────────────────────────────── */
+/* -- Suggestions ----------------------------------------------------- */
 
 export interface SuggestResponse {
   suggestions: Suggestion[];
@@ -92,7 +94,7 @@ export interface Suggestion {
   score: number;
 }
 
-/* ── Dynamic Facets ───────────────────────────────────────── */
+/* -- Dynamic Facets -------------------------------------------------- */
 
 export interface DynamicFacets {
   brands: FacetBucket[];
@@ -105,6 +107,8 @@ export interface DynamicFacets {
   mpns: FacetBucket[];
   makes: FacetBucket[];
   models: FacetBucket[];
+  pipelineJobs: FacetBucket[];
+  marketplaces: FacetBucket[];
   priceRange: { min: number | null; max: number | null };
   totalFiltered: number;
   queryTimeMs: number;
@@ -120,7 +124,7 @@ export interface CategoryFacetBucket extends FacetBucket {
   id: string;
 }
 
-/* ── Full Detail (from /listings/:id) ─────────────────────── */
+/* -- Full Detail (from /listings/:id) -------------------------------- */
 
 export interface ListingDetail {
   id: string;
@@ -176,9 +180,10 @@ export interface ListingDetail {
   sourceFilePath: string | null;
   sheetName: string | null;
   sourceRowNumber: number;
+  version: number;
 }
 
-/* ── Active Filter State ──────────────────────────────────── */
+/* -- Active Filter State --------------------------------------------- */
 
 export interface ActiveFilters {
   brands: string[];
@@ -194,6 +199,8 @@ export interface ActiveFilters {
   makeNames: string[];        // same as makes (kept for compat)
   models: string[];           // vehicle model names (extracted from title)
   modelNames: string[];       // same as models (kept for compat)
+  pipelineJobIds: string[];   // pipeline job UUIDs
+  marketplaces: string[];     // marketplace codes
   minPrice: number | null;
   maxPrice: number | null;
   hasImage: boolean;
@@ -214,6 +221,8 @@ export const EMPTY_FILTERS: ActiveFilters = {
   makeNames: [],
   models: [],
   modelNames: [],
+  pipelineJobIds: [],
+  marketplaces: [],
   minPrice: null,
   maxPrice: null,
   hasImage: false,
@@ -232,6 +241,8 @@ export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
     mpns: f.mpns.length ? f.mpns.join(',') : undefined,
     makes: f.makes.length ? f.makes.join(',') : undefined,
     models: f.models.length ? f.models.join(',') : undefined,
+    pipelineJobIds: f.pipelineJobIds.length ? f.pipelineJobIds.join(',') : undefined,
+    marketplaces: f.marketplaces.length ? f.marketplaces.join(',') : undefined,
     minPrice: f.minPrice ?? undefined,
     maxPrice: f.maxPrice ?? undefined,
     hasImage: f.hasImage ? '1' : undefined,
@@ -251,6 +262,8 @@ export function countActiveFilters(f: ActiveFilters): number {
   count += f.mpns.length;
   count += f.makes.length;
   count += f.models.length;
+  count += f.pipelineJobIds.length;
+  count += f.marketplaces.length;
   if (f.minPrice != null) count++;
   if (f.maxPrice != null) count++;
   if (f.hasImage) count++;
@@ -258,7 +271,7 @@ export function countActiveFilters(f: ActiveFilters): number {
   return count;
 }
 
-/* ── Condition labels ─────────────────────────────────────── */
+/* -- Condition labels ------------------------------------------------ */
 
 export const CONDITION_MAP: Record<string, string> = {
   '1000': 'New',

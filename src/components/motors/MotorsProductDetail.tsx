@@ -262,8 +262,8 @@ export default function MotorsProductDetail() {
               <CardTitle className="text-base">Publishing Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Status</span><span className="font-medium capitalize">{product.status.replace(/_/g, ' ')}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Source</span><span>{product.sourceType.replace(/_/g, ' ')}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Status</span><span className="font-medium capitalize">{(product.status ?? '').replace(/_/g, ' ')}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Source</span><span>{(product.sourceType ?? '').replace(/_/g, ' ')}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">eBay Category</span><span>{product.ebayCategoryName || product.ebayCategoryId || '—'}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">eBay Item ID</span><span className="font-mono">{product.ebayItemId || '—'}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Published</span><span>{product.publishedAt ? new Date(product.publishedAt).toLocaleString() : '—'}</span></div>

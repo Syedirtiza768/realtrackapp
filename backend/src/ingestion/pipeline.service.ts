@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
@@ -64,7 +64,7 @@ export class PipelineService {
   async createJob(dto: CreatePipelineJobDto, userId?: string): Promise<PipelineJob> {
     const enabled = await this.featureFlagService.isEnabled('pipeline_enrichment');
     if (!enabled) {
-      throw new Error('Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.');
+      throw new ServiceUnavailableException('Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.');
     }
 
     const job = this.jobRepo.create({
@@ -75,22 +75,47 @@ export class PipelineService {
       createdBy: userId ?? null,
     });
 
-    const saved = await this.jobRepo.save(job);
+    let saved: PipelineJob;
+    try {
+      saved = await this.jobRepo.save(job);
+    } catch (err) {
+      this.logger.error(
+        `Failed to save pipeline job: ${err instanceof Error ? err.message : err}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      throw new InternalServerErrorException(
+        'Failed to create pipeline job. Database may be unreachable or schema is out of date.',
+      );
+    }
 
-    await this.pipelineQueue.add(
-      'run-pipeline',
-      {
-        jobId: saved.id,
-        filePath: dto.storedFilePath,
-        originalFilename: dto.originalFilename,
-      },
-      {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 60_000 },
-        removeOnComplete: 50,
-        removeOnFail: 100,
-      },
-    );
+    try {
+      await this.pipelineQueue.add(
+        'run-pipeline',
+        {
+          jobId: saved.id,
+          filePath: dto.storedFilePath,
+          originalFilename: dto.originalFilename,
+        },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 60_000 },
+          removeOnComplete: 50,
+          removeOnFail: 100,
+        },
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to enqueue pipeline job ${saved.id}: ${err instanceof Error ? err.message : err}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      await this.jobRepo.update(saved.id, {
+        status: 'failed',
+        lastError: 'Failed to enqueue job. Redis may be unavailable. Try again.',
+      } as any);
+      throw new ServiceUnavailableException(
+        'Pipeline job created but could not be queued for processing. Redis may be unavailable. Try again.',
+      );
+    }
 
     this.logger.log(`Created pipeline job ${saved.id} for file: ${dto.originalFilename}`);
     return saved;
@@ -143,7 +168,7 @@ export class PipelineService {
   async cancelJob(id: string): Promise<PipelineJob> {
     const job = await this.getJob(id);
     if (job.status === 'completed' || job.status === 'cancelled') {
-      throw new Error(`Job ${id} cannot be cancelled (current: ${job.status})`);
+      throw new BadRequestException(`Job ${id} cannot be cancelled (current: ${job.status})`);
     }
 
     job.status = 'cancelled';
@@ -157,7 +182,7 @@ export class PipelineService {
   async retryJob(id: string): Promise<PipelineJob> {
     const job = await this.getJob(id);
     if (job.status !== 'failed') {
-      throw new Error(`Job ${id} is not in failed state (current: ${job.status})`);
+      throw new BadRequestException(`Job ${id} is not in failed state (current: ${job.status})`);
     }
 
     job.status = 'pending';
@@ -281,8 +306,8 @@ export class PipelineService {
     };
   }
 
-  async getOptimizationStatus(jobId: string): Promise<JobOptimizationStatus> {
-    return this.listingOptimization.getJobOptimizationStatus(jobId);
+  async getOptimizationStatus(jobId: string, marketplace?: string): Promise<JobOptimizationStatus> {
+    return this.listingOptimization.getJobOptimizationStatus(jobId, marketplace);
   }
 
   async getProductOptimization(productId: string) {
@@ -298,6 +323,10 @@ export class PipelineService {
 
   async markProductManualReview(productId: string, enabled = true) {
     return this.listingOptimization.markManualReview(productId, enabled);
+  }
+
+  async bypassJobOptimization(jobId: string) {
+    return this.listingOptimization.bypassJobOptimization(jobId);
   }
 
   private optimizationStatusToEnterpriseResult(

@@ -8,7 +8,12 @@ export interface ListingOptimizationJobData {
   marketplace?: 'US' | 'DE' | 'AU';
 }
 
-@Processor('listing-optimization', { concurrency: 1 })
+@Processor('listing-optimization', {
+  concurrency: 1,
+  lockDuration: 120 * 60 * 1000, // 2 hour lock — handles large pipeline jobs with 500+ products
+  maxStalledCount: 2,
+  stalledInterval: 30_000,
+})
 export class ListingOptimizationProcessor extends WorkerHost {
   private readonly logger = new Logger(ListingOptimizationProcessor.name);
 
@@ -18,8 +23,8 @@ export class ListingOptimizationProcessor extends WorkerHost {
 
   async process(job: Job<ListingOptimizationJobData>): Promise<void> {
     const { jobId, marketplace = 'US' } = job.data;
-    this.logger.log(`Starting mandatory listing optimization for pipeline job ${jobId}`);
-    await this.optimization.enqueueJobOptimization(jobId, marketplace);
-    this.logger.log(`Completed listing optimization for pipeline job ${jobId}`);
+    this.logger.log(`Starting mandatory listing optimization for pipeline job ${jobId} [${marketplace}]`);
+    await this.optimization.enqueueJobOptimization(jobId, marketplace, job);
+    this.logger.log(`Completed listing optimization for pipeline job ${jobId} [${marketplace}]`);
   }
 }

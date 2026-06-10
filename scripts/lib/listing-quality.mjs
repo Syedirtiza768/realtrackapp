@@ -2,6 +2,9 @@
  * Pipeline-side listing guards + quality validator (mirrors backend TS).
  */
 
+import { expandFitmentYearRanges } from './fitment-year-expand.mjs';
+import { isLowValueSku } from './token-optimization.mjs';
+
 const REQUIRED_SPECIFICS = [
   'Brand',
   'Manufacturer Part Number',
@@ -93,8 +96,9 @@ export function applyListingGuards(item, srcPart) {
   }
 
   if (Array.isArray(out.compatibility)) {
-    const before = out.compatibility.length;
-    out.compatibility = dedupeFitment(out.compatibility);
+    const expanded = expandFitmentYearRanges(out.compatibility);
+    const before = expanded.length;
+    out.compatibility = dedupeFitment(expanded);
     if (out.compatibility.length < before) fixes.push('FITMENT_DEDUPED');
   }
 
@@ -206,7 +210,10 @@ export function applyTaxonomyChecks(item, options = {}) {
 export function validateListing(item, srcPart, options = {}) {
   const hardFails = [];
   const softFails = [];
-  const fitmentMinRows = options.fitmentMinRows ?? 5;
+  const compactProfile =
+    options.compactProfile === true ||
+    isLowValueSku(options.price, options.lowValueMaxPrice);
+  const fitmentMinRows = compactProfile ? 0 : (options.fitmentMinRows ?? 5);
 
   if (
     options.expectedBatchSize != null &&
@@ -235,12 +242,14 @@ export function validateListing(item, srcPart, options = {}) {
     }
   }
 
-  if (score.fitmentRows < fitmentMinRows) {
+  if (!compactProfile && score.fitmentRows < fitmentMinRows) {
     softFails.push(`FITMENT_ROWS_LOW:${score.fitmentRows}`);
   }
   const desc = String(item.description || '');
   if (!/<h[34]>|<ul>/i.test(desc)) softFails.push('DESC_NO_HTML_STRUCTURE');
-  if (!/compatib/i.test(desc)) softFails.push('DESC_NO_COMPAT_SECTION');
+  if (!compactProfile && !/compatib/i.test(desc)) {
+    softFails.push('DESC_NO_COMPAT_SECTION');
+  }
 
   const taxonomy = applyTaxonomyChecks(item, options);
   if (!taxonomy.skipped) {

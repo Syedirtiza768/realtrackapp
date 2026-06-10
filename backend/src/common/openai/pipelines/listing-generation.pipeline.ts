@@ -52,7 +52,7 @@ export class ListingGenerationPipeline {
     const { systemPrompt, userPrompt } = renderPrompt(
       LISTING_GENERATION_PROMPT,
       {
-        productData: JSON.stringify(productData, null, 2),
+        productData: JSON.stringify(productData),
         categoryName,
         condition,
       },

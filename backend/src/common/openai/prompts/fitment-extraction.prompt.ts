@@ -9,7 +9,7 @@ export const FITMENT_EXTRACTION_PROMPT: PromptTemplate = {
   systemPrompt: `You are a Senior Automotive Parts Interchange Specialist with 20+ years of experience in OEM parts databases (EPCs) and cross-reference systems.
 
 Parse unstructured fitment information into structured year/make/model/trim arrays.
-Be precise with years — expand ranges (e.g. "2015-2020" → individual years).
+Return yearStart/yearEnd ranges (e.g. 2015–2020 as one row), not one row per year — downstream code expands ranges.
 Use standard eBay-compatible make and model names.
 
 For each vehicle entry, you MUST include:
@@ -43,7 +43,8 @@ Return JSON with these exact keys:
 {
   "vehicles": [
     {
-      "year": "2020",
+      "yearStart": 2018,
+      "yearEnd": 2023,
       "make": "Toyota",
       "model": "Camry",
       "trim": "LE | SE | XLE | null",

@@ -1,13 +1,13 @@
-/* ── Advanced Search Query DTO ─────────────────────────────
+/* -- Advanced Search Query DTO -----------------------------
  *  Supports full-text search, multi-select filters, range
  *  filters, boolean logic, sorting, and pagination.
- * ────────────────────────────────────────────────────────── */
+ * ---------------------------------------------------------- */
 
 import { IsOptional, IsInt, IsString, IsIn, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SearchQueryDto {
-  /* ── Pagination ───────────────────────────────────────── */
+  /* -- Pagination ----------------------------------------- */
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200)
   limit?: number;          // default 60, max 200
 
@@ -17,14 +17,14 @@ export class SearchQueryDto {
   @IsOptional() @IsString()
   cursor?: string;         // for infinite-scroll cursor-based paging
 
-  /* ── Full-text search ─────────────────────────────────── */
+  /* -- Full-text search ----------------------------------- */
   @IsOptional() @IsString()
   q?: string;              // main search query (FTS + fuzzy)
 
   @IsOptional() @IsString()
   exactSku?: string;       // exact SKU match (priority)
 
-  /* ── Multi-select filters (comma-separated values) ───── */
+  /* -- Multi-select filters (comma-separated values) ----- */
   @IsOptional() @IsString()
   brands?: string;         // "Mercedes-Benz,BMW,Porsche"
 
@@ -52,32 +52,39 @@ export class SearchQueryDto {
   @IsOptional() @IsString()
   mpns?: string;           // manufacturer part numbers
 
-  /* ── Vehicle make/model filters (comma-separated names) ── */
+  /* -- Pipeline job / marketplace filters ----------------- */
+  @IsOptional() @IsString()
+  pipelineJobIds?: string;  // comma-separated pipeline job UUIDs
+
+  @IsOptional() @IsString()
+  marketplaces?: string;    // comma-separated: "US,DE"
+
+  /* -- Vehicle make/model filters (comma-separated names) - */
   @IsOptional() @IsString()
   makes?: string;          // make names: "Audi,BMW,Mercedes-Benz"
 
   @IsOptional() @IsString()
   models?: string;         // model names: "A4,Q7,X6"
 
-  /* ── Range filters ────────────────────────────────────── */
+  /* -- Range filters -------------------------------------- */
   @IsOptional() @Type(() => Number) @Min(0)
   minPrice?: number;
 
   @IsOptional() @Type(() => Number) @Min(0)
   maxPrice?: number;
 
-  /* ── Boolean filters ──────────────────────────────────── */
+  /* -- Boolean filters ------------------------------------ */
   @IsOptional() @IsString()
   hasImage?: string;       // '1' = only with images
 
   @IsOptional() @IsString()
   hasPrice?: string;       // '1' = only with price
 
-  /* ── Filter logic ─────────────────────────────────────── */
+  /* -- Filter logic --------------------------------------- */
   @IsOptional() @IsIn(['and', 'or'])
   filterMode?: 'and' | 'or'; // default 'and'
 
-  /* ── Sorting ──────────────────────────────────────────── */
+  /* -- Sorting -------------------------------------------- */
   @IsOptional() @IsIn(['relevance', 'price_asc', 'price_desc', 'newest', 'title_asc', 'title_desc', 'sku_asc'])
   sort?: 'relevance' | 'price_asc' | 'price_desc' | 'newest' |
          'title_asc' | 'title_desc' | 'sku_asc';

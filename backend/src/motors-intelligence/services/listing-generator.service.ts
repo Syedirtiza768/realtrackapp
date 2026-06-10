@@ -380,7 +380,7 @@ export class ListingGeneratorService {
     }
 
     const prompt = LISTING_GENERATION_PROMPT
-      .replace('{productData}', JSON.stringify(input, null, 2))
+      .replace('{productData}', JSON.stringify(input))
       .replace('{requiredAspects}', JSON.stringify(
         requiredAspects.map(a => ({
           name: a.aspectName,
@@ -388,8 +388,6 @@ export class ListingGeneratorService {
           allowedValues: a.allowedValues,
           maxLength: a.maxLength,
         })),
-        null,
-        2,
       ))
       .replace(/\{titleCharLimit\}/g, String(input.titleCharLimit))
       .replace('{forbiddenClaims}', JSON.stringify(input.forbiddenClaims));

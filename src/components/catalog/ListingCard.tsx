@@ -129,7 +129,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
             )}
           </div>
           <button
-            onClick={() => navigate(`/sku/${item.id}`)}
+            onClick={() => navigate(`/catalog/products/${item.id}`)}
             className="px-2 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1 transition-colors"
           >
             <Eye size={12} /> Details

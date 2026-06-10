@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
 import { FitmentModule } from '../fitment/fitment.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
@@ -13,8 +14,14 @@ import { ListingOptimizationProcessor } from './processors/listing-optimization.
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CatalogProduct, PipelineJob]),
-    BullModule.registerQueue({ name: 'listing-optimization' }),
+    TypeOrmModule.forFeature([CatalogProduct, ListingRecord, PipelineJob]),
+    BullModule.registerQueue({
+      name: 'listing-optimization',
+      defaultJobOptions: {
+        removeOnComplete: { count: 50 },
+        removeOnFail: { count: 100 },
+      },
+    }),
     FitmentModule,
     ChannelsModule,
     OpenAiModule,

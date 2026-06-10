@@ -150,6 +150,24 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     });
   }
 
+  // Marketplace tags
+  for (const mkt of filters.marketplaces) {
+    tags.push({
+      key: "mkt:"+mkt,
+      label: "Marketplace: "+mkt,
+      onRemove: () => onChange({ ...filters, marketplaces: filters.marketplaces.filter((m) => m !== mkt) }),
+    });
+  }
+
+  // Pipeline job tags
+  for (const pj of filters.pipelineJobIds) {
+    tags.push({
+      key: "pj:"+pj,
+      label: "Job: "+pj.slice(0,8),
+      onRemove: () => onChange({ ...filters, pipelineJobIds: filters.pipelineJobIds.filter((p) => p !== pj) }),
+    });
+  }
+
   // Price tags
   if (filters.minPrice != null || filters.maxPrice != null) {
     const label = `Price: ${filters.minPrice != null ? `$${filters.minPrice}` : '$0'} — ${filters.maxPrice != null ? `$${filters.maxPrice}` : 'Any'}`;

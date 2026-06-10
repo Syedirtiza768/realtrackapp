@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -59,8 +60,11 @@ export class PipelineController {
   @Get('jobs/:id/optimization')
   @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get mandatory listing optimization status for a pipeline job' })
-  async getOptimizationStatus(@Param('id') id: string) {
-    return this.pipelineService.getOptimizationStatus(id);
+  async getOptimizationStatus(
+    @Param('id') id: string,
+    @Query('marketplace') marketplace?: string,
+  ) {
+    return this.pipelineService.getOptimizationStatus(id, marketplace);
   }
 
   @Get('jobs/:id/products/:productId/optimization')
@@ -103,6 +107,14 @@ export class PipelineController {
     return { product };
   }
 
+  @Post('jobs/:id/bypass-optimization')
+  @RequirePermissions('pipeline.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bypass mandatory optimization — mark all products as completed so downloads unlock' })
+  async bypassOptimization(@Param('id') id: string) {
+    return this.pipelineService.bypassJobOptimization(id);
+  }
+
   @Post('jobs/:id/optimize-all')
   @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
@@ -130,7 +142,7 @@ export class PipelineController {
   @ApiOperation({ summary: 'Upload an Excel/CSV file and start enrichment pipeline' })
   async uploadAndStart(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('No file uploaded');
     }
 
     // Ensure upload directory exists

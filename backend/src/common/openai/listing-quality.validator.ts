@@ -135,9 +135,14 @@ export class ListingQualityValidator {
       expectedBatchSize?: number;
       actualBatchSize?: number;
       ebayCategoryId?: string | null;
+      compactProfile?: boolean;
     },
   ): Promise<ValidationResult> {
-    const base = this.validate(item, srcPart, options);
+    const base = this.validate(item, srcPart, {
+      expectedBatchSize: options?.expectedBatchSize,
+      actualBatchSize: options?.actualBatchSize,
+      compactProfile: options?.compactProfile,
+    });
     const ebayCategoryId =
       options?.ebayCategoryId ??
       (typeof item.ebayCategoryId === 'string' ? item.ebayCategoryId : null) ??
@@ -166,7 +171,11 @@ export class ListingQualityValidator {
   validate(
     item: Record<string, unknown>,
     srcPart: { partNumber?: string; donorMake?: string },
-    options?: { expectedBatchSize?: number; actualBatchSize?: number },
+    options?: {
+      expectedBatchSize?: number;
+      actualBatchSize?: number;
+      compactProfile?: boolean;
+    },
   ): ValidationResult {
     const hardFails: string[] = [];
     const softFails: string[] = [];
@@ -206,19 +215,23 @@ export class ListingQualityValidator {
       if (flag.startsWith('MPN_MISMATCH')) hardFails.push(flag);
     }
 
-    if (score.fitmentRows < this.fitmentMinRows) {
+    const compactProfile = options?.compactProfile === true;
+    const fitmentMinRows = compactProfile ? 0 : this.fitmentMinRows;
+
+    if (!compactProfile && score.fitmentRows < fitmentMinRows) {
       softFails.push(`FITMENT_ROWS_LOW:${score.fitmentRows}`);
     }
     const desc = String(item.description || '');
     if (!/<h[34]>|<ul>/i.test(desc)) {
       softFails.push('DESC_NO_HTML_STRUCTURE');
     }
-    if (!/compatib/i.test(desc)) {
+    if (!compactProfile && !/compatib/i.test(desc)) {
       softFails.push('DESC_NO_COMPAT_SECTION');
     }
     const title = String(item.title || '');
     const compat = Array.isArray(item.compatibility) ? item.compatibility : [];
     if (
+      !compactProfile &&
       !/w20[0-9]/i.test(title) &&
       !compat.some((c: Record<string, unknown>) =>
         /w20[0-9]/i.test(String(c.chassisCode || '')),

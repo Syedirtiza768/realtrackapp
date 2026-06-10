@@ -10,6 +10,7 @@ import { EbayCategory } from './entities/ebay-category.entity';
 import { CompetitorPrice } from './entities/competitor-price.entity';
 import { MarketSnapshot } from './entities/market-snapshot.entity';
 import { ExportRule } from './entities/export-rule.entity';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity';
 import { ListingsController } from './listings.controller';
 import { ListingsV2Controller } from './listings-v2.controller';
 import { ExportRuleController } from './export-rule.controller';
@@ -34,6 +35,7 @@ import { TemplateModule } from '../templates/template.module';
       CompetitorPrice,
       MarketSnapshot,
       ExportRule,
+      CatalogProduct,
     ]),
     ChannelsModule,
     TemplateModule,

@@ -16,7 +16,7 @@ function formatBytes(bytes: number): string {
 
 // ─── Exact eBay Listing Preview ─────────────────────────────────────────────
 
-function EbayListingPreview({ listing }: { listing: EbayListing }) {
+export function EbayListingPreview({ listing }: { listing: EbayListing }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [imgErrors, setImgErrors] = useState<Set<number>>(new Set());
   const descIframeRef = useRef<HTMLIFrameElement>(null);

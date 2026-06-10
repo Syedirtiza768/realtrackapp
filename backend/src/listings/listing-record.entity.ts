@@ -280,8 +280,6 @@ export class ListingRecord {
   responsiblePerson1ContactUrl: string | null;
 
   /* ── Numeric price/quantity columns (Phase 3 migration) ── */
-  /* These mirror the TEXT columns above and are auto-synced
-     by a DB trigger. Application code should prefer these. */
 
   @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
   startPriceNum: number | null;
@@ -303,6 +301,16 @@ export class ListingRecord {
 
   @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
   shippingService2CostNum: number | null;
+
+  /* ── Pipeline/marketplace linkage ────────────────────────── */
+
+  @Column({ name: 'pipeline_job_id', type: 'uuid', nullable: true })
+  @Index('idx_listing_pipeline_job')
+  pipelineJobId: string | null;
+
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  @Index('idx_listing_marketplace')
+  marketplace: string | null;
 
   /* ── Lifecycle columns (Module 1 — Listing CRUD) ──────── */
 
@@ -344,7 +352,7 @@ export class ListingRecord {
   @Column({
     type: 'tsvector',
     nullable: true,
-    select: false, // don't return in normal queries
+    select: false,
   })
   searchVector: string | null;
 }

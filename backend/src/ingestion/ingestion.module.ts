@@ -32,7 +32,7 @@ import { PipelineOutputImageService } from './services/pipeline-output-image.ser
     TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob, CatalogProduct]),
     BullModule.registerQueue({ name: 'ingestion' }),
     BullModule.registerQueue({ name: 'pipeline' }),
-    BullModule.registerQueue({ name: 'listing-optimization' }),
+    BullModule.registerQueue({ name: 'listing-optimization', defaultJobOptions: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } } }),
     ListingOptimizationModule,
     AiModule,
     StorageModule,

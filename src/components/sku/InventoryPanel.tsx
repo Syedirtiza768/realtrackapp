@@ -211,7 +211,7 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
                       {evt.quantityChange > 0 ? '+' : ''}{evt.quantityChange}
                     </span>
                     <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 dark:text-slate-600 rounded text-[10px] font-medium uppercase">
-                      {evt.eventType.replace(/_/g, ' ')}
+                      {(evt.eventType ?? '').replace(/_/g, ' ')}
                     </span>
                   </div>
                   {evt.reason && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{evt.reason}</p>}

@@ -12,6 +12,7 @@ files/
 !eBay-*.xlsx
 *.csv
 output/
+config/.enrichment-cache.json
 
 # PM2 logs
 logs/

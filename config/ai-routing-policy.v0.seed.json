@@ -14,6 +14,7 @@
   },
   "thresholds": {
     "flagshipMinPrice": 200,
+    "lowValueMaxPrice": 50,
     "fitmentMinRows": 5,
     "autoApproveMinScore": 85
   },

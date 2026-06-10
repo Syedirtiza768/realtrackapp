@@ -19,6 +19,8 @@ import { ListingRecord } from './listing-record.entity';
 import { ListingRevision } from './listing-revision.entity';
 import { extractMakeModelFromTitle } from './utils/extract-make-model-from-title.js';
 
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+
 /**
  * Maps each Excel header text (normalized to lowercase) to the
  * corresponding entity property name.  The first column header varies
@@ -203,6 +205,8 @@ export class ListingsService {
     private readonly listingRepo: Repository<ListingRecord>,
     @InjectRepository(ListingRevision)
     private readonly revisionRepo: Repository<ListingRevision>,
+    @InjectRepository(CatalogProduct)
+    private readonly catalogProductRepo: Repository<CatalogProduct>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -301,7 +305,11 @@ export class ListingsService {
     if (!record) {
       throw new NotFoundException(`Listing ${id} not found`);
     }
-    return record;
+    let catalogProduct: CatalogProduct | null = null;
+    if (record.customLabelSku) {
+      catalogProduct = await this.catalogProductRepo.findOneBy({ sku: record.customLabelSku });
+    }
+    return { listing: record, catalogProduct };
   }
 
   /* ── CRUD operations (Module 1) ─────────────────────────── */

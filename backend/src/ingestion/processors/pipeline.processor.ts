@@ -37,7 +37,7 @@ const ACTIVE_PIPELINE_STATUSES: PipelineJobStatus[] = [
   'output_generation',
 ];
 
-@Processor('pipeline', { concurrency: 1 })
+@Processor('pipeline', { concurrency: 1, lockDuration: 120 * 60 * 1000 })
 export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(PipelineProcessor.name);
 
@@ -147,18 +147,21 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         optimizationProcessed: 0,
       } as any);
 
-      await this.optimizationQueue.add(
-        'optimize-job',
-        { jobId, marketplace: 'US' },
-        {
-          attempts: 2,
-          backoff: { type: 'exponential', delay: 30_000 },
-          removeOnComplete: 50,
-          removeOnFail: 100,
-        },
-      );
+      // Enqueue mandatory listing optimization for all three marketplaces
+      for (const marketplace of ['US', 'AU', 'DE'] as const) {
+        await this.optimizationQueue.add(
+          'optimize-job',
+          { jobId, marketplace },
+          {
+            attempts: 5,
+            backoff: { type: 'exponential', delay: 30_000 },
+            removeOnComplete: 50,
+            removeOnFail: 100,
+          },
+        );
+      }
 
-      this.logger.log(`Pipeline job=${jobId} enrichment completed; queued mandatory listing optimization`);
+      this.logger.log(`Pipeline job=${jobId} enrichment completed; queued mandatory listing optimization for US/AU/DE`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Pipeline job=${jobId} failed: ${message}`);
@@ -459,25 +462,41 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   }
 
   /**
-   * Parse the US output XLSX and save each listing row to catalog_products + listing_records.
+   * Parse all marketplace output XLSX files and save each listing row to catalog_products + listing_records.
    */
   private async saveToCatalog(jobId: string, outputDir: string): Promise<void> {
+    for (const marketplace of ['US', 'AU', 'DE'] as const) {
+      await this.saveMarketplaceToCatalog(jobId, outputDir, marketplace);
+    }
+  }
+
+  /**
+   * Parse a single marketplace output XLSX and save to both catalog_products and listing_records.
+   * Supports US (English headers), AU (English headers, same as US), and DE (German headers).
+   */
+  private async saveMarketplaceToCatalog(
+    jobId: string,
+    outputDir: string,
+    marketplace: 'US' | 'AU' | 'DE',
+  ): Promise<void> {
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
-    const usFile = files.find(f => {
+    const mktFile = files.find(f => {
       const lower = f.toLowerCase();
-      return lower.includes('us-motors') || lower.includes('us_motors');
+      if (marketplace === 'US') return lower.includes('us-motors') || lower.includes('us_motors');
+      if (marketplace === 'AU') return lower.startsWith('au-') || lower.startsWith('au_');
+      return lower.startsWith('de-') || lower.startsWith('de_');
     });
-    if (!usFile) {
-      this.logger.warn(`Job ${jobId}: No US output file found for catalog save`);
+    if (!mktFile) {
+      this.logger.warn(`Job ${jobId}: No ${marketplace} output file found for catalog save`);
       return;
     }
 
-    const usPath = path.join(outputDir, usFile);
+    const mktPath = path.join(outputDir, mktFile);
     try {
-      const wb = XLSX.readFile(usPath);
+      const wb = XLSX.readFile(mktPath);
       const ws = wb.Sheets['Listings'];
       if (!ws) {
-        this.logger.warn(`Job ${jobId}: No Listings sheet in US output`);
+        this.logger.warn(`Job ${jobId}: No Listings sheet in ${marketplace} output`);
         return;
       }
 
@@ -491,7 +510,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
       }
       if (headerIdx === -1) {
-        this.logger.warn(`Job ${jobId}: Could not find header row in US output`);
+        this.logger.warn(`Job ${jobId}: Could not find header row in ${marketplace} output`);
         return;
       }
 
@@ -500,10 +519,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         const norm = name.toLowerCase().replace(/[^a-z0-9]/g, '');
         return headers.findIndex(h => h.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm));
       };
-      /** Exact match — avoids colIdx('Relationship') matching "Relationship details". */
       const colExact = (pattern: RegExp): number =>
         headers.findIndex(h => pattern.test(String(h ?? '').trim()));
 
+      // Column indices — US/AU use English headers, DE uses German
+      const isDE = marketplace === 'DE';
       const iAction = colIdx('Action');
       const iSku = colIdx('Customlabel');
       const iCategoryId = colIdx('CategoryID');
@@ -520,14 +540,32 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const iShipping = colIdx('Shippingprofilename');
       const iReturn = colIdx('Returnprofilename');
       const iPayment = colIdx('Paymentprofilename');
-      const iBrand = headers.findIndex(h => /^C:Brand$/i.test(h));
-      const iType = headers.findIndex(h => /^C:Type$/i.test(h));
-      const iMpn = headers.findIndex(h => /C:Manufacturer\s*Part\s*Number/i.test(h));
-      const iOem = headers.findIndex(h => /C:OE.*OEM.*Part.*Number/i.test(h));
-      const iPlacement = headers.findIndex(h => /C:Placement/i.test(h));
-      const iMaterial = headers.findIndex(h => /^C:Material$/i.test(h));
-      const iFeatures = headers.findIndex(h => /^C:Features$/i.test(h));
-      const iCountry = headers.findIndex(h => /C:Country/i.test(h));
+
+      // DE column name mappings for custom fields
+      const iBrand = !isDE
+        ? headers.findIndex(h => /^C:Brand$/i.test(h))
+        : headers.findIndex(h => /^C:Hersteller$/i.test(h));
+      const iType = !isDE
+        ? headers.findIndex(h => /^C:Type$/i.test(h))
+        : headers.findIndex(h => /^C:Produktart$/i.test(h));
+      const iMpn = !isDE
+        ? headers.findIndex(h => /C:Manufacturer\s*Part\s*Number/i.test(h))
+        : headers.findIndex(h => /C:Herstellernummer/i.test(h));
+      const iOem = !isDE
+        ? headers.findIndex(h => /C:OE.*OEM.*Part.*Number/i.test(h))
+        : headers.findIndex(h => /C:OE.*OEM.*Referenznummer/i.test(h));
+      const iPlacement = !isDE
+        ? headers.findIndex(h => /C:Placement/i.test(h))
+        : headers.findIndex(h => /C:Einbauposition/i.test(h));
+      const iMaterial = !isDE
+        ? headers.findIndex(h => /^C:Material$/i.test(h))
+        : headers.findIndex(h => /^C:Material$|^C:Material\b/i.test(h));
+      const iFeatures = !isDE
+        ? headers.findIndex(h => /^C:Features$/i.test(h))
+        : headers.findIndex(h => /^C:Merkmale$|^C:Features$/i.test(h));
+      const iCountry = !isDE
+        ? headers.findIndex(h => /C:Country/i.test(h))
+        : headers.findIndex(h => /C:Herstellungsland/i.test(h));
       const iRelationship = colExact(/^Relationship$/i);
       const iRelationshipDetails = colExact(/^Relationship\s*details$/i);
 
@@ -628,14 +666,14 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           shippingProfile: get(row, iShipping) || null,
           returnProfile: get(row, iReturn) || null,
           paymentProfile: get(row, iPayment) || null,
-          sourceFile: usFile,
+          sourceFile: mktFile,
           sourceRow: i,
           pipelineJobId: jobId,
         });
 
         listingRecords.push({
-          sourceFileName: usFile,
-          sourceFilePath: usPath,
+          sourceFileName: mktFile,
+          sourceFilePath: mktPath,
           sheetName: `Pipeline ${jobId.slice(0, 8)}`,
           sourceRowNumber: i,
           action: 'Add',
@@ -663,7 +701,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           cOeOemPartNumber: get(row, iOem) || null,
           extractedMake,
           extractedModel,
-        });
+        } satisfies Partial<ListingRecord> & { marketplace?: string });
+      }
+
+      // Set marketplace + pipelineJobId on each listing record
+      for (const lr of listingRecords) {
+        (lr as any).pipelineJobId = jobId;
+        (lr as any).marketplace = marketplace;
       }
 
       for (const [idx, fitments] of compatibilities) {
@@ -677,35 +721,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           (p) => Array.isArray(p.fitmentData) && (p.fitmentData as unknown[]).length > 0,
         ).length;
         const CHUNK = 500;
+        // PostgreSQL column names (snake_case) — orUpdate uses DB names, not entity property names
         const upsertColumns = [
-          'title',
-          'description',
-          'brand',
-          'brandNormalized',
-          'mpn',
-          'mpnNormalized',
-          'partType',
-          'placement',
-          'material',
-          'features',
-          'countryOfOrigin',
-          'oemPartNumber',
-          'price',
-          'quantity',
-          'conditionId',
-          'categoryId',
-          'categoryName',
-          'imageUrls',
-          'location',
-          'format',
-          'duration',
-          'shippingProfile',
-          'returnProfile',
-          'paymentProfile',
-          'sourceFile',
-          'sourceRow',
-          'pipelineJobId',
-          'fitmentData',
+          'title', 'description', 'brand', 'brand_normalized', 'mpn', 'mpn_normalized',
+          'part_type', 'placement', 'material', 'features', 'country_of_origin', 'oem_part_number',
+          'price', 'quantity', 'condition_id', 'category_id', 'category_name', 'image_urls',
+          'location', 'format', 'duration', 'shipping_profile', 'return_profile', 'payment_profile',
+          'source_file', 'source_row', 'pipeline_job_id', 'fitment_data',
         ] as const;
 
         for (let i = 0; i < products.length; i += CHUNK) {
@@ -733,7 +755,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           }
         }
         this.logger.log(
-          `Job ${jobId}: Saved ${products.length} products to catalog (${withFitment} with fitment rows)`,
+          `Job ${jobId} [${marketplace}]: Saved ${products.length} products to catalog (${withFitment} with fitment rows)`,
         );
       }
 
@@ -748,10 +770,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             .orIgnore()
             .execute();
         }
-        this.logger.log(`Job ${jobId}: Saved ${listingRecords.length} listing records`);
+        this.logger.log(`Job ${jobId} [${marketplace}]: Saved ${listingRecords.length} listing records`);
       }
     } catch (err) {
-      this.logger.error(`Job ${jobId}: Failed to save to catalog: ${err instanceof Error ? err.message : err}`);
+      this.logger.error(`Job ${jobId} [${marketplace}]: Failed to save to catalog: ${err instanceof Error ? err.message : err}`);
     }
   }
 }

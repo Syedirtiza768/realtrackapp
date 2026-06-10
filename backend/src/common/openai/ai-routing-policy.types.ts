@@ -13,6 +13,8 @@ export interface SegmentRoute {
 
 export interface RoutingThresholds {
   flagshipMinPrice: number;
+  /** SKUs below this price use compact enrichment (no LLM fitment generation). */
+  lowValueMaxPrice: number;
   fitmentMinRows: number;
   autoApproveMinScore: number;
 }

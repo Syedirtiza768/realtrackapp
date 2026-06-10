@@ -15,7 +15,7 @@ import {
   Send,
   Trash2,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '../ui/card';
 import SearchBar from './SearchBar';
 import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
@@ -63,6 +63,27 @@ export default function CatalogManager() {
   const [deleting, setDeleting] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishTargetId, setPublishTargetId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Hydrate filters from URL params on mount
+  useEffect(() => {
+    const pjParam = searchParams.get('pipelineJobIds');
+    const mktParam = searchParams.get('marketplaces');
+    const qParam = searchParams.get('q');
+    if (pjParam || mktParam || qParam) {
+      setFilters(prev => ({
+        ...prev,
+        pipelineJobIds: pjParam ? pjParam.split(',').filter(Boolean) : prev.pipelineJobIds,
+        marketplaces: mktParam ? mktParam.split(',').filter(Boolean) : prev.marketplaces,
+      }));
+      if (qParam) {
+        setSearchInput(qParam);
+        setSearchQuery(qParam);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPublishOpen, setBulkPublishOpen] = useState(false);
 

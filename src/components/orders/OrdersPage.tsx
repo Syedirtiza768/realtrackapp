@@ -300,12 +300,12 @@ export default function OrdersPage() {
                                                     </div>
                                                 </td>
                                                 <td className="py-3 px-4 text-slate-400 dark:text-slate-400 hidden sm:table-cell">
-                                                    {order.buyerName ?? order.buyerUsername ?? '—'}
+                                                    {order.buyerName ?? order.buyerUsername ?? 'ï¿½'}
                                                 </td>
                                                 <td className="py-3 px-4">
                                                     <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border ${sc.color}`}>
                                                         {sc.icon}
-                                                        <span className="capitalize">{order.status.replace('_', ' ')}</span>
+                                                        <span className="capitalize">{(order.status ?? '').replace('_', ' ')}</span>
                                                     </span>
                                                 </td>
                                                 <td className="py-3 px-4 hidden md:table-cell">
@@ -329,7 +329,7 @@ export default function OrdersPage() {
                     {total > limit && (
                         <div className="flex items-center justify-between pt-2">
                             <p className="text-sm text-slate-400 dark:text-slate-500">
-                                Showing {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total}
+                                Showing {page * limit + 1}ï¿½{Math.min((page + 1) * limit, total)} of {total}
                             </p>
                             <div className="flex gap-2">
                                 <button
@@ -376,7 +376,7 @@ export default function OrdersPage() {
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${(statusConfigs[selectedOrder.status] ?? defaultStatus).color}`}>
                                                 {(statusConfigs[selectedOrder.status] ?? defaultStatus).icon}
-                                                <span className="capitalize">{selectedOrder.status.replace('_', ' ')}</span>
+                                                <span className="capitalize">{(selectedOrder.status ?? '').replace('_', ' ')}</span>
                                             </span>
                                             <span className="text-xs text-slate-400 dark:text-slate-500 capitalize">{selectedOrder.channel}</span>
                                         </div>

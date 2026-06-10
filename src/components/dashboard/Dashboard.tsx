@@ -209,7 +209,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
-                            {summary?.totalListings != null ? summary.totalListings.toLocaleString() : '—'}
+                            {summary?.totalListings != null ? summary.totalListings.toLocaleString() : 'ï¿½'}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">All listings</p>
                     </CardContent>
@@ -222,7 +222,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold text-emerald-500">
-                            {summary?.activeListings != null ? summary.activeListings.toLocaleString() : '—'}
+                            {summary?.activeListings != null ? summary.activeListings.toLocaleString() : 'ï¿½'}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                             {summary?.channelBreakdown?.length
@@ -239,7 +239,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
-                            {summary?.revenue != null ? fmtCurrency(summary.revenue) : '—'}
+                            {summary?.revenue != null ? fmtCurrency(summary.revenue) : 'ï¿½'}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center mt-1">
                             <ArrowUpRight className="h-3 w-3 text-emerald-500 mr-1" />
@@ -367,7 +367,7 @@ export default function Dashboard() {
                                             <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Channel Instances</p>
                                             {multiStore.instances.map((inst) => (
                                                 <div key={`${inst.channel}-${inst.syncStatus}`} className="flex items-center justify-between text-xs">
-                                                    <span className="text-slate-400 dark:text-slate-400 capitalize">{inst.channel} · {inst.syncStatus}</span>
+                                                    <span className="text-slate-400 dark:text-slate-400 capitalize">{inst.channel} ï¿½ {inst.syncStatus}</span>
                                                     <span className="text-slate-500 dark:text-slate-300 font-mono">{inst.count}</span>
                                                 </div>
                                             ))}
@@ -394,7 +394,7 @@ export default function Dashboard() {
                                     {multiStore.aiEnhancements.map((ai) => (
                                         <div key={`${ai.enhancementType}-${ai.status}`} className="flex items-center justify-between text-xs">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-slate-500 dark:text-slate-300 capitalize">{ai.enhancementType.replace(/_/g, ' ')}</span>
+                                                <span className="text-slate-500 dark:text-slate-300 capitalize">{(ai.enhancementType ?? '').replace(/_/g, ' ')}</span>
                                                 <Badge variant={
                                                     ai.status === 'approved' ? 'success' :
                                                     ai.status === 'rejected' ? 'destructive' :
@@ -426,7 +426,7 @@ export default function Dashboard() {
                                         <div key={`${d.operationType}-${d.channel}`} className="flex items-center justify-between text-xs">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-slate-500 dark:text-slate-300 capitalize">{d.channel}</span>
-                                                <span className="text-slate-400 dark:text-slate-500">{d.operationType.replace(/_/g, ' ')}</span>
+                                                <span className="text-slate-400 dark:text-slate-500">{(d.operationType ?? '').replace(/_/g, ' ')}</span>
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <span className="text-slate-400 dark:text-slate-400 font-mono">{d.count}</span>
@@ -541,7 +541,7 @@ export default function Dashboard() {
                                         <p className="text-xs text-slate-400 dark:text-slate-500">By Type</p>
                                         {aiStats.byType.map((t) => (
                                             <div key={t.type} className="flex items-center justify-between text-xs">
-                                                <span className="text-slate-500 dark:text-slate-300 capitalize">{t.type.replace(/_/g, ' ')}</span>
+                                                <span className="text-slate-500 dark:text-slate-300 capitalize">{(t.type ?? '').replace(/_/g, ' ')}</span>
                                                 <span className="text-slate-400 dark:text-slate-400 font-mono">{t.count}</span>
                                             </div>
                                         ))}
@@ -576,16 +576,16 @@ export default function Dashboard() {
                                 <tbody>
                                     {outOfStock.slice(0, 5).map((item) => (
                                         <tr key={item.listingId} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? '—'}</td>
-                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? '—'}</td>
+                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? 'ï¿½'}</td>
+                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? 'ï¿½'}</td>
                                             <td className="py-2 pr-4 text-right text-red-500 font-bold">{item.available}</td>
                                             <td className="py-2 text-right"><Badge variant="destructive">Out of Stock</Badge></td>
                                         </tr>
                                     ))}
                                     {lowStock.slice(0, 5).map((item) => (
                                         <tr key={item.listingId} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? '—'}</td>
-                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? '—'}</td>
+                                            <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? 'ï¿½'}</td>
+                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? 'ï¿½'}</td>
                                             <td className="py-2 pr-4 text-right text-amber-500 font-bold">{item.available}</td>
                                             <td className="py-2 text-right"><Badge variant="warning">Low Stock</Badge></td>
                                         </tr>

@@ -22,6 +22,7 @@ import {
   useCancelPipelineJob,
   downloadPipelineFile,
 } from '../../lib/pipelineApi';
+import { useNavigate } from 'react-router-dom';
 import type { PipelineJob, PipelineJobStatus } from '../../types/pipeline';
 import { PIPELINE_STAGES } from '../../types/pipeline';
 import ImageEnrichmentPanel from './ImageEnrichmentPanel';
@@ -48,7 +49,7 @@ const STATUS_COLORS: Record<string, string> = {
 function statusBadge(status: string) {
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-slate-600 text-slate-500 dark:text-slate-300'}`}>
-      {status.replace(/_/g, ' ')}
+      {(status ?? '').replace(/_/g, ' ')}
     </span>
   );
 }
@@ -290,6 +291,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   const { data } = usePipelineJob(jobId);
   const retryMutation = useRetryPipelineJob();
   const cancelMutation = useCancelPipelineJob();
+  const navigate = useNavigate();
   const job = data?.job;
   const { canDownload: optimizationAllowsDownload } = useOptimizationDownloadGate(job);
   // Elapsed time counter
@@ -536,6 +538,15 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
       <button onClick={onBack} className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 transition">
         &larr; Back to history
       </button>
+
+      {job.status === 'completed' && (
+        <button
+          onClick={() => navigate(`/catalog?pipelineJobIds=${job.id}`)}
+          className="ml-4 text-sm text-blue-400 hover:text-blue-300 transition inline-flex items-center gap-1"
+        >
+          View in Catalog &rarr;
+        </button>
+      )}
     </div>
   );
 }

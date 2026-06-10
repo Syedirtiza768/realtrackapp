@@ -7,7 +7,15 @@ import { applyListingGuards } from '../listing-guards.js';
 import { AiRunLogService } from '../ai-run-log.service.js';
 import { ListingGuardAuditService } from '../listing-guard-audit.service.js';
 import { renderPrompt } from '../prompts/index.js';
-import { DATA_ENRICHMENT_PROMPT } from '../prompts/data-enrichment.prompt.js';
+import {
+  MOTORS_ENRICHMENT_COMPACT_PROMPT,
+  MOTORS_ENRICHMENT_FULL_PROMPT,
+} from '../prompts/motors-enrichment.prompt.js';
+import { EnrichmentCacheService } from '../enrichment-cache.service.js';
+import {
+  compactJson,
+  getEnrichmentProfile,
+} from '../token-optimization.js';
 import type { OpenAiChatResponse } from '../openai.types.js';
 import type { RunMode } from '../ai-routing-policy.types.js';
 
@@ -49,9 +57,13 @@ export class EnrichmentPipeline {
     private readonly validator: ListingQualityValidator,
     private readonly runLogService: AiRunLogService,
     private readonly guardAudit: ListingGuardAuditService,
+    private readonly enrichmentCache: EnrichmentCacheService,
     private readonly config: ConfigService,
   ) {
-    this.promptVersion = this.config.get('AI_PROMPT_VERSION', 'enrichment-v1');
+    this.promptVersion = this.config.get(
+      'AI_PROMPT_VERSION',
+      'enrichment-v2-compact',
+    );
   }
 
   /**
@@ -77,6 +89,51 @@ export class EnrichmentPipeline {
     };
     partContext.partType = partContext.partType ?? inferPartType(partContext);
 
+    const thresholds = this.modelRouter.getThresholds();
+    const profile = getEnrichmentProfile(
+      partContext.price,
+      thresholds.lowValueMaxPrice,
+    );
+    const mpn = partContext.partNumber;
+    const cached = this.enrichmentCache.get(
+      mpn,
+      this.promptVersion,
+      profile,
+    );
+    if (cached) {
+      this.logger.debug(
+        `Enrichment cache hit for MPN ${mpn} profile=${profile}`,
+      );
+      return this.buildResultFromParsed(cached, partContext, {
+        model: 'cache',
+        lane: 'cache',
+        escalated: false,
+        guardFixes: [],
+        rawResponse: {
+          content: cached,
+          rawContent: compactJson(cached),
+          model: 'cache',
+          finishReason: 'cache_hit',
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          latencyMs: 0,
+          estimatedCostUsd: 0,
+        },
+        validation: await this.validator.validateWithTaxonomy(cached, {
+          partNumber: partContext.partNumber,
+          donorMake: this.str(rawData.donorMake ?? rawData.brand) ?? 'mercedes',
+        }, {
+          compactProfile: profile === 'compact',
+          ebayCategoryId:
+            this.str(rawData.ebayCategoryId ?? rawData.categoryId) ?? null,
+        }),
+      });
+    }
+
+    const promptTemplate =
+      profile === 'compact'
+        ? MOTORS_ENRICHMENT_COMPACT_PROMPT
+        : MOTORS_ENRICHMENT_FULL_PROMPT;
+
     const route = this.modelRouter.selectRoute(partContext, options?.runMode ?? 'default');
     let attempt = 1;
     let model = route.model;
@@ -84,8 +141,8 @@ export class EnrichmentPipeline {
     let escalated = false;
 
     const runOnce = async (useModel: string, useLane: string, useAttempt: number) => {
-      const { systemPrompt, userPrompt } = renderPrompt(DATA_ENRICHMENT_PROMPT, {
-        rawData: JSON.stringify(rawData, null, 2),
+      const { systemPrompt, userPrompt } = renderPrompt(promptTemplate, {
+        rawData: compactJson(rawData),
       });
 
       const response = await this.openai.chat({
@@ -94,8 +151,10 @@ export class EnrichmentPipeline {
         model: useModel,
         costLane: useLane,
         jsonMode: true,
-        temperature: DATA_ENRICHMENT_PROMPT.temperature,
-        maxTokens: DATA_ENRICHMENT_PROMPT.maxTokens,
+        temperature: promptTemplate.temperature,
+        ...(typeof promptTemplate.maxTokens === 'number'
+          ? { maxTokens: promptTemplate.maxTokens }
+          : {}),
       });
 
       let parsed = response.content as Record<string, unknown>;
@@ -132,7 +191,10 @@ export class EnrichmentPipeline {
       const validation = await this.validator.validateWithTaxonomy(
         parsed,
         srcPart,
-        { ebayCategoryId },
+        {
+          ebayCategoryId,
+          compactProfile: profile === 'compact',
+        },
       );
       await this.runLogService.logRun({
         sku: partContext.sku ?? null,
@@ -186,7 +248,39 @@ export class EnrichmentPipeline {
       }
     }
 
-    const result: EnrichmentResult = {
+    if (mpn) {
+      this.enrichmentCache.set(mpn, this.promptVersion, profile, parsed);
+    }
+
+    const result = this.buildResultFromParsed(parsed, partContext, {
+      model,
+      lane,
+      escalated,
+      guardFixes,
+      rawResponse: response,
+      validation,
+    });
+
+    this.logger.log(
+      `Enriched product: title="${result.title}" model=${model} profile=${profile} score=${validation.score} pass=${validation.pass} cost=$${response.estimatedCostUsd.toFixed(4)}`,
+    );
+
+    return result;
+  }
+
+  private buildResultFromParsed(
+    parsed: Record<string, unknown>,
+    partContext: { partNumber?: string; partType?: string },
+    meta: {
+      model: string;
+      lane: string;
+      escalated: boolean;
+      guardFixes: string[];
+      rawResponse: OpenAiChatResponse;
+      validation: { score: number; pass: boolean };
+    },
+  ): EnrichmentResult {
+    return {
       title: this.str(parsed.title),
       brand: this.str(parsed.brand),
       mpn: this.str(parsed.mpn),
@@ -210,20 +304,14 @@ export class EnrichmentPipeline {
       compatibility: Array.isArray(parsed.compatibility)
         ? (parsed.compatibility as Array<Record<string, unknown>>)
         : undefined,
-      validationScore: validation.score,
-      passedGate: validation.pass,
-      escalated,
-      model,
-      lane,
-      guardFixes,
-      rawResponse: response,
+      validationScore: meta.validation.score,
+      passedGate: meta.validation.pass,
+      escalated: meta.escalated,
+      model: meta.model,
+      lane: meta.lane,
+      guardFixes: meta.guardFixes,
+      rawResponse: meta.rawResponse,
     };
-
-    this.logger.log(
-      `Enriched product: title="${result.title}" model=${model} score=${validation.score} pass=${validation.pass} cost=$${response.estimatedCostUsd.toFixed(4)}`,
-    );
-
-    return result;
   }
 
   /**

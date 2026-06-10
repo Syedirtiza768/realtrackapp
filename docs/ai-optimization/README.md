@@ -31,6 +31,19 @@ errors, and localization stats in the Enrichment status panel (sourced from job
 Docker Compose mounts `./.env` at `/app/.env` so the pipeline child process and
 script file loader see `OPENAI_*` / `EBAY_*` keys in container runs.
 
+## Token optimization (2026-06-08)
+
+Models are unchanged. Token savings come from:
+
+- **Compact prompts** — `AI_PROMPT_VERSION=enrichment-v2-compact` (default when unset in pipeline)
+- **Year-range fitment** — AI returns `yearStart`/`yearEnd`; guards expand to per-year MVL rows
+- **Low-value SKUs** — price &lt; `AI_LOW_VALUE_MAX_PRICE` (default **50**): listing copy only, `compatibility: []`
+- **MPN cache** — `config/.enrichment-cache.json` (7-day TTL); report field `routing.enrichmentCacheHits`
+- **Localization** — AU/DE AI pass translates title/type/placement only; HTML description stays rule-based
+- **Vision** — `OPENAI_VISION_DETAIL=auto` (not `high`)
+
+No `max_tokens` caps were added on enrichment calls.
+
 ## Quick reference
 
 | Lane | Default model | Use when |

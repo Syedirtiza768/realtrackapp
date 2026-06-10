@@ -133,7 +133,7 @@ export class CatalogProductService {
 
     const saved = await this.productRepo.save(product);
 
-    // Sync changes to corresponding listing_record (matched by SKU + source)
+    // Sync changes to all corresponding listing_records (matched by SKU)
     await this.syncToListingRecord(saved);
 
     return saved;
@@ -146,36 +146,39 @@ export class CatalogProductService {
   }
 
   /**
-   * Sync catalog product changes to the corresponding listing_record.
+   * Sync catalog product changes to ALL listing_records matching this SKU.
+   * Shared field edits propagate to every marketplace variant (US, AU, DE).
    */
   private async syncToListingRecord(product: CatalogProduct): Promise<void> {
     if (!product.sku) return;
 
-    const listing = await this.listingRepo.findOneBy({ customLabelSku: product.sku });
-    if (!listing) return;
+    const listings = await this.listingRepo.findBy({ customLabelSku: product.sku });
+    if (!listings.length) return;
 
-    listing.title = product.title;
-    listing.description = product.description;
-    listing.startPrice = product.price != null ? String(product.price) : null;
-    listing.startPriceNum = product.price;
-    listing.quantity = product.quantity != null ? String(product.quantity) : null;
-    listing.quantityNum = product.quantity;
-    listing.itemPhotoUrl = product.imageUrls?.length ? product.imageUrls.join('|') : null;
-    listing.conditionId = product.conditionId;
-    listing.categoryId = product.categoryId;
-    listing.categoryName = product.categoryName;
-    listing.format = product.format;
-    listing.duration = product.duration;
-    listing.location = product.location;
-    listing.shippingProfileName = product.shippingProfile;
-    listing.returnProfileName = product.returnProfile;
-    listing.paymentProfileName = product.paymentProfile;
-    listing.cBrand = product.brand;
-    listing.cType = product.partType;
-    listing.cFeatures = product.features;
-    listing.cManufacturerPartNumber = product.mpn;
-    listing.cOeOemPartNumber = product.oemPartNumber;
+    for (const listing of listings) {
+      listing.title = product.title;
+      listing.description = product.description;
+      listing.startPrice = product.price != null ? String(product.price) : null;
+      listing.startPriceNum = product.price;
+      listing.quantity = product.quantity != null ? String(product.quantity) : null;
+      listing.quantityNum = product.quantity;
+      listing.itemPhotoUrl = product.imageUrls?.length ? product.imageUrls.join('|') : null;
+      listing.conditionId = product.conditionId;
+      listing.categoryId = product.categoryId;
+      listing.categoryName = product.categoryName;
+      listing.format = product.format;
+      listing.duration = product.duration;
+      listing.location = product.location;
+      listing.shippingProfileName = product.shippingProfile;
+      listing.returnProfileName = product.returnProfile;
+      listing.paymentProfileName = product.paymentProfile;
+      listing.cBrand = product.brand;
+      listing.cType = product.partType;
+      listing.cFeatures = product.features;
+      listing.cManufacturerPartNumber = product.mpn;
+      listing.cOeOemPartNumber = product.oemPartNumber;
+    }
 
-    await this.listingRepo.save(listing);
+    await this.listingRepo.save(listings);
   }
 }
