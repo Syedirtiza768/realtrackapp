@@ -88,7 +88,7 @@ RealTrackApp (DB/internal name: **listingpro**) is a multi-channel **automotive 
 
 ## Backend Modules (23)
 
-Registered in `backend/src/app.module.ts`: `auth`, `rbac`, `listings`, `health`, `storage`, `ingestion`, `catalog-import`, `fitment`, `channels`, `inventory`, `orders`, `dashboard`, `settings`, `notifications`, `common/scheduler`, `common/feature-flags`, `automation`, `templates`, `motors-intelligence`, `common/openai`, `pricing-intelligence`, `integrations/ebay`, `client-settings`, `listing-optimization`.
+Registered in `backend/src/app.module.ts`: `auth`, `rbac`, `listings`, `health`, `storage`, `ingestion`, `catalog-import`, `fitment`, `channels`, `inventory`, `orders`, `dashboard`, `settings`, `notifications`, `common/scheduler`, `common/feature-flags`, `automation`, `templates`, `motors-intelligence`, `common/openai`, `pricing-intelligence`, `integrations/ebay`, `client-settings`. Note: `listing-optimization` is imported transitively via `ingestion`, and `sellerpundit` is imported transitively via `integrations/ebay`.
 
 Per-module details: [/docs/backend/MODULE_MAP.md](../backend/MODULE_MAP.md).
 
@@ -126,7 +126,7 @@ Details: [INTEGRATIONS.md](INTEGRATIONS.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Database
 
-- PostgreSQL 16, TypeORM 0.3, ~79 entities, 21 migrations
+- PostgreSQL 16, TypeORM 0.3, 82 entities (78 unique tables), 27 migrations
 - Schema: [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md)
 - Entities auto-loaded via `autoLoadEntities`
 - `DB_SYNCHRONIZE=false` — schema changes via migrations only
@@ -135,7 +135,7 @@ Details: [INTEGRATIONS.md](INTEGRATIONS.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 ## Auth & RBAC
 
 - JWT bearer tokens (Passport JWT), bcrypt 12 rounds
-- 8 system roles, ~90 permissions (`module.action` format)
+- 8 system roles, 73 permissions (`module.action` format)
 - Source of truth: `backend/src/rbac/permission-registry.ts`
 - Full details: [AUTH_RBAC.md](AUTH_RBAC.md)
 
@@ -143,7 +143,7 @@ Details: [INTEGRATIONS.md](INTEGRATIONS.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 
 - Some controllers declare `@Controller('api/...')` on top of the global `api` prefix → routes resolve at `/api/api/...` (**Needs verification**)
 - Historical schema audit flags TEXT price columns, missing FKs, and tables not created by migrations
-- Frontend and backend tests are sparse (9 backend `.spec.ts`, 1 e2e)
+- Frontend and backend tests are sparse (24 backend `.spec.ts`, 0 e2e, 0 frontend)
 - eBay OAuth token refresh fragility against live API
 
 Full inventory: [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
@@ -163,4 +163,4 @@ Full inventory: [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
 
 ---
 
-*Consolidated & reorganized: 2026-06-06.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*

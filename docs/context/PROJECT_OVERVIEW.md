@@ -122,4 +122,4 @@ Full risk inventory: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ---
 
-*Last updated: 2026-05-29. Reorganized: 2026-06-06.*
+*Last updated: 2026-06-11. Reorganized: 2026-06-06.*

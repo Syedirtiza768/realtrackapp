@@ -8,7 +8,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Feature | Frontend route | Backend module | Status | Notes |
 |---------|---------------|----------------|--------|-------|
 | Authentication (login/register/me) | `/login`, `/register`, `/forgot-password` | `auth` | Implemented | JWT; `forgot-password` flow **Needs verification** (no reset endpoint seen) |
-| RBAC roles & permissions admin | `/settings/users`, `/settings/permissions` | `rbac` | Implemented | 8 roles, ~90 permissions, registry-driven |
+| RBAC roles & permissions admin | `/settings/users`, `/settings/permissions` | `rbac` | Implemented | 8 roles, 73 permissions, registry-driven |
 | White-label / branding | `/settings/client` | `client-settings` | Implemented | Super-admin only; public branding endpoint |
 | Dashboard / KPIs | `/` | `dashboard` | Implemented | Aggregation via BullMQ; cache table |
 | Listing editor (create/edit) | `/listings/new`, `/listings/:id/edit` | `listings` | Implemented | AI-assisted; split preview |
@@ -51,8 +51,8 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 
 | Status | Count |
 |--------|-------|
-| Implemented | ~20 |
-| Partial | ~18 |
+| Implemented | ~25 |
+| Partial | ~13 |
 | Missing | 0 |
 | Needs Verification | 2 |
 
@@ -69,4 +69,4 @@ The app shell shows "RealTrackApp"; the login screen / DB name use "ListingPro".
 
 ---
 
-*Reorganized: 2026-06-06.*
+*Reorganized: 2026-06-06. Updated: 2026-06-11.*

@@ -5,7 +5,7 @@
 
 ## Overall Status
 
-**Active Development** — RealTrackApp is a substantial, actively developed full-stack platform (NestJS + React + PostgreSQL + Redis/BullMQ) focused on **eBay** automotive-parts listing, catalog import, AI enrichment, fitment, inventory, orders, and multi-store management. The architecture is mature (23 backend modules, ~79 entities, 21 migrations, ~16 BullMQ queues, RBAC with 8 roles / ~90 permissions). Maturity of *individual features* varies — see [FEATURE_REGISTRY.md](FEATURE_REGISTRY.md).
+**Active Development** — RealTrackApp is a substantial, actively developed full-stack platform (NestJS + React + PostgreSQL + Redis/BullMQ) focused on **eBay** automotive-parts listing, catalog import, AI enrichment, fitment, inventory, orders, and multi-store management. The architecture is mature (23 backend modules, 82 entities, 27 migrations, 14 BullMQ queues, RBAC with 8 roles / 73 permissions). Maturity of *individual features* varies — see [FEATURE_REGISTRY.md](FEATURE_REGISTRY.md).
 
 ## What Exists Now
 
@@ -59,14 +59,14 @@
 ## What Is Broken
 
 - **Double `/api` prefix** on two controllers (feature-flags, export-rules) — routes resolve at `/api/api/...`
-- **Sparse automated tests** — 9 backend specs, 1 e2e, 0 frontend tests
+- **Sparse automated tests** — 24 backend specs (unit only), 0 e2e, 0 frontend tests
 - **DB typing issues** — TEXT-typed price/quantity columns partially fixed by migration
 - **Missing foreign keys** on some entity relationships
 - **Branding inconsistency** — "RealTrackApp" (shell) vs "ListingPro" (login/DB)
 
 ## Latest Session Summary
 
-**2026-06-06** — Documentation reorganization: moved all docs into the Self-Sustaining AI Project Context framework structure (creating `/docs/context/`, `/docs/planning/`, `/docs/frontend/`, `/docs/backend/` directories, consolidating 37+ existing files into 37 target files, marking old locations with redirect headers).
+**2026-06-11** — Comprehensive codebase analysis: verified all documentation counts, identified discrepancies (migrations 21→27, entities ~79→82, permissions ~90→73, specs 9→24, e2e 1→0), discovered DEBUG JWT logging security issue, confirmed double `/api` prefix bug, verified SellerPundit integration (19 files), AI routing system (39 files), and listing-optimization pipeline (transitively imported). Created `CURRENT_TRUE_STATE_OF_APPLICATION.md`. Updated all documentation files with corrected counts.
 
 ## Current Assumptions
 
@@ -82,4 +82,4 @@ See [NEXT_STEPS.md](NEXT_STEPS.md) for prioritized work items. Top priority: ver
 
 ---
 
-*Snapshot date: 2026-05-29. Reorganized: 2026-06-06.*
+*Snapshot date: 2026-06-11. Reorganized: 2026-06-06.*

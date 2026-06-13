@@ -124,8 +124,8 @@ Upload/CSV/Image
 
 - **Engine**: PostgreSQL 16
 - **ORM**: TypeORM 0.3
-- **Entities**: ~79 entity files across 23 modules
-- **Migrations**: 21 files in `backend/src/migrations/`
+- **Entities**: 82 entity files across 23 modules
+- **Migrations**: 27 files in `backend/src/migrations/`
 - **Key Tables**:
   - `users`, `roles`, `permissions` (auth/RBAC)
   - `listing_records`, `listing_revisions` (listings)
@@ -256,6 +256,19 @@ npm run dev                        # :3911 (proxies /api → :4191)
 
 ## 12. Previous Session Learnings
 
+### From Codebase Analysis (2026-06-11)
+
+1. **Migration count is 27** (not 21 as previously documented)
+2. **Entity count is 82** (not ~79 as previously documented)
+3. **Permission count is 73** (not ~90 as previously documented)
+4. **Test count is 24 backend specs** (not 9 as previously documented), **0 e2e tests** (not 1)
+5. **DEBUG JWT logging** found in auth.service.ts and jwt.strategy.ts — must remove before production
+6. **SellerPundit integration** is fully implemented (19 files) — underdocumented
+7. **AI routing system** is sophisticated (39 files in common/openai/) — underdocumented
+8. **Listing-optimization module** is transitively imported via IngestionModule (not directly in app.module.ts)
+9. **PricingDashboard component** exists with API client but has no route (orphaned)
+10. **Double /api prefix** confirmed on feature-flag.controller.ts and export-rule.controller.ts
+
 ### From Codebase Analysis (2026-05-29)
 
 1. **Double `/api` prefix** exists in two controllers — verify before fixing
@@ -264,7 +277,7 @@ npm run dev                        # :3911 (proxies /api → :4191)
 4. **Branding inconsistency** — "RealTrackApp" vs "ListingPro" (DB name, login screen)
 5. **TEXT-typed price columns** — Partially fixed by migration, verify remaining
 6. **Missing foreign keys** — Historical issue, needs audit
-7. **Sparse tests** — 9 backend specs, 1 e2e, no frontend tests
+7. **Sparse tests** — 24 backend specs, 0 e2e, no frontend tests
 
 ### Documentation Set Created
 - `/docs/AGENT_SYSTEM_MEMORY.md` (this file) — Master entry point
@@ -382,4 +395,4 @@ See `/docs/KNOWN_GAPS_AND_RISKS.md` for full details. Critical items:
 
 ---
 
-*Last updated: 2026-05-29 by comprehensive codebase analysis*
+*Last updated: 2026-06-11 by comprehensive codebase analysis*

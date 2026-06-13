@@ -94,7 +94,7 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 
 ### Permissions
 
-~90 keys named `module.action` (e.g. `listings.view`, `catalog.import`, `ebay.publish`, `client_settings.manage`). Default-role buckets in the registry: `READ_ONLY`, `READ_WRITE`, `MANAGER_UP`, `ADMIN_UP`, `SUPER_ADMIN_ONLY`, `ALL_OPERATIONAL`.
+73 keys named `module.action` (e.g. `listings.view`, `catalog.import`, `ebay.publish`, `client_settings.manage`). Default-role buckets in the registry: `READ_ONLY`, `READ_WRITE`, `MANAGER_UP`, `ADMIN_UP`, `SUPER_ADMIN_ONLY`, `ALL_OPERATIONAL`.
 
 ### Permission Categories
 
@@ -220,4 +220,4 @@ Permissions returned from `GET /api/auth/me`.
 
 ---
 
-*Consolidated & reorganized: 2026-06-06.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*

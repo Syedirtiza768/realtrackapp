@@ -18,9 +18,9 @@ Ports: backend 4191 (`/api`), Vite dev 3911, Docker frontend 8050, pg 5432, redi
 
 ## Architecture at a glance
 
-- 23 backend NestJS modules; ~79 entities; 21 TypeORM migrations; ~16 BullMQ queues.
+- 23 backend NestJS modules; 82 entities (78 unique tables); 27 TypeORM migrations; 14 BullMQ queues.
 - Global guard stack: `ThrottlerGuard` → `JwtAuthGuard` → `PermissionsGuard`.
-- RBAC: 8 roles, ~90 permissions, defined in `backend/src/rbac/permission-registry.ts`.
+- RBAC: 8 roles, 73 permissions, defined in `backend/src/rbac/permission-registry.ts`.
 - Frontend: route table in `src/App.tsx`, per-domain API clients in `src/lib/*Api.ts`,
   JWT in `localStorage` (`mk_auth_token`).
 - Heavy work runs in BullMQ queues; some jobs scheduled via `@nestjs/schedule`.

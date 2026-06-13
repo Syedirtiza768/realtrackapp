@@ -33,6 +33,17 @@
 **Affected Areas**: Security  
 **Suggested Fix**: Add validation script, enforce pre-deploy checklist.
 
+### R3b: DEBUG JWT Logging
+
+**Type**: Security Concern  
+**Severity**: High  
+**Status**: Confirmed
+
+**Description**: `auth.service.ts` and `jwt.strategy.ts` log JWT secret prefixes and full tokens to console with `[DEBUG]` markers. Risk of token exposure in production logs.
+
+**Affected Areas**: Security  
+**Suggested Fix**: Gate behind `NODE_ENV=development` or remove entirely.
+
 ---
 
 ## High Priority Issues
@@ -43,7 +54,7 @@
 **Severity**: High  
 **Status**: Confirmed
 
-**Description**: 9 backend `.spec.ts` files, 1 e2e test, no meaningful frontend tests. Regressions go undetected, especially in auth/RBAC and eBay paths.
+**Description**: 24 backend `.spec.ts` files (unit only), 0 e2e tests, 0 frontend tests. Regressions go undetected, especially in auth/RBAC and eBay paths.
 
 **Suggested Fix**: Add tests for auth/RBAC, eBay OAuth flow, eBay publish/sync, catalog import pipeline, permission enforcement.
 
@@ -178,6 +189,7 @@
 | R1: Double /api prefix | Medium | Medium | Critical |
 | R2: Low test coverage | High | High | Critical |
 | R3: Default secrets | Medium | High | Critical |
+| R3b: DEBUG JWT logging | High | High | Critical |
 | R8: Weak tenant isolation | Medium | High | High |
 | R9: No JWT revocation | Medium | Medium | High |
 | R10: eBay OAuth fragility | Medium | High | High |
@@ -193,4 +205,4 @@
 
 ---
 
-*Last updated: 2026-05-29. Reorganized: 2026-06-06.*
+*Last updated: 2026-06-11. Reorganized: 2026-06-06.*

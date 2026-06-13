@@ -6,6 +6,13 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Added
+- **CURRENT_TRUE_STATE_OF_APPLICATION.md**: Comprehensive codebase analysis document covering architecture, database, APIs, frontend, backend, integrations, deployment, testing, and documentation accuracy. Generated 2026-06-11.
+
+### Fixed (Documentation)
+- **Corrected documentation counts**: Migrations (21→27), entities (~79→82), permissions (~90→73), backend specs (9→24), e2e tests (1→0). Updated across ARCHITECTURE.md, CONTEXT.md, CURRENT_STATE.md, KNOWN_ISSUES.md, AGENT_SYSTEM_MEMORY.md, DATABASE_SCHEMA.md, AUTH_RBAC.md, FEATURE_REGISTRY.md.
+- **Added new security finding**: DEBUG JWT logging in `auth.service.ts` and `jwt.strategy.ts` exposes full tokens to console. Added as R3b to KNOWN_ISSUES.md.
+
 ### Fixed
 - **Pipeline mandatory listing optimization stuck:** Catalog upsert after enrichment used
   camelCase column names in `ON CONFLICT DO UPDATE` (`brandNormalized` etc.) while PostgreSQL

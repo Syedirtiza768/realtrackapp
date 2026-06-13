@@ -1,6 +1,6 @@
 # Database Schema
 
-> **Source**: Consolidated from `docs/DATABASE_MAP.md` (513 lines, entity-focused) and `docs/architecture/database.md` (108 lines, engine/ORM config focused) — 2026-05-29.
+> **Source**: Consolidated from `docs/DATABASE_MAP.md` (513 lines, entity-focused) and `docs/architecture/database.md` (108 lines, engine/ORM config focused) — 2026-05-29. Updated: 2026-06-11.
 
 ---
 
@@ -35,7 +35,7 @@
 
 ---
 
-## Entities (~79 Entity Files)
+## Entities (82 Entity Files, 78 Unique Tables)
 
 Grouped by module:
 
@@ -174,7 +174,7 @@ Grouped by module:
 
 ## Migrations
 
-Location: `backend/src/migrations/` (21 files). `migrationsTransactionMode: 'each'`.
+Location: `backend/src/migrations/` (27 files). `migrationsTransactionMode: 'each'`.
 
 | Migration | Theme |
 |-----------|-------|
@@ -196,6 +196,11 @@ Location: `backend/src/migrations/` (21 files). `migrationsTransactionMode: 'eac
 | `RbacFoundation` | Roles/permissions tables |
 | `ClientSettings` | Client settings |
 | `SellerPunditExtensions` | SellerPundit integration |
+| `AddAiEnhancementConfidenceScore` | AI enhancement confidence |
+| `AiRunLogsAndRoutingPolicy` | AI routing system |
+| `AddComplianceScoreToAiRunLogs` | AI compliance scoring |
+| `AddListingRecordPipelineMarketplace` | Pipeline marketplace |
+| `AddOptimizationByMarketplace` | Optimization marketplace |
 
 Commands (`backend/`):
 ```bash
@@ -241,4 +246,4 @@ Entities with `@DeleteDateColumn` automatically exclude soft-deleted rows. Use `
 
 ---
 
-*Consolidated & reorganized: 2026-06-06.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*
