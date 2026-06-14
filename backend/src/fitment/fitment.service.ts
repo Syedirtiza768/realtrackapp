@@ -176,6 +176,7 @@ export class FitmentService {
    * Find all listings that fit a vehicle identified by VIN.
    * Uses decoded VIN → make/model/year to resolve fitments, then
    * returns the unique listing records attached to those fitments.
+   * When AI enrichment is available, uses enhanced data for broader matching.
    */
   async findListingsByVin(vin: string) {
     const decoded = await this.vinDecodeService.decode(vin);
@@ -214,13 +215,21 @@ export class FitmentService {
     }
 
     let listings = Array.from(listingsMap.values());
-    let matchStrategy: 'fitment' | 'fallback_text' = 'fitment';
+    let matchStrategy: 'fitment' | 'fallback_text' | 'ai_enriched' = 'fitment';
 
-    // Fallback for datasets where explicit fitment rows are missing:
-    // search listing records by extracted make/model and title/description hints.
+    // Fallback for datasets where explicit fitment rows are missing
     if (listings.length === 0) {
       listings = await this.findListingsByVehicleText(decoded.make, decoded.model, year);
       matchStrategy = 'fallback_text';
+    }
+
+    // Enhanced search using AI-enriched data: try knownFitment vehicles and commonParts
+    if (listings.length === 0 && decoded.aiEnriched && decoded.aiData) {
+      const aiListings = await this.findListingsByAiEnrichment(decoded);
+      if (aiListings.length > 0) {
+        listings = aiListings;
+        matchStrategy = 'ai_enriched';
+      }
     }
 
     return {
@@ -231,6 +240,61 @@ export class FitmentService {
       matchStrategy,
       listings,
     };
+  }
+
+  /**
+   * Search listings using AI-enriched data: knownFitment vehicles and commonParts keywords.
+   */
+  private async findListingsByAiEnrichment(decoded: any): Promise<ListingRecord[]> {
+    const aiData = decoded.aiData;
+    const listingsMap = new Map<string, ListingRecord>();
+
+    // Search by known compatible vehicles (e.g. "2015-2020 Lexus NX 200t")
+    if (aiData.knownFitment?.length) {
+      for (const fitment of aiData.knownFitment.slice(0, 5)) {
+        const parts = fitment.match(/(\d{4})?[-–]?(\d{4})?\s+(\w+)\s+(\w[\w\s]*)/);
+        if (parts) {
+          const [, yrStart, yrEnd, make, model] = parts;
+          const results = await this.findListingsByVehicleText(
+            make,
+            model?.trim(),
+            yrStart ? parseInt(yrStart, 10) : NaN,
+          );
+          for (const r of results) {
+            if (!listingsMap.has(r.id)) listingsMap.set(r.id, r);
+          }
+        }
+      }
+    }
+
+    // Search by common parts keywords combined with make/model
+    if (listingsMap.size === 0 && aiData.commonParts?.length) {
+      const searchTerms = [
+        `${decoded.make} ${decoded.model}`,
+        ...aiData.commonParts.slice(0, 5),
+      ];
+      for (const term of searchTerms) {
+        const qb = this.listingRepo
+          .createQueryBuilder('r')
+          .select([
+            'r.id', 'r.customLabelSku', 'r.title', 'r.cBrand', 'r.cType',
+            'r.categoryId', 'r.categoryName', 'r.startPrice', 'r.quantity',
+            'r.conditionId', 'r.itemPhotoUrl', 'r.cManufacturerPartNumber',
+            'r.cOeOemPartNumber', 'r.location', 'r.format', 'r.sourceFileName',
+            'r.importedAt', 'r.extractedMake', 'r.extractedModel',
+          ])
+          .where('r.title ILIKE :term', { term: `%${term}%` })
+          .orderBy('r.importedAt', 'DESC')
+          .limit(50);
+        const results = await qb.getMany();
+        for (const r of results) {
+          if (!listingsMap.has(r.id)) listingsMap.set(r.id, r);
+        }
+        if (listingsMap.size >= 100) break;
+      }
+    }
+
+    return Array.from(listingsMap.values());
   }
 
   private async findListingsByVehicleText(

@@ -144,7 +144,7 @@ export default function ImageEnrichmentPanel({
                 </Badge>
               )}
             </div>
-            {expanded ? <ChevronUp className="h-4 w-4 text-slate-400 dark:text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-400 dark:text-slate-500" />}
+            {expanded ? <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-500" />}
           </CardTitle>
         </CardHeader>
 
@@ -163,11 +163,11 @@ export default function ImageEnrichmentPanel({
             {/* Progress bar when enriching */}
             {enriching && progress && (
               <div>
-                <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
+                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
                   <span>Enriching images...</span>
                   <span>{Math.round((progress.processedParts / Math.max(progress.totalParts, 1)) * 100)}%</span>
                 </div>
-                <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                   <div
                     className="bg-purple-500 h-2 rounded-full transition-all animate-pulse"
                     style={{ width: `${(progress.processedParts / Math.max(progress.totalParts, 1)) * 100}%` }}
@@ -239,7 +239,7 @@ export default function ImageEnrichmentPanel({
 
             {/* No parts available */}
             {(!parts || parts.length === 0) && jobStatus !== 'completed' && (
-              <p className="text-sm text-slate-400 dark:text-slate-500">Image enrichment is available after the pipeline completes.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-500">Image enrichment is available after the pipeline completes.</p>
             )}
           </CardContent>
         )}
@@ -257,22 +257,22 @@ export default function ImageEnrichmentPanel({
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-slate-400 dark:text-slate-400">Confidence</p>
-                <p className="text-slate-600 dark:text-slate-200 font-medium">{(selectedResult.confidenceScore * 100).toFixed(0)}%</p>
+                <p className="text-slate-500 dark:text-slate-400">Confidence</p>
+                <p className="text-slate-700 dark:text-slate-200 font-medium">{(selectedResult.confidenceScore * 100).toFixed(0)}%</p>
               </div>
               <div>
-                <p className="text-slate-400 dark:text-slate-400">Total Images</p>
-                <p className="text-slate-600 dark:text-slate-200 font-medium">{(selectedResult.primaryImage ? 1 : 0) + selectedResult.galleryImages.length}</p>
+                <p className="text-slate-500 dark:text-slate-400">Total Images</p>
+                <p className="text-slate-700 dark:text-slate-200 font-medium">{(selectedResult.primaryImage ? 1 : 0) + selectedResult.galleryImages.length}</p>
               </div>
             </div>
 
             {/* Search queries used */}
             {selectedResult.searchQueries.length > 0 && (
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-400 mb-1">Search Queries Used</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Search Queries Used</p>
                 <div className="flex flex-wrap gap-1">
                   {selectedResult.searchQueries.map((q, i) => (
-                    <span key={i} className="px-2 py-0.5 bg-slate-700 text-slate-500 dark:text-slate-300 rounded text-xs">{q}</span>
+                    <span key={i} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">{q}</span>
                   ))}
                 </div>
               </div>
@@ -281,7 +281,7 @@ export default function ImageEnrichmentPanel({
             {/* Primary image */}
             {selectedResult.primaryImage && (
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-400 mb-1 flex items-center gap-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
                   <Star className="h-3 w-3 text-yellow-400" /> Primary Image (Hero)
                 </p>
                 <ImageCandidateCard image={selectedResult.primaryImage} />
@@ -291,7 +291,7 @@ export default function ImageEnrichmentPanel({
             {/* Gallery images */}
             {selectedResult.galleryImages.length > 0 && (
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-400 mb-1">Gallery Images</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Gallery Images</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {selectedResult.galleryImages.map((img, i) => (
                     <ImageCandidateCard key={i} image={img} compact />
@@ -303,12 +303,12 @@ export default function ImageEnrichmentPanel({
             {/* Source attribution */}
             {selectedResult.sourceAttribution.length > 0 && (
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-400 mb-1">Sources</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Sources</p>
                 <div className="space-y-1">
                   {selectedResult.sourceAttribution.map((src, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <Badge variant="secondary">{src.source}</Badge>
-                      <span className="text-slate-400 dark:text-slate-500 truncate">{src.url}</span>
+                      <span className="text-slate-500 dark:text-slate-500 truncate">{src.url}</span>
                     </div>
                   ))}
                 </div>
@@ -358,12 +358,12 @@ function ImageResultRow({
     <button
       onClick={onSelect}
       className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition ${
-        isSelected ? 'bg-purple-500/10 ring-1 ring-purple-500/30' : 'bg-slate-200/30 dark:bg-slate-700/30 hover:bg-slate-200/50 dark:bg-slate-700/50'
+        isSelected ? 'bg-purple-50 dark:bg-purple-500/10 ring-1 ring-purple-200 dark:ring-purple-500/30' : 'bg-slate-50 dark:bg-slate-700/30 hover:bg-slate-100 dark:bg-slate-700/50'
       }`}
     >
       <div className="flex items-center gap-3 min-w-0">
         {/* Thumbnail or placeholder */}
-        <div className="w-10 h-10 rounded bg-slate-700 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
           {hasImages ? (
             <ImageIcon className="h-5 w-5 text-green-400" />
           ) : result.skipped ? (
@@ -373,8 +373,8 @@ function ImageResultRow({
           )}
         </div>
         <div className="min-w-0">
-          <p className="text-sm text-slate-600 dark:text-slate-200 truncate">{result.partNumber}</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{result.title}</p>
+          <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{result.partNumber}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-500 truncate">{result.title}</p>
         </div>
       </div>
 
@@ -383,7 +383,7 @@ function ImageResultRow({
           <Badge variant="secondary">Skipped</Badge>
         ) : hasImages ? (
           <>
-            <span className="text-xs text-slate-400 dark:text-slate-400">{imageCount} img</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{imageCount} img</span>
             <ConfidenceBadge score={result.confidenceScore} />
           </>
         ) : (
@@ -395,7 +395,7 @@ function ImageResultRow({
               e.stopPropagation();
               onPreview(result.primaryImage!.url);
             }}
-            className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             title="Preview"
           >
             <Eye className="h-3.5 w-3.5" />
@@ -408,20 +408,20 @@ function ImageResultRow({
 
 function ImageCandidateCard({ image, compact }: { image: ImageCandidate; compact?: boolean }) {
   return (
-    <div className={`bg-slate-200/30 dark:bg-slate-700/30 rounded-lg border border-slate-600/50 ${compact ? 'p-2' : 'p-3'}`}>
+    <div className={`bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-600/50 ${compact ? 'p-2' : 'p-3'}`}>
       <div className="flex items-center justify-between mb-1">
         <Badge variant="secondary">{image.source}</Badge>
-        <span className="text-xs text-slate-400 dark:text-slate-500">{image.width}×{image.height}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-500">{image.width}×{image.height}</span>
       </div>
       <div className={`grid grid-cols-2 gap-1 text-xs ${compact ? '' : 'mt-2'}`}>
         <div>
-          <span className="text-slate-400 dark:text-slate-500">Relevance:</span>{' '}
+          <span className="text-slate-500 dark:text-slate-500">Relevance:</span>{' '}
           <span className={image.relevanceScore >= 0.8 ? 'text-green-400' : image.relevanceScore >= 0.6 ? 'text-yellow-400' : 'text-red-400'}>
             {(image.relevanceScore * 100).toFixed(0)}%
           </span>
         </div>
         <div>
-          <span className="text-slate-400 dark:text-slate-500">Quality:</span>{' '}
+          <span className="text-slate-500 dark:text-slate-500">Quality:</span>{' '}
           <span className={image.qualityScore >= 0.8 ? 'text-green-400' : image.qualityScore >= 0.6 ? 'text-yellow-400' : 'text-red-400'}>
             {(image.qualityScore * 100).toFixed(0)}%
           </span>
@@ -448,8 +448,8 @@ function ConfidenceBadge({ score }: { score: number }) {
 
 function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="p-2 rounded bg-slate-200/40 dark:bg-slate-700/40">
-      <p className="text-xs text-slate-400 dark:text-slate-400">{label}</p>
+    <div className="p-2 rounded bg-slate-50 dark:bg-slate-700/40">
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className={`text-sm font-semibold ${color}`}>{value}</p>
     </div>
   );

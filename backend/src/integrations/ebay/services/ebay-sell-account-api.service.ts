@@ -31,6 +31,7 @@ export class EbaySellAccountApiService {
     accessToken: string,
     baseUrl: string,
     marketplaceId: string,
+    signal?: AbortSignal,
   ): Promise<EbayPolicyListItem[]> {
     return this.listPaged<EbayPolicyListItem>(
       accessToken,
@@ -47,6 +48,7 @@ export class EbaySellAccountApiService {
           return { ebayPolicyId: id, name, isDefault, raw: row as Record<string, unknown> };
         });
       },
+      signal,
     );
   }
 
@@ -54,6 +56,7 @@ export class EbaySellAccountApiService {
     accessToken: string,
     baseUrl: string,
     marketplaceId: string,
+    signal?: AbortSignal,
   ): Promise<EbayPolicyListItem[]> {
     return this.listPaged<EbayPolicyListItem>(
       accessToken,
@@ -70,6 +73,7 @@ export class EbaySellAccountApiService {
           return { ebayPolicyId: id, name, isDefault, raw: row as Record<string, unknown> };
         });
       },
+      signal,
     );
   }
 
@@ -122,6 +126,7 @@ export class EbaySellAccountApiService {
     accessToken: string,
     baseUrl: string,
     marketplaceId: string,
+    signal?: AbortSignal,
   ): Promise<EbayPolicyListItem[]> {
     return this.listPaged<EbayPolicyListItem>(
       accessToken,
@@ -138,6 +143,7 @@ export class EbaySellAccountApiService {
           return { ebayPolicyId: id, name, isDefault, raw: row as Record<string, unknown> };
         });
       },
+      signal,
     );
   }
 
@@ -189,6 +195,7 @@ export class EbaySellAccountApiService {
     path: string,
     marketplaceId: string,
     mapPage: (data: unknown) => T[],
+    signal?: AbortSignal,
   ): Promise<T[]> {
     const http = this.client(baseUrl);
     const out: T[] = [];
@@ -206,6 +213,7 @@ export class EbaySellAccountApiService {
             limit,
             offset,
           },
+          signal,
         });
         const batch = mapPage(data).filter((p) => p.ebayPolicyId);
         out.push(...batch);

@@ -6,6 +6,16 @@ import { CatalogProduct } from '../catalog-import/entities/catalog-product.entit
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import type { ListingGenerationResult } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import {
+  buildGermanItemSpecifics,
+  buildGermanListingDescription,
+  buildGermanListingSubtitle,
+  buildGermanListingTitle,
+  type GermanListingInput,
+  isLikelyGermanText,
+  resolveMotorsCategoryFromPart,
+  validateGermanListing,
+} from '../channels/ebay/ebay-german-listing.util.js';
 
 export type Marketplace = 'US' | 'DE' | 'AU';
 export type ListingQualityProfile = 'max_seo_comprehensive' | 'balanced' | 'creative_exploration';
@@ -158,6 +168,8 @@ export class EnterpriseListingIntelligenceService {
             condition: product.conditionLabel ?? product.conditionId ?? 'Used',
             options: {
               temperature: this.getTemperatureForProfile(options.listingQualityProfile),
+              marketplace: options.marketplace,
+              sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
             },
           })),
         )
@@ -234,6 +246,8 @@ export class EnterpriseListingIntelligenceService {
         condition: product.conditionLabel ?? product.conditionId ?? 'Used',
         options: {
           temperature: this.getTemperatureForProfile(options.listingQualityProfile),
+          marketplace: options.marketplace,
+          sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
         },
       },
     ]);
@@ -252,8 +266,8 @@ export class EnterpriseListingIntelligenceService {
   ): Promise<EnterpriseListingResult> {
     const baseSpecifics = this.extractBaseSpecifics(product);
     const category = await this.resolveCategory(product);
-    const categoryId = category.categoryId;
-    const categoryName = category.categoryName;
+    let categoryId = category.categoryId;
+    let categoryName = category.categoryName;
     const requiredSpecificNames = await this.getRequiredAspectsSafe(categoryId);
 
     let mergedSpecifics = { ...baseSpecifics };
@@ -287,6 +301,41 @@ export class EnterpriseListingIntelligenceService {
       }
     }
 
+    if (marketplace === 'DE') {
+      const germanInput = this.toGermanListingInput(product, compatibilityValidRows);
+      const categoryHint = resolveMotorsCategoryFromPart(product.partType, product.placement);
+      if (categoryHint && categoryId && categoryHint.categoryId !== categoryId) {
+        const exteriorIds = new Set(['33697', '174105']);
+        if (categoryHint.categoryId === '33695' && exteriorIds.has(categoryId)) {
+          categoryId = categoryHint.categoryId;
+          categoryName = categoryHint.categoryName;
+        }
+      }
+
+      if (!isLikelyGermanText(optimizedTitle)) {
+        optimizedTitle = buildGermanListingTitle(germanInput);
+        aiTitleConfidence = Math.max(aiTitleConfidence, 0.88);
+      }
+      if (!subtitle) {
+        subtitle = buildGermanListingSubtitle(germanInput);
+      }
+      const plainDescLen = seoDescription.replace(/<[^>]+>/g, '').trim().length;
+      if (plainDescLen < 120 || !isLikelyGermanText(seoDescription)) {
+        seoDescription = buildGermanListingDescription(germanInput);
+        aiDescriptionConfidence = Math.max(aiDescriptionConfidence, 0.86);
+      }
+      mergedSpecifics = {
+        ...mergedSpecifics,
+        ...buildGermanItemSpecifics(germanInput),
+      };
+      specificsEvaluation = this.evaluateSpecifics(mergedSpecifics, requiredSpecificNames);
+      shortDescription = this.buildShortDescriptionFromAi(
+        [optimizedTitle.split(' ').slice(0, 8).join(' ')],
+        product,
+        marketplace,
+      );
+    }
+
     const imageAnalysis = this.evaluateImages(product.imageUrls);
     const complianceWarnings = this.buildComplianceWarnings({
       title: optimizedTitle,
@@ -297,6 +346,10 @@ export class EnterpriseListingIntelligenceService {
       imageCount: imageAnalysis.count,
       imageQuality: imageAnalysis.qualityScore,
       hasPrice: product.price != null && Number(product.price) > 0,
+      marketplace,
+      product,
+      description: seoDescription,
+      itemSpecifics: mergedSpecifics,
     });
 
     const errors = complianceWarnings.filter((i) => i.severity === 'error').length;
@@ -591,6 +644,10 @@ export class EnterpriseListingIntelligenceService {
     imageCount: number;
     imageQuality: number;
     hasPrice: boolean;
+    marketplace?: Marketplace;
+    product?: CatalogProduct;
+    description?: string;
+    itemSpecifics?: Record<string, string>;
   }): ComplianceWarning[] {
     const issues: ComplianceWarning[] = [];
     if (!input.title || input.title.length > 80) {
@@ -623,7 +680,74 @@ export class EnterpriseListingIntelligenceService {
     if (!input.hasPrice) {
       issues.push({ code: 'PRICE_MISSING', severity: 'error', field: 'price', message: 'Positive price is required for upload' });
     }
+
+    if (input.marketplace === 'DE' && input.product && input.description && input.itemSpecifics) {
+      const deValidation = validateGermanListing({
+        title: input.title,
+        description: input.description,
+        itemSpecifics: input.itemSpecifics,
+        categoryId: input.categoryId,
+        categoryName: input.product.categoryName,
+        partType: input.product.partType,
+        placement: input.product.placement,
+        mpn: input.product.mpn,
+        oemPartNumber: input.product.oemPartNumber,
+      });
+      for (const issue of deValidation.issues) {
+        issues.push({
+          code: issue.code,
+          severity: issue.severity,
+          field: issue.field,
+          message: issue.message,
+        });
+      }
+    }
+
     return issues;
+  }
+
+  private toGermanListingInput(
+    product: CatalogProduct,
+    fitmentRows: CompatibilityRow[],
+  ): GermanListingInput {
+    const decoded = product.donorVinDecoded as Record<string, unknown> | null;
+    const donorYear = decoded?.['year'] ? String(decoded['year']) : '';
+    const donorMake = decoded?.['make'] ? String(decoded['make']) : product.brand ?? '';
+    const donorModel = decoded?.['model'] ? String(decoded['model']) : '';
+    const donorVehicle = [donorYear, donorMake, donorModel].filter(Boolean).join(' ').trim() || undefined;
+
+    const years = fitmentRows
+      .map((r) => Number(r.year))
+      .filter((y) => Number.isFinite(y));
+    const yearRange =
+      years.length >= 2
+        ? `${Math.min(...years)}-${Math.max(...years)}`
+        : years.length === 1
+          ? String(years[0])
+          : donorYear || undefined;
+
+    return {
+      brand: product.brand,
+      model: donorModel || undefined,
+      partType: product.partType,
+      placement: product.placement,
+      mpn: product.mpn,
+      oemPartNumber: product.oemPartNumber ?? product.mpn,
+      condition: product.conditionLabel ?? product.conditionId,
+      material: product.material,
+      donorVehicle,
+      yearRange,
+      fitmentRows: fitmentRows.map((r) => ({
+        year: r.year,
+        make: r.make,
+        model: r.model,
+        trim: r.trim,
+      })),
+      fitmentConfirmed: fitmentRows.length > 0 && product.fitmentConfidence != null && Number(product.fitmentConfidence) >= 0.85,
+      sellerCountry: product.location?.toUpperCase().includes('DE') ? 'DE' : 'US',
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
+    };
   }
 
   private buildMissingDataReport(
@@ -671,6 +795,9 @@ export class EnterpriseListingIntelligenceService {
   }
 
   private buildFallbackTitle(product: CatalogProduct, marketplace: Marketplace): string {
+    if (marketplace === 'DE') {
+      return buildGermanListingTitle(this.toGermanListingInput(product, []));
+    }
     const parts = [
       product.brand,
       product.partType,
@@ -687,6 +814,12 @@ export class EnterpriseListingIntelligenceService {
     marketplace: Marketplace,
     compatibility: CompatibilityRow[],
   ): string {
+    if (marketplace === 'DE') {
+      return buildGermanListingDescription(
+        this.toGermanListingInput(product, compatibility),
+      );
+    }
+
     const compatibilityText = compatibility.length
       ? compatibility.slice(0, 10).map((c) => `${c.year} ${c.make} ${c.model}${c.trim ? ` ${c.trim}` : ''}`).join(', ')
       : 'Please verify fitment before purchase.';
@@ -721,10 +854,8 @@ export class EnterpriseListingIntelligenceService {
 
   private localizeText(text: string, marketplace: Marketplace): string {
     if (marketplace === 'DE') {
-      return text
-        .replace(/\bWarranty\b/g, 'Garantie')
-        .replace(/\bShipping\b/g, 'Versand')
-        .replace(/\breturns?\b/gi, 'Rueckgabe');
+      if (isLikelyGermanText(text)) return text;
+      return text;
     }
     if (marketplace === 'AU') {
       return text

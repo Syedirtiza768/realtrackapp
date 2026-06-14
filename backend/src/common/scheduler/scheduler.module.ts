@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { SchedulerService } from './scheduler.service.js';
 import { PricingIntelligenceModule } from '../../pricing-intelligence/pricing-intelligence.module.js';
+import { SellerpunditModule } from '../../integrations/sellerpundit/sellerpundit.module.js';
+import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 
 /**
  * SchedulerModule — Centralized cron-based job scheduling.
@@ -22,7 +25,9 @@ import { PricingIntelligenceModule } from '../../pricing-intelligence/pricing-in
       { name: 'dashboard' },
       { name: 'channels' },
     ),
+    TypeOrmModule.forFeature([ConnectedEbayAccount]),
     PricingIntelligenceModule,
+    SellerpunditModule,
   ],
   providers: [SchedulerService],
 })

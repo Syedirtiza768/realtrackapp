@@ -137,7 +137,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       await this.pipelineOutputImages.mirrorImagesInOutputDir(jobId, outputDir);
 
       // Save enriched listings to catalog_products + listing_records
-      await this.saveToCatalog(jobId, outputDir);
+      await this.saveToCatalog(jobId, outputDir, job.data.originalFilename);
 
       await this.updateStatus(jobId, 'completed');
 
@@ -464,9 +464,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   /**
    * Parse all marketplace output XLSX files and save each listing row to catalog_products + listing_records.
    */
-  private async saveToCatalog(jobId: string, outputDir: string): Promise<void> {
+  private async saveToCatalog(jobId: string, outputDir: string, originalFilename?: string): Promise<void> {
     for (const marketplace of ['US', 'AU', 'DE'] as const) {
-      await this.saveMarketplaceToCatalog(jobId, outputDir, marketplace);
+      await this.saveMarketplaceToCatalog(jobId, outputDir, marketplace, originalFilename);
     }
   }
 
@@ -478,6 +478,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     jobId: string,
     outputDir: string,
     marketplace: 'US' | 'AU' | 'DE',
+    originalFilename?: string,
   ): Promise<void> {
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
     const mktFile = files.find(f => {
@@ -666,7 +667,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           shippingProfile: get(row, iShipping) || null,
           returnProfile: get(row, iReturn) || null,
           paymentProfile: get(row, iPayment) || null,
-          sourceFile: mktFile,
+          sourceFile: originalFilename ?? mktFile,
           sourceRow: i,
           pipelineJobId: jobId,
         });

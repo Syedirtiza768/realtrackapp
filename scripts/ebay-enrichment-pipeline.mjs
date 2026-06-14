@@ -37,6 +37,13 @@ import {
   getEnrichmentProfile,
   getLowValueMaxPrice,
 } from './lib/token-optimization.mjs';
+import {
+  buildGermanBasicDescription,
+  buildGermanItemSpecifics,
+  buildGermanSeoTitle,
+  isLikelyGermanText,
+  resolveMotorsCategoryFromPart,
+} from './lib/german-listing.mjs';
 
 // ── HTTP connection pooling — reuse TCP sockets across requests ──
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 15, maxFreeSockets: 5 });
@@ -892,6 +899,39 @@ function chunk(arr, size) {
   return chunks;
 }
 
+/**
+ * Scan a text string for VIN patterns and return the first match.
+ * Detects:
+ *   - "VIN: 1HGBH41JXMN109186" or "VIN:1HGBH41JXMN109186"
+ *   - "VIN 1HGBH41JXMN109186"
+ *   - Standalone 17-char alphanumeric strings (excl. I, O, Q)
+ */
+function extractVinFromText(text) {
+  if (!text) return '';
+  const s = String(text);
+
+  // Pattern 1: "VIN" label followed by 17-char code (with optional separator)
+  const labelMatch = s.match(/\bVIN\b[\s:=\-]*([A-HJ-NPR-Z0-9]{17})\b/i);
+  if (labelMatch) return labelMatch[1].toUpperCase();
+
+  // Pattern 2: Standalone 17-char VIN-like string (not part of a URL or longer token)
+  const standaloneMatch = s.match(/(?<![A-HJ-NPR-Z0-9])([A-HJ-NPR-Z0-9]{17})(?![A-HJ-NPR-Z0-9])/i);
+  if (standaloneMatch) return standaloneMatch[1].toUpperCase();
+
+  return '';
+}
+
+/**
+ * Scan an array of text values for a VIN and return the first match.
+ */
+function findVinInRow(values) {
+  for (const val of values) {
+    const vin = extractVinFromText(val);
+    if (vin) return vin;
+  }
+  return '';
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  NHTSA VIN DECODER
 // ═══════════════════════════════════════════════════════════════════════
@@ -1252,10 +1292,12 @@ async function getCategoryAspects(categoryId) {
 // ═══════════════════════════════════════════════════════════════════════
 
 const CATEGORY_KEYWORDS = [
-  // Doors & related
+  // Interior door trim — before generic/exterior door matches
+  { kw: ['armrest', 'armlehne', 'türverkleidung', 'door armrest', 'door finisher', 'inner panel'], id: '33695', name: 'Interior Door Panels & Parts' },
+  { kw: ['interior door', 'door moulding', 'door molding', 'door trim', 'innen'], id: '33695', name: 'Interior Door Panels & Parts' },
+  // Doors & related (exterior before complete assembly)
+  { kw: ['exterior door panel', 'door skin', 'exterior door', 'door shell'], id: '33697', name: 'Exterior Door Panels & Frames' },
   { kw: ['complete door', 'door assembly', 'door front', 'door rear', 'driver door', "driver's door", 'door body-in-white', 'door, body'], id: '174105', name: 'Doors & Door Parts' },
-  { kw: ['door panel', 'door skin', 'exterior door'], id: '33697', name: 'Exterior Door Panels & Frames' },
-  { kw: ['interior door', 'door moulding', 'door trim', 'door armrest', 'door finisher', 'inner panel'], id: '33695', name: 'Interior Door Panels & Parts' },
   { kw: ['door handle', 'handle strip'], id: '174106', name: 'Door Handles' },
   { kw: ['door hinge', 'hinge upper', 'hinge lower', 'hinge front'], id: '174107', name: 'Door Hinges' },
   { kw: ['door lock', 'door latch', 'lock actuator', 'system latch', 'lock with code', 'central locking', 'd gate'], id: '174108', name: 'Door Lock Actuators, Latches & Related' },
@@ -1332,6 +1374,9 @@ const CATEGORY_KEYWORDS = [
 ];
 
 function fallbackCategoryMatch(partName, note) {
+  const hint = resolveMotorsCategoryFromPart(partName, note);
+  if (hint) return hint;
+
   const text = `${partName} ${note}`.toLowerCase();
   for (const entry of CATEGORY_KEYWORDS) {
     if (entry.kw.some(kw => text.includes(kw))) {
@@ -1368,16 +1413,42 @@ function parseInputFile(filePath) {
 
     if (isGridxFormat) {
       // GridX Connect format: row 0 = info, row 1 = headers, row 2+ = data
-      const gxHeaders = row1Values;
+      // Determine which row contains the actual headers.
+      // Variant A: Row 0 = info/metadata, Row 1 = headers, Row 2+ = data
+      // Variant B: Row 0 = headers, Row 1 = category/info row, Row 2+ = data
+      const gridxColCheck = ['part number', 'price', 'image urls', 'sku'];
+      const row1HeaderCount = gridxColCheck.filter(c => row1Values.includes(c)).length;
+      const row0HeaderCount = gridxColCheck.filter(c => row0Headers.includes(c)).length;
+
+      let gxHeaders, dataStartRow;
+      if (row1HeaderCount >= 2) {
+        // Variant A: Row 1 has the headers
+        gxHeaders = row1Values;
+        dataStartRow = 2;
+      } else if (row0HeaderCount >= 2) {
+        // Variant B: Row 0 has the headers, Row 1 is a category/info row
+        gxHeaders = row0Headers;
+        dataStartRow = 1;
+      } else {
+        // Fallback: try Row 1
+        gxHeaders = row1Values;
+        dataStartRow = 2;
+      }
+
       const gxColMap = buildGridxColumnMap(gxHeaders);
       const vehicleInfo = parseVehicleFromSheetName(sheetName);
 
       let sheetParts = 0;
-      for (let i = 2; i < rawData.length; i++) {
+      for (let i = dataStartRow; i < rawData.length; i++) {
         const row = rawData[i];
         if (!row || !row.some(c => c != null && c !== '')) continue;
 
         const part = extractGridxPart(row, gxColMap, sheetName, vehicleInfo);
+        // Skip category/header rows — these have text only in the first cell
+        // with no other data columns filled (no price, images, etc.)
+        const nonEmptyCells = row.filter(c => c != null && String(c).trim() !== '').length;
+        if (nonEmptyCells <= 1) continue;
+        if (!part.partNumber && !part.sku && !part.price) continue;
         if (part.partName || part.partNumber) {
           allParts.push(part);
           sheetParts++;
@@ -1424,6 +1495,10 @@ function detectGridxFormat(row0Headers, row1Values) {
   const gridxCols = ['image urls', 'vehicle make', 'weight major', 'package length', 'package width', 'package depth'];
   const matchCount = gridxCols.filter(col => row1Values.includes(col)).length;
   if (matchCount >= 2) return true;
+
+  // Check if row 0 has GridX-specific columns (variant: headers in row 0, data starts at row 2)
+  const row0GridxMatch = gridxCols.filter(col => row0Headers.includes(col)).length;
+  if (row0GridxMatch >= 2) return true;
 
   // Check if row 0 doesn't look like standard headers but row 1 does
   const standardCols = ['sku', 'brand', 'make', 'model', 'vin', 'category', 'part number', 'name', 'price'];
@@ -1512,8 +1587,11 @@ function extractGridxPart(row, colMap, sheetName, vehicleInfo) {
   const desc = getVal(colMap.description);
   const shortName = extractPartNameFromDescription(desc, vehicleInfo);
 
+  // Scan all row text for VIN patterns
+  const detectedVin = findVinInRow(row.map(c => clean(c)));
+
   return {
-    vin: sheetName,    // Use sheet name as VIN placeholder (VIN decode will skip non-VIN strings)
+    vin: detectedVin || sheetName,    // Use detected VIN or sheet name as placeholder
     brand: getVal(colMap.make) || vehicleInfo.make,
     model: vehicleInfo.model,
     sku: getVal(colMap.sku),
@@ -1766,6 +1844,7 @@ function buildColumnMap(headers) {
     sku: -1, brand: -1, model: -1, vin: -1,
     category: -1, partNumber: -1, partName: -1,
     note: -1, code: -1, price: -1, quantity: -1,
+    images: -1, make: -1,
   };
 
   for (let i = 0; i < headers.length; i++) {
@@ -1784,6 +1863,10 @@ function buildColumnMap(headers) {
     if (h === 'code') map.code = i;
     if (h === 'price' || h === 'real price' || h === 'unit price' || h === 'sell price') map.price === -1 && (map.price = i);
     if (h === 'q' || h === 'qty' || h === 'quantity') map.quantity === -1 && (map.quantity = i);
+    // Image URL column — pipe-separated or single URL
+    if (h === 'image urls' || h === 'images' || h === 'image url' || h === 'picurl' || h === 'item photo url') map.images === -1 && (map.images = i);
+    // Vehicle make (for GridX-style files parsed as standard format)
+    if (h === 'vehicle make' || h === 'make') map.make === -1 && (map.make = i);
   }
 
   // Handle variant layouts:
@@ -1828,8 +1911,12 @@ function extractPart(row, colMap, sheetVin) {
   // Try to parse vehicle info from description when no VIN column exists
   const descVehicle = parseVehicleFromDescription(partName || note, brand);
 
+  // Scan all row text for VIN patterns if no VIN column value exists
+  const colVin = getVal(colMap.vin);
+  const detectedVin = colVin || findVinInRow(row.map(c => clean(c)));
+
   const part = {
-    vin: getVal(colMap.vin) || sheetVin,
+    vin: detectedVin || sheetVin,
     brand: brand,
     model: getVal(colMap.model),
     sku: getVal(colMap.sku) || getVal(colMap.category),
@@ -1844,6 +1931,17 @@ function extractPart(row, colMap, sheetVin) {
   // Attach quantity if available
   if (colMap.quantity >= 0) {
     part._quantity = parseInt(row[colMap.quantity]) || 1;
+  }
+
+  // Attach image URLs if available (pipe-separated in the input file)
+  const rawImages = getVal(colMap.images);
+  if (rawImages) {
+    part._gridx = { ...(part._gridx || {}), images: rawImages };
+  }
+  // Attach vehicle make if available (GridX-style files parsed as standard format)
+  const vehicleMake = getVal(colMap.make);
+  if (vehicleMake && !part.brand) {
+    part.brand = vehicleMake;
   }
 
   // Attach parsed vehicle info from description
@@ -2792,10 +2890,10 @@ const MARKETPLACE_TAB_SHELLS = {
     tabs: ['Zahlungsrichtlinie', 'Versandrichtlinie', 'Rückgaberichtlinie', 'Bearbeitungszeit', 'Internationale Käufer'],
     policies: [
       '- Wir akzeptieren ausschließlich die bei eBay angebotenen Online-Zahlungsmethoden.',
-      '- Wir versenden weltweit mit DHL, FedEx oder Aramex.',
+      '- <strong>Artikelstandort: Vereinigte Staaten (USA).</strong> Internationaler Versand nach Deutschland und in viele weitere Länder (z. B. DHL, FedEx).',
+      '- Die Lieferzeit kann variieren. Einfuhrzölle, Steuern und Gebühren sind nicht im Artikel- oder Versandpreis enthalten — Käuferpflicht.',
       '- 14-tägige Rückgabe möglich. Bitte klären Sie alle Fragen vor dem Kauf.',
-      '- Alle Pakete werden innerhalb von 3 Werktagen versendet.',
-      '- Einfuhrzölle, Steuern und Gebühren sind nicht im Artikel- oder Versandpreis enthalten. Diese Kosten trägt der Käufer. Bitte erkundigen Sie sich vor dem Kauf bei Ihrem Zollamt.',
+      '- Versand in der Regel innerhalb von 3–5 Werktagen nach Zahlungseingang.',
     ],
   },
 };
@@ -2903,7 +3001,7 @@ async function localizeBatchForMarketplace(batchParts, marketplace, locale) {
   }));
 
   const localeGuide = marketplace === 'DE'
-    ? 'Translate into natural German for eBay.de. Keep part numbers and chassis codes unchanged. Title max 80 chars.'
+    ? `Schreibe natürliches Deutsch für eBay.de Gebrauchtteile. Keine wörtliche Übersetzung. Vermeide "gebraucht OE", "Genuine OEM", englische Positionswörter. Nutze z. B. Armlehne, hinten links, Original gebraucht, Teilenummer. Titel max. 80 Zeichen. Teilenummern unverändert lassen.`
     : 'Australian English spelling (colour, metre, organise). Title max 80 chars. Keep part numbers unchanged.';
 
   const systemPrompt = `Localize eBay Motors listing fields for ${marketplace}. ${localeGuide}
@@ -3127,6 +3225,46 @@ function validateAndFix(parts) {
       fixes++;
     }
 
+    // German marketplace copy quality (rule-based + AI fallback)
+    if (part._localized?.DE) {
+      const vehicle = getVehicleInfo(part, vinCache);
+      const de = part._localized.DE;
+      const placement = extractPlacement(part.note || '');
+      if (!isLikelyGermanText(de.title)) {
+        de.title = buildGermanSeoTitle({
+          vehicle,
+          part,
+          partNumber: part.partNumber,
+          placement,
+        });
+        fixes++;
+      }
+      if (!de.description || de.description.length < 80 || !isLikelyGermanText(de.description)) {
+        de.description = buildGermanBasicDescription({
+          part,
+          vehicle,
+          partNumber: part.partNumber,
+          placement,
+        });
+        fixes++;
+      }
+      de.itemSpecifics = mergeAiSpecificsOnly(
+        buildGermanItemSpecifics({ part, vehicle, partNumber: part.partNumber, placement }),
+        de.itemSpecifics || {},
+      );
+    }
+
+    // Interior vs exterior category correction
+    const catHint = resolveMotorsCategoryFromPart(part.partName, part.note);
+    if (catHint && part._category?.categoryId) {
+      const exteriorIds = new Set(['33697', '174105']);
+      if (catHint.categoryId === '33695' && exteriorIds.has(String(part._category.categoryId))) {
+        part._category = catHint;
+        REPORT.validationFixes.push({ sku: part.sku, field: 'category', fix: `corrected to ${catHint.name}` });
+        fixes++;
+      }
+    }
+
     // Track missing required specifics
     const missing = [];
     if (!e.brand) missing.push('Brand');
@@ -3334,12 +3472,49 @@ function expandFitments(parts, vinData) {
     const decoded = vinData.get(part.vin);
 
     if (!vehicle.make || !vehicle.model || !vehicle.year) {
-      const ebayFitment = getEbayFitmentModelFields(vehicle.make, vehicle.model, vehicle.trim);
-      part._fitments = vehicle.year ? [{
-        year: vehicle.year, make: normalizeBrand(vehicle.make), model: ebayFitment.model,
-        trim: ebayFitment.trim || '', engine: '', submodel: '', bodyType: decoded?.bodyClass || '', notes: '',
-      }] : [];
-      REPORT.fitment.noFitment.push(part.sku || part.partNumber);
+      // Even without complete VIN data, AI enrichment may have generated compatibility entries
+      const aiCompat = part._enriched?.compatibility;
+      const fitments = [];
+      const seen = new Set();
+
+      if (Array.isArray(aiCompat) && aiCompat.length > 0) {
+        for (const c of aiCompat) {
+          if (!c.make || !c.model) continue;
+          const aiFields = getEbayFitmentModelFields(c.make, c.model, c.trim);
+          const yStart = parseInt(c.yearStart) || parseInt(c.year) || 0;
+          const yEnd = parseInt(c.yearEnd) || yStart;
+          if (!yStart) continue;
+          for (let y = yStart; y <= yEnd; y++) {
+            addUniqueFitment(fitments, seen, {
+              year: String(y),
+              make: normalizeBrand(c.make),
+              model: aiFields.model,
+              trim: aiFields.trim || c.trim || '',
+              engine: c.engine || '',
+              submodel: c.chassisCode || '',
+              bodyType: c.bodyType || '',
+              notes: c.notes || '',
+            });
+          }
+        }
+        if (fitments.length > 0) aiInterchangeUsed++;
+      }
+
+      // If still no fitments, try partial vehicle info
+      if (fitments.length === 0) {
+        const ebayFitment = getEbayFitmentModelFields(vehicle.make, vehicle.model, vehicle.trim);
+        if (vehicle.year) {
+          addUniqueFitment(fitments, seen, {
+            year: vehicle.year, make: normalizeBrand(vehicle.make || ''), model: ebayFitment.model || '',
+            trim: ebayFitment.trim || '', engine: '', submodel: '', bodyType: decoded?.bodyClass || '', notes: '',
+          });
+        }
+        if (fitments.length === 0) {
+          REPORT.fitment.noFitment.push(part.sku || part.partNumber);
+        }
+      }
+
+      part._fitments = fitments.slice(0, 400);
       generateFitmentOutput(part);
       continue;
     }
@@ -3373,22 +3548,28 @@ function expandFitments(parts, vinData) {
     }
 
     // ── AI interchange / compatibility (merge — do not replace platform years) ──
+    // AI returns yearStart/yearEnd ranges; expand each to individual year rows
     const aiCompat = part._enriched?.compatibility;
     if (Array.isArray(aiCompat) && aiCompat.length > 0) {
       let added = 0;
       for (const c of aiCompat) {
-        if (!c.year || !c.make || !c.model) continue;
+        if (!c.make || !c.model) continue;
         const aiFields = getEbayFitmentModelFields(c.make, c.model, c.trim);
-        if (addUniqueFitment(fitments, seen, {
-          year: String(c.year),
-          make: normalizeBrand(c.make),
-          model: aiFields.model,
-          trim: aiFields.trim || c.trim || '',
-          engine: c.engine || '',
-          submodel: c.chassisCode || '',
-          bodyType: c.bodyType || '',
-          notes: c.notes || '',
-        })) added++;
+        const yStart = parseInt(c.yearStart) || parseInt(c.year) || 0;
+        const yEnd = parseInt(c.yearEnd) || yStart;
+        if (!yStart) continue;
+        for (let y = yStart; y <= yEnd; y++) {
+          if (addUniqueFitment(fitments, seen, {
+            year: String(y),
+            make: normalizeBrand(c.make),
+            model: aiFields.model,
+            trim: aiFields.trim || c.trim || '',
+            engine: c.engine || '',
+            submodel: c.chassisCode || '',
+            bodyType: c.bodyType || '',
+            notes: c.notes || '',
+          })) added++;
+        }
       }
       if (added > 0) aiInterchangeUsed++;
     }

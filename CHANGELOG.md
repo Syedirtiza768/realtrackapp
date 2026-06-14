@@ -14,6 +14,19 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Added new security finding**: DEBUG JWT logging in `auth.service.ts` and `jwt.strategy.ts` exposes full tokens to console. Added as R3b to KNOWN_ISSUES.md.
 
 ### Fixed
+- **German (EBAY_DE) listing quality:** Native German title/description generation
+  (`ebay-german-listing.util.ts`) replaces word-substitution localization. DE AI prompt,
+  interior-vs-exterior category correction (e.g. door armrest → Interior Door Panels),
+  expanded German item specifics (`Hersteller`, `Einbauposition`, `Universelle Kompatibilität`),
+  US-seller transparency in DE shipping copy, and pre-publish DE validation rules.
+- **EBAY_DE SellerPundit publish auth + Hersteller errors:** Direct eBay Inventory API fallback
+  now localizes item specifics (`Brand` → `Hersteller`) for German marketplace listings.
+  SellerPundit store sync probes each imported token against eBay Inventory API (not Identity,
+  which returns 404 without scope) so `connection_status` reflects eBay acceptance, not only
+  SellerPundit connectivity. Pre-publish validation live-checks SellerPundit tokens and blocks
+  with `reconnect_sellerpundit_ebay` when eBay returns invalid access token. Publish failures
+  after invalid-token retry mark the account `reconnect_required` with guidance to refresh eBay
+  OAuth inside SellerPundit admin (RealTrack re-sync alone cannot fix tokens issued to SP's app).
 - **Pipeline mandatory listing optimization stuck:** Catalog upsert after enrichment used
   camelCase column names in `ON CONFLICT DO UPDATE` (`brandNormalized` etc.) while PostgreSQL
   expects snake_case (`brand_normalized`), so products never saved and optimization ran on 0

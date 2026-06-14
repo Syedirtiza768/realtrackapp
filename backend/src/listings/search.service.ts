@@ -67,6 +67,8 @@ export interface SearchItem {
   cFeatures: string | null;
   pEpid: string | null;
   pUpc: string | null;
+  marketplace: string | null;
+  pipelineJobId: string | null;
   /** FTS relevance score (0-1+), null if no search query */
   relevanceScore: number | null;
   /** Headline with <mark> tags around matched terms */
@@ -179,6 +181,8 @@ export class SearchService {
       'r.cFeatures',
       'r.pEpid',
       'r.pUpc',
+      'r.marketplace',
+      'r.pipelineJobId',
     ]);
 
     /* -- Full-text search scoring ------------------------------ */
@@ -349,6 +353,8 @@ export class SearchService {
       cFeatures: row.r_cFeatures ?? null,
       pEpid: row.r_pEpid ?? null,
       pUpc: row.r_pUpc ?? null,
+      marketplace: row.r_marketplace ?? null,
+      pipelineJobId: row.r_pipelineJobId ?? row.r_pipeline_job_id ?? null,
       relevanceScore: hasQuery
         ? parseFloat(row.relevanceScore ?? '0')
         : null,

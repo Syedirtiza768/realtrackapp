@@ -14,6 +14,7 @@ import { tagSellerpunditPlatformError } from './sellerpundit-publish.util.js';
 import { sanitizePublishListingText } from '../../channels/ebay/ebay-listing-text.util.js';
 import { sanitizeEbayImageUrls } from '../../channels/ebay/ebay-listing-images.util.js';
 import { mapToEbayConditionEnum } from '../../channels/ebay/ebay-listing-condition.util.js';
+import { localizeAspectName } from '../../channels/ebay/ebay-listing-aspects.util.js';
 import {
   isLikelyEbayRestPolicyId,
   isPartsAccessoriesCompliantReturnPolicy,
@@ -162,7 +163,7 @@ export class SellerpunditListingAdapter {
     const currency = req.currency ?? this.registry.currencyForMarketplace(marketplaceId);
 
     const itemSpecifics = Object.entries(req.aspects ?? {}).map(([name, values]) => ({
-      name,
+      name: localizeAspectName(name, marketplaceId),
       value: Array.isArray(values) ? values.join(', ') : String(values),
     }));
 

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VinCache } from './entities/vin-cache.entity.js';
+import { OpenAiService } from '../common/openai/openai.service.js';
 
 /* ── Types ── */
 
@@ -20,15 +21,30 @@ export interface VinDecodeResult {
   plantCountry: string;
   vehicleType: string;
   raw: Record<string, string>;
+  aiEnriched?: boolean;
+  aiData?: {
+    engineDescription?: string;
+    transmission?: string;
+    mpg?: string;
+    horsepower?: string;
+    torque?: string;
+    seatingCapacity?: string;
+    wheelbase?: string;
+    curbWeight?: string;
+    commonParts?: string[];
+    knownFitment?: string[];
+    description?: string;
+  };
 }
 
 /**
- * VinDecodeService — Decode VINs using the free NHTSA vPIC API.
+ * VinDecodeService — Decode VINs using NHTSA vPIC + AI enrichment.
  *
- * Results are cached in a `vin_cache` table to avoid repeated API calls.
- * No API key required.
+ * NHTSA provides free baseline decode. When the response is incomplete
+ * (missing model, trim, engine, etc.), OpenRouter AI fills in the gaps
+ * using VIN pattern analysis and automotive knowledge.
  *
- * @see https://vpic.nhtsa.dot.gov/api/
+ * Results are cached in a `vin_cache` table (30-day TTL).
  */
 @Injectable()
 export class VinDecodeService {
@@ -44,11 +60,12 @@ export class VinDecodeService {
   constructor(
     @InjectRepository(VinCache)
     private readonly cacheRepo: Repository<VinCache>,
+    private readonly openai: OpenAiService,
   ) {}
 
   /**
    * Decode a VIN to structured vehicle data.
-   * Returns cached result if available, otherwise calls NHTSA.
+   * Returns cached result if available, otherwise calls NHTSA + AI enrichment.
    */
   async decode(vin: string): Promise<VinDecodeResult> {
     const normalizedVin = vin.trim().toUpperCase();
@@ -78,7 +95,18 @@ export class VinDecodeService {
       data?.Results ?? [];
 
     const raw = this.buildRawMap(results);
-    const decoded = this.normalize(normalizedVin, raw);
+    let decoded = this.normalize(normalizedVin, raw);
+
+    // AI enrichment when NHTSA returns incomplete data
+    const isIncomplete = !decoded.model || !decoded.trim || !decoded.engineCylinders;
+    if (isIncomplete) {
+      try {
+        this.logger.log(`NHTSA decode incomplete for ${normalizedVin}, enriching via AI...`);
+        decoded = await this.enrichWithAI(decoded);
+      } catch (err: any) {
+        this.logger.warn(`AI enrichment failed for ${normalizedVin}: ${err.message}`);
+      }
+    }
 
     // Upsert cache
     await this.cacheRepo.upsert(
@@ -109,6 +137,123 @@ export class VinDecodeService {
     if (decoded.trim) filter['Trim'] = decoded.trim;
 
     return filter;
+  }
+
+  /* ─── AI Enrichment ─── */
+
+  /**
+   * Use OpenRouter AI to fill in missing vehicle data from VIN pattern.
+   */
+  private async enrichWithAI(decoded: VinDecodeResult): Promise<VinDecodeResult> {
+    const nhtsaSummary = [
+      decoded.year && `Year: ${decoded.year}`,
+      decoded.make && `Make: ${decoded.make}`,
+      decoded.model && `Model: ${decoded.model}`,
+      decoded.trim && `Trim: ${decoded.trim}`,
+      decoded.bodyClass && `Body: ${decoded.bodyClass}`,
+      decoded.driveType && `Drive: ${decoded.driveType}`,
+      decoded.engineCylinders && `Cylinders: ${decoded.engineCylinders}`,
+      decoded.engineDisplacementL && `Displacement: ${decoded.engineDisplacementL}L`,
+      decoded.fuelType && `Fuel: ${decoded.fuelType}`,
+      decoded.vehicleType && `Type: ${decoded.vehicleType}`,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    const systemPrompt = `You are an automotive VIN decoder expert. Given a VIN and any partial NHTSA decode data, return a JSON object with comprehensive vehicle information.
+
+Return ONLY valid JSON with this exact structure:
+{
+  "make": "string",
+  "model": "string",
+  "trim": "string",
+  "year": "string",
+  "bodyClass": "string (e.g. SUV, Sedan, Pickup, Coupe)",
+  "driveType": "string (e.g. AWD, FWD, RWD, 4WD)",
+  "engineCylinders": "string (e.g. 4, 6, 8)",
+  "engineDisplacementL": "string (e.g. 2.0, 3.5)",
+  "engineDescription": "string (e.g. 2.0L Turbo I-4)",
+  "fuelType": "string (e.g. Gasoline, Diesel, Hybrid)",
+  "transmission": "string (e.g. 8-speed Automatic, CVT, 6-speed Manual)",
+  "mpg": "string (e.g. 24 city / 30 highway)",
+  "horsepower": "string (e.g. 235 hp)",
+  "torque": "string (e.g. 258 lb-ft)",
+  "seatingCapacity": "string",
+  "wheelbase": "string (e.g. 105.1 in)",
+  "curbWeight": "string (e.g. 3,940 lbs)",
+  "plantCountry": "string",
+  "vehicleType": "string",
+  "commonParts": ["string array of 5-10 common aftermarket parts for this vehicle"],
+  "knownFitment": ["string array of known compatible vehicle years/models sharing parts"],
+  "description": "brief 1-2 sentence description of this vehicle"
+}
+
+Be precise. Use real specifications. If unsure about a field, use an empty string.`;
+
+    const userPrompt = `Decode this VIN comprehensively:
+VIN: ${decoded.vin}
+Partial NHTSA data: ${nhtsaSummary || 'No data available'}
+
+Provide the full vehicle specification.`;
+
+    const response = await this.openai.chat({
+      systemPrompt,
+      userPrompt,
+      jsonMode: true,
+      temperature: 0.1,
+      maxTokens: 1500,
+      costLane: 'vin-enrichment',
+    });
+
+    let aiData: any;
+    try {
+      aiData = typeof response.content === 'string'
+        ? JSON.parse(response.content)
+        : response.content;
+    } catch {
+      this.logger.warn('Failed to parse AI VIN enrichment response');
+      return decoded;
+    }
+
+    if (!aiData || typeof aiData !== 'object') {
+      return decoded;
+    }
+
+    // Merge AI data into decoded result, preferring AI values for empty fields
+    const enriched: VinDecodeResult = {
+      ...decoded,
+      year: decoded.year || aiData.year || '',
+      make: decoded.make || aiData.make || '',
+      model: decoded.model || aiData.model || '',
+      trim: decoded.trim || aiData.trim || '',
+      bodyClass: decoded.bodyClass || aiData.bodyClass || '',
+      driveType: decoded.driveType || aiData.driveType || '',
+      engineCylinders: decoded.engineCylinders || aiData.engineCylinders || '',
+      engineDisplacementL: decoded.engineDisplacementL || aiData.engineDisplacementL || '',
+      fuelType: decoded.fuelType || aiData.fuelType || '',
+      plantCountry: decoded.plantCountry || aiData.plantCountry || '',
+      vehicleType: decoded.vehicleType || aiData.vehicleType || '',
+      aiEnriched: true,
+      aiData: {
+        engineDescription: aiData.engineDescription || '',
+        transmission: aiData.transmission || '',
+        mpg: aiData.mpg || '',
+        horsepower: aiData.horsepower || '',
+        torque: aiData.torque || '',
+        seatingCapacity: aiData.seatingCapacity || '',
+        wheelbase: aiData.wheelbase || '',
+        curbWeight: aiData.curbWeight || '',
+        commonParts: aiData.commonParts || [],
+        knownFitment: aiData.knownFitment || [],
+        description: aiData.description || '',
+      },
+    };
+
+    this.logger.log(
+      `AI enriched VIN ${decoded.vin}: ${enriched.make} ${enriched.model} ${enriched.trim} ${enriched.year}`,
+    );
+
+    return enriched;
   }
 
   /* ─── Private helpers ─── */

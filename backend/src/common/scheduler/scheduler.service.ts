@@ -2,7 +2,13 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { PriceMonitorService } from '../../pricing-intelligence/price-monitor.service.js';
+import { SellerpunditPolicySyncService } from '../../integrations/sellerpundit/sellerpundit-policy-sync.service.js';
+import { SellerpunditTokenSyncService } from '../../integrations/sellerpundit/sellerpundit-token-sync.service.js';
+import { SellerpunditAuthService } from '../../integrations/sellerpundit/sellerpundit-auth.service.js';
+import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 
 /**
  * Centralized scheduler that enqueues jobs to existing BullMQ queues.
@@ -29,6 +35,11 @@ export class SchedulerService {
     private readonly dashboardQueue: Queue,
     @InjectQueue('channels')
     private readonly channelsQueue: Queue,
+    @InjectRepository(ConnectedEbayAccount)
+    private readonly accountRepo: Repository<ConnectedEbayAccount>,
+    private readonly spPolicySync: SellerpunditPolicySyncService,
+    private readonly spTokenSync: SellerpunditTokenSyncService,
+    private readonly spAuth: SellerpunditAuthService,
     @Optional()
     private readonly priceMonitor?: PriceMonitorService,
   ) {}
@@ -169,5 +180,62 @@ export class SchedulerService {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Scheduled competitor price collection failed: ${msg}`);
     }
+  }
+
+  /* ─── SellerPundit: Policy & Token Refresh every 8 hours ─── */
+
+  @Cron('0 */8 * * *', { name: 'sellerpundit-policy-sync' })
+  async scheduleSellerpunditPolicySync(): Promise<void> {
+    const accounts = await this.accountRepo.find({
+      where: { connectionSource: 'sellerpundit' },
+    });
+    if (!accounts.length) {
+      this.logger.debug('No SellerPundit accounts — skipping policy sync');
+      return;
+    }
+
+    this.logger.log(
+      `SellerPundit auto-sync: refreshing policies for ${accounts.length} account(s)`,
+    );
+
+    let ok = 0;
+    let failed = 0;
+
+    for (const account of accounts) {
+      try {
+        await this.spTokenSync.ensureFreshAccessToken(account.id, { force: true });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(
+          `SellerPundit token refresh failed for account ${account.id} (${account.accountDisplayName ?? account.ebayUserId}): ${msg}`,
+        );
+      }
+
+      try {
+        const result = await this.spPolicySync.syncPolicies(
+          account.id,
+          account.organizationId,
+        );
+        if (result.ok) {
+          ok++;
+          this.logger.log(
+            `SellerPundit policies synced for ${account.accountDisplayName ?? account.id}: ${result.synced} policy row(s)`,
+          );
+        } else {
+          failed++;
+          this.logger.warn(
+            `SellerPundit policy sync returned not-ok for ${account.id}: ${result.message}`,
+          );
+        }
+      } catch (e: unknown) {
+        failed++;
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.error(
+          `SellerPundit policy sync failed for account ${account.id} (${account.accountDisplayName ?? account.ebayUserId}): ${msg}`,
+        );
+      }
+    }
+
+    this.logger.log(`SellerPundit auto-sync complete: ${ok} ok, ${failed} failed`);
   }
 }

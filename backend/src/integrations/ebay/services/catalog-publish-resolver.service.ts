@@ -105,7 +105,11 @@ export class CatalogPublishResolverService {
       title: catalogProduct?.title || listingRecord?.title || '',
       description:
         catalogProduct?.description ?? listingRecord?.description ?? null,
-      brand: catalogProduct?.brand ?? listingRecord?.cBrand ?? null,
+      brand:
+        catalogProduct?.brand ??
+        listingRecord?.cBrand ??
+        listingRecord?.manufacturerName ??
+        null,
       mpn:
         catalogProduct?.mpn ?? listingRecord?.cManufacturerPartNumber ?? null,
       partType: catalogProduct?.partType ?? listingRecord?.cType ?? null,

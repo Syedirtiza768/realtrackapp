@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OpenAiService } from '../openai.service.js';
 import { renderPrompt } from '../prompts/index.js';
 import { LISTING_GENERATION_PROMPT } from '../prompts/listing-generation.prompt.js';
+import { LISTING_GENERATION_DE_PROMPT } from '../prompts/listing-generation-de.prompt.js';
 import type { OpenAiChatResponse } from '../openai.types.js';
 
 /**
@@ -47,14 +48,21 @@ export class ListingGenerationPipeline {
     condition: string,
     options?: {
       temperature?: number;
+      marketplace?: 'US' | 'DE' | 'AU';
+      sellerCountry?: string;
     },
   ): Promise<ListingGenerationResult> {
+    const marketplace = options?.marketplace ?? 'US';
+    const promptTemplate =
+      marketplace === 'DE' ? LISTING_GENERATION_DE_PROMPT : LISTING_GENERATION_PROMPT;
+
     const { systemPrompt, userPrompt } = renderPrompt(
-      LISTING_GENERATION_PROMPT,
+      promptTemplate,
       {
         productData: JSON.stringify(productData),
         categoryName,
         condition,
+        sellerCountry: options?.sellerCountry ?? 'US',
       },
     );
 
@@ -62,9 +70,9 @@ export class ListingGenerationPipeline {
       systemPrompt,
       userPrompt,
       jsonMode: true,
-      temperature: options?.temperature ?? LISTING_GENERATION_PROMPT.temperature,
-      ...(typeof LISTING_GENERATION_PROMPT.maxTokens === 'number'
-        ? { maxTokens: LISTING_GENERATION_PROMPT.maxTokens }
+      temperature: options?.temperature ?? promptTemplate.temperature,
+      ...(typeof promptTemplate.maxTokens === 'number'
+        ? { maxTokens: promptTemplate.maxTokens }
         : {}),
     });
 
@@ -114,6 +122,8 @@ export class ListingGenerationPipeline {
       condition: string;
       options?: {
         temperature?: number;
+        marketplace?: 'US' | 'DE' | 'AU';
+        sellerCountry?: string;
       };
     }[],
   ): Promise<ListingGenerationResult[]> {

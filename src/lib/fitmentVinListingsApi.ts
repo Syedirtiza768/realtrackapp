@@ -37,10 +37,24 @@ export interface VinListingsResponse {
     fuelType: string;
     plantCountry: string;
     vehicleType: string;
+    aiEnriched?: boolean;
+    aiData?: {
+      engineDescription?: string;
+      transmission?: string;
+      mpg?: string;
+      horsepower?: string;
+      torque?: string;
+      seatingCapacity?: string;
+      wheelbase?: string;
+      curbWeight?: string;
+      commonParts?: string[];
+      knownFitment?: string[];
+      description?: string;
+    };
   };
   totalFitments: number;
   totalListings: number;
-  matchStrategy: 'fitment' | 'fallback_text';
+  matchStrategy: 'fitment' | 'fallback_text' | 'ai_enriched';
   listings: VinListingRecord[];
 }
 

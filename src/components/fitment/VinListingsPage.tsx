@@ -32,7 +32,7 @@ export default function VinListingsPage() {
   };
 
   const vehicleSummary = data?.vehicle
-    ? `${data.vehicle.year || '—'} ${data.vehicle.make || ''} ${data.vehicle.model || ''}`.trim()
+    ? `${data.vehicle.year || '?'} ${data.vehicle.make || ''} ${data.vehicle.model || ''} ${data.vehicle.trim || ''}`.trim()
     : '';
 
   return (
@@ -87,7 +87,7 @@ export default function VinListingsPage() {
         <CardContent className="p-0">
           {isLoading && (
             <div className="flex items-center justify-center py-12 gap-2 text-slate-400 dark:text-slate-500">
-              <Loader2 size={20} className="animate-spin" /> Fetching listings for VIN…
+              <Loader2 size={20} className="animate-spin" /> Fetching listings for VIN...
             </div>
           )}
 
@@ -111,6 +111,7 @@ export default function VinListingsPage() {
 
           {!isLoading && data && (
             <div className="p-4 space-y-4">
+              {/* Vehicle summary card */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border border-slate-200 dark:border-slate-800 rounded-lg bg-white/60 dark:bg-slate-900/60 px-3 py-3 sm:px-4 sm:py-3">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5">
@@ -125,8 +126,17 @@ export default function VinListingsPage() {
                   <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                     Match mode:{' '}
                     <span className="text-slate-500 dark:text-slate-300">
-                      {data.matchStrategy === 'fitment' ? 'Exact fitment mapping' : 'Vehicle text fallback'}
+                      {data.matchStrategy === 'fitment'
+                        ? 'Exact fitment mapping'
+                        : data.matchStrategy === 'ai_enriched'
+                          ? 'AI-enhanced search'
+                          : 'Vehicle text fallback'}
                     </span>
+                    {data.vehicle.aiEnriched && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                        AI Enriched
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-xs text-slate-400 dark:text-slate-400 flex flex-wrap gap-3">
@@ -134,13 +144,125 @@ export default function VinListingsPage() {
                     <span className="font-semibold text-slate-600 dark:text-slate-200">{data.totalListings}</span>{' '}
                     listing{data.totalListings === 1 ? '' : 's'}
                   </span>
-                  <span className="hidden sm:inline">•</span>
+                  <span className="hidden sm:inline">&middot;</span>
                   <span>
                     <span className="font-semibold text-slate-600 dark:text-slate-200">{data.totalFitments}</span>{' '}
                     fitment record{data.totalFitments === 1 ? '' : 's'}
                   </span>
                 </div>
               </div>
+
+              {/* AI-enriched vehicle specifications */}
+              {data.vehicle.aiEnriched && data.vehicle.aiData && (
+                <div className="border border-slate-200 dark:border-slate-800 rounded-lg bg-white/60 dark:bg-slate-900/60 px-3 py-3 sm:px-4 sm:py-3">
+                  <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
+                    Vehicle Specifications
+                  </div>
+                  {data.vehicle.aiData.description && (
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                      {data.vehicle.aiData.description}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {data.vehicle.bodyClass && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Body</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.bodyClass}</div>
+                      </div>
+                    )}
+                    {data.vehicle.driveType && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Drive</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.driveType}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.engineDescription && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Engine</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.engineDescription}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.transmission && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Transmission</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.transmission}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.horsepower && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Horsepower</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.horsepower}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.torque && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Torque</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.torque}</div>
+                      </div>
+                    )}
+                    {data.vehicle.fuelType && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Fuel</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.fuelType}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.mpg && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">MPG</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.mpg}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.seatingCapacity && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Seating</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.seatingCapacity}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.wheelbase && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Wheelbase</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.wheelbase}</div>
+                      </div>
+                    )}
+                    {data.vehicle.aiData.curbWeight && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Curb Weight</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.aiData.curbWeight}</div>
+                      </div>
+                    )}
+                    {data.vehicle.plantCountry && (
+                      <div>
+                        <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500">Made In</div>
+                        <div className="text-sm text-slate-700 dark:text-slate-200">{data.vehicle.plantCountry}</div>
+                      </div>
+                    )}
+                  </div>
+                  {data.vehicle.aiData.commonParts && data.vehicle.aiData.commonParts.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 mb-1">Common Parts</div>
+                      <div className="flex flex-wrap gap-1">
+                        {data.vehicle.aiData.commonParts.map((part, i) => (
+                          <span key={i} className="inline-flex px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            {part}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {data.vehicle.aiData.knownFitment && data.vehicle.aiData.knownFitment.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 mb-1">Compatible Vehicles</div>
+                      <div className="flex flex-wrap gap-1">
+                        {data.vehicle.aiData.knownFitment.map((fit, i) => (
+                          <span key={i} className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                            {fit}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {data.listings.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
@@ -185,7 +307,7 @@ export default function VinListingsPage() {
                                 <div className="text-xs text-slate-400 dark:text-slate-500">
                                   SKU:{' '}
                                   <span className="font-mono">
-                                    {row.customLabelSku || '—'}
+                                    {row.customLabelSku || '-'}
                                   </span>
                                 </div>
                               </div>
@@ -193,42 +315,42 @@ export default function VinListingsPage() {
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="text-slate-600 dark:text-slate-200">
-                              {row.cBrand || <span className="text-slate-400 dark:text-slate-500">—</span>}
+                              {row.cBrand || <span className="text-slate-400 dark:text-slate-500">-</span>}
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500">
                               MPN:{' '}
                               <span className="font-mono">
-                                {row.cManufacturerPartNumber || '—'}
+                                {row.cManufacturerPartNumber || '-'}
                               </span>
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500">
                               OEM:{' '}
                               <span className="font-mono">
-                                {row.cOeOemPartNumber || '—'}
+                                {row.cOeOemPartNumber || '-'}
                               </span>
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="text-slate-600 dark:text-slate-200">
-                              {row.categoryName || <span className="text-slate-400 dark:text-slate-500">—</span>}
+                              {row.categoryName || <span className="text-slate-400 dark:text-slate-500">-</span>}
                             </div>
                             <div className="text-xs text-slate-400 dark:text-slate-500">
-                              ID: {row.categoryId || '—'}
+                              ID: {row.categoryId || '-'}
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="font-medium text-slate-900 dark:text-slate-100">
-                              {row.startPrice ? `$${row.startPrice}` : '—'}
+                              {row.startPrice ? `$${row.startPrice}` : '-'}
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="text-slate-600 dark:text-slate-200">
-                              {row.quantity || '—'}
+                              {row.quantity || '-'}
                             </div>
                           </td>
                           <td className="p-3 sm:p-4">
                             <div className="text-xs inline-flex px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                              {row.conditionId || '—'}
+                              {row.conditionId || '-'}
                             </div>
                           </td>
                         </tr>
@@ -244,4 +366,3 @@ export default function VinListingsPage() {
     </div>
   );
 }
-

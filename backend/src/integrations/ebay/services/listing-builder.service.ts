@@ -392,6 +392,13 @@ export class ListingBuilderService {
       partType: snapshot.partType,
     });
 
+    if (!aspects.Brand?.length) {
+      aspects.Brand = ['Unbranded'];
+      warnings.push(
+        'Brand/Hersteller is missing — using "Unbranded" as fallback. Set the brand on the catalog product for better search ranking.',
+      );
+    }
+
 
 
     const imageUrls = applyImageOrderOverride(

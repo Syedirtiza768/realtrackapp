@@ -109,7 +109,12 @@ export class SellerpunditHttpClient {
   }
 
   private fromAxiosError(err: AxiosError): never {
-    const status = err.response?.status ?? 502;
+    let status = err.response?.status ?? 502;
+    // Prevent upstream 401/403 from SellerPundit from being propagated as-is.
+    // The frontend treats any 401 as "app session expired" and logs the user out.
+    if (status === 401 || status === 403) {
+      status = 502;
+    }
     const body = err.response?.data;
     const errors: string[] = [];
     let message = err.message;

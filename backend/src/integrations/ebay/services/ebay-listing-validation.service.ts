@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
@@ -6,6 +6,8 @@ import { EbayAccountMarketplace } from '../entities/ebay-account-marketplace.ent
 import { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.js';
 import { EbayAccountTokenService } from './ebay-account-token.service.js';
 import { SellerpunditPolicySyncService } from '../../sellerpundit/sellerpundit-policy-sync.service.js';
+import { SellerpunditTokenSyncService } from '../../sellerpundit/sellerpundit-token-sync.service.js';
+import { EbayInventoryApiService } from '../../../channels/ebay/ebay-inventory-api.service.js';
 import {
   buildEbayListingTitle,
   EBAY_OFFER_DESCRIPTION_MAX_LENGTH,
@@ -26,10 +28,14 @@ export interface ListingValidationResult {
 
 @Injectable()
 export class EbayListingValidationService {
+  private readonly logger = new Logger(EbayListingValidationService.name);
+
   constructor(
     private readonly marketplaceConfig: EbayMarketplaceConfigService,
     private readonly tokens: EbayAccountTokenService,
     private readonly sellerpunditPolicies: SellerpunditPolicySyncService,
+    private readonly sellerpunditTokens: SellerpunditTokenSyncService,
+    private readonly inventoryApi: EbayInventoryApiService,
     private readonly publishResolver: CatalogPublishResolverService,
     @InjectRepository(ConnectedEbayAccount)
     private readonly accountRepo: Repository<ConnectedEbayAccount>,
@@ -72,10 +78,21 @@ export class EbayListingValidationService {
     ) {
       errors.push(
         isSellerpundit
-          ? 'SellerPundit store requires re-import or token refresh'
+          ? `eBay rejected the OAuth token for "${account.accountDisplayName ?? account.ebayUsername ?? 'this store'}". Re-sync in RealTrackApp only refreshes what SellerPundit has — reconnect eBay for this store inside SellerPundit admin, then Re-sync stores here.`
           : 'eBay account requires reconnection',
       );
-      requiredActions.push(isSellerpundit ? 'sync_sellerpundit_stores' : 'reconnect_oauth');
+      requiredActions.push(isSellerpundit ? 'reconnect_sellerpundit_ebay' : 'reconnect_oauth');
+    } else if (isSellerpundit) {
+      const tokenOk = await this.sellerpunditTokens.validateAccountEbayToken(
+        params.ebayAccountId,
+        params.marketplaceId,
+      );
+      if (!tokenOk) {
+        errors.push(
+          `eBay rejected the OAuth token for "${account.accountDisplayName ?? account.ebayUsername ?? 'this store'}". SellerPundit still lists this store as connected, but its eBay authorization is invalid. Reconnect eBay in SellerPundit for this account, then Re-sync stores in Settings → eBay Integrations.`,
+        );
+        requiredActions.push('reconnect_sellerpundit_ebay');
+      }
     }
 
     if (isSellerpundit) {
@@ -93,6 +110,26 @@ export class EbayListingValidationService {
         const msg = e instanceof Error ? e.message : String(e);
         errors.push(`SellerPundit policy refresh failed: ${msg}`);
         requiredActions.push('sync_sellerpundit_policies');
+      }
+
+      // Hydrate inventory location — SellerPundit policy sync only handles
+      // policy IDs, not inventory locations. Auto-resolve via eBay Inventory API.
+      if (account.primaryStoreId) {
+        try {
+          const key = await this.inventoryApi.ensureMerchantLocation(account.primaryStoreId);
+          if (key) {
+            await this.mpRepo
+              .createQueryBuilder()
+              .update()
+              .set({ defaultInventoryLocationKey: key })
+              .where('ebay_account_id = :accountId', { accountId: params.ebayAccountId })
+              .andWhere('default_inventory_location_key IS NULL')
+              .execute();
+          }
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          this.logger.warn(`Inventory location hydration failed for ${params.ebayAccountId}: ${msg}`);
+        }
       }
     }
 
@@ -210,6 +247,11 @@ export class EbayListingValidationService {
           if (!deHint) {
             warnings.push(
               'German marketplace: description may need German-language content',
+            );
+          }
+          if (snapshot.title && /\b(gebraucht OE|Genuine OEM|for \d{4})\b/i.test(snapshot.title)) {
+            warnings.push(
+              'German marketplace: title contains non-native phrasing — regenerate DE optimization',
             );
           }
         }

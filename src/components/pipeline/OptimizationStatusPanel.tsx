@@ -23,11 +23,11 @@ import type { JobOptimizationStatus, OptimizationStatus, PipelineJob, ProductOpt
 
 function optimizationBadge(status: OptimizationStatus | undefined) {
   const map: Record<string, { label: string; className: string }> = {
-    pending: { label: 'Optimization queued', className: 'bg-slate-600/40 text-slate-500 dark:text-slate-300' },
-    running: { label: 'Optimizing\u2026', className: 'bg-indigo-500/20 text-indigo-300' },
-    completed: { label: 'Optimization completed', className: 'bg-green-500/20 text-green-400' },
-    failed: { label: 'Blocked: unresolved errors', className: 'bg-red-500/20 text-red-400' },
-    needs_review: { label: 'Fitment needs review', className: 'bg-amber-500/20 text-amber-300' },
+    pending: { label: 'Optimization queued', className: 'bg-slate-100 dark:bg-slate-600/40 text-slate-600 dark:text-slate-300' },
+    running: { label: 'Optimizing\u2026', className: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300' },
+    completed: { label: 'Optimization completed', className: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' },
+    failed: { label: 'Blocked: unresolved errors', className: 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400' },
+    needs_review: { label: 'Fitment needs review', className: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300' },
   };
   const item = map[status ?? 'pending'] ?? map.pending;
   return (
@@ -45,7 +45,7 @@ function readinessBadge(job: PipelineJob, optimization: JobOptimizationStatus | 
   const opt = optimization?.optimizationStatus ?? job.optimizationStatus;
   if (opt === 'running' || opt === 'pending') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-indigo-500/20 text-indigo-300">
+      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300">
         <Loader2 className="h-3 w-3 animate-spin" /> Preparing listings\u2026
       </span>
     );
@@ -54,21 +54,21 @@ function readinessBadge(job: PipelineJob, optimization: JobOptimizationStatus | 
   const review = (optimization?.reviewCount ?? job.optimizationReviewCount ?? 0) > 0;
   if (blocked) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-500/20 text-red-400">
+      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">
         <AlertCircle className="h-3 w-3" /> Blocked: unresolved errors
       </span>
     );
   }
   if (review || opt === 'needs_review') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
         <ShieldAlert className="h-3 w-3" /> Missing required eBay data / review
       </span>
     );
   }
   if (opt === 'completed') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-500/20 text-emerald-400">
+      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
         <CheckCircle2 className="h-3 w-3" /> Ready for eBay upload
       </span>
     );
@@ -121,14 +121,14 @@ function ProductRow({
           <p className="text-sm text-slate-900 dark:text-slate-100 truncate">
             {product.optimizedTitle ?? product.sku ?? product.productId.slice(0, 8)}
           </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-500">
             SKU {product.sku ?? '\u2014'} \u00b7 Readiness {Math.round(product.uploadReadinessScore * 100)}%
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
           {optimizationBadge(product.optimizationStatus)}
           {product.fitmentStatus === 'needs_review' && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
               Fitment review
             </span>
           )}
@@ -139,7 +139,7 @@ function ProductRow({
           type="button"
           onClick={loadDetail}
           disabled={loading}
-          className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center gap-1"
+          className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 flex items-center gap-1"
         >
           <Eye className="h-3 w-3" /> View optimization details
         </button>
@@ -147,7 +147,7 @@ function ProductRow({
           type="button"
           onClick={loadFitment}
           disabled={loading}
-          className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center gap-1"
+          className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 flex items-center gap-1"
         >
           <Table className="h-3 w-3" /> View fitment table ({product.fitmentRowCount})
         </button>
@@ -157,7 +157,7 @@ function ProductRow({
             await markProductManualReview(jobId, product.productId, true);
             onRefresh();
           }}
-          className="text-xs px-2 py-1 rounded bg-amber-900/40 hover:bg-amber-800/50 text-amber-200"
+          className="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-800/50 text-amber-700 dark:text-amber-200"
         >
           Send to manual review
         </button>
@@ -167,14 +167,14 @@ function ProductRow({
             await rerunProductOptimization(jobId, product.productId);
             onRefresh();
           }}
-          className="text-xs px-2 py-1 rounded bg-slate-200/50 dark:bg-slate-700/50 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-400 dark:text-slate-400 flex items-center gap-1"
+          className="text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 flex items-center gap-1"
           title="Admin/debug only"
         >
           <RotateCcw className="h-3 w-3" /> Re-run optimization
         </button>
       </div>
       {detailOpen && detail && (
-        <pre className="text-[10px] text-slate-400 dark:text-slate-400 bg-white/80 dark:bg-slate-900/80 p-2 rounded max-h-48 overflow-auto">
+        <pre className="text-[10px] text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900/80 p-2 rounded max-h-48 overflow-auto">
           {JSON.stringify(detail.optimizationPayload ?? detail, null, 2)}
         </pre>
       )}
@@ -182,7 +182,7 @@ function ProductRow({
         <div className="overflow-x-auto">
           {Array.isArray(detail.fitmentRows) && (detail.fitmentRows as unknown[]).length > 0 ? (
           <table className="w-full text-xs text-left">
-            <thead className="text-slate-400 dark:text-slate-500">
+            <thead className="text-slate-500 dark:text-slate-500">
               <tr>
                 <th className="p-1">Year</th>
                 <th className="p-1">Make</th>
@@ -193,7 +193,7 @@ function ProductRow({
                 <th className="p-1">Status</th>
               </tr>
             </thead>
-            <tbody className="text-slate-500 dark:text-slate-300">
+            <tbody className="text-slate-600 dark:text-slate-300">
               {(detail.fitmentRows as Array<Record<string, string>>).map((row, i) => (
                 <tr key={i} className="border-t border-slate-200/50 dark:border-slate-700/50">
                   <td className="p-1">{row.year ?? row.Year}</td>
@@ -232,7 +232,7 @@ function ProductRow({
               </table>
             </div>
           ) : (
-            <p className="text-xs text-slate-400 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 rounded-md p-3 bg-white/50 dark:bg-slate-900/50">
+            <p className="text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60 rounded-md p-3 bg-white dark:bg-slate-900/50">
               Fitment data not available for this listing. Use Admin / debug \u2192 Re-run optimization for
               the job after enrichment completes, or confirm the US export includes Compatibility rows.
             </p>
@@ -285,7 +285,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
           <Wrench className="h-5 w-5 text-indigo-400" />
           Mandatory listing optimization
         </CardTitle>
-        <p className="text-xs text-slate-400 dark:text-slate-400 mt-1">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           Max SEO + comprehensive optimization runs automatically after enrichment. Publish and export stay
           blocked until optimization finishes or is flagged for manual review.
         </p>
@@ -293,7 +293,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
       <CardContent className="space-y-4">
         {/* Marketplace tabs */}
         {Object.keys(byMkt).length > 0 && (
-          <div className="flex gap-1 border-b border-slate-700/50 pb-1">
+          <div className="flex gap-1 border-b border-slate-200 dark:border-slate-700/50 pb-1">
             {tabs.map((tab) => {
               const mktStatus = tab === 'all' ? null : byMkt[tab];
               const tabLabel = tab === 'all' ? 'All' : tab;
@@ -303,8 +303,8 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
                   onClick={() => setActiveTab(tab)}
                   className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
                     activeTab === tab
-                      ? 'bg-slate-700/50 text-blue-400 border-b-2 border-blue-500'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-slate-100 dark:bg-slate-700/50 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                   }`}
                 >
                   {tabLabel}
@@ -327,11 +327,11 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
 
         {enabled && (optStatus === 'running' || optStatus === 'pending') && (
           <div>
-            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-400 mb-1">
+            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
               <span>Optimizing listings ({processed}/{total})</span>
               <span>{optPct}%</span>
             </div>
-            <div className="w-full bg-slate-700 rounded-full h-2">
+            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
               <div
                 className="h-2 rounded-full bg-indigo-500 transition-all"
                 style={{ width: `${Math.max(optPct, 2)}%` }}
@@ -357,7 +357,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
         )}
 
         {isLoading && !optimization && (
-          <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading optimization status\u2026
           </div>
         )}
@@ -375,7 +375,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
                 setBypassing(false);
               }
             }}
-            className="w-full px-3 py-2 rounded bg-red-900/40 hover:bg-red-800/50 text-red-200 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full px-3 py-2 rounded bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/50 text-red-700 dark:text-red-200 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
             title="Bypass: mark all products as optimization completed to unlock downloads"
           >
             <Unlock className="h-4 w-4" />
@@ -389,7 +389,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
               <ProductRow key={p.productId} jobId={job.id} product={p} onRefresh={() => refetch()} />
             ))}
             {optimization.products.length > 50 && (
-              <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-500 text-center">
                 Showing 50 of {optimization.products.length} listings
               </p>
             )}
@@ -397,7 +397,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
         )}
 
         <details className="text-xs">
-          <summary className="text-slate-400 dark:text-slate-500 cursor-pointer hover:text-slate-500 dark:text-slate-300">Admin / debug</summary>
+          <summary className="text-slate-500 dark:text-slate-500 cursor-pointer hover:text-slate-700 dark:text-slate-300">Admin / debug</summary>
           <div className="mt-2">
             <button
               type="button"
@@ -411,7 +411,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
                   setAdminRerun(false);
                 }
               }}
-              className="px-3 py-1.5 rounded bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
+              className="px-3 py-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
             >
               {adminRerun ? 'Re-running\u2026' : 'Re-run optimization for entire job'}
             </button>

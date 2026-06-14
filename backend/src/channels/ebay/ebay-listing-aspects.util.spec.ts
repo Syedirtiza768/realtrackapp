@@ -1,6 +1,8 @@
 import {
   buildListingAspects,
   isUsedEbayCondition,
+  localizeAspectsForMarketplace,
+  localizeAspectName,
 } from './ebay-listing-aspects.util.js';
 
 describe('ebay-listing-aspects.util', () => {
@@ -26,5 +28,19 @@ describe('ebay-listing-aspects.util', () => {
   it('detects used conditions', () => {
     expect(isUsedEbayCondition('USED_GOOD')).toBe(true);
     expect(isUsedEbayCondition('NEW')).toBe(false);
+  });
+
+  it('localizes Brand to Hersteller for EBAY_DE', () => {
+    expect(localizeAspectName('Brand', 'EBAY_DE')).toBe('Hersteller');
+    expect(localizeAspectName('Brand', 'EBAY_US')).toBe('Brand');
+    expect(
+      localizeAspectsForMarketplace(
+        { Brand: ['Toyota'], MPN: ['123'] },
+        'EBAY_DE',
+      ),
+    ).toEqual({
+      Hersteller: ['Toyota'],
+      Herstellernummer: ['123'],
+    });
   });
 });

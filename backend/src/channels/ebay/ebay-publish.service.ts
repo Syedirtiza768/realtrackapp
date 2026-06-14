@@ -62,6 +62,7 @@ import { EbayMarketplaceConfigService } from '../../integrations/ebay/services/e
 import {
   buildListingAspects,
   isUsedEbayCondition,
+  localizeAspectsForMarketplace,
 } from './ebay-listing-aspects.util.js';
 
 /**
@@ -272,13 +273,17 @@ export class EbayPublishService {
     });
 
     const aspects = buildListingAspects({
-      brand: listing.cBrand,
+      brand: listing.cBrand || listing.manufacturerName,
       mpn: listing.cManufacturerPartNumber,
       partType: listing.cType,
       upc: listing.pUpc,
       oeOemPartNumber: listing.cOeOemPartNumber,
       existing: req.aspects,
     });
+
+    if (!aspects.Brand?.length) {
+      aspects.Brand = ['Unbranded'];
+    }
 
     const conditionDescription =
       req.conditionDescription?.trim() ||
@@ -470,7 +475,9 @@ export class EbayPublishService {
       }
       if (shouldFallbackFromSellerpunditBulkCreate(fallbackMode, spResult)) {
         this.logger.warn(
-          `SellerPundit bulk-create unavailable for "${store.storeName}" — falling back to direct eBay Inventory API`,
+          `SellerPundit bulk-create unavailable for "${store.storeName}"` +
+            (spResult.error ? ` (${spResult.error})` : '') +
+            ' — falling back to direct eBay Inventory API',
         );
         const enriched = await this.enrichPoliciesFromMarketplace(
           account,
@@ -498,7 +505,7 @@ export class EbayPublishService {
     account?: ConnectedEbayAccount | null,
   ): Promise<PublishResult> {
     const runDirectPublish = async (): Promise<PublishResult> => {
-      const inventoryItem = this.buildInventoryItem(req);
+      const inventoryItem = this.buildInventoryItem(req, store);
       await this.inventoryApi.createOrReplaceItem(storeId, req.sku, inventoryItem);
 
       if (req.compatibility?.compatibleProducts?.length) {
@@ -538,10 +545,13 @@ export class EbayPublishService {
             this.logger.warn(
               `Publish rejected condition "${req.condition}" for SKU ${req.sku} — retrying with ${fallbackCondition}`,
             );
-            const retryItem = this.buildInventoryItem({
-              ...req,
-              condition: fallbackCondition,
-            });
+            const retryItem = this.buildInventoryItem(
+              {
+                ...req,
+                condition: fallbackCondition,
+              },
+              store,
+            );
             await this.inventoryApi.createOrReplaceItem(
               storeId,
               req.sku,
@@ -615,10 +625,26 @@ export class EbayPublishService {
       err instanceof Error ? err.message : 'Publish failed',
     );
     if (isEbayInvalidAccessTokenError(err)) {
-      errorMsg =
-        account?.connectionSource === 'sellerpundit'
-          ? `eBay authorization failed for "${store.storeName}". Re-sync stores in Settings → eBay Integrations (SellerPundit must have a valid eBay connection for this account).`
-          : `eBay authorization failed for "${store.storeName}". Re-sync or reconnect this store in Settings → eBay Integrations.`;
+      if (account?.connectionSource === 'sellerpundit') {
+        void this.connectedAccountRepo
+          .update(account.id, {
+            connectionStatus: 'reconnect_required',
+            lastErrorMessage:
+              'eBay rejected the OAuth token supplied by SellerPundit — reconnect eBay for this store in SellerPundit, then Re-sync stores here',
+          })
+          .catch((updateErr) =>
+            this.logger.warn(
+              `Could not mark SellerPundit account ${account.id} reconnect_required`,
+              updateErr,
+            ),
+          );
+        errorMsg =
+          `eBay rejected the OAuth token for "${store.storeName}". ` +
+          'RealTrackApp is connected to SellerPundit, but SellerPundit\'s eBay authorization for this store is invalid or expired. ' +
+          'Reconnect eBay in SellerPundit for this account, then use Settings → eBay Integrations → Re-sync stores.';
+      } else {
+        errorMsg = `eBay authorization failed for "${store.storeName}". Re-sync or reconnect this store in Settings → eBay Integrations.`;
+      }
     }
     const responseData = (err as { response?: { data?: unknown } })?.response?.data;
     if (responseData) {
@@ -954,16 +980,21 @@ export class EbayPublishService {
     paymentPolicyId?: string;
     returnPolicyId?: string;
   }> {
+    const HARD_TIMEOUT_MS = 60_000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
+
     try {
-      const token = await this.auth.getAccessToken(store.id, {
-        forceRefresh: account.connectionSource === 'sellerpundit',
-      });
+      // Use normal token expiry logic — don't force-refresh from SellerPundit
+      // since the token was already refreshed during the earlier publish step.
+      const token = await this.auth.getAccessToken(store.id);
       const baseUrl = await this.auth.getApiBaseUrlForStore(store.id);
       const marketplaceId = resolveMarketplaceId(store);
+
       const [fulfill, payment, ret] = await Promise.all([
-        this.sellAccount.listFulfillmentPolicies(token, baseUrl, marketplaceId),
-        this.sellAccount.listPaymentPolicies(token, baseUrl, marketplaceId),
-        this.sellAccount.listReturnPolicies(token, baseUrl, marketplaceId),
+        this.sellAccount.listFulfillmentPolicies(token, baseUrl, marketplaceId, controller.signal),
+        this.sellAccount.listPaymentPolicies(token, baseUrl, marketplaceId, controller.signal),
+        this.sellAccount.listReturnPolicies(token, baseUrl, marketplaceId, controller.signal),
       ]);
       const pick = (items: { ebayPolicyId: string; isDefault: boolean }[]) =>
         items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId;
@@ -1006,11 +1037,16 @@ export class EbayPublishService {
       }
       return { fulfillmentPolicyId, paymentPolicyId, returnPolicyId };
     } catch (err: unknown) {
+      const aborted = controller.signal.aborted;
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(
-        `Could not refresh eBay policies for "${store.storeName}": ${message}`,
+        aborted
+          ? `eBay policy refresh timed out for "${store.storeName}" after ${HARD_TIMEOUT_MS / 1000}s`
+          : `Could not refresh eBay policies for "${store.storeName}": ${message}`,
       );
       return {};
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -1397,8 +1433,9 @@ export class EbayPublishService {
   /**
    * Build an EbayInventoryItem from the publish request.
    */
-  private buildInventoryItem(req: PublishRequest): EbayInventoryItem {
+  private buildInventoryItem(req: PublishRequest, store: Store): EbayInventoryItem {
     const condition = mapToEbayConditionEnum(req.condition);
+    const marketplaceId = resolveMarketplaceId(store);
     const item: EbayInventoryItem = {
       availability: {
         shipToLocationAvailability: {
@@ -1410,7 +1447,7 @@ export class EbayPublishService {
       product: {
         title: req.title,
         description: req.description,
-        aspects: req.aspects,
+        aspects: localizeAspectsForMarketplace(req.aspects, marketplaceId),
         imageUrls: req.imageUrls,
       },
     };

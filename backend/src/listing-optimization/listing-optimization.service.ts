@@ -79,10 +79,22 @@ export class ListingOptimizationService {
       select: ['id', 'sku'],
     });
 
-    // Only process products that have a listing_record for this marketplace
-    if (marketplaceSkus.size > 0) {
-      products = products.filter(p => p.sku && marketplaceSkus.has(p.sku));
+    // Only process products that have a listing_record for this marketplace.
+    // If no listing records exist for this marketplace, skip entirely.
+    if (marketplaceSkus.size === 0) {
+      this.logger.log(`No listing records for job ${jobId} [${marketplace}], skipping optimization`);
+      await this.mergeOptimizationByMarketplace(jobId, marketplace, {
+        status: 'completed',
+        passCount: 0,
+        reviewCount: 0,
+        blockCount: 0,
+        processed: 0,
+        total: 0,
+      });
+      await this.refreshJobOptimizationAggregate(jobId);
+      return;
     }
+    products = products.filter(p => p.sku && marketplaceSkus.has(p.sku));
 
     await this.jobRepo.update(jobId, { optimizationTotal: products.length } as any);
 
@@ -123,6 +135,16 @@ export class ListingOptimizationService {
         ]);
       } catch (err) {
         this.logger.error(`Optimization failed for product ${id} [${marketplace}]: ${String(err)}`);
+        // Mark product as failed so it's counted as processed — prevents the
+        // job from getting stuck with processed < total forever.
+        await this.productRepo.update(id, {
+          optimizationStatus: 'failed',
+          optimizationErrors: [{
+            code: 'OPTIMIZATION_FAILED',
+            severity: 'error',
+            message: String(err).substring(0, 500),
+          }],
+        } as any).catch(() => {});
       }
       completedCount++;
       await this.refreshJobOptimizationCounts(jobId, marketplace);

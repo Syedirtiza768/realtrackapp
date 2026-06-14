@@ -12,7 +12,7 @@ import {
  * across all import sources and marketplace channels.
  */
 @Entity('catalog_products')
-@Index('idx_catalog_sku', ['sku'], { unique: true, where: '"sku" IS NOT NULL' })
+@Index('idx_catalog_sku', ['sku'], { unique: true })
 @Index('idx_catalog_mpn', ['mpn'])
 @Index('idx_catalog_upc', ['upc'], { unique: true, where: '"upc" IS NOT NULL' })
 @Index('idx_catalog_ebay_item_id', ['ebayItemId'], { unique: true, where: '"ebay_item_id" IS NOT NULL' })
