@@ -717,6 +717,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
       }
 
+      this.logger.log(
+        `Job ${jobId} [${marketplace}]: Parsed ${products.length} products, ${listingRecords.length} listing records from ${mktFile}`,
+      );
+
       if (products.length > 0) {
         const withFitment = products.filter(
           (p) => Array.isArray(p.fitmentData) && (p.fitmentData as unknown[]).length > 0,
@@ -762,16 +766,29 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       if (listingRecords.length > 0) {
         const CHUNK = 500;
+        let totalInserted = 0;
         for (let i = 0; i < listingRecords.length; i += CHUNK) {
-          await this.listingRepo
-            .createQueryBuilder()
-            .insert()
-            .into(ListingRecord)
-            .values(listingRecords.slice(i, i + CHUNK))
-            .orIgnore()
-            .execute();
+          try {
+            const result = await this.listingRepo
+              .createQueryBuilder()
+              .insert()
+              .into(ListingRecord)
+              .values(listingRecords.slice(i, i + CHUNK))
+              .orIgnore()
+              .execute();
+            const affected = result.raw?.length ?? 0;
+            totalInserted += affected;
+          } catch (insertErr) {
+            this.logger.error(
+              `Job ${jobId} [${marketplace}]: Listing batch insert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
+            );
+          }
         }
-        this.logger.log(`Job ${jobId} [${marketplace}]: Saved ${listingRecords.length} listing records`);
+        this.logger.log(
+          `Job ${jobId} [${marketplace}]: Attempted ${listingRecords.length} listing records, inserted ${totalInserted}`,
+        );
+      } else {
+        this.logger.warn(`Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`);
       }
     } catch (err) {
       this.logger.error(`Job ${jobId} [${marketplace}]: Failed to save to catalog: ${err instanceof Error ? err.message : err}`);
