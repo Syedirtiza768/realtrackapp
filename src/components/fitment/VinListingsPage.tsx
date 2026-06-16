@@ -1,8 +1,18 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Barcode, AlertCircle, Loader2, Search, Download } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/card';
 import { getListingsByVin, exportDbListingsByVin, type VinListingsResponse } from '../../lib/fitmentVinListingsApi';
+
+function parseImageUrls(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(/[\n|,]+/)
+    .flatMap((s) => s.split(/\s+/))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && /^https?:\/\//i.test(s))
+    .map((s) => s.replace(/^http:\/\//i, 'https://'));
+}
 
 function isValidVin(v: string) {
   return /^[A-HJ-NPR-Z0-9]{17}$/i.test(v.trim());
@@ -47,6 +57,17 @@ export default function VinListingsPage() {
   const vehicleSummary = data?.vehicle
     ? `${data.vehicle.year || '?'} ${data.vehicle.make || ''} ${data.vehicle.model || ''} ${data.vehicle.trim || ''}`.trim()
     : '';
+
+  const enrichedListings = useMemo(() => {
+    if (!data?.listings) return [];
+    return data.listings.map((row) => ({
+      ...row,
+      parsedImages:
+        row.parsedImages && row.parsedImages.length > 0
+          ? row.parsedImages
+          : parseImageUrls(row.itemPhotoUrl),
+    }));
+  }, [data?.listings]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -289,7 +310,7 @@ export default function VinListingsPage() {
                 </div>
               )}
 
-              {data.listings.length === 0 ? (
+              {enrichedListings.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
                   <Search size={32} className="mb-2 opacity-50" />
                   <p className="text-sm text-center">
@@ -310,7 +331,7 @@ export default function VinListingsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                      {data.listings.map((row) => (
+                      {enrichedListings.map((row) => (
                         <tr key={row.id} className="hover:bg-slate-100/50 dark:bg-slate-800/50 transition-colors">
                           <td className="p-3 sm:p-4">
                             <div className="flex items-center gap-3">
