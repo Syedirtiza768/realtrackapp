@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Shield } from 'lucide-react';
 import ProtectedRoute from '../auth/ProtectedRoute';
 import {
@@ -64,7 +64,7 @@ function PermissionsMatrix() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400 dark:text-slate-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-slate-500 dark:text-slate-400" />
       </div>
     );
   }
@@ -76,7 +76,7 @@ function PermissionsMatrix() {
           <Shield className="h-7 w-7" style={{ color: 'var(--brand-primary)' }} />
           Roles & permissions
         </h2>
-        <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           Read-only matrix of which roles grant each permission. Role changes are managed on the
           Users page.
         </p>
@@ -93,7 +93,7 @@ function PermissionsMatrix() {
             className={`rounded-lg px-3 py-1.5 text-sm border transition-colors ${
               selectedRoleSlug === r.slug
                 ? 'border-[var(--brand-primary)] text-slate-900 dark:text-slate-100'
-                : 'border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:border-slate-300 dark:border-slate-600'
+                : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:border-slate-600'
             }`}
             style={
               selectedRoleSlug === r.slug
@@ -107,7 +107,7 @@ function PermissionsMatrix() {
       </div>
 
       {selectedRole && (
-        <p className="text-sm text-slate-400 dark:text-slate-400">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           <span className="text-slate-600 dark:text-slate-200 font-medium">{selectedRole.name}</span>
           {selectedRole.description ? ` — ${selectedRole.description}` : ''}
           {' · '}
@@ -128,12 +128,12 @@ function PermissionsMatrix() {
             {byModule.map(([module, perms]) =>
               perms.map((p, idx) => (
                 <tr key={p.id} className="hover:bg-white/40 dark:bg-slate-900/40">
-                  <td className="px-4 py-2.5 text-slate-400 dark:text-slate-500 font-mono text-xs">
+                  <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 font-mono text-xs">
                     {idx === 0 ? module : ''}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="text-slate-600 dark:text-slate-200">{p.label}</div>
-                    <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">{p.key}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{p.key}</div>
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     {permSet.has(p.key) ? (
@@ -156,7 +156,7 @@ function PermissionsMatrix() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs min-w-[800px]">
             <thead>
-              <tr className="text-slate-400 dark:text-slate-500">
+              <tr className="text-slate-500 dark:text-slate-400">
                 <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 dark:bg-slate-950">Permission</th>
                 {roles.map((r) => (
                   <th key={r.id} className="px-2 py-2 text-center whitespace-nowrap">
@@ -168,7 +168,7 @@ function PermissionsMatrix() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {permissions.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-900/30">
-                  <td className="px-3 py-1.5 font-mono text-slate-400 dark:text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-950">
+                  <td className="px-3 py-1.5 font-mono text-slate-500 dark:text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-950">
                     {p.key}
                   </td>
                   {roles.map((r) => {

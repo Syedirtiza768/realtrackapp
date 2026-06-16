@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Zap,
   Plus,
@@ -123,7 +123,7 @@ export default function AutomationRulesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-slate-500 dark:text-slate-400" />
       </div>
     );
   }
@@ -133,7 +133,7 @@ export default function AutomationRulesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Automation Rules</h2>
-          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {rules.length} rule{rules.length !== 1 ? 's' : ''} · {rules.filter((r) => r.enabled).length} active
           </p>
         </div>
@@ -164,8 +164,8 @@ export default function AutomationRulesPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <Zap className="w-12 h-12 mx-auto mb-3 text-slate-500 dark:text-slate-600" />
-            <p className="text-slate-400 dark:text-slate-400 font-medium">No automation rules yet</p>
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Create your first rule to automate pricing, publishing, and more.</p>
+            <p className="text-slate-500 dark:text-slate-400 font-medium">No automation rules yet</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Create your first rule to automate pricing, publishing, and more.</p>
           </CardContent>
         </Card>
       ) : (
@@ -207,7 +207,7 @@ function RuleCard({
           {rule.enabled ? (
             <ToggleRight size={28} className="text-emerald-500" />
           ) : (
-            <ToggleLeft size={28} className="text-slate-400 dark:text-slate-500" />
+            <ToggleLeft size={28} className="text-slate-500 dark:text-slate-400" />
           )}
         </button>
 
@@ -221,31 +221,31 @@ function RuleCard({
               {ACTION_LABELS[rule.actionType] ?? rule.actionType}
             </span>
           </div>
-          {rule.description && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">{rule.description}</p>}
+          {rule.description && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{rule.description}</p>}
         </button>
 
         <div className="flex items-center gap-2 shrink-0">
-          <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+          <div className="hidden sm:flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
             <Play size={12} />
             {rule.executionCount}
           </div>
           {rule.lastExecutedAt && (
-            <span className="hidden lg:inline text-xs text-slate-400 dark:text-slate-500">
+            <span className="hidden lg:inline text-xs text-slate-500 dark:text-slate-400">
               <Clock size={12} className="inline mr-1" />
               {new Date(rule.lastExecutedAt).toLocaleDateString()}
             </span>
           )}
           <button
             onClick={onExecute}
-            className="p-1.5 text-slate-400 dark:text-slate-400 hover:text-blue-400 transition-colors"
+            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-400 transition-colors"
             title="Execute now"
           >
             <Play size={16} />
           </button>
-          <button onClick={onDelete} className="p-1.5 text-slate-400 dark:text-slate-400 hover:text-red-400 transition-colors" title="Delete">
+          <button onClick={onDelete} className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-red-400 transition-colors" title="Delete">
             <Trash2 size={16} />
           </button>
-          {expanded ? <ChevronDown size={16} className="text-slate-400 dark:text-slate-500" /> : <ChevronRight size={16} className="text-slate-400 dark:text-slate-500" />}
+          {expanded ? <ChevronDown size={16} className="text-slate-500 dark:text-slate-400" /> : <ChevronRight size={16} className="text-slate-500 dark:text-slate-400" />}
         </div>
       </div>
 
@@ -253,27 +253,27 @@ function RuleCard({
         <CardContent className="pt-0 border-t border-slate-200 dark:border-slate-800">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-slate-400 dark:text-slate-500 font-medium mb-1">Trigger Config</p>
+              <p className="text-slate-500 dark:text-slate-400 font-medium mb-1">Trigger Config</p>
               <pre className="bg-slate-100/50 dark:bg-slate-800/50 rounded p-2 text-xs text-slate-500 dark:text-slate-300 overflow-auto max-h-32">
                 {JSON.stringify(rule.triggerConfig, null, 2)}
               </pre>
             </div>
             <div>
-              <p className="text-slate-400 dark:text-slate-500 font-medium mb-1">Action Config</p>
+              <p className="text-slate-500 dark:text-slate-400 font-medium mb-1">Action Config</p>
               <pre className="bg-slate-100/50 dark:bg-slate-800/50 rounded p-2 text-xs text-slate-500 dark:text-slate-300 overflow-auto max-h-32">
                 {JSON.stringify(rule.actionConfig, null, 2)}
               </pre>
             </div>
             {rule.conditions.length > 0 && (
               <div className="sm:col-span-2">
-                <p className="text-slate-400 dark:text-slate-500 font-medium mb-1">Conditions ({rule.conditions.length})</p>
+                <p className="text-slate-500 dark:text-slate-400 font-medium mb-1">Conditions ({rule.conditions.length})</p>
                 <pre className="bg-slate-100/50 dark:bg-slate-800/50 rounded p-2 text-xs text-slate-500 dark:text-slate-300 overflow-auto max-h-32">
                   {JSON.stringify(rule.conditions, null, 2)}
                 </pre>
               </div>
             )}
           </div>
-          <div className="flex items-center gap-4 mt-3 text-xs text-slate-400 dark:text-slate-500">
+          <div className="flex items-center gap-4 mt-3 text-xs text-slate-500 dark:text-slate-400">
             <span>Priority: {rule.priority}</span>
             <span>Executed: {rule.executionCount} times</span>
             <span>Created: {new Date(rule.createdAt).toLocaleDateString()}</span>
@@ -319,7 +319,7 @@ function CreateRuleForm({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">New Automation Rule</CardTitle>
-        <button onClick={onCancel} className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
+        <button onClick={onCancel} className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
           <X size={16} />
         </button>
       </CardHeader>
@@ -327,30 +327,30 @@ function CreateRuleForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Name *</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Name *</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Low stock price increase"
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Description</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Description</label>
               <input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Optional description"
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Trigger Type</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Trigger Type</label>
               <select
                 value={triggerType}
                 onChange={(e) => setTriggerType(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="schedule">Scheduled</option>
                 <option value="event">Event-Based</option>
@@ -358,11 +358,11 @@ function CreateRuleForm({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Action Type</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Action Type</label>
               <select
                 value={actionType}
                 onChange={(e) => setActionType(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 {Object.entries(ACTION_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>
@@ -372,12 +372,12 @@ function CreateRuleForm({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Priority</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Priority</label>
               <input
                 type="number"
                 value={priority}
                 onChange={(e) => setPriority(Number(e.target.value))}
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
@@ -391,7 +391,7 @@ function CreateRuleForm({
             <button
               type="button"
               onClick={onCancel}
-              className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors"
+              className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors"
             >
               Cancel
             </button>

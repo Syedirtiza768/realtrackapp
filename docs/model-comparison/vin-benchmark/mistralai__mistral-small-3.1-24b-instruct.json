@@ -1,0 +1,10 @@
+{
+  "modelId": "mistralai/mistral-small-3.1-24b-instruct",
+  "ok": true,
+  "latencyMs": 1329,
+  "estimatedCostUsd": null,
+  "contextLength": 128000,
+  "rawContent": "{\n  \"make\": \"Toyota\",\n  \"model\": \"",
+  "parsed": null,
+  "parseError": "Unterminated string in JSON at position 34 (line 3 column 13)"
+}

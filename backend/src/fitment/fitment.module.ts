@@ -16,6 +16,10 @@ import { FitmentImportProcessor } from './processors/fitment-import.processor.js
 import { FitmentController } from './fitment.controller.js';
 import { EbayMvlService } from './ebay-mvl.service.js';
 import { VinDecodeService } from './vin-decode.service.js';
+import { VinExportService } from './vin-export.service.js';
+import { VinDbExportService } from './vin-db-export.service.js';
+import { EbayVinSearchService } from './ebay-vin-search.service.js';
+import { BrandVinDecoderRegistry } from './vin-decoders/brand-decoder.registry.js';
 import { ChannelsModule } from '../channels/channels.module.js';
 
 @Module({
@@ -41,7 +45,11 @@ import { ChannelsModule } from '../channels/channels.module.js';
     FitmentImportProcessor,
     EbayMvlService,
     VinDecodeService,
+    VinExportService,
+    VinDbExportService,
+    EbayVinSearchService,
+    BrandVinDecoderRegistry,
   ],
-  exports: [FitmentService, FitmentMatcherService, EbayMvlService, VinDecodeService],
+  exports: [FitmentService, FitmentMatcherService, EbayMvlService, VinDecodeService, VinExportService, VinDbExportService, EbayVinSearchService, BrandVinDecoderRegistry],
 })
 export class FitmentModule {}

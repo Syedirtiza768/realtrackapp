@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Upload,
   FileSpreadsheet,
@@ -31,7 +31,7 @@ import OptimizationStatusPanel, { useOptimizationDownloadGate } from './Optimiza
 
 type WizardStep = 'upload' | 'processing' | 'complete' | 'history';
 
-/* ── Status helpers ───────────────────────────────────────── */
+/* -- Status helpers ----------------------------------------- */
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
@@ -85,9 +85,9 @@ function stageProgress(status: PipelineJobStatus): number {
   return stageWeights[status] ?? 0;
 }
 
-/* ═════════════════════════════════════════════════════════════
+/* -------------------------------------------------------------
  *  MAIN COMPONENT
- * ═════════════════════════════════════════════════════════════ */
+ * ------------------------------------------------------------- */
 
 export default function PipelineWizard() {
   const [step, setStep] = useState<WizardStep>('upload');
@@ -149,9 +149,9 @@ export default function PipelineWizard() {
   );
 }
 
-/* ═════════════════════════════════════════════════════════════
+/* -------------------------------------------------------------
  *  STATS BAR
- * ═════════════════════════════════════════════════════════════ */
+ * ------------------------------------------------------------- */
 
 function PipelineStatsBar() {
   const { data: stats } = usePipelineStats();
@@ -178,9 +178,9 @@ function PipelineStatsBar() {
   );
 }
 
-/* ═════════════════════════════════════════════════════════════
+/* -------------------------------------------------------------
  *  UPLOAD STEP
- * ═════════════════════════════════════════════════════════════ */
+ * ------------------------------------------------------------- */
 
 function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -261,11 +261,11 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
             </div>
           ) : (
             <div className="space-y-3">
-              <FileSpreadsheet className="h-12 w-12 text-slate-400 dark:text-slate-500 mx-auto" />
+              <FileSpreadsheet className="h-12 w-12 text-slate-500 dark:text-slate-400 mx-auto" />
               <div>
                 <p className="text-slate-700 dark:text-slate-200 font-medium">Drop your Excel or CSV file here</p>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  Supports .xlsx, .xls, .csv — VIN Report / Parts Inventory
+                  Supports .xlsx, .xls, .csv � VIN Report / Parts Inventory
                 </p>
               </div>
             </div>
@@ -283,9 +283,9 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
   );
 }
 
-/* ═════════════════════════════════════════════════════════════
+/* -------------------------------------------------------------
  *  PROCESSING STEP
- * ═════════════════════════════════════════════════════════════ */
+ * ------------------------------------------------------------- */
 
 function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }) {
   const { data } = usePipelineJob(jobId);
@@ -334,7 +334,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   // Current stage description
   const currentStage = PIPELINE_STAGES.find((s) => s.key === job.status);
   const statusLabel = isQueued
-    ? 'Queued — waiting for the pipeline worker (one job runs at a time)'
+    ? 'Queued � waiting for the pipeline worker (one job runs at a time)'
     : hasPartCounts
       ? `${job.processedParts} / ${job.totalParts} parts`
       : currentStage?.description ?? 'Processing...';
@@ -379,10 +379,10 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
           </div>
         </CardHeader>
         <CardContent>
-          {/* Progress bar — always shown during processing */}
+          {/* Progress bar � always shown during processing */}
           {!terminal && (
             <div className="mb-4">
-              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+              <div className="flex justify-between text-xs text-slate-700 dark:text-slate-300 mb-1">
                 <span>{statusLabel}</span>
                 <span>{isQueued ? 'queued' : `${progressPct}%`}</span>
               </div>
@@ -395,9 +395,9 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
                 />
               </div>
               {!isQueued && (
-                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Last update {formatElapsed(secondsSinceUpdate)} ago
-                  {progressLooksStale && ' — AI batches can pause for several minutes on slow OpenRouter responses'}
+                  {progressLooksStale && ' � AI batches can pause for several minutes on slow OpenRouter responses'}
                 </p>
               )}
             </div>
@@ -438,7 +438,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
                       ${isDone ? 'bg-green-500/20 text-green-400' : ''}
                       ${isActive ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50' : ''}
                       ${isFailed ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50' : ''}
-                      ${!isDone && !isActive && !isFailed ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-500' : ''}
+                      ${!isDone && !isActive && !isFailed ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400' : ''}
                     `}
                   >
                     {isDone && <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -458,10 +458,10 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
             </div>
           )}
 
-          {/* Input file download – always available */}
+          {/* Input file download � always available */}
           {job.storedFilePath && (
             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
-              <span className="text-xs text-slate-500 dark:text-slate-500">Original input file</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Original input file</span>
               <DownloadButton label={job.originalFilename} template="input" jobId={job.id} variant="subtle" />
             </div>
           )}
@@ -568,7 +568,7 @@ function StatCard({
         <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</p>
         <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
         {sub && (
-          <p className={`text-xs mt-0.5 ${subClassName ?? 'text-slate-500 dark:text-slate-500'}`}>{sub}</p>
+          <p className={`text-xs mt-0.5 ${subClassName ?? 'text-slate-500 dark:text-slate-400'}`}>{sub}</p>
         )}
       </CardContent>
     </Card>
@@ -585,15 +585,15 @@ function DownloadButton({ label, template, jobId, variant = 'default' }: { label
           : 'bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-600/50 border-slate-200 dark:border-slate-600'
       }`}
     >
-      <Download className={`h-4 w-4 flex-shrink-0 ${variant === 'subtle' ? 'text-slate-400 dark:text-slate-400' : 'text-green-500 dark:text-green-400'}`} />
+      <Download className={`h-4 w-4 flex-shrink-0 ${variant === 'subtle' ? 'text-slate-500 dark:text-slate-400' : 'text-green-500 dark:text-green-400'}`} />
       <span className="text-sm text-slate-700 dark:text-slate-200">{label}</span>
     </button>
   );
 }
 
-/* ═════════════════════════════════════════════════════════════
+/* -------------------------------------------------------------
  *  HISTORY STEP
- * ═════════════════════════════════════════════════════════════ */
+ * ------------------------------------------------------------- */
 
 function HistoryStep({ onViewJob }: { onViewJob: (id: string) => void }) {
   const { data, isLoading } = usePipelineJobs();
@@ -623,7 +623,7 @@ function HistoryStep({ onViewJob }: { onViewJob: (id: string) => void }) {
                   <FileSpreadsheet className="h-5 w-5 text-slate-400 flex-shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{job.originalFilename}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {new Date(job.createdAt).toLocaleString()} &middot; {formatBytes(job.fileSizeBytes)}
                     </p>
                   </div>
@@ -640,7 +640,7 @@ function HistoryStep({ onViewJob }: { onViewJob: (id: string) => void }) {
                   >
                     <Download className="h-4 w-4" />
                   </button>
-                  <ChevronRight className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                  <ChevronRight className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 </div>
               </button>
             ))}

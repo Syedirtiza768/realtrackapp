@@ -12,6 +12,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReviewQueueService } from '../services/review-queue.service';
 import { ReviewTaskQueryDto, ResolveReviewTaskDto } from '../dto';
 import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
+import { User } from '../../auth/entities/user.entity.js';
 
 @ApiTags('Motors Review Queue')
 @Controller('motors-intelligence/review')
@@ -47,9 +49,9 @@ export class ReviewQueueController {
   async resolveTask(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ResolveReviewTaskDto,
+    @CurrentUser() user: User,
   ) {
-    // TODO: Extract userId from JWT when auth guard is applied
-    return this.reviewService.resolveTask(id, 'system', dto);
+    return this.reviewService.resolveTask(id, user.id, dto);
   }
 
   @Get('stats')

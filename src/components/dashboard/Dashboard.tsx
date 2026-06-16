@@ -187,7 +187,7 @@ export default function Dashboard() {
                         onChange={e => setSelectedStoreId(e.target.value)}
                         className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
-                    <span className="text-xs sm:text-sm text-slate-400 dark:text-slate-500">
+                    <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                         Last sync: {relativeTime(lastRefresh.toISOString())}
                     </span>
                     <button
@@ -195,7 +195,7 @@ export default function Dashboard() {
                         disabled={loading}
                         className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
                     >
-                        <RefreshCw size={16} className={`text-slate-400 dark:text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw size={16} className={`text-slate-500 dark:text-slate-400 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
             </div>
@@ -204,27 +204,27 @@ export default function Dashboard() {
             <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Total Catalog</CardTitle>
-                        <Package className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                        <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Catalog</CardTitle>
+                        <Package className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
                             {summary?.totalListings != null ? summary.totalListings.toLocaleString() : '�'}
                         </div>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">All listings</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">All listings</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Active Listings</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Active Listings</CardTitle>
                         <Activity className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold text-emerald-500">
                             {summary?.activeListings != null ? summary.activeListings.toLocaleString() : '�'}
                         </div>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             {summary?.channelBreakdown?.length
                                 ? `Across ${summary.channelBreakdown.length} channel${summary.channelBreakdown.length !== 1 ? 's' : ''}`
                                 : 'Published'}
@@ -234,14 +234,14 @@ export default function Dashboard() {
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Revenue (30d)</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Revenue (30d)</CardTitle>
                         <BarChart3 className="h-4 w-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold">
                             {summary?.revenue != null ? fmtCurrency(summary.revenue) : '�'}
                         </div>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center mt-1">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center mt-1">
                             <ArrowUpRight className="h-3 w-3 text-emerald-500 mr-1" />
                             <span className="text-emerald-500">{summary?.totalSales ?? 0}</span>&nbsp;sales
                         </p>
@@ -250,14 +250,14 @@ export default function Dashboard() {
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-400 dark:text-slate-400">Inventory Alerts</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Inventory Alerts</CardTitle>
                         <AlertTriangle className="h-4 w-4 text-amber-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl sm:text-2xl font-bold text-amber-500">
                             {lowStock.length + outOfStock.length}
                         </div>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             {outOfStock.length} out of stock, {lowStock.length} low
                         </p>
                     </CardContent>
@@ -273,10 +273,10 @@ export default function Dashboard() {
                     <CardContent>
                         {loading && activity.length === 0 ? (
                             <div className="flex items-center justify-center py-8">
-                                <Loader2 className="h-5 w-5 animate-spin text-slate-400 dark:text-slate-500" />
+                                <Loader2 className="h-5 w-5 animate-spin text-slate-500 dark:text-slate-400" />
                             </div>
                         ) : activity.length === 0 ? (
-                            <p className="text-sm text-slate-400 dark:text-slate-500 py-4">No recent activity</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 py-4">No recent activity</p>
                         ) : (
                             <div className="space-y-4">
                                 {activity.map((item) => (
@@ -287,10 +287,10 @@ export default function Dashboard() {
                                                 <p className="text-sm font-medium text-slate-600 dark:text-slate-200 capitalize">
                                                     {item.action} {item.entityType}
                                                 </p>
-                                                <p className="text-xs text-slate-400 dark:text-slate-500">{item.actorType}</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400">{item.actorType}</p>
                                             </div>
                                         </div>
-                                        <div className="text-xs text-slate-400 dark:text-slate-400 font-mono">
+                                        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                                             {relativeTime(item.createdAt)}
                                         </div>
                                     </div>
@@ -307,7 +307,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         {channels.length === 0 ? (
-                            <p className="text-sm text-slate-400 dark:text-slate-500 py-4">No channels connected</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 py-4">No channels connected</p>
                         ) : (
                             <div className="space-y-4">
                                 {channels.map((c) => {
@@ -320,7 +320,7 @@ export default function Dashboard() {
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-medium text-slate-600 dark:text-slate-200 capitalize">{c.channel}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">
+                                                    <div className="text-xs text-slate-500 dark:text-slate-400">
                                                         {c.lastSync ? relativeTime(c.lastSync) : 'Never synced'}
                                                     </div>
                                                 </div>
@@ -350,7 +350,7 @@ export default function Dashboard() {
                         </CardHeader>
                         <CardContent>
                             {multiStore.stores.length === 0 ? (
-                                <p className="text-sm text-slate-400 dark:text-slate-500 py-2">No stores configured</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 py-2">No stores configured</p>
                             ) : (
                                 <div className="space-y-2">
                                     {multiStore.stores.map((s) => (
@@ -359,15 +359,15 @@ export default function Dashboard() {
                                                 <span className="text-sm font-medium text-slate-600 dark:text-slate-200 capitalize">{s.channel}</span>
                                                 <Badge variant={s.status === 'active' ? 'success' : 'secondary'}>{s.status}</Badge>
                                             </div>
-                                            <span className="text-sm text-slate-400 dark:text-slate-400 font-mono">{s.count}</span>
+                                            <span className="text-sm text-slate-500 dark:text-slate-400 font-mono">{s.count}</span>
                                         </div>
                                     ))}
                                     {multiStore.instances.length > 0 && (
                                         <div className="pt-2 border-t border-slate-800 mt-2">
-                                            <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Channel Instances</p>
+                                            <p className="text-xs text-slate-700 dark:text-slate-300 mb-1">Channel Instances</p>
                                             {multiStore.instances.map((inst) => (
                                                 <div key={`${inst.channel}-${inst.syncStatus}`} className="flex items-center justify-between text-xs">
-                                                    <span className="text-slate-400 dark:text-slate-400 capitalize">{inst.channel} � {inst.syncStatus}</span>
+                                                    <span className="text-slate-500 dark:text-slate-400 capitalize">{inst.channel} � {inst.syncStatus}</span>
                                                     <span className="text-slate-500 dark:text-slate-300 font-mono">{inst.count}</span>
                                                 </div>
                                             ))}
@@ -388,7 +388,7 @@ export default function Dashboard() {
                         </CardHeader>
                         <CardContent>
                             {multiStore.aiEnhancements.length === 0 ? (
-                                <p className="text-sm text-slate-400 dark:text-slate-500 py-2">No enhancements yet</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 py-2">No enhancements yet</p>
                             ) : (
                                 <div className="space-y-2">
                                     {multiStore.aiEnhancements.map((ai) => (
@@ -401,7 +401,7 @@ export default function Dashboard() {
                                                     ai.status === 'generated' ? 'warning' : 'secondary'
                                                 }>{ai.status}</Badge>
                                             </div>
-                                            <span className="text-slate-400 dark:text-slate-400 font-mono">{ai.count}</span>
+                                            <span className="text-slate-500 dark:text-slate-400 font-mono">{ai.count}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -419,17 +419,17 @@ export default function Dashboard() {
                         </CardHeader>
                         <CardContent>
                             {multiStore.demoSimulations.length === 0 ? (
-                                <p className="text-sm text-slate-400 dark:text-slate-500 py-2">No simulations logged</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 py-2">No simulations logged</p>
                             ) : (
                                 <div className="space-y-2">
                                     {multiStore.demoSimulations.map((d) => (
                                         <div key={`${d.operationType}-${d.channel}`} className="flex items-center justify-between text-xs">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-slate-500 dark:text-slate-300 capitalize">{d.channel}</span>
-                                                <span className="text-slate-400 dark:text-slate-500">{(d.operationType ?? '').replace(/_/g, ' ')}</span>
+                                                <span className="text-slate-500 dark:text-slate-400">{(d.operationType ?? '').replace(/_/g, ' ')}</span>
                                             </div>
                                             <div className="flex items-center gap-1">
-                                                <span className="text-slate-400 dark:text-slate-400 font-mono">{d.count}</span>
+                                                <span className="text-slate-500 dark:text-slate-400 font-mono">{d.count}</span>
                                                 <span className="text-emerald-500 text-[10px]">({d.successCount} ok)</span>
                                             </div>
                                         </div>
@@ -453,41 +453,41 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         {(!pipelineStats || pipelineStats.totalJobs === 0) ? (
-                            <p className="text-sm text-slate-400 dark:text-slate-500 py-2">No pipeline jobs recorded yet</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 py-2">No pipeline jobs recorded yet</p>
                         ) : (
                             <div className="space-y-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <Cpu className="h-3 w-3 text-slate-400 dark:text-slate-400" />
-                                            <span className="text-xs text-slate-400 dark:text-slate-400">Total Jobs</span>
+                                            <Cpu className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">Total Jobs</span>
                                         </div>
                                         <span className="text-lg font-bold text-slate-600 dark:text-slate-200">{pipelineStats.totalJobs}</span>
                                     </div>
                                     <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3">
                                         <div className="flex items-center gap-2 mb-1">
                                             <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                                            <span className="text-xs text-slate-400 dark:text-slate-400">Completed</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">Completed</span>
                                         </div>
                                         <span className="text-lg font-bold text-emerald-500">{pipelineStats.completedJobs}</span>
                                     </div>
                                     <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3">
                                         <div className="flex items-center gap-2 mb-1">
                                             <XCircle className="h-3 w-3 text-red-500" />
-                                            <span className="text-xs text-slate-400 dark:text-slate-400">Failed</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">Failed</span>
                                         </div>
                                         <span className="text-lg font-bold text-red-500">{pipelineStats.failedJobs}</span>
                                     </div>
                                     <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3">
                                         <div className="flex items-center gap-2 mb-1">
                                             <Zap className="h-3 w-3 text-amber-500" />
-                                            <span className="text-xs text-slate-400 dark:text-slate-400">Processing</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">Processing</span>
                                         </div>
                                         <span className="text-lg font-bold text-amber-500">{pipelineStats.processingJobs}</span>
                                     </div>
                                 </div>
                                 {pipelineStats.avgProcessingTime > 0 && (
-                                    <div className="text-xs text-slate-400 dark:text-slate-500">
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">
                                         Avg processing time: {(pipelineStats.avgProcessingTime / 1000).toFixed(1)}s
                                     </div>
                                 )}
@@ -506,16 +506,16 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         {(!aiStats || aiStats.totalCount === 0) ? (
-                            <p className="text-sm text-slate-400 dark:text-slate-500 py-2">No AI enhancements generated yet</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 py-2">No AI enhancements generated yet</p>
                         ) : (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-slate-400 dark:text-slate-400">Total Enhancements</span>
+                                    <span className="text-sm text-slate-500 dark:text-slate-400">Total Enhancements</span>
                                     <span className="text-lg font-bold text-slate-600 dark:text-slate-200">{aiStats.totalCount}</span>
                                 </div>
                                 {aiStats.avgConfidence > 0 && (
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm text-slate-400 dark:text-slate-400">Avg Confidence</span>
+                                        <span className="text-sm text-slate-500 dark:text-slate-400">Avg Confidence</span>
                                         <span className={`text-lg font-bold ${aiStats.avgConfidence >= 0.8 ? 'text-emerald-500' : aiStats.avgConfidence >= 0.6 ? 'text-amber-500' : 'text-red-500'}`}>
                                             {(aiStats.avgConfidence * 100).toFixed(0)}%
                                         </span>
@@ -523,7 +523,7 @@ export default function Dashboard() {
                                 )}
                                 {aiStats.byStatus.length > 0 && (
                                     <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                                        <p className="text-xs text-slate-400 dark:text-slate-500">By Status</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">By Status</p>
                                         {aiStats.byStatus.map((s) => (
                                             <div key={s.status} className="flex items-center justify-between text-xs">
                                                 <Badge variant={
@@ -531,18 +531,18 @@ export default function Dashboard() {
                                                     s.status === 'rejected' ? 'destructive' :
                                                     s.status === 'generated' ? 'warning' : 'secondary'
                                                 }>{s.status}</Badge>
-                                                <span className="text-slate-400 dark:text-slate-400 font-mono">{s.count}</span>
+                                                <span className="text-slate-500 dark:text-slate-400 font-mono">{s.count}</span>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                                 {aiStats.byType.length > 0 && (
                                     <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                                        <p className="text-xs text-slate-400 dark:text-slate-500">By Type</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">By Type</p>
                                         {aiStats.byType.map((t) => (
                                             <div key={t.type} className="flex items-center justify-between text-xs">
                                                 <span className="text-slate-500 dark:text-slate-300 capitalize">{(t.type ?? '').replace(/_/g, ' ')}</span>
-                                                <span className="text-slate-400 dark:text-slate-400 font-mono">{t.count}</span>
+                                                <span className="text-slate-500 dark:text-slate-400 font-mono">{t.count}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -566,7 +566,7 @@ export default function Dashboard() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="text-slate-400 dark:text-slate-400 border-b border-slate-800">
+                                    <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-800">
                                         <th className="text-left py-2 pr-4">Title</th>
                                         <th className="text-left py-2 pr-4">SKU</th>
                                         <th className="text-right py-2 pr-4">Available</th>
@@ -577,7 +577,7 @@ export default function Dashboard() {
                                     {outOfStock.slice(0, 5).map((item) => (
                                         <tr key={item.listingId} className="border-b border-slate-200/50 dark:border-slate-800/50">
                                             <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? '�'}</td>
-                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? '�'}</td>
+                                            <td className="py-2 pr-4 text-slate-500 dark:text-slate-400 font-mono text-xs">{item.sku ?? '�'}</td>
                                             <td className="py-2 pr-4 text-right text-red-500 font-bold">{item.available}</td>
                                             <td className="py-2 text-right"><Badge variant="destructive">Out of Stock</Badge></td>
                                         </tr>
@@ -585,7 +585,7 @@ export default function Dashboard() {
                                     {lowStock.slice(0, 5).map((item) => (
                                         <tr key={item.listingId} className="border-b border-slate-200/50 dark:border-slate-800/50">
                                             <td className="py-2 pr-4 text-slate-600 dark:text-slate-200 truncate max-w-[200px]">{item.title ?? '�'}</td>
-                                            <td className="py-2 pr-4 text-slate-400 dark:text-slate-400 font-mono text-xs">{item.sku ?? '�'}</td>
+                                            <td className="py-2 pr-4 text-slate-500 dark:text-slate-400 font-mono text-xs">{item.sku ?? '�'}</td>
                                             <td className="py-2 pr-4 text-right text-amber-500 font-bold">{item.available}</td>
                                             <td className="py-2 text-right"><Badge variant="warning">Low Stock</Badge></td>
                                         </tr>

@@ -1,4 +1,4 @@
-﻿/* ─── ResponsiveContainer ──────────────────────────────────
+/* ─── ResponsiveContainer ──────────────────────────────────
  *  Reusable responsive layout wrapper with consistent
  *  max-width constraints and responsive padding.
  *
@@ -74,7 +74,7 @@ export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
           {title}
         </h2>
         {subtitle && (
-          <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">{subtitle}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{subtitle}</div>
         )}
       </div>
       {children && (

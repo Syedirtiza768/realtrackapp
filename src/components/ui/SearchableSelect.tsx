@@ -238,7 +238,7 @@ export default function SearchableSelect({
         className={`
           flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors
           ${disabled
-            ? 'bg-slate-200/50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-500 cursor-not-allowed'
+            ? 'bg-slate-200/50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
             : error
               ? 'bg-white dark:bg-slate-900 border-red-500/50 text-slate-700 dark:text-slate-200 hover:border-red-400'
               : isOpen
@@ -257,20 +257,20 @@ export default function SearchableSelect({
       >
         {isOpen ? (
           <>
-            <Search size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
+            <Search size={14} className="text-slate-500 dark:text-slate-400 shrink-0" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 min-w-0"
+              className="flex-1 bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 min-w-0"
               placeholder={placeholder}
               autoComplete="off"
               onClick={(e) => e.stopPropagation()}
             />
           </>
         ) : (
-          <span className={`flex-1 truncate ${!value ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+          <span className={`flex-1 truncate ${!value ? 'text-slate-500 dark:text-slate-400' : ''}`}>
             {displayValue || placeholder}
           </span>
         )}
@@ -280,7 +280,7 @@ export default function SearchableSelect({
           <button
             type="button"
             onClick={handleClear}
-            className="p-0.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 shrink-0"
+            className="p-0.5 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0"
             aria-label="Clear selection"
           >
             <X size={14} />
@@ -288,7 +288,7 @@ export default function SearchableSelect({
         )}
         <ChevronDown
           size={14}
-          className={`text-slate-400 dark:text-slate-500 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`text-slate-500 dark:text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </div>
 
@@ -307,7 +307,7 @@ export default function SearchableSelect({
             onScroll={handleScroll}
           >
             {options.length === 0 && !loading && (
-              <div className="px-3 py-6 text-center text-slate-400 dark:text-slate-500 text-sm">
+              <div className="px-3 py-6 text-center text-slate-500 dark:text-slate-400 text-sm">
                 {query ? 'No results found' : 'Type to search...'}
               </div>
             )}
@@ -334,7 +334,7 @@ export default function SearchableSelect({
             ))}
 
             {loading && (
-              <div className="px-3 py-3 flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 text-sm">
+              <div className="px-3 py-3 flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400 text-sm">
                 <Loader2 size={14} className="animate-spin" />
                 Loading...
               </div>

@@ -49,41 +49,51 @@ export async function listRbacPermissions(): Promise<RbacPermission[]> {
   return fetchWithAuth<RbacPermission[]>('/api/rbac/permissions');
 }
 
+async function rbacMutation<T>(
+  run: () => Promise<T>,
+): Promise<{ ok: true; profile: T } | { error: string }> {
+  try {
+    const res = await run();
+    if (res && typeof res === 'object' && 'error' in res && (res as { error: string }).error) {
+      return { error: (res as { error: string }).error };
+    }
+    return { ok: true, profile: res };
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Request failed' };
+  }
+}
+
 export async function createRbacUser(
   payload: CreateUserPayload,
 ): Promise<{ ok: true; profile: unknown } | { error: string }> {
-  const res = await fetchWithAuth<unknown>('/api/rbac/users', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (res && typeof res === 'object' && 'error' in res && (res as { error: string }).error) {
-    return { error: (res as { error: string }).error };
-  }
-  return { ok: true, profile: res };
+  return rbacMutation(() =>
+    fetchWithAuth<unknown>('/api/rbac/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export async function assignUserRole(
   userId: string,
   roleSlug: string,
 ): Promise<{ ok: true; profile: unknown } | { error: string }> {
-  const res = await fetchWithAuth<unknown>(`/api/rbac/users/${userId}/role`, {
-    method: 'PATCH',
-    body: JSON.stringify({ roleSlug }),
-  });
-  if (res && typeof res === 'object' && 'error' in res && (res as { error: string }).error) {
-    return { error: (res as { error: string }).error };
-  }
-  return { ok: true, profile: res };
+  return rbacMutation(() =>
+    fetchWithAuth<unknown>(`/api/rbac/users/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ roleSlug }),
+    }),
+  );
 }
 
 export async function deactivateUser(
   userId: string,
 ): Promise<{ ok: true } | { error: string }> {
-  const res = await fetchWithAuth<unknown>(`/api/rbac/users/${userId}/deactivate`, {
-    method: 'PATCH',
-  });
-  if (res && typeof res === 'object' && 'error' in res && (res as { error: string }).error) {
-    return { error: (res as { error: string }).error };
-  }
+  const result = await rbacMutation(() =>
+    fetchWithAuth<unknown>(`/api/rbac/users/${userId}/deactivate`, {
+      method: 'PATCH',
+    }),
+  );
+  if ('error' in result) return result;
   return { ok: true };
 }

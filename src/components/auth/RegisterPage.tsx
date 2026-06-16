@@ -3,21 +3,37 @@
  *  Links back to login.
  * ────────────────────────────────────────────────────────── */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, UserPlus, AlertCircle } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { usePublicBranding } from '../../hooks/usePublicBranding';
+import { usePublicAuthConfig } from '../../hooks/usePublicAuthConfig';
 
 export default function RegisterPage() {
   const { register, loading } = useAuth();
   const { branding } = usePublicBranding();
+  const { config: authConfig, loading: authConfigLoading } = usePublicAuthConfig();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authConfigLoading && !authConfig.registrationEnabled) {
+      navigate('/login', { replace: true });
+    }
+  }, [authConfig.registrationEnabled, authConfigLoading, navigate]);
+
+  if (authConfigLoading || !authConfig.registrationEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-500">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

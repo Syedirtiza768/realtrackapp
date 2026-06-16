@@ -121,7 +121,7 @@ function ProductRow({
           <p className="text-sm text-slate-900 dark:text-slate-100 truncate">
             {product.optimizedTitle ?? product.sku ?? product.productId.slice(0, 8)}
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             SKU {product.sku ?? '\u2014'} \u00b7 Readiness {Math.round(product.uploadReadinessScore * 100)}%
           </p>
         </div>
@@ -182,7 +182,7 @@ function ProductRow({
         <div className="overflow-x-auto">
           {Array.isArray(detail.fitmentRows) && (detail.fitmentRows as unknown[]).length > 0 ? (
           <table className="w-full text-xs text-left">
-            <thead className="text-slate-500 dark:text-slate-500">
+            <thead className="text-slate-500 dark:text-slate-400">
               <tr>
                 <th className="p-1">Year</th>
                 <th className="p-1">Make</th>
@@ -213,7 +213,7 @@ function ProductRow({
                 Catalog fitment loaded \u2014 re-run optimization to validate against eBay MVL.
               </p>
               <table className="w-full text-xs text-left">
-                <thead className="text-slate-400 dark:text-slate-500">
+                <thead className="text-slate-500 dark:text-slate-400">
                   <tr>
                     <th className="p-1">Year</th>
                     <th className="p-1">Make</th>
@@ -327,7 +327,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
 
         {enabled && (optStatus === 'running' || optStatus === 'pending') && (
           <div>
-            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <div className="flex justify-between text-xs text-slate-700 dark:text-slate-300 mb-1">
               <span>Optimizing listings ({processed}/{total})</span>
               <span>{optPct}%</span>
             </div>
@@ -389,7 +389,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
               <ProductRow key={p.productId} jobId={job.id} product={p} onRefresh={() => refetch()} />
             ))}
             {optimization.products.length > 50 && (
-              <p className="text-xs text-slate-500 dark:text-slate-500 text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
                 Showing 50 of {optimization.products.length} listings
               </p>
             )}
@@ -397,7 +397,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
         )}
 
         <details className="text-xs">
-          <summary className="text-slate-500 dark:text-slate-500 cursor-pointer hover:text-slate-700 dark:text-slate-300">Admin / debug</summary>
+          <summary className="text-slate-500 dark:text-slate-400 cursor-pointer hover:text-slate-700 dark:text-slate-300">Admin / debug</summary>
           <div className="mt-2">
             <button
               type="button"
@@ -425,7 +425,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg bg-slate-100/60 dark:bg-slate-800/60 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
       <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   );

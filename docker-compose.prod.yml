@@ -1,0 +1,65 @@
+# ───────────────────────────────────────────────────────────────
+# RealTrackApp — Production Docker Compose overlay
+# ───────────────────────────────────────────────────────────────
+# Usage (with base compose):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Enables: PgBouncer, larger Redis/Postgres limits, horizontal backend
+# prerequisites (scheduler leader + Socket.IO Redis adapter).
+# ───────────────────────────────────────────────────────────────
+
+services:
+  postgres:
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=200
+
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22.1-p0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-listingpro}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 25
+      AUTH_TYPE: md5
+    ports:
+      - "${PGBOUNCER_PORT_EXTERNAL:-6432}:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 -U ${DB_USER:-postgres} || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+
+  backend:
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_POOL_MAX: ${DB_POOL_MAX:-25}
+      DB_POOL_MIN: ${DB_POOL_MIN:-5}
+      REDIS_SOCKET_ADAPTER: ${REDIS_SOCKET_ADAPTER:-true}
+      SCHEDULER_LEADER_ENABLED: ${SCHEDULER_LEADER_ENABLED:-true}
+      MAX_CONCURRENT_PIPELINE_JOBS: ${MAX_CONCURRENT_PIPELINE_JOBS:-2}
+      MAX_CONCURRENT_CATALOG_IMPORTS: ${MAX_CONCURRENT_CATALOG_IMPORTS:-2}
+    # Scale with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --scale backend=2

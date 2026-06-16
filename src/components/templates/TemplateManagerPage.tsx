@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   FileText,
   Plus,
@@ -125,7 +125,7 @@ export default function TemplateManagerPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-slate-500 dark:text-slate-400" />
       </div>
     );
   }
@@ -135,7 +135,7 @@ export default function TemplateManagerPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Listing Templates</h2>
-          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {templates.length} template{templates.length !== 1 ? 's' : ''} · {templates.filter((t) => t.active).length} active
           </p>
         </div>
@@ -169,7 +169,7 @@ export default function TemplateManagerPage() {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="text-sm font-semibold text-slate-800">Template Preview</h3>
-              <button onClick={() => setPreviewHtml(null)} className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-500 dark:text-slate-600">
+              <button onClick={() => setPreviewHtml(null)} className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-500 dark:text-slate-600">
                 <X size={16} />
               </button>
             </div>
@@ -191,8 +191,8 @@ export default function TemplateManagerPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-3 text-slate-500 dark:text-slate-600" />
-            <p className="text-slate-400 dark:text-slate-400 font-medium">No templates yet</p>
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-slate-500 dark:text-slate-400 font-medium">No templates yet</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Create listing templates for brand-consistent formatting across channels.
             </p>
           </CardContent>
@@ -208,7 +208,7 @@ export default function TemplateManagerPage() {
                     {template.isDefault && <Star size={14} className="text-amber-400 shrink-0" fill="currentColor" />}
                   </div>
                   {template.description && (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">{template.description}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{template.description}</p>
                   )}
                 </div>
               </CardHeader>
@@ -300,7 +300,7 @@ function TemplateForm({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">{initial ? 'Edit Template' : 'New Template'}</CardTitle>
-        <button onClick={onCancel} className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
+        <button onClick={onCancel} className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
           <X size={16} />
         </button>
       </CardHeader>
@@ -308,29 +308,29 @@ function TemplateForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Name *</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Name *</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., eBay Pro Template"
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Description</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Description</label>
               <input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Channel</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Channel</label>
               <select
                 value={channel}
                 onChange={(e) => setChannel(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="">All Channels</option>
                 {Object.entries(CHANNEL_LABELS).map(([k, v]) => (
@@ -341,11 +341,11 @@ function TemplateForm({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Template Type</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Template Type</label>
               <select
                 value={templateType}
                 onChange={(e) => setTemplateType(e.target.value as 'title' | 'description' | 'full')}
-                className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="description">Description</option>
                 <option value="title">Title</option>
@@ -355,26 +355,26 @@ function TemplateForm({
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 mb-1">
+            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 mb-1">
               <Code2 size={12} /> Template Content * <span className="text-slate-500 dark:text-slate-600">(use {'{{variable}}'} syntax)</span>
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={8}
-              className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Custom CSS (optional)</label>
+            <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Custom CSS (optional)</label>
             <textarea
               value={css}
               onChange={(e) => setCss(e.target.value)}
               rows={3}
               placeholder=".listing-title { color: #333; }"
-              className="w-full bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
@@ -400,7 +400,7 @@ function TemplateForm({
             <button
               type="button"
               onClick={onCancel}
-              className="text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors"
+              className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 px-3 py-2 transition-colors"
             >
               Cancel
             </button>

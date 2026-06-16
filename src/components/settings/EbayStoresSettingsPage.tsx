@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   listEbayAccounts,
@@ -206,10 +206,10 @@ export default function EbayStoresSettingsPage() {
     <div className="max-w-4xl mx-auto p-6 space-y-8 text-slate-900 dark:text-slate-100">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">eBay stores</h1>
-        <p className="text-slate-400 dark:text-slate-400 mt-2 text-sm leading-relaxed">
+        <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm leading-relaxed">
           Connect a seller with <strong className="text-slate-500 dark:text-slate-300">Sign in with eBay</strong>.
           eBay does not give you an organization ID to look up — after consent we call{' '}
-          <code className="text-xs text-slate-400 dark:text-slate-500">commerce/identity/v1/user</code> with the
+          <code className="text-xs text-slate-500 dark:text-slate-400">commerce/identity/v1/user</code> with the
           seller&apos;s user access token and store their eBay user ID, username, and tokens
           securely on our server.
         </p>
@@ -242,17 +242,17 @@ export default function EbayStoresSettingsPage() {
           </p>
         )}
         {signedIn && workspaceLoading && (
-          <p className="text-slate-400 dark:text-slate-500 text-sm">Preparing your workspace…</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Preparing your workspace…</p>
         )}
         {signedIn && !workspaceLoading && organizationName && (
-          <p className="text-sm text-slate-400 dark:text-slate-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Workspace: <span className="text-slate-600 dark:text-slate-200">{organizationName}</span>
             <span className="text-slate-500 dark:text-slate-600 text-xs ml-2">(internal tenant — not from eBay)</span>
           </p>
         )}
         {organizations.length > 1 && organizationId && (
           <label className="block text-sm">
-            <span className="text-slate-400 dark:text-slate-400">Workspace</span>
+            <span className="text-slate-500 dark:text-slate-400">Workspace</span>
             <select
               className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
               value={organizationId}
@@ -267,7 +267,7 @@ export default function EbayStoresSettingsPage() {
           </label>
         )}
         <label className="block text-sm">
-          <span className="text-slate-400 dark:text-slate-400">Label in RealTrack (optional)</span>
+          <span className="text-slate-500 dark:text-slate-400">Label in RealTrack (optional)</span>
           <input
             className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
             value={displayName}
@@ -277,7 +277,7 @@ export default function EbayStoresSettingsPage() {
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block text-sm">
-            <span className="text-slate-400 dark:text-slate-400">Marketplace</span>
+            <span className="text-slate-500 dark:text-slate-400">Marketplace</span>
             <select
               className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
               value={marketplaceId}
@@ -291,7 +291,7 @@ export default function EbayStoresSettingsPage() {
             </select>
           </label>
           <label className="block text-sm">
-            <span className="text-slate-400 dark:text-slate-400">Environment</span>
+            <span className="text-slate-500 dark:text-slate-400">Environment</span>
             <select
               className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
               value={environment}
@@ -315,7 +315,7 @@ export default function EbayStoresSettingsPage() {
 
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 p-6 space-y-4">
         <h2 className="text-lg font-medium">Import from SellerPundit</h2>
-        <p className="text-sm text-slate-400 dark:text-slate-400 leading-relaxed">
+        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
           Pull eBay stores already connected in SellerPundit into this workspace. Tokens and
           business policies are stored here; listings publish through SellerPundit&apos;s bulk API.
           Configure <code className="text-xs">SELLERPUNDIT_EMAIL</code> /{' '}
@@ -371,9 +371,9 @@ export default function EbayStoresSettingsPage() {
             Refresh
           </button>
         </div>
-        {loading && <p className="text-slate-400 dark:text-slate-500 text-sm">Loading…</p>}
+        {loading && <p className="text-slate-500 dark:text-slate-400 text-sm">Loading…</p>}
         {!loading && accounts.length === 0 && (
-          <p className="text-slate-400 dark:text-slate-500 text-sm">
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
             No eBay sellers connected yet. Use Sign in with eBay above.
           </p>
         )}
@@ -393,7 +393,7 @@ export default function EbayStoresSettingsPage() {
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-slate-400 dark:text-slate-500">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
                   eBay user: {a.ebayUserId} · {a.environment} ·{' '}
                   <span
                     className={
@@ -403,7 +403,7 @@ export default function EbayStoresSettingsPage() {
                     {a.connectionStatus}
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Marketplaces:{' '}
                   {(a.marketplaces ?? []).map((m) => m.marketplaceId).join(', ') || '—'}
                 </div>

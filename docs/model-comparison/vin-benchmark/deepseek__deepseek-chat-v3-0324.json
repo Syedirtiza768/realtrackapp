@@ -1,0 +1,119 @@
+{
+  "modelId": "deepseek/deepseek-chat-v3-0324",
+  "ok": true,
+  "latencyMs": 16244,
+  "usage": {
+    "prompt_tokens": 775,
+    "completion_tokens": 527,
+    "total_tokens": 1302,
+    "cost": 0.00082553,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00082553,
+      "upstream_inference_prompt_cost": 0.00022475,
+      "upstream_inference_completions_cost": 0.00060078
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.00056079,
+  "contextLength": 163840,
+  "rawContent": "{\n  \"make\": \"TOYOTA\",\n  \"model\": \"Camry\",\n  \"trim\": \"\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"Sedan\",\n  \"driveType\": \"\",\n  \"engineCylinders\": \"\",\n  \"engineDisplacementL\": \"\",\n  \"engineDescription\": \"\",\n  \"fuelType\": \"\",\n  \"transmission\": \"\",\n  \"mpg\": \"\",\n  \"horsepower\": \"\",\n  \"torque\": \"\",\n  \"seatingCapacity\": \"\",\n  \"wheelbase\": \"\",\n  \"curbWeight\": \"\",\n  \"plantCountry\": \"JAPAN\",\n  \"plantCity\": \"TOYOTA CITY\",\n  \"plantName\": \"Toyota Motor Corporation - Tsutsumi Plant\",\n  \"vehicleType\": \"PASSENGER CAR\",\n  \"manufacturingCountry\": \"JAPAN\",\n  \"recallsOrSafetyNotes\": \"\",\n  \"confidenceNotes\": \"Model inferred as Camry based on VIN pattern and Toyota's passenger car lineup. Many fields are empty due to VIN decoding errors (positions 4-8). Plant information is verified from NHTSA data.\",\n  \"dataSourcesRecommended\": [\"Toyota VIN Decoder\", \"NHTSA API\", \"Toyota parts catalogs\"],\n  \"commonParts\": [\n    \"Oil Filter\",\n    \"Air Filter\",\n    \"Cabin Air Filter\",\n    \"Brake Pads\",\n    \"Spark Plugs\",\n    \"Wiper Blades\",\n    \"Battery\",\n    \"Headlight Bulbs\",\n    \"Tail Light Assembly\",\n    \"Strut Assembly\"\n  ],\n  \"knownFitment\": [\n    \"2018-2022 Toyota Camry\",\n    \"2017-2022 Toyota Camry Hybrid\",\n    \"2018-2022 Toyota Avalon (shared platform)\"\n  ],\n  \"ebayMotorsListingHints\": {\n    \"titleKeywords\": [\"2019 Toyota Camry\", \"XV70\", \"8th Gen Camry\"],\n    \"categoryHints\": [\"Car & Truck Parts\", \"Toyota Parts\", \"Camry Parts 2018+\"],\n    \"itemSpecifics\": {\n      \"Fitment Year\": \"2019\",\n      \"Fitment Make\": \"Toyota\",\n      \"Fitment Model\": \"Camry\",\n      \"Generation\": \"XV70 (8th Gen)\"\n    }\n  },\n  \"description\": \"2019 Toyota Camry manufactured in Japan, representing the eighth generation of Toyota's popular midsize sedan with updated styling and improved performance.\"\n}",
+  "parsed": {
+    "make": "TOYOTA",
+    "model": "Camry",
+    "trim": "",
+    "year": "2019",
+    "bodyClass": "Sedan",
+    "driveType": "",
+    "engineCylinders": "",
+    "engineDisplacementL": "",
+    "engineDescription": "",
+    "fuelType": "",
+    "transmission": "",
+    "mpg": "",
+    "horsepower": "",
+    "torque": "",
+    "seatingCapacity": "",
+    "wheelbase": "",
+    "curbWeight": "",
+    "plantCountry": "JAPAN",
+    "plantCity": "TOYOTA CITY",
+    "plantName": "Toyota Motor Corporation - Tsutsumi Plant",
+    "vehicleType": "PASSENGER CAR",
+    "manufacturingCountry": "JAPAN",
+    "recallsOrSafetyNotes": "",
+    "confidenceNotes": "Model inferred as Camry based on VIN pattern and Toyota's passenger car lineup. Many fields are empty due to VIN decoding errors (positions 4-8). Plant information is verified from NHTSA data.",
+    "dataSourcesRecommended": [
+      "Toyota VIN Decoder",
+      "NHTSA API",
+      "Toyota parts catalogs"
+    ],
+    "commonParts": [
+      "Oil Filter",
+      "Air Filter",
+      "Cabin Air Filter",
+      "Brake Pads",
+      "Spark Plugs",
+      "Wiper Blades",
+      "Battery",
+      "Headlight Bulbs",
+      "Tail Light Assembly",
+      "Strut Assembly"
+    ],
+    "knownFitment": [
+      "2018-2022 Toyota Camry",
+      "2017-2022 Toyota Camry Hybrid",
+      "2018-2022 Toyota Avalon (shared platform)"
+    ],
+    "ebayMotorsListingHints": {
+      "titleKeywords": [
+        "2019 Toyota Camry",
+        "XV70",
+        "8th Gen Camry"
+      ],
+      "categoryHints": [
+        "Car & Truck Parts",
+        "Toyota Parts",
+        "Camry Parts 2018+"
+      ],
+      "itemSpecifics": {
+        "Fitment Year": "2019",
+        "Fitment Make": "Toyota",
+        "Fitment Model": "Camry",
+        "Generation": "XV70 (8th Gen)"
+      }
+    },
+    "description": "2019 Toyota Camry manufactured in Japan, representing the eighth generation of Toyota's popular midsize sedan with updated styling and improved performance."
+  },
+  "parseError": null,
+  "scoring": {
+    "checks": {
+      "yearMatch": true,
+      "makeMatch": true,
+      "plantCountryMatch": true,
+      "vehicleTypeMatch": true,
+      "hasConfidenceNotes": true,
+      "mentionsNhtsaGap": true,
+      "hasTransmission": false,
+      "hasEngineDescription": false,
+      "hasEbayHints": true,
+      "hasCommonParts": true,
+      "hasFitment": true,
+      "hasDataSources": true,
+      "jsonComplete": true
+    },
+    "fieldCount": 4,
+    "score": 67,
+    "maxScore": 98
+  }
+}

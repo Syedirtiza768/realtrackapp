@@ -14,17 +14,19 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineService } from './pipeline.service.js';
+import type { CreateSingleListingDto } from './pipeline.service.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import type { CombinedOptimizationResult } from './pipeline.service.js';
 import type { EnterpriseOptimizationResult } from './pipeline.service.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
-
-const PROJECT_ROOT = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-const UPLOAD_DIR = path.resolve(PROJECT_ROOT, 'uploads', 'pipeline');
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
+import { RbacService } from '../rbac/rbac.service.js';
 
 /**
  * PipelineController — REST endpoints for the enrichment pipeline.
@@ -35,9 +37,13 @@ const UPLOAD_DIR = path.resolve(PROJECT_ROOT, 'uploads', 'pipeline');
 @ApiTags('Pipeline')
 @Controller('pipeline')
 export class PipelineController {
-  constructor(private readonly pipelineService: PipelineService) {}
+  constructor(
+    private readonly pipelineService: PipelineService,
+    private readonly rbac: RbacService,
+  ) {}
 
   @Post('jobs/:id/enterprise-optimize')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
   @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -116,6 +122,7 @@ export class PipelineController {
   }
 
   @Post('jobs/:id/optimize-all')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
   @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -135,34 +142,39 @@ export class PipelineController {
   }
 
   @Post('upload')
+  @Throttle({ medium: { limit: 3, ttl: 60_000 } })
   @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload an Excel/CSV file and start enrichment pipeline' })
-  async uploadAndStart(@UploadedFile() file: Express.Multer.File) {
+  async uploadAndStart(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
+  ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
 
-    // Ensure upload directory exists
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-    }
+    const job = await this.pipelineService.createJobFromUpload(
+      file.originalname,
+      file.buffer,
+      user.id,
+    );
 
-    // Save file with unique name
-    const timestamp = Date.now();
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storedName = `${timestamp}_${safeName}`;
-    const storedPath = path.join(UPLOAD_DIR, storedName);
-    fs.writeFileSync(storedPath, file.buffer);
+    return { job };
+  }
 
-    const job = await this.pipelineService.createJob({
-      originalFilename: file.originalname,
-      storedFilePath: storedPath,
-      fileSizeBytes: file.size,
-    });
-
+  @Post('single')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @RequirePermissions('pipeline.run')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Submit a single listing for pipeline enrichment (generates a single-row CSV internally)' })
+  async createSingleListing(
+    @Body() body: CreateSingleListingDto,
+    @CurrentUser() user: User,
+  ) {
+    const job = await this.pipelineService.createSingleJob(body, user.id);
     return { job };
   }
 
@@ -170,18 +182,27 @@ export class PipelineController {
   @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'List pipeline jobs' })
   async listJobs(
+    @CurrentUser() user: User,
     @Query('status') status?: string,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
-    return this.pipelineService.listJobs(status, limit ?? 20, offset ?? 0);
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    return this.pipelineService.listJobs(
+      status,
+      limit ?? 20,
+      offset ?? 0,
+      user.id,
+      viewAll,
+    );
   }
 
   @Get('jobs/:id')
   @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get pipeline job details' })
-  async getJob(@Param('id') id: string) {
-    const job = await this.pipelineService.getJob(id);
+  async getJob(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    const job = await this.pipelineService.getJob(id, user.id, viewAll);
     return { job };
   }
 
@@ -189,8 +210,9 @@ export class PipelineController {
   @RequirePermissions('pipeline.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Retry a failed pipeline job' })
-  async retryJob(@Param('id') id: string) {
-    const job = await this.pipelineService.retryJob(id);
+  async retryJob(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    const job = await this.pipelineService.retryJob(id, user.id, viewAll);
     return { job };
   }
 
@@ -198,8 +220,9 @@ export class PipelineController {
   @RequirePermissions('pipeline.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a pending/processing pipeline job' })
-  async cancelJob(@Param('id') id: string) {
-    const job = await this.pipelineService.cancelJob(id);
+  async cancelJob(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    const job = await this.pipelineService.cancelJob(id, user.id, viewAll);
     return { job };
   }
 

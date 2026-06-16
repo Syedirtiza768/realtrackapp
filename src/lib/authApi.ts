@@ -65,7 +65,7 @@ export async function fetchWithAuth<T = unknown>(
     } catch {
       // ignore parse errors
     }
-    const err = Object.assign(new Error(message), { responseBody: body });
+    const err = Object.assign(new Error(message), { responseBody: body, status: res.status });
     throw err;
   }
 

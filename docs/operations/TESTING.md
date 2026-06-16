@@ -19,8 +19,11 @@ cd backend
 npm run test           # Unit tests (Jest)
 npm run test:e2e       # E2E tests
 
-# Frontend (no test suite configured)
-# npm run test         # Not configured
+# Multi-user concurrency regression (subset)
+npm test -- --testPathPatterns="job-visibility|scheduler-leader|heavy-job-limiter|listings.concurrency"
+
+# Load baseline (requires k6 — see docs/load/README.md)
+k6 run scripts/load/k6-baseline.mjs
 ```
 
 ## Where Tests Are Needed (Priority)

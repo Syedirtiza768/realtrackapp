@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
@@ -12,6 +12,8 @@ import { CatalogImportRow } from './entities/catalog-import-row.entity.js';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import type { CsvImportJobData } from './processors/csv-import.processor.js';
+import { applyCreatedByVisibility, assertCanAccessJob, canViewJob, withCreatedByBackfill } from '../common/utils/job-visibility.js';
+import { HeavyJobLimiterService } from '../common/jobs/heavy-job-limiter.service.js';
 
 export interface ImportVerificationSummary {
   importId: string;
@@ -120,6 +122,7 @@ export class CatalogImportService {
     @InjectQueue('catalog-import')
     private readonly importQueue: Queue<CsvImportJobData>,
     private readonly dataSource: DataSource,
+    private readonly heavyJobLimiter: HeavyJobLimiterService,
   ) {
     this.uploadDir = process.env.CATALOG_UPLOAD_DIR || path.resolve('uploads', 'catalog');
     // Ensure upload directory exists
@@ -306,10 +309,17 @@ export class CatalogImportService {
   async startImport(
     importId: string,
     columnMapping?: Record<string, string>,
+    actorId?: string,
+    viewAll = true,
   ): Promise<CatalogImport> {
+    await this.heavyJobLimiter.assertCatalogImportSlotAvailable();
+
     const importRecord = await this.importRepo.findOneBy({ id: importId });
     if (!importRecord) {
       throw new NotFoundException(`Import ${importId} not found`);
+    }
+    if (actorId) {
+      assertCanAccessJob(importRecord.createdBy, actorId, viewAll);
     }
 
     if (importRecord.status !== 'pending' && importRecord.status !== 'paused') {
@@ -323,6 +333,7 @@ export class CatalogImportService {
       importRecord.columnMapping = columnMapping;
     }
 
+    importRecord.createdBy = withCreatedByBackfill(importRecord.createdBy, actorId);
     importRecord.status = 'validating';
     importRecord.startedAt = new Date();
     await this.importRepo.save(importRecord);
@@ -355,17 +366,16 @@ export class CatalogImportService {
     status?: string,
     limit = 20,
     offset = 0,
+    viewerId?: string,
+    viewAll = true,
   ): Promise<{ imports: CatalogImport[]; total: number }> {
-    const where: Record<string, unknown> = {};
-    if (status) where['status'] = status;
-
-    const [imports, total] = await this.importRepo.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: offset,
-    });
-
+    const qb = this.importRepo.createQueryBuilder('i').orderBy('i.createdAt', 'DESC');
+    if (status) qb.andWhere('i.status = :status', { status });
+    if (viewerId) {
+      applyCreatedByVisibility(qb, 'i', viewerId, viewAll);
+    }
+    qb.take(limit).skip(offset);
+    const [imports, total] = await qb.getManyAndCount();
     return { imports, total };
   }
 
@@ -374,9 +384,14 @@ export class CatalogImportService {
    */
   async getImport(
     id: string,
+    viewerId?: string,
+    viewAll = true,
   ): Promise<{ import: CatalogImport; verification: ImportVerificationSummary | null }> {
     const record = await this.importRepo.findOneBy({ id });
     if (!record) throw new NotFoundException(`Import ${id} not found`);
+    if (viewerId && !canViewJob(record.createdBy, viewerId, viewAll)) {
+      throw new ForbiddenException('You do not have access to this catalog import');
+    }
 
     let verification: ImportVerificationSummary | null = null;
     if (
@@ -418,9 +433,12 @@ export class CatalogImportService {
   /**
    * Cancel a pending or processing import.
    */
-  async cancelImport(id: string): Promise<CatalogImport> {
+  async cancelImport(id: string, actorId?: string, viewAll = true): Promise<CatalogImport> {
     const record = await this.importRepo.findOneBy({ id });
     if (!record) throw new NotFoundException(`Import ${id} not found`);
+    if (actorId) {
+      assertCanAccessJob(record.createdBy, actorId, viewAll);
+    }
 
     if (record.status === 'completed' || record.status === 'cancelled') {
       throw new BadRequestException(
@@ -430,15 +448,19 @@ export class CatalogImportService {
 
     record.status = 'cancelled';
     record.completedAt = new Date();
+    record.createdBy = withCreatedByBackfill(record.createdBy, actorId);
     return this.importRepo.save(record);
   }
 
   /**
    * Retry a failed import (resume from last processed row).
    */
-  async retryImport(id: string): Promise<CatalogImport> {
+  async retryImport(id: string, actorId?: string, viewAll = true): Promise<CatalogImport> {
     const record = await this.importRepo.findOneBy({ id });
     if (!record) throw new NotFoundException(`Import ${id} not found`);
+    if (actorId) {
+      assertCanAccessJob(record.createdBy, actorId, viewAll);
+    }
 
     if (record.status !== 'failed') {
       throw new BadRequestException(
@@ -448,9 +470,10 @@ export class CatalogImportService {
 
     record.status = 'pending';
     record.errorMessage = null;
+    record.createdBy = withCreatedByBackfill(record.createdBy, actorId);
     await this.importRepo.save(record);
 
-    return this.startImport(record.id);
+    return this.startImport(record.id, undefined, actorId, viewAll);
   }
 
   /**

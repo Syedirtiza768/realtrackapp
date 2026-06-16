@@ -7,6 +7,7 @@ export { FITMENT_EXTRACTION_PROMPT } from './fitment-extraction.prompt.js';
 export { IMAGE_ANALYSIS_PROMPT } from './image-analysis.prompt.js';
 export { CROSS_REFERENCE_PROMPT } from './cross-reference.prompt.js';
 export { PRICING_ANALYSIS_PROMPT } from './pricing-analysis.prompt.js';
+export { VIN_PARTS_COMPATIBILITY_PROMPT, VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT } from './vin-parts-compatibility.prompt.js';
 
 import type { PromptTemplate } from '../openai.types.js';
 import { DATA_ENRICHMENT_PROMPT } from './data-enrichment.prompt.js';
@@ -18,6 +19,7 @@ import { FITMENT_EXTRACTION_PROMPT } from './fitment-extraction.prompt.js';
 import { IMAGE_ANALYSIS_PROMPT } from './image-analysis.prompt.js';
 import { CROSS_REFERENCE_PROMPT } from './cross-reference.prompt.js';
 import { PRICING_ANALYSIS_PROMPT } from './pricing-analysis.prompt.js';
+import { VIN_PARTS_COMPATIBILITY_PROMPT, VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT } from './vin-parts-compatibility.prompt.js';
 
 /**
  * Registry of all prompt templates, keyed by name.
@@ -32,6 +34,8 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
   [IMAGE_ANALYSIS_PROMPT.name]: IMAGE_ANALYSIS_PROMPT,
   [CROSS_REFERENCE_PROMPT.name]: CROSS_REFERENCE_PROMPT,
   [PRICING_ANALYSIS_PROMPT.name]: PRICING_ANALYSIS_PROMPT,
+  [VIN_PARTS_COMPATIBILITY_PROMPT.name]: VIN_PARTS_COMPATIBILITY_PROMPT,
+  [VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT.name]: VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT,
 };
 
 /**

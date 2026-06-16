@@ -1,0 +1,130 @@
+{
+  "modelId": "openai/gpt-4.1-mini",
+  "ok": true,
+  "latencyMs": 6325,
+  "usage": {
+    "prompt_tokens": 742,
+    "completion_tokens": 655,
+    "total_tokens": 1397,
+    "cost": 0.0013448,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0013448,
+      "upstream_inference_prompt_cost": 0.0002968,
+      "upstream_inference_completions_cost": 0.001048
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.0013448,
+  "contextLength": 1047576,
+  "rawContent": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Corolla\",\n  \"trim\": \"\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"Sedan\",\n  \"driveType\": \"FWD\",\n  \"engineCylinders\": \"4\",\n  \"engineDisplacementL\": \"1.8\",\n  \"engineDescription\": \"1.8L I4\",\n  \"fuelType\": \"Gasoline\",\n  \"transmission\": \"CVT\",\n  \"mpg\": \"30 city / 38 highway\",\n  \"horsepower\": \"139 hp\",\n  \"torque\": \"126 lb-ft\",\n  \"seatingCapacity\": \"5\",\n  \"wheelbase\": \"106.3 in\",\n  \"curbWeight\": \"2,910 lbs\",\n  \"plantCountry\": \"Japan\",\n  \"plantCity\": \"Toyota City\",\n  \"plantName\": \"Toyota Motor Corporation - Tsutsumi Plant\",\n  \"vehicleType\": \"Passenger Car\",\n  \"manufacturingCountry\": \"Japan\",\n  \"recallsOrSafetyNotes\": \"\",\n  \"confidenceNotes\": \"Make, year, plant info, and vehicle type are verified from NHTSA data. Model, body class, engine, transmission, and other specs are inferred based on typical 2019 Toyota Corolla vehicles produced at Tsutsumi Plant. VIN has errors in positions 4-8, preventing exact trim and engine confirmation. Some fields left blank due to insufficient data.\",\n  \"dataSourcesRecommended\": [\n    \"Toyota official VIN decoder\",\n    \"NHTSA vehicle database\",\n    \"Manufacturer's specification sheets\",\n    \"Edmunds or Kelley Blue Book\",\n    \"Toyota dealership parts catalog\"\n  ],\n  \"commonParts\": [\n    \"Air filter\",\n    \"Brake pads\",\n    \"Oil filter\",\n    \"Spark plugs\",\n    \"Headlights\",\n    \"Tail lights\",\n    \"Suspension struts\",\n    \"Alternator\",\n    \"Radiator\",\n    \"Battery\"\n  ],\n  \"knownFitment\": [\n    \"2019 Toyota Corolla\",\n    \"2018 Toyota Corolla\",\n    \"2020 Toyota Corolla\",\n    \"2019 Toyota Corolla Hatchback (partial parts)\",\n    \"2019 Toyota Corolla LE, SE trims\"\n  ],\n  \"ebayMotorsListingHints\": {\n    \"titleKeywords\": [\"2019 Toyota Corolla\", \"Sedan\", \"1.8L I4\", \"CVT\", \"FWD\"],\n    \"categoryHints\": [\"Sedan\", \"Toyota\", \"Corolla\", \"2019\"],\n    \"itemSpecifics\": {\n      \"Make\": \"Toyota\",\n      \"Model\": \"Corolla\",\n      \"Year\": \"2019\",\n      \"Body Style\": \"Sedan\",\n      \"Engine\": \"1.8L I4\",\n      \"Fuel Type\": \"Gasoline\",\n      \"Transmission\": \"CVT\",\n      \"Drive Type\": \"FWD\"\n    }\n  },\n  \"description\": \"The 2019 Toyota Corolla is a compact sedan known for its reliability and fuel efficiency, featuring a 1.8L 4-cylinder engine paired with a CVT transmission, manufactured in Toyota City, Japan.\"\n}",
+  "parsed": {
+    "make": "Toyota",
+    "model": "Corolla",
+    "trim": "",
+    "year": "2019",
+    "bodyClass": "Sedan",
+    "driveType": "FWD",
+    "engineCylinders": "4",
+    "engineDisplacementL": "1.8",
+    "engineDescription": "1.8L I4",
+    "fuelType": "Gasoline",
+    "transmission": "CVT",
+    "mpg": "30 city / 38 highway",
+    "horsepower": "139 hp",
+    "torque": "126 lb-ft",
+    "seatingCapacity": "5",
+    "wheelbase": "106.3 in",
+    "curbWeight": "2,910 lbs",
+    "plantCountry": "Japan",
+    "plantCity": "Toyota City",
+    "plantName": "Toyota Motor Corporation - Tsutsumi Plant",
+    "vehicleType": "Passenger Car",
+    "manufacturingCountry": "Japan",
+    "recallsOrSafetyNotes": "",
+    "confidenceNotes": "Make, year, plant info, and vehicle type are verified from NHTSA data. Model, body class, engine, transmission, and other specs are inferred based on typical 2019 Toyota Corolla vehicles produced at Tsutsumi Plant. VIN has errors in positions 4-8, preventing exact trim and engine confirmation. Some fields left blank due to insufficient data.",
+    "dataSourcesRecommended": [
+      "Toyota official VIN decoder",
+      "NHTSA vehicle database",
+      "Manufacturer's specification sheets",
+      "Edmunds or Kelley Blue Book",
+      "Toyota dealership parts catalog"
+    ],
+    "commonParts": [
+      "Air filter",
+      "Brake pads",
+      "Oil filter",
+      "Spark plugs",
+      "Headlights",
+      "Tail lights",
+      "Suspension struts",
+      "Alternator",
+      "Radiator",
+      "Battery"
+    ],
+    "knownFitment": [
+      "2019 Toyota Corolla",
+      "2018 Toyota Corolla",
+      "2020 Toyota Corolla",
+      "2019 Toyota Corolla Hatchback (partial parts)",
+      "2019 Toyota Corolla LE, SE trims"
+    ],
+    "ebayMotorsListingHints": {
+      "titleKeywords": [
+        "2019 Toyota Corolla",
+        "Sedan",
+        "1.8L I4",
+        "CVT",
+        "FWD"
+      ],
+      "categoryHints": [
+        "Sedan",
+        "Toyota",
+        "Corolla",
+        "2019"
+      ],
+      "itemSpecifics": {
+        "Make": "Toyota",
+        "Model": "Corolla",
+        "Year": "2019",
+        "Body Style": "Sedan",
+        "Engine": "1.8L I4",
+        "Fuel Type": "Gasoline",
+        "Transmission": "CVT",
+        "Drive Type": "FWD"
+      }
+    },
+    "description": "The 2019 Toyota Corolla is a compact sedan known for its reliability and fuel efficiency, featuring a 1.8L 4-cylinder engine paired with a CVT transmission, manufactured in Toyota City, Japan."
+  },
+  "parseError": null,
+  "scoring": {
+    "checks": {
+      "yearMatch": true,
+      "makeMatch": true,
+      "plantCountryMatch": true,
+      "vehicleTypeMatch": true,
+      "hasConfidenceNotes": true,
+      "mentionsNhtsaGap": true,
+      "hasTransmission": true,
+      "hasEngineDescription": true,
+      "hasEbayHints": true,
+      "hasCommonParts": true,
+      "hasFitment": true,
+      "hasDataSources": true,
+      "jsonComplete": true
+    },
+    "fieldCount": 10,
+    "score": 95,
+    "maxScore": 98
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "modelId": "openai/gpt-4.1",
+  "ok": true,
+  "latencyMs": 10270,
+  "usage": {
+    "prompt_tokens": 742,
+    "completion_tokens": 809,
+    "total_tokens": 1551,
+    "cost": 0.007956,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.007956,
+      "upstream_inference_prompt_cost": 0.001484,
+      "upstream_inference_completions_cost": 0.006472
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.007956,
+  "contextLength": 1047576,
+  "rawContent": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Camry\",\n  \"trim\": \"SE\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"Sedan\",\n  \"driveType\": \"FWD\",\n  \"engineCylinders\": \"4\",\n  \"engineDisplacementL\": \"2.5\",\n  \"engineDescription\": \"2.5L I-4\",\n  \"fuelType\": \"Gasoline\",\n  \"transmission\": \"8-speed Automatic\",\n  \"mpg\": \"28 city / 39 highway\",\n  \"horsepower\": \"203 hp\",\n  \"torque\": \"184 lb-ft\",\n  \"seatingCapacity\": \"5\",\n  \"wheelbase\": \"111.2 in\",\n  \"curbWeight\": \"3,340 lbs\",\n  \"plantCountry\": \"Japan\",\n  \"plantCity\": \"Toyota City\",\n  \"plantName\": \"Toyota Motor Corporation - Tsutsumi Plant\",\n  \"vehicleType\": \"Passenger Car\",\n  \"manufacturingCountry\": \"Japan\",\n  \"recallsOrSafetyNotes\": \"Check NHTSA Campaign Number 19V-XXX for airbag and fuel pump recalls affecting some 2019 Camry models.\",\n  \"confidenceNotes\": \"Make, year, vehicle type, plant country/city/name are verified from NHTSA data. Model, trim, engine, transmission, mpg, horsepower, torque, seating, wheelbase, and curb weight are inferred based on typical 2019 Toyota Camry SE FWD specs. VIN errors in positions 4-8 prevent 100% certainty on trim and engine, but JTNB29HK8K3... pattern is most consistent with Camry SE 2.5L FWD. Recalls are typical for this model/year but should be verified by VIN lookup.\",\n  \"dataSourcesRecommended\": [\n    \"Toyota official VIN decoder\",\n    \"Toyota dealer service department\",\n    \"NHTSA VIN lookup\",\n    \"Toyota Camry 2019 owner's manual\",\n    \"Toyota Techinfo\"\n  ],\n  \"commonParts\": [\n    \"Engine air filter\",\n    \"Cabin air filter\",\n    \"Oil filter\",\n    \"Front brake pads\",\n    \"Rear brake pads\",\n    \"Spark plugs\",\n    \"Wiper blades\",\n    \"Battery\",\n    \"Headlight bulbs\",\n    \"Serpentine belt\"\n  ],\n  \"knownFitment\": [\n    \"2018 Toyota Camry SE 2.5L\",\n    \"2019 Toyota Camry SE 2.5L\",\n    \"2020 Toyota Camry SE 2.5L\",\n    \"2018-2020 Toyota Camry LE/XLE 2.5L (some parts)\",\n    \"2018-2020 Toyota Camry XSE 2.5L (some parts)\"\n  ],\n  \"ebayMotorsListingHints\": {\n    \"titleKeywords\": [\n      \"2019 Toyota Camry SE\",\n      \"2.5L\",\n      \"FWD\",\n      \"Sedan\",\n      \"Automatic\"\n    ],\n    \"categoryHints\": [\n      \"eBay Motors > Cars & Trucks > Toyota > Camry\"\n    ],\n    \"itemSpecifics\": {\n      \"Make\": \"Toyota\",\n      \"Model\": \"Camry\",\n      \"Year\": \"2019\",\n      \"Trim\": \"SE\",\n      \"Engine\": \"2.5L I4\",\n      \"Drive Type\": \"FWD\",\n      \"Body Type\": \"Sedan\",\n      \"Transmission\": \"Automatic\",\n      \"Fuel Type\": \"Gasoline\",\n      \"VIN\": \"JTNB29HK8K3019731\"\n    }\n  },\n  \"description\": \"The 2019 Toyota Camry SE is a midsize sedan known for its reliability, fuel efficiency, and sporty styling, powered by a 2.5L four-cylinder engine with an 8-speed automatic transmission.\"\n}",
+  "parsed": {
+    "make": "Toyota",
+    "model": "Camry",
+    "trim": "SE",
+    "year": "2019",
+    "bodyClass": "Sedan",
+    "driveType": "FWD",
+    "engineCylinders": "4",
+    "engineDisplacementL": "2.5",
+    "engineDescription": "2.5L I-4",
+    "fuelType": "Gasoline",
+    "transmission": "8-speed Automatic",
+    "mpg": "28 city / 39 highway",
+    "horsepower": "203 hp",
+    "torque": "184 lb-ft",
+    "seatingCapacity": "5",
+    "wheelbase": "111.2 in",
+    "curbWeight": "3,340 lbs",
+    "plantCountry": "Japan",
+    "plantCity": "Toyota City",
+    "plantName": "Toyota Motor Corporation - Tsutsumi Plant",
+    "vehicleType": "Passenger Car",
+    "manufacturingCountry": "Japan",
+    "recallsOrSafetyNotes": "Check NHTSA Campaign Number 19V-XXX for airbag and fuel pump recalls affecting some 2019 Camry models.",
+    "confidenceNotes": "Make, year, vehicle type, plant country/city/name are verified from NHTSA data. Model, trim, engine, transmission, mpg, horsepower, torque, seating, wheelbase, and curb weight are inferred based on typical 2019 Toyota Camry SE FWD specs. VIN errors in positions 4-8 prevent 100% certainty on trim and engine, but JTNB29HK8K3... pattern is most consistent with Camry SE 2.5L FWD. Recalls are typical for this model/year but should be verified by VIN lookup.",
+    "dataSourcesRecommended": [
+      "Toyota official VIN decoder",
+      "Toyota dealer service department",
+      "NHTSA VIN lookup",
+      "Toyota Camry 2019 owner's manual",
+      "Toyota Techinfo"
+    ],
+    "commonParts": [
+      "Engine air filter",
+      "Cabin air filter",
+      "Oil filter",
+      "Front brake pads",
+      "Rear brake pads",
+      "Spark plugs",
+      "Wiper blades",
+      "Battery",
+      "Headlight bulbs",
+      "Serpentine belt"
+    ],
+    "knownFitment": [
+      "2018 Toyota Camry SE 2.5L",
+      "2019 Toyota Camry SE 2.5L",
+      "2020 Toyota Camry SE 2.5L",
+      "2018-2020 Toyota Camry LE/XLE 2.5L (some parts)",
+      "2018-2020 Toyota Camry XSE 2.5L (some parts)"
+    ],
+    "ebayMotorsListingHints": {
+      "titleKeywords": [
+        "2019 Toyota Camry SE",
+        "2.5L",
+        "FWD",
+        "Sedan",
+        "Automatic"
+      ],
+      "categoryHints": [
+        "eBay Motors > Cars & Trucks > Toyota > Camry"
+      ],
+      "itemSpecifics": {
+        "Make": "Toyota",
+        "Model": "Camry",
+        "Year": "2019",
+        "Trim": "SE",
+        "Engine": "2.5L I4",
+        "Drive Type": "FWD",
+        "Body Type": "Sedan",
+        "Transmission": "Automatic",
+        "Fuel Type": "Gasoline",
+        "VIN": "JTNB29HK8K3019731"
+      }
+    },
+    "description": "The 2019 Toyota Camry SE is a midsize sedan known for its reliability, fuel efficiency, and sporty styling, powered by a 2.5L four-cylinder engine with an 8-speed automatic transmission."
+  },
+  "parseError": null,
+  "scoring": {
+    "checks": {
+      "yearMatch": true,
+      "makeMatch": true,
+      "plantCountryMatch": true,
+      "vehicleTypeMatch": true,
+      "hasConfidenceNotes": true,
+      "mentionsNhtsaGap": true,
+      "hasTransmission": true,
+      "hasEngineDescription": true,
+      "hasEbayHints": true,
+      "hasCommonParts": true,
+      "hasFitment": true,
+      "hasDataSources": true,
+      "jsonComplete": true
+    },
+    "fieldCount": 11,
+    "score": 98,
+    "maxScore": 98
+  }
+}

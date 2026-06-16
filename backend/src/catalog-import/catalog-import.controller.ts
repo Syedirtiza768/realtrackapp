@@ -16,6 +16,7 @@ import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CatalogImportService } from './catalog-import.service.js';
 import {
   BackfillListingsDto,
@@ -25,16 +26,23 @@ import {
   StartImportDto,
 } from './dto/catalog-import.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
+import { RbacService } from '../rbac/rbac.service.js';
 
 @ApiTags('Catalog Import')
 @Controller('catalog-import')
 @RequirePermissions('catalog.view')
 export class CatalogImportController {
-  constructor(private readonly importService: CatalogImportService) {}
+  constructor(
+    private readonly importService: CatalogImportService,
+    private readonly rbac: RbacService,
+  ) {}
 
   /* ── Upload ────────────────────────────────────────────── */
 
   @Post('upload')
+  @Throttle({ medium: { limit: 3, ttl: 60_000 } })
   @RequirePermissions('catalog.import')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -76,6 +84,7 @@ export class CatalogImportController {
   @ApiOperation({ summary: 'Upload a CSV or Excel catalog file for import' })
   async uploadCsv(
     @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
     @Body('columnMapping') columnMappingStr?: string,
   ) {
     if (!file) {
@@ -94,6 +103,7 @@ export class CatalogImportController {
     const importRecord = await this.importService.handleUpload(
       file,
       columnMapping,
+      user.id,
     );
     return {
       import: importRecord,
@@ -106,13 +116,17 @@ export class CatalogImportController {
   /* ── Start processing ──────────────────────────────────── */
 
   @Post('start')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
   @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Start processing an uploaded CSV import' })
-  async startImport(@Body() dto: StartImportDto) {
+  async startImport(@Body() dto: StartImportDto, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
     const importRecord = await this.importService.startImport(
       dto.importId,
       dto.columnMapping,
+      user.id,
+      viewAll,
     );
     return { import: importRecord };
   }
@@ -142,11 +156,17 @@ export class CatalogImportController {
 
   @Get()
   @ApiOperation({ summary: 'List catalog imports' })
-  async listImports(@Query() query: ImportQueryDto) {
+  async listImports(
+    @CurrentUser() user: User,
+    @Query() query: ImportQueryDto,
+  ) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
     return this.importService.listImports(
       query.status,
       query.limit ?? 20,
       query.offset ?? 0,
+      user.id,
+      viewAll,
     );
   }
 
@@ -166,8 +186,9 @@ export class CatalogImportController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific catalog import' })
-  async getImport(@Param('id') id: string) {
-    return this.importService.getImport(id);
+  async getImport(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    return this.importService.getImport(id, user.id, viewAll);
   }
 
   /* ── Import rows ───────────────────────────────────────── */
@@ -192,8 +213,9 @@ export class CatalogImportController {
   @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a pending or processing import' })
-  async cancelImport(@Param('id') id: string) {
-    const importRecord = await this.importService.cancelImport(id);
+  async cancelImport(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    const importRecord = await this.importService.cancelImport(id, user.id, viewAll);
     return { import: importRecord };
   }
 
@@ -203,8 +225,9 @@ export class CatalogImportController {
   @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Retry a failed import (resumes from last row)' })
-  async retryImport(@Param('id') id: string) {
-    const importRecord = await this.importService.retryImport(id);
+  async retryImport(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    const importRecord = await this.importService.retryImport(id, user.id, viewAll);
     return { import: importRecord };
   }
 }

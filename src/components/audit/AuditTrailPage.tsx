@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ScrollText,
   ChevronLeft,
@@ -33,9 +33,14 @@ const ACTION_COLORS: Record<string, string> = {
   publish: 'bg-purple-500/10 text-purple-400',
   status_change: 'bg-amber-500/10 text-amber-400',
   import: 'bg-cyan-500/10 text-cyan-400',
+  'auth.login_success': 'bg-green-500/10 text-green-400',
+  'auth.login_failed': 'bg-red-500/10 text-red-400',
+  'auth.register': 'bg-blue-500/10 text-blue-400',
+  'auth.logout': 'bg-slate-500/10 text-slate-400',
 };
 
 const ENTITY_ICONS: Record<string, string> = {
+  auth: 'A',
   listing: 'L',
   order: 'O',
   channel: 'C',
@@ -63,16 +68,17 @@ export default function AuditTrailPage() {
       if (action) params.set('action', action);
       if (since) params.set('since', since);
 
-      const data = await fetchWithAuth<AuditLogEntry[] | { logs: AuditLogEntry[]; total?: number }>(
+      const data = await fetchWithAuth<AuditLogEntry[] | { items?: AuditLogEntry[]; logs?: AuditLogEntry[]; total?: number }>(
         `${API}?${params}`,
       );
 
       if (Array.isArray(data)) {
         setLogs(data);
         setTotal(data.length >= limit ? (page + 2) * limit : page * limit + data.length);
-      } else if (data.logs) {
-        setLogs(data.logs);
-        setTotal(data.total ?? data.logs.length);
+      } else {
+        const entries = data.items ?? data.logs ?? [];
+        setLogs(entries);
+        setTotal(data.total ?? entries.length);
       }
     } catch (e) {
       console.error('Failed to fetch audit logs', e);
@@ -96,22 +102,23 @@ export default function AuditTrailPage() {
     <div className="space-y-4 sm:space-y-6">
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Audit Trail</h2>
-        <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Track all system changes and actions</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Track all system changes and actions</p>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
-          <Filter size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <Filter size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
           <select
             value={entityType}
             onChange={(e) => {
               setEntityType(e.target.value);
               setPage(0);
             }}
-            className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
           >
             <option value="">All Entities</option>
+            <option value="auth">Auth</option>
             <option value="listing">Listings</option>
             <option value="order">Orders</option>
             <option value="channel">Channels</option>
@@ -136,7 +143,7 @@ export default function AuditTrailPage() {
           <option value="import">Import</option>
         </select>
         <div className="relative">
-          <Calendar size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <Calendar size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
           <input
             type="date"
             value={since}
@@ -144,7 +151,7 @@ export default function AuditTrailPage() {
               setSince(e.target.value);
               setPage(0);
             }}
-            className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
           />
         </div>
         {(entityType || action || since) && (
@@ -157,14 +164,14 @@ export default function AuditTrailPage() {
       {/* Log Table */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
+          <Loader2 className="h-6 w-6 animate-spin text-slate-500 dark:text-slate-400" />
         </div>
       ) : logs.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <ScrollText className="w-12 h-12 mx-auto mb-3 text-slate-500 dark:text-slate-600" />
-            <p className="text-slate-400 dark:text-slate-400 font-medium">No audit logs found</p>
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Logs will appear here as system actions occur.</p>
+            <p className="text-slate-500 dark:text-slate-400 font-medium">No audit logs found</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Logs will appear here as system actions occur.</p>
           </CardContent>
         </Card>
       ) : (
@@ -173,11 +180,11 @@ export default function AuditTrailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-800/30">
-                  <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Timestamp</th>
-                  <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Entity</th>
-                  <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium">Action</th>
-                  <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium hidden md:table-cell">Actor</th>
-                  <th className="text-left py-3 px-4 text-slate-400 dark:text-slate-500 font-medium hidden lg:table-cell">Changes</th>
+                  <th className="text-left py-3 px-4 text-slate-500 dark:text-slate-400 font-medium">Timestamp</th>
+                  <th className="text-left py-3 px-4 text-slate-500 dark:text-slate-400 font-medium">Entity</th>
+                  <th className="text-left py-3 px-4 text-slate-500 dark:text-slate-400 font-medium">Action</th>
+                  <th className="text-left py-3 px-4 text-slate-500 dark:text-slate-400 font-medium hidden md:table-cell">Actor</th>
+                  <th className="text-left py-3 px-4 text-slate-500 dark:text-slate-400 font-medium hidden lg:table-cell">Changes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -189,7 +196,7 @@ export default function AuditTrailPage() {
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between text-sm text-slate-400 dark:text-slate-500">
+          <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
             <span>
               Showing {page * limit + 1}–{page * limit + logs.length}
             </span>
@@ -228,17 +235,17 @@ function AuditLogRow({ log }: { log: AuditLogEntry }) {
         className="hover:bg-slate-100/30 dark:bg-slate-800/30 transition-colors cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
-        <td className="py-3 px-4 text-slate-400 dark:text-slate-400 whitespace-nowrap">
+        <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">
           {new Date(log.createdAt).toLocaleString()}
         </td>
         <td className="py-3 px-4">
           <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400 dark:text-slate-400 shrink-0">
+            <span className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
               {entityIcon}
             </span>
             <div>
               <span className="text-slate-600 dark:text-slate-200 capitalize">{log.entityType}</span>
-              <span className="text-slate-400 dark:text-slate-500 text-xs ml-1.5 font-mono">{log.entityId.slice(0, 8)}</span>
+              <span className="text-slate-500 dark:text-slate-400 text-xs ml-1.5 font-mono">{log.entityId.slice(0, 8)}</span>
             </div>
           </div>
         </td>
@@ -247,14 +254,14 @@ function AuditLogRow({ log }: { log: AuditLogEntry }) {
             {log.action}
           </span>
         </td>
-        <td className="py-3 px-4 text-slate-400 dark:text-slate-400 hidden md:table-cell">
+        <td className="py-3 px-4 text-slate-500 dark:text-slate-400 hidden md:table-cell">
           <div className="flex items-center gap-1">
             <User size={12} />
             <span className="capitalize">{log.actorType}</span>
-            {log.actorId && <span className="text-xs font-mono text-slate-400 dark:text-slate-500">{log.actorId.slice(0, 8)}</span>}
+            {log.actorId && <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{log.actorId.slice(0, 8)}</span>}
           </div>
         </td>
-        <td className="py-3 px-4 text-slate-400 dark:text-slate-500 hidden lg:table-cell">
+        <td className="py-3 px-4 text-slate-500 dark:text-slate-400 hidden lg:table-cell">
           {log.changes ? `${Object.keys(log.changes).length} field(s)` : '—'}
         </td>
       </tr>
@@ -264,7 +271,7 @@ function AuditLogRow({ log }: { log: AuditLogEntry }) {
             <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-3 text-xs">
               <table className="w-full">
                 <thead>
-                  <tr className="text-slate-400 dark:text-slate-500">
+                  <tr className="text-slate-500 dark:text-slate-400">
                     <th className="text-left py-1 pr-4">Field</th>
                     <th className="text-left py-1 pr-4">Old Value</th>
                     <th className="text-left py-1">New Value</th>
@@ -273,7 +280,7 @@ function AuditLogRow({ log }: { log: AuditLogEntry }) {
                 <tbody className="text-slate-500 dark:text-slate-300">
                   {Object.entries(log.changes).map(([field, vals]) => (
                     <tr key={field}>
-                      <td className="py-1 pr-4 font-medium text-slate-400 dark:text-slate-400">{field}</td>
+                      <td className="py-1 pr-4 font-medium text-slate-500 dark:text-slate-400">{field}</td>
                       <td className="py-1 pr-4 text-red-400/70 font-mono">
                         {typeof vals.old === 'object' ? JSON.stringify(vals.old) : String(vals.old ?? '—')}
                       </td>
@@ -284,7 +291,7 @@ function AuditLogRow({ log }: { log: AuditLogEntry }) {
                   ))}
                 </tbody>
               </table>
-              {log.ipAddress && <p className="mt-2 text-slate-400 dark:text-slate-500">IP: {log.ipAddress}</p>}
+              {log.ipAddress && <p className="mt-2 text-slate-500 dark:text-slate-400">IP: {log.ipAddress}</p>}
             </div>
           </td>
         </tr>

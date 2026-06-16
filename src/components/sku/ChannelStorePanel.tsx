@@ -1,4 +1,4 @@
-﻿/* ─── Channel Store Panel ───────────────────────────────────
+/* ─── Channel Store Panel ───────────────────────────────────
  *  Multi-store channel management for a single SKU.
  *  Shows: Channel → Store → Instance hierarchy
  *  Supports: demo publish, multi-store publish, end listing
@@ -146,7 +146,7 @@ export default function ChannelStorePanel({ listingId }: { listingId: string }) 
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-700">Multi-Store Channel Publishing</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {stores.length} stores across {channels.length} channels
             {overview && ` · ${overview.instances.filter((i) => i.syncStatus === 'synced').length} published`}
           </p>
@@ -191,11 +191,11 @@ export default function ChannelStorePanel({ listingId }: { listingId: string }) 
                 <span className="font-semibold text-slate-800">
                   {CHANNEL_LABELS[channel] ?? channel}
                 </span>
-                <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
+                <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
                   {publishedInChannel}/{channelStores.length} stores published
                 </span>
               </div>
-              {expanded ? <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-400" />}
+              {expanded ? <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
             </button>
 
             {/* Store List */}
@@ -222,7 +222,7 @@ export default function ChannelStorePanel({ listingId }: { listingId: string }) 
       })}
 
       {channels.length === 0 && (
-        <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+        <div className="text-center py-12 text-slate-500 dark:text-slate-400">
           <StoreIcon className="w-12 h-12 mx-auto mb-3 text-slate-500 dark:text-slate-300" />
           <p className="font-medium">No stores configured</p>
           <p className="text-sm mt-1">Create stores in Settings to start publishing.</p>
@@ -256,7 +256,7 @@ function StoreRow({
     <div className="px-4 py-3 flex items-center gap-3 hover:bg-slate-25">
       {/* Store Icon */}
       <div className="w-7 h-7 rounded-md bg-slate-100 flex items-center justify-center flex-shrink-0 ml-4">
-        <StoreIcon className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+        <StoreIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
       </div>
 
       {/* Store Info */}
@@ -272,7 +272,7 @@ function StoreRow({
         </div>
         {instance?.externalId && (
           <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{instance.externalId}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">{instance.externalId}</span>
             {instance.externalUrl && (
               <a href={instance.externalUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="w-3 h-3 text-blue-500" />
@@ -281,7 +281,7 @@ function StoreRow({
           </div>
         )}
         {instance?.overridePrice != null && (
-          <span className="text-xs text-slate-400 dark:text-slate-500">Override: ${Number(instance.overridePrice).toFixed(2)}</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">Override: ${Number(instance.overridePrice).toFixed(2)}</span>
         )}
       </div>
 
@@ -332,7 +332,7 @@ function SyncStatusBadge({ status }: { status: string }) {
     error: { icon: AlertCircle, bg: 'bg-red-100', text: 'text-red-700', label: 'Error' },
     ended: { icon: XCircle, bg: 'bg-slate-200', text: 'text-slate-500 dark:text-slate-600', label: 'Ended' },
     draft: { icon: Clock, bg: 'bg-slate-100', text: 'text-slate-500 dark:text-slate-600', label: 'Draft' },
-    not_listed: { icon: Plus, bg: 'bg-slate-100', text: 'text-slate-400 dark:text-slate-500', label: 'Not Listed' },
+    not_listed: { icon: Plus, bg: 'bg-slate-100', text: 'text-slate-500 dark:text-slate-400', label: 'Not Listed' },
   };
 
   const c = config[status] ?? config.not_listed;

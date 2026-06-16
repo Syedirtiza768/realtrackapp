@@ -7,6 +7,17 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Added
+- **Multi-user Phase 3 (testing/observability):** Concurrency unit tests for job visibility, scheduler leader, heavy job limiter, and listing version conflicts; k6 baseline script; `GET /api/health/runtime`; global `X-Response-Time-Ms` header and slow-request logging (`SLOW_REQUEST_MS`).
+- **Multi-user Phase 2 (scale):** PgBouncer + prod compose overlay; Redis 512MB in prod; `GET /api/health/queues` (admin); heavy job caps (`MAX_CONCURRENT_PIPELINE_JOBS`, `MAX_CONCURRENT_CATALOG_IMPORTS`); job-scoped pipeline uploads; Socket.IO Redis adapter (`REDIS_SOCKET_ADAPTER`); scheduler leader election (`SCHEDULER_LEADER_ENABLED`); per-user rate limits on pipeline/catalog heavy routes.
+- **Multi-user P0 hardening (Sprint 1):** `ALLOW_PUBLIC_REGISTRATION` env gate (default off in production/Docker); self-registered users receive Viewer role; `GET /api/auth/public-config` for login UI; JWT default expiry reduced to 4h (`JWT_EXPIRY_SECONDS=14400`).
+- **Channel connection scoping:** `GET /api/channels` uses JWT user id (removed `userId` query param); disconnect/test scoped to owner.
+- **WebSocket auth:** Notification gateway verifies JWT from `handshake.auth.token` before joining user rooms.
+- **Job attribution:** Pipeline, ingestion, and catalog-import uploads record `createdBy` from JWT; review endpoints record reviewer id.
+
+### Fixed
+- **Multi-user P1.3:** `createdBy` wired on all job creation/mutation paths (ingestion, pipeline, catalog-import start/retry/cancel, motors product create, fitment bulk-import queue); legacy null `createdBy` backfilled on retry/cancel/start; review reject records `reviewedBy`.
+- **Multi-user Phase 1:** Partial unique index on active listing SKUs; pessimistic lock + retry on create; `version` required for PATCH status and optional per-id in bulk update; ingestion/pipeline/catalog job lists scoped by `createdBy` (admins with `users.view` see all).
+- **Security:** Removed DEBUG JWT/secret logging from auth module and JWT strategy.
 - **CURRENT_TRUE_STATE_OF_APPLICATION.md**: Comprehensive codebase analysis document covering architecture, database, APIs, frontend, backend, integrations, deployment, testing, and documentation accuracy. Generated 2026-06-11.
 
 ### Fixed (Documentation)
@@ -14,7 +25,11 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Added new security finding**: DEBUG JWT logging in `auth.service.ts` and `jwt.strategy.ts` exposes full tokens to console. Added as R3b to KNOWN_ISSUES.md.
 
 ### Fixed
-- **German (EBAY_DE) listing quality:** Native German title/description generation
+- **User management (`/settings/users`) create/role assign failures:** `POST /api/rbac/users`
+  and `PATCH /api/rbac/users/:id/role` returned 400 because inline DTOs lacked
+  `class-validator` decorators and were rejected by the global `ValidationPipe`. Added
+  `CreateRbacUserDto` / `AssignRoleDto` with proper validation; frontend `rbacApi` now
+  surfaces API errors instead of leaving the modal stuck on "Creating…".
   (`ebay-german-listing.util.ts`) replaces word-substitution localization. DE AI prompt,
   interior-vs-exterior category correction (e.g. door armrest → Interior Door Panels),
   expanded German item specifics (`Hersteller`, `Einbauposition`, `Universelle Kompatibilität`),

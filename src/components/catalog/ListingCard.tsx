@@ -1,4 +1,4 @@
-﻿/* ─── ListingCard ──────────────────────────────────────────
+/* ─── ListingCard ──────────────────────────────────────────
  *  Product card for grid view.
  *  Features: image with fallback, highlight matched text,
  *  condition badge, price display, lazy loading.
@@ -91,7 +91,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
         </a>
 
         {/* SKU + Brand + Fitment */}
-        <div className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1 flex-wrap">
+        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 flex-wrap">
           {item.customLabelSku && (
             <span className="font-mono bg-slate-100/60 dark:bg-slate-800/60 rounded px-1 py-0.5">{item.customLabelSku}</span>
           )}
@@ -119,10 +119,10 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
             {price !== null ? (
               <div className="text-lg font-bold text-slate-900 dark:text-slate-100">${price.toFixed(2)}</div>
             ) : (
-              <div className="text-sm text-slate-400 dark:text-slate-500">No price</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400">No price</div>
             )}
             {item.quantity && (
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
                 Qty: {item.quantity}
                 {item.format && ` · ${item.format}`}
               </div>
@@ -140,14 +140,14 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
         <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex-wrap">
           <button
             onClick={() => navigate(`/listings/${item.id}/edit`)}
-            className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-400 transition-colors"
+            className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-400 transition-colors"
           >
             <Pencil size={11} /> Edit
           </button>
           {onPublish && (
             <button
               onClick={() => onPublish(item.id)}
-              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 dark:text-slate-400 hover:bg-blue-900/30 hover:text-blue-400 transition-colors"
+              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-500 dark:text-slate-400 hover:bg-blue-900/30 hover:text-blue-400 transition-colors"
             >
               <Send size={11} /> Channels
             </button>
@@ -155,7 +155,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
           {onDelete && (
             <button
               onClick={() => onDelete(item.id)}
-              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-400 dark:text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
+              className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-500 dark:text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
             >
               <Trash2 size={11} /> Delete
             </button>

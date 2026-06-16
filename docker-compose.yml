@@ -91,6 +91,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Auth
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS:-14400}
+      ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
       # Demo user seeding (enabled by default; set false to disable)
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
       DEFAULT_SUPER_ADMIN_EMAIL: ${DEFAULT_SUPER_ADMIN_EMAIL:-admin@realtrack.local}

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     Bell,
     Check,
@@ -159,14 +159,14 @@ export default function NotificationsPage() {
 
             {/* ─── Filters ─── */}
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500">
+                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                     <Filter size={14} />
                     Filter:
                 </div>
                 <select
                     value={severityFilter}
                     onChange={e => { setSeverityFilter(e.target.value); setPage(0); }}
-                    className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 >
                     <option value="">All Severities</option>
                     <option value="info">Info</option>
@@ -178,7 +178,7 @@ export default function NotificationsPage() {
                     <select
                         value={typeFilter}
                         onChange={e => { setTypeFilter(e.target.value); setPage(0); }}
-                        className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     >
                         <option value="">All Types</option>
                         {uniqueTypes.map(t => (
@@ -191,13 +191,13 @@ export default function NotificationsPage() {
             {/* ─── Notification List ─── */}
             {loading ? (
                 <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-slate-400 dark:text-slate-500" />
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-500 dark:text-slate-400" />
                 </div>
             ) : notifications.length === 0 ? (
                 <Card>
                     <CardContent className="py-12 text-center">
                         <Bell className="h-10 w-10 mx-auto text-slate-500 dark:text-slate-600 mb-3" />
-                        <p className="text-sm text-slate-400 dark:text-slate-500">No notifications yet</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">No notifications yet</p>
                     </CardContent>
                 </Card>
             ) : (
@@ -222,11 +222,11 @@ export default function NotificationsPage() {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
-                                            <p className={`text-sm font-medium ${notif.read ? 'text-slate-400 dark:text-slate-400' : 'text-slate-600 dark:text-slate-200'}`}>
+                                            <p className={`text-sm font-medium ${notif.read ? 'text-slate-500 dark:text-slate-400' : 'text-slate-600 dark:text-slate-200'}`}>
                                                 {notif.title}
                                             </p>
                                             {notif.body && (
-                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 line-clamp-2">{notif.body}</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{notif.body}</p>
                                             )}
                                             <div className="flex items-center gap-3 mt-1.5">
                                                 <span className="text-[11px] text-slate-500 dark:text-slate-600 font-mono">
@@ -243,7 +243,7 @@ export default function NotificationsPage() {
                                             {!notif.read && (
                                                 <button
                                                     onClick={() => void markAsRead(notif.id)}
-                                                    className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-blue-400 transition-colors"
+                                                    className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-400 transition-colors"
                                                     title="Mark as read"
                                                 >
                                                     <Check size={14} />
@@ -251,7 +251,7 @@ export default function NotificationsPage() {
                                             )}
                                             <button
                                                 onClick={() => void dismiss(notif.id)}
-                                                className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-400 transition-colors"
+                                                className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-red-400 transition-colors"
                                                 title="Dismiss"
                                             >
                                                 <Trash2 size={14} />
@@ -273,7 +273,7 @@ export default function NotificationsPage() {
             {/* Pagination */}
             {(page > 0 || hasMore) && notifications.length > 0 && (
                 <div className="flex items-center justify-between pt-2">
-                    <p className="text-sm text-slate-400 dark:text-slate-500">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
                         Page {page + 1}
                     </p>
                     <div className="flex gap-2">

@@ -5,9 +5,16 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
 import type { Notification } from './entities/notification.entity.js';
+
+interface WsJwtPayload {
+  sub: string;
+  email?: string;
+  role?: string;
+}
 
 @WebSocketGateway({
   cors: {
@@ -23,14 +30,32 @@ export class NotificationGateway
   @WebSocketServer()
   server: Server;
 
+  constructor(private readonly jwt: JwtService) {}
+
   handleConnection(client: Socket) {
-    const userId = client.handshake.auth?.userId as string | undefined;
-    if (userId) {
-      void client.join(`user:${userId}`);
-      this.logger.log(`Client connected: ${client.id} (user: ${userId})`);
-    } else {
-      this.logger.log(`Client connected: ${client.id} (anonymous)`);
+    const token = client.handshake.auth?.token as string | undefined;
+    if (!token) {
+      this.logger.warn(`Rejected WS connection ${client.id}: missing token`);
+      client.disconnect(true);
+      return;
     }
+
+    let userId: string;
+    try {
+      const payload = this.jwt.verify<WsJwtPayload>(token);
+      if (!payload?.sub) {
+        throw new Error('missing sub');
+      }
+      userId = payload.sub;
+    } catch {
+      this.logger.warn(`Rejected WS connection ${client.id}: invalid token`);
+      client.disconnect(true);
+      return;
+    }
+
+    void client.join(`user:${userId}`);
+    client.data.userId = userId;
+    this.logger.log(`Client connected: ${client.id} (user: ${userId})`);
   }
 
   handleDisconnect(client: Socket) {

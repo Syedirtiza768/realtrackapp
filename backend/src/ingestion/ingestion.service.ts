@@ -1,8 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
+import { applyCreatedByVisibility, assertCanAccessJob, canViewJob, withCreatedByBackfill } from '../common/utils/job-visibility.js';
 import { ImageAsset } from '../storage/entities/image-asset.entity.js';
 import { IngestionJob } from './entities/ingestion-job.entity.js';
 import { AiResult } from './entities/ai-result.entity.js';
@@ -85,19 +86,21 @@ export class IngestionService {
     status?: string,
     limit = 20,
     offset = 0,
+    viewerId?: string,
+    viewAll = true,
   ): Promise<{ jobs: IngestionJob[]; total: number }> {
-    const where: Record<string, unknown> = {};
+    const qb = this.jobRepo.createQueryBuilder('j').orderBy('j.createdAt', 'DESC');
+
     if (status) {
-      where['status'] = status;
+      qb.andWhere('j.status = :status', { status });
     }
 
-    const [jobs, total] = await this.jobRepo.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: offset,
-    });
+    if (viewerId) {
+      applyCreatedByVisibility(qb, 'j', viewerId, viewAll);
+    }
 
+    qb.take(limit).skip(offset);
+    const [jobs, total] = await qb.getManyAndCount();
     return { jobs, total };
   }
 
@@ -106,10 +109,15 @@ export class IngestionService {
    */
   async getJob(
     id: string,
+    viewerId?: string,
+    viewAll = true,
   ): Promise<{ job: IngestionJob; aiResult: AiResult | null; images: ImageAsset[] }> {
     const job = await this.jobRepo.findOneBy({ id });
     if (!job) {
       throw new NotFoundException(`Ingestion job ${id} not found`);
+    }
+    if (viewerId && !canViewJob(job.createdBy, viewerId, viewAll)) {
+      throw new ForbiddenException('You do not have access to this ingestion job');
     }
 
     const aiResult = await this.aiResultRepo.findOneBy({ jobId: id });
@@ -124,10 +132,13 @@ export class IngestionService {
   /**
    * Retry a failed job.
    */
-  async retryJob(id: string): Promise<IngestionJob> {
+  async retryJob(id: string, actorId?: string, viewAll = true): Promise<IngestionJob> {
     const job = await this.jobRepo.findOneBy({ id });
     if (!job) {
       throw new NotFoundException(`Ingestion job ${id} not found`);
+    }
+    if (actorId) {
+      assertCanAccessJob(job.createdBy, actorId, viewAll);
     }
     if (job.status !== 'failed') {
       throw new Error(`Job ${id} is not in failed state (current: ${job.status})`);
@@ -142,6 +153,7 @@ export class IngestionService {
     job.attemptCount = 0;
     job.lastError = null;
     job.nextRetryAt = null;
+    job.createdBy = withCreatedByBackfill(job.createdBy, actorId);
     await this.jobRepo.save(job);
 
     // Re-enqueue
@@ -166,16 +178,20 @@ export class IngestionService {
   /**
    * Cancel a pending/processing job.
    */
-  async cancelJob(id: string): Promise<IngestionJob> {
+  async cancelJob(id: string, actorId?: string, viewAll = true): Promise<IngestionJob> {
     const job = await this.jobRepo.findOneBy({ id });
     if (!job) {
       throw new NotFoundException(`Ingestion job ${id} not found`);
+    }
+    if (actorId) {
+      assertCanAccessJob(job.createdBy, actorId, viewAll);
     }
     if (!['pending', 'processing', 'uploading'].includes(job.status)) {
       throw new Error(`Cannot cancel job in status: ${job.status}`);
     }
 
     job.status = 'cancelled';
+    job.createdBy = withCreatedByBackfill(job.createdBy, actorId);
     await this.jobRepo.save(job);
 
     this.logger.log(`Cancelled ingestion job ${id}`);

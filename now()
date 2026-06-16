@@ -1,0 +1,17 @@
+                  id                  |             store_name              | ebay_marketplace_id | ebay_user_id | status | token_valid 
+--------------------------------------+-------------------------------------+---------------------+--------------+--------+-------------
+ 188ac8c7-7784-41a0-bb21-97f7c09804c6 | partsbazar360                       | EBAY_MOTORS_US      | sp-442       | active | 
+ d56933c3-d0b6-4b94-9272-f4d3f8bf972d | partsbazar360                       | EBAY_MOTORS_US      | sp-482       | active | 
+ 0a32ee37-5003-4bfc-9a6a-e3cc50da0444 | Part Out Pro                        | EBAY_MOTORS_US      | sp-434       | active | 
+ 704f3a6e-b0d1-4b0c-8cfe-99c33f1f99a2 | (SVG-AU) Southern Cross Autoparts   | EBAY_AU             | sp-449       | active | 
+ 2e41999c-2b39-4270-a903-c4819fbb70af | (SVG-DE) German Salvage Dismantlers | EBAY_DE             | sp-447       | active | 
+ 0e830eb1-1198-41ff-8c82-f7d244561691 | Blackline Uk                        | EBAY_GB             | sp-370       | active | 
+ e1dd468f-c259-4c1d-a6f0-4d38cbde8355 | Blackline Autos De                  | EBAY_DE             | sp-374       | active | 
+ 954432fe-4a48-4e19-b1bc-04ec5b130cca | Blackline Auto Parts                | EBAY_MOTORS_US      | sp-373       | active | 
+ 592e7e65-8805-4d6d-b35a-8fe63837bbab | Blackline Autos                     | EBAY_MOTORS_US      | sp-372       | active | 
+ ca341496-3920-4356-aa46-b77aa4b38165 | All About Mercedes                  | EBAY_MOTORS_US      | sp-455       | active | 
+ 44f1ad79-b6fa-48e1-bbfb-6b8f58aff171 | JLRWORLD                            | EBAY_MOTORS_US      | sp-443       | active | 
+ d60eb400-88d8-476a-8097-84b69151ae80 | BlacklineautosAU                    | EBAY_MOTORS_US      | sp-363       | active | 
+ 1778f76a-73a5-453b-95ba-4cf3d33b593c | superiorcarautoparts                | EBAY_MOTORS_US      | sp-474       | active | 
+(13 rows)
+

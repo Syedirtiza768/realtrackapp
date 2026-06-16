@@ -1,13 +1,16 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { PermissionsGuard } from './rbac/guards/permissions.guard.js';
 import { RbacModule } from './rbac/rbac.module.js';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { UserThrottlerGuard } from './common/guards/user-throttler.guard.js';
+import { AppRedisModule } from './common/redis/app-redis.module.js';
+import { RequestTimingInterceptor } from './common/observability/request-timing.interceptor.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -43,6 +46,7 @@ import { ClientSettingsModule } from './client-settings/client-settings.module.j
       isGlobal: true,
       ignoreEnvFile: process.env.IGNORE_ENV_FILE === 'true',
     }),
+    AppRedisModule,
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
@@ -119,9 +123,10 @@ import { ClientSettingsModule } from './client-settings/client-settings.module.j
   controllers: [AppController],
   providers: [
     AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_INTERCEPTOR, useClass: RequestTimingInterceptor },
   ],
 })
 export class AppModule {}

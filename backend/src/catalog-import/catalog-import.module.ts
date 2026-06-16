@@ -19,6 +19,8 @@ import { CatalogProductService } from './catalog-product.service.js';
 import { TemplateGeneratorService } from './template-generator.service.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
+import { RbacModule } from '../rbac/rbac.module.js';
+import { HeavyJobLimiterModule } from '../common/jobs/heavy-job-limiter.module.js';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { ChannelsModule } from '../channels/channels.module.js';
       ComplianceAuditLog,
       ListingRecord,
     ]),
+    RbacModule,
+    HeavyJobLimiterModule,
     BullModule.registerQueue({ name: 'catalog-import' }),
     OpenAiModule,
     StorageModule,

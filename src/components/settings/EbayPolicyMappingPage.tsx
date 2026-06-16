@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   getEbayAccountPolicies,
@@ -119,11 +119,11 @@ export default function EbayPolicyMappingPage() {
         </Link>
       </div>
       <h1 className="text-2xl font-semibold">Policy mapping</h1>
-      <p className="text-slate-400 dark:text-slate-400 text-sm">
+      <p className="text-slate-500 dark:text-slate-400 text-sm">
         Run <strong>Sync policies</strong> on the stores list first, then pick default business policies per
         marketplace. Publishing is blocked until these are set.
       </p>
-      {loading && <p className="text-slate-400 dark:text-slate-500">Loading…</p>}
+      {loading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
       {message && <p className="text-sm text-amber-300">{message}</p>}
 
       {!loading &&
@@ -135,7 +135,7 @@ export default function EbayPolicyMappingPage() {
             <h2 className="text-lg font-medium">{m.marketplaceId}</h2>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm">
-                <span className="text-slate-400 dark:text-slate-400">Fulfillment policy</span>
+                <span className="text-slate-500 dark:text-slate-400">Fulfillment policy</span>
                 <select
                   className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-2 py-2 text-sm"
                   value={draft[m.marketplaceId]?.fulfillment ?? ''}
@@ -158,7 +158,7 @@ export default function EbayPolicyMappingPage() {
                 </select>
               </label>
               <label className="block text-sm">
-                <span className="text-slate-400 dark:text-slate-400">Payment policy</span>
+                <span className="text-slate-500 dark:text-slate-400">Payment policy</span>
                 <select
                   className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-2 py-2 text-sm"
                   value={draft[m.marketplaceId]?.payment ?? ''}
@@ -181,7 +181,7 @@ export default function EbayPolicyMappingPage() {
                 </select>
               </label>
               <label className="block text-sm">
-                <span className="text-slate-400 dark:text-slate-400">Return policy</span>
+                <span className="text-slate-500 dark:text-slate-400">Return policy</span>
                 <select
                   className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-2 py-2 text-sm"
                   value={draft[m.marketplaceId]?.ret ?? ''}
@@ -204,7 +204,7 @@ export default function EbayPolicyMappingPage() {
                 </select>
               </label>
               <label className="block text-sm">
-                <span className="text-slate-400 dark:text-slate-400">Merchant location key</span>
+                <span className="text-slate-500 dark:text-slate-400">Merchant location key</span>
                 <input
                   className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-2 py-2 text-sm"
                   value={draft[m.marketplaceId]?.location ?? ''}

@@ -27,13 +27,21 @@
 | `REDIS_PORT` | `6379` | Redis port |
 | `REDIS_PORT_EXTERNAL` | `6379` | Host-exposed port |
 | `REDIS_PASSWORD` | _(empty)_ | Redis auth (**secret**) |
+| `REDIS_SOCKET_ADAPTER` | `false` (dev), `true` in prod overlay | Socket.IO Redis pub/sub for multi-replica |
+| `SCHEDULER_LEADER_ENABLED` | `true` | Redis lock so one instance runs cron producers |
+| `MAX_CONCURRENT_PIPELINE_JOBS` | `2` | Active pipeline job cap (503 when full) |
+| `MAX_CONCURRENT_CATALOG_IMPORTS` | `2` | Active catalog import cap (503 when full) |
+| `PGBOUNCER_PORT_EXTERNAL` | `6432` | Host port when using prod compose overlay |
+| `SLOW_REQUEST_MS` | `2000` | Warn in logs when HTTP request exceeds threshold (ms) |
 
 ## Auth / RBAC
 
-| Var | Purpose |
-|-----|---------|
-| `JWT_SECRET` | **Required.** JWT signing secret (**secret**) |
-| `RBAC_SYNC_PERMISSIONS` | If `true`, sync permission registry → DB on startup |
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `JWT_SECRET` | _(required)_ | JWT signing secret (**secret**) |
+| `JWT_EXPIRY_SECONDS` | `14400` (4h) | Access token lifetime in seconds |
+| `ALLOW_PUBLIC_REGISTRATION` | `false` in production | If `true`, `POST /api/auth/register` is allowed; new users get Viewer role |
+| `RBAC_SYNC_PERMISSIONS` | `true` | Sync permission registry → DB on startup |
 | `SEED_DEMO_USERS` | If `true` (non-prod), seed default users |
 | `DEFAULT_SUPER_ADMIN_EMAIL` / `_PASSWORD` | Seed super admin (**secret pw**) |
 | `DEFAULT_ADMIN_EMAIL` / `_PASSWORD` | Seed admin |

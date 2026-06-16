@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PricingDashboard.tsx — Phase 5
  *
  * Market Intelligence & Dynamic Pricing dashboard:
@@ -154,7 +154,7 @@ export default function PricingDashboard({
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-slate-400 dark:text-slate-400">Market Avg</CardTitle>
+            <CardTitle className="text-xs font-medium text-slate-500 dark:text-slate-400">Market Avg</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">{fmtUSD(marketAvg)}</div>
@@ -173,15 +173,15 @@ export default function PricingDashboard({
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-slate-400 dark:text-slate-400">Price Range</CardTitle>
+            <CardTitle className="text-xs font-medium text-slate-500 dark:text-slate-400">Price Range</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">
               {fmtUSD(snapshot?.minPrice ? Number(snapshot.minPrice) : null)}
-              <span className="text-sm text-slate-400 dark:text-slate-500"> — </span>
+              <span className="text-sm text-slate-500 dark:text-slate-400"> — </span>
               {fmtUSD(snapshot?.maxPrice ? Number(snapshot.maxPrice) : null)}
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {snapshot?.totalListings ?? 0} active listings
             </p>
           </CardContent>
@@ -189,12 +189,12 @@ export default function PricingDashboard({
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-slate-400 dark:text-slate-400">Your Price</CardTitle>
+            <CardTitle className="text-xs font-medium text-slate-500 dark:text-slate-400">Your Price</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold text-blue-400">{fmtUSD(currentPrice)}</div>
             {costPrice && currentPrice && (
-              <p className="text-xs text-slate-400 dark:text-slate-400 mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 {((currentPrice - costPrice) / costPrice * 100).toFixed(1)}% margin
               </p>
             )}
@@ -203,11 +203,11 @@ export default function PricingDashboard({
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-slate-400 dark:text-slate-400">Competitors</CardTitle>
+            <CardTitle className="text-xs font-medium text-slate-500 dark:text-slate-400">Competitors</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">{competitors.length}</div>
-            <p className="text-xs text-slate-400 dark:text-slate-400 mt-1">tracked (30 days)</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">tracked (30 days)</p>
           </CardContent>
         </Card>
       </div>
@@ -220,7 +220,7 @@ export default function PricingDashboard({
               <Target className="h-4 w-4 text-amber-400" />
               Market Insights
               {snapshot.confidence !== null && (
-                <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
+                <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
                   (confidence: {(Number(snapshot.confidence) * 100).toFixed(0)}%)
                 </span>
               )}
@@ -257,7 +257,7 @@ export default function PricingDashboard({
               Get AI Pricing Suggestion
             </button>
           ) : suggestionQuery.isLoading ? (
-            <div className="flex items-center justify-center py-4 gap-2 text-slate-400 dark:text-slate-400">
+            <div className="flex items-center justify-center py-4 gap-2 text-slate-500 dark:text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" />
               Analyzing market data…
             </div>
@@ -281,7 +281,7 @@ export default function PricingDashboard({
 
               <p className="text-sm text-slate-500 dark:text-slate-300">{suggestion.reasoning}</p>
 
-              <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 dark:text-slate-400">
+              <div className="grid grid-cols-3 gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <div>
                   <span className="block font-medium text-slate-500 dark:text-slate-300">Confidence</span>
                   {(suggestion.confidence * 100).toFixed(0)}%
@@ -297,7 +297,7 @@ export default function PricingDashboard({
               </div>
 
               {suggestion.actionItems.length > 0 && (
-                <ul className="text-xs text-slate-400 dark:text-slate-400 space-y-0.5">
+                <ul className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
                   {suggestion.actionItems.map((item: string, i: number) => (
                     <li key={i}>→ {item}</li>
                   ))}
@@ -344,7 +344,7 @@ export default function PricingDashboard({
                       ) : r.action === 'error' ? (
                         <span className="text-red-400">{r.error}</span>
                       ) : (
-                        <span className="text-slate-400 dark:text-slate-500">{r.action}</span>
+                        <span className="text-slate-500 dark:text-slate-400">{r.action}</span>
                       )}
                     </div>
                   ))}
@@ -371,7 +371,7 @@ export default function PricingDashboard({
           <CardContent>
             <div className="max-h-64 overflow-y-auto">
               <table className="w-full text-xs">
-                <thead className="text-slate-400 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                <thead className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                   <tr>
                     <th className="text-left py-1.5 pr-2">Seller</th>
                     <th className="text-right py-1.5 px-2">Price</th>
@@ -387,7 +387,7 @@ export default function PricingDashboard({
                         {fmtUSD(c.price)}
                       </td>
                       <td className="py-1.5 px-2">{c.condition ?? '—'}</td>
-                      <td className="py-1.5 pl-2 text-slate-400 dark:text-slate-500">
+                      <td className="py-1.5 pl-2 text-slate-500 dark:text-slate-400">
                         {new Date(c.capturedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </td>
                     </tr>

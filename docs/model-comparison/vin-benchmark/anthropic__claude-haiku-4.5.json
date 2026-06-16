@@ -1,0 +1,33 @@
+{
+  "modelId": "anthropic/claude-haiku-4.5",
+  "ok": true,
+  "latencyMs": 10281,
+  "usage": {
+    "prompt_tokens": 878,
+    "completion_tokens": 1361,
+    "total_tokens": 2239,
+    "cost": 0.007683,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.007683,
+      "upstream_inference_prompt_cost": 0.000878,
+      "upstream_inference_completions_cost": 0.006805
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.007683000000000001,
+  "contextLength": 200000,
+  "rawContent": "```json\n{\n  \"make\": \"Toyota\",\n  \"model\": \"Corolla\",\n  \"trim\": \"\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"Sedan\",\n  \"driveType\": \"FWD\",\n  \"engineCylinders\": \"4\",\n  \"engineDisplacementL\": \"1.8\",\n  \"engineDescription\": \"1.8L I-4\",\n  \"fuelType\": \"Gasoline\",\n  \"transmission\": \"CVT Automatic\",\n  \"mpg\": \"28 city / 36 highway\",\n  \"horsepower\": \"132 hp\",\n  \"torque\": \"128 lb-ft\",\n  \"seatingCapacity\": \"5\",\n  \"wheelbase\": \"106.3 in\",\n  \"curbWeight\": \"3,060 lbs\",\n  \"plantCountry\": \"Japan\",\n  \"plantCity\": \"Toyota City\",\n  \"plantName\": \"Toyota Motor Corporation - Tsutsumi Plant\",\n  \"vehicleType\": \"Passenger Car\",\n  \"manufacturingCountry\": \"Japan\",\n  \"recallsOrSafetyNotes\": \"VIN contains errors in positions 4 and 5 (indicated by ! in suggested VIN: JTNB!!HK8K3019731). NHTSA unable to provide complete decode due to these errors. Verify VIN with dealer or manufacturer before relying on this decode for critical purposes.\",\n  \"confidenceNotes\": \"VERIFIED: Make (Toyota), Year (2019), Vehicle Type (Passenger Car), Plant location (Toyota City, Japan). INFERRED: Model (Corolla) based on VIN prefix JT and body class, trim level, and specific engine/transmission details inferred from typical 2019 Corolla specifications. UNCERTAIN: Positions 4-5 of VIN contain errors per NHTSA; exact trim, engine variant, and transmission type cannot be definitively confirmed without corrected VIN. Positions 4-8 marked as unused/problematic by NHTSA.\",\n  \"dataSourcesRecommended\": [\n    \"NHTSA VIN Decoder (official) - resubmit with corrected VIN\",\n    \"Toyota dealer - provide VIN for accurate trim and options\",\n    \"Vehicle registration/title documents\",\n    \"Window sticker (Monroney label) if available\",\n    \"Toyota.com build and price tool for 2019 Corolla specifications\"\n  ],\n  \"commonParts\": [\n    \"Oil and air filters\",\n    \"Brake pads and rotors\",\n    \"Spark plugs\",\n    \"Serpentine belt\",\n    \"Battery (12V)\",\n    \"Wiper blades\",\n    \"Cabin air filter\",\n    \"Transmission fluid (CVT)\",\n    \"Coolant\",\n    \"Headlight and taillight assemblies\"\n  ],\n  \"knownFitment\": [\n    \"2019 Toyota Corolla (all trims)\",\n    \"2018 Toyota Corolla (similar generation)\",\n    \"2020 Toyota Corolla (same generation)\",\n    \"Toyota Corolla Matrix (some components)\",\n    \"Toyota Prius (some electrical components)\"\n  ],\n  \"ebayMotorsListingHints\": {\n    \"titleKeywords\": [\n      \"2019 Toyota Corolla\",\n      \"OEM parts\",\n      \"Sedan\",\n      \"Japanese import\",\n      \"CVT transmission\"\n    ],\n    \"categoryHints\": [\n      \"Car Parts & Accessories > Engine & Engine Parts\",\n      \"Car Parts & Accessories > Transmission & Drivetrain\",\n      \"Car Parts & Accessories > Exterior & Body Parts\",\n      \"Car Parts & Accessories > Interior Parts & Trim\"\n    ],\n    \"itemSpecifics\": {\n      \"Year\": \"2019\",\n      \"Make\": \"Toyota\",\n      \"Model\": \"Corolla\",\n      \"Engine\": \"1.8L I-4\",\n      \"Transmission\": \"CVT\",\n      \"Drive Type\": \"Front-Wheel Drive\",\n      \"Body Type\": \"Sedan\",\n      \"Country/Region of Manufacture\": \"Japan\"\n    }\n  },\n  \"description\": \"2019 Toyota Corolla sedan manufactured in Japan at the Tsutsumi Plant. Front-wheel-drive compact sedan with 1.8L 4-cylinder engine and CVT transmission, offering reliable daily transportation with good fuel efficiency.\"\n}\n```\n\n---\n\n## ⚠️ **CRITICAL DECODE LIMITATIONS**\n\n**VIN Validation Issues:**\n- **Error Positions: 4 & 5** — NHTSA flagged these positions as containing invalid characters\n- **Suggested Corrected VIN:** `JTNB!!HK8K3019731` (!! indicates error positions)\n- **Status:** NHTSA unable to provide complete decode due to VIN errors\n\n**Recommendations:**\n1. **Verify the VIN** with the vehicle owner, registration documents, or dealer\n2. **Do not rely on this decode** for title/registration purposes without NHTSA confirmation\n3. **Contact Toyota dealer** with the VIN for authoritative trim and options information\n4. **Check the vehicle's window sticker** (Monroney label) for exact specifications\n\n**What We Know with Confidence:**\n- ✅ Make: Toyota\n- ✅ Year: 2019\n- ✅ Vehicle Type: Passenger Car\n- ✅ Plant: Toyota City, Japan (Tsutsumi Plant)\n\n**What is Inferred (Not Verified):**\n- Model, trim, engine variant, transmission type based on typical 2019 Corolla specs\n- All performance and dimension data are representative estimates",
+  "parsed": null,
+  "parseError": "Unexpected token '`', \"```json\n{\n\"... is not valid JSON"
+}

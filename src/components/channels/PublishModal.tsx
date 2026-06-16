@@ -296,7 +296,7 @@ export default function PublishModal(props: Props) {
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 p-1 rounded-lg hover:bg-slate-100 dark:bg-slate-800"
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 p-1 rounded-lg hover:bg-slate-100 dark:bg-slate-800"
           >
             <X size={18} />
           </button>
@@ -314,7 +314,7 @@ export default function PublishModal(props: Props) {
                     <p className="text-sm text-slate-600 dark:text-slate-200 font-medium truncate">
                       {listing.title ?? 'Untitled'}
                     </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                       {listing.customLabelSku ?? listing.id}
                     </p>
                   </div>
@@ -341,7 +341,7 @@ export default function PublishModal(props: Props) {
 
               {/* Loading */}
               {storesLoading && (
-                <div className="flex items-center justify-center py-8 gap-2 text-slate-400 dark:text-slate-400">
+                <div className="flex items-center justify-center py-8 gap-2 text-slate-500 dark:text-slate-400">
                   <Loader2 size={16} className="animate-spin" />
                   <span className="text-sm">Loading eBay stores…</span>
                 </div>
@@ -351,7 +351,7 @@ export default function PublishModal(props: Props) {
               {!storesLoading && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-400 dark:text-slate-400 font-medium uppercase tracking-wider">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
                       Select eBay Stores
                     </p>
                     {activeStores.length > 1 && (
@@ -365,7 +365,7 @@ export default function PublishModal(props: Props) {
                         <span className="text-slate-600 dark:text-slate-700">|</span>
                         <button
                           onClick={deselectAll}
-                          className="text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-400 dark:text-slate-400"
+                          className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-500 dark:text-slate-400"
                         >
                           Deselect all
                         </button>
@@ -410,7 +410,7 @@ export default function PublishModal(props: Props) {
                               {store.storeName}
                             </span>
                             {store.externalStoreId && (
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
                                 {store.externalStoreId}
                               </span>
                             )}
@@ -431,7 +431,7 @@ export default function PublishModal(props: Props) {
                                   expandedOverride === store.id ? null : store.id,
                                 );
                               }}
-                              className="text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:text-slate-300 p-0.5"
+                              className="text-slate-500 dark:text-slate-400 hover:text-slate-500 dark:text-slate-300 p-0.5"
                             >
                               {expandedOverride === store.id ? (
                                 <ChevronUp size={14} />
@@ -445,12 +445,12 @@ export default function PublishModal(props: Props) {
                         {/* Per-store overrides */}
                         {isChecked && expandedOverride === store.id && mode === 'single' && (
                           <div className="border border-slate-200 dark:border-slate-800 border-t-0 rounded-b-lg p-3 bg-white/60 dark:bg-slate-900/60 space-y-2">
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                               Store-specific overrides (optional)
                             </p>
                             <div className="grid grid-cols-3 gap-2">
                               <div>
-                                <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-1">
+                                <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
                                   Price
                                 </label>
                                 <input
@@ -465,7 +465,7 @@ export default function PublishModal(props: Props) {
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-1">
+                                <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
                                   Quantity
                                 </label>
                                 <input
@@ -479,7 +479,7 @@ export default function PublishModal(props: Props) {
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-1">
+                                <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
                                   Title
                                 </label>
                                 <input
@@ -501,7 +501,7 @@ export default function PublishModal(props: Props) {
 
                   {/* No stores */}
                   {!storesLoading && activeStores.length === 0 && (
-                    <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500">
+                    <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
                       <StoreIcon size={24} className="mx-auto mb-2 text-slate-500 dark:text-slate-600" />
                       <p>No active eBay stores found.</p>
                       <p className="text-xs mt-1">
@@ -521,7 +521,7 @@ export default function PublishModal(props: Props) {
               <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
                 Publishing to {selected.size} store{selected.size !== 1 ? 's' : ''}…
               </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">This may take a moment.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">This may take a moment.</p>
             </div>
           )}
 
@@ -536,7 +536,7 @@ export default function PublishModal(props: Props) {
                     <p className="text-sm text-slate-600 dark:text-slate-200 font-medium">
                       All published successfully!
                     </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       {successCount} offer{successCount !== 1 ? 's' : ''} created on eBay.
                     </p>
                   </>
@@ -544,7 +544,7 @@ export default function PublishModal(props: Props) {
                   <>
                     <XCircle size={32} className="text-red-400 mx-auto mb-2" />
                     <p className="text-sm text-slate-600 dark:text-slate-200 font-medium">Publishing failed</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       {failCount} store{failCount !== 1 ? 's' : ''} failed.
                     </p>
                   </>
@@ -552,7 +552,7 @@ export default function PublishModal(props: Props) {
                   <>
                     <AlertTriangle size={32} className="text-amber-400 mx-auto mb-2" />
                     <p className="text-sm text-slate-600 dark:text-slate-200 font-medium">Partial success</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       {successCount} succeeded, {failCount} failed.
                     </p>
                   </>
@@ -577,12 +577,12 @@ export default function PublishModal(props: Props) {
                         {r.storeName ?? store?.storeName ?? r.storeId}
                       </span>
                       {r.offerId && (
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                           Offer: {r.offerId}
                         </span>
                       )}
                       {r.listingId && (
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono ml-2">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono ml-2">
                           Listing: {r.listingId}
                         </span>
                       )}
@@ -604,7 +604,7 @@ export default function PublishModal(props: Props) {
               {/* Bulk results breakdown */}
               {mode === 'bulk' && bulkResults.length > 0 && (
                 <div className="border-t border-slate-200 dark:border-slate-800 pt-3 mt-3">
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                     {bulkResults.length} listing{bulkResults.length !== 1 ? 's' : ''} processed
                   </p>
                 </div>

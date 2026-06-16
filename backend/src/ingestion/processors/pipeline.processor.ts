@@ -7,6 +7,7 @@ import { In, Repository } from 'typeorm';
 import { PipelineJob, PipelineJobStatus } from '../entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
+import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
 import { spawn } from 'node:child_process';
@@ -55,6 +56,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     private readonly productRepo: Repository<CatalogProduct>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectRepository(ImageAsset)
+    private readonly imageAssetRepo: Repository<ImageAsset>,
     @InjectQueue('pipeline')
     private readonly pipelineQueue: Queue,
     @InjectQueue('listing-optimization')
@@ -138,6 +141,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       // Save enriched listings to catalog_products + listing_records
       await this.saveToCatalog(jobId, outputDir, job.data.originalFilename);
+
+      // Link uploaded images (from Single Listing form) to the created listing
+      await this.linkUploadedImages(jobId);
 
       await this.updateStatus(jobId, 'completed');
 
@@ -459,6 +465,39 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       status: 'failed' as PipelineJobStatus,
       lastError: error.substring(0, 2000),
     });
+  }
+
+  /**
+   * Link uploaded images (from the Single Listing form) to the created listing record.
+   * Reads uploadedAssetIds from the job's stageDetails and updates ImageAsset.listingId.
+   */
+  private async linkUploadedImages(jobId: string): Promise<void> {
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    const assetIds = (job?.stageDetails as Record<string, unknown>)?.uploadedAssetIds as string[] | undefined;
+    if (!assetIds || assetIds.length === 0) return;
+
+    // Find the first listing record created by this job (sheetName contains the job ID)
+    const listing = await this.listingRepo.findOne({
+      where: { sheetName: `Pipeline ${jobId.slice(0, 8)}` },
+      order: { sourceRowNumber: 'ASC' },
+    });
+
+    if (!listing) {
+      this.logger.warn(`Job ${jobId}: Could not find listing record to link uploaded images`);
+      return;
+    }
+
+    // Update all uploaded ImageAsset records to point to this listing
+    const result = await this.imageAssetRepo
+      .createQueryBuilder()
+      .update()
+      .set({ listingId: listing.id })
+      .where('id IN (:...assetIds)', { assetIds })
+      .execute();
+
+    this.logger.log(
+      `Job ${jobId}: Linked ${result.affected ?? 0} uploaded images to listing ${listing.id}`,
+    );
   }
 
   /**

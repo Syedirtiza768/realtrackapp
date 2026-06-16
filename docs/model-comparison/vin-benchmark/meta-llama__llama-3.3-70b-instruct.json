@@ -1,0 +1,33 @@
+{
+  "modelId": "meta-llama/llama-3.3-70b-instruct",
+  "ok": true,
+  "latencyMs": 28616,
+  "usage": {
+    "prompt_tokens": 752,
+    "completion_tokens": 480,
+    "total_tokens": 1232,
+    "cost": 0.0002288,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0002288,
+      "upstream_inference_prompt_cost": 0.0000752,
+      "upstream_inference_completions_cost": 0.0001536
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.00022879999999999998,
+  "contextLength": 131072,
+  "rawContent": "```json\n{\n  \"make\": \"TOYOTA\",\n  \"model\": \"\",\n  \"trim\": \"\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"\",\n  \"driveType\": \"\",\n  \"engineCylinders\": \"\",\n  \"engineDisplacementL\": \"\",\n  \"engineDescription\": \"\",\n  \"fuelType\": \"\",\n  \"transmission\": \"\",\n  \"mpg\": \"\",\n  \"horsepower\": \"\",\n  \"torque\": \"\",\n  \"seatingCapacity\": \"\",\n  \"wheelbase\": \"\",\n  \"curbWeight\": \"\",\n  \"plantCountry\": \"JAPAN\",\n  \"plantCity\": \"TOYOTA CITY\",\n  \"plantName\": \"Toyota Motor Corporation - Tsutsumi Plant\",\n  \"vehicleType\": \"PASSENGER CAR\",\n  \"manufacturingCountry\": \"JAPAN\",\n  \"recallsOrSafetyNotes\": \"\",\n  \"confidenceNotes\": \"The provided NHTSA data contains errors in the VIN, and some information could not be retrieved. The make and model year are verified, but other fields are uncertain due to the errors in the VIN. The suggested VIN indicates errors in positions 2 and 3, which could affect the accuracy of the decoded information.\",\n  \"dataSourcesRecommended\": [\n    \"Toyota's official website\",\n    \"NHTSA's official website\",\n    \"Edmunds\",\n    \"Kelley Blue Book\"\n  ],\n  \"commonParts\": [\n    \"Air filter\",\n    \"Oil filter\",\n    \"Tire pressure monitoring system\",\n    \"Brake pads\",\n    \"Spark plugs\"\n  ],\n  \"knownFitment\": [\n    \"2018-2020 Toyota Camry\",\n    \"2018-2020 Toyota Corolla\",\n    \"2019-2020 Toyota Avalon\"\n  ],\n  \"ebayMotorsListingHints\": {\n    \"titleKeywords\": [\n      \"Toyota\",\n      \"2019\",\n      \"Passenger Car\"\n    ],\n    \"categoryHints\": [\n      \"Cars & Trucks\",\n      \"Toyota\"\n    ],\n    \"itemSpecifics\": {\n      \"Make\": \"Toyota\",\n      \"Model\": \"\",\n      \"Year\": \"2019\"\n    }\n  },\n  \"description\": \"2019 Toyota passenger car with unknown model and trim due to errors in the provided VIN.\"\n}\n```",
+  "parsed": null,
+  "parseError": "Unexpected token '`', \"```json\n{\n\"... is not valid JSON"
+}

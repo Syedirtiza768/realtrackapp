@@ -16,20 +16,32 @@ import { User } from '../auth/entities/user.entity.js';
 import { Role } from './entities/role.entity.js';
 import { Permission } from './entities/permission.entity.js';
 import { RequirePermissions } from './decorators/require-permissions.decorator.js';
+import {
+  AssignRoleDto,
+  CreateRbacUserDto,
+} from './dto/rbac-admin.dto.js';
+import { ROLE_SLUGS } from './permission-registry.js';
 import { RbacService } from './rbac.service.js';
 
-class CreateUserDto {
-  email: string;
-  password: string;
-  name?: string;
-  roleSlug: string;
-}
-
-class AssignRoleDto {
-  roleSlug: string;
-}
-
 const SALT_ROUNDS = 12;
+
+/** Maps RBAC role slug to legacy users.role column (permissions use RBAC assignments). */
+function legacyUserRoleFromSlug(slug: string): User['role'] {
+  switch (slug) {
+    case ROLE_SLUGS.STAFF:
+      return 'user';
+    case ROLE_SLUGS.SUPER_ADMIN:
+      return 'super_admin';
+    case ROLE_SLUGS.ADMIN:
+      return 'admin';
+    case ROLE_SLUGS.MANAGER:
+      return 'manager';
+    case ROLE_SLUGS.VIEWER:
+      return 'viewer';
+    default:
+      return 'user';
+  }
+}
 
 @ApiTags('rbac-admin')
 @ApiBearerAuth()
@@ -92,7 +104,7 @@ export class RbacAdminController {
   @Post('users')
   @RequirePermissions('users.create')
   @ApiOperation({ summary: 'Create user' })
-  async createUser(@Body() body: CreateUserDto) {
+  async createUser(@Body() body: CreateRbacUserDto) {
     const email = body.email.toLowerCase();
     const existing = await this.userRepo.findOne({ where: { email } });
     if (existing) {
@@ -103,7 +115,7 @@ export class RbacAdminController {
         email,
         name: body.name ?? null,
         passwordHash: await bcrypt.hash(body.password, SALT_ROUNDS),
-        role: body.roleSlug === 'staff' ? 'user' : (body.roleSlug as User['role']),
+        role: legacyUserRoleFromSlug(body.roleSlug),
         active: true,
       }),
     );
@@ -123,10 +135,7 @@ export class RbacAdminController {
       return { error: 'Only Super Admin can assign Super Admin role' };
     }
     const user = await this.userRepo.findOneOrFail({ where: { id: userId } });
-    user.role =
-      body.roleSlug === 'staff'
-        ? 'user'
-        : (body.roleSlug as User['role']);
+    user.role = legacyUserRoleFromSlug(body.roleSlug);
     await this.userRepo.save(user);
     await this.rbac.assignPrimaryRole(userId, body.roleSlug);
     return this.rbac.getAuthProfile(user);

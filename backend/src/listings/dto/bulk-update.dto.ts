@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsObject,
+  IsOptional,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -20,4 +21,9 @@ export class BulkUpdateDto {
   @ValidateNested()
   @Type(() => CreateListingDto)
   changes: Partial<CreateListingDto>;
+
+  /** Per-listing version for optimistic locking (required for each id when provided). */
+  @IsOptional()
+  @IsObject()
+  versions?: Record<string, number>;
 }

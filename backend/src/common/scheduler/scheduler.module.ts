@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SchedulerLeaderService } from './scheduler-leader.service.js';
 import { SchedulerService } from './scheduler.service.js';
 import { PricingIntelligenceModule } from '../../pricing-intelligence/pricing-intelligence.module.js';
 import { SellerpunditModule } from '../../integrations/sellerpundit/sellerpundit.module.js';
@@ -29,6 +30,6 @@ import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected
     PricingIntelligenceModule,
     SellerpunditModule,
   ],
-  providers: [SchedulerService],
+  providers: [SchedulerLeaderService, SchedulerService],
 })
 export class SchedulerModule {}

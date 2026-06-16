@@ -1,0 +1,99 @@
+{
+  "modelId": "qwen/qwen-2.5-72b-instruct",
+  "ok": true,
+  "latencyMs": 14257,
+  "usage": {
+    "prompt_tokens": 774,
+    "completion_tokens": 392,
+    "total_tokens": 1166,
+    "cost": 0.00043544,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00043544,
+      "upstream_inference_prompt_cost": 0.00027864,
+      "upstream_inference_completions_cost": 0.0001568
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.00043543999999999994,
+  "contextLength": 131072,
+  "rawContent": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Camry\",\n  \"trim\": \"\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"Sedan\",\n  \"driveType\": \"\",\n  \"engineCylinders\": \"\",\n  \"engineDisplacementL\": \"\",\n  \"engineDescription\": \"\",\n  \"fuelType\": \"\",\n  \"transmission\": \"\",\n  \"mpg\": \"\",\n  \"horsepower\": \"\",\n  \"torque\": \"\",\n  \"seatingCapacity\": \"\",\n  \"wheelbase\": \"\",\n  \"curbWeight\": \"\",\n  \"plantCountry\": \"Japan\",\n  \"plantCity\": \"Toyota City\",\n  \"plantName\": \"Toyota Motor Corporation - Tsutsumi Plant\",\n  \"vehicleType\": \"Passenger Car\",\n  \"manufacturingCountry\": \"Japan\",\n  \"recallsOrSafetyNotes\": \"\",\n  \"confidenceNotes\": \"The VIN has errors in positions 4, 5, 6, 7, and 8, making it impossible to fully decode the vehicle. The make, model year, and plant information are verified, but other fields are left blank due to the VIN errors.\",\n  \"dataSourcesRecommended\": [\"Toyota Official Website\", \"NHTSA Vehicle Safety Database\", \"AutoZone Parts Catalog\"],\n  \"commonParts\": [],\n  \"knownFitment\": [],\n  \"ebayMotorsListingHints\": {\n    \"titleKeywords\": [\"2019 Toyota Camry\"],\n    \"categoryHints\": [\"Cars & Trucks: Parts & Accessories\"],\n    \"itemSpecifics\": {\"Make\": \"Toyota\", \"Model\": \"Camry\", \"Year\": \"2019\"}\n  },\n  \"description\": \"This is a 2019 Toyota Camry, a passenger car manufactured in Toyota City, Japan. Due to VIN errors, specific details about the vehicle's configuration are not available.\"\n}",
+  "parsed": {
+    "make": "Toyota",
+    "model": "Camry",
+    "trim": "",
+    "year": "2019",
+    "bodyClass": "Sedan",
+    "driveType": "",
+    "engineCylinders": "",
+    "engineDisplacementL": "",
+    "engineDescription": "",
+    "fuelType": "",
+    "transmission": "",
+    "mpg": "",
+    "horsepower": "",
+    "torque": "",
+    "seatingCapacity": "",
+    "wheelbase": "",
+    "curbWeight": "",
+    "plantCountry": "Japan",
+    "plantCity": "Toyota City",
+    "plantName": "Toyota Motor Corporation - Tsutsumi Plant",
+    "vehicleType": "Passenger Car",
+    "manufacturingCountry": "Japan",
+    "recallsOrSafetyNotes": "",
+    "confidenceNotes": "The VIN has errors in positions 4, 5, 6, 7, and 8, making it impossible to fully decode the vehicle. The make, model year, and plant information are verified, but other fields are left blank due to the VIN errors.",
+    "dataSourcesRecommended": [
+      "Toyota Official Website",
+      "NHTSA Vehicle Safety Database",
+      "AutoZone Parts Catalog"
+    ],
+    "commonParts": [],
+    "knownFitment": [],
+    "ebayMotorsListingHints": {
+      "titleKeywords": [
+        "2019 Toyota Camry"
+      ],
+      "categoryHints": [
+        "Cars & Trucks: Parts & Accessories"
+      ],
+      "itemSpecifics": {
+        "Make": "Toyota",
+        "Model": "Camry",
+        "Year": "2019"
+      }
+    },
+    "description": "This is a 2019 Toyota Camry, a passenger car manufactured in Toyota City, Japan. Due to VIN errors, specific details about the vehicle's configuration are not available."
+  },
+  "parseError": null,
+  "scoring": {
+    "checks": {
+      "yearMatch": true,
+      "makeMatch": true,
+      "plantCountryMatch": true,
+      "vehicleTypeMatch": true,
+      "hasConfidenceNotes": true,
+      "mentionsNhtsaGap": true,
+      "hasTransmission": false,
+      "hasEngineDescription": false,
+      "hasEbayHints": true,
+      "hasCommonParts": false,
+      "hasFitment": false,
+      "hasDataSources": true,
+      "jsonComplete": true
+    },
+    "fieldCount": 4,
+    "score": 57,
+    "maxScore": 98
+  }
+}

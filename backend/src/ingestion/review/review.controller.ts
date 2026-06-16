@@ -10,6 +10,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReviewService } from './review.service.js';
 import { ReviewDecisionDto } from '../dto/review-decision.dto.js';
 import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
+import { User } from '../../auth/entities/user.entity.js';
 
 @ApiTags('Ingestion Review')
 @Controller('ingestion/review')
@@ -29,9 +31,9 @@ export class ReviewController {
   async approve(
     @Param('id') id: string,
     @Body() dto: ReviewDecisionDto,
+    @CurrentUser() user: User,
   ) {
-    // TODO: extract reviewer ID from JWT once auth guards are wired
-    const result = await this.reviewService.approve(id, dto);
+    const result = await this.reviewService.approve(id, dto, user.id);
     return result;
   }
 
@@ -40,8 +42,9 @@ export class ReviewController {
   async reject(
     @Param('id') id: string,
     @Body() dto: ReviewDecisionDto,
+    @CurrentUser() user: User,
   ) {
-    const job = await this.reviewService.reject(id, dto);
+    const job = await this.reviewService.reject(id, dto, user.id);
     return { job };
   }
 }

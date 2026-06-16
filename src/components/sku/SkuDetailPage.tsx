@@ -1,4 +1,4 @@
-﻿/* ─── SKU Detail Page ───────────────────────────────────────
+/* ─── SKU Detail Page ───────────────────────────────────────
  *  Full-featured SKU detail view with tabbed interface:
  *  Overview | Channels | Inventory | AI Enhancements | Activity
  * ────────────────────────────────────────────────────────── */
@@ -136,7 +136,7 @@ export default function SkuDetailPage() {
           className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
           title="Refresh"
         >
-          <RefreshCw className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+          <RefreshCw className="w-4 h-4 text-slate-500 dark:text-slate-400" />
         </button>
       </div>
 
@@ -160,7 +160,7 @@ export default function SkuDetailPage() {
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === tabId
                   ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-700 hover:border-slate-300'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-700 hover:border-slate-300'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -187,7 +187,7 @@ export default function SkuDetailPage() {
 function QuickStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-3">
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-semibold text-slate-800 truncate" title={value}>{value}</p>
     </div>
   );
@@ -200,7 +200,7 @@ function StatusBadge({ status }: { status: string }) {
     ready: { bg: 'bg-blue-100', text: 'text-blue-700' },
     sold: { bg: 'bg-amber-100', text: 'text-amber-700' },
     delisted: { bg: 'bg-red-100', text: 'text-red-700' },
-    archived: { bg: 'bg-slate-200', text: 'text-slate-400 dark:text-slate-500' },
+    archived: { bg: 'bg-slate-200', text: 'text-slate-500 dark:text-slate-400' },
   };
   const c = config[status] ?? config.draft;
 
@@ -322,7 +322,7 @@ function InfoRow({ label, value, copyable, link }: {
   const display = value ?? '—';
   return (
     <div className="flex justify-between items-center">
-      <dt className="text-slate-400 dark:text-slate-500">{label}</dt>
+      <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
       <dd className="text-slate-800 font-medium flex items-center gap-1">
         {link ? (
           <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
@@ -337,7 +337,7 @@ function InfoRow({ label, value, copyable, link }: {
             className="p-0.5 hover:bg-slate-100 rounded"
             title="Copy"
           >
-            <Copy className="w-3 h-3 text-slate-400 dark:text-slate-400" />
+            <Copy className="w-3 h-3 text-slate-500 dark:text-slate-400" />
           </button>
         )}
       </dd>
@@ -369,7 +369,7 @@ function ActivityTab({ listingId }: { listingId: string }) {
 
   if (logs.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+      <div className="text-center py-12 text-slate-500 dark:text-slate-400">
         <History className="w-12 h-12 mx-auto mb-3 text-slate-500 dark:text-slate-300" />
         <p className="font-medium">No activity yet</p>
         <p className="text-sm mt-1">Activity will appear as you publish, update, and manage this listing.</p>
@@ -382,16 +382,16 @@ function ActivityTab({ listingId }: { listingId: string }) {
       {logs.map((log: any) => (
         <div key={log.id} className="px-4 py-3 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
-            <History className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+            <History className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-800">{log.action}</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {log.entityType} · {new Date(log.createdAt).toLocaleString()}
             </p>
           </div>
           {log.actorType && (
-            <span className="text-xs text-slate-400 dark:text-slate-400">{log.actorType}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{log.actorType}</span>
           )}
         </div>
       ))}

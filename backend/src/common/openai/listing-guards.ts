@@ -136,3 +136,75 @@ export function applyListingGuards(
 
   return { item: out, fixes };
 }
+
+/**
+ * Detect LLM-hallucinated OEM part numbers that don't match the expected brand format.
+ *
+ * Returns an array of warning strings. Each warning identifies a part whose
+ * OEM number doesn't match the brand's known part number pattern.
+ *
+ * This is a deterministic guard — no AI cost, pure regex matching.
+ */
+export function detectHallucinatedPartNumbers(
+  parts: Array<{ part_name?: string; partName?: string; oem_part_number?: string; oemPartNumber?: string }>,
+  brand: string,
+): string[] {
+  // Brand → regex for OEM part number format
+  const BRAND_FORMATS: Record<string, RegExp> = {
+    toyota: /^\d{5}[-]?\d{3,5}$/i,
+    lexus: /^\d{5}[-]?\d{3,5}$/i,
+    bmw: /^(\d{2}\s?\d{2}\s?\d\s?\d{3}\s?\d{3}|\d{11})$/,
+    'mercedes-benz': /^A?\s?\d{3}\s?\d{3}\s?\d{2}\s?\d{2}$/i,
+    ford: /^[A-Z0-9]{3,5}[-]?\d{4,5}[-]?[A-Z0-9]{0,3}$/i,
+    lincoln: /^[A-Z0-9]{3,5}[-]?\d{4,5}[-]?[A-Z0-9]{0,3}$/i,
+    chevrolet: /^\d{7,8}$/,
+    gmc: /^\d{7,8}$/,
+    cadillac: /^\d{7,8}$/,
+    honda: /^\d{5}[-]?\w{5}$/i,
+    acura: /^\d{5}[-]?\w{5}$/i,
+    nissan: /^\d{5}[-]?[A-Z0-9]{5}$/i,
+    infiniti: /^\d{5}[-]?[A-Z0-9]{5}$/i,
+    hyundai: /^\d{3,5}[-]?\d{3,5}$/i,
+    kia: /^\d{3,5}[-]?\d{3,5}$/i,
+    volkswagen: /^[A-Z0-9]{3}\s?\d{3}\s?\d{3}[A-Z]?$/i,
+    audi: /^[A-Z0-9]{3}\s?\d{3}\s?\d{3}[A-Z]?$/i,
+    subaru: /^\d{3}[-]?\d{3}[-]?\d{2}$/i,
+  };
+
+  const normalizedBrand = brand.trim().toLowerCase();
+  const format = BRAND_FORMATS[normalizedBrand];
+
+  // If brand not in registry, skip validation
+  if (!format) return [];
+
+  const warnings: string[] = [];
+
+  for (const part of parts) {
+    const pn = part.oem_part_number || part.oemPartNumber || '';
+    const name = part.part_name || part.partName || 'Unknown part';
+
+    if (!pn) continue;
+
+    // Skip [VERIFY] tagged parts — they're already flagged by the AI
+    if (pn.includes('[VERIFY]')) continue;
+
+    const normalized = pn.replace(/\s+/g, '').toUpperCase();
+    if (!format.test(normalized)) {
+      // Check if it matches another brand's format
+      const matchedBrands: string[] = [];
+      for (const [b, fmt] of Object.entries(BRAND_FORMATS)) {
+        if (b !== normalizedBrand && fmt.test(normalized)) {
+          matchedBrands.push(b);
+        }
+      }
+      const matchNote = matchedBrands.length > 0
+        ? ` (matches ${matchedBrands.join(', ')} format)`
+        : '';
+      warnings.push(
+        `"${name}": OEM# "${pn}" does not match ${brand} format${matchNote}`,
+      );
+    }
+  }
+
+  return warnings;
+}

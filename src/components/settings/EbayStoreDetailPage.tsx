@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   getEbayAccount,
@@ -98,7 +98,7 @@ export default function EbayStoreDetailPage() {
 
   if (!signedIn) {
     return (
-      <div className="p-8 text-slate-400 dark:text-slate-400">
+      <div className="p-8 text-slate-500 dark:text-slate-400">
         <Link to="/login" className="text-sky-400 underline">
           Sign in
         </Link>{' '}
@@ -118,7 +118,7 @@ export default function EbayStoreDetailPage() {
         </Link>
       </div>
 
-      {loading && <p className="text-slate-400 dark:text-slate-400">Loading…</p>}
+      {loading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
       {message && (
         <p className="rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 py-2 text-sm text-slate-600 dark:text-slate-200">
           {message}
@@ -131,7 +131,7 @@ export default function EbayStoreDetailPage() {
             <h1 className="text-2xl font-semibold text-white">
               {account.accountDisplayName}
             </h1>
-            <p className="mt-1 text-sm text-slate-400 dark:text-slate-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               {account.connectionSource === 'sellerpundit' && (
                 <span className="mr-2 rounded bg-violet-900/60 px-2 py-0.5 text-xs text-violet-200">
                   SellerPundit
@@ -156,7 +156,7 @@ export default function EbayStoreDetailPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 p-4">
               <h2 className="text-sm font-medium text-slate-500 dark:text-slate-300">Sync stats</h2>
-              <ul className="mt-2 space-y-1 text-sm text-slate-400 dark:text-slate-400">
+              <ul className="mt-2 space-y-1 text-sm text-slate-500 dark:text-slate-400">
                 <li>
                   Last sync:{' '}
                   {account.lastSuccessfulSyncAt
@@ -234,7 +234,7 @@ export default function EbayStoreDetailPage() {
                 <li key={m.marketplaceId} className="px-4 py-3 text-sm text-slate-500 dark:text-slate-300">
                   <span className="font-medium">{m.marketplaceId}</span>
                   {m.enabled ? '' : ' (disabled)'}
-                  <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     Fulfillment: {m.defaultFulfillmentPolicyId ?? '—'} · Payment:{' '}
                     {m.defaultPaymentPolicyId ?? '—'} · Return:{' '}
                     {m.defaultReturnPolicyId ?? '—'} · Location:{' '}
@@ -248,7 +248,7 @@ export default function EbayStoreDetailPage() {
           <section>
             <h2 className="mb-2 text-sm font-medium text-slate-500 dark:text-slate-300">Recent sync logs</h2>
             {syncLogs.length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-slate-500">No sync runs yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">No sync runs yet.</p>
             ) : (
               <ul className="divide-y divide-slate-200 dark:divide-slate-800 rounded-lg border border-slate-200 dark:border-slate-800">
                 {syncLogs.map((log) => (
@@ -265,7 +265,7 @@ export default function EbayStoreDetailPage() {
                     >
                       {log.status}
                     </span>
-                    <span className="text-slate-400 dark:text-slate-500">
+                    <span className="text-slate-500 dark:text-slate-400">
                       {' '}
                       · {log.itemsProcessed} processed, {log.itemsUpdated} updated
                       {log.itemsFailed > 0 ? `, ${log.itemsFailed} failed` : ''}

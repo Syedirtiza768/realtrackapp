@@ -198,9 +198,14 @@ export async function updateListing(
 export async function patchListingStatus(
   id: string,
   status: ListingStatus,
+  version: number,
   reason?: string,
 ): Promise<PatchStatusResponse> {
-  return apiMutate<PatchStatusResponse>(`/listings/${id}/status`, 'PATCH', { status, reason });
+  return apiMutate<PatchStatusResponse>(`/listings/${id}/status`, 'PATCH', {
+    status,
+    version,
+    reason,
+  });
 }
 
 /** Soft-delete a listing (DELETE /api/listings/:id) */
@@ -217,8 +222,9 @@ export async function restoreListing(id: string): Promise<{ listing: ListingReco
 export async function bulkUpdateListings(
   ids: string[],
   changes: Partial<ListingRecordFull>,
+  versions?: Record<string, number>,
 ): Promise<BulkUpdateResponse> {
-  return apiMutate<BulkUpdateResponse>('/listings/bulk', 'POST', { ids, changes });
+  return apiMutate<BulkUpdateResponse>('/listings/bulk', 'POST', { ids, changes, versions });
 }
 
 /** Fetch revision history for a listing */

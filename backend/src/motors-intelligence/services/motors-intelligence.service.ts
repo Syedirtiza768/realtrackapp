@@ -341,10 +341,13 @@ export class MotorsIntelligenceService {
     return { items: result.products, total: result.total };
   }
 
-  async batchCreateProducts(products: Partial<MotorsProduct>[]): Promise<MotorsProduct[]> {
+  async batchCreateProducts(
+    products: Partial<MotorsProduct>[],
+    actorId?: string,
+  ): Promise<MotorsProduct[]> {
     const created: MotorsProduct[] = [];
     for (const data of products) {
-      created.push(await this.createProduct(data));
+      created.push(await this.createProduct(data, actorId));
     }
     return created;
   }
@@ -361,21 +364,28 @@ export class MotorsIntelligenceService {
     return this.motorsPublisherService.publishToEbay(motorsProductId, connectionId);
   }
 
-  async createProduct(data: Partial<MotorsProduct>): Promise<MotorsProduct> {
+  async createProduct(
+    data: Partial<MotorsProduct>,
+    actorId?: string,
+  ): Promise<MotorsProduct> {
+    const { createdBy: _ignored, ...rest } = data;
     // Normalize MPN and brand
-    if (data.mpn) {
-      data.mpnNormalized = data.mpn
+    if (rest.mpn) {
+      rest.mpnNormalized = rest.mpn
         .toUpperCase()
         .replace(/[-–—.\s]/g, '')
         .trim();
     }
-    if (data.brand) {
-      data.brandNormalized = data.brand
+    if (rest.brand) {
+      rest.brandNormalized = rest.brand
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '');
     }
 
-    const product = this.motorsProductRepo.create(data);
+    const product = this.motorsProductRepo.create({
+      ...rest,
+      createdBy: actorId ?? null,
+    });
     return this.motorsProductRepo.save(product);
   }
 

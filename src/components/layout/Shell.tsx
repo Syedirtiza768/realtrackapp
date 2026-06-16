@@ -36,6 +36,20 @@ type NavItem = {
     permission?: string;
 };
 
+/** Sidebar links hidden from nav; routes remain reachable by URL. Remove a path to show again. */
+const SIDEBAR_HIDDEN_PATHS = new Set([
+    '/ingestion', // Ingestion
+    '/motors', // Motors Intel
+    '/motors/review', // Review Queue
+    '/fitment', // Fitment
+    '/catalog/motors-filters', // Motors CSV filters
+    '/bulk-actions', // Bulk Actions
+    '/orders', // Orders
+    '/automation', // Automation
+    '/templates', // Templates
+    '/settings/ai-routing', // AI routing
+]);
+
 const NAV_ITEMS: NavItem[] = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', permission: 'dashboard.view' },
     { icon: Camera, label: 'Ingestion', path: '/ingestion', permission: 'ingestion.view' },
@@ -80,7 +94,9 @@ function SidebarContent({
     const appTitle = branding.appName || 'RealTrackApp';
 
     const visibleNav = NAV_ITEMS.filter(
-        (item) => !item.permission || has(item.permission),
+        (item) =>
+            !SIDEBAR_HIDDEN_PATHS.has(item.path) &&
+            (!item.permission || has(item.permission)),
     );
 
     const handleLogout = async () => {
@@ -154,7 +170,7 @@ function SidebarContent({
                         <div className="font-medium text-slate-700 dark:text-slate-200 truncate">
                             {user?.name ?? user?.email ?? 'User'}
                         </div>
-                        <div className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                             {user?.roleName ?? user?.roleSlug ?? ''}
                         </div>
                     </div>
@@ -253,7 +269,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                         </button>
 
                         <div className="relative flex-1 min-w-0">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" size={16} />
                             <input
                                 type="text"
                                 placeholder="Search inventory, listings, parts..."

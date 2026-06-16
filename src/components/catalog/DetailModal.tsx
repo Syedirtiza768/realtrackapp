@@ -1,4 +1,4 @@
-﻿/* ─── DetailModal ──────────────────────────────────────────
+/* ─── DetailModal ──────────────────────────────────────────
  *  Full product detail modal with image gallery,
  *  specifications table, and description rendering.
  * ────────────────────────────────────────────────────────── */
@@ -83,14 +83,14 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
             {data?.customLabelSku && (
               <button
                 onClick={copySku}
-                className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:text-slate-300 bg-slate-800 rounded-md px-2 py-1 font-mono"
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-500 dark:text-slate-300 bg-slate-800 rounded-md px-2 py-1 font-mono"
               >
                 {data.customLabelSku}
                 {copiedSku ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
               </button>
             )}
           </div>
-          <button onClick={onClose} className="text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
             <X size={18} />
           </button>
         </div>
@@ -182,7 +182,7 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
                     <Badge variant="secondary">{conditionLabel(data.conditionId)}</Badge>
                   )}
                   {data.quantity && (
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Qty: {data.quantity}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Qty: {data.quantity}</span>
                   )}
                 </div>
 
@@ -210,8 +210,8 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
                 {/* Description excerpt */}
                 {data.description && (
                   <div>
-                    <h5 className="text-xs font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">Description</h5>
-                    <p className="text-xs text-slate-400 dark:text-slate-400 leading-relaxed line-clamp-4">
+                    <h5 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Description</h5>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-4">
                       {stripHtml(data.description)}
                     </p>
                   </div>
@@ -241,7 +241,7 @@ function DetailRow({ label, value, mono }: { label: string; value: string | null
   if (!value) return null;
   return (
     <tr>
-      <td className="px-3 py-2 text-slate-400 dark:text-slate-500 font-medium w-32 bg-slate-100/30 dark:bg-slate-800/30">{label}</td>
+      <td className="px-3 py-2 text-slate-500 dark:text-slate-400 font-medium w-32 bg-slate-100/30 dark:bg-slate-800/30">{label}</td>
       <td className={`px-3 py-2 text-slate-500 dark:text-slate-300 ${mono ? 'font-mono' : ''}`}>{value}</td>
     </tr>
   );

@@ -149,7 +149,7 @@ export interface PatchStatusResponse {
 
 export interface BulkUpdateResponse {
   updated: number;
-  failed: { id: string; error: string }[];
+  failed: { id: string; error: string; conflict?: boolean }[];
 }
 
 export interface RevisionsResponse {

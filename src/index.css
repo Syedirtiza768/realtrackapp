@@ -65,3 +65,16 @@ img {
     display: none;
   }
 }
+
+/* Global form placeholder contrast */
+input::placeholder,
+textarea::placeholder,
+select::placeholder {
+  opacity: 1;
+}
+
+/* Native select option styling for dark mode */
+[data-theme="dark"] select option {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}

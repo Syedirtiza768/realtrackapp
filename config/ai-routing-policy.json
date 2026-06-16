@@ -1,9 +1,21 @@
 {
-  "version": 1,
-  "generatedAt": "2026-06-08T05:19:49.984Z",
+  "version": 2,
+  "generatedAt": "2026-06-14T00:00:00.000Z",
   "canaryPercent": 10,
   "source": "optimizer",
   "segments": {
+    "vin_decode|*": {
+      "lane": "flagship",
+      "model": "google/gemini-2.5-flash"
+    },
+    "vin_parts|*": {
+      "lane": "flagship",
+      "model": "google/gemini-2.5-flash"
+    },
+    "vin-enrichment|*": {
+      "lane": "flagship",
+      "model": "google/gemini-2.5-flash"
+    },
     "complete_engine|*": {
       "lane": "flagship",
       "model": "google/gemini-2.5-flash"

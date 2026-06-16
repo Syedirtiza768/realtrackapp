@@ -58,13 +58,9 @@ export class ChannelsService {
 
   // ─── Connection management ───
 
-  async getConnections(userId?: string): Promise<ChannelConnection[]> {
-    // UUID validation — if userId is missing or not a valid UUID,
-    // return all connections (single-tenant / pre-auth mode)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const where = userId && uuidRegex.test(userId) ? { userId } : {};
+  async getConnections(userId: string): Promise<ChannelConnection[]> {
     return this.connectionRepo.find({
-      where,
+      where: { userId },
       order: { createdAt: 'DESC' },
     });
   }
@@ -109,7 +105,7 @@ export class ChannelsService {
   async connectEbayLegacyToken(
     legacyToken: string,
     storesService: any,
-    userId = '00000000-0000-0000-0000-000000000001',
+    userId: string,
   ): Promise<{ connection: ChannelConnection; storeId: string; message: string }> {
     // Remove any existing eBay connection for this user first
     const existing = await this.connectionRepo.find({
@@ -176,15 +172,18 @@ export class ChannelsService {
     };
   }
 
-  async disconnectChannel(connectionId: string): Promise<void> {
-    const result = await this.connectionRepo.delete(connectionId);
+  async disconnectChannel(connectionId: string, userId: string): Promise<void> {
+    const result = await this.connectionRepo.delete({ id: connectionId, userId });
     if (result.affected === 0) {
       throw new NotFoundException(`Connection ${connectionId} not found`);
     }
   }
 
-  async testConnection(connectionId: string): Promise<{ ok: boolean; error?: string }> {
-    const conn = await this.connectionRepo.findOneBy({ id: connectionId });
+  async testConnection(
+    connectionId: string,
+    userId: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const conn = await this.connectionRepo.findOneBy({ id: connectionId, userId });
     if (!conn) throw new NotFoundException(`Connection ${connectionId} not found`);
 
     try {

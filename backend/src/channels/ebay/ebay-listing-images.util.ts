@@ -2,6 +2,20 @@ export const EBAY_MAX_LISTING_IMAGES = 12;
 
 const PLACEHOLDER_IMAGE_PATTERN = /placeholder|no-image|default-image|logo-only/i;
 
+/**
+ * Parse a raw image URL field from the database into an array of valid URLs.
+ * Handles pipe, comma, newline, and space delimiters — the field may contain
+ * any combination of these separators.
+ */
+export function parseImageUrlField(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(/[\n|,]+/)
+    .flatMap((s) => s.split(/\s+/))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && /^https?:\/\//i.test(s));
+}
+
 /** Expand pipe-delimited image strings and drop blank entries. */
 export function flattenImageUrlInputs(urls: string[] | null | undefined): string[] {
   if (!urls?.length) return [];

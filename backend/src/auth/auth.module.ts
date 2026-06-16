@@ -21,16 +21,12 @@ import { OrganizationMember } from './entities/organization-member.entity';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_SECRET', 'dev-secret-change-in-production');
-        console.log('[DEBUG] JWT Secret configured:', secret.substring(0, 10) + '...');
-        return {
-          secret,
-          signOptions: {
-            expiresIn: Number(config.get<string>('JWT_EXPIRY_SECONDS', '86400')),
-          },
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET', 'dev-secret-change-in-production'),
+        signOptions: {
+          expiresIn: Number(config.get<string>('JWT_EXPIRY_SECONDS', '14400')),
+        },
+      }),
     }),
     TypeOrmModule.forFeature([User, Organization, OrganizationMember, AuditLog]),
   ],

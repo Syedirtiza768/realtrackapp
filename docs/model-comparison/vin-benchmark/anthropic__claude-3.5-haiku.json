@@ -1,0 +1,115 @@
+{
+  "modelId": "anthropic/claude-3.5-haiku",
+  "ok": true,
+  "latencyMs": 10077,
+  "usage": {
+    "prompt_tokens": 878,
+    "completion_tokens": 663,
+    "total_tokens": 1541,
+    "cost": 0.0033544,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0033544,
+      "upstream_inference_prompt_cost": 0.0007024,
+      "upstream_inference_completions_cost": 0.002652
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.0033543999999999996,
+  "contextLength": 200000,
+  "rawContent": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Camry\",\n  \"trim\": \"Hybrid\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"Sedan\",\n  \"driveType\": \"FWD\",\n  \"engineCylinders\": \"4\",\n  \"engineDisplacementL\": \"2.5\",\n  \"engineDescription\": \"2.5L Hybrid I-4\",\n  \"fuelType\": \"Hybrid\",\n  \"transmission\": \"CVT\",\n  \"mpg\": \"51 city / 53 highway\",\n  \"horsepower\": \"208 hp\",\n  \"torque\": \"163 lb-ft\",\n  \"seatingCapacity\": \"5\",\n  \"wheelbase\": \"111.2 in\",\n  \"curbWeight\": \"3,310 lbs\",\n  \"plantCountry\": \"Japan\",\n  \"plantCity\": \"Toyota City\",\n  \"plantName\": \"Toyota Motor Corporation - Tsutsumi Plant\",\n  \"vehicleType\": \"Passenger Car\",\n  \"manufacturingCountry\": \"Japan\",\n  \"recallsOrSafetyNotes\": \"\",\n  \"confidenceNotes\": \"VIN decode partially validated. Model inferred from VIN prefix JTNB (Toyota Camry Hybrid). Some specifications are typical for 2019 Camry Hybrid based on manufacturer data.\",\n  \"dataSourcesRecommended\": [\n    \"Toyota Official Specifications\",\n    \"NHTSA Vehicle Database\",\n    \"Kelley Blue Book\"\n  ],\n  \"commonParts\": [\n    \"Hybrid Battery\",\n    \"Brake Pads\",\n    \"Air Filters\",\n    \"Spark Plugs\",\n    \"Tire Sensors\"\n  ],\n  \"knownFitment\": [\n    \"2018-2020 Toyota Camry Hybrid\",\n    \"2018-2020 Toyota Avalon Hybrid\"\n  ],\n  \"ebayMotorsListingHints\": {\n    \"titleKeywords\": [\n      \"2019 Toyota Camry\",\n      \"Hybrid\",\n      \"Low Miles\",\n      \"FWD\"\n    ],\n    \"categoryHints\": [\n      \"Cars & Trucks\",\n      \"Toyota\",\n      \"Camry\",\n      \"Hybrid Vehicles\"\n    ],\n    \"itemSpecifics\": {\n      \"Model\": \"Camry\",\n      \"Trim\": \"Hybrid\",\n      \"Year\": \"2019\",\n      \"Mileage\": \"\"\n    }\n  },\n  \"description\": \"A fuel-efficient 2019 Toyota Camry Hybrid sedan featuring a 2.5L hybrid powertrain, offering excellent city/highway fuel economy and comfortable family transportation.\"\n}",
+  "parsed": {
+    "make": "Toyota",
+    "model": "Camry",
+    "trim": "Hybrid",
+    "year": "2019",
+    "bodyClass": "Sedan",
+    "driveType": "FWD",
+    "engineCylinders": "4",
+    "engineDisplacementL": "2.5",
+    "engineDescription": "2.5L Hybrid I-4",
+    "fuelType": "Hybrid",
+    "transmission": "CVT",
+    "mpg": "51 city / 53 highway",
+    "horsepower": "208 hp",
+    "torque": "163 lb-ft",
+    "seatingCapacity": "5",
+    "wheelbase": "111.2 in",
+    "curbWeight": "3,310 lbs",
+    "plantCountry": "Japan",
+    "plantCity": "Toyota City",
+    "plantName": "Toyota Motor Corporation - Tsutsumi Plant",
+    "vehicleType": "Passenger Car",
+    "manufacturingCountry": "Japan",
+    "recallsOrSafetyNotes": "",
+    "confidenceNotes": "VIN decode partially validated. Model inferred from VIN prefix JTNB (Toyota Camry Hybrid). Some specifications are typical for 2019 Camry Hybrid based on manufacturer data.",
+    "dataSourcesRecommended": [
+      "Toyota Official Specifications",
+      "NHTSA Vehicle Database",
+      "Kelley Blue Book"
+    ],
+    "commonParts": [
+      "Hybrid Battery",
+      "Brake Pads",
+      "Air Filters",
+      "Spark Plugs",
+      "Tire Sensors"
+    ],
+    "knownFitment": [
+      "2018-2020 Toyota Camry Hybrid",
+      "2018-2020 Toyota Avalon Hybrid"
+    ],
+    "ebayMotorsListingHints": {
+      "titleKeywords": [
+        "2019 Toyota Camry",
+        "Hybrid",
+        "Low Miles",
+        "FWD"
+      ],
+      "categoryHints": [
+        "Cars & Trucks",
+        "Toyota",
+        "Camry",
+        "Hybrid Vehicles"
+      ],
+      "itemSpecifics": {
+        "Model": "Camry",
+        "Trim": "Hybrid",
+        "Year": "2019",
+        "Mileage": ""
+      }
+    },
+    "description": "A fuel-efficient 2019 Toyota Camry Hybrid sedan featuring a 2.5L hybrid powertrain, offering excellent city/highway fuel economy and comfortable family transportation."
+  },
+  "parseError": null,
+  "scoring": {
+    "checks": {
+      "yearMatch": true,
+      "makeMatch": true,
+      "plantCountryMatch": true,
+      "vehicleTypeMatch": true,
+      "hasConfidenceNotes": true,
+      "mentionsNhtsaGap": true,
+      "hasTransmission": true,
+      "hasEngineDescription": true,
+      "hasEbayHints": true,
+      "hasCommonParts": true,
+      "hasFitment": true,
+      "hasDataSources": true,
+      "jsonComplete": true
+    },
+    "fieldCount": 11,
+    "score": 98,
+    "maxScore": 98
+  }
+}

@@ -1,4 +1,4 @@
-﻿/* ─── Inventory Panel ───────────────────────────────────────
+/* ─── Inventory Panel ───────────────────────────────────────
  *  Centralized inventory management for a single SKU.
  *  Shows: current stock levels, adjust quantity, event history.
  * ────────────────────────────────────────────────────────── */
@@ -138,7 +138,7 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
         <h3 className="font-semibold text-slate-800 mb-3">Adjust Inventory</h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Qty Change</label>
+            <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Qty Change</label>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setAdjustAmount((v) => v - 1)}
@@ -161,7 +161,7 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
             </div>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs text-slate-400 dark:text-slate-500 mb-1">Reason</label>
+            <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Reason</label>
             <input
               type="text"
               value={adjustReason}
@@ -190,7 +190,7 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
           <h3 className="font-semibold text-slate-800">Recent Inventory Events</h3>
         </div>
         {events.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 dark:text-slate-500">
+          <div className="p-8 text-center text-slate-500 dark:text-slate-400">
             <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-500 dark:text-slate-300" />
             <p className="text-sm">No inventory events yet</p>
           </div>
@@ -214,11 +214,11 @@ export default function InventoryPanel({ listingId }: { listingId: string }) {
                       {(evt.eventType ?? '').replace(/_/g, ' ')}
                     </span>
                   </div>
-                  {evt.reason && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{evt.reason}</p>}
+                  {evt.reason && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{evt.reason}</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-xs text-slate-400 dark:text-slate-500">{evt.quantityBefore} → {evt.quantityAfter}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-400">{new Date(evt.createdAt).toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{evt.quantityBefore} → {evt.quantityAfter}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">{new Date(evt.createdAt).toLocaleString()}</p>
                 </div>
               </div>
             ))}
@@ -244,7 +244,7 @@ function StockCard({
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-slate-400 dark:text-slate-500">{label}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
         <div className={`w-7 h-7 rounded-md flex items-center justify-center ${bgColor}`}>
           <Icon className={`w-4 h-4 ${iconColor}`} />
         </div>

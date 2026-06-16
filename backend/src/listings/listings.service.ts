@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DataSource, In, Repository } from 'typeorm';
+import { QueryFailedError } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { BulkUpdateDto } from './dto/bulk-update.dto';
 import { CreateListingDto } from './dto/create-listing.dto';
@@ -315,6 +316,25 @@ export class ListingsService {
   /* ── CRUD operations (Module 1) ─────────────────────────── */
 
   async create(dto: CreateListingDto) {
+    try {
+      return await this.createInTransaction(dto);
+    } catch (err) {
+      if (this.isSkuUniqueViolation(err) && dto.customLabelSku?.trim()) {
+        return this.createInTransaction(dto);
+      }
+      throw err;
+    }
+  }
+
+  private isSkuUniqueViolation(err: unknown): boolean {
+    return (
+      err instanceof QueryFailedError &&
+      (err as QueryFailedError & { driverError?: { code?: string } }).driverError
+        ?.code === '23505'
+    );
+  }
+
+  private async createInTransaction(dto: CreateListingDto) {
     return this.dataSource.transaction(async (em) => {
       const listing = em.create(ListingRecord, {
         ...dto,
@@ -329,9 +349,12 @@ export class ListingsService {
       let existing: ListingRecord | null = null;
 
       if (sku) {
-        existing = await em.findOne(ListingRecord, {
-          where: { customLabelSku: sku },
-        });
+        existing = await em
+          .createQueryBuilder(ListingRecord, 'l')
+          .setLock('pessimistic_write')
+          .where('l.customLabelSku = :sku', { sku })
+          .andWhere('l.deletedAt IS NULL')
+          .getOne();
       }
 
       if (existing) {
@@ -424,6 +447,14 @@ export class ListingsService {
       const listing = await em.findOne(ListingRecord, { where: { id } });
       if (!listing) throw new NotFoundException(`Listing ${id} not found`);
 
+      if (listing.version !== dto.version) {
+        throw new ConflictException({
+          message: 'This listing was modified since you loaded it.',
+          currentVersion: listing.version,
+          yourVersion: dto.version,
+        });
+      }
+
       const oldStatus = listing.status;
       listing.status = dto.status;
       if (dto.status === 'published' && !listing.publishedAt) {
@@ -465,24 +496,40 @@ export class ListingsService {
   }
 
   async bulkUpdate(dto: BulkUpdateDto) {
-    const BATCH_SIZE = 50;
     const updated: string[] = [];
-    const failed: { id: string; error: string }[] = [];
+    const failed: { id: string; error: string; conflict?: boolean }[] = [];
 
-    for (let i = 0; i < dto.ids.length; i += BATCH_SIZE) {
-      const batch = dto.ids.slice(i, i + BATCH_SIZE);
-      for (const id of batch) {
-        try {
-          await this.listingRepo.update(id, dto.changes as Partial<ListingRecord>);
-          updated.push(id);
-        } catch (err) {
-          failed.push({
-            id,
-            error: err instanceof Error ? err.message : 'Unknown error',
-          });
-        }
+    for (const id of dto.ids) {
+      try {
+        await this.dataSource.transaction(async (em) => {
+          const listing = await em.findOne(ListingRecord, { where: { id } });
+          if (!listing) {
+            throw new NotFoundException(`Listing ${id} not found`);
+          }
+
+          const expectedVersion = dto.versions?.[id];
+          if (expectedVersion !== undefined && listing.version !== expectedVersion) {
+            throw new ConflictException({
+              message: 'This listing was modified since you loaded it.',
+              currentVersion: listing.version,
+              yourVersion: expectedVersion,
+            });
+          }
+
+          Object.assign(listing, dto.changes);
+          await em.save(ListingRecord, listing);
+        });
+        updated.push(id);
+      } catch (err) {
+        const conflict = err instanceof ConflictException;
+        failed.push({
+          id,
+          error: err instanceof Error ? err.message : 'Unknown error',
+          ...(conflict ? { conflict: true } : {}),
+        });
       }
     }
+
     return { updated: updated.length, failed };
   }
 

@@ -37,6 +37,19 @@ interface ListingSummary {
   categoryName: string | null;
   status: string;
   itemPhotoUrl: string | null;
+  version?: number;
+}
+
+function buildVersionsMap(
+  listings: ListingSummary[],
+  ids: string[],
+): Record<string, number> {
+  const versions: Record<string, number> = {};
+  for (const id of ids) {
+    const row = listings.find((l) => l.id === id);
+    if (row?.version != null) versions[id] = row.version;
+  }
+  return versions;
 }
 
 type BulkAction = 'price' | 'category' | 'images' | 'status';
@@ -224,8 +237,20 @@ export default function BulkActionsPage() {
           onExecute={async (changes) => {
             setProcessing(true);
             try {
-              const res = await bulkUpdateListings(Array.from(selectedIds), changes);
-              setActionResult({ ok: true, message: `Price updated for ${res.updated ?? selectedCount} listings` });
+              const ids = Array.from(selectedIds);
+              const res = await bulkUpdateListings(
+                ids,
+                changes,
+                buildVersionsMap(listings, ids),
+              );
+              const conflicts = res.failed?.filter((f) => f.conflict).length ?? 0;
+              setActionResult({
+                ok: conflicts === 0,
+                message:
+                  conflicts > 0
+                    ? `Updated ${res.updated}; ${conflicts} conflict(s) — refresh and retry`
+                    : `Price updated for ${res.updated ?? selectedCount} listings`,
+              });
               setActiveAction(null);
               doSearch();
             } catch (e: any) {
@@ -244,8 +269,20 @@ export default function BulkActionsPage() {
           onExecute={async (changes) => {
             setProcessing(true);
             try {
-              const res = await bulkUpdateListings(Array.from(selectedIds), changes);
-              setActionResult({ ok: true, message: `Category updated for ${res.updated ?? selectedCount} listings` });
+              const ids = Array.from(selectedIds);
+              const res = await bulkUpdateListings(
+                ids,
+                changes,
+                buildVersionsMap(listings, ids),
+              );
+              const conflicts = res.failed?.filter((f) => f.conflict).length ?? 0;
+              setActionResult({
+                ok: conflicts === 0,
+                message:
+                  conflicts > 0
+                    ? `Updated ${res.updated}; ${conflicts} conflict(s) — refresh and retry`
+                    : `Category updated for ${res.updated ?? selectedCount} listings`,
+              });
               setActiveAction(null);
               doSearch();
             } catch (e: any) {
@@ -287,8 +324,20 @@ export default function BulkActionsPage() {
           onExecute={async (changes) => {
             setProcessing(true);
             try {
-              const res = await bulkUpdateListings(Array.from(selectedIds), changes);
-              setActionResult({ ok: true, message: `Status updated for ${res.updated ?? selectedCount} listings` });
+              const ids = Array.from(selectedIds);
+              const res = await bulkUpdateListings(
+                ids,
+                changes,
+                buildVersionsMap(listings, ids),
+              );
+              const conflicts = res.failed?.filter((f) => f.conflict).length ?? 0;
+              setActionResult({
+                ok: conflicts === 0,
+                message:
+                  conflicts > 0
+                    ? `Updated ${res.updated}; ${conflicts} conflict(s) — refresh and retry`
+                    : `Status updated for ${res.updated ?? selectedCount} listings`,
+              });
               setActiveAction(null);
               doSearch();
             } catch (e: any) {

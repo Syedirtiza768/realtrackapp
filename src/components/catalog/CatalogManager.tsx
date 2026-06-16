@@ -1,4 +1,4 @@
-﻿/* ─── CatalogManager ──────────────────────────────────────
+/* ─── CatalogManager ──────────────────────────────────────
  *  State-of-the-art catalogue search system.
  *  Orchestrates: SearchBar, FilterSidebar, ResultsGrid,
  *  DetailModal, ActiveFilterTags, breadcrumbs, sorting.
@@ -21,7 +21,7 @@ import SearchBar from './SearchBar';
 import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
 import ActiveFilterTags from './ActiveFilterTags';
 import ResultsGrid from './ResultsGrid';
-import DetailModal from './DetailModal';
+import CatalogPreviewModal from './CatalogPreviewModal';
 import PublishModal from '../channels/PublishModal';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
 import { deleteListing } from '../../lib/listingsApi';
@@ -337,7 +337,7 @@ export default function CatalogManager() {
   return (
     <div className="space-y-3 sm:space-y-4 pb-24">
       {/* Breadcrumbs */}
-      <nav className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 overflow-x-auto scrollbar-none">
+      <nav className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 overflow-x-auto scrollbar-none">
         {breadcrumbs.map((crumb, i) => (
           <span key={i} className="flex items-center gap-1 whitespace-nowrap">
             {i > 0 && <ChevronRight size={11} className="text-slate-600 dark:text-slate-700 shrink-0" />}
@@ -359,7 +359,7 @@ export default function CatalogManager() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Catalog</h2>
-          <p className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 mt-1 truncate">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 truncate">
             {summary
               ? `${summary.totalRecords.toLocaleString()} listings · ${summary.uniqueSkus.toLocaleString()} unique SKUs · ${summary.files} source files`
               : 'Loading…'}
@@ -383,7 +383,7 @@ export default function CatalogManager() {
             className={`hidden sm:flex items-center gap-1.5 px-3 py-2 border rounded-lg text-xs transition-colors ${
               infiniteScroll
                 ? 'border-blue-600 text-blue-400 bg-blue-600/10'
-                : 'border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800'
+                : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800'
             }`}
           >
             <Zap size={13} />
@@ -449,7 +449,7 @@ export default function CatalogManager() {
                     )}
                   </button>
 
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
                     {loading ? (
                       'Searching…'
                     ) : (
@@ -461,7 +461,7 @@ export default function CatalogManager() {
                         {!infiniteScroll && totalPages > 1 && (
                           <span className="text-slate-500 dark:text-slate-600">
                             {' · Page '}
-                            <span className="text-slate-400 dark:text-slate-400">{page + 1}</span>
+                            <span className="text-slate-500 dark:text-slate-400">{page + 1}</span>
                             {' of '}
                             {totalPages}
                           </span>
@@ -538,7 +538,7 @@ export default function CatalogManager() {
       </MobileFilterDrawer>
 
       {/* Detail modal */}
-      <DetailModal id={detailId} onClose={() => setDetailId(null)} onPublish={handlePublish} />
+      <CatalogPreviewModal id={detailId} onClose={() => setDetailId(null)} onPublish={handlePublish} />
 
       {/* Delete confirmation modal */}
       {showCatalogDestructiveUi && deleteConfirmId && (
@@ -550,7 +550,7 @@ export default function CatalogManager() {
               </div>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Delete Listing</h3>
             </div>
-            <p className="text-sm text-slate-400 dark:text-slate-400 mb-6">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
               Are you sure you want to delete this listing? It will be soft-deleted and can be restored later.
             </p>
             <div className="flex items-center gap-3 justify-end">
@@ -582,7 +582,7 @@ export default function CatalogManager() {
               </div>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Delete {selectedIds.size} Listings</h3>
             </div>
-            <p className="text-sm text-slate-400 dark:text-slate-400 mb-6">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
               Are you sure you want to delete <span className="font-semibold text-slate-600 dark:text-slate-200">{selectedIds.size}</span> selected listings? They will be soft-deleted and can be restored later.
             </p>
             <div className="flex items-center gap-3 justify-end">
@@ -656,7 +656,7 @@ export default function CatalogManager() {
           )}
           <button
             onClick={() => setSelectedIds(new Set())}
-            className="text-xs text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 transition-colors"
+            className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 transition-colors"
           >
             Clear
           </button>

@@ -3,11 +3,22 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import { AppModule } from './app.module';
+import { APP_REDIS } from './common/redis/app-redis.constants.js';
+import { RedisIoAdapter } from './common/redis/redis-io.adapter.js';
+import type Redis from 'ioredis';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true, // preserve raw body for webhook HMAC verification
   });
+
+  if (process.env.REDIS_SOCKET_ADAPTER === 'true') {
+    const pubClient = app.get<Redis>(APP_REDIS);
+    const subClient = pubClient.duplicate();
+    const redisAdapter = new RedisIoAdapter(app, pubClient, subClient);
+    await redisAdapter.connectToRedis();
+    app.useWebSocketAdapter(redisAdapter);
+  }
 
   // Gzip/deflate compression — cuts JSON payload size ~70-80%
   app.use(compression({ level: 6, threshold: 1024 }));

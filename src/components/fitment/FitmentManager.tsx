@@ -290,7 +290,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
     };
 
     const confidenceColor = (c: number | null) => {
-        if (!c) return 'text-slate-400 dark:text-slate-500';
+        if (!c) return 'text-slate-500 dark:text-slate-400';
         if (c > 90) return 'text-emerald-500';
         if (c > 50) return 'text-amber-500';
         return 'text-red-500';
@@ -309,7 +309,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Fitment Manager</h2>
-                    <p className="text-slate-400 dark:text-slate-500 text-sm">
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">
                         {fitments.length} fitment{fitments.length !== 1 ? 's' : ''} assigned
                     </p>
                 </div>
@@ -332,7 +332,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                     <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-200">Add Vehicle Fitment</h3>
-                            <button onClick={resetAddForm} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 dark:text-slate-400">
+                            <button onClick={resetAddForm} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400">
                                 <X size={18} />
                             </button>
                         </div>
@@ -341,7 +341,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                         {/* VIN Lookup */}
                         <div className="flex flex-col sm:flex-row gap-2">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
                                     Quick Fill via VIN
                                 </label>
                                 <div className="flex gap-2">
@@ -441,7 +441,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                 <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 w-full sm:max-w-sm lg:max-w-md">
-                            <Search size={16} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                            <Search size={16} className="text-slate-500 dark:text-slate-400 shrink-0" />
                             <input
                                 type="text"
                                 value={filterText}
@@ -451,7 +451,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                             />
                         </div>
                         <div className="flex items-center gap-2">
-                            <button className="p-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400">
+                            <button className="p-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
                                 <Filter size={16} />
                             </button>
                         </div>
@@ -459,7 +459,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                 </CardHeader>
                 <CardContent className="p-0">
                     {isLoading && (
-                        <div className="flex items-center justify-center py-12 gap-2 text-slate-400 dark:text-slate-500">
+                        <div className="flex items-center justify-center py-12 gap-2 text-slate-500 dark:text-slate-400">
                             <Loader2 size={20} className="animate-spin" /> Loading fitments...
                         </div>
                     )}
@@ -471,7 +471,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                     )}
 
                     {!isLoading && !listError && filteredFitments.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
                             <Search size={32} className="mb-2 opacity-50" />
                             <p className="text-sm">{fitments.length === 0 ? 'No fitments yet. Click "Add Fitment" to begin.' : 'No fitments match your filter.'}</p>
                         </div>
@@ -513,11 +513,11 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-medium text-slate-600 dark:text-slate-200">{formatVehicle(row)}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">ID: {row.id.slice(0, 8)}�</div>
+                                                    <div className="text-xs text-slate-500 dark:text-slate-400">ID: {row.id.slice(0, 8)}�</div>
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="text-slate-500 dark:text-slate-300">{row.submodel?.name ?? '�'}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">{row.engine?.name ?? '�'}</div>
+                                                    <div className="text-xs text-slate-500 dark:text-slate-400">{row.engine?.name ?? '�'}</div>
                                                 </td>
                                                 <td className="p-4">
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
@@ -551,18 +551,18 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                         <button
                                                             title={row.verified ? 'Unverify' : 'Verify'}
                                                             onClick={() => verifyMut.mutate({ id: row.id, verified: !row.verified })}
-                                                            className="p-1.5 hover:bg-emerald-500/10 text-slate-400 dark:text-slate-400 hover:text-emerald-500 rounded"
+                                                            className="p-1.5 hover:bg-emerald-500/10 text-slate-500 dark:text-slate-400 hover:text-emerald-500 rounded"
                                                         >
                                                             <Check size={16} />
                                                         </button>
                                                         <button
                                                             title="Delete"
                                                             onClick={() => deleteMut.mutate(row.id)}
-                                                            className="p-1.5 hover:bg-red-500/10 text-slate-400 dark:text-slate-400 hover:text-red-500 rounded"
+                                                            className="p-1.5 hover:bg-red-500/10 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded"
                                                         >
                                                             <X size={16} />
                                                         </button>
-                                                        <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 rounded">
+                                                        <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 rounded">
                                                             <MoreHorizontal size={16} />
                                                         </button>
                                                     </div>
@@ -587,7 +587,7 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                                 />
                                                 <div>
                                                     <div className="font-medium text-slate-600 dark:text-slate-200 text-sm">{formatVehicle(row)}</div>
-                                                    <div className="text-xs text-slate-400 dark:text-slate-500">
+                                                    <div className="text-xs text-slate-500 dark:text-slate-400">
                                                         {row.submodel?.name ?? '�'} � {row.engine?.name ?? '�'}
                                                     </div>
                                                 </div>
@@ -595,17 +595,17 @@ export default function FitmentManager({ listingId = '' }: FitmentManagerProps) 
                                             <div className="flex items-center gap-1">
                                                 <button
                                                     onClick={() => verifyMut.mutate({ id: row.id, verified: !row.verified })}
-                                                    className="p-1.5 hover:bg-emerald-500/10 text-slate-400 dark:text-slate-400 hover:text-emerald-500 rounded"
+                                                    className="p-1.5 hover:bg-emerald-500/10 text-slate-500 dark:text-slate-400 hover:text-emerald-500 rounded"
                                                 >
                                                     <Check size={14} />
                                                 </button>
                                                 <button
                                                     onClick={() => deleteMut.mutate(row.id)}
-                                                    className="p-1.5 hover:bg-red-500/10 text-slate-400 dark:text-slate-400 hover:text-red-500 rounded"
+                                                    className="p-1.5 hover:bg-red-500/10 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded"
                                                 >
                                                     <X size={14} />
                                                 </button>
-                                                <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 rounded">
+                                                <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 rounded">
                                                     <MoreHorizontal size={14} />
                                                 </button>
                                             </div>

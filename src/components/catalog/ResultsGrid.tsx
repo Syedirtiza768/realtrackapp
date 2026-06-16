@@ -1,4 +1,4 @@
-﻿/* ─── ResultsGrid ──────────────────────────────────────────
+/* ─── ResultsGrid ──────────────────────────────────────────
  *  Grid / List view for search results with infinite scroll
  *  support, loading skeletons, and empty state.
  * ────────────────────────────────────────────────────────── */
@@ -112,7 +112,7 @@ export default function ResultsGrid({
                 onChange={() => onSelectAll?.(allSelected ? [] : items.map(i => i.id))}
                 className="w-4 h-4 rounded accent-blue-500 cursor-pointer"
               />
-              <span className="text-xs text-slate-400 dark:text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 {selectedIds && selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
               </span>
             </label>
@@ -123,7 +123,7 @@ export default function ResultsGrid({
             className={`px-2.5 py-1.5 transition-colors ${
               viewMode === 'grid'
                 ? 'bg-blue-600/20 text-blue-400'
-                : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'
             }`}
           >
             <Grid3X3 size={14} />
@@ -133,7 +133,7 @@ export default function ResultsGrid({
             className={`px-2.5 py-1.5 transition-colors ${
               viewMode === 'list'
                 ? 'bg-blue-600/20 text-blue-400'
-                : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200'
             }`}
           >
             <LayoutList size={14} />
@@ -235,10 +235,10 @@ export default function ResultsGrid({
                           item.title ?? 'Untitled'
                         )}
                       </a>
-                      <div className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{item.customLabelSku}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{item.customLabelSku}</div>
                     </td>
-                    <td className="p-3 text-slate-400 dark:text-slate-400 text-xs hidden md:table-cell">{item.cBrand ?? '—'}</td>
-                    <td className="p-3 text-slate-400 dark:text-slate-500 text-xs max-w-48 truncate hidden lg:table-cell">
+                    <td className="p-3 text-slate-500 dark:text-slate-400 text-xs hidden md:table-cell">{item.cBrand ?? '—'}</td>
+                    <td className="p-3 text-slate-500 dark:text-slate-400 text-xs max-w-48 truncate hidden lg:table-cell">
                       {item.categoryName ? (() => {
                         const parts = item.categoryName.split('/').filter(Boolean);
                         return parts.length > 1 ? parts[parts.length - 1] : item.categoryName;
@@ -256,21 +256,21 @@ export default function ResultsGrid({
                     <td className="p-3 text-right text-slate-600 dark:text-slate-200 font-semibold">
                       {price !== null ? `$${price.toFixed(2)}` : '—'}
                     </td>
-                    <td className="p-3 text-center text-slate-400 dark:text-slate-400 text-xs hidden sm:table-cell">
+                    <td className="p-3 text-center text-slate-500 dark:text-slate-400 text-xs hidden sm:table-cell">
                       {item.quantity ?? '—'}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => onQuickView(item.id)}
-                          className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          className="p-1.5 rounded-lg border border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
                           <Eye size={14} />
                         </button>
                         {onPublish && (
                           <button
                             onClick={() => onPublish(item.id)}
-                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 transition-colors"
+                            className="p-1.5 rounded-lg border border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 transition-colors"
                             title="List on Channels"
                           >
                             <Send size={14} />
@@ -286,7 +286,7 @@ export default function ResultsGrid({
                         {onDelete && (
                           <button
                             onClick={() => onDelete(item.id)}
-                            className="p-1.5 rounded-lg border border-slate-700 text-slate-400 dark:text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                            className="p-1.5 rounded-lg border border-slate-700 text-slate-500 dark:text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-colors"
                             title="Delete"
                           >
                             <Trash2 size={14} />
@@ -307,7 +307,7 @@ export default function ResultsGrid({
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 p-12 text-center">
           <Sparkles className="mx-auto text-slate-500 dark:text-slate-600 mb-4" size={32} />
           <h4 className="text-lg font-semibold text-slate-600 dark:text-slate-200 mb-1">No results found</h4>
-          <p className="text-sm text-slate-400 dark:text-slate-500 max-w-md mx-auto">
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
             Try adjusting your search terms or removing some filters to see more results.
           </p>
         </div>
@@ -317,7 +317,7 @@ export default function ResultsGrid({
       {infiniteScroll && hasMore && (
         <div ref={sentinelRef} className="flex items-center justify-center py-8">
           {loading && (
-            <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <ArrowDown size={16} className="animate-bounce" />
               Loading more…
             </div>

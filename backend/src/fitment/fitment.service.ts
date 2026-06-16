@@ -10,6 +10,8 @@ import { ListingRecord } from '../listings/listing-record.entity.js';
 import type { CreateFitmentDto } from './dto/create-fitment.dto.js';
 import type { SearchFitmentDto } from './dto/search-fitment.dto.js';
 import { VinDecodeService } from './vin-decode.service.js';
+import { EbayVinSearchService } from './ebay-vin-search.service.js';
+import { parseImageUrlField } from '../channels/ebay/ebay-listing-images.util.js';
 
 @Injectable()
 export class FitmentService {
@@ -29,6 +31,7 @@ export class FitmentService {
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
     private readonly vinDecodeService: VinDecodeService,
+    private readonly ebayVinSearch: EbayVinSearchService,
   ) {}
 
   // ─── Reference data lookups ───
@@ -215,7 +218,7 @@ export class FitmentService {
     }
 
     let listings = Array.from(listingsMap.values());
-    let matchStrategy: 'fitment' | 'fallback_text' | 'ai_enriched' = 'fitment';
+    let matchStrategy: 'fitment' | 'fallback_text' | 'ai_enriched' | 'ebay_browse' = 'fitment';
 
     // Fallback for datasets where explicit fitment rows are missing
     if (listings.length === 0) {
@@ -232,13 +235,28 @@ export class FitmentService {
       }
     }
 
+    // eBay Browse API fallback: search eBay for parts matching this vehicle
+    if (listings.length === 0) {
+      const ebayListings = await this.ebayVinSearch.searchAndPersist(vin, decoded);
+      if (ebayListings.length > 0) {
+        listings = ebayListings;
+        matchStrategy = 'ebay_browse';
+      }
+    }
+
+    // Enrich each listing with parsed image URLs
+    const enriched = listings.map((l: any) => ({
+      ...l,
+      parsedImages: parseImageUrlField(l.itemPhotoUrl),
+    }));
+
     return {
       vin: decoded.vin,
       vehicle: decoded,
       totalFitments: fitments.length,
-      totalListings: listings.length,
+      totalListings: enriched.length,
       matchStrategy,
-      listings,
+      listings: enriched,
     };
   }
 

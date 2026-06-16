@@ -1,4 +1,4 @@
-﻿/* ── eBay Compliance Panel ─────────────────────────────────
+/* ── eBay Compliance Panel ─────────────────────────────────
  *  Shows compliance validation results and auto-corrections
  *  for imported catalog products.
  * ────────────────────────────────────────────────────────── */
@@ -218,7 +218,7 @@ export default function CompliancePanel({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-400 cursor-pointer">
+              <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={autoFix}
@@ -243,7 +243,7 @@ export default function CompliancePanel({
           )}
 
           {!isReady && importStatus !== 'completed' && (
-            <p className="text-sm text-slate-400 dark:text-slate-500">Compliance validation is available after import completes.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Compliance validation is available after import completes.</p>
           )}
 
           {validating && (
@@ -268,7 +268,7 @@ export default function CompliancePanel({
               {/* Top issues */}
               {batchResult.summary.topIssues.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 dark:text-slate-400 mb-2">Top Issues</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Top Issues</p>
                   <div className="flex flex-wrap gap-1">
                     {batchResult.summary.topIssues.slice(0, 8).map((issue) => (
                       <Badge key={issue.code} variant="secondary">
@@ -292,7 +292,7 @@ export default function CompliancePanel({
               onClick={() => setExpandedSection(expandedSection === 'records' ? null : 'records')}
             >
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-slate-400 dark:text-slate-400" />
+                <FileText className="h-5 w-5 text-slate-500 dark:text-slate-400" />
                 Record Details
                 <Badge variant="secondary">{batchResult.results.length}</Badge>
               </div>
@@ -394,7 +394,7 @@ function ComplianceResultRow({
         </div>
         <div className="min-w-0">
           <p className="text-sm text-slate-600 dark:text-slate-200 truncate">{result.sku || result.productId.slice(0, 8)}</p>
-          <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span>Score: {Math.round(result.complianceScore * 100)}%</span>
             {result.autoCorrections.length > 0 && (
               <span className="text-purple-400">{result.autoCorrections.length} auto-fixed</span>
@@ -409,7 +409,7 @@ function ComplianceResultRow({
         {result.compliant && <Badge variant="success">Compliant</Badge>}
         <button
           onClick={(e) => { e.stopPropagation(); onRevalidate(); }}
-          className="p-1 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
+          className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
           title="Re-validate"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -511,7 +511,7 @@ function ComplianceDetail({ result }: { result: ComplianceResult }) {
                   <div>
                     <span className="text-slate-600 dark:text-slate-200">{c.message}</span>
                     {c.originalValue && c.fixedValue && (
-                      <div className="mt-0.5 text-slate-400 dark:text-slate-500">
+                      <div className="mt-0.5 text-slate-500 dark:text-slate-400">
                         <span className="line-through">{c.originalValue.slice(0, 50)}</span>
                         {' → '}
                         <span className="text-green-400">{c.fixedValue.slice(0, 50)}</span>
@@ -581,8 +581,8 @@ function SpecificsSection({ data }: { data: ItemSpecificsResult }) {
   return (
     <div className="text-xs space-y-2">
       <div className="flex items-center gap-4">
-        <span className="text-slate-400 dark:text-slate-400">Coverage: {data.coveragePercent}%</span>
-        <span className="text-slate-400 dark:text-slate-400">Present: {data.totalPresent}/{data.totalRequired}</span>
+        <span className="text-slate-500 dark:text-slate-400">Coverage: {data.coveragePercent}%</span>
+        <span className="text-slate-500 dark:text-slate-400">Present: {data.totalPresent}/{data.totalRequired}</span>
       </div>
       {data.missingRequired.length > 0 && (
         <div>
@@ -611,12 +611,12 @@ function TitleSection({ data }: { data: TitleOptimizationResult }) {
   return (
     <div className="text-xs space-y-2">
       <div className="flex items-center gap-3">
-        <span className="text-slate-400 dark:text-slate-400">Length: {data.originalTitle.length}/80 {data.lengthOk ? '✓' : '✗'}</span>
-        <span className="text-slate-400 dark:text-slate-400">SEO: {Math.round(data.seoScore * 100)}%</span>
+        <span className="text-slate-500 dark:text-slate-400">Length: {data.originalTitle.length}/80 {data.lengthOk ? '✓' : '✗'}</span>
+        <span className="text-slate-500 dark:text-slate-400">SEO: {Math.round(data.seoScore * 100)}%</span>
       </div>
       {data.applied && data.optimizedTitle !== data.originalTitle && (
         <div className="p-2 bg-purple-500/10 rounded">
-          <p className="text-slate-400 dark:text-slate-500 line-through mb-0.5">{data.originalTitle}</p>
+          <p className="text-slate-500 dark:text-slate-400 line-through mb-0.5">{data.originalTitle}</p>
           <p className="text-green-400">{data.optimizedTitle}</p>
         </div>
       )}
@@ -717,7 +717,7 @@ function SectionToggle({
               ? <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
               : <XCircle className="h-3.5 w-3.5 text-red-400" />
           )}
-          {open ? <ChevronUp className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />}
+          {open ? <ChevronUp className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />}
         </div>
       </button>
       {open && (
@@ -747,7 +747,7 @@ function IssueRow({ issue }: { issue: ComplianceIssue }) {
       <div className="min-w-0">
         <span className="text-slate-500 dark:text-slate-300">{issue.message}</span>
         {issue.suggestion && (
-          <p className="text-slate-400 dark:text-slate-500 mt-0.5">💡 {issue.suggestion}</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-0.5">💡 {issue.suggestion}</p>
         )}
         {issue.autoFixed && (
           <span className="text-purple-400 ml-1">(auto-fixed)</span>
@@ -776,7 +776,7 @@ function MiniStat({
 }) {
   return (
     <div className="p-2 rounded bg-slate-200/40 dark:bg-slate-700/40">
-      <p className="text-xs text-slate-400 dark:text-slate-400">{label}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className={`text-sm font-semibold ${color} flex items-center gap-1`}>
         {icon}
         {value}

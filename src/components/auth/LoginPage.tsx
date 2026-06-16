@@ -8,11 +8,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { usePublicBranding } from '../../hooks/usePublicBranding';
+import { usePublicAuthConfig } from '../../hooks/usePublicAuthConfig';
 
 export default function LoginPage() {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
   const { branding, loading: brandingLoading } = usePublicBranding();
+  const { config: authConfig } = usePublicAuthConfig();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -139,19 +141,25 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-            Don&apos;t have an account?{' '}
-            <Link
-              to="/register"
-              className="font-medium hover:opacity-80"
-              style={{ color: branding.primaryColor }}
-            >
-              Create one
-            </Link>
+            {authConfig.registrationEnabled ? (
+              <>
+                Don&apos;t have an account?{' '}
+                <Link
+                  to="/register"
+                  className="font-medium hover:opacity-80"
+                  style={{ color: branding.primaryColor }}
+                >
+                  Create one
+                </Link>
+              </>
+            ) : (
+              <span>Contact your administrator for an account.</span>
+            )}
           </div>
         </div>
 
         {branding.poweredByVisible && (
-          <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-6">Powered by RealTrack</p>
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">Powered by RealTrack</p>
         )}
       </div>
     </div>

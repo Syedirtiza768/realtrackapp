@@ -1,4 +1,4 @@
-﻿import { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Columns, ArrowRight, Check, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -102,7 +102,7 @@ export default function ColumnMapper({
                       <select
                         value={currentField}
                         onChange={(e) => handleFieldChange(header, e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-slate-600 dark:text-slate-200 focus:outline-none focus:border-blue-500"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
                       >
                         <option value="">-- Skip this column --</option>
                         {catalogFields.map((field) => (
@@ -135,7 +135,7 @@ export default function ColumnMapper({
               flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
               ${
                 missingRequired.length > 0
-                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-500'
               }
             `}

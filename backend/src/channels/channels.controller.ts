@@ -27,6 +27,8 @@ import {
   BulkPublishDto,
 } from './dto/channel.dto.js';
 import { Public } from '../auth/decorators/public.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
 @ApiTags('channels')
@@ -40,10 +42,9 @@ export class ChannelsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all connected channels for the current user' })
-  getConnections(@Query('userId') userId?: string) {
-    // TODO: Extract userId from JWT once auth guard is fully wired
-    return this.channelsService.getConnections(userId);
+  @ApiOperation({ summary: 'List connected channels for the authenticated user' })
+  getConnections(@CurrentUser() user: User) {
+    return this.channelsService.getConnections(user.id);
   }
 
   @Public()
@@ -98,15 +99,21 @@ export class ChannelsController {
   @RequirePermissions('channels.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Disconnect a channel' })
-  disconnect(@Param('connectionId', ParseUUIDPipe) connectionId: string) {
-    return this.channelsService.disconnectChannel(connectionId);
+  disconnect(
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.channelsService.disconnectChannel(connectionId, user.id);
   }
 
   @Post(':connectionId/test')
   @RequirePermissions('channels.manage')
   @ApiOperation({ summary: 'Test a channel connection' })
-  testConnection(@Param('connectionId', ParseUUIDPipe) connectionId: string) {
-    return this.channelsService.testConnection(connectionId);
+  testConnection(
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.channelsService.testConnection(connectionId, user.id);
   }
 
   @Post('publish')
@@ -186,7 +193,8 @@ export class ChannelsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Connect eBay using a pre-generated sandbox Auth\'n\'Auth legacy token' })
   async connectEbayLegacyToken(
-    @Body() body: { token: string; userId?: string },
+    @Body() body: { token: string },
+    @CurrentUser() user: User,
   ) {
     if (!body?.token?.trim()) {
       return { ok: false, error: 'token is required' };
@@ -195,7 +203,7 @@ export class ChannelsController {
       const result = await this.channelsService.connectEbayLegacyToken(
         body.token.trim(),
         this.storesService,
-        body.userId,
+        user.id,
       );
       return { ok: true, ...result };
     } catch (error: any) {

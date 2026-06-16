@@ -208,6 +208,11 @@ export class RbacService implements OnModuleInit {
     return keys;
   }
 
+  async userHasPermission(userId: string, permissionKey: string): Promise<boolean> {
+    const keys = await this.getPermissionKeysForUser(userId);
+    return keys.has(permissionKey);
+  }
+
   async getAuthProfile(user: User): Promise<AuthProfile> {
     const permissions = [...(await this.getPermissionKeysForUser(user.id))].sort();
     const primary = await this.userRoleRepo.findOne({
@@ -232,10 +237,5 @@ export class RbacService implements OnModuleInit {
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
     };
-  }
-
-  async userHasPermission(userId: string, permission: string): Promise<boolean> {
-    const keys = await this.getPermissionKeysForUser(userId);
-    return keys.has(permission);
   }
 }

@@ -1,0 +1,4 @@
+# PgBouncer userlist — credentials must match PostgreSQL.
+# Format: "username" "password"
+# In production, mount a secret file or use envsubst at container start.
+"postgres" "postgres"

@@ -49,6 +49,15 @@ export class AuthController {
   }
 
   @Public()
+  @Get('public-config')
+  @ApiOperation({ summary: 'Public auth UI config (registration gate, etc.)' })
+  getPublicConfig() {
+    return {
+      registrationEnabled: this.auth.isPublicRegistrationEnabled(),
+    };
+  }
+
+  @Public()
   @Post('register')
   async register(@Body() body: RegisterDto, @Req() req: Request) {
     const result = await this.auth.register(body.email, body.password, body.name);

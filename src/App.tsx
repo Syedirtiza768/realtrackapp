@@ -1,4 +1,4 @@
-
+import SingleListingPipeline from './components/listings/SingleListingPipeline';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Shell from './components/layout/Shell';
 import { AuthProvider } from './components/auth/AuthContext';
@@ -68,7 +68,7 @@ function App() {
                     <Shell>
                         <Routes>
                             <Route path="/" element={<ProtectedRoute permissions={['dashboard.view']}><Dashboard /></ProtectedRoute>} />
-                            <Route path="/listings/new" element={<ProtectedRoute permissions={['listings.create']}><ListingEditor /></ProtectedRoute>} />
+                            <Route path="/listings/new" element={<ProtectedRoute permissions={['listings.create']}><SingleListingPipeline /></ProtectedRoute>} />
                             <Route path="/listings/:id/edit" element={<ProtectedRoute permissions={['listings.update']}><ListingEditor /></ProtectedRoute>} />
                             <Route path="/listings/:id/history" element={<ProtectedRoute permissions={['listings.view']}><RevisionHistory /></ProtectedRoute>} />
                             <Route path="/ingestion" element={<ProtectedRoute permissions={['ingestion.view']}><IngestionManager /></ProtectedRoute>} />
@@ -101,7 +101,7 @@ function App() {
                             <Route path="/motors/:id" element={<ProtectedRoute permissions={['motors.view']}><MotorsProductDetail /></ProtectedRoute>} />
                             <Route path="/pipeline" element={<ProtectedRoute permissions={['pipeline.view']}><PipelineWizard /></ProtectedRoute>} />
                             <Route path="/preview" element={<ProtectedRoute permissions={['listings.view']}><EbayPreviewPage /></ProtectedRoute>} />
-                            <Route path="*" element={<div className="p-10 text-center text-slate-400 dark:text-slate-500">Page not found</div>} />
+                            <Route path="*" element={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Page not found</div>} />
                         </Routes>
                     </Shell>
                     </ProtectedRoute>

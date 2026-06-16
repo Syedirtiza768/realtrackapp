@@ -1,4 +1,4 @@
-﻿/**
+/**
  * OrderShipmentPanel.tsx — Phase 4
  *
  * Bulk operations panel for the Orders page:
@@ -176,7 +176,7 @@ export default function OrderShipmentPanel({
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {selectedOrderIds.map((id) => (
                 <div key={id} className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 dark:text-slate-400 font-mono w-24 truncate">{id.slice(0, 8)}…</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono w-24 truncate">{id.slice(0, 8)}…</span>
                   <input
                     type="text"
                     placeholder="Tracking number"
@@ -215,7 +215,7 @@ export default function OrderShipmentPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-slate-400 dark:text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Upload a CSV with columns: <code className="text-slate-500 dark:text-slate-300">orderId</code>,{' '}
             <code className="text-slate-500 dark:text-slate-300">trackingNumber</code>,{' '}
             <code className="text-slate-500 dark:text-slate-300">carrier</code>
@@ -308,7 +308,7 @@ export default function OrderShipmentPanel({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-slate-400 dark:text-slate-400 mb-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
             Manually trigger an eBay order import for all connected stores.
             This normally runs every 15 minutes automatically.
           </p>
@@ -349,14 +349,14 @@ export default function OrderShipmentPanel({
                   ) : (
                     <AlertTriangle className="h-3 w-3 text-red-400 flex-shrink-0" />
                   )}
-                  <span className="font-mono text-slate-400 dark:text-slate-400">{r.orderId.slice(0, 8)}…</span>
+                  <span className="font-mono text-slate-500 dark:text-slate-400">{r.orderId.slice(0, 8)}…</span>
                   {r.error && <span className="text-red-400">{r.error}</span>}
                 </div>
               ))}
             </div>
             <button
               onClick={() => setBulkResults(null)}
-              className="mt-2 text-xs text-slate-400 dark:text-slate-400 hover:text-slate-500 dark:text-slate-300"
+              className="mt-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-500 dark:text-slate-300"
             >
               Dismiss
             </button>

@@ -1,4 +1,4 @@
-﻿import {
+import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
@@ -83,7 +83,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
         {/* Progress bar (while processing) */}
         {isProcessing && (
           <div className="mb-4">
-            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <div className="flex justify-between text-xs text-slate-700 dark:text-slate-300 mb-1">
               <span>
                 {isFinalizing
                   ? 'Writing search index and finishing…'

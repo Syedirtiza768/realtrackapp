@@ -1,8 +1,9 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
-  UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -21,7 +22,25 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly userOrgs: UserOrganizationService,
     private readonly rbac: RbacService,
+    private readonly config: ConfigService,
   ) {}
+
+  /** Whether unauthenticated clients may call POST /auth/register. */
+  isPublicRegistrationEnabled(): boolean {
+    const explicit = this.config.get<string>('ALLOW_PUBLIC_REGISTRATION');
+    if (explicit !== undefined && explicit !== '') {
+      return explicit === 'true' || explicit === '1';
+    }
+    return this.config.get<string>('NODE_ENV', 'development') !== 'production';
+  }
+
+  assertPublicRegistrationAllowed(): void {
+    if (!this.isPublicRegistrationEnabled()) {
+      throw new ForbiddenException(
+        'Public registration is disabled. Contact an administrator for access.',
+      );
+    }
+  }
 
   async validateAndSign(
     email: string,
@@ -40,9 +59,7 @@ export class AuthService {
     await this.userRepo.update(user.id, { lastLoginAt: new Date() });
 
     const payload = { sub: user.id, email: user.email, role: user.role };
-    console.log('[DEBUG] AuthService - Signing token with payload:', payload);
     const accessToken = this.jwt.sign(payload);
-    console.log('[DEBUG] AuthService - Token:', accessToken.substring(0, 50) + '...');
 
     return {
       accessToken,
@@ -55,6 +72,8 @@ export class AuthService {
     password: string,
     name?: string,
   ): Promise<{ accessToken: string; user: Partial<User> }> {
+    this.assertPublicRegistrationAllowed();
+
     const normalizedEmail = email.toLowerCase();
 
     const existing = await this.userRepo.findOne({
@@ -74,7 +93,8 @@ export class AuthService {
     });
     const saved = await this.userRepo.save(user);
     await this.userOrgs.ensureDefaultForUser(saved.id);
-    await this.rbac.assignPrimaryRole(saved.id, ROLE_SLUGS.STAFF);
+    // Self-registered users get read-only Viewer until an admin upgrades the role.
+    await this.rbac.assignPrimaryRole(saved.id, ROLE_SLUGS.VIEWER);
 
     const payload = { sub: saved.id, email: saved.email, role: saved.role };
     const accessToken = this.jwt.sign(payload);

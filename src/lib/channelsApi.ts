@@ -32,9 +32,9 @@ async function postJson<T>(path: string, body?: unknown): Promise<T> {
 
 /* ── Connections (tenant-level) ───────────────────────────── */
 
-/** Get all connected channels. userId='system' until auth is wired. */
-export async function getConnections(userId = 'system'): Promise<ChannelConnection[]> {
-  return fetchJson<ChannelConnection[]>(`/channels?userId=${encodeURIComponent(userId)}`);
+/** Get channel connections for the authenticated user. */
+export async function getConnections(): Promise<ChannelConnection[]> {
+  return fetchJson<ChannelConnection[]>('/channels');
 }
 
 /** Start OAuth flow — returns the authorization URL */

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   getEbayListingJob,
@@ -194,7 +194,7 @@ export default function EbayPublishWizardPage() {
         ← Catalog
       </Link>
       <h1 className="text-2xl font-semibold">Publish to eBay</h1>
-      <p className="text-slate-400 dark:text-slate-400 text-sm">
+      <p className="text-slate-500 dark:text-slate-400 text-sm">
         Product: <span className="text-slate-600 dark:text-slate-200">{productTitle || productId}</span>
       </p>
       {!signedIn && (
@@ -213,7 +213,7 @@ export default function EbayPublishWizardPage() {
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 p-5 space-y-3">
         <h2 className="text-lg font-medium">Target sellers</h2>
         {accounts.length === 0 && signedIn && (
-          <p className="text-slate-400 dark:text-slate-500 text-sm">
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
             No connected sellers.{' '}
             <Link to="/settings/integrations/ebay" className="text-sky-400 underline">
               Sign in with eBay
@@ -224,7 +224,7 @@ export default function EbayPublishWizardPage() {
         {accounts.map((a) => (
           <div key={a.id} className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-2">
             <div className="font-medium">{a.accountDisplayName}</div>
-            <div className="text-xs text-slate-400 dark:text-slate-500">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
               eBay user {a.ebayUserId} · {a.connectionStatus}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -283,7 +283,7 @@ export default function EbayPublishWizardPage() {
                 v.status === 'blocked' ? 'border-red-800 bg-red-950/30' : 'border-slate-200 dark:border-slate-700'
               }`}
             >
-              <div className="font-mono text-xs text-slate-400 dark:text-slate-400">{v.key}</div>
+              <div className="font-mono text-xs text-slate-500 dark:text-slate-400">{v.key}</div>
               <div>Status: {v.status}</div>
               {v.errors?.length ? (
                 <ul className="text-red-300 list-disc pl-4">
@@ -325,7 +325,7 @@ export default function EbayPublishWizardPage() {
       )}
 
       {jobId && (
-        <p className="text-sm text-slate-400 dark:text-slate-400">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Job {jobId} — status: <strong className="text-slate-600 dark:text-slate-200">{jobStatus ?? '…'}</strong> (polls every 2s)
         </p>
       )}

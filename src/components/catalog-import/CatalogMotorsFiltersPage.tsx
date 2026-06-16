@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -251,7 +251,7 @@ export default function CatalogMotorsFiltersPage() {
       <div className="max-w-[1600px] mx-auto space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-400 mb-1">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-1">
               <Link to="/catalog/import" className="hover:text-blue-400">
                 CSV Import
               </Link>
@@ -262,7 +262,7 @@ export default function CatalogMotorsFiltersPage() {
               <Truck className="w-7 h-7 text-blue-500" />
               eBay Motors — catalog listing filters
             </h1>
-            <p className="text-slate-400 dark:text-slate-400 text-sm mt-1 max-w-3xl">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 max-w-3xl">
               Internal filters for imported CSV catalog data only (no margin or sales metrics).
               Readiness and routing fields are derived from your template columns and fitment JSON.
             </p>
@@ -324,7 +324,7 @@ export default function CatalogMotorsFiltersPage() {
             </Card>
 
             <FilterDetails title="1. Listing readiness">
-              <label className="block text-xs text-slate-400 dark:text-slate-400 mb-1">Readiness</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Readiness</label>
               <select
                 className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 value={form.readinessStatus}
@@ -394,7 +394,7 @@ export default function CatalogMotorsFiltersPage() {
                 value={form.categoryIds}
                 onChange={(e) => setForm((f) => ({ ...f, categoryIds: e.target.value }))}
               />
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Super-categories use server config when category IDs are filled in.
               </p>
               <input
@@ -490,7 +490,7 @@ export default function CatalogMotorsFiltersPage() {
                   onChange={(e) => setForm((f) => ({ ...f, priceMax: e.target.value }))}
                 />
               </div>
-              <label className="block text-xs text-slate-400 dark:text-slate-400 mb-1">Price band</label>
+              <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Price band</label>
               <select
                 className="w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm"
                 value={form.priceBand}
@@ -575,7 +575,7 @@ export default function CatalogMotorsFiltersPage() {
             <Card className="border-slate-800 bg-white/50 dark:bg-slate-900/50">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-base">
-                  Results <span className="text-slate-400 dark:text-slate-400 font-normal">({total})</span>
+                  Results <span className="text-slate-500 dark:text-slate-400 font-normal">({total})</span>
                 </CardTitle>
                 <div className="flex items-center gap-2 text-sm">
                   <button
@@ -586,7 +586,7 @@ export default function CatalogMotorsFiltersPage() {
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-slate-400 dark:text-slate-400">
+                  <span className="text-slate-500 dark:text-slate-400">
                     {page + 1} / {totalPages}
                   </span>
                   <button
@@ -602,7 +602,7 @@ export default function CatalogMotorsFiltersPage() {
               <CardContent className="overflow-x-auto p-0">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800 text-left text-slate-400 dark:text-slate-400">
+                    <tr className="border-b border-slate-800 text-left text-slate-500 dark:text-slate-400">
                       <th className="px-3 py-2 font-medium">SKU</th>
                       <th className="px-3 py-2 font-medium">Title</th>
                       <th className="px-3 py-2 font-medium">Price</th>
@@ -616,21 +616,21 @@ export default function CatalogMotorsFiltersPage() {
                   <tbody>
                     {!appliedForm && !loading && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400 dark:text-slate-500">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-500 dark:text-slate-400">
                           Click Apply filters or Refresh (after first apply) to load catalog rows.
                         </td>
                       </tr>
                     )}
                     {appliedForm && rows.length === 0 && !loading && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400 dark:text-slate-500">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-500 dark:text-slate-400">
                           No rows match.
                         </td>
                       </tr>
                     )}
                     {loading && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400 dark:text-slate-400">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-500 dark:text-slate-400">
                           <Loader2 className="w-6 h-6 animate-spin inline mr-2" />
                           Loading…
                         </td>
@@ -655,8 +655,8 @@ export default function CatalogMotorsFiltersPage() {
                         <td className="px-3 py-2 text-slate-500 dark:text-slate-300">
                           {row.derived?.data_completeness_score ?? '—'}
                         </td>
-                        <td className="px-3 py-2 text-xs text-slate-400 dark:text-slate-400">{row.derived?.price_band ?? '—'}</td>
-                        <td className="px-3 py-2 text-xs text-slate-400 dark:text-slate-400">
+                        <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">{row.derived?.price_band ?? '—'}</td>
+                        <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
                           {row.derived?.fitment_count ?? 0} / {row.derived?.unique_make_count ?? 0}m
                         </td>
                       </tr>
@@ -673,11 +673,11 @@ export default function CatalogMotorsFiltersPage() {
                 </CardHeader>
                 <CardContent className="text-sm text-slate-500 dark:text-slate-300 space-y-2 font-mono text-xs">
                   <div>
-                    <span className="text-slate-400 dark:text-slate-500">Store routing: </span>
+                    <span className="text-slate-500 dark:text-slate-400">Store routing: </span>
                     {rows[0].derived.store_routing_recommendation}
                   </div>
                   <div>
-                    <span className="text-slate-400 dark:text-slate-500">Manual review: </span>
+                    <span className="text-slate-500 dark:text-slate-400">Manual review: </span>
                     {rows[0].derived.manual_review_reasons.join(', ') || '—'}
                   </div>
                   <div className="flex flex-wrap gap-2 pt-2">

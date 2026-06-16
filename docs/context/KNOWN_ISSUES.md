@@ -37,12 +37,21 @@
 
 **Type**: Security Concern  
 **Severity**: High  
-**Status**: Confirmed
+**Status**: Resolved (2026-06-17)
 
-**Description**: `auth.service.ts` and `jwt.strategy.ts` log JWT secret prefixes and full tokens to console with `[DEBUG]` markers. Risk of token exposure in production logs.
+**Description**: `auth.service.ts` and `jwt.strategy.ts` logged JWT secret prefixes and full tokens to console with `[DEBUG]` markers.
 
-**Affected Areas**: Security  
-**Suggested Fix**: Gate behind `NODE_ENV=development` or remove entirely.
+**Resolution**: Debug logging removed from auth service, JWT strategy, and auth module factory.
+
+### R3c: Open Public Registration
+
+**Type**: Security Concern  
+**Severity**: High  
+**Status**: Mitigated (2026-06-17)
+
+**Description**: `POST /api/auth/register` was public and assigned Staff role.
+
+**Resolution**: Gated by `ALLOW_PUBLIC_REGISTRATION` (default off in production/Docker); self-registered users get Viewer role; login UI hides register link when disabled. Admin invite via `POST /api/rbac/users` remains the production path.
 
 ---
 

@@ -1,4 +1,4 @@
-import { authGet } from './authApi';
+import { authGet, fetchDownloadResponse } from './authApi';
 
 const BASE = '/api/fitment';
 
@@ -20,6 +20,7 @@ export interface VinListingRecord {
   format: string | null;
   sourceFileName: string | null;
   importedAt: string | null;
+  parsedImages?: string[];
 }
 
 export interface VinListingsResponse {
@@ -54,11 +55,25 @@ export interface VinListingsResponse {
   };
   totalFitments: number;
   totalListings: number;
-  matchStrategy: 'fitment' | 'fallback_text' | 'ai_enriched';
+  matchStrategy: 'fitment' | 'fallback_text' | 'ai_enriched' | 'ebay_browse';
   listings: VinListingRecord[];
 }
 
 export function getListingsByVin(vin: string): Promise<VinListingsResponse> {
   return authGet(`${BASE}/vin/${encodeURIComponent(vin)}/listings`);
+}
+
+export async function exportDbListingsByVin(vin: string): Promise<void> {
+  const url = `${BASE}/vin/${encodeURIComponent(vin)}/export-db`;
+  const res = await fetchDownloadResponse(url);
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition');
+  const filenameMatch = disposition?.match(/filename="?(.+?)"?$/);
+  const filename = filenameMatch?.[1] || `vin-${vin}-listings.xlsx`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 

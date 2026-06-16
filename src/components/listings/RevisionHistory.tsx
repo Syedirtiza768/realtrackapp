@@ -1,4 +1,4 @@
-﻿/* ─── RevisionHistory ─────────────────────────────────────
+/* ─── RevisionHistory ─────────────────────────────────────
  *  Timeline view of all revisions for a listing.
  *  Shows version, status transitions, timestamps, and
  *  allows viewing full snapshot diffs.
@@ -19,12 +19,12 @@ import { Badge } from '../ui/badge';
 import { useRevisions } from '../../lib/listingsApi';
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-slate-500/10 text-slate-400 dark:text-slate-400 border-slate-500/30',
+  draft: 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/30',
   ready: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
   published: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
   sold: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
   delisted: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  archived: 'bg-slate-500/10 text-slate-400 dark:text-slate-500 border-slate-500/30',
+  archived: 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/30',
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -59,7 +59,7 @@ export default function RevisionHistory() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:text-slate-200 transition-colors shrink-0"
+          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:text-slate-200 transition-colors shrink-0"
         >
           <ArrowLeft size={16} />
         </button>
@@ -67,7 +67,7 @@ export default function RevisionHistory() {
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Revision History
           </h2>
-          <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
             {id ? `Listing ${id.slice(0, 8)}…` : 'Loading…'}
           </p>
         </div>
@@ -93,7 +93,7 @@ export default function RevisionHistory() {
         <Card>
           <CardContent className="py-12 text-center">
             <Clock className="mx-auto h-10 w-10 text-slate-500 dark:text-slate-600 mb-3" />
-            <p className="text-slate-400 dark:text-slate-400">No revisions found for this listing.</p>
+            <p className="text-slate-500 dark:text-slate-400">No revisions found for this listing.</p>
           </CardContent>
         </Card>
       )}
@@ -146,7 +146,7 @@ export default function RevisionHistory() {
                             <Badge variant="success" className="text-[10px]">Latest</Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 dark:text-slate-500">
+                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400">
                           <span className="flex items-center gap-1">
                             <Clock size={11} />
                             {formatDate(rev.createdAt)}
@@ -162,7 +162,7 @@ export default function RevisionHistory() {
                       {/* Expand icon */}
                       <ChevronDown
                         size={16}
-                        className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        className={`text-slate-500 dark:text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                       />
                     </button>
 
@@ -170,7 +170,7 @@ export default function RevisionHistory() {
                     {isExpanded && (
                       <div className="px-5 pb-4 ml-12">
                         <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-lg p-4 overflow-x-auto">
-                          <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 font-medium">Snapshot at v{rev.version}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">Snapshot at v{rev.version}</p>
                           <pre className="text-xs text-slate-500 dark:text-slate-300 whitespace-pre-wrap font-mono leading-relaxed max-h-80 overflow-y-auto scrollbar-thin">
                             {JSON.stringify(rev.snapshot, null, 2)}
                           </pre>

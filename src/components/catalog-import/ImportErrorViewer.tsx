@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   AlertTriangle,
   XCircle,
@@ -178,7 +178,7 @@ export default function ImportErrorViewer({
                       <td className="py-2 pr-3 max-w-[300px]">
                         <p className="text-slate-500 dark:text-slate-300 text-xs">{row.message || '—'}</p>
                       </td>
-                      <td className="py-2 pr-3 text-xs text-slate-400 dark:text-slate-500">
+                      <td className="py-2 pr-3 text-xs text-slate-500 dark:text-slate-400">
                         {row.matchStrategy || '—'}
                       </td>
                       <td className="py-2">
@@ -221,7 +221,7 @@ export default function ImportErrorViewer({
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-              <span className="text-xs text-slate-400 dark:text-slate-500">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 Showing {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total}
               </span>
               <div className="flex gap-2">

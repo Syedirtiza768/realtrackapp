@@ -11,16 +11,23 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { FitmentService } from './fitment.service.js';
 import { FitmentMatcherService } from './fitment-matcher.service.js';
 import { FitmentImportService, type AcesVehicleRow } from './fitment-import.service.js';
 import { EbayMvlService, type FitmentSelection } from './ebay-mvl.service.js';
 import { VinDecodeService } from './vin-decode.service.js';
+import { VinExportService } from './vin-export.service.js';
+import { VinDbExportService } from './vin-db-export.service.js';
 import { CreateFitmentDto, VerifyFitmentDto, FitmentDetectionDto } from './dto/create-fitment.dto.js';
 import { SearchFitmentDto } from './dto/search-fitment.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
 
 @ApiTags('fitment')
 @Controller('fitment')
@@ -32,6 +39,8 @@ export class FitmentController {
     private readonly importService: FitmentImportService,
     private readonly mvlService: EbayMvlService,
     private readonly vinService: VinDecodeService,
+    private readonly vinExport: VinExportService,
+    private readonly vinDbExport: VinDbExportService,
   ) {}
 
   // ─── Reference data ───
@@ -124,8 +133,8 @@ export class FitmentController {
   @Post('bulk-import')
   @RequirePermissions('fitment.manage')
   @ApiOperation({ summary: 'Enqueue ACES XML/CSV bulk import' })
-  bulkImport(@Body() body: { rows: AcesVehicleRow[] }) {
-    return this.importService.enqueueBulkImport(body.rows);
+  bulkImport(@Body() body: { rows: AcesVehicleRow[] }, @CurrentUser() user: User) {
+    return this.importService.enqueueBulkImport(body.rows, user.id);
   }
 
   // ─── eBay MVL (Compatibility) ───
@@ -250,5 +259,55 @@ export class FitmentController {
   @ApiParam({ name: 'vin', type: String, example: '1HGCV1F34LA000001' })
   getListingsByVin(@Param('vin') vin: string) {
     return this.fitmentService.findListingsByVin(vin);
+  }
+
+  @Get('vin/:vin/export')
+  @RequirePermissions('fitment.manage')
+  @ApiOperation({
+    summary: 'Generate a pipeline-ready XLSX file from VIN',
+    description:
+      'Decodes the VIN, generates a comprehensive parts catalog via AI, and returns a GridX Connect XLSX file that can be directly uploaded to POST /api/pipeline/upload',
+  })
+  @ApiParam({ name: 'vin', type: String, example: 'JTNB29HK8K3019731' })
+  async exportVinPipelineInput(
+    @Param('vin') vin: string,
+    @Res() res: Response,
+  ) {
+    const result = await this.vinExport.generatePipelineInput(vin);
+
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${result.filename}"`,
+      'X-Vehicle-Info': `${result.vehicleInfo.year} ${result.vehicleInfo.make} ${result.vehicleInfo.model}`,
+      'X-Part-Count': String(result.partCount),
+      'X-Category-Count': String(result.categoryCount),
+    });
+
+    res.end(result.buffer);
+  }
+
+  @Get('vin/:vin/export-db')
+  @RequirePermissions('fitment.manage')
+  @ApiOperation({
+    summary: 'Export VIN-matched database listings as XLSX',
+    description:
+      'Finds listings in the database that match the VIN-decoded vehicle and exports them as an XLSX file with images, pricing, and all listing data.',
+  })
+  @ApiParam({ name: 'vin', type: String, example: '1HGCV1F34LA000001' })
+  async exportVinDbListings(
+    @Param('vin') vin: string,
+    @Res() res: Response,
+  ) {
+    const result = await this.vinDbExport.exportListingsByVin(vin);
+
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${result.filename}"`,
+      'X-Listing-Count': String(result.listingCount),
+      'X-Match-Strategy': result.matchStrategy,
+      'X-Vehicle-Info': `${result.vehicleInfo.year} ${result.vehicleInfo.make} ${result.vehicleInfo.model}`,
+    });
+
+    res.end(result.buffer);
   }
 }

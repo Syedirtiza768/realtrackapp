@@ -175,6 +175,38 @@ export function useUploadPipelineFile() {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *  SINGLE LISTING
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+export interface SingleListingInput {
+  sku?: string;
+  brand?: string;
+  model?: string;
+  vin?: string;
+  category?: string;
+  partNumber?: string;
+  partName?: string;
+  note?: string;
+  price?: number;
+  quantity?: number;
+  imageUrls?: string;
+  uploadedAssetIds?: string[];
+}
+
+export function useCreateSingleListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SingleListingInput) =>
+      postJson<{ job: PipelineJobApi }>('/pipeline/single', input)
+        .then((res) => ({ job: normalizePipelineJob(res.job) })),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pipeline-jobs'] });
+      qc.invalidateQueries({ queryKey: ['pipeline-stats'] });
+    },
+  });
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *  JOBS
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 

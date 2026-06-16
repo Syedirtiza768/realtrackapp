@@ -103,7 +103,7 @@ function ClientSettingsForm() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400 dark:text-slate-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-slate-500 dark:text-slate-400" />
       </div>
     );
   }
@@ -335,7 +335,7 @@ function ThemePreview({ data }: { data: ClientSettingsRecord }) {
           )}
         </p>
       </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
         Sidebar and login pages use these colors after save (preview applies immediately).
       </p>
     </div>

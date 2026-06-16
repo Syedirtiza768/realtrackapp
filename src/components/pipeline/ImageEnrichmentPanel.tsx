@@ -1,7 +1,7 @@
-﻿/* ── Image Enrichment Panel ────────────────────────────────
+/* -- Image Enrichment Panel --------------------------------
  *  Shows image enrichment status & controls within the pipeline view.
  *  Rendered inside PipelineWizard when a job is active.
- * ────────────────────────────────────────────────────────── */
+ * ---------------------------------------------------------- */
 
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { authPost, fetchWithAuth } from '../../lib/authApi';
 
-/* ── Types ────────────────────────────────────────────────── */
+/* -- Types -------------------------------------------------- */
 
 interface ImageCandidate {
   url: string;
@@ -57,7 +57,7 @@ interface ImageEnrichmentProgress {
   openaiTokensUsed: number;
 }
 
-/* ── API helpers ──────────────────────────────────────────── */
+/* -- API helpers -------------------------------------------- */
 
 async function fetchImageStatus(jobId: string): Promise<ImageEnrichmentProgress | null> {
   try {
@@ -77,7 +77,7 @@ async function enrichImages(
   return authPost('/api/pipeline/images/enrich', { parts, jobId });
 }
 
-/* ── Main Component ───────────────────────────────────────── */
+/* -- Main Component ----------------------------------------- */
 
 export default function ImageEnrichmentPanel({
   jobId,
@@ -144,7 +144,7 @@ export default function ImageEnrichmentPanel({
                 </Badge>
               )}
             </div>
-            {expanded ? <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-500" />}
+            {expanded ? <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
           </CardTitle>
         </CardHeader>
 
@@ -163,7 +163,7 @@ export default function ImageEnrichmentPanel({
             {/* Progress bar when enriching */}
             {enriching && progress && (
               <div>
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <div className="flex justify-between text-xs text-slate-700 dark:text-slate-300 mb-1">
                   <span>Enriching images...</span>
                   <span>{Math.round((progress.processedParts / Math.max(progress.totalParts, 1)) * 100)}%</span>
                 </div>
@@ -239,7 +239,7 @@ export default function ImageEnrichmentPanel({
 
             {/* No parts available */}
             {(!parts || parts.length === 0) && jobStatus !== 'completed' && (
-              <p className="text-sm text-slate-500 dark:text-slate-500">Image enrichment is available after the pipeline completes.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Image enrichment is available after the pipeline completes.</p>
             )}
           </CardContent>
         )}
@@ -251,7 +251,7 @@ export default function ImageEnrichmentPanel({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ImageIcon className="h-5 w-5 text-blue-400" />
-              {selectedResult.partNumber} — Image Details
+              {selectedResult.partNumber} � Image Details
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -269,7 +269,7 @@ export default function ImageEnrichmentPanel({
             {/* Search queries used */}
             {selectedResult.searchQueries.length > 0 && (
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Search Queries Used</p>
+                <p className="text-xs text-slate-700 dark:text-slate-300 mb-1">Search Queries Used</p>
                 <div className="flex flex-wrap gap-1">
                   {selectedResult.searchQueries.map((q, i) => (
                     <span key={i} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">{q}</span>
@@ -281,7 +281,7 @@ export default function ImageEnrichmentPanel({
             {/* Primary image */}
             {selectedResult.primaryImage && (
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
+                <p className="text-xs text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                   <Star className="h-3 w-3 text-yellow-400" /> Primary Image (Hero)
                 </p>
                 <ImageCandidateCard image={selectedResult.primaryImage} />
@@ -291,7 +291,7 @@ export default function ImageEnrichmentPanel({
             {/* Gallery images */}
             {selectedResult.galleryImages.length > 0 && (
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Gallery Images</p>
+                <p className="text-xs text-slate-700 dark:text-slate-300 mb-1">Gallery Images</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {selectedResult.galleryImages.map((img, i) => (
                     <ImageCandidateCard key={i} image={img} compact />
@@ -303,12 +303,12 @@ export default function ImageEnrichmentPanel({
             {/* Source attribution */}
             {selectedResult.sourceAttribution.length > 0 && (
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Sources</p>
+                <p className="text-xs text-slate-700 dark:text-slate-300 mb-1">Sources</p>
                 <div className="space-y-1">
                   {selectedResult.sourceAttribution.map((src, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <Badge variant="secondary">{src.source}</Badge>
-                      <span className="text-slate-500 dark:text-slate-500 truncate">{src.url}</span>
+                      <span className="text-slate-500 dark:text-slate-400 truncate">{src.url}</span>
                     </div>
                   ))}
                 </div>
@@ -338,7 +338,7 @@ export default function ImageEnrichmentPanel({
   );
 }
 
-/* ── Sub-components ───────────────────────────────────────── */
+/* -- Sub-components ----------------------------------------- */
 
 function ImageResultRow({
   result,
@@ -374,7 +374,7 @@ function ImageResultRow({
         </div>
         <div className="min-w-0">
           <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{result.partNumber}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-500 truncate">{result.title}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{result.title}</p>
         </div>
       </div>
 
@@ -411,17 +411,17 @@ function ImageCandidateCard({ image, compact }: { image: ImageCandidate; compact
     <div className={`bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-600/50 ${compact ? 'p-2' : 'p-3'}`}>
       <div className="flex items-center justify-between mb-1">
         <Badge variant="secondary">{image.source}</Badge>
-        <span className="text-xs text-slate-500 dark:text-slate-500">{image.width}×{image.height}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">{image.width}�{image.height}</span>
       </div>
       <div className={`grid grid-cols-2 gap-1 text-xs ${compact ? '' : 'mt-2'}`}>
         <div>
-          <span className="text-slate-500 dark:text-slate-500">Relevance:</span>{' '}
+          <span className="text-slate-500 dark:text-slate-400">Relevance:</span>{' '}
           <span className={image.relevanceScore >= 0.8 ? 'text-green-400' : image.relevanceScore >= 0.6 ? 'text-yellow-400' : 'text-red-400'}>
             {(image.relevanceScore * 100).toFixed(0)}%
           </span>
         </div>
         <div>
-          <span className="text-slate-500 dark:text-slate-500">Quality:</span>{' '}
+          <span className="text-slate-500 dark:text-slate-400">Quality:</span>{' '}
           <span className={image.qualityScore >= 0.8 ? 'text-green-400' : image.qualityScore >= 0.6 ? 'text-yellow-400' : 'text-red-400'}>
             {(image.qualityScore * 100).toFixed(0)}%
           </span>

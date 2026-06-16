@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Loader2, MoreHorizontal, UserPlus } from 'lucide-react';
 import Can from '../auth/Can';
 import ProtectedRoute from '../auth/ProtectedRoute';
@@ -52,7 +52,7 @@ function UsersAdmin() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400 dark:text-slate-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-slate-500 dark:text-slate-400" />
       </div>
     );
   }
@@ -62,7 +62,7 @@ function UsersAdmin() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Users & roles</h2>
-          <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Create users, assign roles, and deactivate accounts.
           </p>
         </div>
@@ -101,7 +101,7 @@ function UsersAdmin() {
                   {u.profile?.roleName ?? u.profile?.roleSlug ?? '—'}
                 </td>
                 <td className="px-4 py-3">
-                  <span className={u.active ? 'text-emerald-400' : 'text-slate-400 dark:text-slate-500'}>
+                  <span className={u.active ? 'text-emerald-400' : 'text-slate-500 dark:text-slate-400'}>
                     {u.active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
@@ -112,7 +112,7 @@ function UsersAdmin() {
                         type="button"
                         title="Change role"
                         onClick={() => setRoleEditUser(u)}
-                        className="p-1.5 rounded text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:bg-slate-800"
+                        className="p-1.5 rounded text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:bg-slate-800"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </button>
@@ -215,7 +215,7 @@ function CreateUserModal({
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         {err && <p className="text-sm text-red-400">{err}</p>}
         <label className="block text-sm">
-          <span className="text-slate-400 dark:text-slate-400">Email</span>
+          <span className="text-slate-500 dark:text-slate-400">Email</span>
           <input
             type="email"
             required
@@ -225,7 +225,7 @@ function CreateUserModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="text-slate-400 dark:text-slate-400">Name</span>
+          <span className="text-slate-500 dark:text-slate-400">Name</span>
           <input
             className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
             value={name}
@@ -233,7 +233,7 @@ function CreateUserModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="text-slate-400 dark:text-slate-400">Password</span>
+          <span className="text-slate-500 dark:text-slate-400">Password</span>
           <input
             type="password"
             required
@@ -244,7 +244,7 @@ function CreateUserModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="text-slate-400 dark:text-slate-400">Role</span>
+          <span className="text-slate-500 dark:text-slate-400">Role</span>
           <select
             className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
             value={roleSlug}
@@ -261,7 +261,7 @@ function CreateUserModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
+            className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
           >
             Cancel
           </button>
@@ -327,7 +327,7 @@ function EditRoleModal({
       <div className="space-y-4">
         {err && <p className="text-sm text-red-400">{err}</p>}
         <label className="block text-sm">
-          <span className="text-slate-400 dark:text-slate-400">Role</span>
+          <span className="text-slate-500 dark:text-slate-400">Role</span>
           <select
             className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
             value={roleSlug}
@@ -357,7 +357,7 @@ function EditRoleModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
+              className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200"
             >
               Cancel
             </button>

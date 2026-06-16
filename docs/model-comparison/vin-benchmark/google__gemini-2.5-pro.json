@@ -1,0 +1,33 @@
+{
+  "modelId": "google/gemini-2.5-pro",
+  "ok": true,
+  "latencyMs": 21016,
+  "usage": {
+    "prompt_tokens": 797,
+    "completion_tokens": 1985,
+    "total_tokens": 2782,
+    "cost": 0.02084625,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.02084625,
+      "upstream_inference_prompt_cost": 0.00099625,
+      "upstream_inference_completions_cost": 0.01985
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 1918,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "estimatedCostUsd": 0.020846250000000004,
+  "contextLength": 1048576,
+  "rawContent": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Mirai\",\n  \"trim\": \"Base\",\n  \"year\": \"2019\",\n  \"bodyClass\": \"Sedan\",\n  \"driveType\": \"RWD\",\n  \"engineCylinders\": \"0",
+  "parsed": null,
+  "parseError": "Unterminated string in JSON at position 147 (line 8 column 24)"
+}

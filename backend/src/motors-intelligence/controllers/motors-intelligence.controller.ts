@@ -36,6 +36,8 @@ import { MotorsProductStatus, MotorsSourceType } from '../entities';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
+import { User } from '../../auth/entities/user.entity.js';
 
 @ApiTags('Motors Intelligence')
 @Controller('motors-intelligence')
@@ -54,18 +56,24 @@ export class MotorsIntelligenceController {
   @Post('products/upload-images')
   @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Start image-based product creation with presigned S3 URLs' })
-  async uploadImages(@Body() dto: ImageUploadRequestDto): Promise<ImageUploadResponseDto> {
+  async uploadImages(
+    @Body() dto: ImageUploadRequestDto,
+    @CurrentUser() user: User,
+  ): Promise<ImageUploadResponseDto> {
     // Create the product first so we have an ID for S3 paths
-    const product = await this.motorsService.createProduct({
-      sourceType: MotorsSourceType.IMAGE_UPLOAD,
-      brand: dto.brand || null,
-      mpn: dto.mpn || null,
-      productType: dto.productType || null,
-      condition: dto.condition || 'New',
-      price: dto.price || null,
-      quantity: dto.quantity || null,
-      sourcePayload: { files: dto.files, autoRunPipeline: dto.autoRunPipeline ?? true },
-    });
+    const product = await this.motorsService.createProduct(
+      {
+        sourceType: MotorsSourceType.IMAGE_UPLOAD,
+        brand: dto.brand || null,
+        mpn: dto.mpn || null,
+        productType: dto.productType || null,
+        condition: dto.condition || 'New',
+        price: dto.price || null,
+        quantity: dto.quantity || null,
+        sourcePayload: { files: dto.files, autoRunPipeline: dto.autoRunPipeline ?? true },
+      },
+      user.id,
+    );
 
     // Generate presigned upload URLs
     const uploadUrls = await Promise.all(
@@ -253,15 +261,15 @@ export class MotorsIntelligenceController {
   @Post('products')
   @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Create a new Motors product and start pipeline' })
-  async createProduct(@Body() dto: CreateMotorsProductDto) {
-    return this.motorsService.createProduct(dto);
+  async createProduct(@Body() dto: CreateMotorsProductDto, @CurrentUser() user: User) {
+    return this.motorsService.createProduct(dto, user.id);
   }
 
   @Post('products/batch')
   @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Batch create Motors products' })
-  async batchCreate(@Body() dto: BatchCreateMotorsProductDto) {
-    return this.motorsService.batchCreateProducts(dto.products);
+  async batchCreate(@Body() dto: BatchCreateMotorsProductDto, @CurrentUser() user: User) {
+    return this.motorsService.batchCreateProducts(dto.products, user.id);
   }
 
   @Get('products')

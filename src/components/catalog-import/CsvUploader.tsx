@@ -1,4 +1,4 @@
-﻿import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Upload, FileText, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -186,7 +186,7 @@ export default function CsvUploader({
         {/* Upload progress bar */}
         {uploading && (
           <div className="mt-4">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 mb-1">
               <span>
                 {progress >= 100
                   ? 'Finishing upload on server…'

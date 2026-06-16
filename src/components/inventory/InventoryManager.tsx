@@ -188,7 +188,7 @@ export default function InventoryManager() {
             <Package className="h-6 w-6 text-blue-400" />
             Inventory Manager
           </h1>
-          <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             View, validate, and publish listings to eBay directly from the app
           </p>
         </div>
@@ -222,19 +222,19 @@ export default function InventoryManager() {
         <CardContent className="pt-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-slate-400" />
               <input
                 type="text"
                 placeholder="Search by SKU, title, brand..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full pl-9 pr-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-200 focus:outline-none focus:border-blue-500"
+              className="px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
             >
               <option value="">All Statuses</option>
               <option value="draft">Draft</option>
@@ -242,7 +242,7 @@ export default function InventoryManager() {
               <option value="published">Published</option>
               <option value="error">Error</option>
             </select>
-            <label className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-400 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 cursor-pointer">
               <input
                 type="checkbox"
                 checked={missingImagesFilter}
@@ -308,7 +308,7 @@ export default function InventoryManager() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 text-left">
+                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-left">
                     <th className="pb-3 pr-3 w-8">
                       <input
                         type="checkbox"
@@ -366,10 +366,10 @@ export default function InventoryManager() {
 
                       {/* SKU & Title */}
                       <td className="py-3 pr-3 max-w-[300px]">
-                        <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">{item.sku}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{item.sku}</div>
                         <div className="text-slate-600 dark:text-slate-200 truncate" title={item.title}>{item.title}</div>
                         {item.categoryName && (
-                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{item.categoryName}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.categoryName}</div>
                         )}
                       </td>
 
@@ -430,7 +430,7 @@ export default function InventoryManager() {
                         {expandedErrors.has(item.id) && item.missingFields.length > 0 && (
                           <div className="mt-1 text-xs text-amber-400/80 space-y-0.5">
                             {item.missingFields.map((f, i) => (
-                              <div key={i}>• {f}</div>
+                              <div key={i}>ï¿½ {f}</div>
                             ))}
                           </div>
                         )}
@@ -482,7 +482,7 @@ export default function InventoryManager() {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-400 dark:text-slate-400">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   Page {page} of {totalPages}
                 </span>
                 <div className="flex gap-2">
@@ -512,10 +512,10 @@ export default function InventoryManager() {
         <Card>
           <CardContent className="py-12 text-center">
             <Package className="h-12 w-12 text-slate-500 dark:text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-400 dark:text-slate-400 text-sm">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
               Click "Load Inventory" to view your catalog listings.
             </p>
-            <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
+            <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
               You can validate, select, and publish listings to eBay directly from here.
             </p>
           </CardContent>

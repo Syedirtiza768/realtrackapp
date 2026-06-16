@@ -1,0 +1,116 @@
+{
+  "testVin": "JTNB29HK8K3019731",
+  "runAt": "2026-06-14T22:33:33.593Z",
+  "groundTruth": {
+    "vin": "JTNB29HK8K3019731",
+    "year": "2019",
+    "make": "TOYOTA",
+    "model": "",
+    "trim": "",
+    "plantCountry": "JAPAN",
+    "plantCity": "TOYOTA CITY",
+    "plantCompany": "Toyota Motor Corporation - Tsutsumi Plant",
+    "vehicleType": "PASSENGER CAR",
+    "nhtsaIncomplete": true,
+    "nhtsaErrors": "5 - VIN has errors in few positions; 14 - Unable to provide information for some of the characters in the VIN, based on the manufacturer submission."
+  },
+  "nhtsaSummary": "Model Year: 2019, Make: TOYOTA, Vehicle Type: PASSENGER CAR, Plant Country: JAPAN, Plant City: TOYOTA CITY, Plant Company Name: Toyota Motor Corporation - Tsutsumi Plant, Error Code: 5,14, Error Text: 5 - VIN has errors in few positions; 14 - Unable to provide information for some of the characters in the VIN, based on the manufacturer submission., Suggested VIN: JTNB!!HK8K3019731, Additional Error Text: The error positions are indicated by ! in Suggested VIN. In the Possible values section, each pair of parenthesis indicate information about each error position in VIN . The Numeric value before the : indicates the position in error and the values after the : indicate the possible values that are allowed in this position Unused position(s): 4,5,6,7,8.",
+  "models": [
+    {
+      "modelId": "google/gemini-2.5-pro",
+      "ok": true,
+      "latencyMs": 21016,
+      "estimatedCostUsd": 0.020846250000000004,
+      "contextLength": 1048576,
+      "parseError": "Unterminated string in JSON at position 147 (line 8 column 24)",
+      "decoded": null
+    },
+    {
+      "modelId": "openai/gpt-4o",
+      "ok": true,
+      "latencyMs": 5106,
+      "estimatedCostUsd": 0.008035,
+      "contextLength": 128000,
+      "parseError": null,
+      "scoring": {
+        "checks": {
+          "yearMatch": true,
+          "makeMatch": true,
+          "plantCountryMatch": true,
+          "vehicleTypeMatch": true,
+          "hasConfidenceNotes": true,
+          "mentionsNhtsaGap": true,
+          "hasTransmission": true,
+          "hasEngineDescription": true,
+          "hasEbayHints": true,
+          "hasCommonParts": true,
+          "hasFitment": true,
+          "hasDataSources": true,
+          "jsonComplete": true
+        },
+        "fieldCount": 10,
+        "score": 95,
+        "maxScore": 98
+      },
+      "decoded": {
+        "year": "2019",
+        "make": "Toyota",
+        "model": "Camry",
+        "trim": "",
+        "engineDescription": "2.5L I-4",
+        "transmission": "8-speed Automatic",
+        "driveType": "FWD",
+        "bodyClass": "Sedan",
+        "plantCountry": "Japan",
+        "confidenceNotes": "Make, year, vehicle type, plant country, and plant city are verified from NHTSA data. Model, body class, drive type, engine details, transmission, and other specifications are inferred based on typical configurations for a 2019 Toyota Camry. Error codes indicate uncertainty in VIN positions, affecting trim and specific configuration details."
+      }
+    },
+    {
+      "modelId": "anthropic/claude-haiku-4.5",
+      "ok": true,
+      "latencyMs": 10281,
+      "estimatedCostUsd": 0.007683000000000001,
+      "contextLength": 200000,
+      "parseError": "Unexpected token '`', \"```json\n{\n\"... is not valid JSON",
+      "decoded": null
+    },
+    {
+      "modelId": "qwen/qwen3-235b-a22b",
+      "ok": true,
+      "latencyMs": 29103,
+      "estimatedCostUsd": 0.00191464,
+      "contextLength": 131072,
+      "parseError": null,
+      "scoring": {
+        "checks": {
+          "yearMatch": false,
+          "makeMatch": false,
+          "plantCountryMatch": true,
+          "vehicleTypeMatch": true,
+          "hasConfidenceNotes": false,
+          "mentionsNhtsaGap": false,
+          "hasTransmission": false,
+          "hasEngineDescription": false,
+          "hasEbayHints": false,
+          "hasCommonParts": false,
+          "hasFitment": false,
+          "hasDataSources": false,
+          "jsonComplete": false
+        },
+        "fieldCount": 1,
+        "score": 13,
+        "maxScore": 98
+      },
+      "decoded": {}
+    },
+    {
+      "modelId": "minimax/minimax-m3",
+      "ok": true,
+      "latencyMs": 38774,
+      "estimatedCostUsd": 0.0026696999999999997,
+      "contextLength": 1048576,
+      "parseError": "Unexpected end of JSON input",
+      "decoded": null
+    }
+  ]
+}

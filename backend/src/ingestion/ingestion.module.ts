@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { RbacModule } from '../rbac/rbac.module.js';
 import { IngestionJob } from './entities/ingestion-job.entity.js';
 import { AiResult } from './entities/ai-result.entity.js';
 import { ImageAsset } from '../storage/entities/image-asset.entity.js';
@@ -25,11 +26,13 @@ import { ImageOptimizerService } from './image-enrichment/image-optimizer.servic
 import { OpenAiModule } from '../common/openai/openai.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
 import { ListingOptimizationModule } from '../listing-optimization/listing-optimization.module.js';
+import { HeavyJobLimiterModule } from '../common/jobs/heavy-job-limiter.module.js';
 import { PipelineOutputImageService } from './services/pipeline-output-image.service.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob, CatalogProduct]),
+    RbacModule,
     BullModule.registerQueue({ name: 'ingestion' }),
     BullModule.registerQueue({ name: 'pipeline' }),
     BullModule.registerQueue({ name: 'listing-optimization', defaultJobOptions: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } } }),
@@ -39,6 +42,7 @@ import { PipelineOutputImageService } from './services/pipeline-output-image.ser
     FeatureFlagModule,
     OpenAiModule,
     ChannelsModule,
+    HeavyJobLimiterModule,
   ],
   controllers: [IngestionController, ReviewController, PipelineController, ImageEnrichmentController],
   providers: [

@@ -30,7 +30,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {
     const secret = config.get<string>('JWT_SECRET', 'dev-secret-change-in-production');
-    console.log('[DEBUG] JWT Strategy - Secret:', secret.substring(0, 10) + '...');
     super({
       jwtFromRequest: fromAuthHeaderOrQueryParam,
       ignoreExpiration: false,
