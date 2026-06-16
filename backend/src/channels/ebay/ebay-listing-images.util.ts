@@ -13,7 +13,8 @@ export function parseImageUrlField(raw: string | null | undefined): string[] {
     .split(/[\n|,]+/)
     .flatMap((s) => s.split(/\s+/))
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && /^https?:\/\//i.test(s));
+    .filter((s) => s.length > 0 && /^https?:\/\//i.test(s))
+    .map((s) => s.replace(/^http:\/\//i, 'https://'));
 }
 
 /** Expand pipe-delimited image strings and drop blank entries. */
