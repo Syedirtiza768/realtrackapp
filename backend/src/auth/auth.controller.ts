@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Patch,
   Post,
   Req,
   UnauthorizedException,
@@ -16,7 +17,7 @@ import { UserOrganizationService } from './user-organization.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { Public } from './decorators/public.decorator.js';
 import { CurrentUser } from './decorators/current-user.decorator.js';
-import { LoginDto, RegisterDto } from './dto/auth.dto.js';
+import { ChangePasswordDto, LoginDto, RegisterDto } from './dto/auth.dto.js';
 import { User } from './entities/user.entity.js';
 
 @ApiTags('auth')
@@ -91,6 +92,28 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout (client should discard token)' })
   async logout(@CurrentUser() user: User, @Req() req: Request) {
     await this.authAudit.log('auth.logout', {
+      actorId: user.id,
+      entityId: user.id,
+      req,
+    });
+    return { ok: true };
+  }
+
+  @Patch('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change current user password' })
+  async changePassword(
+    @CurrentUser() user: User,
+    @Body() body: ChangePasswordDto,
+    @Req() req: Request,
+  ) {
+    await this.auth.changePassword(
+      user.id,
+      body.currentPassword,
+      body.newPassword,
+    );
+    await this.authAudit.log('auth.password_changed', {
       actorId: user.id,
       entityId: user.id,
       req,

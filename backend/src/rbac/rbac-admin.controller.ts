@@ -6,11 +6,15 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuthService } from '../auth/auth.service.js';
+import { AuthAuditService } from '../auth/auth-audit.service.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { User } from '../auth/entities/user.entity.js';
 import { Role } from './entities/role.entity.js';
@@ -19,6 +23,7 @@ import { RequirePermissions } from './decorators/require-permissions.decorator.j
 import {
   AssignRoleDto,
   CreateRbacUserDto,
+  ResetPasswordDto,
 } from './dto/rbac-admin.dto.js';
 import { ROLE_SLUGS } from './permission-registry.js';
 import { RbacService } from './rbac.service.js';
@@ -53,6 +58,8 @@ export class RbacAdminController {
     @InjectRepository(Permission)
     private readonly permissionRepo: Repository<Permission>,
     private readonly rbac: RbacService,
+    private readonly auth: AuthService,
+    private readonly authAudit: AuthAuditService,
   ) {}
 
   @Get('permissions')
@@ -156,6 +163,25 @@ export class RbacAdminController {
     }
     user.active = false;
     await this.userRepo.save(user);
+    return { ok: true };
+  }
+
+  @Patch('users/:id/reset-password')
+  @RequirePermissions('users.reset_password')
+  @ApiOperation({ summary: 'Admin reset a user password' })
+  async resetPassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ResetPasswordDto,
+    @CurrentUser() actor: User,
+    @Req() req: Request,
+  ) {
+    await this.auth.adminResetPassword(id, body.newPassword);
+    await this.authAudit.log('auth.admin_password_reset', {
+      actorId: actor.id,
+      entityId: id,
+      metadata: { targetUserId: id },
+      req,
+    });
     return { ok: true };
   }
 }

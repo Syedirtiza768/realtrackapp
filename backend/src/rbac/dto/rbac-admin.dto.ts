@@ -31,3 +31,9 @@ export class AssignRoleDto {
   @IsIn(ROLE_SLUG_VALUES)
   roleSlug: string;
 }
+
+export class ResetPasswordDto {
+  @IsString()
+  @MinLength(8)
+  newPassword: string;
+}

@@ -7,6 +7,7 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Added
+- **Password management:** Users can change their own password via `PATCH /api/auth/change-password` (Settings → Account tab). Admins/super-admins can reset any user's password via `PATCH /api/rbac/users/:id/reset-password` using the `users.reset_password` permission (Users admin → Manage user modal). Both actions are audit-logged.
 - **Multi-user Phase 3 (testing/observability):** Concurrency unit tests for job visibility, scheduler leader, heavy job limiter, and listing version conflicts; k6 baseline script; `GET /api/health/runtime`; global `X-Response-Time-Ms` header and slow-request logging (`SLOW_REQUEST_MS`).
 - **Multi-user Phase 2 (scale):** PgBouncer + prod compose overlay; Redis 512MB in prod; `GET /api/health/queues` (admin); heavy job caps (`MAX_CONCURRENT_PIPELINE_JOBS`, `MAX_CONCURRENT_CATALOG_IMPORTS`); job-scoped pipeline uploads; Socket.IO Redis adapter (`REDIS_SOCKET_ADAPTER`); scheduler leader election (`SCHEDULER_LEADER_ENABLED`); per-user rate limits on pipeline/catalog heavy routes.
 - **Multi-user P0 hardening (Sprint 1):** `ALLOW_PUBLIC_REGISTRATION` env gate (default off in production/Docker); self-registered users receive Viewer role; `GET /api/auth/public-config` for login UI; JWT default expiry reduced to 4h (`JWT_EXPIRY_SECONDS=14400`).

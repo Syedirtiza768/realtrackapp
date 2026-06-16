@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type FormEvent } from 'react';
 import {
     Settings,
     Truck,
@@ -18,10 +18,12 @@ import {
     ExternalLink,
     Wifi,
     WifiOff,
+    KeyRound,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { startEbayOAuth } from '../../lib/ebayIntegrationsApi';
 import { authPost, fetchWithAuth } from '../../lib/authApi';
+import { changeOwnPassword } from '../../lib/rbacApi';
 
 const API = '/api/settings';
 
@@ -75,7 +77,7 @@ function Spinner() {
 /* ─── Component ─── */
 
 export default function SettingsPage() {
-    const [tab, setTab] = useState<'general' | 'shipping' | 'pricing' | 'channels'>('general');
+    const [tab, setTab] = useState<'general' | 'shipping' | 'pricing' | 'channels' | 'account'>('general');
     const [settings, setSettings] = useState<Record<string, TenantSetting[]>>({});
     const [shipping, setShipping] = useState<ShippingProfile[]>([]);
     const [pricing, setPricing] = useState<PricingRule[]>([]);
@@ -161,6 +163,7 @@ export default function SettingsPage() {
         { key: 'channels' as const, label: 'Channels', icon: Link2 },
         { key: 'shipping' as const, label: 'Shipping', icon: Truck },
         { key: 'pricing' as const, label: 'Pricing', icon: DollarSign },
+        { key: 'account' as const, label: 'Account', icon: KeyRound },
     ];
 
     return (
@@ -416,6 +419,11 @@ export default function SettingsPage() {
                     {/* ─── Channels ─── */}
                     {tab === 'channels' && (
                         <ChannelConnectionsTab />
+                    )}
+
+                    {/* ─── Account ─── */}
+                    {tab === 'account' && (
+                        <ChangePasswordCard />
                     )}
                 </>
             )}
@@ -684,6 +692,113 @@ function AddPricingRuleForm({
                             Cancel
                         </button>
                     </div>
+                </form>
+            </CardContent>
+        </Card>
+    );
+}
+
+/* ─── Change Password ─── */
+
+function ChangePasswordCard() {
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        setMsg(null);
+
+        if (newPassword.length < 8) {
+            setMsg({ type: 'error', text: 'New password must be at least 8 characters.' });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setMsg({ type: 'error', text: 'Passwords do not match.' });
+            return;
+        }
+
+        setBusy(true);
+        const result = await changeOwnPassword(currentPassword, newPassword);
+        setBusy(false);
+
+        if ('error' in result) {
+            setMsg({ type: 'error', text: result.error });
+            return;
+        }
+
+        setMsg({ type: 'success', text: 'Password updated successfully.' });
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                    <KeyRound size={18} className="text-blue-400" />
+                    Change Password
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 max-w-md">
+                    {msg && (
+                        <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+                            msg.type === 'success'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        }`}>
+                            {msg.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                            {msg.text}
+                            <button type="button" onClick={() => setMsg(null)} className="ml-auto text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200">
+                                <X size={14} />
+                            </button>
+                        </div>
+                    )}
+                    <div>
+                        <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Current Password</label>
+                        <input
+                            type="password"
+                            required
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">New Password</label>
+                        <input
+                            type="password"
+                            required
+                            minLength={8}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-slate-700 dark:text-slate-300 mb-1">Confirm New Password</label>
+                        <input
+                            type="password"
+                            required
+                            minLength={8}
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={busy}
+                        className="flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
+                        style={{ backgroundColor: 'var(--brand-primary)' }}
+                    >
+                        {busy ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
+                        {busy ? 'Updating…' : 'Update Password'}
+                    </button>
                 </form>
             </CardContent>
         </Card>

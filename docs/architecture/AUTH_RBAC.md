@@ -34,6 +34,9 @@ Authorization: Bearer <jwt_token>
 - **Hashing**: bcrypt with 12 salt rounds
 - **Storage**: `passwordHash` column with `select: false`
 - **Comparison**: `bcrypt.compare()` in `AuthService.validateAndSign()`
+- **Self-service change**: `PATCH /api/auth/change-password` — authenticated users change their own password (requires current password verification)
+- **Admin reset**: `PATCH /api/rbac/users/:id/reset-password` — admin/super-admin resets any user's password (requires `users.reset_password` permission)
+- **Audit**: Both operations log to `audit_logs` (`auth.password_changed`, `auth.admin_password_reset`)
 
 ### Login Flow
 

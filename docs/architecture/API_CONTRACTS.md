@@ -33,6 +33,7 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 |--------|------|-------------|
 | GET | `/api/auth/me` | Current user profile + permissions |
 | POST | `/api/auth/logout` | Logout (client-side token discard) |
+| PATCH | `/api/auth/change-password` | Change current user password (requires currentPassword + newPassword) |
 | GET | `/api/auth/organizations` | List user's organizations |
 
 ### Auth Response Format
@@ -360,9 +361,9 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 |--------|------|-------------|------------|
 | GET | `/api/rbac/users` | List users | users.view |
 | POST | `/api/rbac/users` | Create user | users.create |
-| PUT | `/api/rbac/users/:id` | Update user | users.update |
-| DELETE | `/api/rbac/users/:id` | Deactivate user | users.deactivate |
-| POST | `/api/rbac/users/:id/reset-password` | Reset password | users.reset_password |
+| PATCH | `/api/rbac/users/:id/role` | Assign primary role | roles.assign |
+| PATCH | `/api/rbac/users/:id/deactivate` | Deactivate user | users.deactivate |
+| PATCH | `/api/rbac/users/:id/reset-password` | Admin reset user password | users.reset_password |
 
 ### Roles
 

@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -103,5 +104,40 @@ export class AuthService {
       accessToken,
       user: { id: saved.id, email: saved.email, name: saved.name, role: saved.role },
     };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId, active: true },
+      select: ['id', 'passwordHash'],
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await this.userRepo.update(userId, { passwordHash });
+  }
+
+  async adminResetPassword(userId: string, newPassword: string): Promise<void> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId, active: true },
+      select: ['id'],
+    });
+    if (!user) {
+      throw new ConflictException('User not found or inactive');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await this.userRepo.update(userId, { passwordHash });
   }
 }

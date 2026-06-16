@@ -1,4 +1,4 @@
-import { Global, Injectable, Module, OnModuleInit } from '@nestjs/common';
+import { forwardRef, Global, Injectable, Module, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Organization } from '../auth/entities/organization.entity.js';
 import { OrganizationMember } from '../auth/entities/organization-member.entity.js';
@@ -7,6 +7,7 @@ import { Permission } from './entities/permission.entity.js';
 import { RolePermission } from './entities/role-permission.entity.js';
 import { Role } from './entities/role.entity.js';
 import { UserRoleAssignment } from './entities/user-role-assignment.entity.js';
+import { AuthModule } from '../auth/auth.module.js';
 import { PermissionsGuard } from './guards/permissions.guard.js';
 import { RbacAdminController } from './rbac-admin.controller.js';
 import { RbacSeedService } from './rbac-seed.service.js';
@@ -24,6 +25,7 @@ class RbacBootstrap implements OnModuleInit {
 @Global()
 @Module({
   imports: [
+    forwardRef(() => AuthModule),
     TypeOrmModule.forFeature([
       Role,
       Permission,

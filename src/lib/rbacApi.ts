@@ -97,3 +97,31 @@ export async function deactivateUser(
   if ('error' in result) return result;
   return { ok: true };
 }
+
+export async function changeOwnPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: true } | { error: string }> {
+  const result = await rbacMutation(() =>
+    fetchWithAuth<unknown>('/api/auth/change-password', {
+      method: 'PATCH',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  );
+  if ('error' in result) return result;
+  return { ok: true };
+}
+
+export async function adminResetPassword(
+  userId: string,
+  newPassword: string,
+): Promise<{ ok: true } | { error: string }> {
+  const result = await rbacMutation(() =>
+    fetchWithAuth<unknown>(`/api/rbac/users/${userId}/reset-password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ newPassword }),
+    }),
+  );
+  if ('error' in result) return result;
+  return { ok: true };
+}

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Loader2, MoreHorizontal, UserPlus } from 'lucide-react';
+import { Loader2, MoreHorizontal, KeyRound, UserPlus } from 'lucide-react';
 import Can from '../auth/Can';
 import ProtectedRoute from '../auth/ProtectedRoute';
 import {
+  adminResetPassword,
   assignUserRole,
   createRbacUser,
   deactivateUser,
@@ -295,6 +296,8 @@ function EditRoleModal({
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
 
   const saveRole = async () => {
     setBusy(true);
@@ -322,6 +325,21 @@ function EditRoleModal({
     onSaved();
   };
 
+  const resetPassword = async () => {
+    if (newPassword.length < 8) return;
+    setBusy(true);
+    setErr(null);
+    setResetMsg(null);
+    const result = await adminResetPassword(user.id, newPassword);
+    setBusy(false);
+    if ('error' in result) {
+      setErr(result.error);
+      return;
+    }
+    setResetMsg('Password reset successfully.');
+    setNewPassword('');
+  };
+
   return (
     <Modal title={`Manage ${user.email}`} onClose={onClose}>
       <div className="space-y-4">
@@ -340,6 +358,33 @@ function EditRoleModal({
             ))}
           </select>
         </label>
+
+        <Can permission="users.reset_password">
+          <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Reset Password</p>
+            {resetMsg && <p className="text-sm text-emerald-400 mb-2">{resetMsg}</p>}
+            <div className="flex items-center gap-2">
+              <input
+                type="password"
+                placeholder="New password (min 8 chars)"
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="flex-1 rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                disabled={busy || newPassword.length < 8}
+                onClick={() => void resetPassword()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white rounded-md disabled:opacity-50 bg-amber-600 hover:bg-amber-700"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                Reset
+              </button>
+            </div>
+          </div>
+        </Can>
+
         <div className="flex flex-wrap justify-between gap-2 pt-2">
           <Can permission="users.deactivate">
             {user.active && (
