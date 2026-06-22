@@ -6,6 +6,13 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Fixed
+- **Pipeline listing upsert:** Raw SQL upsert in `saveMarketplaceToCatalog` was missing
+  the `version` column (`@VersionColumn`), causing every listing record insert to fail
+  with "null value in column 'version' violates not-null constraint".
+- **Pipeline listing upsert:** Backfilled `pipeline_job_id` on existing listing records
+  for completed pipeline jobs that had 0 listing records due to previous `orIgnore()` behavior.
+
 ### Added
 - **Password management:** Users can change their own password via `PATCH /api/auth/change-password` (Settings → Account tab). Admins/super-admins can reset any user's password via `PATCH /api/rbac/users/:id/reset-password` using the `users.reset_password` permission (Users admin → Manage user modal). Both actions are audit-logged.
 - **Multi-user Phase 3 (testing/observability):** Concurrency unit tests for job visibility, scheduler leader, heavy job limiter, and listing version conflicts; k6 baseline script; `GET /api/health/runtime`; global `X-Response-Time-Ms` header and slow-request logging (`SLOW_REQUEST_MS`).
