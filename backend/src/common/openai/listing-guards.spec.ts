@@ -19,7 +19,7 @@ describe('applyListingGuards', () => {
           { year: '2008', make: 'Mercedes-Benz', model: 'C350' },
         ],
       },
-      { partNumber: '123', donorMake: 'mercedes' },
+      { partNumber: '123', donorMake: 'mercedes' } as { partNumber?: string },
     );
     expect(item.compatibility).toHaveLength(1);
   });

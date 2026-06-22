@@ -78,7 +78,7 @@ describe('CatalogPublishResolverService', () => {
       sku: 'BLA-17856',
       title: 'Existing',
       imageUrls: [],
-    } as CatalogProduct;
+    } as unknown as CatalogProduct;
     const { service, catalogRepo } = makeService({
       catalogProduct: emptyCatalog,
     });

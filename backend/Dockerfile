@@ -41,4 +41,4 @@ RUN mkdir -p uploads/catalog
 
 EXPOSE 4191
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]

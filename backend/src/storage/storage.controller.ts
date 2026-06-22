@@ -17,7 +17,7 @@ import type { Queue } from 'bullmq';
 import { IsNull, Not, Repository } from 'typeorm';
 import { ImageAsset } from './entities/image-asset.entity.js';
 import { StorageService } from './storage.service.js';
-import { RequestUploadDto } from './dto/request-upload.dto.js';
+import { BulkRequestUploadDto, RequestUploadDto } from './dto/request-upload.dto.js';
 import { UpdateAssetDto } from './dto/image-transform.dto.js';
 import type { ThumbnailJobData } from './processors/thumbnail.processor.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
@@ -165,7 +165,7 @@ export class StorageController {
   @RequirePermissions('storage.upload')
   @ApiOperation({ summary: 'Generate multiple pre-signed upload URLs' })
   async getBulkUploadUrls(
-    @Body() body: { files: Array<{ filename: string; mimeType: string }>; listingId?: string },
+    @Body() body: BulkRequestUploadDto,
   ) {
     const results = await this.storageService.generateBulkUploadUrls(
       body.files,

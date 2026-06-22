@@ -1,4 +1,5 @@
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] as const;
 
@@ -27,5 +28,8 @@ export class BulkRequestUploadDto {
   @IsString()
   listingId?: string;
 
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RequestUploadDto)
   files!: RequestUploadDto[];
 }
