@@ -16,6 +16,7 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Job attribution:** Pipeline, ingestion, and catalog-import uploads record `createdBy` from JWT; review endpoints record reviewer id.
 
 ### Fixed
+- **Pipeline listing records not saved to catalog:** `orIgnore()` on listing record inserts silently skipped all rows when `customLabelSku` already existed in `listing_records` (due to `idx_listing_sku_unique_active` partial unique index). Replaced with raw SQL upsert (`ON CONFLICT ("customLabelSku") WHERE ... DO UPDATE SET`) to properly update existing records with the new `pipeline_job_id`.
 - **Multi-user P1.3:** `createdBy` wired on all job creation/mutation paths (ingestion, pipeline, catalog-import start/retry/cancel, motors product create, fitment bulk-import queue); legacy null `createdBy` backfilled on retry/cancel/start; review reject records `reviewedBy`.
 - **Multi-user Phase 1:** Partial unique index on active listing SKUs; pessimistic lock + retry on create; `version` required for PATCH status and optional per-id in bulk update; ingestion/pipeline/catalog job lists scoped by `createdBy` (admins with `users.view` see all).
 - **Security:** Removed DEBUG JWT/secret logging from auth module and JWT strategy.

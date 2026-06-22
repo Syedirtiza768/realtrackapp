@@ -806,25 +806,78 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       if (listingRecords.length > 0) {
         const CHUNK = 500;
         let totalInserted = 0;
+        // Map entity property names → DB column names (pipeline_job_id uses explicit name)
+        const PROP_TO_COL: Record<string, string> = {
+          sourceFileName: 'sourceFileName',
+          sourceFilePath: 'sourceFilePath',
+          sheetName: 'sheetName',
+          sourceRowNumber: 'sourceRowNumber',
+          action: 'action',
+          customLabelSku: 'customLabelSku',
+          categoryId: 'categoryId',
+          categoryName: 'categoryName',
+          title: 'title',
+          startPrice: 'startPrice',
+          startPriceNum: 'startPriceNum',
+          quantity: 'quantity',
+          quantityNum: 'quantityNum',
+          itemPhotoUrl: 'itemPhotoUrl',
+          conditionId: 'conditionId',
+          description: 'description',
+          format: 'format',
+          duration: 'duration',
+          location: 'location',
+          shippingProfileName: 'shippingProfileName',
+          returnProfileName: 'returnProfileName',
+          paymentProfileName: 'paymentProfileName',
+          cBrand: 'cBrand',
+          cType: 'cType',
+          cFeatures: 'cFeatures',
+          cManufacturerPartNumber: 'cManufacturerPartNumber',
+          cOeOemPartNumber: 'cOeOemPartNumber',
+          extractedMake: 'extractedMake',
+          extractedModel: 'extractedModel',
+          pipelineJobId: 'pipeline_job_id',
+          marketplace: 'marketplace',
+        };
+        const ALL_COLS = Object.values(PROP_TO_COL); // all columns for INSERT / UPDATE on conflict
+
         for (let i = 0; i < listingRecords.length; i += CHUNK) {
           try {
-            const result = await this.listingRepo
-              .createQueryBuilder()
-              .insert()
-              .into(ListingRecord)
-              .values(listingRecords.slice(i, i + CHUNK))
-              .orIgnore()
-              .execute();
-            const affected = result.raw?.length ?? 0;
-            totalInserted += affected;
+            const batch = listingRecords.slice(i, i + CHUNK);
+            // Build parameterised INSERT … ON CONFLICT DO UPDATE
+            const values: unknown[] = [];
+            const rowsSql: string[] = [];
+            let paramIdx = 0;
+            for (const lr of batch) {
+              const rowParams: string[] = [];
+              for (const [prop, col] of Object.entries(PROP_TO_COL)) {
+                paramIdx++;
+                rowParams.push(`$${paramIdx}`);
+                values.push((lr as Record<string, unknown>)[prop] ?? null);
+              }
+              rowsSql.push(`(${rowParams.join(', ')})`);
+            }
+            const colList = ALL_COLS.map(c => `"${c}"`).join(', ');
+            const updateSet = ALL_COLS.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ');
+            const sql = `
+              INSERT INTO "listing_records" (${colList})
+              VALUES ${rowsSql.join(',\n')}
+              ON CONFLICT ("customLabelSku")
+              WHERE ("customLabelSku" IS NOT NULL) AND ("deletedAt" IS NULL)
+              DO UPDATE SET ${updateSet}
+              RETURNING id
+            `;
+            const result = await this.listingRepo.query(sql, values);
+            totalInserted += (result?.length ?? 0);
           } catch (insertErr) {
             this.logger.error(
-              `Job ${jobId} [${marketplace}]: Listing batch insert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
+              `Job ${jobId} [${marketplace}]: Listing batch upsert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
             );
           }
         }
         this.logger.log(
-          `Job ${jobId} [${marketplace}]: Attempted ${listingRecords.length} listing records, inserted ${totalInserted}`,
+          `Job ${jobId} [${marketplace}]: Attempted ${listingRecords.length} listing records, upserted ${totalInserted}`,
         );
       } else {
         this.logger.warn(`Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`);
