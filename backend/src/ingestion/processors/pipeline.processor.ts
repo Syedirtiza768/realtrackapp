@@ -748,6 +748,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       for (const lr of listingRecords) {
         (lr as any).pipelineJobId = jobId;
         (lr as any).marketplace = marketplace;
+        (lr as any).version = 1;
       }
 
       for (const [idx, fitments] of compatibilities) {
@@ -839,6 +840,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           extractedModel: 'extractedModel',
           pipelineJobId: 'pipeline_job_id',
           marketplace: 'marketplace',
+          version: 'version',
         };
         const ALL_COLS = Object.values(PROP_TO_COL); // all columns for INSERT / UPDATE on conflict
 
