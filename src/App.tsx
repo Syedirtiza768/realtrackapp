@@ -42,6 +42,7 @@ import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import EbayOAuthCallback from './components/channels/EbayOAuthCallback';
+import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import VinListingsPage from './components/fitment/VinListingsPage';
 import ClientSettingsPage from './components/settings/ClientSettingsPage';
 import UsersAdminPage from './components/settings/UsersAdminPage';
@@ -61,6 +62,7 @@ function App() {
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/channels/ebay/callback" element={<EbayOAuthCallback />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
 
                 {/* App routes (with Shell) */}
                 <Route path="*" element={
