@@ -1,5 +1,6 @@
 ﻿import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,6 +22,10 @@ import { ListingRevision } from './listing-revision.entity';
 import { extractMakeModelFromTitle } from './utils/extract-make-model-from-title.js';
 
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
+import { RbacService } from '../rbac/rbac.service.js';
+import { StoreAccessService } from '../channels/store-access.service.js';
+import { User } from '../auth/entities/user.entity.js';
 
 /**
  * Maps each Excel header text (normalized to lowercase) to the
@@ -208,12 +213,16 @@ export class ListingsService {
     private readonly revisionRepo: Repository<ListingRevision>,
     @InjectRepository(CatalogProduct)
     private readonly catalogProductRepo: Repository<CatalogProduct>,
+    @InjectRepository(ListingActionLog)
+    private readonly actionLogRepo: Repository<ListingActionLog>,
     private readonly dataSource: DataSource,
+    private readonly rbac: RbacService,
+    private readonly storeAccess: StoreAccessService,
   ) {}
 
   /* ── Query methods ──────────────────────────────────────── */
 
-  async findAll(query: ListingsQueryDto) {
+  async findAll(query: ListingsQueryDto, user?: User) {
     const limit = Math.min(Number(query.limit ?? 60), 200);
     const offset = Number(query.offset ?? 0);
 
@@ -243,6 +252,12 @@ export class ListingsService {
       .addOrderBy('r.id', 'ASC')
       .offset(offset)
       .limit(limit);
+
+    // ── Store-level access filter ──
+    const storeFilter = await this.buildStoreFilter(user);
+    if (storeFilter) {
+      qb.andWhere(storeFilter.sql, storeFilter.params);
+    }
 
     if (query.search?.trim()) {
       qb.andWhere(
@@ -301,11 +316,28 @@ export class ListingsService {
     return { total, limit, offset, items };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: User) {
     const record = await this.listingRepo.findOne({ where: { id } });
     if (!record) {
       throw new NotFoundException(`Listing ${id} not found`);
     }
+
+    // ── Store access check ──
+    const storeFilter = await this.buildStoreFilter(user);
+    if (storeFilter && storeFilter.sql !== '1=0') {
+      const hasAccess = await this.listingRepo
+        .createQueryBuilder('r')
+        .select('r.id')
+        .where('r.id = :id', { id })
+        .andWhere(storeFilter.sql, storeFilter.params)
+        .getExists();
+      if (!hasAccess) {
+        throw new NotFoundException(`Listing ${id} not found`);
+      }
+    } else if (storeFilter && storeFilter.sql === '1=0') {
+      throw new NotFoundException(`Listing ${id} not found`);
+    }
+
     let catalogProduct: CatalogProduct | null = null;
     if (record.customLabelSku) {
       catalogProduct = await this.catalogProductRepo.findOneBy({ sku: record.customLabelSku });
@@ -408,7 +440,7 @@ export class ListingsService {
     });
   }
 
-  async update(id: string, dto: UpdateListingDto) {
+  async update(id: string, dto: UpdateListingDto, user?: User) {
     return this.dataSource.transaction(async (em) => {
       const listing = await em.findOne(ListingRecord, { where: { id } });
       if (!listing) throw new NotFoundException(`Listing ${id} not found`);
@@ -421,28 +453,72 @@ export class ListingsService {
         });
       }
 
+      // ── Role-based checks (skip for system-internal calls) ──
+      if (user) {
+        const userPerms = await this.rbac.getPermissionKeysForUser(user.id);
+        const canRevise = userPerms.has('listings.revise');
+        const canPriceOverride = userPerms.has('listings.price_override');
+
+        if (listing.status === 'published' && !canRevise) {
+          throw new ForbiddenException(
+            'You do not have permission to revise published listings.',
+          );
+        }
+
+        // Price change on a published listing requires price_override
+        const priceFields = ['startPrice', 'buyItNowPrice', 'bestOfferAutoAcceptPrice', 'minimumBestOfferPrice'] as const;
+        const hasPriceChange = priceFields.some(
+          (f) => (dto as unknown as Record<string, unknown>)[f] !== undefined,
+        );
+        if (listing.status === 'published' && hasPriceChange && !canPriceOverride) {
+          throw new ForbiddenException(
+            'Changing price on a live listing requires manager approval.',
+          );
+        }
+      }
+
       const oldStatus = listing.status;
+      const beforeSnapshot = { ...listing } as Record<string, unknown>;
       const { version: _v, ...changes } = dto;
       Object.assign(listing, changes);
+      if (user) listing.updatedBy = user.id;
 
       const saved = await em.save(ListingRecord, listing);
+
+      const afterSnapshot = { ...saved } as Record<string, unknown>;
 
       const revision = em.create(ListingRevision, {
         listingId: id,
         version: saved.version,
         statusBefore: oldStatus,
         statusAfter: saved.status,
-        snapshot: { ...saved } as unknown as Record<string, unknown>,
+        snapshot: afterSnapshot,
         changeReason: 'manual_edit',
-        changedBy: null,
+        changedBy: user?.id ?? null,
       });
       await em.save(ListingRevision, revision);
+
+      // ── Audit log entry (user-initiated only) ──
+      if (user) {
+        const diff = this.computeDiff(beforeSnapshot, afterSnapshot);
+        if (Object.keys(diff).length > 0) {
+          const actionLog = this.actionLogRepo.create({
+            organizationId: saved.organizationId ?? undefined,
+            userId: user.id,
+            action: 'listing.updated',
+            beforeSnapshot: beforeSnapshot,
+            afterSnapshot: afterSnapshot,
+            result: 'success',
+          });
+          await this.actionLogRepo.save(actionLog);
+        }
+      }
 
       return { listing: saved, revision };
     });
   }
 
-  async patchStatus(id: string, dto: PatchStatusDto) {
+  async patchStatus(id: string, dto: PatchStatusDto, user?: User) {
     return this.dataSource.transaction(async (em) => {
       const listing = await em.findOne(ListingRecord, { where: { id } });
       if (!listing) throw new NotFoundException(`Listing ${id} not found`);
@@ -455,24 +531,54 @@ export class ListingsService {
         });
       }
 
+      // ── Approve check: draft/ready → published requires listings.approve ──
+      if (
+        user &&
+        dto.status === 'published' &&
+        listing.status !== 'published'
+      ) {
+        const canApprove = await this.rbac.userHasPermission(user.id, 'listings.approve');
+        if (!canApprove) {
+          throw new ForbiddenException(
+            'You do not have permission to approve listings for publication.',
+          );
+        }
+      }
+
       const oldStatus = listing.status;
+      const beforeSnapshot = { ...listing } as Record<string, unknown>;
       listing.status = dto.status;
+      if (user) listing.updatedBy = user.id;
       if (dto.status === 'published' && !listing.publishedAt) {
         listing.publishedAt = new Date();
       }
 
       const saved = await em.save(ListingRecord, listing);
+      const afterSnapshot = { ...saved } as Record<string, unknown>;
 
       const revision = em.create(ListingRevision, {
         listingId: id,
         version: saved.version,
         statusBefore: oldStatus,
         statusAfter: dto.status,
-        snapshot: { ...saved } as unknown as Record<string, unknown>,
+        snapshot: afterSnapshot,
         changeReason: dto.reason ?? 'status_change',
-        changedBy: null,
+        changedBy: user?.id ?? null,
       });
       await em.save(ListingRevision, revision);
+
+      // ── Audit log entry (user-initiated only) ──
+      if (user) {
+        const actionLog = this.actionLogRepo.create({
+          organizationId: saved.organizationId ?? undefined,
+          userId: user.id,
+          action: `listing.status_changed:${oldStatus}→${dto.status}`,
+          beforeSnapshot: beforeSnapshot,
+          afterSnapshot: afterSnapshot,
+          result: 'success',
+        });
+        await this.actionLogRepo.save(actionLog);
+      }
 
       return { listing: saved, revision };
     });
@@ -540,7 +646,7 @@ export class ListingsService {
     return { deleted: listings.length };
   }
 
-  async exportCsv(query: SearchQueryDto): Promise<string> {
+  async exportCsv(query: SearchQueryDto, user?: User): Promise<string> {
     const qb = this.listingRepo
       .createQueryBuilder('r')
       .select([
@@ -552,6 +658,9 @@ export class ListingsService {
       ])
       .orderBy('r.importedAt', 'DESC')
       .limit(10000);
+
+    const storeFilter = await this.buildStoreFilter(user);
+    if (storeFilter) qb.andWhere(storeFilter.sql, storeFilter.params);
 
     if (query.q?.trim()) {
       qb.andWhere(
@@ -607,18 +716,31 @@ export class ListingsService {
     return { total, revisions };
   }
 
-  async getSummary() {
-    const totalRecords = await this.listingRepo.count();
+  async getSummary(user?: User) {
+    const storeFilter = await this.buildStoreFilter(user);
 
-    const uniqueRow = await this.listingRepo
-      .createQueryBuilder('r')
-      .select('COUNT(DISTINCT r.customLabelSku)', 'uniqueSkus')
-      .getRawOne<{ uniqueSkus: string }>();
+    if (storeFilter && storeFilter.sql === '1=0') {
+      return { totalRecords: 0, uniqueSkus: 0, files: 0 };
+    }
 
-    const fileRow = await this.listingRepo
+    // totalRecords
+    const qb = this.listingRepo.createQueryBuilder('r');
+    if (storeFilter) qb.andWhere(storeFilter.sql, storeFilter.params);
+    const totalRecords = await qb.getCount();
+
+    // uniqueSkus
+    const skuQb = this.listingRepo
       .createQueryBuilder('r')
-      .select('COUNT(DISTINCT r.sourceFileName)', 'files')
-      .getRawOne<{ files: string }>();
+      .select('COUNT(DISTINCT r.customLabelSku)', 'uniqueSkus');
+    if (storeFilter) skuQb.where(storeFilter.sql, storeFilter.params);
+    const uniqueRow = await skuQb.getRawOne<{ uniqueSkus: string }>();
+
+    // files
+    const fileQb = this.listingRepo
+      .createQueryBuilder('r')
+      .select('COUNT(DISTINCT r.sourceFileName)', 'files');
+    if (storeFilter) fileQb.where(storeFilter.sql, storeFilter.params);
+    const fileRow = await fileQb.getRawOne<{ files: string }>();
 
     return {
       totalRecords,
@@ -628,45 +750,49 @@ export class ListingsService {
   }
 
   /** Returns distinct values for filter dropdowns. */
-  async getFacets() {
-    const brandsRaw = await this.listingRepo
+  async getFacets(user?: User) {
+    const storeFilter = await this.buildStoreFilter(user);
+
+    const brandsQb = this.listingRepo
       .createQueryBuilder('r')
       .select('r.cBrand', 'value')
       .addSelect('COUNT(*)', 'count')
       .where("r.cBrand IS NOT NULL AND r.cBrand != ''")
-      .groupBy('r.cBrand')
-      .orderBy('count', 'DESC')
-      .limit(100)
-      .getRawMany<{ value: string; count: string }>();
+      .groupBy('r.cBrand');
+    if (storeFilter) brandsQb.andWhere(storeFilter.sql, storeFilter.params);
+    brandsQb.orderBy('count', 'DESC').limit(100);
+    const brandsRaw = await brandsQb.getRawMany<{ value: string; count: string }>();
 
-    const categoriesRaw = await this.listingRepo
+    const categoriesQb = this.listingRepo
       .createQueryBuilder('r')
       .select('r.categoryName', 'value')
       .addSelect('r.categoryId', 'id')
       .addSelect('COUNT(*)', 'count')
       .where("r.categoryName IS NOT NULL AND r.categoryName != ''")
       .groupBy('r.categoryName')
-      .addGroupBy('r.categoryId')
-      .orderBy('count', 'DESC')
-      .limit(100)
-      .getRawMany<{ value: string; id: string; count: string }>();
+      .addGroupBy('r.categoryId');
+    if (storeFilter) categoriesQb.andWhere(storeFilter.sql, storeFilter.params);
+    categoriesQb.orderBy('count', 'DESC').limit(100);
+    const categoriesRaw = await categoriesQb.getRawMany<{ value: string; id: string; count: string }>();
 
-    const conditionsRaw = await this.listingRepo
+    const conditionsQb = this.listingRepo
       .createQueryBuilder('r')
       .select('r.conditionId', 'value')
       .addSelect('COUNT(*)', 'count')
       .where("r.conditionId IS NOT NULL AND r.conditionId != ''")
-      .groupBy('r.conditionId')
-      .orderBy('count', 'DESC')
-      .getRawMany<{ value: string; count: string }>();
+      .groupBy('r.conditionId');
+    if (storeFilter) conditionsQb.andWhere(storeFilter.sql, storeFilter.params);
+    conditionsQb.orderBy('count', 'DESC');
+    const conditionsRaw = await conditionsQb.getRawMany<{ value: string; count: string }>();
 
-    const sourceFilesRaw = await this.listingRepo
+    const sourceFilesQb = this.listingRepo
       .createQueryBuilder('r')
       .select('r.sourceFileName', 'value')
       .addSelect('COUNT(*)', 'count')
-      .groupBy('r.sourceFileName')
-      .orderBy('count', 'DESC')
-      .getRawMany<{ value: string; count: string }>();
+      .groupBy('r.sourceFileName');
+    if (storeFilter) sourceFilesQb.andWhere(storeFilter.sql, storeFilter.params);
+    sourceFilesQb.orderBy('count', 'DESC');
+    const sourceFilesRaw = await sourceFilesQb.getRawMany<{ value: string; count: string }>();
 
     return {
       brands: brandsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
@@ -812,6 +938,21 @@ export class ListingsService {
 
   /* ── Private helpers ────────────────────────────────────── */
 
+  /** Store filter: returns { sql, params } or null if no filtering needed */
+  private async buildStoreFilter(user?: User): Promise<{ sql: string; params: Record<string, string[]> } | null> {
+    const storeIds = await this.storeAccess.resolveStoreFilter(user);
+    if (storeIds === undefined) return null; // accessAll or no user
+    if (storeIds.length === 0) {
+      // No accessible stores — use impossible condition
+      return { sql: '1=0', params: { storeIds: [] } };
+    }
+    return {
+      sql: `(r.id IN (SELECT lci.listing_id FROM listing_channel_instances lci WHERE lci.store_id IN (:...storeIds))
+            OR r.id NOT IN (SELECT lci.listing_id FROM listing_channel_instances lci))`,
+      params: { storeIds },
+    };
+  }
+
   /** Upsert a batch of partial records using ON CONFLICT */
   private async upsertBatch(batch: Partial<ListingRecord>[]) {
     await this.listingRepo
@@ -889,5 +1030,34 @@ export class ListingsService {
       return null;
     }
     return str;
+  }
+
+  /** Compute field-level diff between two snapshots for audit logging */
+  private computeDiff(
+    before: Record<string, unknown>,
+    after: Record<string, unknown>,
+  ): Record<string, { from: unknown; to: unknown }> {
+    const diff: Record<string, { from: unknown; to: unknown }> = {};
+    const tracked = new Set([
+      'title', 'startPrice', 'quantity', 'description', 'conditionId',
+      'buyItNowPrice', 'bestOfferEnabled', 'bestOfferAutoAcceptPrice',
+      'minimumBestOfferPrice', 'format', 'duration', 'location',
+      'shippingService1Option', 'shippingService1Cost', 'shippingService2Option',
+      'shippingService2Cost', 'maxDispatchTime', 'returnsAcceptedOption',
+      'returnsWithinOption', 'refundOption', 'returnShippingCostPaidBy',
+      'shippingProfileName', 'returnProfileName', 'paymentProfileName',
+      'cBrand', 'cType', 'customLabelSku', 'categoryId', 'categoryName',
+      'itemPhotoUrl', 'startPriceNum', 'quantityNum', 'buyItNowPriceNum',
+      'bestOfferAutoAcceptPriceNum', 'minimumBestOfferPriceNum',
+      'shippingService1CostNum', 'shippingService2CostNum',
+    ]);
+    for (const key of tracked) {
+      const fromVal = before[key];
+      const toVal = after[key];
+      if (JSON.stringify(fromVal) !== JSON.stringify(toVal)) {
+        diff[key] = { from: fromVal, to: toVal };
+      }
+    }
+    return diff;
   }
 }

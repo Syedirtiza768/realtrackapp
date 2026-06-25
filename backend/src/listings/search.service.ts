@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { ListingRecord } from './listing-record.entity';
+import { StoreAccessService } from '../channels/store-access.service.js';
+import { User } from '../auth/entities/user.entity.js';
 
 /* ── Simple in-memory cache ───────────────────────────────── */
 interface CacheEntry<T> {
@@ -142,6 +144,7 @@ export class SearchService {
   constructor(
     @InjectRepository(ListingRecord)
     private readonly repo: Repository<ListingRecord>,
+    private readonly storeAccess: StoreAccessService,
   ) {}
 
   /* ──────────────────────────────────────────────────────────
@@ -149,7 +152,7 @@ export class SearchService {
    * Combines: FTS ranking, exact SKU boost, fuzzy fallback,
    *           multi-select filters, range filters, sorting
    * ──────────────────────────────────────────────────────── */
-  async search(dto: SearchQueryDto): Promise<SearchResult> {
+  async search(dto: SearchQueryDto, user?: User): Promise<SearchResult> {
     const start = Date.now();
     const limit = Math.min(Number(dto.limit ?? 60), 200);
     const offset = Number(dto.offset ?? 0);
@@ -283,6 +286,19 @@ export class SearchService {
       qb.andWhere(`r."startPrice" IS NOT NULL AND r."startPrice" != ''`);
     }
 
+    /* -- Store-level access filter ------------------------------ */
+    const storeIds = await this.storeAccess.resolveStoreFilter(user);
+    if (storeIds !== undefined) {
+      if (storeIds.length === 0) {
+        return { total: 0, limit, offset, nextCursor: null, queryTimeMs: Date.now() - start, items: [] };
+      }
+      qb.andWhere(
+        `(r.id IN (SELECT lci.listing_id FROM listing_channel_instances lci WHERE lci.store_id IN (:...searchStoreIds))
+          OR r.id NOT IN (SELECT lci.listing_id FROM listing_channel_instances lci))`,
+        { searchStoreIds: storeIds },
+      );
+    }
+
     /* -- Sorting ----------------------------------------------- */
     const sort = dto.sort ?? (hasQuery ? 'relevance' : 'newest');
     switch (sort) {
@@ -381,18 +397,28 @@ export class SearchService {
    * Returns ranked suggestions from SKUs, titles, brands,
    * categories, and MPNs.
    * ──────────────────────────────────────────────────────── */
-  async suggest(q: string, limitNum = 10): Promise<SuggestionResult> {
+  async suggest(q: string, limitNum = 10, user?: User): Promise<SuggestionResult> {
     const start = Date.now();
     const term = q.trim();
     if (!term) return { suggestions: [], queryTimeMs: 0 };
 
     const maxPerType = Math.ceil(limitNum / 3);
 
+    // Pre-compute store filter for suggest queries
+    const sf = await this.buildStoreFilterSql(user);
+
+    const applyStoreFilter = (qb: SelectQueryBuilder<ListingRecord>): SelectQueryBuilder<ListingRecord> => {
+      if (sf) qb.andWhere(sf.sql, sf.params);
+      return qb;
+    };
+
+    // Helper: create suggest query with store filter applied
+    const suggestQb = () => applyStoreFilter(this.repo.createQueryBuilder('r'));
+
     // Run all suggestion queries in parallel
     const [skus, titles, brands, categories, mpns] = await Promise.all([
       // Exact / prefix SKU matches (highest priority)
-      this.repo
-        .createQueryBuilder('r')
+      suggestQb()
         .select('r."customLabelSku"', 'value')
         .addSelect('COUNT(*)', 'count')
         .addSelect(`similarity(r."customLabelSku", :q)`, 'score')
@@ -409,8 +435,7 @@ export class SearchService {
         .getRawMany<{ value: string; count: string; score: string }>(),
 
       // Title matches via FTS
-      this.repo
-        .createQueryBuilder('r')
+      suggestQb()
         .select('r.title', 'value')
         .addSelect('COUNT(*)', 'count')
         .addSelect(
@@ -426,8 +451,7 @@ export class SearchService {
         .getRawMany<{ value: string; count: string; score: string }>(),
 
       // Brand matches (trigram)
-      this.repo
-        .createQueryBuilder('r')
+      suggestQb()
         .select('r."cBrand"', 'value')
         .addSelect('COUNT(*)', 'count')
         .addSelect(`similarity(r."cBrand", :q)`, 'score')
@@ -443,8 +467,7 @@ export class SearchService {
         .getRawMany<{ value: string; count: string; score: string }>(),
 
       // Category name matches
-      this.repo
-        .createQueryBuilder('r')
+      suggestQb()
         .select('r."categoryName"', 'value')
         .addSelect('r."categoryId"', 'id')
         .addSelect('COUNT(*)', 'count')
@@ -462,8 +485,7 @@ export class SearchService {
         .getRawMany<{ value: string; id: string; count: string; score: string }>(),
 
       // MPN matches
-      this.repo
-        .createQueryBuilder('r')
+      suggestQb()
         .select('r."cManufacturerPartNumber"', 'value')
         .addSelect('COUNT(*)', 'count')
         .addSelect(`similarity(r."cManufacturerPartNumber", :q)`, 'score')
@@ -530,7 +552,7 @@ export class SearchService {
    * DYNAMIC FACETS — counts that reflect current filters/query
    * Cached for 30s per unique query to avoid repeated heavy queries
    * ──────────────────────────────────────────────────────── */
-  async dynamicFacets(dto: SearchQueryDto): Promise<DynamicFacets> {
+  async dynamicFacets(dto: SearchQueryDto, user?: User): Promise<DynamicFacets> {
     // Check facet cache first (30s TTL)
     const cacheKey = `facets:${JSON.stringify(dto)}`;
     const cached = this.facetCache.get<DynamicFacets>(cacheKey);
@@ -539,6 +561,9 @@ export class SearchService {
     const start = Date.now();
     const q = dto.q?.trim() || '';
     const hasQuery = q.length > 0;
+
+    // Pre-compute store filter for dynamic facets
+    const storeFilter = await this.buildStoreFilterSql(user);
 
     // Build base WHERE — same text-match rules as SearchService.search (FTS + SKU + ILIKE when vector null)
     const buildBaseQb = () => {
@@ -588,6 +613,7 @@ export class SearchService {
       if (dto.maxPrice != null) {
         base.andWhere(`${SAFE_PRICE} <= :maxPrice`, { maxPrice: dto.maxPrice });
       }
+      if (storeFilter) base.andWhere(storeFilter.sql, storeFilter.params);
       return base;
     };
 
@@ -818,6 +844,21 @@ export class SearchService {
   }
 
   /* ── Private: apply multi-select filters to any QueryBuilder ── */
+  
+  /** Build store filter SQL + params, or null if no filtering needed */
+  private async buildStoreFilterSql(user?: User): Promise<{ sql: string; params: Record<string, string[]> } | null> {
+    const storeIds = await this.storeAccess.resolveStoreFilter(user);
+    if (storeIds === undefined) return null; // accessAll or no user
+    if (storeIds.length === 0) {
+      return { sql: '1=0', params: { storeIds: [] } };
+    }
+    return {
+      sql: `(r.id IN (SELECT lci.listing_id FROM listing_channel_instances lci WHERE lci.store_id IN (:...storeIds))
+            OR r.id NOT IN (SELECT lci.listing_id FROM listing_channel_instances lci))`,
+      params: { storeIds },
+    };
+  }
+
   private applyMultiFilters(
     qb: SelectQueryBuilder<ListingRecord>,
     dto: SearchQueryDto,

@@ -12,6 +12,7 @@ import {
   type RbacRole,
   type RbacUser,
 } from '../../lib/rbacApi';
+import StoreAccessPanel from './StoreAccessPanel';
 
 export default function UsersAdminPage() {
   return (
@@ -167,7 +168,7 @@ function Modal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-900 p-6 shadow-xl"
+        className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{title}</h3>
@@ -383,6 +384,10 @@ function EditRoleModal({
               </button>
             </div>
           </div>
+        </Can>
+
+        <Can permission="stores.assign">
+          <StoreAccessPanel userId={user.id} />
         </Can>
 
         <div className="flex flex-wrap justify-between gap-2 pt-2">

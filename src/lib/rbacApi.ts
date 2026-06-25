@@ -125,3 +125,69 @@ export async function adminResetPassword(
   if ('error' in result) return result;
   return { ok: true };
 }
+
+/* ── Store-level access ─────────────────────────────────── */
+
+export type StoreBrief = {
+  id: string;
+  storeName: string;
+};
+
+export type StoreAssignment = {
+  id: string;
+  userId: string;
+  storeId: string;
+  accessLevel: 'view' | 'operate' | 'admin';
+  createdAt: string;
+  store?: StoreBrief;
+};
+
+export async function listStores(): Promise<StoreBrief[]> {
+  return fetchWithAuth<StoreBrief[]>('/api/stores');
+}
+
+export async function getUserStoreAssignments(userId: string): Promise<{ assignments: StoreAssignment[] }> {
+  return fetchWithAuth<{ assignments: StoreAssignment[] }>(`/api/store-access/users/${userId}`);
+}
+
+export async function assignUserToStore(
+  userId: string,
+  storeId: string,
+  accessLevel: string,
+): Promise<{ ok: true } | { error: string }> {
+  const result = await rbacMutation(() =>
+    fetchWithAuth<unknown>('/api/store-access/assign', {
+      method: 'POST',
+      body: JSON.stringify({ userId, storeId, accessLevel }),
+    }),
+  );
+  if ('error' in result) return result;
+  return { ok: true };
+}
+
+export async function removeUserFromStore(
+  userId: string,
+  storeId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const result = await rbacMutation(() =>
+    fetchWithAuth<unknown>(`/api/store-access/assign/${userId}/${storeId}`, {
+      method: 'DELETE',
+    }),
+  );
+  if ('error' in result) return result;
+  return { ok: true };
+}
+
+export async function setUserAccessAll(
+  userId: string,
+  enabled: boolean,
+): Promise<{ ok: true } | { error: string }> {
+  const result = await rbacMutation(() =>
+    fetchWithAuth<unknown>(`/api/store-access/access-all/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+  );
+  if ('error' in result) return result;
+  return { ok: true };
+}

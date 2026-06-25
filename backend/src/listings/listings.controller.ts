@@ -20,6 +20,8 @@ import { UpdateListingDto } from './dto/update-listing.dto';
 import { ListingsService } from './listings.service';
 import { SearchService } from './search.service';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
 
 @Controller('listings')
 export class ListingsController {
@@ -32,8 +34,8 @@ export class ListingsController {
 
   @Get('search')
   @RequirePermissions('listings.view')
-  search(@Query() query: SearchQueryDto) {
-    return this.searchService.search(query);
+  search(@Query() query: SearchQueryDto, @CurrentUser() user: User) {
+    return this.searchService.search(query, user);
   }
 
   @Get('search/suggest')
@@ -41,14 +43,15 @@ export class ListingsController {
   suggest(
     @Query('q') q: string,
     @Query('limit') limit?: string,
+    @CurrentUser() user?: User,
   ) {
-    return this.searchService.suggest(q ?? '', Number(limit) || 10);
+    return this.searchService.suggest(q ?? '', Number(limit) || 10, user);
   }
 
   @Get('search/facets')
   @RequirePermissions('listings.view')
-  dynamicFacets(@Query() query: SearchQueryDto) {
-    return this.searchService.dynamicFacets(query);
+  dynamicFacets(@Query() query: SearchQueryDto, @CurrentUser() user: User) {
+    return this.searchService.dynamicFacets(query, user);
   }
 
   /* ── CRUD endpoints (Module 1) ── */
@@ -61,14 +64,14 @@ export class ListingsController {
 
   @Put(':id')
   @RequirePermissions('listings.update')
-  update(@Param('id') id: string, @Body() dto: UpdateListingDto) {
-    return this.listingsService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateListingDto, @CurrentUser() user: User) {
+    return this.listingsService.update(id, dto, user);
   }
 
   @Patch(':id/status')
   @RequirePermissions('listings.update')
-  patchStatus(@Param('id') id: string, @Body() dto: PatchStatusDto) {
-    return this.listingsService.patchStatus(id, dto);
+  patchStatus(@Param('id') id: string, @Body() dto: PatchStatusDto, @CurrentUser() user: User) {
+    return this.listingsService.patchStatus(id, dto, user);
   }
 
   @Delete(':id')
@@ -97,8 +100,8 @@ export class ListingsController {
 
   @Get('export')
   @RequirePermissions('listings.export')
-  async exportCsv(@Query() query: SearchQueryDto, @Res() res: Response) {
-    const csv = await this.listingsService.exportCsv(query);
+  async exportCsv(@Query() query: SearchQueryDto, @Res() res: Response, @CurrentUser() user: User) {
+    const csv = await this.listingsService.exportCsv(query, user);
     const dateStr = new Date().toISOString().slice(0, 10);
     res.set({
       'Content-Type': 'text/csv',
@@ -125,26 +128,26 @@ export class ListingsController {
 
   @Get()
   @RequirePermissions('listings.view')
-  findAll(@Query() query: ListingsQueryDto) {
-    return this.listingsService.findAll(query);
+  findAll(@Query() query: ListingsQueryDto, @CurrentUser() user: User) {
+    return this.listingsService.findAll(query, user);
   }
 
   @Get('summary')
   @RequirePermissions('listings.view')
-  getSummary() {
-    return this.listingsService.getSummary();
+  getSummary(@CurrentUser() user: User) {
+    return this.listingsService.getSummary(user);
   }
 
   @Get('facets')
   @RequirePermissions('listings.view')
-  getFacets() {
-    return this.listingsService.getFacets();
+  getFacets(@CurrentUser() user: User) {
+    return this.listingsService.getFacets(user);
   }
 
   @Get(':id')
   @RequirePermissions('listings.view')
-  findOne(@Param('id') id: string) {
-    return this.listingsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.listingsService.findOne(id, user);
   }
 
   @Post('import')

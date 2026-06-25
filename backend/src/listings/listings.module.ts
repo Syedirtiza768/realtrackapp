@@ -11,6 +11,7 @@ import { CompetitorPrice } from './entities/competitor-price.entity';
 import { MarketSnapshot } from './entities/market-snapshot.entity';
 import { ExportRule } from './entities/export-rule.entity';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity';
+import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
 import { ListingsController } from './listings.controller';
 import { ListingsV2Controller } from './listings-v2.controller';
 import { ExportRuleController } from './export-rule.controller';
@@ -36,6 +37,7 @@ import { TemplateModule } from '../templates/template.module';
       MarketSnapshot,
       ExportRule,
       CatalogProduct,
+      ListingActionLog,
     ]),
     ChannelsModule,
     TemplateModule,

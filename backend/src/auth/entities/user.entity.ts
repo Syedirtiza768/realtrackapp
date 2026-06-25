@@ -32,6 +32,9 @@ export class User {
   @Column({ type: 'boolean', default: true })
   active: boolean;
 
+  @Column({ name: 'store_access_all', type: 'boolean', default: false })
+  storeAccessAll: boolean;
+
   @Column({ type: 'timestamptz', nullable: true })
   lastLoginAt: Date | null;
 

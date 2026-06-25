@@ -72,7 +72,6 @@ export class EbayIntegrationsOAuthService {
       state,
       environment: input.environment,
     });
-    this.logger.log(`OAuth authUrl: ${authUrl}`);
     return { authUrl, state };
   }
 

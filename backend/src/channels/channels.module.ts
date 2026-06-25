@@ -8,6 +8,7 @@ import { Store } from './entities/store.entity.js';
 import { ListingChannelInstance } from './entities/listing-channel-instance.entity.js';
 import { AiEnhancement } from './entities/ai-enhancement.entity.js';
 import { DemoSimulationLog } from './entities/demo-simulation-log.entity.js';
+import { UserStoreAssignment } from './entities/user-store-assignment.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { ChannelsService } from './channels.service.js';
@@ -22,6 +23,8 @@ import { ChannelPublishProcessor } from './processors/channel-publish.processor.
 import { PricingPushService } from './pricing-push.service.js';
 import { InventoryRealtimeSyncService } from './inventory-realtime-sync.service.js';
 import { PricingRule } from '../settings/entities/pricing-rule.entity.js';
+import { StoreAccessService } from './store-access.service.js';
+import { StoreAccessController } from './store-access.controller.js';
 import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.js';
 // ── New eBay API service layer ──
 import { EbayAuthService } from './ebay/ebay-auth.service.js';
@@ -52,6 +55,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
       ListingRecord,
       CatalogProduct,
       PricingRule,
+      UserStoreAssignment,
       ConnectedEbayAccount,
       EbayAccountMarketplace,
       EbayBusinessPolicy,
@@ -61,12 +65,13 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
   ],
-  controllers: [ChannelsController, StoresController, AiEnhancementController, EbayPublishController],
+  controllers: [ChannelsController, StoresController, AiEnhancementController, EbayPublishController, StoreAccessController],
   providers: [
     ChannelsService,
     StoresService,
     AiEnhancementService,
     TokenEncryptionService,
+    StoreAccessService,
     EbayAdapter,
     ChannelPublishProcessor,
     PricingPushService,
@@ -97,6 +102,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     EbayPublishService,
     EbayPaReturnPolicyService,
     TokenEncryptionService,
+    StoreAccessService,
   ],
 })
 export class ChannelsModule {}

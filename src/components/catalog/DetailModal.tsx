@@ -73,7 +73,7 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-2xl lg:max-w-5xl h-[95dvh] sm:h-auto sm:max-h-[90vh] bg-slate-900 border-0 sm:border border-slate-200 dark:border-slate-700 rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl shadow-black/50"
+        className="w-full sm:max-w-2xl lg:max-w-5xl h-[95dvh] sm:h-auto sm:max-h-[90vh] bg-white dark:bg-slate-900 border-0 sm:border border-slate-200 dark:border-slate-700 rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl shadow-black/50"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

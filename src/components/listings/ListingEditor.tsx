@@ -457,7 +457,7 @@ export default function ListingEditor() {
 
                 <div className="lg:col-span-5 flex flex-col bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xl min-h-[400px] lg:min-h-0">
                     <div className="px-4 py-3 bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Live Preview</span>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-300 dark:text-slate-400">Live Preview</span>
                         <div className="flex bg-slate-800 rounded-lg p-1">
                             <button className="p-1 px-3 rounded-md bg-blue-600/20 text-blue-400 text-xs font-medium flex items-center gap-2">
                                 <Monitor size={12} /> eBay

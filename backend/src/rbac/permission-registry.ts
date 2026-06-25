@@ -20,6 +20,8 @@ export const ROLE_SLUGS = {
   CATALOG_MANAGER: 'catalog_manager',
   LISTING_MANAGER: 'listing_manager',
   OPS_USER: 'ops_user',
+  LISTING_USER: 'listing_user',
+  SUPERVISOR: 'supervisor',
 } as const;
 
 export type RoleSlug = (typeof ROLE_SLUGS)[keyof typeof ROLE_SLUGS];
@@ -68,6 +70,8 @@ const READ_WRITE: RoleSlug[] = [
 const READ_ONLY: RoleSlug[] = [
   ...READ_WRITE,
   ROLE_SLUGS.VIEWER,
+  ROLE_SLUGS.LISTING_USER,
+  ROLE_SLUGS.SUPERVISOR,
 ];
 
 const SUPER_ADMIN_ONLY: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN];
@@ -111,13 +115,51 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
 
   // ── Listings ──
   p('listings.view', 'View listings', 'listings', READ_ONLY),
-  p('listings.create', 'Create listings', 'listings', READ_WRITE),
-  p('listings.update', 'Update listings', 'listings', READ_WRITE),
+  p('listings.create', 'Create listings', 'listings', [
+    ...READ_WRITE,
+    ROLE_SLUGS.LISTING_USER,
+    ROLE_SLUGS.SUPERVISOR,
+  ]),
+  p('listings.update', 'Update listings', 'listings', [
+    ...READ_WRITE,
+    ROLE_SLUGS.LISTING_USER,
+    ROLE_SLUGS.SUPERVISOR,
+  ]),
   p('listings.delete', 'Delete listings', 'listings', MANAGER_UP),
-  p('listings.publish', 'Publish listings to channels', 'listings', READ_WRITE),
-  p('listings.import', 'Import listings', 'listings', MANAGER_UP),
+  p('listings.publish', 'Publish listings to channels', 'listings', [
+    ROLE_SLUGS.SUPER_ADMIN,
+    ROLE_SLUGS.ADMIN,
+    ROLE_SLUGS.MANAGER,
+    ROLE_SLUGS.SUPERVISOR,
+  ]),
+  p('listings.approve', 'Approve listings for publication', 'listings', [
+    ROLE_SLUGS.SUPER_ADMIN,
+    ROLE_SLUGS.ADMIN,
+    ROLE_SLUGS.MANAGER,
+    ROLE_SLUGS.SUPERVISOR,
+  ]),
+  p('listings.revise', 'Revise published listings', 'listings', [
+    ROLE_SLUGS.SUPER_ADMIN,
+    ROLE_SLUGS.ADMIN,
+    ROLE_SLUGS.MANAGER,
+    ROLE_SLUGS.SUPERVISOR,
+  ]),
+  p('listings.price_override', 'Change price on live listings', 'listings', [
+    ROLE_SLUGS.SUPER_ADMIN,
+    ROLE_SLUGS.ADMIN,
+    ROLE_SLUGS.MANAGER,
+  ]),
+  p('listings.import', 'Import listings', 'listings', [
+    ...MANAGER_UP,
+    ROLE_SLUGS.LISTING_USER,
+    ROLE_SLUGS.SUPERVISOR,
+  ]),
   p('listings.export', 'Export listings', 'listings', READ_ONLY),
-  p('listings.generate', 'AI-generate listings', 'listings', READ_WRITE),
+  p('listings.generate', 'AI-generate listings', 'listings', [
+    ...READ_WRITE,
+    ROLE_SLUGS.LISTING_USER,
+    ROLE_SLUGS.SUPERVISOR,
+  ]),
 
   // ── AI routing ──
   p('ai.routing.view', 'View AI routing stats and policy', 'ai', READ_ONLY),
@@ -162,6 +204,8 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('channels.manage', 'Manage channel connections', 'channels', MANAGER_UP),
   p('stores.view', 'View stores', 'stores', READ_ONLY),
   p('stores.manage', 'Manage stores', 'stores', MANAGER_UP),
+  p('stores.assign', 'Assign users to stores', 'stores', MANAGER_UP),
+  p('stores.access_all_manage', 'Toggle store access_all for users', 'stores', ADMIN_UP),
 
   // ── eBay integrations ──
   p('ebay.view', 'View eBay accounts', 'ebay', READ_ONLY),
@@ -263,6 +307,18 @@ export const ROLE_DEFINITIONS: {
     slug: ROLE_SLUGS.OPS_USER,
     name: 'Operations User',
     description: 'Orders, inventory, and fulfillment operations',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.LISTING_USER,
+    name: 'Listing User',
+    description: 'Upload sheets, verify data, and edit draft listings. Cannot publish, revise, or delete.',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.SUPERVISOR,
+    name: 'Supervisor',
+    description: 'Approve and publish listings, revise live listings. Cannot delete or change price on live listings without manager approval.',
     isSystem: true,
   },
 ];
