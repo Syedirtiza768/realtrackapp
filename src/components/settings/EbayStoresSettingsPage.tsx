@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  disconnectEbayAccount,
   listEbayAccounts,
   startEbayOAuth,
   syncEbayListings,
@@ -124,6 +125,19 @@ export default function EbayStoresSettingsPage() {
       await loadAccounts();
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : 'Policy sync failed');
+    }
+  };
+
+  const disconnect = async (accountId: string, name: string) => {
+    if (!organizationId) return;
+    if (!window.confirm(`Disconnect "${name}"? The account will be disabled but data is preserved.`)) return;
+    setMessage(null);
+    try {
+      await disconnectEbayAccount(accountId, organizationId);
+      setMessage(`Disconnected ${name}.`);
+      await loadAccounts();
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : 'Disconnect failed');
     }
   };
 
@@ -435,6 +449,15 @@ export default function EbayStoresSettingsPage() {
                 >
                   Map defaults
                 </Link>
+                {a.connectionStatus !== 'disabled' && (
+                  <button
+                    type="button"
+                    className="text-xs rounded-md border border-red-700 text-red-400 px-2 py-1.5 hover:bg-red-900/20"
+                    onClick={() => void disconnect(a.id, a.accountDisplayName)}
+                  >
+                    Disconnect
+                  </button>
+                )}
               </div>
             </li>
           ))}

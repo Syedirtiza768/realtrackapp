@@ -107,6 +107,16 @@ export async function syncEbayListings(
   );
 }
 
+export async function disconnectEbayAccount(
+  accountId: string,
+  organizationId?: string,
+): Promise<{ ok: boolean }> {
+  return fetchWithAuth(
+    `${API}/integrations/ebay/accounts/${accountId}/disconnect${orgQuery(organizationId)}`,
+    { method: 'POST' },
+  );
+}
+
 export async function syncEbayOrders(
   accountId: string,
   organizationId?: string,

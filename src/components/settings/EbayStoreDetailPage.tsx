@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  disconnectEbayAccount,
   getEbayAccount,
   listEbaySyncLogs,
   syncEbayListings,
@@ -47,7 +48,8 @@ type SyncLog = {
 
 export default function EbayStoreDetailPage() {
   const { accountId } = useParams<{ accountId: string }>();
-  const { signedIn, ready } = useEbayWorkspace();
+  const { signedIn, ready, organizationId } = useEbayWorkspace();
+  const navigate = useNavigate();
 
   const [account, setAccount] = useState<AccountDetail | null>(null);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
@@ -75,6 +77,18 @@ export default function EbayStoreDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const doDisconnect = async () => {
+    if (!accountId || !account) return;
+    if (!window.confirm(`Disconnect "${account.accountDisplayName}"? The account will be disabled but data is preserved.`)) return;
+    setMessage(null);
+    try {
+      await disconnectEbayAccount(accountId, organizationId ?? undefined);
+      navigate('/settings/integrations/ebay');
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : 'Disconnect failed');
+    }
+  };
 
   const runSync = async (kind: 'policies' | 'listings' | 'orders') => {
     if (!accountId) return;
@@ -223,6 +237,15 @@ export default function EbayStoreDetailPage() {
                 >
                   Policy mapping
                 </Link>
+                {account.connectionStatus !== 'disabled' && (
+                  <button
+                    type="button"
+                    onClick={() => void doDisconnect()}
+                    className="rounded border border-red-700 px-3 py-1.5 text-sm text-red-400 hover:bg-red-900/20"
+                  >
+                    Disconnect
+                  </button>
+                )}
               </div>
             </div>
           </div>
