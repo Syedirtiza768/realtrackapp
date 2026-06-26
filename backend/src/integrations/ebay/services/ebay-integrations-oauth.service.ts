@@ -16,6 +16,7 @@ import { EbayAccountMarketplace } from '../entities/ebay-account-marketplace.ent
 import { EbayOAuthStateStore } from './ebay-oauth-state.store.js';
 import { EbayAccountTokenService } from './ebay-account-token.service.js';
 import { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.js';
+import { EbayPolicySyncService } from './ebay-policy-sync.service.js';
 import { ListingActionLogWriterService } from './listing-action-log-writer.service.js';
 
 interface TokenBlob {
@@ -37,6 +38,7 @@ export class EbayIntegrationsOAuthService {
     private readonly mpConfig: EbayMarketplaceConfigService,
     private readonly dataSource: DataSource,
     private readonly logWriter: ListingActionLogWriterService,
+    private readonly policySync: EbayPolicySyncService,
     @InjectRepository(ChannelConnection)
     private readonly connectionRepo: Repository<ChannelConnection>,
     @InjectRepository(Store)
@@ -120,9 +122,10 @@ export class EbayIntegrationsOAuthService {
 
     const displayName =
       pending.accountDisplayName?.trim() ||
+      ebayUsername ||
       `eBay — ${ebayUserId}`;
 
-    const mp = this.mpConfig.require(pending.marketplaceId);
+    const allMpConfigs = this.mpConfig.all();
 
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
@@ -191,14 +194,16 @@ export class EbayIntegrationsOAuthService {
       });
       await qr.manager.save(oauthRow);
 
-      const mpRow = this.mpRepo.create({
-        ebayAccountId: savedAcct.id,
-        marketplaceId: pending.marketplaceId,
-        currency: mp.currency,
-        locale: mp.locale,
-        enabled: true,
-      });
-      await qr.manager.save(mpRow);
+      for (const cfg of allMpConfigs) {
+        const mpRow = this.mpRepo.create({
+          ebayAccountId: savedAcct.id,
+          marketplaceId: cfg.marketplaceId,
+          currency: cfg.currency,
+          locale: cfg.locale,
+          enabled: true,
+        });
+        await qr.manager.save(mpRow);
+      }
 
       await qr.commitTransaction();
 
@@ -217,6 +222,15 @@ export class EbayIntegrationsOAuthService {
           environment: pending.environment,
         },
       });
+
+      // Fire-and-forget policy sync for all marketplaces
+      this.policySync.syncPolicies(
+        savedAcct.id,
+        pending.organizationId,
+        pending.userId,
+      ).catch((err) =>
+        this.logger.error(`Auto-policy sync failed for account ${savedAcct.id}`, err),
+      );
 
       return { connectedEbayAccountId: savedAcct.id };
     } catch (e) {

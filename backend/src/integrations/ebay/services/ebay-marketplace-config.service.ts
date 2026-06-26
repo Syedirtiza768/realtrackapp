@@ -51,6 +51,10 @@ export class EbayMarketplaceConfigService {
     },
   };
 
+  all(): EbayMarketplaceConfig[] {
+    return Object.values(this.configs);
+  }
+
   get(marketplaceId: string): EbayMarketplaceConfig | null {
     return this.configs[marketplaceId] ?? null;
   }

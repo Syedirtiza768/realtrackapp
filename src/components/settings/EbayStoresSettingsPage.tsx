@@ -17,14 +17,6 @@ import {
 } from '../../lib/sellerpunditIntegrationsApi';
 import { useEbayWorkspace } from '../../hooks/useEbayWorkspace';
 
-const MARKETPLACES = [
-  { id: 'EBAY_US', label: 'eBay US' },
-  { id: 'EBAY_MOTORS_US', label: 'eBay Motors US' },
-  { id: 'EBAY_GB', label: 'eBay UK' },
-  { id: 'EBAY_DE', label: 'eBay Germany' },
-  { id: 'EBAY_AU', label: 'eBay Australia' },
-];
-
 export default function EbayStoresSettingsPage() {
   const {
     signedIn,
@@ -37,9 +29,6 @@ export default function EbayStoresSettingsPage() {
     selectWorkspace,
   } = useEbayWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [displayName, setDisplayName] = useState('');
-  const [marketplaceId, setMarketplaceId] = useState('EBAY_MOTORS_US');
-  const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [accounts, setAccounts] = useState<EbayAccountSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [spLoading, setSpLoading] = useState(false);
@@ -202,9 +191,8 @@ export default function EbayStoresSettingsPage() {
     try {
       const data = await startEbayOAuth({
         organizationId,
-        marketplaceId,
-        environment,
-        accountDisplayName: displayName.trim() || undefined,
+        marketplaceId: 'EBAY_MOTORS_US',
+        environment: 'production',
       });
       if (data.authUrl) {
         window.location.href = data.authUrl;
@@ -280,42 +268,7 @@ export default function EbayStoresSettingsPage() {
             </select>
           </label>
         )}
-        <label className="block text-sm">
-          <span className="text-slate-500 dark:text-slate-400">Label in RealTrack (optional)</span>
-          <input
-            className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Defaults to your eBay username after connect"
-          />
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label className="block text-sm">
-            <span className="text-slate-500 dark:text-slate-400">Marketplace</span>
-            <select
-              className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
-              value={marketplaceId}
-              onChange={(e) => setMarketplaceId(e.target.value)}
-            >
-              {MARKETPLACES.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            <span className="text-slate-500 dark:text-slate-400">Environment</span>
-            <select
-              className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
-              value={environment}
-              onChange={(e) => setEnvironment(e.target.value as 'sandbox' | 'production')}
-            >
-              <option value="sandbox">Sandbox</option>
-              <option value="production">Production</option>
-            </select>
-          </label>
-        </div>
+
         <button
           type="button"
           onClick={() => void connect()}
