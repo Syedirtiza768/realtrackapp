@@ -29,6 +29,7 @@ export default function EbayStoresSettingsPage() {
     selectWorkspace,
   } = useEbayWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [displayName, setDisplayName] = useState('');
   const [accounts, setAccounts] = useState<EbayAccountSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [spLoading, setSpLoading] = useState(false);
@@ -193,6 +194,7 @@ export default function EbayStoresSettingsPage() {
         organizationId,
         marketplaceId: 'EBAY_MOTORS_US',
         environment: 'production',
+        accountDisplayName: displayName.trim() || undefined,
       });
       if (data.authUrl) {
         window.location.href = data.authUrl;
@@ -268,7 +270,15 @@ export default function EbayStoresSettingsPage() {
             </select>
           </label>
         )}
-
+        <label className="block text-sm">
+          <span className="text-slate-500 dark:text-slate-400">Store name (optional)</span>
+          <input
+            className="mt-1 mb-2 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Defaults to your eBay username"
+          />
+        </label>
         <button
           type="button"
           onClick={() => void connect()}
