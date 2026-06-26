@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Logger,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -35,6 +36,8 @@ import { UserOrganizationService } from '../../../auth/user-organization.service
 @Controller('integrations/ebay')
 @RequirePermissions('ebay.view')
 export class IntegrationsEbayController {
+  private readonly logger = new Logger(IntegrationsEbayController.name);
+
   constructor(
     private readonly oauth: EbayIntegrationsOAuthService,
     private readonly permissions: EbayIntegrationPermissionsService,
@@ -95,7 +98,8 @@ export class IntegrationsEbayController {
       res.redirect(
         `${base}/settings/integrations/ebay?success=1&accountId=${result.connectedEbayAccountId}`,
       );
-    } catch {
+    } catch (err) {
+      this.logger.error({ err, code: !!code, state: !!state }, 'eBay OAuth callback failed');
       res.redirect(`${base}/settings/integrations/ebay?error=oauth_failed`);
     }
   }

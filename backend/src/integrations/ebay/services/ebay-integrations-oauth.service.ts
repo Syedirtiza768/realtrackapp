@@ -88,10 +88,17 @@ export class EbayIntegrationsOAuthService {
       throw new BadRequestException('Invalid or expired OAuth state');
     }
 
-    const { tokens } = await this.tokenService.exchangeCode({
-      code: params.code,
-      environment: pending.environment,
-    });
+    let tokens: TokenBlob;
+    try {
+      const result = await this.tokenService.exchangeCode({
+        code: params.code,
+        environment: pending.environment,
+      });
+      tokens = result.tokens;
+    } catch (e: unknown) {
+      this.logger.warn({ errMsg: (e as Error)?.message }, 'eBay token exchange failed');
+      throw e;
+    }
 
     const oauthBase =
       pending.environment === 'production'
@@ -108,8 +115,10 @@ export class EbayIntegrationsOAuthService {
       ebayUserId =
         identity.data?.userId ?? identity.data?.username ?? ebayUserId;
       ebayUsername = identity.data?.username ?? null;
-    } catch (e) {
-      this.logger.warn('eBay identity fetch failed after OAuth', e);
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status ?? '?';
+      const msg = (e as Error)?.message ?? String(e);
+      this.logger.warn({ status, errMsg: msg }, `eBay identity API failed (${status}) — using unknown`);
     }
 
     const tokenBlob: TokenBlob = {
@@ -233,8 +242,9 @@ export class EbayIntegrationsOAuthService {
       );
 
       return { connectedEbayAccountId: savedAcct.id };
-    } catch (e) {
+    } catch (e: unknown) {
       await qr.rollbackTransaction();
+      this.logger.warn({ errMsg: (e as Error)?.message }, 'eBay OAuth DB transaction failed');
       throw e;
     } finally {
       await qr.release();
