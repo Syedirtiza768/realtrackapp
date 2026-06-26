@@ -231,14 +231,16 @@ export class EbayIntegrationsOAuthService {
         },
       });
 
-      // Fire-and-forget policy sync for all marketplaces
+      this.logger.log(`Queuing policy sync for account ${savedAcct.id}`);
       this.policySync.syncPolicies(
         savedAcct.id,
         pending.organizationId,
         pending.userId,
-      ).catch((err) =>
-        this.logger.error(`Auto-policy sync failed for account ${savedAcct.id}`, err),
-      );
+      ).then((result) => {
+        this.logger.log(`Auto-policy sync complete for ${savedAcct.id}: ${result.synced} policies`);
+      }).catch((err: unknown) => {
+        this.logger.error({ errMsg: (err as Error)?.message }, `Auto-policy sync failed for ${savedAcct.id}`);
+      });
 
       return { connectedEbayAccountId: savedAcct.id };
     } catch (e: unknown) {
