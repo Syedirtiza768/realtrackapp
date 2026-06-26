@@ -22,7 +22,7 @@ import {
   useCancelPipelineJob,
   downloadPipelineFile,
 } from '../../lib/pipelineApi';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { PipelineJob, PipelineJobStatus } from '../../types/pipeline';
 import { PIPELINE_STAGES } from '../../types/pipeline';
 import ImageEnrichmentPanel from './ImageEnrichmentPanel';
@@ -90,18 +90,35 @@ function stageProgress(status: PipelineJobStatus): number {
  * ------------------------------------------------------------- */
 
 export default function PipelineWizard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [step, setStep] = useState<WizardStep>('upload');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
-  const handleJobCreated = useCallback((job: PipelineJob) => {
-    setActiveJobId(job.id);
-    setStep('processing');
-  }, []);
+  useEffect(() => {
+    const jobParam = searchParams.get('job');
+    if (jobParam) {
+      setActiveJobId(jobParam);
+      setStep('processing');
+    }
+  }, [searchParams]);
 
-  const handleViewJob = useCallback((id: string) => {
-    setActiveJobId(id);
-    setStep('processing');
-  }, []);
+  const handleJobCreated = useCallback(
+    (job: PipelineJob) => {
+      setActiveJobId(job.id);
+      setStep('processing');
+      setSearchParams({ job: job.id }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  const handleViewJob = useCallback(
+    (id: string) => {
+      setActiveJobId(id);
+      setStep('processing');
+      setSearchParams({ job: id }, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   return (
     <div className="space-y-6">
@@ -118,7 +135,11 @@ export default function PipelineWizard() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setStep('upload')}
+            onClick={() => {
+              setStep('upload');
+              setActiveJobId(null);
+              setSearchParams({}, { replace: true });
+            }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               step === 'upload' ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
             }`}

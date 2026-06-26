@@ -55,7 +55,7 @@ const NAV_ITEMS: NavItem[] = [
     { icon: Camera, label: 'Ingestion', path: '/ingestion', permission: 'ingestion.view' },
     { icon: Cpu, label: 'Motors Intel', path: '/motors', permission: 'motors.view' },
     { icon: ClipboardList, label: 'Review Queue', path: '/motors/review', permission: 'motors.review' },
-    { icon: PlusCircle, label: 'New Listing', path: '/listings/new', permission: 'listings.create' },
+    { icon: PlusCircle, label: 'Add Part', path: '/listings/new', permission: 'listings.create' },
     { icon: ScanLine, label: 'Fitment', path: '/fitment', permission: 'fitment.view' },
     { icon: Car, label: 'VIN Lookup', path: '/fitment/vin', permission: 'fitment.view' },
     { icon: Database, label: 'Catalog', path: '/catalog', permission: 'catalog.view' },

@@ -4,6 +4,7 @@
 
 import { expandFitmentYearRanges } from './fitment-year-expand.mjs';
 import { isLowValueSku } from './token-optimization.mjs';
+import { detectTitleGenerationMismatch } from './platform-generation.mjs';
 
 const REQUIRED_SPECIFICS = [
   'Brand',
@@ -100,6 +101,16 @@ export function applyListingGuards(item, srcPart) {
     const before = expanded.length;
     out.compatibility = dedupeFitment(expanded);
     if (out.compatibility.length < before) fixes.push('FITMENT_DEDUPED');
+  }
+
+  const titleMismatch = detectTitleGenerationMismatch(
+    String(out.title ?? ''),
+    out.brand || srcPart.donorMake,
+    out.model || srcPart.donorModel,
+    srcPart.donorYear || srcPart.vehicleYear,
+  );
+  if (titleMismatch) {
+    fixes.push(`GENERATION_YEAR_MISMATCH:${titleMismatch}`);
   }
 
   return { item: out, fixes };
@@ -240,6 +251,16 @@ export function validateListing(item, srcPart, options = {}) {
     if (flag.startsWith('CROSS_MAKE') || flag.startsWith('MPN_MISMATCH')) {
       hardFails.push(flag);
     }
+  }
+
+  const titleMismatch = detectTitleGenerationMismatch(
+    String(item.title || ''),
+    item.brand || sp.Brand || srcPart.donorMake,
+    item.model || sp.Model || srcPart.donorModel,
+    srcPart.donorYear || srcPart.vehicleYear || String(item.title || '').match(/\b(19|20)\d{2}\b/)?.[0],
+  );
+  if (titleMismatch) {
+    hardFails.push(`GENERATION_YEAR_MISMATCH:${titleMismatch}`);
   }
 
   if (!compactProfile && score.fitmentRows < fitmentMinRows) {

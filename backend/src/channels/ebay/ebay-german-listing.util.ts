@@ -1,4 +1,10 @@
 import { EBAY_TITLE_MAX_LENGTH } from './ebay-listing-text.util.js';
+import {
+  alignGenerationAndYearRange,
+  detectTitleGenerationMismatch,
+  extractFitmentVariantTokens,
+  validateGenerationYearAlignment,
+} from '../../fitment/platform-generation.util.js';
 
 /** Input for native German eBay Motors listing copy (no invented fields). */
 export interface GermanListingInput {
@@ -53,6 +59,12 @@ const PART_NAME_DE: Record<string, string> = {
   hood: 'Motorhaube',
   seat: 'Sitz',
   dashboard: 'Armaturenbrett',
+  'dash trim': 'Armaturenbrettblende',
+  'dashboard trim': 'Armaturenbrettblende',
+  'dash panel': 'Armaturenbrettblende',
+  'dash bezel': 'Armaturenbrettblende',
+  'instrument panel': 'Armaturenbrett',
+  'center console': 'Mittelkonsole',
   'steering wheel': 'Lenkrad',
 };
 
@@ -81,6 +93,11 @@ const AWKWARD_GERMAN_PATTERNS = [
 
 /** Motors category keyword rows — interior before exterior; first match wins. */
 const CATEGORY_KEYWORD_ROWS: Array<{ kw: string[]; id: string; name: string }> = [
+  {
+    kw: ['dashboard', 'dash panel', 'instrument panel', 'dash trim', 'dash bezel', 'armaturenbrett'],
+    id: '33717',
+    name: 'Dashboards & Dashboard Parts',
+  },
   {
     kw: ['armrest', 'armlehne', 'türverkleidung', 'door armrest', 'inner panel', 'door finisher'],
     id: '33695',
@@ -213,8 +230,27 @@ function truncateGermanTitle(title: string, max = EBAY_TITLE_MAX_LENGTH): string
 export function buildGermanListingTitle(input: GermanListingInput): string {
   const brand = input.brand?.trim() ?? '';
   const model = input.model?.trim() ?? '';
-  const generation = input.generation?.trim() ?? '';
-  const yearRange = input.yearRange?.trim() ?? '';
+  const anchorYear =
+    input.fitmentRows?.[0]?.year ??
+    input.yearRange?.slice(0, 4) ??
+    input.donorVehicle?.match(/\b(19|20)\d{2}\b/)?.[0];
+
+  const aligned = alignGenerationAndYearRange({
+    generation: input.generation,
+    yearRange: input.yearRange,
+    make: brand,
+    model,
+    anchorYear,
+    fitmentYears: input.fitmentRows?.map((r) => r.year),
+  });
+
+  const generation = aligned.generation;
+  const yearRange = aligned.yearRange;
+  const variantTokens = extractFitmentVariantTokens(
+    (input.fitmentRows ?? []).map((r) => ({ trim: r.trim, model: r.model })),
+    2,
+  );
+
   const partDe = translatePartNameToGerman(input.partType);
   const placementDe = formatGermanPlacement(input.placement);
   const pn = (input.oemPartNumber ?? input.mpn ?? '').trim();
@@ -225,6 +261,11 @@ export function buildGermanListingTitle(input: GermanListingInput): string {
   if (model) segments.push(model);
   if (generation) segments.push(generation);
   else if (yearRange) segments.push(yearRange);
+  for (const token of variantTokens) {
+    if (!segments.some((s) => s.toUpperCase().includes(token))) {
+      segments.push(token);
+    }
+  }
   if (partDe) segments.push(partDe);
   if (placementDe) segments.push(placementDe);
 
@@ -392,6 +433,38 @@ export function validateGermanListing(params: {
   }
   if (title && hasAwkwardGermanPhrasing(title)) {
     issues.push({ code: 'DE_TITLE_AWKWARD', severity: 'warning', field: 'title', message: 'Title contains awkward translated phrasing' });
+  }
+
+  const anchorYear = params.itemSpecifics['Baujahrbereich']?.slice(0, 4);
+  const generationCheck = validateGenerationYearAlignment({
+    generation: params.itemSpecifics['Plattform/Generation'],
+    yearRange: params.itemSpecifics['Baujahrbereich'],
+    make: params.itemSpecifics['Fahrzeugmarke'] ?? params.itemSpecifics['Hersteller'],
+    model: params.itemSpecifics['Modell'],
+    anchorYear,
+  });
+  if (!generationCheck.valid) {
+    issues.push({
+      code: 'DE_GENERATION_YEAR_MISMATCH',
+      severity: 'error',
+      field: 'title',
+      message: generationCheck.message ?? 'Generation and year range conflict',
+    });
+  }
+
+  const titleMismatch = detectTitleGenerationMismatch(
+    title,
+    params.itemSpecifics['Fahrzeugmarke'] ?? params.itemSpecifics['Hersteller'],
+    params.itemSpecifics['Modell'],
+    anchorYear,
+  );
+  if (titleMismatch) {
+    issues.push({
+      code: 'DE_TITLE_GENERATION_MISMATCH',
+      severity: 'error',
+      field: 'title',
+      message: titleMismatch,
+    });
   }
 
   if (!description || description.replace(/<[^>]+>/g, '').trim().length < 120) {

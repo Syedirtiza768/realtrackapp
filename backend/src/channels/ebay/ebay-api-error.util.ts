@@ -196,6 +196,34 @@ export function isEbayPartsAccessoriesReturnPolicyError(err: unknown): boolean {
   );
 }
 
+/** True when eBay rejected the request due to seller selling limits (errorId 21919024 / 21919023 / 21919144). */
+export function isEbaySellingLimitError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const bodies: unknown[] = [
+    (err as { response?: { data?: unknown } }).response?.data,
+    err,
+  ];
+  for (const body of bodies) {
+    if (!body || typeof body !== 'object') continue;
+    const errors = (body as { errors?: EbayErrorRow[] }).errors;
+    if (!Array.isArray(errors)) continue;
+    for (const e of errors) {
+      const id = String(e.errorId);
+      if (id === '21919024' || id === '21919023' || id === '21919144') return true;
+      const msg = e.longMessage ?? e.message ?? '';
+      if (/selling limit/i.test(msg)) return true;
+      if (/Höchstbetrag/i.test(msg)) return true;
+      if (/active listings allowed/i.test(msg)) return true;
+    }
+  }
+  const formatted = formatEbayApiError(err, '');
+  return (
+    /selling limit/i.test(formatted) ||
+    /Höchstbetrag/i.test(formatted) ||
+    /active listings allowed/i.test(formatted)
+  );
+}
+
 /** Policy errors where refresh or alternate policy selection may recover publish. */
 export function isEbayRecoverableBusinessPolicyError(err: unknown): boolean {
   return (

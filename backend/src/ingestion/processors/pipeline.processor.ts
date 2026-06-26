@@ -10,6 +10,8 @@ import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
+import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
+import { ListingGenerationPipeline } from '../../common/openai/pipelines/listing-generation.pipeline.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -63,6 +65,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     @InjectQueue('listing-optimization')
     private readonly optimizationQueue: Queue,
     private readonly pipelineOutputImages: PipelineOutputImageService,
+    private readonly mvlService: EbayMvlService,
+    private readonly listingGenPipeline: ListingGenerationPipeline,
   ) {
     super();
   }
@@ -125,8 +129,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     fs.mkdirSync(outputDir, { recursive: true });
 
     try {
+      const dbJob = await this.jobRepo.findOneBy({ id: jobId });
+      const forceVision = Boolean(dbJob?.stageDetails?.forceVision);
+
       // Spawn the pipeline script with environment overrides
-      const exitCode = await this.runPipeline(jobId, scriptPath, filePath, outputDir, projectRoot);
+      const exitCode = await this.runPipeline(
+        jobId,
+        scriptPath,
+        filePath,
+        outputDir,
+        projectRoot,
+        { forceVision },
+      );
 
       if (exitCode !== 0) {
         await this.fail(jobId, `Pipeline exited with code ${exitCode}`);
@@ -142,8 +156,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       // Save enriched listings to catalog_products + listing_records
       await this.saveToCatalog(jobId, outputDir, job.data.originalFilename);
 
-      // Link uploaded images (from Single Listing form) to the created listing
+      // Ensure every catalog product has US, AU, and DE listing records.
+      // For any missing marketplace, generate marketplace-appropriate AI content
+      // (English for US/AU, German for DE) and create the listing record.
+      await this.ensureMissingMarketplaceListings(jobId);
+
       await this.linkUploadedImages(jobId);
+      await this.propagateSourceImages(jobId);
 
       await this.updateStatus(jobId, 'completed');
 
@@ -182,6 +201,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     inputPath: string,
     outputDir: string,
     cwd: string,
+    options: { forceVision?: boolean } = {},
   ): Promise<number> {
     return new Promise((resolve, reject) => {
       const child = spawn('node', [scriptPath], {
@@ -191,6 +211,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           PIPELINE_INPUT_FILE: inputPath,
           PIPELINE_OUTPUT_DIR: outputDir,
           PIPELINE_JOB_ID: jobId,
+          ...(options.forceVision ? { PIPELINE_FORCE_VISION: '1' } : {}),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -468,44 +489,432 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   }
 
   /**
-   * Link uploaded images (from the Single Listing form) to the created listing record.
-   * Reads uploadedAssetIds from the job's stageDetails and updates ImageAsset.listingId.
+   * Link uploaded images (from the Single Listing form) to listing records.
+   * Image URLs are propagated to all marketplace rows via {@link propagateSourceImages}.
    */
   private async linkUploadedImages(jobId: string): Promise<void> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
     const assetIds = (job?.stageDetails as Record<string, unknown>)?.uploadedAssetIds as string[] | undefined;
     if (!assetIds || assetIds.length === 0) return;
 
-    // Find the first listing record created by this job (sheetName contains the job ID)
-    const listing = await this.listingRepo.findOne({
-      where: { sheetName: `Pipeline ${jobId.slice(0, 8)}` },
+    const listings = await this.listingRepo.find({
+      where: { pipelineJobId: jobId },
       order: { sourceRowNumber: 'ASC' },
     });
-
-    if (!listing) {
+    const primaryListing = listings[0];
+    if (!primaryListing) {
       this.logger.warn(`Job ${jobId}: Could not find listing record to link uploaded images`);
       return;
     }
 
-    // Update all uploaded ImageAsset records to point to this listing
     const result = await this.imageAssetRepo
       .createQueryBuilder()
       .update()
-      .set({ listingId: listing.id })
+      .set({ listingId: primaryListing.id })
       .where('id IN (:...assetIds)', { assetIds })
       .execute();
 
     this.logger.log(
-      `Job ${jobId}: Linked ${result.affected ?? 0} uploaded images to listing ${listing.id}`,
+      `Job ${jobId}: Linked ${result.affected ?? 0} uploaded images to listing ${primaryListing.id}`,
     );
   }
 
   /**
+   * Copy warehouse-intake / upload photos onto catalog_products.image_urls and every
+   * marketplace listing_records.itemPhotoUrl for this job when pipeline output omitted them.
+   */
+  private async propagateSourceImages(jobId: string): Promise<void> {
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    const stageDetails = (job?.stageDetails ?? {}) as Record<string, unknown>;
+    const sourceListingIds = stageDetails.sourceListingIds as string[] | undefined;
+    const uploadedAssetIds = stageDetails.uploadedAssetIds as string[] | undefined;
+
+    const imageUrlSet = new Set<string>();
+
+    const addUrls = (pipe: string | null | undefined): void => {
+      for (const url of (pipe ?? '').split('|').map((u) => u.trim()).filter(Boolean)) {
+        if (url.startsWith('http')) imageUrlSet.add(url);
+      }
+    };
+
+    if (sourceListingIds?.length) {
+      const sources = await this.listingRepo.find({ where: { id: In(sourceListingIds) } });
+      for (const source of sources) {
+        addUrls(source.itemPhotoUrl);
+      }
+    }
+
+    if (uploadedAssetIds?.length) {
+      const assets = await this.imageAssetRepo.find({ where: { id: In(uploadedAssetIds) } });
+      for (const asset of assets) {
+        if (asset.cdnUrl?.startsWith('http')) imageUrlSet.add(asset.cdnUrl);
+      }
+    }
+
+    const pipelineListings = await this.listingRepo.find({ where: { pipelineJobId: jobId } });
+    for (const listing of pipelineListings) {
+      addUrls(listing.itemPhotoUrl);
+    }
+
+    const skus = [
+      ...new Set(
+        pipelineListings.map((l) => l.customLabelSku?.trim()).filter((s): s is string => Boolean(s)),
+      ),
+    ];
+    if (skus.length) {
+      const intakeListings = await this.listingRepo.find({
+        where: {
+          customLabelSku: In(skus),
+          sourceFileName: 'warehouse-intake',
+        },
+      });
+      for (const intake of intakeListings) {
+        addUrls(intake.itemPhotoUrl);
+      }
+
+      const intakeIds = intakeListings.map((l) => l.id);
+      if (intakeIds.length) {
+        const linkedAssets = await this.imageAssetRepo.find({
+          where: { listingId: In(intakeIds) },
+        });
+        for (const asset of linkedAssets) {
+          if (asset.cdnUrl?.startsWith('http')) imageUrlSet.add(asset.cdnUrl);
+        }
+      }
+    }
+
+    const imageUrls = [...imageUrlSet].slice(0, 12);
+    if (imageUrls.length === 0) {
+      this.logger.log(`Job ${jobId}: No source/upload images to propagate`);
+      return;
+    }
+
+    const photoPipe = imageUrls.join('|');
+    let catalogUpdated = 0;
+    let listingsUpdated = 0;
+
+    const products = await this.productRepo.find({ where: { pipelineJobId: jobId } });
+    for (const product of products) {
+      if (!product.imageUrls?.length) {
+        product.imageUrls = imageUrls;
+        await this.productRepo.save(product);
+        catalogUpdated++;
+      }
+    }
+
+    for (const listing of pipelineListings) {
+      if (!listing.itemPhotoUrl?.trim()) {
+        listing.itemPhotoUrl = photoPipe;
+        await this.listingRepo.save(listing);
+        listingsUpdated++;
+      }
+    }
+
+    this.logger.log(
+      `Job ${jobId}: Propagated ${imageUrls.length} source image(s) to ${catalogUpdated} catalog product(s) and ${listingsUpdated} listing row(s)`,
+    );
+  }
+
+  /**
+   * After saveToCatalog completes, ensure every catalog product has listing records
+   * for ALL THREE marketplaces (US, AU, DE). For any missing marketplace, generate
+   * marketplace-appropriate content via AI and create the listing record.
+   *
+   * This is the key fix for the "only DE listing was produced" issue — it guarantees
+   * that regardless of which marketplace file was imported, the system auto-creates
+   * listings for the other two markets with proper localization:
+   *  - US: English, eBay US optimized, SEO
+   *  - AU: English, eBay AU optimized, SEO
+   *  - DE: German (de-DE), native German copywriting, SEO
+   */
+  private async ensureMissingMarketplaceListings(jobId: string): Promise<void> {
+    const MARKETPLACES = ['US', 'AU', 'DE'] as const;
+
+    // 1. Get all catalog products for this job that have a SKU
+    const products = await this.productRepo.find({
+      where: { pipelineJobId: jobId },
+    });
+    const productsWithSku = products.filter(p => p.sku?.trim());
+    if (productsWithSku.length === 0) return;
+
+    // 2. Get all listing records for this job, indexed by (sku → set of marketplaces)
+    const listingRecords = await this.listingRepo.find({
+      where: { pipelineJobId: jobId },
+    });
+
+    const existingBySku = new Map<string, Set<string>>();
+    const templateBySku = new Map<string, Partial<ListingRecord>>();
+    for (const lr of listingRecords) {
+      if (!lr.customLabelSku) continue;
+      if (!existingBySku.has(lr.customLabelSku)) {
+        existingBySku.set(lr.customLabelSku, new Set());
+      }
+      const mkt = (lr as any).marketplace as string;
+      if (mkt) existingBySku.get(lr.customLabelSku)!.add(mkt);
+      if (!templateBySku.has(lr.customLabelSku)) {
+        templateBySku.set(lr.customLabelSku, lr);
+      }
+    }
+
+    // 3. Collect missing marketplace entries — (product, marketplace, template)
+    const missingEntries: Array<{
+      product: typeof productsWithSku[number];
+      marketplace: 'US' | 'AU' | 'DE';
+      template: Partial<ListingRecord>;
+    }> = [];
+
+    for (const product of productsWithSku) {
+      const sku = product.sku!;
+      const existing = existingBySku.get(sku) ?? new Set();
+      const template = templateBySku.get(sku);
+      if (!template) continue; // no source listing record at all — skip
+
+      for (const mkt of MARKETPLACES) {
+        if (!existing.has(mkt)) {
+          missingEntries.push({ product, marketplace: mkt, template });
+        }
+      }
+    }
+
+    if (missingEntries.length === 0) {
+      this.logger.log(`Job ${jobId}: All 3 marketplaces already have listing records — no action needed`);
+      return;
+    }
+
+    this.logger.log(
+      `Job ${jobId}: Generating ${missingEntries.length} missing marketplace listing record(s) across ${productsWithSku.length} product(s)`,
+    );
+
+    // 4. Group missing entries by marketplace for batch AI generation
+    const byMarketplace = new Map<'US' | 'AU' | 'DE', typeof missingEntries>();
+    for (const entry of missingEntries) {
+      if (!byMarketplace.has(entry.marketplace)) byMarketplace.set(entry.marketplace, []);
+      byMarketplace.get(entry.marketplace)!.push(entry);
+    }
+
+    const newListingRecords: Array<Partial<ListingRecord> & Record<string, unknown>> = [];
+
+    for (const [mkt, entries] of byMarketplace) {
+      try {
+        const aiItems = entries.map(e => ({
+          productData: {
+            sku: e.product.sku,
+            brand: e.product.brand,
+            mpn: e.product.mpn,
+            oem_number: e.product.oemPartNumber,
+            title: e.product.title,
+            part_type: e.product.partType,
+            placement: e.product.placement,
+            material: e.product.material,
+            features: e.product.features,
+            image_count: Array.isArray(e.product.imageUrls) ? e.product.imageUrls.length : 0,
+          },
+          categoryName: e.product.categoryName ?? 'eBay Motors Parts & Accessories',
+          condition: e.product.conditionId ?? 'Used',
+          options: {
+            marketplace: mkt,
+            sellerCountry:
+              e.product.location?.includes('DE') || String(e.template.location ?? '').includes('DE')
+                ? 'DE'
+                : 'US',
+          },
+        }));
+
+        const aiResults = await this.listingGenPipeline.generateBatch(aiItems);
+
+        for (let i = 0; i < entries.length; i++) {
+          const { product, template } = entries[i];
+          const ai = aiResults[i];
+          const sourceSku = product.sku ?? template.customLabelSku ?? 'UNKNOWN';
+
+          newListingRecords.push({
+            sourceFileName: `generated-${mkt.toLowerCase()}-${jobId.slice(0, 8)}`,
+            sourceFilePath: `pipeline:${jobId}/${mkt}`,
+            sheetName: `Pipeline ${jobId.slice(0, 8)}`,
+            sourceRowNumber: template.sourceRowNumber,
+            action: 'Add',
+            customLabelSku: sourceSku,
+            categoryId: product.categoryId ?? template.categoryId,
+            categoryName: product.categoryName ?? template.categoryName,
+            title: ai?.title ?? product.title ?? template.title,
+            description: ai?.description ?? product.description ?? template.description,
+            startPrice: template.startPrice,
+            startPriceNum: template.startPriceNum,
+            quantity: template.quantity,
+            quantityNum: template.quantityNum,
+            itemPhotoUrl: template.itemPhotoUrl,
+            conditionId: product.conditionId ?? template.conditionId,
+            format: template.format,
+            duration: template.duration,
+            location: template.location,
+            shippingProfileName: template.shippingProfileName,
+            returnProfileName: template.returnProfileName,
+            paymentProfileName: template.paymentProfileName,
+            cBrand: product.brand ?? template.cBrand,
+            cType: product.partType ?? template.cType,
+            cFeatures: product.features ?? template.cFeatures,
+            cManufacturerPartNumber: product.mpn ?? template.cManufacturerPartNumber,
+            cOeOemPartNumber: product.oemPartNumber ?? template.cOeOemPartNumber,
+            extractedMake: template.extractedMake,
+            extractedModel: template.extractedModel,
+            pipelineJobId: jobId,
+            marketplace: mkt,
+            version: 1,
+          });
+        }
+
+        this.logger.log(
+          `Job ${jobId} [${mkt}]: AI-generated ${entries.length} listing(s) ` +
+            `cost=${
+              aiResults.reduce((s, r) => s + r.rawResponse.estimatedCostUsd, 0).toFixed(4)
+            }`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Job ${jobId}: AI generation failed for marketplace ${mkt}: ${err instanceof Error ? err.message : err}`,
+        );
+        // Fallback: create listing records without AI content — basic data is better than nothing
+        for (const { product, template } of entries) {
+          const sourceSku = product.sku ?? template.customLabelSku ?? 'UNKNOWN';
+          newListingRecords.push({
+            sourceFileName: `generated-${mkt.toLowerCase()}-${jobId.slice(0, 8)}`,
+            sourceFilePath: `pipeline:${jobId}/${mkt}`,
+            sheetName: `Pipeline ${jobId.slice(0, 8)}`,
+            sourceRowNumber: template.sourceRowNumber,
+            action: 'Add',
+            customLabelSku: sourceSku,
+            categoryId: product.categoryId ?? template.categoryId,
+            categoryName: product.categoryName ?? template.categoryName,
+            title: product.title ?? template.title,
+            description: product.description ?? template.description,
+            startPrice: template.startPrice,
+            startPriceNum: template.startPriceNum,
+            quantity: template.quantity,
+            quantityNum: template.quantityNum,
+            itemPhotoUrl: template.itemPhotoUrl,
+            conditionId: product.conditionId ?? template.conditionId,
+            format: template.format,
+            duration: template.duration,
+            location: template.location,
+            shippingProfileName: template.shippingProfileName,
+            returnProfileName: template.returnProfileName,
+            paymentProfileName: template.paymentProfileName,
+            cBrand: product.brand ?? template.cBrand,
+            cType: product.partType ?? template.cType,
+            cFeatures: product.features ?? template.cFeatures,
+            cManufacturerPartNumber: product.mpn ?? template.cManufacturerPartNumber,
+            cOeOemPartNumber: product.oemPartNumber ?? template.cOeOemPartNumber,
+            extractedMake: template.extractedMake,
+            extractedModel: template.extractedModel,
+            pipelineJobId: jobId,
+            marketplace: mkt,
+            version: 1,
+          });
+        }
+      }
+    }
+
+    if (newListingRecords.length === 0) return;
+
+    // 5. Bulk insert new listing records (uses same pattern as saveMarketplaceToCatalog)
+    try {
+      const CHUNK = 500;
+      let totalInserted = 0;
+
+      const PROP_TO_COL: Record<string, string> = {
+        sourceFileName: 'sourceFileName',
+        sourceFilePath: 'sourceFilePath',
+        sheetName: 'sheetName',
+        sourceRowNumber: 'sourceRowNumber',
+        action: 'action',
+        customLabelSku: 'customLabelSku',
+        categoryId: 'categoryId',
+        categoryName: 'categoryName',
+        title: 'title',
+        startPrice: 'startPrice',
+        startPriceNum: 'startPriceNum',
+        quantity: 'quantity',
+        quantityNum: 'quantityNum',
+        itemPhotoUrl: 'itemPhotoUrl',
+        conditionId: 'conditionId',
+        description: 'description',
+        format: 'format',
+        duration: 'duration',
+        location: 'location',
+        shippingProfileName: 'shippingProfileName',
+        returnProfileName: 'returnProfileName',
+        paymentProfileName: 'paymentProfileName',
+        cBrand: 'cBrand',
+        cType: 'cType',
+        cFeatures: 'cFeatures',
+        cManufacturerPartNumber: 'cManufacturerPartNumber',
+        cOeOemPartNumber: 'cOeOemPartNumber',
+        extractedMake: 'extractedMake',
+        extractedModel: 'extractedModel',
+        pipelineJobId: 'pipeline_job_id',
+        marketplace: 'marketplace',
+        version: 'version',
+      };
+      const ALL_COLS = Object.values(PROP_TO_COL);
+      const updateSet = ALL_COLS.map((c) => {
+        if (c === 'itemPhotoUrl') {
+          return `"${c}" = COALESCE(NULLIF(EXCLUDED."${c}", ''), listing_records."${c}")`;
+        }
+        return `"${c}" = EXCLUDED."${c}"`;
+      }).join(', ');
+      const colList = ALL_COLS.map(c => `"${c}"`).join(', ');
+
+      for (let i = 0; i < newListingRecords.length; i += CHUNK) {
+        const batch = newListingRecords.slice(i, i + CHUNK);
+        const values: unknown[] = [];
+        const rowsSql: string[] = [];
+        let paramIdx = 0;
+        for (const lr of batch) {
+          const rowParams: string[] = [];
+          for (const col of ALL_COLS) {
+            paramIdx++;
+            rowParams.push(`$${paramIdx}`);
+            values.push((lr as Record<string, unknown>)[col] ?? null);
+          }
+          rowsSql.push(`(${rowParams.join(', ')})`);
+        }
+        const sql = `
+          INSERT INTO "listing_records" (${colList})
+          VALUES ${rowsSql.join(',\n')}
+          ON CONFLICT ("customLabelSku", "marketplace")
+          WHERE ("customLabelSku" IS NOT NULL) AND ("deletedAt" IS NULL) AND ("marketplace" IS NOT NULL)
+          DO UPDATE SET ${updateSet}
+          RETURNING id
+        `;
+        const result = await this.listingRepo.query(sql, values);
+        totalInserted += (result?.length ?? 0);
+      }
+
+      this.logger.log(
+        `Job ${jobId}: Created ${totalInserted} missing marketplace listing records for ${missingEntries.length} marketplace(s)`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Job ${jobId}: Failed to insert missing marketplace listing records: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  /**
    * Parse all marketplace output XLSX files and save each listing row to catalog_products + listing_records.
+   * Catalog master rows are upserted from US output only (AU/DE update listing_records per marketplace).
    */
   private async saveToCatalog(jobId: string, outputDir: string, originalFilename?: string): Promise<void> {
+    let catalogUpserted = false;
     for (const marketplace of ['US', 'AU', 'DE'] as const) {
-      await this.saveMarketplaceToCatalog(jobId, outputDir, marketplace, originalFilename);
+      const didUpsertCatalog = await this.saveMarketplaceToCatalog(
+        jobId,
+        outputDir,
+        marketplace,
+        originalFilename,
+        !catalogUpserted,
+      );
+      if (didUpsertCatalog) catalogUpserted = true;
     }
   }
 
@@ -518,7 +927,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     outputDir: string,
     marketplace: 'US' | 'AU' | 'DE',
     originalFilename?: string,
-  ): Promise<void> {
+    upsertCatalogProducts = false,
+  ): Promise<boolean> {
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
     const mktFile = files.find(f => {
       const lower = f.toLowerCase();
@@ -528,7 +938,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     });
     if (!mktFile) {
       this.logger.warn(`Job ${jobId}: No ${marketplace} output file found for catalog save`);
-      return;
+      return false;
     }
 
     const mktPath = path.join(outputDir, mktFile);
@@ -537,7 +947,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const ws = wb.Sheets['Listings'];
       if (!ws) {
         this.logger.warn(`Job ${jobId}: No Listings sheet in ${marketplace} output`);
-        return;
+        return false;
       }
 
       const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
@@ -551,7 +961,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       }
       if (headerIdx === -1) {
         this.logger.warn(`Job ${jobId}: Could not find header row in ${marketplace} output`);
-        return;
+        return false;
       }
 
       const headers = rows[headerIdx].map(h => String(h ?? '').trim());
@@ -757,15 +1167,61 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
       }
 
+      let mvlRejectedTotal = 0;
+      let mvlValidatedTotal = 0;
+      for (const product of products) {
+        const rawFitment = product.fitmentData as Record<string, unknown>[] | undefined;
+        if (!Array.isArray(rawFitment) || rawFitment.length === 0) continue;
+
+        const categoryId =
+          product.categoryId?.trim() || EbayMvlService.MOTORS_PARTS_CATEGORY;
+        try {
+          const mvlResult = await this.mvlService.validateFitmentData(rawFitment, categoryId);
+          product.fitmentData = mvlResult.accepted;
+          mvlRejectedTotal += mvlResult.rejectedCount;
+          mvlValidatedTotal += mvlResult.validCount;
+          if (mvlResult.apiUnavailable) {
+            this.logger.warn(
+              `Job ${jobId} [${marketplace}]: eBay MVL API unavailable — fitment kept as needs_review where possible`,
+            );
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Job ${jobId} [${marketplace}]: MVL validation failed for SKU ${product.sku ?? '?'}: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+
+      if (mvlRejectedTotal > 0 || mvlValidatedTotal > 0) {
+        this.logger.log(
+          `Job ${jobId} [${marketplace}]: MVL validation — ${mvlValidatedTotal} valid, ${mvlRejectedTotal} rejected`,
+        );
+      }
+
       this.logger.log(
         `Job ${jobId} [${marketplace}]: Parsed ${products.length} products, ${listingRecords.length} listing records from ${mktFile}`,
       );
 
-      if (products.length > 0) {
+      if (products.length > 0 && upsertCatalogProducts) {
         const withFitment = products.filter(
           (p) => Array.isArray(p.fitmentData) && (p.fitmentData as unknown[]).length > 0,
         ).length;
         const CHUNK = 500;
+
+        const skusToMerge = products.map((p) => p.sku?.trim()).filter((s): s is string => Boolean(s));
+        if (skusToMerge.length > 0) {
+          const existingProducts = await this.productRepo.find({ where: { sku: In(skusToMerge) } });
+          const existingBySku = new Map(existingProducts.map((p) => [p.sku!, p]));
+          for (const product of products) {
+            if ((!product.imageUrls || product.imageUrls.length === 0) && product.sku) {
+              const existing = existingBySku.get(product.sku);
+              if (existing?.imageUrls?.length) {
+                product.imageUrls = existing.imageUrls;
+              }
+            }
+          }
+        }
+
         // PostgreSQL column names (snake_case) — orUpdate uses DB names, not entity property names
         const upsertColumns = [
           'title', 'description', 'brand', 'brand_normalized', 'mpn', 'mpn_normalized',
@@ -801,6 +1257,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
         this.logger.log(
           `Job ${jobId} [${marketplace}]: Saved ${products.length} products to catalog (${withFitment} with fitment rows)`,
+        );
+      } else if (products.length > 0) {
+        this.logger.log(
+          `Job ${jobId} [${marketplace}]: Skipped catalog_products upsert (master catalog uses US output only)`,
         );
       }
 
@@ -861,12 +1321,17 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               rowsSql.push(`(${rowParams.join(', ')})`);
             }
             const colList = ALL_COLS.map(c => `"${c}"`).join(', ');
-            const updateSet = ALL_COLS.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ');
+            const updateSet = ALL_COLS.map((c) => {
+              if (c === 'itemPhotoUrl') {
+                return `"${c}" = COALESCE(NULLIF(EXCLUDED."${c}", ''), listing_records."${c}")`;
+              }
+              return `"${c}" = EXCLUDED."${c}"`;
+            }).join(', ');
             const sql = `
               INSERT INTO "listing_records" (${colList})
               VALUES ${rowsSql.join(',\n')}
-              ON CONFLICT ("customLabelSku")
-              WHERE ("customLabelSku" IS NOT NULL) AND ("deletedAt" IS NULL)
+              ON CONFLICT ("customLabelSku", "marketplace")
+              WHERE ("customLabelSku" IS NOT NULL) AND ("deletedAt" IS NULL) AND ("marketplace" IS NOT NULL)
               DO UPDATE SET ${updateSet}
               RETURNING id
             `;
@@ -884,8 +1349,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       } else {
         this.logger.warn(`Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`);
       }
+
+      return upsertCatalogProducts && products.length > 0;
     } catch (err) {
       this.logger.error(`Job ${jobId} [${marketplace}]: Failed to save to catalog: ${err instanceof Error ? err.message : err}`);
+      return false;
     }
   }
 }

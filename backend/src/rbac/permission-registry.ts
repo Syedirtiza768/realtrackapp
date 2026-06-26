@@ -185,6 +185,13 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
 
   // ── Inventory ──
   p('inventory.view', 'View inventory', 'inventory', READ_ONLY),
+  p('inventory.enrich', 'Fetch details and run enrichment on inventory parts', 'inventory', [
+    ROLE_SLUGS.SUPER_ADMIN,
+    ROLE_SLUGS.ADMIN,
+    ROLE_SLUGS.MANAGER,
+    ROLE_SLUGS.LISTING_MANAGER,
+    ROLE_SLUGS.OPS_USER,
+  ]),
   p('inventory.adjust', 'Adjust inventory', 'inventory', MANAGER_UP),
   p('inventory.allocate', 'Allocate inventory', 'inventory', MANAGER_UP),
   p('inventory.reconcile', 'Reconcile inventory', 'inventory', ADMIN_UP),

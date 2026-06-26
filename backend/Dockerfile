@@ -33,8 +33,9 @@ RUN \
   elif [ -f package-lock.json ]; then npm ci --omit=dev; \
   else npm install --omit=dev; fi
 
-# Copy compiled output
+# Copy compiled output + shared platform data (runtime lookup: /app/shared/...)
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/shared ./shared
 
 # Create uploads directory
 RUN mkdir -p uploads/catalog

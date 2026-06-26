@@ -1,0 +1,1003 @@
+{
+  "generatedAt": "2026-06-26T20:17:45.224Z",
+  "task": "single-listing OEM text part lookup",
+  "cases": 6,
+  "modelsTested": 7,
+  "rankings": [
+    {
+      "model": "google/gemini-2.5-flash",
+      "credibilityPct": 88,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "avgLatencyMs": 2714,
+      "avgCostUsd": 0.00041390000000000003,
+      "cost15000Usd": 6.208500000000001,
+      "cost15000With10PctVisionFallback": 7.760625000000001
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "credibilityPct": 78,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "avgLatencyMs": 2093,
+      "avgCostUsd": 0.000091225,
+      "cost15000Usd": 1.368375,
+      "cost15000With10PctVisionFallback": 1.71046875
+    },
+    {
+      "model": "openai/gpt-4.1-mini",
+      "credibilityPct": 78,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "avgLatencyMs": 2495,
+      "avgCostUsd": 0.0002648666666666667,
+      "cost15000Usd": 3.9730000000000003,
+      "cost15000With10PctVisionFallback": 4.9662500000000005
+    },
+    {
+      "model": "deepseek/deepseek-chat-v3-0324",
+      "credibilityPct": 74,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "avgLatencyMs": 7667,
+      "avgCostUsd": 0.0001324,
+      "cost15000Usd": 1.986,
+      "cost15000With10PctVisionFallback": 2.4825
+    },
+    {
+      "model": "minimax/minimax-m3",
+      "credibilityPct": 72,
+      "usableRate": 0.6666666666666666,
+      "parseFailures": 1,
+      "avgLatencyMs": 9403,
+      "avgCostUsd": 0.00066175,
+      "cost15000Usd": 9.92625,
+      "cost15000With10PctVisionFallback": 12.407812499999999
+    },
+    {
+      "model": "meta-llama/llama-3.3-70b-instruct",
+      "credibilityPct": 58,
+      "usableRate": 0.5,
+      "parseFailures": 0,
+      "avgLatencyMs": 3524,
+      "avgCostUsd": 0.00005597,
+      "cost15000Usd": 0.83955,
+      "cost15000With10PctVisionFallback": 1.0494375
+    },
+    {
+      "model": "anthropic/claude-3.5-haiku",
+      "credibilityPct": 0,
+      "usableRate": 0,
+      "parseFailures": 6,
+      "avgLatencyMs": 0,
+      "avgCostUsd": 0,
+      "cost15000Usd": 0,
+      "cost15000With10PctVisionFallback": 0
+    }
+  ],
+  "details": [
+    {
+      "model": "google/gemini-2.5-flash",
+      "cases": [
+        {
+          "id": "mercedes-engine",
+          "partNumber": "272.970",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2940,
+          "costUsd": 0.0005189999999999999,
+          "parsed": {
+            "partName": "Engine Assembly",
+            "brand": "Mercedes-Benz",
+            "model": "M272",
+            "category": "Engines & Components",
+            "note": "This part number format (272.970) strongly suggests a Mercedes-Benz M272 engine variant. The '970' typically refers to a specific engine configuration or application within the M272 family. This would likely be a used OEM engine assembly. Buyers should verify fitment with their specific vehicle's VIN to ensure compatibility, as M272 engines were used across various Mercedes-Benz models like the C-Class, E-Class, CLK-Class, and ML-Class during the mid-2000s.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "mercedes-regulator",
+          "partNumber": "A 204 720 06 79",
+          "score": 90,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "model/platform hint",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2104,
+          "costUsd": 0.00045610000000000003,
+          "parsed": {
+            "partName": "Door Handle Trim Front Left",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class W204",
+            "category": "Interior Parts & Accessories",
+            "note": "This is a genuine Mercedes-Benz OEM part, likely for the W204 C-Class. Given the part number format, it's probably a used item. Please verify fitment with your vehicle's VIN to ensure compatibility, as specific trim levels or model years may vary. This part number typically refers to an interior door handle trim piece for the front left (driver's side in LHD vehicles).",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "mercedes-latch",
+          "partNumber": "A 204 730 08 35",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2960,
+          "costUsd": 0.0004411,
+          "parsed": {
+            "partName": "Door Lock Actuator Front Right",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class (W204)",
+            "category": "Door Parts",
+            "note": "This is a genuine Mercedes-Benz OEM door lock actuator, likely for the front right (passenger side in LHD vehicles) of a W204 C-Class. As a used OEM part, it is expected to be in good working condition but may show minor signs of wear. Please verify fitment with your vehicle's VIN before purchase, as specific features or model years may vary.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "toyota-alternator",
+          "partNumber": "27060-0V210",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2422,
+          "costUsd": 0.0003652,
+          "parsed": {
+            "partName": "Alternator",
+            "brand": "Toyota",
+            "model": "Camry",
+            "category": "Charging & Starting Systems",
+            "note": "This is a genuine Toyota OEM alternator, part number 27060-0V210. It is commonly found on Toyota Camry models. This part is typically sold in used condition and may show signs of wear. Please verify fitment with your vehicle's VIN before purchasing.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "bosch-aftermarket",
+          "partNumber": "0986424590",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2594,
+          "costUsd": 0.0003774,
+          "parsed": {
+            "partName": "Brake Pad Set, Front",
+            "brand": "Bosch",
+            "model": "",
+            "category": "Brakes",
+            "note": "This is a Bosch aftermarket brake pad set, likely for the front axle. Bosch is a major OEM supplier, so these pads are designed to meet or exceed original equipment specifications. Please verify fitment with your vehicle's make, model, and year using the provided part number before purchasing. This part is typically sold new.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "unknown-fake",
+          "partNumber": "ZZZ-INVALID-00000",
+          "score": 40,
+          "usable": false,
+          "notes": [
+            "correctly cautious on unknown PN"
+          ],
+          "parseError": null,
+          "latencyMs": 3262,
+          "costUsd": 0.0003246,
+          "parsed": {
+            "partName": "",
+            "brand": "",
+            "model": "",
+            "category": "",
+            "note": "This part number 'ZZZ-INVALID-00000' does not conform to any known OEM or aftermarket part numbering conventions. Please double-check the number for accuracy. Without a valid part number, it is impossible to determine the part's details or vehicle compatibility.",
+            "confidence": "low"
+          }
+        }
+      ],
+      "totalScore": 530,
+      "maxScore": 600,
+      "avgLatencyMs": 2714,
+      "totalCostUsd": 0.0024834,
+      "avgCostUsd": 0.00041390000000000003,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "credibilityPct": 88,
+      "cost15000Usd": 6.208500000000001,
+      "cost15000With10PctVisionFallback": 7.760625000000001
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "cases": [
+        {
+          "id": "mercedes-engine",
+          "partNumber": "272.970",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2726,
+          "costUsd": 0.00009630000000000001,
+          "parsed": {
+            "partName": "Engine Control Module (ECM)",
+            "brand": "Mercedes-Benz",
+            "model": "E-Class",
+            "category": "Engine Management",
+            "note": "This is a used OEM Engine Control Module (ECM) for Mercedes-Benz vehicles, specifically compatible with the E-Class model. Please verify compatibility with your specific vehicle before purchasing. The part is in good condition and has been tested for functionality.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "mercedes-regulator",
+          "partNumber": "A 204 720 06 79",
+          "score": 90,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "model/platform hint",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2290,
+          "costUsd": 0.00009825,
+          "parsed": {
+            "partName": "Front Bumper Cover",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class",
+            "category": "Body Parts",
+            "note": "This is a used OEM front bumper cover for the Mercedes-Benz C-Class (W204). It may show signs of wear and tear typical for used parts, but is structurally sound and ready for installation. Please verify fitment with your vehicle's specifications before purchasing.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "mercedes-latch",
+          "partNumber": "A 204 730 08 35",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 1991,
+          "costUsd": 0.00009525,
+          "parsed": {
+            "partName": "Front Bumper Cover",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class",
+            "category": "Body Parts",
+            "note": "This is a used OEM front bumper cover for the Mercedes-Benz C-Class (W204). It may show signs of wear consistent with its age, but overall condition is good. Please verify fitment with your vehicle's specifications before purchasing.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "toyota-alternator",
+          "partNumber": "27060-0V210",
+          "score": 55,
+          "usable": true,
+          "notes": [
+            "brand mismatch",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 1978,
+          "costUsd": 0.00009015,
+          "parsed": {
+            "partName": "Ignition Coil",
+            "brand": "Nissan",
+            "model": "Altima",
+            "category": "Ignition System",
+            "note": "This is a used OEM ignition coil compatible with Nissan vehicles, specifically the Altima model. Please verify fitment with your vehicle's specifications before purchasing. In good working condition, tested for functionality.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "bosch-aftermarket",
+          "partNumber": "0986424590",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 1700,
+          "costUsd": 0.00008984999999999999,
+          "parsed": {
+            "partName": "Brake Pad Set",
+            "brand": "Bosch",
+            "model": "",
+            "category": "Brakes",
+            "note": "This is a used OEM brake pad set from Bosch, part number 0986424590. Please ensure compatibility with your vehicle before purchasing. These pads are designed for reliable stopping power and are a great choice for replacement.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "unknown-fake",
+          "partNumber": "ZZZ-INVALID-00000",
+          "score": 40,
+          "usable": false,
+          "notes": [
+            "correctly cautious on unknown PN"
+          ],
+          "parseError": null,
+          "latencyMs": 1871,
+          "costUsd": 0.00007754999999999999,
+          "parsed": {
+            "partName": "",
+            "brand": "",
+            "model": "",
+            "category": "",
+            "note": "This part number appears to be invalid or does not correspond to any known automotive component. Please verify the part number for accuracy or provide additional details for better identification.",
+            "confidence": "low"
+          }
+        }
+      ],
+      "totalScore": 465,
+      "maxScore": 600,
+      "avgLatencyMs": 2093,
+      "totalCostUsd": 0.0005473499999999999,
+      "avgCostUsd": 0.000091225,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "credibilityPct": 78,
+      "cost15000Usd": 1.368375,
+      "cost15000With10PctVisionFallback": 1.71046875
+    },
+    {
+      "model": "openai/gpt-4.1-mini",
+      "cases": [
+        {
+          "id": "mercedes-engine",
+          "partNumber": "272.970",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2576,
+          "costUsd": 0.0002728,
+          "parsed": {
+            "partName": "Engine Cylinder Head Cover",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class (W203)",
+            "category": "Engine Components",
+            "note": "This is a used OEM engine cylinder head cover for Mercedes-Benz, commonly found on the C-Class W203 models with the M272 engine. Please verify compatibility with your specific vehicle model and engine code before purchase. The part shows typical signs of use but is structurally intact and functional.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "mercedes-regulator",
+          "partNumber": "A 204 720 06 79",
+          "score": 90,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "model/platform hint",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2259,
+          "costUsd": 0.00029079999999999997,
+          "parsed": {
+            "partName": "Front Brake Disc Rotor",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class (W204)",
+            "category": "Brakes",
+            "note": "This is a genuine OEM front brake disc rotor for the Mercedes-Benz C-Class W204 series. Typically used on models produced between 2007 and 2014. The part is assumed to be used but in good condition unless otherwise specified. Please verify fitment with your vehicle's VIN or consult a Mercedes-Benz dealer to ensure compatibility.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "mercedes-latch",
+          "partNumber": "A 204 730 08 35",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 1979,
+          "costUsd": 0.00030199999999999997,
+          "parsed": {
+            "partName": "Radiator Cooling Fan Assembly",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class (W204)",
+            "category": "Engine Cooling",
+            "note": "This is a used OEM radiator cooling fan assembly for Mercedes-Benz C-Class W204 models. It is designed to fit specific model years within the W204 generation, typically 2007-2014. Please verify compatibility with your vehicle's VIN or consult a dealer to ensure proper fitment. The part is in good working condition with normal wear consistent with used parts.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "toyota-alternator",
+          "partNumber": "27060-0V210",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2497,
+          "costUsd": 0.00026599999999999996,
+          "parsed": {
+            "partName": "Fuel Pump Assembly",
+            "brand": "Toyota",
+            "model": "Hilux",
+            "category": "Fuel Delivery",
+            "note": "This is a used OEM fuel pump assembly with part number 27060-0V210, typically fitting Toyota Hilux models. Ensure compatibility with your vehicle's year and engine variant before purchasing. The part is tested for functionality but may show minor signs of wear consistent with normal use.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "bosch-aftermarket",
+          "partNumber": "0986424590",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 3538,
+          "costUsd": 0.00025079999999999997,
+          "parsed": {
+            "partName": "Fuel Injector",
+            "brand": "Bosch",
+            "model": "",
+            "category": "Fuel Delivery",
+            "note": "This is a Bosch OEM fuel injector commonly used in various diesel engines. It is typically a used or remanufactured part. Verify fitment with your specific vehicle model and engine type before purchase, as Bosch injectors are often compatible with multiple applications.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "unknown-fake",
+          "partNumber": "ZZZ-INVALID-00000",
+          "score": 40,
+          "usable": false,
+          "notes": [
+            "correctly cautious on unknown PN"
+          ],
+          "parseError": null,
+          "latencyMs": 2119,
+          "costUsd": 0.00020679999999999999,
+          "parsed": {
+            "partName": "",
+            "brand": "",
+            "model": "",
+            "category": "",
+            "note": "The provided part number appears to be invalid or does not match known OEM formats. Please verify the number and provide a correct OEM or part number for accurate identification.",
+            "confidence": "low"
+          }
+        }
+      ],
+      "totalScore": 470,
+      "maxScore": 600,
+      "avgLatencyMs": 2495,
+      "totalCostUsd": 0.0015892,
+      "avgCostUsd": 0.0002648666666666667,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "credibilityPct": 78,
+      "cost15000Usd": 3.9730000000000003,
+      "cost15000With10PctVisionFallback": 4.9662500000000005
+    },
+    {
+      "model": "deepseek/deepseek-chat-v3-0324",
+      "cases": [
+        {
+          "id": "mercedes-engine",
+          "partNumber": "272.970",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 6537,
+          "costUsd": 0.00014285999999999997,
+          "parsed": {
+            "partName": "Mercedes-Benz engine mount",
+            "brand": "Mercedes-Benz",
+            "model": "",
+            "category": "Engine & Transmission Mounts",
+            "note": "This appears to be a Mercedes-Benz OEM engine mount based on the 272-prefix part number format. Typical fitment would be for M272 V6 engines (2004-2011 era). Verify application against chassis/VIN as mounts vary by submodel and production date. Original equipment part showing normal wear if used.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "mercedes-regulator",
+          "partNumber": "A 204 720 06 79",
+          "score": 90,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "model/platform hint",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 8823,
+          "costUsd": 0.00012925,
+          "parsed": {
+            "partName": "headlight switch",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class (W204)",
+            "category": "Lighting",
+            "note": "Genuine Mercedes-Benz headlight switch assembly. Compatible with W204 platform vehicles (2008-2014 C-Class). Verify your vehicle's production date as minor variations exist. Includes rotary light switch function. OEM part in used condition unless specified otherwise.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "mercedes-latch",
+          "partNumber": "A 204 730 08 35",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 6908,
+          "costUsd": 0.00015695,
+          "parsed": {
+            "partName": "Front brake pad set",
+            "brand": "Mercedes-Benz",
+            "model": "W204 (C-Class)",
+            "category": "Brakes",
+            "note": "This appears to be a genuine Mercedes-Benz brake pad set for W204 platform vehicles (2007-2014 C-Class). Typical fitment would include C250, C300, C350 models. Verify exact application as brake components may vary by engine/trim. OEM part shows typical wear patterns but should be inspected for remaining thickness before resale. Includes all shims and wear sensors as original equipment.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "toyota-alternator",
+          "partNumber": "27060-0V210",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 9147,
+          "costUsd": 0.00013114,
+          "parsed": {
+            "partName": "Oil Filter",
+            "brand": "Toyota",
+            "model": "",
+            "category": "Engine",
+            "note": "This appears to be a genuine Toyota oil filter part number. Suitable for various Toyota/Lexus models - sellers should verify exact fitment using the part number against vehicle applications. Typically sold as new OEM part in original packaging. Recommend checking Toyota parts catalogs for model year applicability before listing.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "bosch-aftermarket",
+          "partNumber": "0986424590",
+          "score": 55,
+          "usable": true,
+          "notes": [
+            "brand mismatch",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 10468,
+          "costUsd": 0.00013076,
+          "parsed": {
+            "partName": "Ignition Coil",
+            "brand": "Volkswagen",
+            "model": "",
+            "category": "Ignition",
+            "note": "This appears to be a VW/Audi ignition coil part number. Compatible with multiple models including some Golf, Jetta, and Passat variants. Verify fitment using VW's ETKA system or cross-reference guides. Typical condition would be used OEM part unless specified as new old stock.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "unknown-fake",
+          "partNumber": "ZZZ-INVALID-00000",
+          "score": 40,
+          "usable": false,
+          "notes": [
+            "correctly cautious on unknown PN"
+          ],
+          "parseError": null,
+          "latencyMs": 4117,
+          "costUsd": 0.00010344,
+          "parsed": {
+            "partName": "",
+            "brand": "",
+            "model": "",
+            "category": "",
+            "note": "This appears to be an invalid or placeholder part number format. No recognizable OEM numbering pattern detected. Seller should verify the correct part number from vehicle service documentation or parts catalog before listing.",
+            "confidence": "low"
+          }
+        }
+      ],
+      "totalScore": 445,
+      "maxScore": 600,
+      "avgLatencyMs": 7667,
+      "totalCostUsd": 0.0007944,
+      "avgCostUsd": 0.0001324,
+      "usableRate": 0.8333333333333334,
+      "parseFailures": 0,
+      "credibilityPct": 74,
+      "cost15000Usd": 1.986,
+      "cost15000With10PctVisionFallback": 2.4825
+    },
+    {
+      "model": "minimax/minimax-m3",
+      "cases": [
+        {
+          "id": "mercedes-engine",
+          "partNumber": "272.970",
+          "score": 0,
+          "usable": false,
+          "notes": [
+            "parse failed"
+          ],
+          "parseError": "Unterminated string in JSON at position 982 (line 6 column 676)",
+          "latencyMs": 7719,
+          "costUsd": 0.0010806000000000001,
+          "parsed": null
+        },
+        {
+          "id": "mercedes-regulator",
+          "partNumber": "A 204 720 06 79",
+          "score": 90,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "model/platform hint",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 10271,
+          "costUsd": 0.00033779999999999997,
+          "parsed": {
+            "partName": "Trunk Lid Lock Actuator / Tailgate Latch",
+            "brand": "Mercedes-Benz",
+            "model": "C-Class (W204) / E-Class (W212) / GLK (X204)",
+            "category": "Trunk / Tailgate Latch & Lock",
+            "note": "Genuine Mercedes-Benz OEM trunk/tailgate latch assembly. Part number A 204 720 06 79 fits W204 C-Class models and is commonly cross-used on related chassis such as the W212 E-Class and X204 GLK. Sold as a used OEM part — inspect photos for broken plastic, stripped actuator gears, or corroded electrical connector pins before listing. Verify fitment by VIN or chassis code, as Mercedes often shares latch assemblies across multiple model lines within the same generation.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "mercedes-latch",
+          "partNumber": "A 204 730 08 35",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 17027,
+          "costUsd": 0.0007293,
+          "parsed": {
+            "partName": "Door Lock Actuator (Central Locking Mechanism)",
+            "brand": "Mercedes-Benz",
+            "model": "W204 C-Class (2008-2014)",
+            "category": "Door Locks & Hardware",
+            "note": "OEM Mercedes-Benz door lock actuator / central locking mechanism removed from a W204 C-Class. Part number prefix 'A 204' confirms W204 chassis fitment, and group '730' designates the door lock system in Mercedes' parts catalog. Verify exact door position (front left/right or rear left/right) by comparing the actuator linkage and connector orientation to your vehicle before purchase. Sold as a used OEM part — inspect photos for intact linkage, undamaged connector pins, and smooth actuator operation. Compatible with W204 C-Class sedan and likely C204 coupe / S204 wagon variants sharing the same lock assembly.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "toyota-alternator",
+          "partNumber": "27060-0V210",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 10029,
+          "costUsd": 0.0008042999999999999,
+          "parsed": {
+            "partName": "Alternator Assembly (Generator)",
+            "brand": "Toyota",
+            "model": "Tundra / Sequoia / Land Cruiser (3UR-FE 5.7L V8 applications)",
+            "category": "Charging System - Alternators & Generators",
+            "note": "OEM Toyota alternator removed from a donor vehicle. The 27060 series in Toyota's catalog denotes a generator/charging unit, and the 0V210 suffix aligns with large-displacement V8 applications, most commonly the 5.7L (3UR-FE) platform shared across the Tundra, Sequoia, and Land Cruiser. Verify amperage rating and pulley/clutch configuration against the buyer's VIN before shipping, as 130A and 150A variants exist across model years. Sold as a used OEM part — inspect brushes, rectifier, and bearings prior to installation and core-return if applicable.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "bosch-aftermarket",
+          "partNumber": "0986424590",
+          "score": 100,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type plausible",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 5785,
+          "costUsd": 0.0007880999999999999,
+          "parsed": {
+            "partName": "Brake Disc / Rotor (front or rear, specific position not confirmed)",
+            "brand": "Bosch",
+            "model": "",
+            "category": "Brakes",
+            "note": "Bosch aftermarket brake disc from the 0986 424xxx series, which covers passenger-car brake rotors. Listing should clearly state condition (assumed used OEM-quality aftermarket unless marked new), include all visible measurements (diameter, thickness, hat height, bolt pattern, center bore) from the actual disc, and note any scoring, lip, or rust. Cross-reference by physical dimensions only — do not claim specific vehicle fitment without verifying the Bosch catalog entry or measuring against the original rotor. Standard eBay Brakes > Rotors category placement recommended.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "unknown-fake",
+          "partNumber": "ZZZ-INVALID-00000",
+          "score": 40,
+          "usable": false,
+          "notes": [
+            "correctly cautious on unknown PN"
+          ],
+          "parseError": null,
+          "latencyMs": 5588,
+          "costUsd": 0.0002304,
+          "parsed": {
+            "partName": "",
+            "brand": "",
+            "model": "",
+            "category": "",
+            "note": "The provided part number (ZZZ-INVALID-00000) does not match any recognized OEM or aftermarket part numbering format. No reliable identification of the part, vehicle brand, model, or category can be made from this input. Please verify the part number and resubmit with a valid OEM or manufacturer reference to enable accurate listing details.",
+            "confidence": "low"
+          }
+        }
+      ],
+      "totalScore": 430,
+      "maxScore": 600,
+      "avgLatencyMs": 9403,
+      "totalCostUsd": 0.0039705,
+      "avgCostUsd": 0.00066175,
+      "usableRate": 0.6666666666666666,
+      "parseFailures": 1,
+      "credibilityPct": 72,
+      "cost15000Usd": 9.92625,
+      "cost15000With10PctVisionFallback": 12.407812499999999
+    },
+    {
+      "model": "meta-llama/llama-3.3-70b-instruct",
+      "cases": [
+        {
+          "id": "mercedes-engine",
+          "partNumber": "272.970",
+          "score": 60,
+          "usable": false,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 3616,
+          "costUsd": 0.00005158,
+          "parsed": {
+            "partName": "",
+            "brand": "Mercedes-Benz",
+            "model": "",
+            "category": "",
+            "note": "This is a used OEM part from Mercedes-Benz, sold as-is. Please verify fitment before purchasing. The A-number format suggests it's a genuine Mercedes part, but exact application and condition are unknown.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "mercedes-regulator",
+          "partNumber": "A 204 720 06 79",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 3265,
+          "costUsd": 0.0000608,
+          "parsed": {
+            "partName": "Control Module",
+            "brand": "Mercedes-Benz",
+            "model": "",
+            "category": "Electrical",
+            "note": "This is a used OEM control module with part number A 204 720 06 79. It is recommended to check the fitment before purchasing. Please consult a mechanic or the vehicle's manual to ensure compatibility. The module is assumed to be in working condition, but testing is advised.",
+            "confidence": "high"
+          }
+        },
+        {
+          "id": "mercedes-latch",
+          "partNumber": "A 204 730 08 35",
+          "score": 80,
+          "usable": true,
+          "notes": [
+            "brand match",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 3046,
+          "costUsd": 0.00005592000000000001,
+          "parsed": {
+            "partName": "Control Module",
+            "brand": "Mercedes-Benz",
+            "model": "",
+            "category": "Electrical",
+            "note": "This is a used OEM control module, likely from a Mercedes-Benz vehicle. Please verify fitment before purchasing, as control modules can be vehicle-specific. The seller recommends checking the part number against the vehicle's documentation to ensure compatibility.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "toyota-alternator",
+          "partNumber": "27060-0V210",
+          "score": 55,
+          "usable": true,
+          "notes": [
+            "brand mismatch",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 2896,
+          "costUsd": 0.0000558,
+          "parsed": {
+            "partName": "Radiator Fan Motor",
+            "brand": "Nissan",
+            "model": "",
+            "category": "Engine Cooling",
+            "note": "This is a used OEM radiator fan motor, compatible with various Nissan models. Please verify fitment before purchasing. Interchange numbers may vary, ensure correct application. Seller is not responsible for incorrect installation or compatibility issues.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "bosch-aftermarket",
+          "partNumber": "0986424590",
+          "score": 35,
+          "usable": false,
+          "notes": [
+            "brand mismatch",
+            "part type weak",
+            "confidence ok"
+          ],
+          "parseError": null,
+          "latencyMs": 4893,
+          "costUsd": 0.00005624,
+          "parsed": {
+            "partName": "",
+            "brand": "Volkswagen",
+            "model": "",
+            "category": "",
+            "note": "This is a used OEM part, please ensure proper fitment before purchasing. The part number 0986424590 is a Volkswagen OEM number, but without further information, the exact application and condition are unknown. Buyers are responsible for verifying compatibility with their vehicle.",
+            "confidence": "medium"
+          }
+        },
+        {
+          "id": "unknown-fake",
+          "partNumber": "ZZZ-INVALID-00000",
+          "score": 40,
+          "usable": false,
+          "notes": [
+            "correctly cautious on unknown PN"
+          ],
+          "parseError": null,
+          "latencyMs": 3430,
+          "costUsd": 0.00005548,
+          "parsed": {
+            "partName": "",
+            "brand": "",
+            "model": "",
+            "category": "",
+            "note": "This part number does not appear to be a valid OEM number. Please verify the part number with the manufacturer or supplier to ensure accuracy. If you have any additional information about the part, please include it in the listing to help buyers find what they're looking for.",
+            "confidence": "low"
+          }
+        }
+      ],
+      "totalScore": 350,
+      "maxScore": 600,
+      "avgLatencyMs": 3524,
+      "totalCostUsd": 0.00033582,
+      "avgCostUsd": 0.00005597,
+      "usableRate": 0.5,
+      "parseFailures": 0,
+      "credibilityPct": 58,
+      "cost15000Usd": 0.83955,
+      "cost15000With10PctVisionFallback": 1.0494375
+    },
+    {
+      "model": "anthropic/claude-3.5-haiku",
+      "cases": [
+        {
+          "id": "mercedes-engine",
+          "partNumber": "272.970",
+          "score": 0,
+          "usable": false,
+          "error": "404 No endpoints found for anthropic/claude-3.5-haiku."
+        },
+        {
+          "id": "mercedes-regulator",
+          "partNumber": "A 204 720 06 79",
+          "score": 0,
+          "usable": false,
+          "error": "404 No endpoints found for anthropic/claude-3.5-haiku."
+        },
+        {
+          "id": "mercedes-latch",
+          "partNumber": "A 204 730 08 35",
+          "score": 0,
+          "usable": false,
+          "error": "404 No endpoints found for anthropic/claude-3.5-haiku."
+        },
+        {
+          "id": "toyota-alternator",
+          "partNumber": "27060-0V210",
+          "score": 0,
+          "usable": false,
+          "error": "404 No endpoints found for anthropic/claude-3.5-haiku."
+        },
+        {
+          "id": "bosch-aftermarket",
+          "partNumber": "0986424590",
+          "score": 0,
+          "usable": false,
+          "error": "404 No endpoints found for anthropic/claude-3.5-haiku."
+        },
+        {
+          "id": "unknown-fake",
+          "partNumber": "ZZZ-INVALID-00000",
+          "score": 0,
+          "usable": false,
+          "error": "404 No endpoints found for anthropic/claude-3.5-haiku."
+        }
+      ],
+      "totalScore": 0,
+      "maxScore": 600,
+      "avgLatencyMs": 0,
+      "totalCostUsd": 0,
+      "avgCostUsd": 0,
+      "usableRate": 0,
+      "parseFailures": 6,
+      "credibilityPct": 0,
+      "cost15000Usd": 0,
+      "cost15000With10PctVisionFallback": 0
+    }
+  ]
+}

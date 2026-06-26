@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EbayMvlService } from '../fitment/ebay-mvl.service.js';
+import type { MvlValidatedRow } from '../fitment/ebay-mvl.service.js';
+import type { ParsedFitmentRow } from '../fitment/fitment-mvl.util.js';
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
 import { extractMakeModelFromTitle } from '../listings/utils/extract-make-model-from-title.js';
@@ -228,88 +230,76 @@ export class FitmentDiscoveryService {
     rows: FitmentRow[],
     categoryId: string,
   ): Promise<FitmentRow[]> {
-    const validated: FitmentRow[] = [];
+    if (rows.length === 0) return [];
 
-    for (const row of rows) {
-      if (row.validationStatus === 'rejected') {
-        validated.push(row);
-        continue;
-      }
+    const indicesToValidate: number[] = [];
+    const parsed: ParsedFitmentRow[] = [];
 
-      try {
-        const yearNum = Number(row.year);
-        if (!Number.isFinite(yearNum) || yearNum < 1900) {
-          validated.push({
-            ...row,
-            validationStatus: 'rejected',
-            rejectedReason: 'Invalid year',
-            confidence: 0,
-          });
-          continue;
-        }
-
-        const makes = await this.mvl.getPropertyValues(categoryId, 'Make', {}, row.make, 5);
-        const makeMatch = makes.options.some(
-          (o) => o.value.toLowerCase() === row.make.toLowerCase(),
-        );
-        if (!makeMatch) {
-          validated.push({
-            ...row,
-            validationStatus: 'rejected',
-            rejectedReason: `Make "${row.make}" not found in eBay compatibility`,
-            confidence: 0,
-          });
-          continue;
-        }
-
-        const models = await this.mvl.getPropertyValues(
-          categoryId,
-          'Model',
-          { Make: row.make },
-          row.model,
-          5,
-        );
-        const modelMatch = models.options.some(
-          (o) => o.value.toLowerCase() === row.model.toLowerCase(),
-        );
-        if (!modelMatch) {
-          validated.push({
-            ...row,
-            validationStatus: 'rejected',
-            rejectedReason: `Model "${row.model}" not valid for Make "${row.make}" on eBay`,
-            confidence: 0,
-          });
-          continue;
-        }
-
-        const years = await this.mvl.getYears(categoryId, row.make, row.model);
-        const yearMatch = years.options.some((o) => o.value === row.year);
-        if (!yearMatch) {
-          validated.push({
-            ...row,
-            validationStatus: 'needs_review',
-            rejectedReason: `Year ${row.year} not listed for ${row.make} ${row.model}`,
-            confidence: Math.min(row.confidence, 0.5),
-          });
-          continue;
-        }
-
-        validated.push({
-          ...row,
-          validationStatus: row.source === 'donor_vin_nhtsa' ? 'needs_review' : 'valid',
-          confidence: row.source === 'donor_vin_nhtsa' ? row.confidence : 0.9,
-        });
-      } catch (err) {
-        this.logger.debug(`eBay validation skipped for row: ${String(err)}`);
-        validated.push({
-          ...row,
-          validationStatus: 'needs_review',
-          confidence: Math.min(row.confidence, 0.4),
-        });
-      }
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.validationStatus === 'rejected') continue;
+      indicesToValidate.push(i);
+      parsed.push({
+        year: row.year,
+        make: row.make,
+        model: row.model,
+        trim: row.trim,
+        engine: row.engine,
+        notes: row.notes,
+      });
     }
 
-    return validated;
+    const validated = await this.mvl.validateParsedRows(parsed, categoryId);
+    const validationByIndex = new Map<number, MvlValidatedRow>();
+    indicesToValidate.forEach((rowIndex, vi) => {
+      validationByIndex.set(rowIndex, validated[vi]);
+    });
+
+    return rows.map((row, i) => {
+      if (row.validationStatus === 'rejected') return row;
+
+      const result = validationByIndex.get(i);
+      if (!result) {
+        return {
+          ...row,
+          validationStatus: 'rejected' as const,
+          rejectedReason: 'Could not parse fitment row',
+          confidence: 0,
+        };
+      }
+
+      if (result.status === 'rejected') {
+        return {
+          ...row,
+          make: result.row.make,
+          model: result.row.model,
+          validationStatus: 'rejected' as const,
+          rejectedReason: result.rejectedReason,
+          confidence: 0,
+        };
+      }
+
+      if (result.status === 'needs_review') {
+        return {
+          ...row,
+          make: result.row.make,
+          model: result.row.model,
+          year: result.row.year,
+          validationStatus: 'needs_review' as const,
+          rejectedReason: result.rejectedReason,
+          confidence: Math.min(row.confidence, 0.5),
+        };
+      }
+
+      return {
+        ...row,
+        make: result.row.make,
+        model: result.row.model,
+        year: result.row.year,
+        validationStatus: row.source === 'donor_vin_nhtsa' ? 'needs_review' : 'valid',
+        confidence: row.source === 'donor_vin_nhtsa' ? row.confidence : 0.9,
+      };
+    });
   }
 
   private deduplicateFitments(rows: FitmentRow[]): FitmentRow[] {

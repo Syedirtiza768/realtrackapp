@@ -24,7 +24,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | Route | Component | Permission | Purpose |
 |-------|-----------|------------|---------|
 | `/` | `Dashboard` | `dashboard.view` | Main dashboard |
-| `/listings/new` | `ListingEditor` | `listings.create` | Create listing |
+| `/listings/new` | `SingleListingPipeline` | `listings.create` | **Add Part** — warehouse intake: OEM + brand + 2+ photos → draft inventory record (no AI, no pipeline) |
 | `/listings/:id/edit` | `ListingEditor` | `listings.update` | Edit listing |
 | `/listings/:id/history` | `RevisionHistory` | `listings.view` | View revisions |
 | `/catalog` | `CatalogManager` | `catalog.view` | Catalog browser |
@@ -35,7 +35,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | `/pipeline` | `PipelineWizard` | `pipeline.view` | Upload → enrich → US/AU/DE export; shows enrichment mode, OpenRouter probe errors, localization stats |
 | `/fitment` | `FitmentManager` | `fitment.view` | Fitment management |
 | `/fitment/vin` | `VinListingsPage` | `fitment.view` | VIN lookup |
-| `/inventory` | `InventoryManager` | `inventory.view` | Inventory; bulk eBay publish |
+| `/inventory` | `InventoryManager` | `inventory.view` | One row per SKU; **Fetch details** (vision: OEM+brand+photos) + **Send to pipeline** (`inventory.enrich`); no publish |
 | `/bulk-actions` | `BulkActionsPage` | `listings.update` | Bulk operations |
 | `/orders` | `OrdersPage` | `orders.view` | Order management |
 | `/motors` | `MotorsDashboard` | `motors.view` | Motors intelligence |

@@ -49,6 +49,7 @@ import { IntegrationsEbayController } from './controllers/integrations-ebay.cont
 import { EbayMultiStoreController } from './controllers/ebay-multi-store.controller.js';
 import { SellerpunditModule } from '../sellerpundit/sellerpundit.module.js';
 import { SellerpunditEbayController } from '../sellerpundit/sellerpundit-ebay.controller.js';
+import { FitmentModule } from '../../fitment/fitment.module.js';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { SellerpunditEbayController } from '../sellerpundit/sellerpundit-ebay.co
     ChannelsModule,
     AuthModule,
     OrdersModule,
+    FitmentModule,
   ],
   controllers: [
     IntegrationsEbayController,

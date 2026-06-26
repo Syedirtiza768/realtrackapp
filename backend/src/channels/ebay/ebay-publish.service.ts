@@ -45,6 +45,7 @@ import {
   isEbayOfferAlreadyExistsError,
   isEbayPartsAccessoriesReturnPolicyError,
   isEbayRecoverableBusinessPolicyError,
+  isEbaySellingLimitError,
 } from './ebay-api-error.util.js';
 import { EbayBusinessPolicy } from '../../integrations/ebay/entities/ebay-business-policy.entity.js';
 import {
@@ -645,6 +646,15 @@ export class EbayPublishService {
       } else {
         errorMsg = `eBay authorization failed for "${store.storeName}". Re-sync or reconnect this store in Settings → eBay Integrations.`;
       }
+    }
+
+    if (isEbaySellingLimitError(err)) {
+      errorMsg =
+        `eBay DE selling limit reached for "${store.storeName}". ` +
+        'Your eBay DE account has exceeded its monthly listing value limit (€3,000,000.00). ' +
+        'New listings cannot be created until the limit resets (typically at the start of the next month) ' +
+        'or eBay approves a limit increase. ' +
+        'Request a limit increase at: https://www.ebay.de/help/selling/listings/selling-limits?id=4107';
     }
     const responseData = (err as { response?: { data?: unknown } })?.response?.data;
     if (responseData) {

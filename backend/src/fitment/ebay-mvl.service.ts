@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import {
+  parseFitmentEntry,
+  serializeValidatedFitmentRow,
+  type ParsedFitmentRow,
+} from './fitment-mvl.util.js';
 
 /* ── Types ── */
 
@@ -31,6 +36,77 @@ export interface FitmentSelection {
 export interface EbayCompatibilityEntry {
   compatibilityProperties: Array<{ name: string; value: string }>;
   notes?: string;
+}
+
+export type MvlRowStatus = 'valid' | 'needs_review' | 'rejected';
+
+export interface MvlValidatedRow {
+  row: ParsedFitmentRow;
+  status: MvlRowStatus;
+  rejectedReason?: string;
+  serialized: Record<string, unknown>;
+}
+
+export interface MvlValidationSummary {
+  accepted: Record<string, unknown>[];
+  rejectedCount: number;
+  needsReviewCount: number;
+  validCount: number;
+  apiUnavailable: boolean;
+}
+
+class MvlValueCache {
+  private makes = new Map<string, Set<string>>();
+  private models = new Map<string, Set<string>>();
+  private years = new Map<string, Set<string>>();
+
+  private makeKey(categoryId: string) {
+    return categoryId;
+  }
+
+  private modelKey(categoryId: string, make: string) {
+    return `${categoryId}|${make.toLowerCase()}`;
+  }
+
+  private yearKey(categoryId: string, make: string, model: string) {
+    return `${categoryId}|${make.toLowerCase()}|${model.toLowerCase()}`;
+  }
+
+  hasMakeList(categoryId: string) {
+    return this.makes.has(this.makeKey(categoryId));
+  }
+
+  hasModelList(categoryId: string, make: string) {
+    return this.models.has(this.modelKey(categoryId, make));
+  }
+
+  hasYearList(categoryId: string, make: string, model: string) {
+    return this.years.has(this.yearKey(categoryId, make, model));
+  }
+
+  setMakes(categoryId: string, values: string[]) {
+    this.makes.set(this.makeKey(categoryId), new Set(values.map((v) => v.toLowerCase())));
+  }
+
+  setModels(categoryId: string, make: string, values: string[]) {
+    this.models.set(this.modelKey(categoryId, make), new Set(values.map((v) => v.toLowerCase())));
+  }
+
+  setYears(categoryId: string, make: string, model: string, values: string[]) {
+    this.years.set(this.yearKey(categoryId, make, model), new Set(values));
+  }
+
+  hasMake(categoryId: string, make: string) {
+    return this.makes.get(this.makeKey(categoryId))?.has(make.toLowerCase()) ?? false;
+  }
+
+  hasModel(categoryId: string, make: string, model: string) {
+    return this.models.get(this.modelKey(categoryId, make))?.has(model.toLowerCase()) ?? false;
+  }
+
+  hasYear(categoryId: string, make: string, model: string, year: string) {
+    return this.years.get(this.yearKey(categoryId, make, model))?.has(year) ?? false;
+  }
 }
 
 /**
@@ -238,5 +314,229 @@ export class EbayMvlService {
       Make: make,
       Model: model,
     });
+  }
+
+  /* ─── MVL validation & canonicalization ─── */
+
+  /**
+   * Match free-text make/model to canonical eBay MVL spellings (case-insensitive).
+   */
+  async resolveCanonicalMakeModel(
+    categoryId: string,
+    make: string,
+    model?: string,
+  ): Promise<{ make?: string; model?: string; mvlMatched: boolean }> {
+    const makeQuery = make.trim();
+    if (!makeQuery) return { mvlMatched: false };
+
+    try {
+      const makes = await this.getMakes(categoryId, makeQuery, 100);
+      const canonicalMake = this.pickCanonical(makes.options, makeQuery);
+      if (!canonicalMake) return { mvlMatched: false };
+
+      if (!model?.trim()) {
+        return { make: canonicalMake, mvlMatched: true };
+      }
+
+      const models = await this.getModels(categoryId, canonicalMake, model.trim(), 100);
+      const canonicalModel = this.pickCanonical(models.options, model.trim());
+      return {
+        make: canonicalMake,
+        model: canonicalModel ?? model.trim(),
+        mvlMatched: Boolean(canonicalModel),
+      };
+    } catch (err) {
+      this.logger.debug(
+        `MVL canonicalization skipped: ${err instanceof Error ? err.message : err}`,
+      );
+      return { make: makeQuery, model: model?.trim(), mvlMatched: false };
+    }
+  }
+
+  /**
+   * Validate fitment rows against live eBay MVL (Taxonomy API).
+   * Rejected rows are dropped from `accepted`; needs_review rows are kept with MvlStatus tag.
+   */
+  async validateFitmentData(
+    fitmentData: Record<string, unknown>[] | null | undefined,
+    categoryId: string,
+    options?: { keepNeedsReview?: boolean },
+  ): Promise<MvlValidationSummary> {
+    const empty: MvlValidationSummary = {
+      accepted: [],
+      rejectedCount: 0,
+      needsReviewCount: 0,
+      validCount: 0,
+      apiUnavailable: false,
+    };
+    if (!Array.isArray(fitmentData) || fitmentData.length === 0) return empty;
+
+    const parsedRows: ParsedFitmentRow[] = [];
+    let parseRejected = 0;
+    for (const raw of fitmentData) {
+      const parsed = parseFitmentEntry(raw);
+      if (parsed) parsedRows.push(parsed);
+      else parseRejected++;
+    }
+
+    const keepNeedsReview = options?.keepNeedsReview !== false;
+    const validated = await this.validateParsedRows(parsedRows, categoryId);
+
+    const accepted: Record<string, unknown>[] = [];
+    let rejectedCount = parseRejected;
+    let needsReviewCount = 0;
+    let validCount = 0;
+    const apiUnavailable = validated.some(
+      (v) => v.rejectedReason === 'eBay MVL API unavailable',
+    );
+
+    for (const result of validated) {
+      if (result.status === 'rejected') {
+        rejectedCount++;
+        continue;
+      }
+      if (result.status === 'needs_review') {
+        needsReviewCount++;
+        if (!keepNeedsReview) continue;
+      } else {
+        validCount++;
+      }
+      accepted.push(result.serialized);
+    }
+
+    return {
+      accepted,
+      rejectedCount,
+      needsReviewCount,
+      validCount,
+      apiUnavailable,
+    };
+  }
+
+  /** Validate parsed rows; returns one result per input row (preserves order). */
+  async validateParsedRows(
+    rows: ParsedFitmentRow[],
+    categoryId: string,
+  ): Promise<MvlValidatedRow[]> {
+    if (rows.length === 0) return [];
+
+    const cache = new MvlValueCache();
+    const results: MvlValidatedRow[] = [];
+
+    for (const parsed of rows) {
+      try {
+        results.push(await this.validateSingleRow(parsed, categoryId, cache));
+      } catch (err) {
+        this.logger.warn(
+          `MVL validation unavailable for ${parsed.make} ${parsed.model}: ${err instanceof Error ? err.message : err}`,
+        );
+        results.push({
+          row: parsed,
+          status: 'needs_review',
+          rejectedReason: 'eBay MVL API unavailable',
+          serialized: serializeValidatedFitmentRow(parsed, 'needs_review', {
+            MvlRejectedReason: 'eBay MVL API unavailable',
+          }),
+        });
+      }
+    }
+
+    return results;
+  }
+
+  private async validateSingleRow(
+    parsed: ParsedFitmentRow,
+    categoryId: string,
+    cache: MvlValueCache,
+  ): Promise<MvlValidatedRow> {
+    if (!cache.hasMakeList(categoryId)) {
+      const makes = await this.getMakes(categoryId, undefined, 5000);
+      cache.setMakes(
+        categoryId,
+        makes.options.map((o) => o.value),
+      );
+    }
+
+    let row = parsed;
+    if (!cache.hasMake(categoryId, row.make)) {
+      const canonical = await this.resolveCanonicalMakeModel(categoryId, row.make);
+      if (canonical.make) row = { ...row, make: canonical.make };
+    }
+
+    if (!cache.hasMake(categoryId, row.make)) {
+      return {
+        row,
+        status: 'rejected',
+        rejectedReason: `Make "${row.make}" not found in eBay MVL`,
+        serialized: serializeValidatedFitmentRow(row, 'rejected', {
+          MvlRejectedReason: `Make "${row.make}" not found in eBay MVL`,
+        }),
+      };
+    }
+
+    if (!cache.hasModelList(categoryId, row.make)) {
+      const models = await this.getModels(categoryId, row.make, undefined, 5000);
+      cache.setModels(
+        categoryId,
+        row.make,
+        models.options.map((o) => o.value),
+      );
+    }
+
+    if (!cache.hasModel(categoryId, row.make, row.model)) {
+      const resolved = await this.resolveCanonicalMakeModel(categoryId, row.make, row.model);
+      if (resolved.model) row = { ...row, model: resolved.model };
+    }
+
+    if (!cache.hasModel(categoryId, row.make, row.model)) {
+      return {
+        row,
+        status: 'rejected',
+        rejectedReason: `Model "${row.model}" not valid for Make "${row.make}" on eBay MVL`,
+        serialized: serializeValidatedFitmentRow(row, 'rejected', {
+          MvlRejectedReason: `Model "${row.model}" not valid for Make "${row.make}" on eBay MVL`,
+        }),
+      };
+    }
+
+    if (!cache.hasYearList(categoryId, row.make, row.model)) {
+      const years = await this.getYears(categoryId, row.make, row.model);
+      cache.setYears(
+        categoryId,
+        row.make,
+        row.model,
+        years.options.map((o) => o.value),
+      );
+    }
+
+    if (!cache.hasYear(categoryId, row.make, row.model, row.year)) {
+      return {
+        row,
+        status: 'needs_review',
+        rejectedReason: `Year ${row.year} not listed for ${row.make} ${row.model} on eBay MVL`,
+        serialized: serializeValidatedFitmentRow(row, 'needs_review', {
+          MvlRejectedReason: `Year ${row.year} not listed for ${row.make} ${row.model} on eBay MVL`,
+        }),
+      };
+    }
+
+    return {
+      row,
+      status: 'valid',
+      serialized: serializeValidatedFitmentRow(row, 'valid'),
+    };
+  }
+
+  private pickCanonical(
+    options: PropertyValueOption[],
+    query: string,
+  ): string | undefined {
+    const q = query.toLowerCase();
+    const exact = options.find((o) => o.value.toLowerCase() === q);
+    if (exact) return exact.value;
+    const prefix = options.find((o) => o.value.toLowerCase().startsWith(q));
+    if (prefix) return prefix.value;
+    const contains = options.find((o) => o.value.toLowerCase().includes(q));
+    return contains?.value;
   }
 }

@@ -73,4 +73,23 @@ describe('ebay-german-listing.util', () => {
     expect(result.valid).toBe(false);
     expect(result.issues.some((i) => i.code === 'DE_CATEGORY_MISMATCH')).toBe(true);
   });
+
+  it('flags generation/year mismatch in German validation', () => {
+    const result = validateGermanListing({
+      title: 'Lexus RX AL20 2013-2021 Armaturenbrett OEM 1A421-034G gebraucht',
+      description: buildGermanListingDescription(sampleInput),
+      itemSpecifics: {
+        Herstellernummer: '1A421-034G',
+        'Plattform/Generation': 'AL20',
+        Baujahrbereich: '2013-2021',
+        Fahrzeugmarke: 'Lexus',
+        Modell: 'RX',
+      },
+      categoryId: '33717',
+      partType: 'Dashboard trim',
+      mpn: '1A421-034G',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((i) => i.code.includes('GENERATION'))).toBe(true);
+  });
 });

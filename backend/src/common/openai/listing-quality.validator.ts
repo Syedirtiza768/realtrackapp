@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ValidationResult } from './ai-routing-policy.types.js';
 import { EbayTaxonomyTruthService } from './ebay-taxonomy-truth.service.js';
+import { detectTitleGenerationMismatch } from '../../fitment/platform-generation.util.js';
 
 const REQUIRED_SPECIFICS = [
   'Brand',
@@ -97,9 +98,12 @@ export function scoreItem(
       (descScore / 5) * 20 +
       (requiredSpecificsFilled / 4) * 20 +
       (Math.min(fitmentRows, 12) / 12) * 20 +
-      (compat.some((c: Record<string, unknown>) =>
-        /w20[0-9]/i.test(String(c.chassisCode || c.model || '')),
-      )
+      (compat.some((c) =>
+        /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(
+          String(c.chassisCode || c.submodel || c.model || ''),
+        ),
+      ) ||
+      /w20[0-9]|al\d{2}|xv\d{2}/i.test(title)
         ? 10
         : 0) +
       (mpnMatchesProvided ? 5 : 0),
@@ -203,6 +207,31 @@ export class ListingQualityValidator {
       typeof item.itemSpecifics === 'object' && item.itemSpecifics
         ? (item.itemSpecifics as Record<string, string>)
         : {};
+    const title = String(item.title || '');
+    const titleMake =
+      sp.Brand ||
+      (typeof item.brand === 'string' ? item.brand : '') ||
+      srcPart.donorMake ||
+      '';
+    const titleModel =
+      sp.Model ||
+      (typeof item.model === 'string' ? item.model : '') ||
+      '';
+    const donorYear =
+      typeof (srcPart as { donorYear?: number | string }).donorYear === 'number' ||
+      typeof (srcPart as { donorYear?: number | string }).donorYear === 'string'
+        ? (srcPart as { donorYear?: number | string }).donorYear
+        : title.match(/\b(19|20)\d{2}\b/)?.[0];
+    const generationMismatch = detectTitleGenerationMismatch(
+      title,
+      titleMake,
+      titleModel,
+      donorYear,
+    );
+    if (generationMismatch) {
+      hardFails.push(`GENERATION_YEAR_MISMATCH:${generationMismatch}`);
+    }
+
     for (const key of REQUIRED_SPECIFICS) {
       if (!sp[key] || !String(sp[key]).trim()) {
         hardFails.push(`MISSING_SPECIFIC:${key}`);
@@ -228,15 +257,15 @@ export class ListingQualityValidator {
     if (!compactProfile && !/compatib/i.test(desc)) {
       softFails.push('DESC_NO_COMPAT_SECTION');
     }
-    const title = String(item.title || '');
     const compat = Array.isArray(item.compatibility) ? item.compatibility : [];
-    if (
-      !compactProfile &&
-      !/w20[0-9]/i.test(title) &&
-      !compat.some((c: Record<string, unknown>) =>
-        /w20[0-9]/i.test(String(c.chassisCode || '')),
-      )
-    ) {
+    const hasChassisSignal =
+      /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(title) ||
+      compat.some((c: Record<string, unknown>) =>
+        /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(
+          String(c.chassisCode || c.submodel || ''),
+        ),
+      );
+    if (!compactProfile && !hasChassisSignal) {
       softFails.push('NO_CHASSIS_CODE');
     }
 

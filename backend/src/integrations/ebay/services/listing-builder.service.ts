@@ -43,6 +43,8 @@ import {
   buildListingAspects,
   isUsedEbayCondition,
 } from '../../../channels/ebay/ebay-listing-aspects.util.js';
+import { fitmentDataToCompatibilityPayload } from '../../../fitment/fitment-mvl.util.js';
+import type { EbayCompatibilityPayload } from '../../../channels/ebay/ebay-api.types.js';
 
 
 
@@ -427,6 +429,39 @@ export class ListingBuilderService {
 
 
 
+    let compatibility: EbayCompatibilityPayload | undefined;
+    const fitmentOverride = ov?.fitmentOverride;
+    const fitmentSource =
+      Array.isArray(fitmentOverride) && fitmentOverride.length > 0
+        ? (fitmentOverride as Record<string, unknown>[])
+        : resolved.catalogProduct?.fitmentData;
+
+    compatibility = fitmentDataToCompatibilityPayload(fitmentSource);
+
+    if (compatibility) {
+      let supportsMotorsFitment = true;
+      try {
+        supportsMotorsFitment = this.marketplaceConfig
+          .require(params.marketplaceId)
+          .supportsMotorsFitment;
+      } catch {
+        supportsMotorsFitment = false;
+      }
+
+      if (!supportsMotorsFitment) {
+        warnings.push(
+          'Marketplace does not support Motors fitment — compatibility omitted from publish',
+        );
+        compatibility = undefined;
+      } else {
+        warnings.push(
+          `Including ${compatibility.compatibleProducts.length} eBay MVL fitment row(s) in publish payload`,
+        );
+      }
+    }
+
+
+
     const publishRequest: PublishRequest = {
 
       listingId: listingRecordId,
@@ -460,7 +495,7 @@ export class ListingBuilderService {
 
       aspects,
 
-      compatibility: undefined,
+      compatibility,
 
       fulfillmentPolicyId,
 

@@ -3,6 +3,13 @@
  * Keep in sync with backend/src/channels/ebay/ebay-german-listing.util.ts
  */
 
+import {
+  alignGenerationAndYearRange,
+  detectTitleGenerationMismatch,
+  extractFitmentVariantTokens,
+  resolvePlatformGeneration,
+} from './platform-generation.mjs';
+
 const PART_NAME_DE = {
   armrest: 'Armlehne',
   'door armrest': 'Armlehne',
@@ -10,6 +17,13 @@ const PART_NAME_DE = {
   'door trim': 'Türverkleidung',
   'interior door panel': 'Innentürverkleidung',
   'door panel': 'Türverkleidung',
+  dashboard: 'Armaturenbrett',
+  'dash trim': 'Armaturenbrettblende',
+  'dashboard trim': 'Armaturenbrettblende',
+  'dash panel': 'Armaturenbrettblende',
+  'dash bezel': 'Armaturenbrettblende',
+  'instrument panel': 'Armaturenbrett',
+  'center console': 'Mittelkonsole',
 };
 
 const PLACEMENT_TOKEN_DE = {
@@ -54,22 +68,52 @@ export function formatGermanPlacement(placement) {
   return out.replace(/\s+/g, ' ').trim();
 }
 
-export function buildGermanSeoTitle({ vehicle, part, partNumber, placement, condition = 'Used' }) {
+export function buildGermanSeoTitle({
+  vehicle,
+  part,
+  partNumber,
+  placement,
+  fitments = [],
+}) {
   const brand = vehicle?.make || part?.brand || '';
   const model = vehicle?.model || '';
+  const anchorYear = vehicle?.year;
+  const platform = anchorYear
+    ? resolvePlatformGeneration(brand, model, anchorYear)
+    : null;
+  const aligned = alignGenerationAndYearRange({
+    generation: platform?.code,
+    yearRange: platform
+      ? `${platform.start}-${platform.end}`
+      : anchorYear,
+    make: brand,
+    model,
+    anchorYear,
+    fitmentYears: fitments.map((f) => f.year),
+  });
+
   const partDe = translatePartNameToGerman(part?._shortPartName || part?.partName);
   const placementDe = formatGermanPlacement(placement || part?.note || '');
   const pn = String(partNumber || part?.partNumber || '').trim();
-  const segments = [brand, model, partDe, placementDe].filter(Boolean);
+  const variants = extractFitmentVariantTokens(fitments, 2);
+  const segments = [brand, model, aligned.generation || aligned.yearRange].filter(Boolean);
+
+  for (const token of variants) {
+    if (!segments.some((s) => s.toUpperCase().includes(token))) segments.push(token);
+  }
+  if (partDe) segments.push(partDe);
+  if (placementDe) segments.push(placementDe);
+
   let title = segments.join(' ');
   if (pn && title.length + pn.length + 5 <= 75) title += ` OEM ${pn}`;
   else if (pn) title += ` ${pn}`;
   if (title.length + 18 <= 80) title += ' Original gebraucht';
   else if (!/gebraucht/i.test(title)) title += ' gebraucht';
+
   return title.replace(/\s+/g, ' ').slice(0, 80).trim();
 }
 
-export function buildGermanBasicDescription({ part, vehicle, partNumber, placement, wearNotes }) {
+export function buildGermanBasicDescription({ part, vehicle, partNumber, placement, wearNotes, fitments = [] }) {
   const partDe = translatePartNameToGerman(part?._shortPartName || part?.partName);
   const placementDe = formatGermanPlacement(placement || part?.note || '');
   const pn = String(partNumber || part?.partNumber || '').trim();
@@ -78,20 +122,39 @@ export function buildGermanBasicDescription({ part, vehicle, partNumber, placeme
     ? `Zustandshinweise: ${wearNotes}.`
     : 'Gebrauchter Originalartikel mit normalen Gebrauchsspuren. Die Bilder zeigen den tatsächlichen Artikel, sofern zutreffend.';
 
+  const fitmentLines = (fitments || [])
+    .filter((f) => f.make && f.model && f.year)
+    .slice(0, 6)
+    .map((f) => `${f.year} ${f.make} ${f.model}${f.trim ? ` ${f.trim}` : ''}`)
+    .join(', ');
+
   return [
     `${partDe}${placementDe ? ` (${placementDe})` : ''}${pn ? ` — Teilenummer ${pn}` : ''}.`,
     donor ? `Spenderfahrzeug: ${donor} (nur zur Orientierung).` : '',
     wear,
-    'Bitte prüfen Sie vor dem Kauf die Teilenummer und vergleichen Sie die Bilder mit Ihrem Altteil. Die Fahrzeugverwendung dient nur als Orientierung.',
+    fitmentLines
+      ? `Passende Fahrzeuge (Auszug): ${fitmentLines}. Bitte Teilenummer und Bilder vergleichen.`
+      : 'Bitte prüfen Sie vor dem Kauf die Teilenummer und vergleichen Sie die Bilder mit Ihrem Altteil. Die Fahrzeugverwendung dient nur als Orientierung.',
     'Artikelstandort: Vereinigte Staaten (USA). Internationaler Versand nach Deutschland. Lieferzeit kann variieren; Zoll und Einfuhrsteuern können anfallen.',
     'Bei Fragen zur Kompatibilität bitte vor dem Kauf kontaktieren.',
   ].filter(Boolean).join(' ');
 }
 
-export function buildGermanItemSpecifics({ part, vehicle, partNumber, placement }) {
+export function buildGermanItemSpecifics({ part, vehicle, partNumber, placement, fitments = [] }) {
   const pn = String(partNumber || part?.partNumber || '').trim();
   const out = {};
   const set = (k, v) => { if (v?.trim()) out[k] = String(v).trim(); };
+  const platform = vehicle?.year
+    ? resolvePlatformGeneration(vehicle.make, vehicle.model, vehicle.year)
+    : null;
+  const aligned = alignGenerationAndYearRange({
+    generation: platform?.code,
+    make: vehicle?.make || part?.brand,
+    model: vehicle?.model,
+    anchorYear: vehicle?.year,
+    fitmentYears: fitments.map((f) => f.year),
+  });
+
   set('Hersteller', vehicle?.make || part?.brand);
   set('Herstellernummer', pn);
   set('OE/OEM Referenznummer(n)', pn);
@@ -102,11 +165,18 @@ export function buildGermanItemSpecifics({ part, vehicle, partNumber, placement 
   set('Oldtimer-Teil', 'Nein');
   set('Fahrzeugmarke', vehicle?.make || part?.brand);
   set('Modell', vehicle?.model);
+  if (aligned.yearRange) set('Baujahrbereich', aligned.yearRange);
+  if (aligned.generation) set('Plattform/Generation', aligned.generation);
+  if (part?._enriched?.color) set('Farbe', part._enriched.color);
+  if (part?._enriched?.material) set('Material', part._enriched.material);
   return out;
 }
 
 export function resolveMotorsCategoryFromPart(partName, note) {
   const text = `${partName || ''} ${note || ''}`.toLowerCase();
+  if (/\b(dashboard|dash panel|instrument panel|dash trim|armaturenbrett)\b/i.test(text)) {
+    return { categoryId: '33717', categoryName: 'Dashboards & Dashboard Parts' };
+  }
   if (/\b(interior|innen|armrest|armlehne|trim|verkleidung|finisher)\b/i.test(text) && /\bdoor panel\b/i.test(text) && !/\bexterior\b/i.test(text)) {
     return { categoryId: '33695', categoryName: 'Interior Door Panels & Parts' };
   }
@@ -123,5 +193,11 @@ export function resolveMotorsCategoryFromPart(partName, note) {
 }
 
 export function isLikelyGermanText(text) {
-  return /[äöüßÄÖÜ]/.test(text) || /\b(OEM|Original|gebraucht|hinten|vorne|Teilenummer|Armlehne)\b/i.test(text);
+  return /[äöüßÄÖÜ]/.test(text) || /\b(OEM|Original|gebraucht|hinten|vorne|Teilenummer|Armlehne|Armaturenbrett)\b/i.test(text);
+}
+
+export function shouldRebuildGermanTitle(title, vehicle) {
+  return Boolean(
+    detectTitleGenerationMismatch(title, vehicle?.make, vehicle?.model, vehicle?.year),
+  );
 }

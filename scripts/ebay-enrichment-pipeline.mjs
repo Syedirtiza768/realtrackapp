@@ -18,6 +18,7 @@
 import './lib/ipv4-network-bootstrap.mjs';
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import https from 'https';
 import http from 'http';
@@ -43,7 +44,18 @@ import {
   buildGermanSeoTitle,
   isLikelyGermanText,
   resolveMotorsCategoryFromPart,
+  shouldRebuildGermanTitle,
 } from './lib/german-listing.mjs';
+import { PLATFORM_RANGES, detectTitleGenerationMismatch, buildPlatformSeoTitle } from './lib/platform-generation.mjs';
+import {
+  applyAustralianSpelling,
+  buildEnglishBasicDescription,
+  buildEnglishItemSpecifics,
+  buildEnglishSeoTitle,
+  localizeEnglishCopyForAu,
+  resolveMotorsCategoryFromPart as resolveEnglishCategory,
+  shouldRebuildEnglishTitle,
+} from './lib/english-listing.mjs';
 
 // ── HTTP connection pooling — reuse TCP sockets across requests ──
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 15, maxFreeSockets: 5 });
@@ -181,542 +193,7 @@ const IMAGE_API_URL =
   (process.env.PIPELINE_JOB_ID ? 'http://backend:4191' : 'http://localhost:4191');
 
 // ─── Automotive Platform Year Ranges ──────────────────────────────────────────
-// Maps "MAKE|MODEL" → [{start, end, code}] per generation.
-// Used to expand a single VIN year to the full platform generation for fitments.
-const PLATFORM_RANGES = {
-  // ── BMW ──
-  'BMW|3 Series': [
-    { start: 1975, end: 1983, code: 'E21' }, { start: 1982, end: 1994, code: 'E30' },
-    { start: 1990, end: 2000, code: 'E36' }, { start: 1997, end: 2006, code: 'E46' },
-    { start: 2004, end: 2013, code: 'E9x' }, { start: 2011, end: 2019, code: 'F3x' },
-    { start: 2018, end: 2028, code: 'G2x' },
-  ],
-  'BMW|5 Series': [
-    { start: 1972, end: 1981, code: 'E12' }, { start: 1981, end: 1988, code: 'E28' },
-    { start: 1987, end: 1996, code: 'E34' }, { start: 1995, end: 2004, code: 'E39' },
-    { start: 2003, end: 2010, code: 'E60/E61' }, { start: 2009, end: 2017, code: 'F10/F11' },
-    { start: 2016, end: 2025, code: 'G30/G31' },
-  ],
-  'BMW|7 Series': [
-    { start: 1977, end: 1987, code: 'E23' }, { start: 1986, end: 1994, code: 'E32' },
-    { start: 1994, end: 2001, code: 'E38' }, { start: 2001, end: 2008, code: 'E65/E66' },
-    { start: 2008, end: 2015, code: 'F01/F02' }, { start: 2015, end: 2022, code: 'G11/G12' },
-    { start: 2022, end: 2028, code: 'G70' },
-  ],
-  'BMW|X3': [
-    { start: 2003, end: 2010, code: 'E83' }, { start: 2010, end: 2017, code: 'F25' },
-    { start: 2017, end: 2025, code: 'G01' },
-  ],
-  'BMW|X5': [
-    { start: 1999, end: 2006, code: 'E53' }, { start: 2006, end: 2013, code: 'E70' },
-    { start: 2013, end: 2019, code: 'F15' }, { start: 2018, end: 2028, code: 'G05' },
-  ],
-  'BMW|X6': [
-    { start: 2007, end: 2014, code: 'E71' }, { start: 2014, end: 2019, code: 'F16' },
-    { start: 2019, end: 2028, code: 'G06' },
-  ],
-  'BMW|X1': [
-    { start: 2009, end: 2015, code: 'E84' }, { start: 2015, end: 2022, code: 'F48' },
-    { start: 2022, end: 2028, code: 'U11' },
-  ],
-  'BMW|X7': [{ start: 2018, end: 2028, code: 'G07' }],
-  'BMW|4 Series': [
-    { start: 2013, end: 2020, code: 'F32/F33/F36' }, { start: 2020, end: 2028, code: 'G22/G23/G26' },
-  ],
-  'BMW|Z4': [
-    { start: 2002, end: 2008, code: 'E85/E86' }, { start: 2009, end: 2016, code: 'E89' },
-    { start: 2018, end: 2028, code: 'G29' },
-  ],
-  // ── Mercedes-Benz ──
-  'Mercedes-Benz|C-Class': [
-    { start: 1993, end: 2000, code: 'W202' }, { start: 2000, end: 2007, code: 'W203' },
-    { start: 2007, end: 2014, code: 'W204' }, { start: 2014, end: 2021, code: 'W205' },
-    { start: 2021, end: 2028, code: 'W206' },
-  ],
-  'Mercedes-Benz|E-Class': [
-    { start: 1985, end: 1997, code: 'W124' }, { start: 1995, end: 2002, code: 'W210' },
-    { start: 2002, end: 2009, code: 'W211' }, { start: 2009, end: 2016, code: 'W212' },
-    { start: 2016, end: 2025, code: 'W213' },
-  ],
-  'Mercedes-Benz|S-Class': [
-    { start: 1972, end: 1980, code: 'W116' }, { start: 1979, end: 1991, code: 'W126' },
-    { start: 1991, end: 1998, code: 'W140' }, { start: 1998, end: 2005, code: 'W220' },
-    { start: 2005, end: 2013, code: 'W221' }, { start: 2013, end: 2020, code: 'W222' },
-    { start: 2020, end: 2028, code: 'W223' },
-  ],
-  'Mercedes-Benz|GLE': [
-    { start: 2015, end: 2019, code: 'W166' }, { start: 2019, end: 2028, code: 'W167' },
-  ],
-  'Mercedes-Benz|GLC': [
-    { start: 2015, end: 2022, code: 'X253' }, { start: 2022, end: 2028, code: 'X254' },
-  ],
-  'Mercedes-Benz|A-Class': [
-    { start: 1997, end: 2004, code: 'W168' }, { start: 2004, end: 2012, code: 'W169' },
-    { start: 2012, end: 2018, code: 'W176' }, { start: 2018, end: 2025, code: 'W177' },
-  ],
-  'Mercedes-Benz|CLA': [
-    { start: 2013, end: 2019, code: 'C117' }, { start: 2019, end: 2028, code: 'C118' },
-  ],
-  'Mercedes-Benz|GLA': [
-    { start: 2013, end: 2020, code: 'X156' }, { start: 2020, end: 2028, code: 'H247' },
-  ],
-  'Mercedes-Benz|GLB': [{ start: 2019, end: 2028, code: 'X247' }],
-  // ── Audi ──
-  'Audi|A4': [
-    { start: 1994, end: 2001, code: 'B5' }, { start: 2001, end: 2008, code: 'B6/B7' },
-    { start: 2007, end: 2015, code: 'B8' }, { start: 2015, end: 2023, code: 'B9' },
-  ],
-  'Audi|A6': [
-    { start: 1994, end: 1997, code: 'C4' }, { start: 1997, end: 2004, code: 'C5' },
-    { start: 2004, end: 2011, code: 'C6' }, { start: 2011, end: 2018, code: 'C7' },
-    { start: 2018, end: 2025, code: 'C8' },
-  ],
-  'Audi|A8': [
-    { start: 1994, end: 2002, code: 'D2' }, { start: 2002, end: 2009, code: 'D3' },
-    { start: 2009, end: 2017, code: 'D4' }, { start: 2017, end: 2025, code: 'D5' },
-  ],
-  'Audi|A3': [
-    { start: 1996, end: 2003, code: '8L' }, { start: 2003, end: 2013, code: '8P' },
-    { start: 2012, end: 2020, code: '8V' }, { start: 2020, end: 2028, code: '8Y' },
-  ],
-  'Audi|Q5': [
-    { start: 2008, end: 2017, code: '8R' }, { start: 2017, end: 2025, code: 'FY' },
-  ],
-  'Audi|Q7': [
-    { start: 2005, end: 2015, code: '4L' }, { start: 2015, end: 2025, code: '4M' },
-  ],
-  'Audi|Q3': [
-    { start: 2011, end: 2018, code: '8U' }, { start: 2018, end: 2028, code: 'F3' },
-  ],
-  'Audi|Q8': [{ start: 2018, end: 2028, code: '4M8' }],
-  'Audi|TT': [
-    { start: 1998, end: 2006, code: '8N' }, { start: 2006, end: 2014, code: '8J' },
-    { start: 2014, end: 2024, code: '8S' },
-  ],
-  // ── Volkswagen ──
-  'Volkswagen|Golf': [
-    { start: 1974, end: 1983, code: 'Mk1' }, { start: 1983, end: 1992, code: 'Mk2' },
-    { start: 1991, end: 2002, code: 'Mk3' }, { start: 1997, end: 2006, code: 'Mk4' },
-    { start: 2003, end: 2009, code: 'Mk5' }, { start: 2008, end: 2013, code: 'Mk6' },
-    { start: 2012, end: 2020, code: 'Mk7' }, { start: 2019, end: 2028, code: 'Mk8' },
-  ],
-  'Volkswagen|Jetta': [
-    { start: 1979, end: 1984, code: 'Mk1' }, { start: 1984, end: 1992, code: 'Mk2' },
-    { start: 1992, end: 1999, code: 'Mk3' }, { start: 1999, end: 2005, code: 'Mk4' },
-    { start: 2005, end: 2011, code: 'Mk5' }, { start: 2010, end: 2018, code: 'Mk6' },
-    { start: 2018, end: 2028, code: 'Mk7' },
-  ],
-  'Volkswagen|Passat': [
-    { start: 1996, end: 2005, code: 'B5' }, { start: 2005, end: 2010, code: 'B6' },
-    { start: 2010, end: 2015, code: 'B7' }, { start: 2014, end: 2023, code: 'B8' },
-  ],
-  'Volkswagen|Tiguan': [
-    { start: 2007, end: 2017, code: '5N' }, { start: 2016, end: 2028, code: 'AD1' },
-  ],
-  // ── Porsche ──
-  'Porsche|911': [
-    { start: 1997, end: 2004, code: '996' }, { start: 2004, end: 2012, code: '997' },
-    { start: 2011, end: 2019, code: '991' }, { start: 2018, end: 2028, code: '992' },
-  ],
-  'Porsche|Cayenne': [
-    { start: 2002, end: 2010, code: '9PA' }, { start: 2010, end: 2018, code: '92A' },
-    { start: 2017, end: 2028, code: '9YA' },
-  ],
-  'Porsche|Macan': [{ start: 2014, end: 2028, code: '95B' }],
-  'Porsche|Panamera': [
-    { start: 2009, end: 2016, code: '970' }, { start: 2016, end: 2028, code: '971' },
-  ],
-  'Porsche|Boxster': [
-    { start: 1996, end: 2004, code: '986' }, { start: 2004, end: 2012, code: '987' },
-    { start: 2012, end: 2016, code: '981' }, { start: 2016, end: 2028, code: '718' },
-  ],
-  'Porsche|Cayman': [
-    { start: 2005, end: 2012, code: '987c' }, { start: 2012, end: 2016, code: '981c' },
-    { start: 2016, end: 2028, code: '718c' },
-  ],
-  // ── Toyota ──
-  'Toyota|Camry': [
-    { start: 1991, end: 1996, code: 'XV10' }, { start: 1996, end: 2001, code: 'XV20' },
-    { start: 2001, end: 2006, code: 'XV30' }, { start: 2006, end: 2011, code: 'XV40' },
-    { start: 2011, end: 2017, code: 'XV50' }, { start: 2017, end: 2024, code: 'XV70' },
-  ],
-  'Toyota|Corolla': [
-    { start: 1995, end: 2000, code: 'E110' }, { start: 2000, end: 2006, code: 'E120/E130' },
-    { start: 2006, end: 2013, code: 'E140/E150' }, { start: 2013, end: 2019, code: 'E170/E180' },
-    { start: 2018, end: 2028, code: 'E210' },
-  ],
-  'Toyota|RAV4': [
-    { start: 1994, end: 2000, code: 'XA10' }, { start: 2000, end: 2005, code: 'XA20' },
-    { start: 2005, end: 2012, code: 'XA30' }, { start: 2012, end: 2018, code: 'XA40' },
-    { start: 2018, end: 2028, code: 'XA50' },
-  ],
-  'Toyota|Highlander': [
-    { start: 2000, end: 2007, code: 'XU20' }, { start: 2007, end: 2013, code: 'XU40' },
-    { start: 2013, end: 2019, code: 'XU50' }, { start: 2019, end: 2028, code: 'XU70' },
-  ],
-  'Toyota|Tacoma': [
-    { start: 1995, end: 2004, code: 'N100' }, { start: 2004, end: 2015, code: 'N200' },
-    { start: 2015, end: 2023, code: 'N300' }, { start: 2023, end: 2028, code: 'N400' },
-  ],
-  'Toyota|4Runner': [
-    { start: 1995, end: 2002, code: 'N180' }, { start: 2002, end: 2009, code: 'N210' },
-    { start: 2009, end: 2024, code: 'N280' },
-  ],
-  'Toyota|Tundra': [
-    { start: 1999, end: 2006, code: 'XK30/XK40' }, { start: 2006, end: 2021, code: 'XK50' },
-    { start: 2021, end: 2028, code: 'XK70' },
-  ],
-  'Toyota|Prius': [
-    { start: 2003, end: 2009, code: 'XW20' }, { start: 2009, end: 2015, code: 'XW30' },
-    { start: 2015, end: 2022, code: 'XW50' }, { start: 2022, end: 2028, code: 'XW60' },
-  ],
-  // ── Lexus (Toyota luxury — shared platforms) ──
-  'Lexus|IS': [
-    { start: 1998, end: 2005, code: 'XE10' }, { start: 2005, end: 2013, code: 'XE20' },
-    { start: 2013, end: 2028, code: 'XE30' },
-  ],
-  'Lexus|ES': [
-    { start: 1996, end: 2001, code: 'XV20' }, { start: 2001, end: 2006, code: 'XV30' },
-    { start: 2006, end: 2012, code: 'XV40' }, { start: 2012, end: 2018, code: 'XV60' },
-    { start: 2018, end: 2028, code: 'XZ10' },
-  ],
-  'Lexus|RX': [
-    { start: 1998, end: 2003, code: 'XU10' }, { start: 2003, end: 2009, code: 'XU30' },
-    { start: 2009, end: 2015, code: 'AL10' }, { start: 2015, end: 2022, code: 'AL20' },
-    { start: 2022, end: 2028, code: 'AL30' },
-  ],
-  'Lexus|GX': [
-    { start: 2002, end: 2009, code: 'J120' }, { start: 2009, end: 2024, code: 'J150' },
-  ],
-  'Lexus|NX': [
-    { start: 2014, end: 2021, code: 'AZ10' }, { start: 2021, end: 2028, code: 'AZ20' },
-  ],
-  // ── Honda ──
-  'Honda|Civic': [
-    { start: 1995, end: 2000, code: 'EK/EJ' }, { start: 2000, end: 2005, code: 'EM/ES' },
-    { start: 2005, end: 2011, code: 'FA/FG' }, { start: 2011, end: 2015, code: 'FB/FG' },
-    { start: 2015, end: 2021, code: 'FC/FK' }, { start: 2021, end: 2028, code: 'FE/FL' },
-  ],
-  'Honda|Accord': [
-    { start: 1997, end: 2002, code: 'CG/CF' }, { start: 2002, end: 2007, code: 'CM' },
-    { start: 2007, end: 2012, code: 'CP/CU' }, { start: 2012, end: 2017, code: 'CR' },
-    { start: 2017, end: 2022, code: 'CV' },
-  ],
-  'Honda|CR-V': [
-    { start: 1995, end: 2001, code: 'RD1/RD3' }, { start: 2001, end: 2006, code: 'RD4-9' },
-    { start: 2006, end: 2011, code: 'RE' }, { start: 2011, end: 2016, code: 'RM' },
-    { start: 2016, end: 2022, code: 'RW' }, { start: 2022, end: 2028, code: 'RS' },
-  ],
-  'Honda|Pilot': [
-    { start: 2002, end: 2008, code: 'YF1' }, { start: 2008, end: 2015, code: 'YF2' },
-    { start: 2015, end: 2022, code: 'YF5' }, { start: 2022, end: 2028, code: 'YF6' },
-  ],
-  // ── Acura (Honda luxury — shared platforms) ──
-  'Acura|TLX': [{ start: 2014, end: 2028, code: 'UB1-UB6' }],
-  'Acura|MDX': [
-    { start: 2000, end: 2006, code: 'YD1' }, { start: 2006, end: 2013, code: 'YD2' },
-    { start: 2013, end: 2020, code: 'YD3' }, { start: 2020, end: 2028, code: 'YD4' },
-  ],
-  'Acura|RDX': [
-    { start: 2006, end: 2012, code: 'TB1' }, { start: 2012, end: 2018, code: 'TB3' },
-    { start: 2018, end: 2028, code: 'TC' },
-  ],
-  // ── Nissan ──
-  'Nissan|Altima': [
-    { start: 2001, end: 2006, code: 'L31' }, { start: 2006, end: 2012, code: 'L32' },
-    { start: 2012, end: 2018, code: 'L33' }, { start: 2018, end: 2028, code: 'L34' },
-  ],
-  'Nissan|Maxima': [
-    { start: 1999, end: 2003, code: 'A33' }, { start: 2003, end: 2008, code: 'A34' },
-    { start: 2008, end: 2014, code: 'A35' }, { start: 2015, end: 2023, code: 'A36' },
-  ],
-  'Nissan|Rogue': [
-    { start: 2007, end: 2013, code: 'S35' }, { start: 2013, end: 2020, code: 'T32' },
-    { start: 2020, end: 2028, code: 'T33' },
-  ],
-  'Nissan|Pathfinder': [
-    { start: 1996, end: 2004, code: 'R50' }, { start: 2004, end: 2012, code: 'R51' },
-    { start: 2012, end: 2020, code: 'R52' }, { start: 2021, end: 2028, code: 'R53' },
-  ],
-  'Nissan|Frontier': [
-    { start: 1997, end: 2004, code: 'D22' }, { start: 2004, end: 2021, code: 'D40' },
-    { start: 2021, end: 2028, code: 'D41' },
-  ],
-  'Nissan|350Z': [{ start: 2002, end: 2009, code: 'Z33' }],
-  'Nissan|370Z': [{ start: 2008, end: 2020, code: 'Z34' }],
-  // ── Infiniti (Nissan luxury — shared platforms) ──
-  'Infiniti|Q50': [{ start: 2013, end: 2028, code: 'V37' }],
-  'Infiniti|Q60': [{ start: 2016, end: 2028, code: 'CV37' }],
-  'Infiniti|QX60': [
-    { start: 2012, end: 2020, code: 'L50' }, { start: 2021, end: 2028, code: 'L52' },
-  ],
-  'Infiniti|QX80': [
-    { start: 2010, end: 2017, code: 'Z62' }, { start: 2017, end: 2028, code: 'Z63' },
-  ],
-  'Infiniti|G35': [{ start: 2002, end: 2007, code: 'V35' }],
-  'Infiniti|G37': [{ start: 2007, end: 2013, code: 'V36' }],
-  // ── Ford ──
-  'Ford|F-150': [
-    { start: 1997, end: 2003, code: 'P221' }, { start: 2003, end: 2008, code: 'P2' },
-    { start: 2008, end: 2014, code: 'P415' }, { start: 2014, end: 2020, code: 'P552' },
-    { start: 2020, end: 2028, code: 'P702' },
-  ],
-  'Ford|Mustang': [
-    { start: 1994, end: 2004, code: 'SN95' }, { start: 2004, end: 2014, code: 'S197' },
-    { start: 2014, end: 2023, code: 'S550' }, { start: 2023, end: 2028, code: 'S650' },
-  ],
-  'Ford|Explorer': [
-    { start: 2001, end: 2005, code: 'U152' }, { start: 2005, end: 2010, code: 'U251' },
-    { start: 2010, end: 2019, code: 'U502' }, { start: 2019, end: 2028, code: 'U625' },
-  ],
-  'Ford|Escape': [
-    { start: 2000, end: 2007, code: 'CD2' }, { start: 2007, end: 2012, code: 'CD2/2' },
-    { start: 2012, end: 2019, code: 'C520' }, { start: 2019, end: 2028, code: 'C519' },
-  ],
-  'Ford|Focus': [
-    { start: 1999, end: 2007, code: 'Mk1' }, { start: 2007, end: 2011, code: 'Mk2' },
-    { start: 2010, end: 2018, code: 'Mk3' },
-  ],
-  'Ford|Ranger': [
-    { start: 1998, end: 2011, code: 'N/A' }, { start: 2018, end: 2028, code: 'P703' },
-  ],
-  'Ford|Edge': [
-    { start: 2006, end: 2014, code: 'U387' }, { start: 2014, end: 2024, code: 'CD539' },
-  ],
-  // ── Lincoln (Ford luxury — shared platforms) ──
-  'Lincoln|Navigator': [
-    { start: 1997, end: 2002, code: 'U228' }, { start: 2002, end: 2006, code: 'U228/2' },
-    { start: 2006, end: 2017, code: 'U326' }, { start: 2017, end: 2028, code: 'U554' },
-  ],
-  'Lincoln|Aviator': [{ start: 2019, end: 2028, code: 'CD6' }],
-  'Lincoln|Corsair': [{ start: 2019, end: 2028, code: 'C519L' }],
-  // ── Chevrolet / GM ──
-  'Chevrolet|Silverado': [
-    { start: 1999, end: 2007, code: 'GMT800' }, { start: 2007, end: 2014, code: 'GMT900' },
-    { start: 2014, end: 2019, code: 'K2XX' }, { start: 2018, end: 2028, code: 'T1XX' },
-  ],
-  'Chevrolet|Tahoe': [
-    { start: 1999, end: 2006, code: 'GMT820' }, { start: 2006, end: 2014, code: 'GMT900' },
-    { start: 2014, end: 2020, code: 'K2XL' }, { start: 2020, end: 2028, code: 'T1XL' },
-  ],
-  'Chevrolet|Camaro': [
-    { start: 1993, end: 2002, code: 'F-body' }, { start: 2009, end: 2015, code: 'Zeta' },
-    { start: 2015, end: 2024, code: 'Alpha' },
-  ],
-  'Chevrolet|Corvette': [
-    { start: 1996, end: 2004, code: 'C5' }, { start: 2004, end: 2013, code: 'C6' },
-    { start: 2013, end: 2019, code: 'C7' }, { start: 2019, end: 2028, code: 'C8' },
-  ],
-  'Chevrolet|Equinox': [
-    { start: 2004, end: 2009, code: 'Theta' }, { start: 2009, end: 2017, code: 'Theta/2' },
-    { start: 2017, end: 2025, code: 'D2XX' },
-  ],
-  'Chevrolet|Malibu': [
-    { start: 2003, end: 2007, code: 'Epsilon' }, { start: 2007, end: 2012, code: 'Epsilon/2' },
-    { start: 2012, end: 2016, code: 'Epsilon II' }, { start: 2015, end: 2024, code: 'E2XX' },
-  ],
-  'Chevrolet|Traverse': [
-    { start: 2008, end: 2017, code: 'Lambda' }, { start: 2017, end: 2028, code: 'C1XX' },
-  ],
-  // ── GMC (shared GM platforms) ──
-  'GMC|Sierra': [
-    { start: 1999, end: 2007, code: 'GMT800' }, { start: 2007, end: 2014, code: 'GMT900' },
-    { start: 2014, end: 2019, code: 'K2XX' }, { start: 2018, end: 2028, code: 'T1XX' },
-  ],
-  'GMC|Yukon': [
-    { start: 1999, end: 2006, code: 'GMT820' }, { start: 2006, end: 2014, code: 'GMT900' },
-    { start: 2014, end: 2020, code: 'K2XL' }, { start: 2020, end: 2028, code: 'T1XL' },
-  ],
-  'GMC|Acadia': [
-    { start: 2006, end: 2016, code: 'Lambda' }, { start: 2016, end: 2028, code: 'C1XX' },
-  ],
-  // ── Cadillac (GM luxury — shared platforms) ──
-  'Cadillac|Escalade': [
-    { start: 1999, end: 2006, code: 'GMT820' }, { start: 2006, end: 2014, code: 'GMT900' },
-    { start: 2014, end: 2020, code: 'K2XL' }, { start: 2020, end: 2028, code: 'T1XL' },
-  ],
-  'Cadillac|CT5': [{ start: 2019, end: 2028, code: 'Alpha II' }],
-  'Cadillac|XT5': [{ start: 2016, end: 2028, code: 'C1XX' }],
-  // ── Subaru ──
-  'Subaru|Outback': [
-    { start: 1999, end: 2003, code: 'BH' }, { start: 2003, end: 2009, code: 'BP' },
-    { start: 2009, end: 2014, code: 'BR' }, { start: 2014, end: 2020, code: 'BS' },
-    { start: 2019, end: 2028, code: 'BT' },
-  ],
-  'Subaru|Forester': [
-    { start: 1997, end: 2002, code: 'SF' }, { start: 2002, end: 2008, code: 'SG' },
-    { start: 2007, end: 2013, code: 'SH' }, { start: 2012, end: 2018, code: 'SJ' },
-    { start: 2018, end: 2028, code: 'SK' },
-  ],
-  'Subaru|Impreza': [
-    { start: 1992, end: 2000, code: 'GC/GF' }, { start: 2000, end: 2007, code: 'GD/GG' },
-    { start: 2007, end: 2014, code: 'GE/GH' }, { start: 2011, end: 2016, code: 'GP/GJ' },
-    { start: 2016, end: 2023, code: 'GT/GK' },
-  ],
-  'Subaru|WRX': [
-    { start: 2001, end: 2007, code: 'GD' }, { start: 2007, end: 2014, code: 'GE/GH' },
-    { start: 2014, end: 2021, code: 'VA' }, { start: 2021, end: 2028, code: 'VB' },
-  ],
-  'Subaru|Crosstrek': [
-    { start: 2012, end: 2017, code: 'GP' }, { start: 2017, end: 2023, code: 'GT' },
-    { start: 2023, end: 2028, code: 'GU' },
-  ],
-  // ── Volvo ──
-  'Volvo|XC90': [
-    { start: 2002, end: 2015, code: 'C/275' }, { start: 2015, end: 2028, code: 'SPA' },
-  ],
-  'Volvo|XC60': [
-    { start: 2008, end: 2017, code: 'Y20' }, { start: 2017, end: 2028, code: 'SPA' },
-  ],
-  'Volvo|XC40': [{ start: 2017, end: 2028, code: 'CMA' }],
-  'Volvo|S60': [
-    { start: 2000, end: 2010, code: 'P2' }, { start: 2010, end: 2018, code: 'Y20' },
-    { start: 2018, end: 2028, code: 'SPA' },
-  ],
-  'Volvo|S90': [
-    { start: 1997, end: 1998, code: '960' }, { start: 2016, end: 2028, code: 'SPA' },
-  ],
-  'Volvo|V60': [
-    { start: 2010, end: 2018, code: 'Y20' }, { start: 2018, end: 2028, code: 'SPA' },
-  ],
-  // ── Hyundai ──
-  'Hyundai|Tucson': [
-    { start: 2004, end: 2009, code: 'JM' }, { start: 2009, end: 2015, code: 'LM/IX' },
-    { start: 2015, end: 2020, code: 'TL' }, { start: 2020, end: 2028, code: 'NX4' },
-  ],
-  'Hyundai|Santa Fe': [
-    { start: 2000, end: 2006, code: 'SM' }, { start: 2006, end: 2012, code: 'CM' },
-    { start: 2012, end: 2018, code: 'DM' }, { start: 2018, end: 2028, code: 'TM' },
-  ],
-  'Hyundai|Sonata': [
-    { start: 2004, end: 2009, code: 'NF' }, { start: 2009, end: 2014, code: 'YF' },
-    { start: 2014, end: 2019, code: 'LF' }, { start: 2019, end: 2028, code: 'DN8' },
-  ],
-  'Hyundai|Elantra': [
-    { start: 2006, end: 2010, code: 'HD' }, { start: 2010, end: 2015, code: 'MD/UD' },
-    { start: 2015, end: 2020, code: 'AD' }, { start: 2020, end: 2028, code: 'CN7' },
-  ],
-  // ── Kia (shares Hyundai platforms) ──
-  'Kia|Sorento': [
-    { start: 2002, end: 2009, code: 'BL' }, { start: 2009, end: 2015, code: 'XM' },
-    { start: 2014, end: 2020, code: 'UM' }, { start: 2020, end: 2028, code: 'MQ4' },
-  ],
-  'Kia|Sportage': [
-    { start: 2004, end: 2010, code: 'KM' }, { start: 2010, end: 2015, code: 'SL' },
-    { start: 2015, end: 2021, code: 'QL' }, { start: 2021, end: 2028, code: 'NQ5' },
-  ],
-  'Kia|Optima': [
-    { start: 2010, end: 2015, code: 'TF' }, { start: 2015, end: 2020, code: 'JF' },
-  ],
-  'Kia|K5': [{ start: 2020, end: 2028, code: 'DL3' }],
-  'Kia|Telluride': [{ start: 2019, end: 2028, code: 'ON' }],
-  // ── Genesis (Hyundai luxury — shared platforms) ──
-  'Genesis|G70': [{ start: 2017, end: 2028, code: 'IK' }],
-  'Genesis|G80': [
-    { start: 2016, end: 2020, code: 'DH' }, { start: 2020, end: 2028, code: 'RG3' },
-  ],
-  'Genesis|GV70': [{ start: 2021, end: 2028, code: 'JK' }],
-  'Genesis|GV80': [{ start: 2020, end: 2028, code: 'JX' }],
-  // ── Jaguar ──
-  'Jaguar|XF': [
-    { start: 2008, end: 2015, code: 'X250' }, { start: 2015, end: 2025, code: 'X260' },
-  ],
-  'Jaguar|XE': [{ start: 2015, end: 2025, code: 'X760' }],
-  'Jaguar|XJ': [
-    { start: 1994, end: 1997, code: 'X300' }, { start: 1997, end: 2003, code: 'X308' },
-    { start: 2003, end: 2009, code: 'X350' }, { start: 2009, end: 2019, code: 'X351' },
-  ],
-  'Jaguar|F-Pace': [{ start: 2015, end: 2025, code: 'X761' }],
-  'Jaguar|E-Pace': [{ start: 2017, end: 2025, code: 'X540' }],
-  'Jaguar|F-Type': [{ start: 2013, end: 2025, code: 'X152' }],
-  // ── Land Rover ──
-  'Land Rover|Range Rover': [
-    { start: 1970, end: 1996, code: 'Classic' }, { start: 1994, end: 2002, code: 'P38' },
-    { start: 2001, end: 2012, code: 'L322' }, { start: 2012, end: 2022, code: 'L405' },
-    { start: 2022, end: 2028, code: 'L460' },
-  ],
-  'Land Rover|Discovery': [
-    { start: 1989, end: 1998, code: 'Series 1' }, { start: 1998, end: 2004, code: 'Series 2' },
-    { start: 2004, end: 2009, code: 'LR3' }, { start: 2009, end: 2017, code: 'LR4' },
-    { start: 2017, end: 2025, code: 'Series 5' },
-  ],
-  'Land Rover|Range Rover Sport': [
-    { start: 2005, end: 2013, code: 'L320' }, { start: 2013, end: 2022, code: 'L494' },
-    { start: 2022, end: 2028, code: 'L461' },
-  ],
-  'Land Rover|Freelander': [
-    { start: 1997, end: 2006, code: 'L314' }, { start: 2006, end: 2015, code: 'L359' },
-  ],
-  'Land Rover|Defender': [
-    { start: 2019, end: 2028, code: 'L663' },
-  ],
-  'Land Rover|Range Rover Evoque': [
-    { start: 2011, end: 2019, code: 'L538' }, { start: 2019, end: 2028, code: 'L551' },
-  ],
-  'Land Rover|Range Rover Velar': [{ start: 2017, end: 2028, code: 'L560' }],
-  // ── Bentley ──
-  'Bentley|Continental': [
-    { start: 2003, end: 2011, code: 'D1' }, { start: 2011, end: 2018, code: 'D2' },
-    { start: 2018, end: 2028, code: 'D3' },
-  ],
-  'Bentley|Bentayga': [{ start: 2015, end: 2028, code: 'BY' }],
-  'Bentley|Flying Spur': [
-    { start: 2005, end: 2013, code: '3W' }, { start: 2019, end: 2028, code: '3W/2' },
-  ],
-  // ── Dodge / Ram ──
-  'Ram|1500': [
-    { start: 2001, end: 2009, code: 'DR/DH' }, { start: 2009, end: 2018, code: 'DS' },
-    { start: 2018, end: 2028, code: 'DT' },
-  ],
-  'Dodge|Charger': [
-    { start: 2005, end: 2010, code: 'LX' }, { start: 2011, end: 2023, code: 'LD' },
-  ],
-  'Dodge|Challenger': [{ start: 2008, end: 2023, code: 'LC' }],
-  'Dodge|Durango': [
-    { start: 2003, end: 2009, code: 'HB' }, { start: 2010, end: 2028, code: 'WD' },
-  ],
-  // ── Jeep ──
-  'Jeep|Grand Cherokee': [
-    { start: 1999, end: 2004, code: 'WJ' }, { start: 2004, end: 2010, code: 'WK' },
-    { start: 2010, end: 2021, code: 'WK2' }, { start: 2021, end: 2028, code: 'WL' },
-  ],
-  'Jeep|Wrangler': [
-    { start: 1996, end: 2006, code: 'TJ' }, { start: 2006, end: 2018, code: 'JK' },
-    { start: 2017, end: 2028, code: 'JL' },
-  ],
-  'Jeep|Cherokee': [
-    { start: 1997, end: 2001, code: 'XJ' }, { start: 2002, end: 2007, code: 'KJ' },
-    { start: 2007, end: 2012, code: 'KK' }, { start: 2013, end: 2023, code: 'KL' },
-  ],
-  // ── Mazda ──
-  'Mazda|CX-5': [
-    { start: 2012, end: 2017, code: 'KE' }, { start: 2017, end: 2028, code: 'KF' },
-  ],
-  'Mazda|Mazda3': [
-    { start: 2003, end: 2009, code: 'BK' }, { start: 2009, end: 2013, code: 'BL' },
-    { start: 2013, end: 2019, code: 'BM/BN' }, { start: 2019, end: 2028, code: 'BP' },
-  ],
-  'Mazda|Mazda6': [
-    { start: 2002, end: 2008, code: 'GG/GY' }, { start: 2007, end: 2012, code: 'GH' },
-    { start: 2012, end: 2021, code: 'GJ/GL' },
-  ],
-  'Mazda|CX-9': [
-    { start: 2006, end: 2015, code: 'TB' }, { start: 2015, end: 2028, code: 'TC' },
-  ],
-  'Mazda|MX-5': [
-    { start: 1989, end: 1998, code: 'NA' }, { start: 1998, end: 2005, code: 'NB' },
-    { start: 2005, end: 2015, code: 'NC' }, { start: 2015, end: 2028, code: 'ND' },
-  ],
-  // ── Tesla ──
-  'Tesla|Model 3': [{ start: 2017, end: 2028, code: 'Model 3' }],
-  'Tesla|Model Y': [{ start: 2019, end: 2028, code: 'Model Y' }],
-  'Tesla|Model S': [
-    { start: 2012, end: 2021, code: 'Model S' }, { start: 2021, end: 2028, code: 'Model S Refresh' },
-  ],
-  'Tesla|Model X': [
-    { start: 2015, end: 2021, code: 'Model X' }, { start: 2021, end: 2028, code: 'Model X Refresh' },
-  ],
-};
+// Loaded from shared/automotive-platform-ranges.json via scripts/lib/platform-generation.mjs
 
 /**
  * Cross-platform sharing map: makes/models that share platforms and may
@@ -890,6 +367,39 @@ const log = {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function clean(v) { return v == null ? '' : String(v).trim(); }
 function normalizePN(pn) { return clean(pn).replace(/[\s\-\.]/g, '').toUpperCase(); }
+
+/** Cache-busting fingerprint — same MPN with different intake identity gets fresh enrichment. */
+function partIdentityKey(part) {
+  const images = String(part._gridx?.images || part._sourceImageUrls?.join('|') || '').trim();
+  const name = String(part.partName || '').trim().toLowerCase().slice(0, 100);
+  const note = String(part.note || '').trim().toLowerCase().slice(0, 200);
+  return createHash('sha256').update(`${name}|${note}|${images}`).digest('hex').slice(0, 16);
+}
+
+/** Apply warehouse / CSV source images onto a part (never cleared by failed API calls). */
+function applySourceImagesFromInput(part) {
+  const raw =
+    part._gridx?.images ||
+    (Array.isArray(part._sourceImageUrls) ? part._sourceImageUrls.join('|') : '');
+  if (!raw) return false;
+  const urls = String(raw)
+    .split(/[|,;]/)
+    .map((u) => u.trim())
+    .filter((u) => u.startsWith('http'));
+  if (urls.length === 0) return false;
+
+  part._images = urls.slice(0, 12);
+  part._imageData = {
+    primary_image_url: urls[0],
+    additional_image_urls: urls.slice(1),
+    diagram_image_urls: [],
+    enriched_image_urls: urls.slice(0, 12),
+    confidence: 1.0,
+    sources: ['upload'],
+    validation: null,
+  };
+  return true;
+}
 function titleCase(s) {
   return clean(s).replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
 }
@@ -1937,6 +1447,10 @@ function extractPart(row, colMap, sheetVin) {
   const rawImages = getVal(colMap.images);
   if (rawImages) {
     part._gridx = { ...(part._gridx || {}), images: rawImages };
+    part._sourceImageUrls = rawImages
+      .split(/[|,;]/)
+      .map((u) => u.trim())
+      .filter((u) => u.startsWith('http'));
   }
   // Attach vehicle make if available (GridX-style files parsed as standard format)
   const vehicleMake = getVal(colMap.make);
@@ -2475,7 +1989,8 @@ async function enrichBatchWithRouting(batchParts, vinData) {
   for (let i = 0; i < batchParts.length; i++) {
     const srcPart = batchParts[i];
     const profile = getEnrichmentProfile(srcPart.price, lowValueMax);
-    const cached = enrichmentCache.get(srcPart.partNumber, profile);
+    const identityKey = partIdentityKey(srcPart);
+    const cached = enrichmentCache.get(srcPart.partNumber, profile, identityKey);
     if (cached) {
       REPORT.routing.enrichmentCacheHits++;
       const vehicle = getVehicleInfo(srcPart, vinData);
@@ -2527,7 +2042,7 @@ async function enrichBatchWithRouting(batchParts, vinData) {
     if (fixes.length) REPORT.routing.guardFixes += fixes.length;
 
     if (srcPart.partNumber) {
-      enrichmentCache.set(srcPart.partNumber, profile, guarded);
+      enrichmentCache.set(srcPart.partNumber, profile, guarded, partIdentityKey(srcPart));
     }
 
     const validation = validateListing(guarded, {
@@ -2569,7 +2084,7 @@ async function enrichBatchWithRouting(batchParts, vinData) {
             partNumber: srcPart.partNumber,
           });
           if (srcPart.partNumber) {
-            enrichmentCache.set(srcPart.partNumber, profile, guarded);
+            enrichmentCache.set(srcPart.partNumber, profile, guarded, partIdentityKey(srcPart));
           }
           const validation = validateListing(guarded, {
             partNumber: srcPart.partNumber,
@@ -2799,33 +2314,15 @@ async function enrichAllParts(parts, vinData) {
 function buildSeoTitle(vehicle, part, normalizedPN) {
   const placement = extractPlacement(part.note);
   const partName = resolvePartDisplayName(part, vehicle);
+  const fitments = part._fitments || part._enriched?.compatibility || [];
 
-  // Build title segments in priority order
-  const segments = [
-    vehicle.year,
-    vehicle.make,
-    normalizeModelForPlatform(vehicle.make, vehicle.model) || vehicle.model,
+  return buildPlatformSeoTitle({
+    vehicle,
     partName,
-  ].filter(Boolean);
-
-  let title = segments.join(' ');
-
-  // Add placement if room
-  if (placement && (title.length + placement.length + 1) <= 69) {
-    title += ` ${placement}`;
-  }
-
-  // Add part number if room
-  if (normalizedPN && (title.length + normalizedPN.length + 1) <= 75) {
-    title += ` ${normalizedPN}`;
-  }
-
-  // Add OEM marker if room
-  if ((title.length + 4) <= 80) {
-    title += ' OEM';
-  }
-
-  return title.replace(/\s+/g, ' ').slice(0, 80).trim();
+    mpn: normalizedPN,
+    placement,
+    fitments,
+  });
 }
 
 function buildBasicDescription(part, vehicle) {
@@ -3225,17 +2722,51 @@ function validateAndFix(parts) {
       fixes++;
     }
 
+    const vehicle = getVehicleInfo(part, vinCache);
+    const fitments = part._fitments || [];
+
+    // US title: fix generation/year mismatch (e.g. AL20 + 2013-2021)
+    const usTitleMismatch = detectTitleGenerationMismatch(
+      e.title,
+      e.brand || vehicle.make,
+      vehicle.model,
+      vehicle.year,
+    );
+    if (usTitleMismatch) {
+      e.title = buildSeoTitle(vehicle, part, normalizePN(part.partNumber));
+      REPORT.validationFixes.push({
+        sku: part.sku,
+        field: 'title',
+        fix: `generation/year realigned (${usTitleMismatch})`,
+      });
+      fixes++;
+    }
+
+    e.itemSpecifics = mergeAiSpecificsOnly(
+      buildEnglishItemSpecifics({
+        part,
+        vehicle,
+        partNumber: part.partNumber,
+        placement: extractPlacement(part.note || ''),
+        fitments,
+      }),
+      e.itemSpecifics,
+    );
+
     // German marketplace copy quality (rule-based + AI fallback)
     if (part._localized?.DE) {
-      const vehicle = getVehicleInfo(part, vinCache);
       const de = part._localized.DE;
       const placement = extractPlacement(part.note || '');
-      if (!isLikelyGermanText(de.title)) {
+      if (
+        !isLikelyGermanText(de.title) ||
+        shouldRebuildGermanTitle(de.title, vehicle)
+      ) {
         de.title = buildGermanSeoTitle({
           vehicle,
           part,
           partNumber: part.partNumber,
           placement,
+          fitments,
         });
         fixes++;
       }
@@ -3245,20 +2776,70 @@ function validateAndFix(parts) {
           vehicle,
           partNumber: part.partNumber,
           placement,
+          fitments,
         });
         fixes++;
       }
       de.itemSpecifics = mergeAiSpecificsOnly(
-        buildGermanItemSpecifics({ part, vehicle, partNumber: part.partNumber, placement }),
+        buildGermanItemSpecifics({
+          part,
+          vehicle,
+          partNumber: part.partNumber,
+          placement,
+          fitments,
+        }),
         de.itemSpecifics || {},
       );
     }
 
+    // AU marketplace: platform-aligned title, description, specifics + spelling
+    if (part._localized?.AU) {
+      const au = part._localized.AU;
+      const placement = extractPlacement(part.note || '');
+      if (shouldRebuildEnglishTitle(au.title, vehicle) || au.title.length < 24) {
+        au.title = applyAustralianSpelling(
+          buildEnglishSeoTitle({
+            vehicle,
+            part,
+            partNumber: part.partNumber,
+            placement,
+            fitments,
+          }),
+        );
+        fixes++;
+      }
+      if (!au.description || au.description.length < 80) {
+        au.description = buildEnglishBasicDescription({
+          part,
+          vehicle,
+          partNumber: part.partNumber,
+          placement,
+          fitments,
+          marketplace: 'AU',
+        });
+        fixes++;
+      }
+      au.itemSpecifics = mergeAiSpecificsOnly(
+        buildEnglishItemSpecifics({
+          part,
+          vehicle,
+          partNumber: part.partNumber,
+          placement,
+          fitments,
+        }),
+        localizeEnglishCopyForAu(au).itemSpecifics || {},
+      );
+    }
+
     // Interior vs exterior category correction
-    const catHint = resolveMotorsCategoryFromPart(part.partName, part.note);
+    const catHint = resolveEnglishCategory(part.partName, part.note) || resolveMotorsCategoryFromPart(part.partName, part.note);
     if (catHint && part._category?.categoryId) {
       const exteriorIds = new Set(['33697', '174105']);
-      if (catHint.categoryId === '33695' && exteriorIds.has(String(part._category.categoryId))) {
+      const interiorIds = new Set(['33695', '33717', '174090']);
+      if (
+        interiorIds.has(catHint.categoryId) &&
+        exteriorIds.has(String(part._category.categoryId))
+      ) {
         part._category = catHint;
         REPORT.validationFixes.push({ sku: part.sku, field: 'category', fix: `corrected to ${catHint.name}` });
         fixes++;
@@ -3777,32 +3358,29 @@ function imageCacheKey(part) {
  */
 async function fetchImages(parts) {
   log.step('Image Enrichment & Validation');
+  const forceVision = process.env.PIPELINE_FORCE_VISION === '1';
+  if (forceVision) {
+    log.info('PIPELINE_FORCE_VISION enabled — validating warehouse photos for all parts with source images');
+  }
 
-  // Pre-populate images for GridX Connect parts that already have image URLs
-  let gridxImageParts = 0;
+  // Always seed uploaded / CSV source images before any API fetch
+  let sourceImageParts = 0;
   for (const p of parts) {
-    if (p._gridx?.images && !p._images) {
-      const urls = p._gridx.images.split(/[|,;]/).map(u => u.trim()).filter(Boolean);
-      if (urls.length > 0) {
-        p._images = urls.slice(0, 12);
-        p._imageData = {
-          primary_image_url: urls[0],
-          additional_image_urls: urls.slice(1),
-          diagram_image_urls: [],
-          enriched_image_urls: urls.slice(0, 12),
-          confidence: 1.0,
-        };
-        gridxImageParts++;
-        REPORT.images.withPrimary++;
-        REPORT.images.totalUrls += urls.length;
-      }
+    if (applySourceImagesFromInput(p)) {
+      sourceImageParts++;
+      REPORT.images.withPrimary++;
+      REPORT.images.totalUrls += p._images?.length || 0;
     }
   }
-  if (gridxImageParts > 0) {
-    log.info(`Preloaded GridX images for ${gridxImageParts} parts`);
+  if (sourceImageParts > 0) {
+    log.info(`Preloaded source/upload images for ${sourceImageParts} parts`);
   }
 
-  const toBeFetched = parts.filter(p => p._enriched && (!p._images || p._images.length === 0));
+  const toBeFetched = parts.filter((p) => {
+    if (!p._enriched) return false;
+    if (forceVision && (p._gridx?.images || (p._images && p._images.length > 0))) return true;
+    return !p._images || p._images.length === 0;
+  });
   REPORT.images.totalParts = parts.filter(p => p._enriched).length;
   if (!toBeFetched.length) {
     log.info('No additional image API fetch needed — all parts have source images or none require enrichment');
@@ -3876,9 +3454,13 @@ async function fetchImages(parts) {
     if (!apiSuccess) {
       REPORT.images.apiFailed++;
       for (const p of uncached) {
-        setEmptyImageData(p);
-        REPORT.images.failedEnrichments.push(p.sku || p.partNumber);
-        log.warn(`Image enrichment failed for ${p.partNumber} — no images available`);
+        if (!applySourceImagesFromInput(p)) {
+          setEmptyImageData(p);
+          REPORT.images.failedEnrichments.push(p.sku || p.partNumber);
+          log.warn(`Image enrichment failed for ${p.partNumber} — no images available`);
+        } else {
+          log.warn(`Image API failed for ${p.partNumber} — kept ${p._images.length} source upload(s)`);
+        }
       }
     }
       }),
@@ -3957,22 +3539,23 @@ async function fetchImages(parts) {
     REPORT.images.validated += validated.length + removed.length;
   }
 
-  // Final observability summary
-  const imagesWithPrimary = toBeFetched.filter(p => p._imageData?.primary_image_url).length;
-  const imagesWithGallery = toBeFetched.filter(p => (p._imageData?.additional_image_urls?.length || 0) > 0).length;
-  const imagesWithDiagrams = toBeFetched.filter(p => (p._imageData?.diagram_image_urls?.length || 0) > 0).length;
-  const missingImages = toBeFetched.filter(p => !p._images || p._images.length === 0);
+  // Final observability summary — count all enriched parts, not only API fetch candidates
+  const allEnriched = parts.filter((p) => p._enriched);
+  const imagesWithPrimary = allEnriched.filter(p => p._imageData?.primary_image_url || p._images?.length).length;
+  const imagesWithGallery = allEnriched.filter(p => (p._imageData?.additional_image_urls?.length || 0) > 0).length;
+  const imagesWithDiagrams = allEnriched.filter(p => (p._imageData?.diagram_image_urls?.length || 0) > 0).length;
+  const missingImages = allEnriched.filter(p => !p._images || p._images.length === 0);
 
   REPORT.images.withPrimary = imagesWithPrimary;
   REPORT.images.withGallery = imagesWithGallery;
   REPORT.images.withDiagrams = imagesWithDiagrams;
-  REPORT.images.totalUrls = toBeFetched.reduce((s, p) => s + (p._images?.length || 0), 0);
+  REPORT.images.totalUrls = allEnriched.reduce((s, p) => s + (p._images?.length || 0), 0);
 
   for (const p of missingImages) {
     REPORT.images.missingParts.push(p.sku || p.partNumber);
   }
 
-  log.info(`Images: ${imagesWithPrimary}/${toBeFetched.length} with primary, ${imagesWithGallery} with gallery, ${imagesWithDiagrams} with diagrams`);
+  log.info(`Images: ${imagesWithPrimary}/${allEnriched.length} with primary, ${imagesWithGallery} with gallery, ${imagesWithDiagrams} with diagrams`);
   log.info(`Validated ${REPORT.images.validated} URLs: ${REPORT.images.accessible} accessible, ${REPORT.images.inaccessible} removed`);
   if (REPORT.images.cacheHits > 0) log.info(`Cache hits: ${REPORT.images.cacheHits}`);
   if (missingImages.length > 0) log.warn(`${missingImages.length} parts have NO images`);
@@ -3991,7 +3574,9 @@ async function fetchImages(parts) {
 /** Process a single image enrichment API result into part fields. */
 function processImageResult(part, result) {
   if (!result || !result.primaryImage?.url) {
-    setEmptyImageData(part);
+    if (!applySourceImagesFromInput(part)) {
+      setEmptyImageData(part);
+    }
     return;
   }
 
@@ -4027,8 +3612,11 @@ function processImageResult(part, result) {
   }
 }
 
-/** Set empty image data on a part (fallback when API fails). */
+/** Set empty image data on a part (fallback when API fails and no source uploads). */
 function setEmptyImageData(part) {
+  if (applySourceImagesFromInput(part)) return;
+  if (part._images?.length) return;
+
   part._images = [];
   part._imageData = {
     primary_image_url: '',

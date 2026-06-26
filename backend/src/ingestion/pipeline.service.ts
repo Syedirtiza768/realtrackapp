@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineJob } from './entities/pipeline-job.entity.js';
@@ -13,6 +13,11 @@ import { ListingOptimizationService } from '../listing-optimization/listing-opti
 import type { JobOptimizationStatus } from '../listing-optimization/listing-optimization.types.js';
 import { applyCreatedByVisibility, canViewJob, withCreatedByBackfill } from '../common/utils/job-visibility.js';
 import { HeavyJobLimiterService } from '../common/jobs/heavy-job-limiter.service.js';
+import { SingleListingFormService } from './services/single-listing-form.service.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
+
+const SINGLE_LISTING_DEFAULT_PRICE = 100;
+const SINGLE_LISTING_DEFAULT_QUANTITY = 1;
 
 export interface CreatePipelineJobDto {
   originalFilename: string;
@@ -70,12 +75,15 @@ export class PipelineService {
   constructor(
     @InjectRepository(PipelineJob)
     private readonly jobRepo: Repository<PipelineJob>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
     @InjectQueue('pipeline')
     private readonly pipelineQueue: Queue,
     private readonly featureFlagService: FeatureFlagService,
     private readonly enterpriseListingIntelligence: EnterpriseListingIntelligenceService,
     private readonly listingOptimization: ListingOptimizationService,
     private readonly heavyJobLimiter: HeavyJobLimiterService,
+    private readonly singleListingForm: SingleListingFormService,
   ) {}
 
   private pipelineUploadRoot(): string {
@@ -205,8 +213,20 @@ export class PipelineService {
    * Generates a single-row CSV and feeds it into the existing pipeline.
    */
   async createSingleJob(dto: CreateSingleListingDto, userId?: string): Promise<PipelineJob> {
-    if (!dto.partName && !dto.partNumber) {
-      throw new BadRequestException('At least partName or partNumber is required');
+    if (!dto.partNumber?.trim()) {
+      throw new BadRequestException('partNumber is required');
+    }
+
+    const price =
+      dto.price != null && !Number.isNaN(dto.price) ? dto.price : SINGLE_LISTING_DEFAULT_PRICE;
+    const quantity =
+      dto.quantity != null && !Number.isNaN(dto.quantity)
+        ? dto.quantity
+        : SINGLE_LISTING_DEFAULT_QUANTITY;
+
+    let sku = dto.sku?.trim();
+    if (!sku) {
+      sku = await this.singleListingForm.allocateSku();
     }
 
     const escapeCsv = (val: unknown): string => {
@@ -218,7 +238,7 @@ export class PipelineService {
 
     const headers = ['sku', 'brand', 'model', 'vin', 'category', 'part number', 'part name', 'note', 'price', 'quantity', 'image urls'];
     const row = [
-      dto.sku ?? '',
+      sku,
       dto.brand ?? '',
       dto.model ?? '',
       dto.vin ?? '',
@@ -226,8 +246,8 @@ export class PipelineService {
       dto.partNumber ?? '',
       dto.partName ?? '',
       dto.note ?? '',
-      dto.price ?? '',
-      dto.quantity ?? '',
+      price,
+      quantity,
       dto.imageUrls ?? '',
     ].map(escapeCsv).join(',');
 
@@ -276,6 +296,135 @@ export class PipelineService {
         },
       } as any);
     }
+
+    return job;
+  }
+
+  /**
+   * Create one pipeline job from multiple existing listing records (inventory batch enrich).
+   */
+  async createBatchJobFromListings(
+    listingIds: string[],
+    userId?: string,
+    options?: { source?: string; forceVision?: boolean },
+  ): Promise<PipelineJob> {
+    const uniqueIds = [...new Set(listingIds)];
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('listingIds must not be empty');
+    }
+
+    const listings = await this.listingRepo.find({
+      where: { id: In(uniqueIds) },
+    });
+
+    if (listings.length !== uniqueIds.length) {
+      throw new BadRequestException('One or more listings were not found');
+    }
+
+    const escapeCsv = (val: unknown): string => {
+      const s = val == null ? '' : String(val);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+
+    const headers = [
+      'sku',
+      'brand',
+      'model',
+      'vin',
+      'category',
+      'part number',
+      'part name',
+      'note',
+      'price',
+      'quantity',
+      'image urls',
+    ];
+
+    const rows = listings.map((listing) => {
+      const partNumber =
+        listing.cOeOemPartNumber?.trim() ||
+        listing.cManufacturerPartNumber?.trim() ||
+        '';
+      const price =
+        listing.startPriceNum ??
+        (listing.startPrice ? parseFloat(listing.startPrice) : SINGLE_LISTING_DEFAULT_PRICE);
+      const quantity =
+        listing.quantityNum ??
+        (listing.quantity ? parseInt(listing.quantity, 10) : SINGLE_LISTING_DEFAULT_QUANTITY);
+      const imageUrls = (listing.itemPhotoUrl ?? '')
+        .split('|')
+        .map((u) => u.trim())
+        .filter(Boolean)
+        .join('|');
+
+      return [
+        listing.customLabelSku ?? '',
+        listing.cBrand ?? '',
+        listing.extractedModel ?? '',
+        '',
+        listing.categoryName ?? '',
+        partNumber,
+        listing.title ?? '',
+        listing.description ?? '',
+        price,
+        quantity,
+        imageUrls,
+      ]
+        .map(escapeCsv)
+        .join(',');
+    });
+
+    const csv = `${headers.join(',')}\n${rows.join('\n')}\n`;
+    const csvBuffer = Buffer.from(csv, 'utf8');
+    const originalFilename = `Inventory Batch - ${listings.length} parts`;
+
+    await this.heavyJobLimiter.assertPipelineSlotAvailable();
+    const enabled = await this.featureFlagService.isEnabled('pipeline_enrichment');
+    if (!enabled) {
+      throw new ServiceUnavailableException(
+        'Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.',
+      );
+    }
+
+    const placeholder = await this.jobRepo.save(
+      this.jobRepo.create({
+        originalFilename,
+        storedFilePath: 'pending',
+        fileSizeBytes: csvBuffer.length,
+        status: 'pending',
+        createdBy: userId ?? null,
+      }),
+    );
+
+    const storedPath = path.join(
+      this.ensureJobUploadDir(placeholder.id),
+      `batch_${Date.now()}.csv`,
+    );
+    fs.writeFileSync(storedPath, csvBuffer);
+    await this.jobRepo.update(placeholder.id, { storedFilePath: storedPath });
+
+    const job = await this.enqueuePipelineJob(
+      await this.jobRepo.findOneByOrFail({ id: placeholder.id }),
+      storedPath,
+      originalFilename,
+    );
+
+    await this.jobRepo.update(job.id, {
+      stageDetails: {
+        ...(job.stageDetails ?? {}),
+        sourceListingIds: uniqueIds,
+        source: options?.source ?? 'inventory',
+        forceVision: options?.forceVision ?? false,
+      },
+    } as any);
+
+    await this.listingRepo.update({ id: In(uniqueIds) }, { pipelineJobId: job.id });
+
+    this.logger.log(
+      `Created batch pipeline job ${job.id} for ${uniqueIds.length} inventory listing(s)`,
+    );
 
     return job;
   }

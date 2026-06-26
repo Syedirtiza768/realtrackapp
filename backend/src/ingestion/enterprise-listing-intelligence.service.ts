@@ -16,6 +16,19 @@ import {
   resolveMotorsCategoryFromPart,
   validateGermanListing,
 } from '../channels/ebay/ebay-german-listing.util.js';
+import {
+  applyAustralianSpelling,
+  buildEnglishItemSpecifics,
+  buildEnglishListingDescription,
+  buildEnglishListingTitle,
+  resolveMotorsCategoryFromPart as resolveEnglishCategory,
+  shouldRebuildEnglishTitle,
+  validateEnglishListing,
+} from '../channels/ebay/ebay-english-listing.util.js';
+import {
+  alignGenerationAndYearRange,
+  resolvePlatformGeneration,
+} from '../fitment/platform-generation.util.js';
 
 export type Marketplace = 'US' | 'DE' | 'AU';
 export type ListingQualityProfile = 'max_seo_comprehensive' | 'balanced' | 'creative_exploration';
@@ -306,7 +319,8 @@ export class EnterpriseListingIntelligenceService {
       const categoryHint = resolveMotorsCategoryFromPart(product.partType, product.placement);
       if (categoryHint && categoryId && categoryHint.categoryId !== categoryId) {
         const exteriorIds = new Set(['33697', '174105']);
-        if (categoryHint.categoryId === '33695' && exteriorIds.has(categoryId)) {
+        const interiorIds = new Set(['33695', '33717', '174090']);
+        if (interiorIds.has(categoryHint.categoryId) && exteriorIds.has(categoryId)) {
           categoryId = categoryHint.categoryId;
           categoryName = categoryHint.categoryName;
         }
@@ -334,6 +348,42 @@ export class EnterpriseListingIntelligenceService {
         product,
         marketplace,
       );
+    } else if (marketplace === 'US' || marketplace === 'AU') {
+      const englishInput = this.toEnglishListingInput(product, compatibilityValidRows);
+      const categoryHint = resolveEnglishCategory(product.partType, product.placement);
+      if (categoryHint && categoryId && categoryHint.categoryId !== categoryId) {
+        const exteriorIds = new Set(['33697', '174105']);
+        const interiorIds = new Set(['33695', '33717', '174090']);
+        if (interiorIds.has(categoryHint.categoryId) && exteriorIds.has(categoryId)) {
+          categoryId = categoryHint.categoryId;
+          categoryName = categoryHint.categoryName;
+        }
+      }
+
+      if (
+        shouldRebuildEnglishTitle(optimizedTitle, englishInput) ||
+        optimizedTitle.length < 24
+      ) {
+        optimizedTitle = buildEnglishListingTitle(englishInput);
+        aiTitleConfidence = Math.max(aiTitleConfidence, 0.88);
+      }
+      if (marketplace === 'AU') {
+        optimizedTitle = applyAustralianSpelling(optimizedTitle);
+      }
+
+      const plainDescLen = seoDescription.replace(/<[^>]+>/g, '').trim().length;
+      if (plainDescLen < 120) {
+        seoDescription = buildEnglishListingDescription(englishInput, marketplace);
+        aiDescriptionConfidence = Math.max(aiDescriptionConfidence, 0.86);
+      } else if (marketplace === 'AU') {
+        seoDescription = applyAustralianSpelling(seoDescription);
+      }
+
+      mergedSpecifics = {
+        ...mergedSpecifics,
+        ...buildEnglishItemSpecifics(englishInput),
+      };
+      specificsEvaluation = this.evaluateSpecifics(mergedSpecifics, requiredSpecificNames);
     }
 
     const imageAnalysis = this.evaluateImages(product.imageUrls);
@@ -615,6 +665,9 @@ export class EnterpriseListingIntelligenceService {
 
     if (count === 0) findings.push('No product images detected');
     if (count > 0 && count < 3) findings.push('Low image count for high-conversion Motors listing');
+    if (count > 0 && count < 6) {
+      findings.push('Interior/trim parts typically need 6–12 photos (front, back, clips, label, wear)');
+    }
     if (imageUrls.some((url) => /watermark|placeholder|default|logo-only/i.test(url))) {
       findings.push('Potential watermark/placeholder style image detected');
     }
@@ -703,7 +756,59 @@ export class EnterpriseListingIntelligenceService {
       }
     }
 
+    if (
+      (input.marketplace === 'US' || input.marketplace === 'AU') &&
+      input.product &&
+      input.description &&
+      input.itemSpecifics
+    ) {
+      const enValidation = validateEnglishListing({
+        title: input.title,
+        description: input.description,
+        itemSpecifics: input.itemSpecifics,
+        categoryId: input.categoryId,
+        categoryName: input.product.categoryName,
+        partType: input.product.partType,
+        placement: input.product.placement,
+        mpn: input.product.mpn,
+        oemPartNumber: input.product.oemPartNumber,
+      });
+      for (const issue of enValidation.issues) {
+        issues.push({
+          code: issue.code,
+          severity: issue.severity,
+          field: issue.field,
+          message: issue.message,
+        });
+      }
+    }
+
     return issues;
+  }
+
+  private toEnglishListingInput(
+    product: CatalogProduct,
+    fitmentRows: CompatibilityRow[],
+  ) {
+    const german = this.toGermanListingInput(product, fitmentRows);
+    return {
+      brand: german.brand,
+      model: german.model,
+      partType: german.partType,
+      placement: german.placement,
+      mpn: german.mpn,
+      oemPartNumber: german.oemPartNumber,
+      condition: german.condition,
+      material: german.material,
+      donorVehicle: german.donorVehicle,
+      yearRange: german.yearRange,
+      generation: german.generation,
+      fitmentRows: german.fitmentRows,
+      fitmentConfirmed: german.fitmentConfirmed,
+      sellerCountry: german.sellerCountry,
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
+    };
   }
 
   private toGermanListingInput(
@@ -719,16 +824,28 @@ export class EnterpriseListingIntelligenceService {
     const years = fitmentRows
       .map((r) => Number(r.year))
       .filter((y) => Number.isFinite(y));
-    const yearRange =
+    const yearRangeFromFitment =
       years.length >= 2
         ? `${Math.min(...years)}-${Math.max(...years)}`
         : years.length === 1
           ? String(years[0])
           : donorYear || undefined;
 
+    const platform = donorYear
+      ? resolvePlatformGeneration(donorMake, donorModel || product.brand, donorYear)
+      : null;
+    const aligned = alignGenerationAndYearRange({
+      generation: platform?.code,
+      yearRange: yearRangeFromFitment,
+      make: donorMake || product.brand,
+      model: donorModel || fitmentRows[0]?.model,
+      anchorYear: donorYear,
+      fitmentYears: fitmentRows.map((r) => r.year),
+    });
+
     return {
       brand: product.brand,
-      model: donorModel || undefined,
+      model: donorModel || fitmentRows[0]?.model || undefined,
       partType: product.partType,
       placement: product.placement,
       mpn: product.mpn,
@@ -736,7 +853,8 @@ export class EnterpriseListingIntelligenceService {
       condition: product.conditionLabel ?? product.conditionId,
       material: product.material,
       donorVehicle,
-      yearRange,
+      yearRange: aligned.yearRange,
+      generation: aligned.generation || undefined,
       fitmentRows: fitmentRows.map((r) => ({
         year: r.year,
         make: r.make,
@@ -798,6 +916,10 @@ export class EnterpriseListingIntelligenceService {
     if (marketplace === 'DE') {
       return buildGermanListingTitle(this.toGermanListingInput(product, []));
     }
+    if (marketplace === 'US' || marketplace === 'AU') {
+      const title = buildEnglishListingTitle(this.toEnglishListingInput(product, []));
+      return marketplace === 'AU' ? applyAustralianSpelling(title) : title;
+    }
     const parts = [
       product.brand,
       product.partType,
@@ -817,6 +939,12 @@ export class EnterpriseListingIntelligenceService {
     if (marketplace === 'DE') {
       return buildGermanListingDescription(
         this.toGermanListingInput(product, compatibility),
+      );
+    }
+    if (marketplace === 'US' || marketplace === 'AU') {
+      return buildEnglishListingDescription(
+        this.toEnglishListingInput(product, compatibility),
+        marketplace,
       );
     }
 

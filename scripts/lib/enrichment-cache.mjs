@@ -40,14 +40,15 @@ export function createEnrichmentCache(rootDir, promptVersion, options = {}) {
 
   load();
 
-  function key(mpn, profile) {
-    return `${normMpn(mpn)}|${promptVersion}|${profile}`;
+  function key(mpn, profile, identityKey) {
+    const identity = identityKey ? String(identityKey).slice(0, 64) : '_';
+    return `${normMpn(mpn)}|${promptVersion}|${profile}|${identity}`;
   }
 
   return {
-    get(mpn, profile) {
+    get(mpn, profile, identityKey) {
       if (!normMpn(mpn)) return null;
-      const k = key(mpn, profile);
+      const k = key(mpn, profile, identityKey);
       const hit = data[k];
       if (!hit) return null;
       if (Date.now() - hit.cachedAt > ttlMs) {
@@ -56,9 +57,9 @@ export function createEnrichmentCache(rootDir, promptVersion, options = {}) {
       }
       return hit.item;
     },
-    set(mpn, profile, item) {
+    set(mpn, profile, item, identityKey) {
       if (!normMpn(mpn) || !item) return;
-      data[key(mpn, profile)] = { item, cachedAt: Date.now() };
+      data[key(mpn, profile, identityKey)] = { item, cachedAt: Date.now() };
       persist();
     },
     stats() {

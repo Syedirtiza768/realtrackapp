@@ -141,6 +141,12 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | POST | `/api/pipeline/run` | Run pipeline job | pipeline.run |
+| POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — save OEM, brand, 2+ photos as draft listing | listings.create |
+| POST | `/api/pipeline/single` | Submit single listing to enrichment pipeline | pipeline.run |
+| GET | `/api/pipeline/single-listing/lookup-pricing` | OpenRouter cost estimates (incl. 15k parts) | listings.create |
+| GET | `/api/pipeline/single-listing/next-sku` | Allocate next `BLA-#####` SKU | listings.create |
+| GET | `/api/pipeline/single-listing/brands` | Brand/make options (catalog + OEM list); `?q=` filter | listings.create |
+| POST | `/api/pipeline/single-listing/part-lookup` | Vision-first when 2+ image URLs provided; OEM text only without photos | inventory.enrich |
 | GET | `/api/pipeline/jobs` | List pipeline jobs | pipeline.view |
 | GET | `/api/pipeline/jobs/:id` | Get job details | pipeline.view |
 
@@ -282,11 +288,16 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
-| GET | `/api/inventory` | List inventory | inventory.view |
-| GET | `/api/inventory/:id` | Get inventory details | inventory.view |
-| POST | `/api/inventory/:id/adjust` | Adjust quantity | inventory.adjust |
-| POST | `/api/inventory/:id/allocate` | Allocate inventory | inventory.allocate |
-| POST | `/api/inventory/sync` | Sync inventory | inventory.reconcile |
+| GET | `/api/inventory/listings` | List workbench parts — one row per SKU (`page`, `limit`, `status`, `search`, `missingImages`) | inventory.view |
+| GET | `/api/inventory/listings/:listingId/detail` | Full part detail for modal (fitments, US/AU/DE variants, pipeline job) | inventory.view |
+| POST | `/api/inventory/send-to-pipeline` | Build pipeline CSV from selected listings; `forceVision` on photos; returns `{ job, warnings }` | inventory.enrich |
+| POST | `/api/inventory/enrich` | Alias for `send-to-pipeline` (deprecated) | inventory.enrich |
+| POST | `/api/inventory/part-lookup` | Vision-first fetch details for one listing (OEM + brand + 2+ photos → title, category, SEO notes) | inventory.enrich |
+| POST | `/api/inventory/part-lookup/bulk` | Vision-first fetch details for multiple listings | inventory.enrich |
+| GET | `/api/inventory/:listingId` | Get inventory ledger for a listing | inventory.view |
+| POST | `/api/inventory/:listingId/adjust` | Adjust quantity | inventory.adjust |
+| POST | `/api/inventory/:listingId/allocations` | Per-store allocation | inventory.allocate |
+| POST | `/api/inventory/reconcile` | Reconcile inventory | inventory.reconcile |
 
 ---
 

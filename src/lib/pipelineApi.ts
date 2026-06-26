@@ -71,7 +71,7 @@ function toNumber(value: number | string | null | undefined, fallback = 0): numb
   return fallback;
 }
 
-function normalizePipelineJob(job: PipelineJobApi): PipelineJob {
+export function normalizePipelineJob(job: PipelineJobApi): PipelineJob {
   return {
     ...job,
     fileSizeBytes: toNumber(job.fileSizeBytes),
@@ -191,6 +191,105 @@ export interface SingleListingInput {
   quantity?: number;
   imageUrls?: string;
   uploadedAssetIds?: string[];
+}
+
+export interface PartLookupResult {
+  partName?: string;
+  brand?: string;
+  model?: string;
+  category?: string;
+  note?: string;
+  partNumber?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  mvlMatched?: boolean;
+  source: 'oem_text' | 'vision';
+  aiModel: string;
+  visionModel?: string;
+  estimatedCostUsd: number;
+  fallbackUsed: boolean;
+}
+
+export interface PartLookupPricingEstimate {
+  oemModel: string;
+  visionModel: string;
+  recommendedStack: string;
+  assumptions: {
+    oemPromptTokens: number;
+    oemCompletionTokens: number;
+    visionPromptTokens: number;
+    visionCompletionTokens: number;
+    visionFallbackRate: number;
+  };
+  perLookupUsd: {
+    oemTextOnly: number;
+    visionFallback: number;
+    oemPlusVision: number;
+  };
+  bulk15000PartsUsd: {
+    allOemSuccess: number;
+    typicalWithVisionFallback: number;
+    worstCase: number;
+  };
+}
+
+export function useNextSingleListingSku() {
+  return useQuery({
+    queryKey: ['single-listing-next-sku'],
+    queryFn: ({ signal }) =>
+      fetchJson<{ sku: string }>('/pipeline/single-listing/next-sku', signal),
+    staleTime: Infinity,
+    retry: 2,
+  });
+}
+
+export function useSingleListingBrands() {
+  return useQuery({
+    queryKey: ['single-listing-brands'],
+    queryFn: ({ signal }) =>
+      fetchJson<{ brands: string[] }>('/pipeline/single-listing/brands', signal),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function usePartLookupPricing() {
+  return useQuery({
+    queryKey: ['single-listing-lookup-pricing'],
+    queryFn: ({ signal }) =>
+      fetchJson<PartLookupPricingEstimate>('/pipeline/single-listing/lookup-pricing', signal),
+    staleTime: 60 * 60_000,
+  });
+}
+
+export function usePartLookup() {
+  return useMutation({
+    mutationFn: (input: {
+      partNumber: string;
+      brand?: string;
+      vin?: string;
+      imageUrls?: string[];
+    }) => postJson<PartLookupResult>('/pipeline/single-listing/part-lookup', input),
+  });
+}
+
+export function useAddIntakePart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      sku?: string;
+      partNumber: string;
+      brand: string;
+      imageUrls: string[];
+      uploadedAssetIds?: string[];
+    }) =>
+      postJson<{ listing: { id: string; customLabelSku: string | null } }>(
+        '/pipeline/single-listing/add-part',
+        input,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['single-listing-next-sku'] });
+      qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+    },
+  });
 }
 
 export function useCreateSingleListing() {

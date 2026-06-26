@@ -27,7 +27,9 @@ import { OpenAiModule } from '../common/openai/openai.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
 import { ListingOptimizationModule } from '../listing-optimization/listing-optimization.module.js';
 import { HeavyJobLimiterModule } from '../common/jobs/heavy-job-limiter.module.js';
+import { FitmentModule } from '../fitment/fitment.module.js';
 import { PipelineOutputImageService } from './services/pipeline-output-image.service.js';
+import { SingleListingFormService } from './services/single-listing-form.service.js';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { PipelineOutputImageService } from './services/pipeline-output-image.ser
     BullModule.registerQueue({ name: 'pipeline' }),
     BullModule.registerQueue({ name: 'listing-optimization', defaultJobOptions: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } } }),
     ListingOptimizationModule,
+    FitmentModule,
     AiModule,
     StorageModule,
     FeatureFlagModule,
@@ -55,7 +58,8 @@ import { PipelineOutputImageService } from './services/pipeline-output-image.ser
     ImageSearchService,
     ImageOptimizerService,
     PipelineOutputImageService,
+    SingleListingFormService,
   ],
-  exports: [IngestionService, PipelineService, ImageEnrichmentService, ListingOptimizationModule],
+  exports: [IngestionService, PipelineService, ImageEnrichmentService, ListingOptimizationModule, SingleListingFormService],
 })
 export class IngestionModule {}

@@ -20,6 +20,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineService } from './pipeline.service.js';
 import type { CreateSingleListingDto } from './pipeline.service.js';
+import { SingleListingFormService } from './services/single-listing-form.service.js';
+import type { PartLookupDto } from './services/single-listing-form.service.js';
+import { AddIntakePartDto } from './dto/add-intake-part.dto.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import type { CombinedOptimizationResult } from './pipeline.service.js';
 import type { EnterpriseOptimizationResult } from './pipeline.service.js';
@@ -39,6 +42,7 @@ import { RbacService } from '../rbac/rbac.service.js';
 export class PipelineController {
   constructor(
     private readonly pipelineService: PipelineService,
+    private readonly singleListingForm: SingleListingFormService,
     private readonly rbac: RbacService,
   ) {}
 
@@ -163,6 +167,48 @@ export class PipelineController {
     );
 
     return { job };
+  }
+
+  @Get('single-listing/next-sku')
+  @RequirePermissions('listings.create')
+  @ApiOperation({ summary: 'Allocate the next auto-generated BLA- SKU for a new single listing' })
+  async nextSingleListingSku() {
+    return this.singleListingForm.generateNextSku();
+  }
+
+  @Get('single-listing/brands')
+  @RequirePermissions('listings.create')
+  @ApiOperation({ summary: 'List brand/make options (catalog + static OEM list) for new listing form' })
+  async singleListingBrands(@Query('q') q?: string) {
+    return this.singleListingForm.listBrands(q);
+  }
+
+  @Get('single-listing/lookup-pricing')
+  @RequirePermissions('listings.create')
+  @ApiOperation({ summary: 'Estimated OpenRouter cost for single-listing part lookup at scale' })
+  async singleListingLookupPricing() {
+    return this.singleListingForm.getLookupPricing();
+  }
+
+  @Post('single-listing/part-lookup')
+  @Throttle({ medium: { limit: 10, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Vision-first AI lookup from OEM + brand + photos (requires 2+ images when provided)',
+  })
+  async singleListingPartLookup(@Body() body: PartLookupDto) {
+    return this.singleListingForm.lookupPart(body);
+  }
+
+  @Post('single-listing/add-part')
+  @Throttle({ medium: { limit: 20, ttl: 60_000 } })
+  @RequirePermissions('listings.create')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Warehouse intake — save OEM, brand, and photos as a draft inventory part' })
+  async addIntakePart(@Body() body: AddIntakePartDto) {
+    return this.singleListingForm.createIntakePart(body);
   }
 
   @Post('single')

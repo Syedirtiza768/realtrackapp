@@ -6,9 +6,13 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { InventoryService } from './inventory.service.js';
+import { InventoryWorkbenchService } from './inventory-workbench.service.js';
 import {
   AdjustInventoryDto,
   ReserveInventoryDto,
@@ -17,12 +21,79 @@ import {
   LowStockQueryDto,
   InventoryEventsQueryDto,
 } from './dto/inventory.dto.js';
+import {
+  InventoryListingsQueryDto,
+  InventoryPartLookupDto,
+  InventoryBulkPartLookupDto,
+  InventoryEnrichDto,
+} from './dto/inventory-workbench.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
 
 @ApiTags('inventory')
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly workbench: InventoryWorkbenchService,
+  ) {}
+
+  /* ── Workbench (must be registered before :listingId routes) ── */
+
+  @Get('listings')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'List catalog listings for inventory workbench' })
+  listWorkbenchListings(@Query() query: InventoryListingsQueryDto) {
+    return this.workbench.listListings(query);
+  }
+
+  @Get('listings/:listingId/detail')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'Full part detail for inventory workbench modal' })
+  getListingDetail(@Param('listingId', ParseUUIDPipe) listingId: string) {
+    return this.workbench.getListingDetail(listingId);
+  }
+
+  @Post('part-lookup')
+  @Throttle({ medium: { limit: 10, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Vision-first fetch details for one inventory part (OEM + brand + photos → title, category, SEO notes)',
+  })
+  lookupPart(@Body() dto: InventoryPartLookupDto) {
+    return this.workbench.lookupPartForListing(dto.listingId);
+  }
+
+  @Post('part-lookup/bulk')
+  @Throttle({ medium: { limit: 3, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Vision-first fetch details for multiple inventory parts',
+  })
+  bulkLookupParts(@Body() dto: InventoryBulkPartLookupDto) {
+    return this.workbench.bulkLookupParts(dto.listingIds);
+  }
+
+  @Post('send-to-pipeline')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Send selected inventory parts to enrichment pipeline (one batch job, vision on photos)' })
+  sendToPipeline(@Body() dto: InventoryEnrichDto, @CurrentUser() user: User) {
+    return this.workbench.sendToPipeline(dto.listingIds, user.id);
+  }
+
+  @Post('enrich')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Alias for send-to-pipeline (deprecated)' })
+  enrichListings(@Body() dto: InventoryEnrichDto, @CurrentUser() user: User) {
+    return this.workbench.sendToPipeline(dto.listingIds, user.id);
+  }
 
   @Get(':listingId')
   @RequirePermissions('inventory.view')
