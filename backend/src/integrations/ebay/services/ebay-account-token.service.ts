@@ -208,7 +208,9 @@ export class EbayAccountTokenService {
   }): string {
     const clientId = this.config.get<string>('EBAY_CLIENT_ID', '');
     const redirectUri = this.config.get<string>('EBAY_REDIRECT_URI', '');
-    const scopes = this.getDefaultScopes().join('%20');
+    const scopes = this.getDefaultScopes()
+      .map((s) => encodeURIComponent(s))
+      .join('%20');
     const host = this.getAuthHost(params.environment);
     return (
       `${host}/oauth2/authorize?` +
