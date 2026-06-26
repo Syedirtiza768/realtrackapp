@@ -7,6 +7,7 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Fixed
+- **StoreAccessPanel (user store assignment):** Deduplicate stores by `storeName` so the same store isn't listed multiple times when choosing stores for a user.
 - **Pipeline listing upsert:** Raw SQL upsert in `saveMarketplaceToCatalog` was missing
   the `version` column (`@VersionColumn`), causing every listing record insert to fail
   with "null value in column 'version' violates not-null constraint".

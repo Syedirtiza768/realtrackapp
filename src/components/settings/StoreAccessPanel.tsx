@@ -41,7 +41,12 @@ export default function StoreAccessPanel({ userId }: { userId: string }) {
         listStores(),
         getUserStoreAssignments(userId),
       ]);
-      setAllStores(storeList);
+      // Deduplicate by storeName so the same store isn't listed multiple times
+      const seen = new Map<string, StoreBrief>();
+      for (const s of storeList) {
+        if (!seen.has(s.storeName)) seen.set(s.storeName, s);
+      }
+      setAllStores(Array.from(seen.values()));
       setAssignments(assigns);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load stores');
