@@ -105,6 +105,8 @@ services:
       PIPELINE_PROJECT_ROOT: /app
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8050,https://mhn.realtrackapp.com,http://mhn.realtrackapp.com}
+      # Frontend base URL (used for OAuth redirect back)
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-}
       # OpenRouter AI (OpenAI-compatible API)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
