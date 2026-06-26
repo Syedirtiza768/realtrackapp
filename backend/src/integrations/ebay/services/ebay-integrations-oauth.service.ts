@@ -105,20 +105,19 @@ export class EbayIntegrationsOAuthService {
         ? 'https://api.ebay.com'
         : 'https://api.sandbox.ebay.com';
 
-    let ebayUserId = 'unknown';
+    let ebayUserId = `unknown_${Date.now()}`;
     let ebayUsername: string | null = null;
     try {
       const identity = await axios.get(`${oauthBase}/commerce/identity/v1/user/`, {
         headers: { Authorization: `Bearer ${tokens.accessToken}` },
         timeout: 15_000,
       });
-      ebayUserId =
-        identity.data?.userId ?? identity.data?.username ?? ebayUserId;
+      if (identity.data?.userId) ebayUserId = identity.data.userId;
       ebayUsername = identity.data?.username ?? null;
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status ?? '?';
       const msg = (e as Error)?.message ?? String(e);
-      this.logger.warn({ status, errMsg: msg }, `eBay identity API failed (${status}) — using unknown`);
+      this.logger.warn({ status, errMsg: msg }, `eBay identity API failed (${status}) — using ${ebayUserId}`);
     }
 
     const tokenBlob: TokenBlob = {
