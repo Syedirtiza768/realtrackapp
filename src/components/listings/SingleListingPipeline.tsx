@@ -30,6 +30,7 @@ export default function SingleListingPipeline() {
   const [partNumber, setPartNumber] = useState('');
   const [brand, setBrand] = useState('');
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [uploadZoneKey, setUploadZoneKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -39,6 +40,7 @@ export default function SingleListingPipeline() {
     setPartNumber('');
     setBrand('');
     setUploadedImages([]);
+    setUploadZoneKey((k) => k + 1);
     setError(null);
     await refetchSku();
   }, [refetchSku]);
@@ -192,7 +194,7 @@ export default function SingleListingPipeline() {
                   </span>
                 </span>
               </label>
-              <ImageUploadZone onImagesChange={setUploadedImages} maxImages={12} />
+              <ImageUploadZone key={uploadZoneKey} onImagesChange={setUploadedImages} maxImages={12} />
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                 {uploadedImages.length} of {MIN_PHOTOS} required photos uploaded
               </p>
