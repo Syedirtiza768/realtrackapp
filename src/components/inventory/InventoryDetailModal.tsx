@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   X,
@@ -13,9 +13,13 @@ import {
   ExternalLink,
   Sparkles,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { useInventoryDetail, useInventoryPartLookup } from '../../lib/inventoryApi';
+import { useInventoryDetail, useInventoryPartLookup, useUpdateInventoryImages } from '../../lib/inventoryApi';
+import { usePermissions } from '../../hooks/usePermissions';
+import ImageUploadZone from '../listings/ImageUploadZone';
+import type { UploadedImage } from '../../lib/storageApi';
 
 interface Props {
   listingId: string | null;
@@ -53,9 +57,16 @@ function DetailRow({
 export default function InventoryDetailModal({ listingId, onClose, canFetchDetails }: Props) {
   const { data, isLoading, refetch } = useInventoryDetail(listingId);
   const partLookup = useInventoryPartLookup();
+  const updateImages = useUpdateInventoryImages();
+  const { has: hasPermission } = usePermissions();
+  const canUploadImages = hasPermission('listings.update');
+
   const images = data?.imageUrls ?? [];
   const [activeImg, setActiveImg] = useState(0);
   const [copiedSku, setCopiedSku] = useState(false);
+  const [uploadZoneKey, setUploadZoneKey] = useState(0);
+  const [stagedImages, setStagedImages] = useState<UploadedImage[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const listing = data?.listing as {
     customLabelSku?: string;
@@ -86,6 +97,29 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
   };
 
   useEffect(() => setActiveImg(0), [listingId]);
+
+  useEffect(() => {
+    setStagedImages([]);
+    setUploadZoneKey((k) => k + 1);
+    setUploadError(null);
+  }, [listingId]);
+
+  const handleSavePhotos = useCallback(async () => {
+    if (!listingId || stagedImages.length === 0) return;
+    setUploadError(null);
+    try {
+      await updateImages.mutateAsync({
+        listingId,
+        imageUrls: stagedImages.map((img) => img.cdnUrl).filter(Boolean),
+        uploadedAssetIds: stagedImages.map((img) => img.assetId),
+      });
+      setStagedImages([]);
+      setUploadZoneKey((k) => k + 1);
+      await refetch();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Failed to save photos');
+    }
+  }, [listingId, stagedImages, updateImages, refetch]);
 
   useEffect(() => {
     if (!listingId) return;
@@ -243,9 +277,44 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
                     )}
                   </div>
                 ) : (
-                  <div className="aspect-square bg-slate-50 dark:bg-slate-800 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2">
+                  <div className="aspect-square bg-slate-50 dark:bg-slate-800 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2 p-4">
                     <ImageIcon className="h-10 w-10 text-amber-400" />
                     <span className="text-xs text-amber-400">No photos uploaded</span>
+                  </div>
+                )}
+
+                {canUploadImages && listingId && (
+                  <div className="mt-4">
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <Upload className="h-4 w-4" />
+                      Add photos
+                      <span className="text-xs font-normal text-slate-500">
+                        (min 2 for Fetch details: label + overall)
+                      </span>
+                    </div>
+                    <ImageUploadZone
+                      key={uploadZoneKey}
+                      onImagesChange={setStagedImages}
+                      maxImages={12}
+                    />
+                    {stagedImages.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void handleSavePhotos()}
+                        disabled={updateImages.isPending}
+                        className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {updateImages.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        Attach {stagedImages.length} photo{stagedImages.length !== 1 ? 's' : ''} to listing
+                      </button>
+                    )}
+                    {uploadError && (
+                      <p className="text-xs text-red-400 mt-2">{uploadError}</p>
+                    )}
                   </div>
                 )}
 

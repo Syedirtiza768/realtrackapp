@@ -141,12 +141,12 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | POST | `/api/pipeline/run` | Run pipeline job | pipeline.run |
-| POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — save OEM, brand, 2+ photos as draft listing | listings.create |
+| POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — part type, condition, brand, part #, price, qty → draft listing (photos optional) | listings.create |
 | POST | `/api/pipeline/single` | Submit single listing to enrichment pipeline | pipeline.run |
 | GET | `/api/pipeline/single-listing/lookup-pricing` | OpenRouter cost estimates (incl. 15k parts) | listings.create |
 | GET | `/api/pipeline/single-listing/next-sku` | Allocate next `BLA-#####` SKU | listings.create |
 | GET | `/api/pipeline/single-listing/brands` | Brand/make options (catalog + OEM list); `?q=` filter | listings.create |
-| POST | `/api/pipeline/single-listing/part-lookup` | Vision-first when 2+ image URLs provided; OEM text only without photos | inventory.enrich |
+| POST | `/api/pipeline/single-listing/part-lookup` | AI lookup: vision when 2+ images; OEM text when no photos | listings.create **or** inventory.enrich |
 | GET | `/api/pipeline/jobs` | List pipeline jobs | pipeline.view |
 | GET | `/api/pipeline/jobs/:id` | Get job details | pipeline.view |
 
@@ -290,6 +290,7 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 |--------|------|-------------|------------|
 | GET | `/api/inventory/listings` | List workbench parts — one row per SKU (`page`, `limit`, `status`, `search`, `missingImages`) | inventory.view |
 | GET | `/api/inventory/listings/:listingId/detail` | Full part detail for modal (fitments, US/AU/DE variants, pipeline job) | inventory.view |
+| PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing | listings.update |
 | POST | `/api/inventory/send-to-pipeline` | Build pipeline CSV from selected listings; `forceVision` on photos; returns `{ job, warnings }` | inventory.enrich |
 | POST | `/api/inventory/enrich` | Alias for `send-to-pipeline` (deprecated) | inventory.enrich |
 | POST | `/api/inventory/part-lookup` | Vision-first fetch details for one listing (OEM + brand + 2+ photos → title, category, SEO notes) | inventory.enrich |

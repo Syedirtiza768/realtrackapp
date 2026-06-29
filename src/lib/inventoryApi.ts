@@ -205,3 +205,29 @@ export function useSendToPipeline() {
 export function useInventoryEnrich() {
   return useSendToPipeline();
 }
+
+export function useUpdateInventoryImages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      listingId: string;
+      imageUrls: string[];
+      uploadedAssetIds?: string[];
+    }) =>
+      fetchWithAuth<InventoryListingDetail>(
+        `${API}/inventory/listings/${input.listingId}/images`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageUrls: input.imageUrls,
+            uploadedAssetIds: input.uploadedAssetIds,
+          }),
+        },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+      qc.invalidateQueries({ queryKey: ['inventory-detail', vars.listingId] });
+    },
+  });
+}

@@ -15,7 +15,8 @@ Derived from the route table (`src/App.tsx`), backend modules, and the prior
 | RBAC roles & permissions admin | `/settings/users`, `/settings/permissions` | `rbac` | Implemented | 8 roles, ~90 permissions, registry-driven |
 | White-label / branding | `/settings/client` | `client-settings` | Implemented | Super-admin only; public branding endpoint |
 | Dashboard / KPIs | `/` | `dashboard` | Implemented | Aggregation via BullMQ; cache table |
-| Listing editor (create/edit) | `/listings/new`, `/listings/:id/edit` | `listings` | Implemented | AI-assisted; split preview |
+| Add Part (warehouse intake) | `/listings/new` | `listings` | Implemented | GridConnect-style: OEM/Aftermarket/Salvage, New/Used, Process SKU → inventory draft |
+| Listing editor (edit) | `/listings/:id/edit` | `listings` | Implemented | AI-assisted; split preview |
 | Listing revision history | `/listings/:id/history` | `listings` | Implemented | `ListingRevision` |
 | AI listing generation | (in editor) | `listings` (`listing-generation.controller`) | Partial | OpenAI-backed; verify quality/limits |
 | Listings v2 (cached) | — | `listings` (`listings-v2.controller`) | Partial | Redis cache interceptor |

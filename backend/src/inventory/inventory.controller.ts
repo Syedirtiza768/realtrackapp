@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -26,6 +27,7 @@ import {
   InventoryPartLookupDto,
   InventoryBulkPartLookupDto,
   InventoryEnrichDto,
+  UpdateListingImagesDto,
 } from './dto/inventory-workbench.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -53,6 +55,20 @@ export class InventoryController {
   @ApiOperation({ summary: 'Full part detail for inventory workbench modal' })
   getListingDetail(@Param('listingId', ParseUUIDPipe) listingId: string) {
     return this.workbench.getListingDetail(listingId);
+  }
+
+  @Patch('listings/:listingId/images')
+  @RequirePermissions('listings.update')
+  @ApiOperation({ summary: 'Attach uploaded photos to an inventory draft listing' })
+  updateListingImages(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+    @Body() dto: UpdateListingImagesDto,
+  ) {
+    return this.workbench.updateListingImages(
+      listingId,
+      dto.imageUrls,
+      dto.uploadedAssetIds,
+    );
   }
 
   @Post('part-lookup')

@@ -26,7 +26,7 @@ import { AddIntakePartDto } from './dto/add-intake-part.dto.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import type { CombinedOptimizationResult } from './pipeline.service.js';
 import type { EnterpriseOptimizationResult } from './pipeline.service.js';
-import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { RequirePermissions, RequireAnyPermission } from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { User } from '../auth/entities/user.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
@@ -192,11 +192,11 @@ export class PipelineController {
 
   @Post('single-listing/part-lookup')
   @Throttle({ medium: { limit: 10, ttl: 60_000 } })
-  @RequirePermissions('inventory.enrich')
+  @RequireAnyPermission('inventory.enrich', 'listings.create')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Vision-first AI lookup from OEM + brand + photos (requires 2+ images when provided)',
+      'AI part lookup from OEM + brand (+ photos when provided). Text-only when no images.',
   })
   async singleListingPartLookup(@Body() body: PartLookupDto) {
     return this.singleListingForm.lookupPart(body);
@@ -206,7 +206,7 @@ export class PipelineController {
   @Throttle({ medium: { limit: 20, ttl: 60_000 } })
   @RequirePermissions('listings.create')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Warehouse intake — save OEM, brand, and photos as a draft inventory part' })
+  @ApiOperation({ summary: 'Warehouse intake — save part type, condition, price, and identity as draft inventory' })
   async addIntakePart(@Body() body: AddIntakePartDto) {
     return this.singleListingForm.createIntakePart(body);
   }

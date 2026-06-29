@@ -1,132 +1,245 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  Barcode,
   CheckCircle2,
+  FileText,
   Loader2,
-  Plus,
-  ArrowLeft,
   PackagePlus,
-  Image,
+  Sparkles,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
   useAddIntakePart,
   useNextSingleListingSku,
+  usePartLookup,
   useSingleListingBrands,
+  type PartLookupResult,
 } from '../../lib/pipelineApi';
-import ImageUploadZone from './ImageUploadZone';
-import type { UploadedImage } from '../../lib/storageApi';
 
-const MIN_PHOTOS = 2;
+type PartType = 'OEM' | 'Aftermarket' | 'Salvage';
+type ConditionId = '1000' | '3000';
+
+const PART_TYPES: { value: PartType; label: string }[] = [
+  { value: 'OEM', label: 'OEM' },
+  { value: 'Aftermarket', label: 'Aftermarket' },
+  { value: 'Salvage', label: 'Salvage' },
+];
+
+const CONDITIONS: { value: ConditionId; label: string }[] = [
+  { value: '1000', label: 'New' },
+  { value: '3000', label: 'Used' },
+];
+
+function partNumberHint(partType: PartType): string {
+  if (partType === 'Aftermarket') {
+    return 'Manufacturer part number — not casting / stamped marks.';
+  }
+  if (partType === 'Salvage') {
+    return 'OEM or stamped number from the donor part.';
+  }
+  return 'OE or manufacturer number — not casting / stamped marks.';
+}
+
+function brandLabel(partType: PartType): string {
+  if (partType === 'Aftermarket') return 'Brand (aftermarket)';
+  return 'Brand (OEM)';
+}
+
+type PreviewState =
+  | { status: 'idle' }
+  | { status: 'ready'; title: string; category?: string; note?: string; confidence?: string }
+  | { status: 'lookup'; partial?: PartLookupResult }
+  | { status: 'saved'; sku: string };
 
 export default function SingleListingPipeline() {
-  const navigate = useNavigate();
   const addPartMutation = useAddIntakePart();
+  const partLookupMutation = usePartLookup();
   const { data: skuData, isLoading: skuLoading, error: skuError, refetch: refetchSku } =
     useNextSingleListingSku();
   const { data: brandsData } = useSingleListingBrands();
 
+  const [partType, setPartType] = useState<PartType>('Aftermarket');
+  const [conditionId, setConditionId] = useState<ConditionId>('1000');
   const [partNumber, setPartNumber] = useState('');
   const [brand, setBrand] = useState('');
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
-  const [uploadZoneKey, setUploadZoneKey] = useState(0);
+  const [vehicleMake, setVehicleMake] = useState('');
+  const [price, setPrice] = useState('');
+  const [quantity, setQuantity] = useState('1');
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [lookupWarning, setLookupWarning] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
 
   const sku = skuData?.sku ?? '';
+  const brands = brandsData?.brands ?? [];
+
+  useEffect(() => {
+    if (partType === 'Salvage') {
+      setConditionId('3000');
+    }
+  }, [partType]);
+
+  const mandatoryFilled = useMemo(() => {
+    const pn = partNumber.trim();
+    const br = brand.trim();
+    const pr = parseFloat(price);
+    return Boolean(pn && br && sku && Number.isFinite(pr) && pr > 0);
+  }, [partNumber, brand, price, sku]);
 
   const resetForm = useCallback(async () => {
     setPartNumber('');
     setBrand('');
-    setUploadedImages([]);
-    setUploadZoneKey((k) => k + 1);
+    setVehicleMake('');
+    setPrice('');
+    setQuantity('1');
+    setPartType('Aftermarket');
+    setConditionId('1000');
     setError(null);
+    setLookupWarning(null);
+    setPreview({ status: 'idle' });
     await refetchSku();
   }, [refetchSku]);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
+  const handleProcessSku = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
       setError(null);
-      setSuccessMessage(null);
+      setLookupWarning(null);
 
-      const oem = partNumber.trim();
-      const make = brand.trim();
-      if (!oem) {
-        setError('OEM / Part Number is required');
+      const pn = partNumber.trim();
+      const br = brand.trim();
+      const pr = parseFloat(price);
+      const qty = parseInt(quantity, 10);
+
+      if (!pn) {
+        setError('Part number is required');
         return;
       }
-      if (!make) {
+      if (!br) {
         setError('Brand is required');
+        return;
+      }
+      if (!Number.isFinite(pr) || pr <= 0) {
+        setError('Enter a valid price greater than zero');
         return;
       }
       if (!sku) {
         setError('SKU is still loading — please wait and try again');
         return;
       }
-
-      const imageUrls = uploadedImages.map((img) => img.cdnUrl).filter(Boolean);
-      if (imageUrls.length < MIN_PHOTOS) {
-        setError(`Upload at least ${MIN_PHOTOS} photos (label close-up + overall part shot)`);
+      if (!Number.isFinite(qty) || qty < 1) {
+        setError('Quantity must be at least 1');
         return;
+      }
+
+      let lookup: PartLookupResult | undefined;
+      try {
+        setPreview({ status: 'lookup' });
+        lookup = await partLookupMutation.mutateAsync({
+          partNumber: pn,
+          brand: br,
+        });
+        setPreview({
+          status: 'ready',
+          title: lookup.partName?.trim() || `${br} ${pn}`.slice(0, 80),
+          category: lookup.category,
+          note: lookup.note,
+          confidence: lookup.confidence,
+        });
+      } catch {
+        setLookupWarning(
+          'AI lookup unavailable — part will be saved with a placeholder title. Add photos on Inventory, then Fetch details.',
+        );
+        setPreview({
+          status: 'ready',
+          title: `${br} ${pn}`.slice(0, 80),
+        });
       }
 
       try {
         const result = await addPartMutation.mutateAsync({
           sku,
-          partNumber: oem,
-          brand: make,
-          imageUrls,
-          uploadedAssetIds: uploadedImages.map((img) => img.assetId),
+          partNumber: pn,
+          brand: br,
+          partType,
+          conditionId,
+          vehicleMake: vehicleMake.trim() || undefined,
+          price: pr,
+          quantity: qty,
+          title: lookup?.partName?.trim(),
+          categoryName: lookup?.category?.trim(),
+          description: lookup?.note?.trim(),
         });
 
-        setSuccessMessage(
-          `Part saved to inventory as ${result.listing.customLabelSku ?? sku}. Add another part below.`,
-        );
-        await resetForm();
+        const savedSku = result.listing.customLabelSku ?? sku;
+        setPartNumber('');
+        setBrand('');
+        setVehicleMake('');
+        setPrice('');
+        setQuantity('1');
+        setPartType('Aftermarket');
+        setConditionId('1000');
+        setLookupWarning(null);
+        setError(null);
+        setPreview({ status: 'saved', sku: savedSku });
+        await refetchSku();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to add part');
+        setPreview({ status: 'idle' });
+        setError(err instanceof Error ? err.message : 'Failed to save part');
       }
     },
-    [partNumber, brand, sku, uploadedImages, addPartMutation, resetForm],
+    [
+      partNumber,
+      brand,
+      price,
+      quantity,
+      sku,
+      partType,
+      conditionId,
+      vehicleMake,
+      partLookupMutation,
+      addPartMutation,
+      refetchSku,
+    ],
   );
 
   const inputClassName =
-    'w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none text-sm';
+    'w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none text-sm';
+
+  const toggleBtn = (active: boolean) =>
+    `flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+      active
+        ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm'
+        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+    }`;
+
+  const isBusy = addPartMutation.isPending || partLookupMutation.isPending;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-8">
-      <div className="min-w-0 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:text-slate-200 transition-colors shrink-0"
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-3">
-            <PackagePlus className="h-7 w-7 text-blue-400" />
-            Add Part
-          </h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Enter OEM number, brand, and photos — parts go to Inventory for enrichment
-          </p>
-        </div>
+      <div>
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-3">
+          <PackagePlus className="h-7 w-7 text-blue-400" />
+          Add Part
+        </h2>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+          GridConnect-style intake — photos optional here; add them on{' '}
+          <Link to="/inventory" className="text-blue-400 hover:underline">
+            Inventory
+          </Link>{' '}
+          before Fetch details
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleProcessSku} className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5 text-blue-400" />
-              Warehouse Intake
-            </CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Part details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 SKU
               </label>
               <div className="relative">
@@ -140,70 +253,156 @@ export default function SingleListingPipeline() {
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400" />
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                Auto-generated label SKU (BLA prefix)
-              </p>
               {skuError && (
-                <p className="text-[11px] text-red-400 mt-1">
-                  Could not generate SKU — refresh the page
-                </p>
+                <p className="text-[11px] text-red-400 mt-1">Could not generate SKU — refresh</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Brand / Make <span className="text-red-400">*</span>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Part type <span className="text-red-400">*</span>
+              </label>
+              <div className="flex gap-1.5">
+                {PART_TYPES.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPartType(opt.value)}
+                    className={toggleBtn(partType === opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Part number <span className="text-red-400">*</span>
+              </label>
+              <div className="relative">
+                <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={partNumber}
+                  onChange={(e) => setPartNumber(e.target.value)}
+                  placeholder="e.g. 8V0615601A"
+                  className={`${inputClassName} pl-9`}
+                  required
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">
+                {partNumberHint(partType)}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                {brandLabel(partType)} <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
                 list="add-part-brand-options"
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
-                placeholder="Select or type a brand"
+                placeholder="Select brand…"
                 className={inputClassName}
                 required
               />
               <datalist id="add-part-brand-options">
-                {(brandsData?.brands ?? []).map((b) => (
+                {brands.map((b) => (
                   <option key={b} value={b} />
                 ))}
               </datalist>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                OEM / Part Number <span className="text-red-400">*</span>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Vehicle make
               </label>
               <input
                 type="text"
-                value={partNumber}
-                onChange={(e) => setPartNumber(e.target.value)}
-                placeholder="e.g. 27060-0V210, A12345678"
+                list="add-part-make-options"
+                value={vehicleMake}
+                onChange={(e) => setVehicleMake(e.target.value)}
+                placeholder="e.g. Toyota"
                 className={inputClassName}
-                required
               />
+              <datalist id="add-part-make-options">
+                {brands.map((b) => (
+                  <option key={`make-${b}`} value={b} />
+                ))}
+              </datalist>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                <span className="flex items-center gap-1.5">
-                  <Image className="h-4 w-4" />
-                  Photos <span className="text-red-400">*</span>
-                  <span className="text-xs font-normal text-slate-500">
-                    (min {MIN_PHOTOS}: label + overall)
-                  </span>
-                </span>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Condition <span className="text-red-400">*</span>
               </label>
-              <ImageUploadZone key={uploadZoneKey} onImagesChange={setUploadedImages} maxImages={12} />
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-                {uploadedImages.length} of {MIN_PHOTOS} required photos uploaded
-              </p>
+              <div className="flex gap-1.5 max-w-xs">
+                {CONDITIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setConditionId(opt.value)}
+                    className={toggleBtn(conditionId === opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {partType === 'Salvage' && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  Salvage defaults to Used
+                </p>
+              )}
             </div>
 
-            {successMessage && (
-              <div className="flex items-center gap-2 text-emerald-300 text-sm bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {successMessage}
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                Listing details
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Price (USD) <span className="text-red-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="0.00"
+                      className={`${inputClassName} pl-7`}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Qty
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className={inputClassName}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {lookupWarning && (
+              <div className="flex items-start gap-2 text-amber-300 text-sm bg-amber-900/20 border border-amber-500/30 rounded-lg p-3">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                {lookupWarning}
               </div>
             )}
 
@@ -214,23 +413,136 @@ export default function SingleListingPipeline() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={addPartMutation.isPending || skuLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 transition-colors"
-            >
-              {addPartMutation.isPending ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Saving…
-                </>
-              ) : (
-                <>
-                  <PackagePlus size={16} />
-                  Add to Inventory
-                </>
-              )}
-            </button>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => void resetForm()}
+                disabled={isBusy}
+                className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+              >
+                Reset
+              </button>
+              <button
+                type="submit"
+                disabled={isBusy || skuLoading || !mandatoryFilled}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium text-sm disabled:opacity-50 transition-colors"
+              >
+                {isBusy ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} />
+                    Process SKU (Enter)
+                  </>
+                )}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col min-h-[320px]">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Generated listing</CardTitle>
+            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  preview.status === 'saved'
+                    ? 'bg-emerald-400'
+                    : preview.status === 'ready' || preview.status === 'lookup'
+                      ? 'bg-blue-400 animate-pulse'
+                      : mandatoryFilled
+                        ? 'bg-amber-400'
+                        : 'bg-slate-500'
+                }`}
+              />
+              {preview.status === 'saved'
+                ? 'Saved'
+                : preview.status === 'lookup'
+                  ? 'Looking up…'
+                  : preview.status === 'ready'
+                    ? 'Preview ready'
+                    : mandatoryFilled
+                      ? 'Ready to process'
+                      : 'Awaiting input'}
+            </span>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col">
+            {preview.status === 'saved' ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 p-6">
+                <CheckCircle2 className="h-12 w-12 text-emerald-400" />
+                <p className="text-sm text-slate-700 dark:text-slate-200">
+                  Part saved as{' '}
+                  <span className="font-mono font-semibold text-emerald-400">{preview.sku}</span>
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
+                  Add photos on Inventory, then Fetch details and Send to pipeline.
+                </p>
+                <Link
+                  to="/inventory"
+                  className="text-sm text-blue-400 hover:underline font-medium"
+                >
+                  Open Inventory →
+                </Link>
+              </div>
+            ) : preview.status === 'ready' || preview.status === 'lookup' ? (
+              <div className="space-y-4 flex-1">
+                {preview.status === 'lookup' && (
+                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Identifying part…
+                  </div>
+                )}
+                {preview.status === 'ready' && (
+                  <>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                        Title
+                      </p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-snug">
+                        {preview.title}
+                      </p>
+                    </div>
+                    {preview.category && (
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                          Category
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">{preview.category}</p>
+                      </div>
+                    )}
+                    {preview.note && (
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                          Seller notes
+                        </p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                          {preview.note}
+                        </p>
+                      </div>
+                    )}
+                    {preview.confidence && (
+                      <p className="text-[11px] text-slate-500">
+                        AI confidence:{' '}
+                        <span className="capitalize">{preview.confidence}</span>
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 p-8 text-center">
+                <FileText className="h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Your generated listing will appear here
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 max-w-[240px]">
+                  Fill part number, brand, type, condition, and price — then Process SKU
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </form>

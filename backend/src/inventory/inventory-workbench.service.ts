@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
+import { ImageAsset } from '../storage/entities/image-asset.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PartFitment } from '../fitment/entities/part-fitment.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
@@ -102,6 +103,8 @@ export class InventoryWorkbenchService {
     private readonly fitmentRepo: Repository<PartFitment>,
     @InjectRepository(PipelineJob)
     private readonly pipelineJobRepo: Repository<PipelineJob>,
+    @InjectRepository(ImageAsset)
+    private readonly imageAssetRepo: Repository<ImageAsset>,
     private readonly singleListingForm: SingleListingFormService,
     private readonly pipelineService: PipelineService,
   ) {}
@@ -463,6 +466,40 @@ export class InventoryWorkbenchService {
     listingId: string,
   ): Promise<{ listing: ListingRecord; lookup: PartLookupResult }> {
     return this.singleListingForm.lookupAndApplyToListing(listingId);
+  }
+
+  async updateListingImages(
+    listingId: string,
+    imageUrls: string[],
+    uploadedAssetIds?: string[],
+  ) {
+    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    if (!listing || listing.deletedAt) {
+      throw new NotFoundException(`Listing ${listingId} not found`);
+    }
+
+    const incoming = imageUrls.map((u) => u.trim()).filter(Boolean);
+    if (incoming.length === 0) {
+      throw new BadRequestException('At least one image URL is required');
+    }
+
+    const existing = parseImageUrls(listing.itemPhotoUrl);
+    const merged = [...existing];
+    for (const url of incoming) {
+      if (!merged.includes(url)) merged.push(url);
+    }
+
+    listing.itemPhotoUrl = merged.join('|');
+    await this.listingRepo.save(listing);
+
+    if (uploadedAssetIds?.length) {
+      await this.imageAssetRepo.update(
+        { id: In(uploadedAssetIds) },
+        { listingId: listing.id },
+      );
+    }
+
+    return this.getListingDetail(listingId);
   }
 
   async bulkLookupParts(listingIds: string[]): Promise<{

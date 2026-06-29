@@ -278,8 +278,16 @@ export function useAddIntakePart() {
       sku?: string;
       partNumber: string;
       brand: string;
-      imageUrls: string[];
+      partType: 'OEM' | 'Aftermarket' | 'Salvage';
+      conditionId: string;
+      vehicleMake?: string;
+      price: number;
+      quantity?: number;
+      imageUrls?: string[];
       uploadedAssetIds?: string[];
+      title?: string;
+      categoryName?: string;
+      description?: string;
     }) =>
       postJson<{ listing: { id: string; customLabelSku: string | null } }>(
         '/pipeline/single-listing/add-part',

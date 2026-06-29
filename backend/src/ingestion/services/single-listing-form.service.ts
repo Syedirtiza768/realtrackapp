@@ -56,8 +56,16 @@ export interface CreateIntakePartDto {
   sku?: string;
   partNumber: string;
   brand: string;
-  imageUrls: string[];
+  partType: 'OEM' | 'Aftermarket' | 'Salvage';
+  conditionId: string;
+  vehicleMake?: string;
+  price: number;
+  quantity?: number;
+  imageUrls?: string[];
   uploadedAssetIds?: string[];
+  title?: string;
+  categoryName?: string;
+  description?: string;
 }
 
 export interface PartLookupPricingEstimate {
@@ -236,14 +244,13 @@ export class SingleListingFormService {
     }
 
     const imageUrls = (dto.imageUrls ?? []).map((u) => u.trim()).filter(Boolean);
-    if (imageUrls.length < PART_LOOKUP_MIN_VISION_IMAGES) {
-      throw new BadRequestException(
-        `At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos are required (label close-up + overall part shot)`,
-      );
-    }
 
     const sku = dto.sku?.trim() || (await this.allocateSku());
+    const qty = dto.quantity ?? 1;
+    const priceNum = dto.price;
+    const priceStr = priceNum.toFixed(2);
     const placeholderTitle = `${brand} ${partNumber}`.slice(0, 80);
+    const title = dto.title?.trim() || placeholderTitle;
     const sourceRowNumber = await this.allocateIntakeSourceRow();
 
     let listing: ListingRecord;
@@ -252,14 +259,19 @@ export class SingleListingFormService {
         this.listingRepo.create({
           customLabelSku: sku,
           cBrand: brand,
+          cType: dto.partType,
           cOeOemPartNumber: partNumber,
           cManufacturerPartNumber: partNumber,
-          itemPhotoUrl: imageUrls.join('|'),
-          title: placeholderTitle,
-          startPrice: '100',
-          startPriceNum: 100,
-          quantity: '1',
-          quantityNum: 1,
+          itemPhotoUrl: imageUrls.length > 0 ? imageUrls.join('|') : null,
+          title,
+          description: dto.description?.trim() || null,
+          categoryName: dto.categoryName?.trim() || null,
+          conditionId: dto.conditionId,
+          extractedMake: dto.vehicleMake?.trim() || null,
+          startPrice: priceStr,
+          startPriceNum: priceNum,
+          quantity: String(qty),
+          quantityNum: qty,
           status: 'draft',
           sourceFileName: 'warehouse-intake',
           sourceFilePath: 'warehouse-intake',

@@ -57,3 +57,15 @@ export class InventoryEnrichDto {
   @IsUUID('4', { each: true })
   listingIds!: string[];
 }
+
+export class UpdateListingImagesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  imageUrls!: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  uploadedAssetIds?: string[];
+}

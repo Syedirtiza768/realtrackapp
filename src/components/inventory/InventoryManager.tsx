@@ -195,7 +195,7 @@ export default function InventoryManager() {
             Inventory
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Fetch details from OEM, brand, and photos — then send to the enrichment pipeline (US / AU / DE)
+            Fetch details from OEM, brand, and photos — upload photos in part detail, then send to the enrichment pipeline (US / AU / DE)
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
