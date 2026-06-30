@@ -17,6 +17,12 @@ import {
   useSingleListingBrands,
   type PartLookupResult,
 } from '../../lib/pipelineApi';
+import {
+  loadJson,
+  saveJson,
+  STORAGE_KEYS,
+  type ListingFormPrefs,
+} from '../../lib/persistence';
 
 type PartType = 'OEM' | 'Aftermarket' | 'Salvage';
 type ConditionId = '1000' | '3000';
@@ -42,11 +48,6 @@ function partNumberHint(partType: PartType): string {
   return 'OE or manufacturer number — not casting / stamped marks.';
 }
 
-function brandLabel(partType: PartType): string {
-  if (partType === 'Aftermarket') return 'Brand (aftermarket)';
-  return 'Brand (OEM)';
-}
-
 type PreviewState =
   | { status: 'idle' }
   | { status: 'ready'; title: string; category?: string; note?: string; confidence?: string }
@@ -60,12 +61,18 @@ export default function SingleListingPipeline() {
     useNextSingleListingSku();
   const { data: brandsData } = useSingleListingBrands();
 
-  const [partType, setPartType] = useState<PartType>('Aftermarket');
-  const [conditionId, setConditionId] = useState<ConditionId>('1000');
+  const [partType, setPartType] = useState<PartType>(() => {
+    const prefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
+    return prefs.partType ?? 'OEM';
+  });
+  const [conditionId, setConditionId] = useState<ConditionId>(() => {
+    const prefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
+    return prefs.conditionId ?? '3000';
+  });
   const [partNumber, setPartNumber] = useState('');
   const [brand, setBrand] = useState('');
   const [vehicleMake, setVehicleMake] = useState('');
-  const [price, setPrice] = useState('');
+  const [price, setPrice] = useState('100');
   const [quantity, setQuantity] = useState('1');
   const [error, setError] = useState<string | null>(null);
   const [lookupWarning, setLookupWarning] = useState<string | null>(null);
@@ -80,21 +87,28 @@ export default function SingleListingPipeline() {
     }
   }, [partType]);
 
+  useEffect(() => {
+    saveJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, { partType, conditionId });
+  }, [partType, conditionId]);
+
+  const isAftermarket = partType === 'Aftermarket';
+
   const mandatoryFilled = useMemo(() => {
     const pn = partNumber.trim();
-    const br = brand.trim();
     const pr = parseFloat(price);
-    return Boolean(pn && br && sku && Number.isFinite(pr) && pr > 0);
-  }, [partNumber, brand, price, sku]);
+    const identifier = isAftermarket ? brand.trim() : vehicleMake.trim();
+    return Boolean(pn && identifier && sku && Number.isFinite(pr) && pr > 0);
+  }, [partNumber, brand, vehicleMake, price, sku, isAftermarket]);
 
   const resetForm = useCallback(async () => {
     setPartNumber('');
     setBrand('');
     setVehicleMake('');
-    setPrice('');
+    setPrice('100');
     setQuantity('1');
-    setPartType('Aftermarket');
-    setConditionId('1000');
+    const prefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
+    setPartType(prefs.partType ?? 'OEM');
+    setConditionId(prefs.conditionId ?? '3000');
     setError(null);
     setLookupWarning(null);
     setPreview({ status: 'idle' });
@@ -109,6 +123,7 @@ export default function SingleListingPipeline() {
 
       const pn = partNumber.trim();
       const br = brand.trim();
+      const vm = vehicleMake.trim();
       const pr = parseFloat(price);
       const qty = parseInt(quantity, 10);
 
@@ -116,9 +131,16 @@ export default function SingleListingPipeline() {
         setError('Part number is required');
         return;
       }
-      if (!br) {
-        setError('Brand is required');
-        return;
+      if (isAftermarket) {
+        if (!br) {
+          setError('Brand is required');
+          return;
+        }
+      } else {
+        if (!vm) {
+          setError('Vehicle make is required');
+          return;
+        }
       }
       if (!Number.isFinite(pr) || pr <= 0) {
         setError('Enter a valid price greater than zero');
@@ -133,12 +155,15 @@ export default function SingleListingPipeline() {
         return;
       }
 
+      // For OEM/Salvage, use vehicleMake as brand when brand is empty
+      const effectiveBrand = isAftermarket ? br : (br || vm);
+
       let lookup: PartLookupResult | undefined;
       try {
         setPreview({ status: 'lookup' });
         lookup = await partLookupMutation.mutateAsync({
           partNumber: pn,
-          brand: br,
+          brand: effectiveBrand,
         });
         setPreview({
           status: 'ready',
@@ -153,7 +178,7 @@ export default function SingleListingPipeline() {
         );
         setPreview({
           status: 'ready',
-          title: `${br} ${pn}`.slice(0, 80),
+          title: `${effectiveBrand} ${pn}`.slice(0, 80),
         });
       }
 
@@ -161,10 +186,10 @@ export default function SingleListingPipeline() {
         const result = await addPartMutation.mutateAsync({
           sku,
           partNumber: pn,
-          brand: br,
+          brand: effectiveBrand,
           partType,
           conditionId,
-          vehicleMake: vehicleMake.trim() || undefined,
+          vehicleMake: vm || undefined,
           price: pr,
           quantity: qty,
           title: lookup?.partName?.trim(),
@@ -176,10 +201,11 @@ export default function SingleListingPipeline() {
         setPartNumber('');
         setBrand('');
         setVehicleMake('');
-        setPrice('');
+        setPrice('100');
         setQuantity('1');
-        setPartType('Aftermarket');
-        setConditionId('1000');
+        const savedPrefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
+        setPartType(savedPrefs.partType ?? 'OEM');
+        setConditionId(savedPrefs.conditionId ?? '3000');
         setLookupWarning(null);
         setError(null);
         setPreview({ status: 'saved', sku: savedSku });
@@ -198,6 +224,7 @@ export default function SingleListingPipeline() {
       partType,
       conditionId,
       vehicleMake,
+      isAftermarket,
       partLookupMutation,
       addPartMutation,
       refetchSku,
@@ -296,44 +323,67 @@ export default function SingleListingPipeline() {
               </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                {brandLabel(partType)} <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                list="add-part-brand-options"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder="Select brand…"
-                className={inputClassName}
-                required
-              />
-              <datalist id="add-part-brand-options">
-                {brands.map((b) => (
-                  <option key={b} value={b} />
-                ))}
-              </datalist>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Vehicle make
-              </label>
-              <input
-                type="text"
-                list="add-part-make-options"
-                value={vehicleMake}
-                onChange={(e) => setVehicleMake(e.target.value)}
-                placeholder="e.g. Toyota"
-                className={inputClassName}
-              />
-              <datalist id="add-part-make-options">
-                {brands.map((b) => (
-                  <option key={`make-${b}`} value={b} />
-                ))}
-              </datalist>
-            </div>
+            {isAftermarket ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Brand <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    list="add-part-brand-options"
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    placeholder="Select brand…"
+                    className={inputClassName}
+                    required
+                  />
+                  <datalist id="add-part-brand-options">
+                    {brands.map((b) => (
+                      <option key={b} value={b} />
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Vehicle make
+                  </label>
+                  <input
+                    type="text"
+                    list="add-part-make-options"
+                    value={vehicleMake}
+                    onChange={(e) => setVehicleMake(e.target.value)}
+                    placeholder="e.g. Toyota"
+                    className={inputClassName}
+                  />
+                  <datalist id="add-part-make-options">
+                    {brands.map((b) => (
+                      <option key={`make-${b}`} value={b} />
+                    ))}
+                  </datalist>
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  Vehicle make <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  list="add-part-make-options"
+                  value={vehicleMake}
+                  onChange={(e) => setVehicleMake(e.target.value)}
+                  placeholder="Select vehicle make…"
+                  className={inputClassName}
+                  required
+                />
+                <datalist id="add-part-make-options">
+                  {brands.map((b) => (
+                    <option key={`make-${b}`} value={b} />
+                  ))}
+                </datalist>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
@@ -539,7 +589,7 @@ export default function SingleListingPipeline() {
                   Your generated listing will appear here
                 </p>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 max-w-[240px]">
-                  Fill part number, brand, type, condition, and price — then Process SKU
+                  Fill part number, {isAftermarket ? 'brand' : 'vehicle make'}, type, condition, and price — then Process SKU
                 </p>
               </div>
             )}

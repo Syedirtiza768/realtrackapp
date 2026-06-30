@@ -1,7 +1,13 @@
 export const STORAGE_KEYS = {
     ingestionQueue: 'realtrackapp.ingestion.queue.v1',
     ingestionListingSeed: 'realtrackapp.ingestion.seed.v1',
+    listingFormPrefs: 'realtrackapp.listing-form.prefs.v1',
 } as const;
+
+export interface ListingFormPrefs {
+    partType?: 'OEM' | 'Aftermarket' | 'Salvage';
+    conditionId?: '1000' | '3000';
+}
 
 export function loadJson<T>(key: string, fallback: T): T {
     if (typeof window === 'undefined') {
