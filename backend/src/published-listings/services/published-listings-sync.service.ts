@@ -10,6 +10,8 @@ import { Repository, In } from 'typeorm';
 import type { Queue } from 'bullmq';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
+import { Store } from '../../channels/entities/store.entity.js';
+import { resolveMarketplaceId } from '../../channels/ebay/ebay-marketplace-headers.util.js';
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
 import { EbayTradingApiService } from '../../channels/ebay/ebay-trading-api.service.js';
 import type { TradingSellerListItem } from '../../channels/ebay/ebay-trading-api.service.js';
@@ -41,6 +43,8 @@ export class PublishedListingsSyncService {
     private readonly syncLogRepo: Repository<EbayPublishedListingSyncLog>,
     @InjectRepository(EbayListingChannel)
     private readonly channelRepo: Repository<EbayListingChannel>,
+    @InjectRepository(Store)
+    private readonly storeRepo: Repository<Store>,
     private readonly inventoryApi: EbayInventoryApiService,
     private readonly tradingApi: EbayTradingApiService,
     private readonly health: PublishedListingsHealthService,
@@ -165,6 +169,9 @@ export class PublishedListingsSyncService {
     }
 
     const storeId = account.primaryStoreId;
+    const store = await this.storeRepo.findOneBy({ id: storeId });
+    const accountMarketplaceId =
+      payload.marketplaceId ?? (store ? resolveMarketplaceId(store) : 'EBAY_US');
     const errors: Record<string, unknown>[] = [];
     const warnings: Record<string, unknown>[] = [];
     let processed = 0;
@@ -227,7 +234,7 @@ export class PublishedListingsSyncService {
         const tradingResult = await this.syncFromTradingApi(
           account,
           storeId,
-          payload.marketplaceId ?? null,
+          accountMarketplaceId,
           seenKeys,
           channelByListing,
         );
@@ -262,8 +269,8 @@ export class PublishedListingsSyncService {
               for (const offer of offers) {
                 if (!this.isPublishedOffer(offer)) continue;
                 if (
-                  payload.marketplaceId &&
-                  offer.marketplaceId !== payload.marketplaceId
+                  accountMarketplaceId &&
+                  offer.marketplaceId !== accountMarketplaceId
                 ) {
                   continue;
                 }

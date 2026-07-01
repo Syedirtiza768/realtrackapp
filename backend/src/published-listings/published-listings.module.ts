@@ -35,6 +35,7 @@ import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
       ConnectedEbayAccount,
       EbayListingChannel,
       User,
+      Store,
     ]),
     BullModule.registerQueue(
       { name: 'published-listings-sync' },
