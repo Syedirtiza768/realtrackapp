@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { ChannelsModule } from '../channels/channels.module.js';
+import { Store } from '../channels/entities/store.entity.js';
 import { EbayIntegrationsModule } from '../integrations/ebay/ebay-integrations.module.js';
 import { User } from '../auth/entities/user.entity.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
