@@ -3,9 +3,9 @@
  * Usage (inside backend container): node scripts/trigger-published-listings-sync.cjs
  */
 const { NestFactory } = require('@nestjs/core');
-const { AppModule } = require('../dist/app.module.js');
-const { PublishedListingsSyncService } = require('../dist/published-listings/services/published-listings-sync.service.js');
-const { ConnectedEbayAccount } = require('../dist/integrations/ebay/entities/connected-ebay-account.entity.js');
+const { AppModule } = require('../dist/src/app.module.js');
+const { PublishedListingsSyncService } = require('../dist/src/published-listings/services/published-listings-sync.service.js');
+const { ConnectedEbayAccount } = require('../dist/src/integrations/ebay/entities/connected-ebay-account.entity.js');
 const { DataSource } = require('typeorm');
 
 async function main() {
