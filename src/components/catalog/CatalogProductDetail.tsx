@@ -110,16 +110,14 @@ export default function CatalogProductDetail() {
   // Available marketplaces from enriched sibling listings + the base listing
   const availableMkts = useMemo<string[]>(() => {
     const mktSet = new Set<string>();
-    // Base listing marketplace
-    if (listing?.marketplace) mktSet.add(listing.marketplace);
-    // Marketplace sibling keys
+    // Marketplace sibling keys from enriched listings
     if (mktData?.listings) {
       Object.keys(mktData.listings).forEach((mkt) => mktSet.add(mkt));
     }
     // Always include US as default
     mktSet.add('US');
     return Array.from(mktSet).sort();
-  }, [listing?.marketplace, mktData?.listings]);
+  }, [mktData?.listings]);
 
   // Initialize override category from listing, reset on store change
   const [overrideCategoryId, setOverrideCategoryId] = useState('');
