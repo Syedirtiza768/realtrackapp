@@ -78,12 +78,27 @@ export class CategoryLookupService {
   async lookupAndUpdateProduct(product: CatalogProduct): Promise<boolean> {
     if (product.categoryId) return false; // already set
 
-    const result = await this.lookupCategory(
-      product.title,
-      product.brand,
-      product.partType,
-      product.mpn,
-    );
+    // First try: use categoryName as query if available
+    let result: CategoryLookupResult;
+    if (product.categoryName) {
+      result = await this.lookupByCategoryName(product.categoryName);
+      if (!result.categoryId) {
+        // Fall back to product keyword lookup
+        result = await this.lookupCategory(
+          product.title,
+          product.brand,
+          product.partType,
+          product.mpn,
+        );
+      }
+    } else {
+      result = await this.lookupCategory(
+        product.title,
+        product.brand,
+        product.partType,
+        product.mpn,
+      );
+    }
 
     if (!result.categoryId) return false;
 
@@ -205,10 +220,23 @@ export class CategoryLookupService {
   // ── Private ────────────────────────────────────────────────
 
   private async lookupAndUpdateListingRecord(rec: ListingRecord): Promise<boolean> {
+    // First try: use categoryName as query if available (it was imported but ID wasn't)
+    if (rec.categoryName && !rec.categoryId) {
+      const nameResult = await this.lookupByCategoryName(rec.categoryName, rec.marketplace);
+      if (nameResult.categoryId) {
+        await this.listingRepo.update(rec.id, {
+          categoryId: nameResult.categoryId,
+          categoryName: nameResult.categoryName,
+        });
+        return true;
+      }
+    }
+
+    // Second try: use product data keywords
     const result = await this.lookupCategory(
       rec.title,
       rec.cBrand,
-      null, // listing records don't have partType
+      null,
       null,
       rec.marketplace,
     );
@@ -223,12 +251,73 @@ export class CategoryLookupService {
     return true;
   }
 
+  /**
+   * Use a known category name to find its eBay category ID.
+   * Searches the category tree or falls back to suggestion API.
+   */
+  private async lookupByCategoryName(
+    categoryName: string,
+    marketplace?: string | null,
+  ): Promise<CategoryLookupResult> {
+    // Try the category name as a suggestion query
+    const treeId = await this.resolveTreeId(marketplace);
+    try {
+      const suggestions = await this.taxonomy.getCategorySuggestions(categoryName, treeId);
+      // Find the best match — exact name match or closest
+      const exact = suggestions.find(
+        (s) => s.category.categoryName.toLowerCase() === categoryName.toLowerCase(),
+      );
+      if (exact?.category?.categoryId) {
+        return {
+          categoryId: exact.category.categoryId,
+          categoryName: exact.category.categoryName,
+          confidence: 'high',
+        };
+      }
+      // Fall back to first suggestion
+      const first = suggestions[0];
+      if (first?.category?.categoryId) {
+        return {
+          categoryId: first.category.categoryId,
+          categoryName: first.category.categoryName,
+          confidence: 'medium',
+        };
+      }
+    } catch {
+      // fall through
+    }
+    return { categoryId: null, categoryName: null, confidence: 'none' };
+  }
+
   private buildQuery(
     title?: string | null,
     brand?: string | null,
     partType?: string | null,
     mpn?: string | null,
   ): string {
+    // Strategy 1: Short focused query from brand + part type
+    // This works best with eBay's suggestion API
+    const shortParts = [brand, partType].filter((s) => s && s.trim());
+    if (shortParts.length >= 2) {
+      return shortParts.join(' ').trim();
+    }
+
+    // Strategy 2: Extract key terms from title (strip brand, colors, positions, condition words)
+    if (title) {
+      const cleaned = title
+        .replace(new RegExp(`\\b${brand ?? ''}\\b`, 'gi'), '')  // remove brand (already included)
+        .replace(/\b(New|OEM|Genuine|Left|Right|Front|Rear|Driver|Passenger|Upper|Lower|Inner|Outer|Gray|Black|White|Assembly|Set|Pair)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const words = cleaned.split(' ').filter(Boolean);
+      // Take first 3-5 meaningful words
+      const keyTerms = words.slice(0, 5);
+      if (keyTerms.length >= 2) {
+        return [brand, ...keyTerms].filter(Boolean).join(' ').trim();
+      }
+    }
+
+    // Strategy 3: Full title (fallback)
     const parts = [brand, partType, title].filter((s) => s && s.trim());
     if (parts.length === 0 && mpn) parts.push(mpn);
     return parts.join(' ').trim();
