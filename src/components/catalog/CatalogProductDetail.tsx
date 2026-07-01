@@ -127,6 +127,11 @@ export default function CatalogProductDetail() {
     return Array.from(mktSet).sort();
   }, [mktData?.listings]);
 
+  // Current listing for the selected marketplace tab (preview/edit)
+  const currentListing: ListingDetail | null = useMemo(() => {
+    return mktData?.listings?.[selectedMktTab] ?? listing ?? null;
+  }, [mktData, selectedMktTab, listing]);
+
   // Initialize override category from listing, reset on store change
   const [overrideCategoryId, setOverrideCategoryId] = useState('');
   const [categorySearch, setCategorySearch] = useState('');
@@ -157,11 +162,6 @@ export default function CatalogProductDetail() {
     if (!selectedStore) return 'US';
     return marketplaceIdToTab(selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId);
   }, [selectedStore]);
-
-  // Current listing for the selected marketplace tab (preview/edit)
-  const currentListing: ListingDetail | null = useMemo(() => {
-    return mktData?.listings?.[selectedMktTab] ?? listing ?? null;
-  }, [mktData, selectedMktTab, listing]);
 
   // The marketplace context shown in the preview header (derived from the tab)
   const previewMarketplace = selectedMktTab;
