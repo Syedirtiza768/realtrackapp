@@ -20,3 +20,12 @@ logs/
 # Sensitive tokens
 sellerpundit-tokens.html
 sellerpundit-tokens.json
+
+# Ad-hoc scripts and patches
+check-*.sql
+fix-*.sql
+tmp_*
+patch-*.js
+*-compiled.js
+trigger-sync.*
+test-*.sh

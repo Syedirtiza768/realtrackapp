@@ -163,19 +163,23 @@ export class StoresService {
    * for the store's connected eBay account + marketplace.
    */
   async getStoreProfiles(storeId: string): Promise<{
-    shippingProfiles: ShippingProfile[];
+    shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string }>;
     returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
     paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
   }> {
     const store = await this.getStore(storeId);
 
-    // Shipping profiles are always available from the local table
-    const shippingProfiles = await this.shippingProfileRepo.find({
+    // Shipping profiles: first from local table, then fall back to eBay fulfillment policies
+    let shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string }> = [];
+    const localShipping = await this.shippingProfileRepo.find({
       where: { active: true },
       order: { isDefault: 'DESC', name: 'ASC' },
     });
+    if (localShipping.length > 0) {
+      shippingProfiles = localShipping;
+    }
 
-    // For eBay stores, also fetch return/payment policies
+    // For eBay stores, also fetch fulfillment/return/payment policies
     let returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }> = [];
     let paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }> = [];
 
@@ -191,6 +195,18 @@ export class StoresService {
           },
           order: { isDefault: 'DESC', name: 'ASC' },
         });
+
+        // Fulfillment policies as shipping profiles (fallback if no local shipping profiles)
+        const fulfillPolicies = policies.filter((p) => p.policyType === 'fulfillment');
+        if (shippingProfiles.length === 0 && fulfillPolicies.length > 0) {
+          shippingProfiles = fulfillPolicies.map((p) => ({
+            id: p.id,
+            name: p.name,
+            carrier: '',
+            service: '',
+            costType: '',
+          }));
+        }
 
         returnProfiles = policies
           .filter((p) => p.policyType === 'return')

@@ -281,17 +281,17 @@ export default function CatalogProductDetail() {
   const [overrideCategoryId, setOverrideCategoryId] = useState('');
   const [categorySearch, setCategorySearch] = useState('');
   useEffect(() => {
-    const init = listing?.categoryId || '';
+    const init = listing?.categoryId || catalogProduct?.categoryId || '';
     setOverrideCategoryId(init);
     setCategorySearch('');
-  }, [listing?.categoryId, selectedStoreId]);
+  }, [listing?.categoryId, catalogProduct?.categoryId, selectedStoreId]);
 
   // Auto-fetch category suggestions when category is missing
-  const searchTerm = listing?.categoryName || listing?.title || '';
+  const searchTerm = listing?.categoryName || catalogProduct?.categoryName || listing?.title || '';
   const { data: categorySuggestions = [] } = useQuery({
     queryKey: ['category-suggestions', searchTerm],
     queryFn: () => fetchCategorySuggestions(searchTerm),
-    enabled: !listing?.categoryId && searchTerm.length > 0,
+    enabled: !listing?.categoryId && !catalogProduct?.categoryId && searchTerm.length > 0,
     staleTime: 300_000,
   });
 

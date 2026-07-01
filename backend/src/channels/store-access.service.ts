@@ -109,13 +109,24 @@ export class StoreAccessService {
   /**
    * Build a WHERE clause fragment for store-filtered listing queries.
    * Returns an array of store IDs to filter by, or undefined (meaning "all").
+   * An empty array means the user has scoped access but no store assignments —
+   * they may still view catalog listings not tied to any store.
    */
   async resolveStoreFilter(user: User | undefined): Promise<string[] | undefined> {
     if (!user || user.storeAccessAll) return undefined;
     const storeIds = await this.getAccessibleStoreIds(user);
-    if (storeIds.size === 0) return []; // user sees nothing
+    if (storeIds.size === 0) return [];
     return [...storeIds];
   }
+
+  /** Listings with no channel instance (catalog imports, etc.). */
+  static readonly UNSCOPED_LISTINGS_SQL =
+    `r.id NOT IN (SELECT lci.listing_id FROM listing_channel_instances lci)`;
+
+  /** Listings in the user's stores plus unscoped catalog listings. */
+  static readonly SCOPED_LISTINGS_SQL =
+    `(r.id IN (SELECT lci.listing_id FROM listing_channel_instances lci WHERE lci.store_id IN (:...storeIds))
+      OR r.id NOT IN (SELECT lci.listing_id FROM listing_channel_instances lci))`;
 
   /**
    * Set the storeAccessAll flag for a user.

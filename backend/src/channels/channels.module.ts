@@ -25,6 +25,7 @@ import { InventoryRealtimeSyncService } from './inventory-realtime-sync.service.
 import { PricingRule } from '../settings/entities/pricing-rule.entity.js';
 import { StoreAccessService } from './store-access.service.js';
 import { StoreAccessController } from './store-access.controller.js';
+import { EbayCategoryController } from './ebay/ebay-category.controller.js';
 import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.js';
 // ── New eBay API service layer ──
 import { EbayAuthService } from './ebay/ebay-auth.service.js';
@@ -67,7 +68,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
   ],
-  controllers: [ChannelsController, StoresController, AiEnhancementController, EbayPublishController, StoreAccessController],
+  controllers: [ChannelsController, StoresController, AiEnhancementController, EbayPublishController, StoreAccessController, EbayCategoryController],
   providers: [
     ChannelsService,
     StoresService,

@@ -8,6 +8,7 @@ import {
   Put,
   ForbiddenException,
 } from '@nestjs/common';
+import { IsString, IsIn } from 'class-validator';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { User } from '../auth/entities/user.entity.js';
@@ -15,9 +16,15 @@ import { StoreAccessService } from './store-access.service.js';
 import { type StoreAccessLevel } from './entities/user-store-assignment.entity.js';
 
 class SetAssignmentDto {
-  userId: string;
-  storeId: string;
-  accessLevel: StoreAccessLevel;
+  @IsString()
+  userId!: string;
+
+  @IsString()
+  storeId!: string;
+
+  @IsString()
+  @IsIn(['view', 'operate', 'admin'])
+  accessLevel!: StoreAccessLevel;
 }
 
 @Controller('store-access')

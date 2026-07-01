@@ -290,13 +290,10 @@ export class SearchService {
     const storeIds = await this.storeAccess.resolveStoreFilter(user);
     if (storeIds !== undefined) {
       if (storeIds.length === 0) {
-        return { total: 0, limit, offset, nextCursor: null, queryTimeMs: Date.now() - start, items: [] };
+        qb.andWhere(StoreAccessService.UNSCOPED_LISTINGS_SQL);
+      } else {
+        qb.andWhere(StoreAccessService.SCOPED_LISTINGS_SQL, { storeIds });
       }
-      qb.andWhere(
-        `(r.id IN (SELECT lci.listing_id FROM listing_channel_instances lci WHERE lci.store_id IN (:...searchStoreIds))
-          OR r.id NOT IN (SELECT lci.listing_id FROM listing_channel_instances lci))`,
-        { searchStoreIds: storeIds },
-      );
     }
 
     /* -- Sorting ----------------------------------------------- */
@@ -850,11 +847,10 @@ export class SearchService {
     const storeIds = await this.storeAccess.resolveStoreFilter(user);
     if (storeIds === undefined) return null; // accessAll or no user
     if (storeIds.length === 0) {
-      return { sql: '1=0', params: { storeIds: [] } };
+      return { sql: StoreAccessService.UNSCOPED_LISTINGS_SQL, params: {} };
     }
     return {
-      sql: `(r.id IN (SELECT lci.listing_id FROM listing_channel_instances lci WHERE lci.store_id IN (:...storeIds))
-            OR r.id NOT IN (SELECT lci.listing_id FROM listing_channel_instances lci))`,
+      sql: StoreAccessService.SCOPED_LISTINGS_SQL,
       params: { storeIds },
     };
   }
