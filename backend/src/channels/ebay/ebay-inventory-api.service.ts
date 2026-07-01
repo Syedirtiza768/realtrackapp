@@ -231,10 +231,32 @@ export class EbayInventoryApiService {
     limit = 25,
     offset = 0,
   ): Promise<{ offers: EbayOffer[]; total: number }> {
+    return this.getOffers(storeId, { sku, limit, offset });
+  }
+
+  /**
+   * Paginated offers list (optionally filtered by SKU or marketplace).
+   */
+  async getOffers(
+    storeId: string,
+    params: {
+      sku?: string;
+      marketplaceId?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<{ offers: EbayOffer[]; total: number }> {
     const cfg = await this.authHeaders(storeId);
     const { data } = await this.http.get(`/offer`, {
       ...cfg,
-      params: { sku, limit, offset },
+      params: {
+        limit: params.limit ?? 25,
+        offset: params.offset ?? 0,
+        ...(params.sku ? { sku: params.sku } : {}),
+        ...(params.marketplaceId
+          ? { marketplace_id: toEbayInventoryApiMarketplaceId(params.marketplaceId) }
+          : {}),
+      },
     });
     return { offers: data.offers ?? [], total: data.total ?? 0 };
   }

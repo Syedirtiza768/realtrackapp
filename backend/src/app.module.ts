@@ -39,6 +39,7 @@ import { OpenAiModule } from './common/openai/openai.module';
 import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intelligence.module';
 import { EbayIntegrationsModule } from './integrations/ebay/ebay-integrations.module';
 import { ClientSettingsModule } from './client-settings/client-settings.module.js';
+import { PublishedListingsModule } from './published-listings/published-listings.module.js';
 
 @Module({
   imports: [
@@ -119,6 +120,7 @@ import { ClientSettingsModule } from './client-settings/client-settings.module.j
     PricingIntelligenceModule,
     EbayIntegrationsModule,
     ClientSettingsModule,
+    PublishedListingsModule,
   ],
   controllers: [AppController],
   providers: [

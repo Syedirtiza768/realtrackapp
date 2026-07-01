@@ -31,5 +31,6 @@ import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected
     SellerpunditModule,
   ],
   providers: [SchedulerLeaderService, SchedulerService],
+  exports: [SchedulerLeaderService],
 })
 export class SchedulerModule {}

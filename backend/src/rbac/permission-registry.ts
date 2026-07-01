@@ -222,6 +222,12 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('ebay.manage', 'Manage eBay accounts', 'ebay', MANAGER_UP),
   p('ebay.audit', 'View eBay API audit logs', 'ebay', MANAGER_UP),
 
+  // ── Published listings (live eBay mirror) ──
+  p('published_listings.view', 'View published eBay listings', 'published_listings', READ_ONLY),
+  p('published_listings.sync', 'Sync published listings from eBay', 'published_listings', READ_WRITE),
+  p('published_listings.manage', 'Revise/end published listings', 'published_listings', READ_WRITE),
+  p('published_listings.bulk', 'Bulk actions on published listings', 'published_listings', MANAGER_UP),
+
   // ── Settings (tenant operational) ──
   p('settings.view', 'View settings', 'settings', READ_ONLY),
   p('settings.manage', 'Manage settings', 'settings', ADMIN_UP),

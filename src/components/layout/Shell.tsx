@@ -23,6 +23,7 @@ import {
     Car,
     Filter,
     ShoppingBag,
+    ListChecks,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
@@ -62,6 +63,7 @@ const NAV_ITEMS: NavItem[] = [
     { icon: Upload, label: 'CSV Import', path: '/catalog/import', permission: 'catalog.import' },
     { icon: Filter, label: 'Motors CSV filters', path: '/catalog/motors-filters', permission: 'catalog.view' },
     { icon: Package, label: 'Inventory', path: '/inventory', permission: 'inventory.view' },
+    { icon: ListChecks, label: 'Published Listings', path: '/published-listings', permission: 'published_listings.view' },
     { icon: Workflow, label: 'Pipeline', path: '/pipeline', permission: 'pipeline.view' },
     { icon: Eye, label: 'eBay Preview', path: '/preview', permission: 'listings.view' },
     { icon: Layers, label: 'Bulk Actions', path: '/bulk-actions', permission: 'listings.update' },

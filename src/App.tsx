@@ -49,6 +49,8 @@ import ClientSettingsPage from './components/settings/ClientSettingsPage';
 import UsersAdminPage from './components/settings/UsersAdminPage';
 import PermissionsPage from './components/settings/PermissionsPage';
 import AiRoutingDashboardPage from './components/settings/AiRoutingDashboardPage';
+import PublishedListingsPage from './components/published-listings/PublishedListingsPage';
+import PublishedListingDetailPage from './components/published-listings/PublishedListingDetailPage';
 
 
 function App() {
@@ -81,6 +83,8 @@ function App() {
                             <Route path="/catalog/import" element={<ProtectedRoute permissions={['catalog.import']}><CatalogImportDashboard /></ProtectedRoute>} />
                             <Route path="/catalog/motors-filters" element={<ProtectedRoute permissions={['catalog.view']}><CatalogMotorsFiltersPage /></ProtectedRoute>} />
                             <Route path="/inventory" element={<ProtectedRoute permissions={['inventory.view']}><InventoryManager /></ProtectedRoute>} />
+                            <Route path="/published-listings" element={<ProtectedRoute permissions={['published_listings.view']}><PublishedListingsPage /></ProtectedRoute>} />
+                            <Route path="/published-listings/:id" element={<ProtectedRoute permissions={['published_listings.view']}><PublishedListingDetailPage /></ProtectedRoute>} />
           <Route path="/inventory/:id/edit" element={<ProtectedRoute permissions={['inventory.view', 'listings.update']}><InventoryListingEditor /></ProtectedRoute>} />
                             <Route path="/bulk-actions" element={<ProtectedRoute permissions={['listings.update']}><BulkActionsPage /></ProtectedRoute>} />
                             <Route path="/orders" element={<ProtectedRoute permissions={['orders.view']}><OrdersPage /></ProtectedRoute>} />

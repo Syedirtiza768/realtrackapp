@@ -33,6 +33,7 @@ import { EbayInventoryApiService } from './ebay/ebay-inventory-api.service.js';
 import { EbayTaxonomyApiService } from './ebay/ebay-taxonomy-api.service.js';
 import { EbayFulfillmentApiService } from './ebay/ebay-fulfillment-api.service.js';
 import { EbayBrowseApiService } from './ebay/ebay-browse-api.service.js';
+import { EbayTradingApiService } from './ebay/ebay-trading-api.service.js';
 import { EbayPublishService } from './ebay/ebay-publish.service.js';
 import { EbayPublishController } from './ebay/ebay-publish.controller.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
@@ -85,6 +86,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,
+    EbayTradingApiService,
     EbayPublishService,
     EbayMarketplaceConfigService,
     EbaySellAccountApiService,
@@ -102,6 +104,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,
+    EbayTradingApiService,
     EbayPublishService,
     EbayPaReturnPolicyService,
     TokenEncryptionService,

@@ -257,6 +257,27 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 
 **Base**: `/api/ebay` | `ebay.*`
 
+---
+
+## Published Listings (live eBay mirror)
+
+**Base**: `/api/published-listings` | `published_listings.*`
+
+| Method | Path | Description | Permission |
+|--------|------|-------------|------------|
+| GET | `/api/published-listings` | List/filter published listings | published_listings.view |
+| GET | `/api/published-listings/summary` | Dashboard counts | published_listings.view |
+| GET | `/api/published-listings/sync-logs` | Sync job history | published_listings.view |
+| POST | `/api/published-listings/sync` | Enqueue store sync from eBay | published_listings.sync |
+| GET | `/api/published-listings/:id` | Listing detail (+ raw eBay payload) | published_listings.view |
+| GET | `/api/published-listings/:id/revisions` | Audit/revision history | published_listings.view |
+| PATCH | `/api/published-listings/:id` | Revise title/price/qty/images | published_listings.manage |
+| POST | `/api/published-listings/:id/end` | End listing on eBay | published_listings.manage |
+| POST | `/api/published-listings/:id/relist` | Relist ended offer | published_listings.manage |
+| POST | `/api/published-listings/:id/refresh` | Re-sync single listing | published_listings.sync |
+| POST | `/api/published-listings/bulk` | Bulk price/qty/end/sync | published_listings.bulk |
+| GET | `/api/published-listings/bulk/:jobId` | Bulk job status | published_listings.view |
+
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | GET | `/api/ebay/stores` | List eBay stores | ebay.view |
