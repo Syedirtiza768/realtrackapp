@@ -1,6 +1,6 @@
 /**
  * One-shot: sync all active eBay accounts (inventory + Trading API fallback).
- * Usage (inside backend container): node scripts/trigger-published-listings-sync.cjs
+ * Mounted at /app/scripts in Docker; run: docker compose exec backend node scripts/trigger-published-listings-sync.cjs
  */
 const { NestFactory } = require('@nestjs/core');
 const { AppModule } = require('../dist/src/app.module.js');
