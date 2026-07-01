@@ -4,7 +4,7 @@ import { ArrowLeft, Send, Save, Loader2, Store as StoreIcon, Globe, CheckCircle2
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchWithAuth } from '../../lib/authApi';
 import { buildEbayPreview } from '../../lib/listingPreviewMapper';
-import { getStoresByChannel } from '../../lib/multiStoreApi';
+import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
 import { publishToEbay, type PublishResult } from '../../lib/publishApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
@@ -105,6 +105,14 @@ export default function CatalogProductDetail() {
   const { data: mktData, isLoading: mktLoading } = useMarketplaceListings(sku ?? null);
   const { data: stores = [], isLoading: storesLoading } = useEligibleStores();
 
+  // Fetch available profiles when a store is selected
+  const { data: storeProfiles } = useQuery({
+    queryKey: ['store-profiles', selectedStoreId],
+    queryFn: () => getStoreProfiles(selectedStoreId),
+    enabled: !!selectedStoreId,
+    staleTime: 60_000,
+  });
+
   // Marketplace tab state: allows switching US/AU/DE preview independently of store selection
   const [selectedMktTab, setSelectedMktTab] = useState<string>('US');
   // Available marketplaces from enriched sibling listings + the base listing
@@ -203,7 +211,7 @@ export default function CatalogProductDetail() {
 
       // Marketplace fields → listing record
       const mktFields: Record<string, any> = {};
-      const mktKeys = ['title', 'description', 'price', 'quantity'];
+      const mktKeys = ['title', 'description', 'price', 'quantity', 'shippingProfileName', 'returnProfileName', 'paymentProfileName'];
       for (const k of mktKeys) {
         if (editedFields[k] !== undefined) mktFields[k] = editedFields[k];
       }
@@ -360,6 +368,8 @@ export default function CatalogProductDetail() {
                 editable={editMode}
                 onFieldChange={handleFieldChange}
                 editedFields={editedFields}
+                profiles={storeProfiles}
+                marketplace={selectedMktTab}
               />
               {/* Floating save/cancel bar when editing */}
               {editMode && (

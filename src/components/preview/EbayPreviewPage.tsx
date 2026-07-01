@@ -98,11 +98,15 @@ export function EbayListingPreview({
   editable,
   onFieldChange,
   editedFields,
+  profiles,
+  marketplace,
 }: {
   listing: EbayListing;
   editable?: boolean;
   onFieldChange?: (field: string, value: string) => void;
   editedFields?: Record<string, string>;
+  profiles?: { shippingProfiles: { id: string; name: string }[]; returnProfiles: { id: string; name: string }[]; paymentProfiles: { id: string; name: string }[] };
+  marketplace?: string;
 }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [imgErrors, setImgErrors] = useState<Set<number>>(new Set());
@@ -535,29 +539,77 @@ input[type="radio"][name="tab"] {
               <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                 <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>🚚</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Shipping:</div>
-                  <div style={{ fontSize: 13, color: '#707070' }}>{listing.shippingProfile || 'See listing details'}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>{marketplace === 'DE' ? 'Versand:' : 'Shipping:'}</div>
+                  {editable && profiles?.shippingProfiles ? (
+                    <select
+                      value={editedFields?.shippingProfileName ?? listing.shippingProfile}
+                      onChange={(e) => onFieldChange?.('shippingProfileName', e.target.value)}
+                      style={{
+                        width: '100%', fontSize: 13, color: '#191919',
+                        background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: '2px 4px',
+                      }}
+                    >
+                      <option value="">{marketplace === 'DE' ? '— Auswählen —' : '— Select —'}</option>
+                      {profiles.shippingProfiles.map((p) => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ fontSize: 13, color: '#707070' }}>{listing.shippingProfile || 'See listing details'}</div>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                 <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>📍</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Located in:</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>{marketplace === 'DE' ? 'Standort:' : 'Located in:'}</div>
                   <div style={{ fontSize: 13, color: '#707070' }}>{listing.location}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                 <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>↩️</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Returns:</div>
-                  <div style={{ fontSize: 13, color: '#707070' }}>{listing.returnProfile || 'See listing details'}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>{marketplace === 'DE' ? 'Rückgabe:' : 'Returns:'}</div>
+                  {editable && profiles?.returnProfiles ? (
+                    <select
+                      value={editedFields?.returnProfileName ?? listing.returnProfile}
+                      onChange={(e) => onFieldChange?.('returnProfileName', e.target.value)}
+                      style={{
+                        width: '100%', fontSize: 13, color: '#191919',
+                        background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: '2px 4px',
+                      }}
+                    >
+                      <option value="">{marketplace === 'DE' ? '— Auswählen —' : '— Select —'}</option>
+                      {profiles.returnProfiles.map((p) => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ fontSize: 13, color: '#707070' }}>{listing.returnProfile || 'See listing details'}</div>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>💳</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Payments:</div>
-                  <div style={{ fontSize: 13, color: '#707070' }}>{listing.paymentProfile || 'See listing details'}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>{marketplace === 'DE' ? 'Zahlung:' : 'Payments:'}</div>
+                  {editable && profiles?.paymentProfiles ? (
+                    <select
+                      value={editedFields?.paymentProfileName ?? listing.paymentProfile}
+                      onChange={(e) => onFieldChange?.('paymentProfileName', e.target.value)}
+                      style={{
+                        width: '100%', fontSize: 13, color: '#191919',
+                        background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: '2px 4px',
+                      }}
+                    >
+                      <option value="">{marketplace === 'DE' ? '— Auswählen —' : '— Select —'}</option>
+                      {profiles.paymentProfiles.map((p) => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ fontSize: 13, color: '#707070' }}>{listing.paymentProfile || 'See listing details'}</div>
+                  )}
                 </div>
               </div>
             </div>
