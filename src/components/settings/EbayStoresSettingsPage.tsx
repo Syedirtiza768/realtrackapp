@@ -290,6 +290,7 @@ export default function EbayStoresSettingsPage() {
         {message && <p className="text-sm text-amber-300">{message}</p>}
       </section>
 
+      {/* SECTION HIDDEN 2026-07-01 — Import from SellerPundit. Uncomment to restore.
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 p-6 space-y-4">
         <h2 className="text-lg font-medium">Import from SellerPundit</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
@@ -335,6 +336,7 @@ export default function EbayStoresSettingsPage() {
           </button>
         </div>
       </section>
+      */}
 
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 p-6 space-y-3">
         <div className="flex items-center justify-between">

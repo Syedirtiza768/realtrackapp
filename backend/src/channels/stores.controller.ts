@@ -56,6 +56,12 @@ export class StoresController {
     return this.storesService.getStore(storeId);
   }
 
+  @Get(':storeId/profiles')
+  @ApiOperation({ summary: 'Get available shipping, return, and payment profiles for a store' })
+  getStoreProfiles(@Param('storeId', ParseUUIDPipe) storeId: string) {
+    return this.storesService.getStoreProfiles(storeId);
+  }
+
   @Post()
   @RequirePermissions('stores.manage')
   @ApiOperation({ summary: 'Create a new store within a channel connection' })

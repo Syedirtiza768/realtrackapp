@@ -221,6 +221,7 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | GET | `/api/stores` | List stores | stores.view |
 | POST | `/api/stores` | Create store | stores.manage |
 | GET | `/api/stores/:id` | Get store details | stores.view |
+| GET | `/api/stores/:id/profiles` | Get available shipping, return, and payment profiles for a store | stores.view |
 | PUT | `/api/stores/:id` | Update store | stores.manage |
 
 ### eBay Publish

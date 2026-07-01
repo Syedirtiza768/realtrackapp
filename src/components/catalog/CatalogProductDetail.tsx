@@ -4,7 +4,7 @@ import { ArrowLeft, Send, ChevronDown, ChevronUp, Save, Loader2, Store as StoreI
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchWithAuth } from '../../lib/authApi';
 import { buildEbayPreview } from '../../lib/listingPreviewMapper';
-import { getStoresByChannel } from '../../lib/multiStoreApi';
+import { getStoresByChannel, getStoreProfiles, type StoreProfiles } from '../../lib/multiStoreApi';
 import { publishToEbay, type PublishResult } from '../../lib/publishApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
@@ -75,6 +75,7 @@ function EditPanel({
   catalogProduct,
   activeTab,
   selectedStore,
+  storeProfiles,
   onSaveShared,
   onSaveMarketplace,
   saving,
@@ -83,6 +84,7 @@ function EditPanel({
   catalogProduct: any;
   activeTab: string;
   selectedStore: Store | null;
+  storeProfiles?: StoreProfiles;
   onSaveShared: (fields: Record<string, any>) => void;
   onSaveMarketplace: (fields: Record<string, any>) => void;
   saving: boolean;
@@ -104,9 +106,9 @@ function EditPanel({
     description: listing.description ?? '',
     price: listing.startPrice ?? '',
     quantity: listing.quantity ?? '',
-    shippingProfile: listing.shippingProfileName ?? '',
-    returnProfile: listing.returnProfileName ?? '',
-    paymentProfile: listing.paymentProfileName ?? '',
+    shippingProfileName: listing.shippingProfileName ?? '',
+    returnProfileName: listing.returnProfileName ?? '',
+    paymentProfileName: listing.paymentProfileName ?? '',
   });
 
   // When the selected store changes, update profiles from it
@@ -116,16 +118,16 @@ function EditPanel({
     if (selectedStore) {
       setMktFields((prev) => ({
         ...prev,
-        shippingProfile: selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? prev.shippingProfile,
-        returnProfile: selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? prev.returnProfile,
-        paymentProfile: selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? prev.paymentProfile,
+        shippingProfileName: selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? prev.shippingProfileName,
+        returnProfileName: selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? prev.returnProfileName,
+        paymentProfileName: selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? prev.paymentProfileName,
       }));
     }
   }
 
   const Section = ({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) => (
     <div className="border border-slate-700/50 rounded-lg overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-800/40 transition-colors">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:bg-slate-800/40 transition-colors">
         {label}
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
@@ -135,7 +137,7 @@ function EditPanel({
 
   const Field = ({ label, field, value, onChange, multiline, readOnly }: { label: string; field: string; value: string; onChange: (v: string) => void; multiline?: boolean; readOnly?: boolean }) => (
     <div>
-      <label className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</label>
+      <label className="text-[10px] text-slate-400 uppercase tracking-wider">{label}</label>
       {multiline ? (
         <textarea
           value={value}
@@ -158,9 +160,9 @@ function EditPanel({
 
   return (
     <div className="space-y-2 mt-3">
-      <p className="text-xs text-slate-400 font-medium">Edit</p>
+      <p className="text-xs text-slate-300 font-medium">Edit</p>
 
-      <Section label="Shared Fields (syncs to all marketplaces)" open={sharedOpen} onToggle={() => setSharedOpen(!sharedOpen)}>
+      <Section label="Shared Fields" open={sharedOpen} onToggle={() => setSharedOpen(!sharedOpen)}>
         <Field label="Brand" field="brand" value={sharedFields.brand} onChange={(v) => setSharedFields({ ...sharedFields, brand: v })} />
         <Field label="MPN" field="mpn" value={sharedFields.mpn} onChange={(v) => setSharedFields({ ...sharedFields, mpn: v })} />
         <Field label="OEM Part #" field="oemPartNumber" value={sharedFields.oemPartNumber} onChange={(v) => setSharedFields({ ...sharedFields, oemPartNumber: v })} />
@@ -184,10 +186,48 @@ function EditPanel({
         <Field label="Description" field="description" value={mktFields.description} onChange={(v) => setMktFields({ ...mktFields, description: v })} multiline />
         <Field label="Price" field="price" value={mktFields.price} onChange={(v) => setMktFields({ ...mktFields, price: v })} />
         <Field label="Quantity" field="quantity" value={mktFields.quantity} onChange={(v) => setMktFields({ ...mktFields, quantity: v })} />
-        <Field label="Shipping Profile" field="shippingProfile" value={mktFields.shippingProfile} onChange={(v) => setMktFields({ ...mktFields, shippingProfile: v })} readOnly />
-        <Field label="Return Profile" field="returnProfile" value={mktFields.returnProfile} onChange={(v) => setMktFields({ ...mktFields, returnProfile: v })} readOnly />
-        <Field label="Payment Profile" field="paymentProfile" value={mktFields.paymentProfile} onChange={(v) => setMktFields({ ...mktFields, paymentProfile: v })} readOnly />
-        <p className="text-[10px] text-slate-500 italic">Profiles are inherited from the selected store and set at publish time.</p>
+        {/* Shipping Profile Select */}
+        <div>
+          <label className="text-[10px] text-slate-400 uppercase tracking-wider">Shipping Profile</label>
+          <select
+            value={mktFields.shippingProfileName}
+            onChange={(e) => setMktFields({ ...mktFields, shippingProfileName: e.target.value })}
+            className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+          >
+            <option value="">— Store default —</option>
+            {(storeProfiles?.shippingProfiles ?? []).map((p) => (
+              <option key={p.id} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* Return Profile Select */}
+        <div>
+          <label className="text-[10px] text-slate-400 uppercase tracking-wider">Return Profile</label>
+          <select
+            value={mktFields.returnProfileName}
+            onChange={(e) => setMktFields({ ...mktFields, returnProfileName: e.target.value })}
+            className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+          >
+            <option value="">— Store default —</option>
+            {(storeProfiles?.returnProfiles ?? []).map((p) => (
+              <option key={p.id} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* Payment Profile Select */}
+        <div>
+          <label className="text-[10px] text-slate-400 uppercase tracking-wider">Payment Profile</label>
+          <select
+            value={mktFields.paymentProfileName}
+            onChange={(e) => setMktFields({ ...mktFields, paymentProfileName: e.target.value })}
+            className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+          >
+            <option value="">— Store default —</option>
+            {(storeProfiles?.paymentProfiles ?? []).map((p) => (
+              <option key={p.id} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
         <button
           onClick={() => onSaveMarketplace(mktFields)}
           disabled={saving}
@@ -221,6 +261,14 @@ export default function CatalogProductDetail() {
 
   const { data: mktData, isLoading: mktLoading } = useMarketplaceListings(sku ?? null);
   const { data: stores = [], isLoading: storesLoading } = useEligibleStores();
+
+  // Fetch available profiles when a store is selected
+  const { data: storeProfiles, isLoading: profilesLoading } = useQuery({
+    queryKey: ['store-profiles', selectedStoreId],
+    queryFn: () => getStoreProfiles(selectedStoreId),
+    enabled: !!selectedStoreId,
+    staleTime: 30_000,
+  });
 
   // Resolve selected store object
   const selectedStore = useMemo<Store | null>(() => {
@@ -405,7 +453,7 @@ export default function CatalogProductDetail() {
           <div className="rounded-lg border border-slate-700/50 p-4 space-y-3">
             {/* Store Selector */}
             <div>
-              <label className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1.5 block">
+              <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1.5 block">
                 Target Store
               </label>
               {storesLoading ? (
@@ -441,27 +489,39 @@ export default function CatalogProductDetail() {
               )}
             </div>
 
-            {/* Profiles from selected store */}
+            {/* Profiles from selected store / listing override */}
             {selectedStore && (
               <div className="space-y-2 border-t border-slate-700/30 pt-3">
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Profiles</p>
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Profiles</p>
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500">Shipping</span>
-                    <span className="text-[11px] text-slate-300 font-mono truncate max-w-[140px] text-right">
-                      {selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? '—'}
+                    <span className="text-[10px] text-slate-400">Shipping</span>
+                    <span className="text-[11px] text-slate-200 font-mono truncate max-w-[140px] text-right">
+                      {currentListing?.shippingProfileName
+                        ? (currentListing.shippingProfileName !== selectedStore.fulfillmentPolicyName
+                          ? <><span className="text-blue-300">{currentListing.shippingProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
+                          : currentListing.shippingProfileName)
+                        : (selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? '—')}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500">Payment</span>
-                    <span className="text-[11px] text-slate-300 font-mono truncate max-w-[140px] text-right">
-                      {selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? '—'}
+                    <span className="text-[10px] text-slate-400">Payment</span>
+                    <span className="text-[11px] text-slate-200 font-mono truncate max-w-[140px] text-right">
+                      {currentListing?.paymentProfileName
+                        ? (currentListing.paymentProfileName !== selectedStore.paymentPolicyName
+                          ? <><span className="text-blue-300">{currentListing.paymentProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
+                          : currentListing.paymentProfileName)
+                        : (selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? '—')}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500">Return</span>
-                    <span className="text-[11px] text-slate-300 font-mono truncate max-w-[140px] text-right">
-                      {selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? '—'}
+                    <span className="text-[10px] text-slate-400">Return</span>
+                    <span className="text-[11px] text-slate-200 font-mono truncate max-w-[140px] text-right">
+                      {currentListing?.returnProfileName
+                        ? (currentListing.returnProfileName !== selectedStore.returnPolicyName
+                          ? <><span className="text-blue-300">{currentListing.returnProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
+                          : currentListing.returnProfileName)
+                        : (selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? '—')}
                     </span>
                   </div>
                 </div>
@@ -486,22 +546,22 @@ export default function CatalogProductDetail() {
             {/* Listing info */}
             <div className="border-t border-slate-700/30 pt-3 space-y-2">
               <div>
-                <p className="text-xs text-slate-500">SKU</p>
+                <p className="text-xs text-slate-400">SKU</p>
                 <p className="text-sm text-slate-200 font-mono">{sku || '\u2014'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Marketplace</p>
+                <p className="text-xs text-slate-400">Marketplace</p>
                 <p className="text-sm text-slate-200">{selectedStore ? activeTab : '—'}</p>
               </div>
               {listing.sourceFileName && (
                 <div>
-                  <p className="text-xs text-slate-500">Source File</p>
-                  <p className="text-xs text-slate-400">{listing.sourceFileName}</p>
+                  <p className="text-xs text-slate-400">Source File</p>
+                  <p className="text-xs text-slate-300">{listing.sourceFileName}</p>
                 </div>
               )}
               <div>
-                <p className="text-xs text-slate-500">Imported</p>
-                <p className="text-xs text-slate-400">{new Date(listing.importedAt).toLocaleDateString()}</p>
+                <p className="text-xs text-slate-400">Imported</p>
+                <p className="text-xs text-slate-300">{new Date(listing.importedAt).toLocaleDateString()}</p>
               </div>
             </div>
 
@@ -536,6 +596,7 @@ export default function CatalogProductDetail() {
                 catalogProduct={mktData?.catalogProduct ?? catalogProduct}
                 activeTab={activeTab}
                 selectedStore={selectedStore}
+                storeProfiles={storeProfiles}
                 onSaveShared={handleSaveShared}
                 onSaveMarketplace={handleSaveMarketplace}
                 saving={saving}

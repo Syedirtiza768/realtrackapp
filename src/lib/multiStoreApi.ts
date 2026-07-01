@@ -42,6 +42,16 @@ async function putJson<T>(path: string, body?: unknown): Promise<T> {
 
 /* ── Stores ───────────────────────────────────────────────── */
 
+export interface StoreProfiles {
+  shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string }>;
+  returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
+  paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
+}
+
+export async function getStoreProfiles(storeId: string): Promise<StoreProfiles> {
+  return fetchJson<StoreProfiles>(`/stores/${storeId}/profiles`);
+}
+
 export async function getStores(connectionId?: string): Promise<Store[]> {
   const qs = connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : '';
   return fetchJson<Store[]>(`/stores${qs}`);

@@ -18,6 +18,7 @@ import { StoreAccessService } from './store-access.service.js';
 import { User } from '../auth/entities/user.entity.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayBusinessPolicy } from '../integrations/ebay/entities/ebay-business-policy.entity.js';
+import { ShippingProfile } from '../settings/entities/shipping-profile.entity.js';
 
 @Injectable()
 export class StoresService {
@@ -38,6 +39,8 @@ export class StoresService {
     private readonly connectedAccountRepo: Repository<ConnectedEbayAccount>,
     @InjectRepository(EbayBusinessPolicy)
     private readonly policyRepo: Repository<EbayBusinessPolicy>,
+    @InjectRepository(ShippingProfile)
+    private readonly shippingProfileRepo: Repository<ShippingProfile>,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
     private readonly ebayPublish: EbayPublishService,
@@ -60,8 +63,9 @@ export class StoresService {
 
   /**
    * List stores for a channel, filtered to stores the user can access.
-   * For eBay, only native OAuth stores with synced policies are returned,
-   * enriched with marketplace labels and policy display names.
+   * For eBay, active native OAuth and SellerPundit stores with matching
+   * marketplaces are returned, enriched with marketplace labels and
+   * policy display names (where available).
    */
   async getStoresByChannel(channel: string, user?: User): Promise<any[]> {
     // 1. Resolve accessible store IDs for the user
@@ -81,7 +85,7 @@ export class StoresService {
 
     if (!user || channel !== 'ebay') return stores;
 
-    // 2. For eBay: filter to native OAuth stores with policy data
+    // 2. For eBay: filter to active stores (native OAuth & SellerPundit)
     const connectionIds = stores.map((s) => s.connectionId);
     const accounts: ConnectedEbayAccount[] =
       await this.connectedAccountRepo.find({
@@ -103,7 +107,6 @@ export class StoresService {
     for (const store of stores) {
       const account = accountByConnId.get(store.connectionId);
       if (!account) continue;
-      if (account.connectionSource !== 'native_oauth') continue;
       if (account.connectionStatus !== 'active') continue;
 
       const mkt = (account.marketplaces ?? []).find(
@@ -111,11 +114,16 @@ export class StoresService {
       );
       if (!mkt) continue;
 
-      // Must have at least fulfillment + payment + return policies synced
+      // Native OAuth stores must have fulfilment + payment + return
+      // policies synced. SellerPundit stores are published via the
+      // SellerPundit API which handles policies on its side.
       if (
-        !mkt.defaultFulfillmentPolicyId ||
-        !mkt.defaultPaymentPolicyId ||
-        !mkt.defaultReturnPolicyId
+        account.connectionSource === 'native_oauth' &&
+        (
+          !mkt.defaultFulfillmentPolicyId ||
+          !mkt.defaultPaymentPolicyId ||
+          !mkt.defaultReturnPolicyId
+        )
       )
         continue;
 
@@ -146,6 +154,55 @@ export class StoresService {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
     return store;
+  }
+
+  /**
+   * Get available shipping, return, and payment profiles for a store.
+   * Shipping profiles come from the local shipping_profiles table.
+   * Return/payment profiles come from cached eBay business policies
+   * for the store's connected eBay account + marketplace.
+   */
+  async getStoreProfiles(storeId: string): Promise<{
+    shippingProfiles: ShippingProfile[];
+    returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
+    paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
+  }> {
+    const store = await this.getStore(storeId);
+
+    // Shipping profiles are always available from the local table
+    const shippingProfiles = await this.shippingProfileRepo.find({
+      where: { active: true },
+      order: { isDefault: 'DESC', name: 'ASC' },
+    });
+
+    // For eBay stores, also fetch return/payment policies
+    let returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }> = [];
+    let paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }> = [];
+
+    if (store.channel === 'ebay' && store.connectionId) {
+      const account = await this.connectedAccountRepo.findOne({
+        where: { channelConnectionId: store.connectionId },
+      });
+      if (account && store.ebayMarketplaceId) {
+        const policies = await this.policyRepo.find({
+          where: {
+            ebayAccountId: account.id,
+            marketplaceId: store.ebayMarketplaceId,
+          },
+          order: { isDefault: 'DESC', name: 'ASC' },
+        });
+
+        returnProfiles = policies
+          .filter((p) => p.policyType === 'return')
+          .map((p) => ({ id: p.id, name: p.name, ebayPolicyId: p.ebayPolicyId }));
+
+        paymentProfiles = policies
+          .filter((p) => p.policyType === 'payment')
+          .map((p) => ({ id: p.id, name: p.name, ebayPolicyId: p.ebayPolicyId }));
+      }
+    }
+
+    return { shippingProfiles, returnProfiles, paymentProfiles };
   }
 
   async createStore(data: {

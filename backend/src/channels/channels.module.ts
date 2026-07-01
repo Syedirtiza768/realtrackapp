@@ -37,6 +37,7 @@ import { EbayPublishController } from './ebay/ebay-publish.controller.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayAccountMarketplace } from '../integrations/ebay/entities/ebay-account-marketplace.entity.js';
 import { EbayBusinessPolicy } from '../integrations/ebay/entities/ebay-business-policy.entity.js';
+import { ShippingProfile } from '../settings/entities/shipping-profile.entity.js';
 import { SellerpunditModule } from '../integrations/sellerpundit/sellerpundit.module.js';
 import { EbayMarketplaceConfigService } from '../integrations/ebay/services/ebay-marketplace-config.service.js';
 import { EbaySellAccountApiService } from '../integrations/ebay/services/ebay-sell-account-api.service.js';
@@ -59,6 +60,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
       ConnectedEbayAccount,
       EbayAccountMarketplace,
       EbayBusinessPolicy,
+      ShippingProfile,
     ]),
     SellerpunditModule,
     BullModule.registerQueue({ name: 'channels' }),
