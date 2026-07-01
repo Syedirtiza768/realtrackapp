@@ -35,7 +35,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
   return (
     <article className="border border-slate-200/60 dark:border-slate-700/60 rounded-xl bg-white/50 dark:bg-slate-900/50 overflow-hidden flex flex-col group hover:border-slate-300 dark:border-slate-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200">
       {/* Image */}
-      <div className="relative aspect-[4/3] sm:h-44 sm:aspect-auto bg-slate-800 overflow-hidden">
+      <div className="relative aspect-[4/3] bg-slate-800 overflow-hidden">
         {imageUrl && !imgErr ? (
           <img
             src={imageUrl}

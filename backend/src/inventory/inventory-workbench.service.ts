@@ -21,6 +21,8 @@ import type { EnrichmentStatus } from './inventory-auto-trigger.service.js';
 import type { InventoryListingsQueryDto } from './dto/inventory-workbench.dto.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import { EnrichmentPipeline } from '../common/openai/pipelines/enrichment.pipeline.js';
+import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import { translatePartNameToGerman, formatGermanPlacement } from '../channels/ebay/ebay-german-listing.util.js';
 
 export interface InventoryMarketplaceVariant {
   listingId: string;
@@ -142,6 +144,7 @@ export class InventoryWorkbenchService {
     private readonly autoTrigger: InventoryAutoTriggerService,
     private readonly listingGenPipeline: ListingGenerationPipeline,
     private readonly enrichmentPipeline: EnrichmentPipeline,
+    private readonly taxonomy: EbayTaxonomyApiService,
   ) {}
 
   async listListings(
@@ -680,8 +683,26 @@ export class InventoryWorkbenchService {
       if (enrichmentResult.mpn) baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
       if (enrichmentResult.oemNumber) baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
       if (enrichmentResult.features?.length) baseListing.cFeatures = enrichmentResult.features.join(' | ');
-      if (enrichmentResult.suggestedCategory && !baseListing.categoryName) {
+      if (enrichmentResult.suggestedCategory) {
         baseListing.categoryName = enrichmentResult.suggestedCategory;
+        // Resolve numeric eBay category ID from the suggested category name
+        try {
+          const suggestions = await this.taxonomy.getCategorySuggestions(
+            enrichmentResult.suggestedCategory,
+          );
+          const best = suggestions[0]?.category;
+          if (best?.categoryId) {
+            baseListing.categoryId = best.categoryId;
+            this.logger.log(
+              `Resolved category for listing ${listingId}: "${best.categoryName}" (${best.categoryId})`,
+            );
+          }
+        } catch (catErr) {
+          this.logger.warn(
+            `Failed to resolve category ID for "${enrichmentResult.suggestedCategory}": ` +
+              `${catErr instanceof Error ? catErr.message : catErr}`,
+          );
+        }
       }
 
       this.logger.log(
@@ -732,6 +753,17 @@ export class InventoryWorkbenchService {
         price: baseListing.startPriceNum,
         description: baseListing.description,
       };
+
+      // DE-specific: provide German context for natural German output
+      if (mkt === 'DE') {
+        const partTypeRaw =
+          typeof productData.part_type === 'string' ? productData.part_type : '';
+        const placementRaw =
+          typeof productData.placement === 'string' ? productData.placement : '';
+        productData.germanPartType = translatePartNameToGerman(partTypeRaw) || partTypeRaw;
+        productData.germanPlacement = formatGermanPlacement(placementRaw) || placementRaw;
+        productData.marketplaceLanguage = 'German';
+      }
 
       try {
         const sellerCountry = mkt === 'DE' ? 'DE' : 'US';

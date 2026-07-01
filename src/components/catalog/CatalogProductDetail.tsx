@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, ChevronDown, ChevronUp, Save, Loader2, Store as StoreIcon, Globe, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +11,21 @@ import type { EbayListing } from '../../lib/ebayFileExchangeParser';
 import type { ListingDetail } from '../../types/search';
 import type { Store } from '../../types/multiStore';
 import { EbayListingPreview } from '../preview/EbayPreviewPage';
+
+/* ── Category suggestion helper ──────────────────────────── */
+
+interface CategorySuggestion {
+  id: string;
+  name: string;
+}
+
+async function fetchCategorySuggestions(q: string): Promise<CategorySuggestion[]> {
+  if (!q?.trim()) return [];
+  const res = await fetch(`/api/ebay/category/suggest?q=${encodeURIComponent(q.trim())}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.suggestions ?? [];
+}
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
@@ -126,8 +141,8 @@ function EditPanel({
   }
 
   const Section = ({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) => (
-    <div className="border border-slate-700/50 rounded-lg overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:bg-slate-800/40 transition-colors">
+    <div className="border border-slate-200 dark:border-slate-700/50 rounded-lg overflow-hidden">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
         {label}
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
@@ -137,14 +152,14 @@ function EditPanel({
 
   const Field = ({ label, field, value, onChange, multiline, readOnly }: { label: string; field: string; value: string; onChange: (v: string) => void; multiline?: boolean; readOnly?: boolean }) => (
     <div>
-      <label className="text-[10px] text-slate-400 uppercase tracking-wider">{label}</label>
+      <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</label>
       {multiline ? (
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
           readOnly={readOnly}
-          className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+          className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
         />
       ) : (
         <input
@@ -152,7 +167,7 @@ function EditPanel({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           readOnly={readOnly}
-          className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+          className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
         />
       )}
     </div>
@@ -160,7 +175,7 @@ function EditPanel({
 
   return (
     <div className="space-y-2 mt-3">
-      <p className="text-xs text-slate-300 font-medium">Edit</p>
+      <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">Edit</p>
 
       <Section label="Shared Fields" open={sharedOpen} onToggle={() => setSharedOpen(!sharedOpen)}>
         <Field label="Brand" field="brand" value={sharedFields.brand} onChange={(v) => setSharedFields({ ...sharedFields, brand: v })} />
@@ -188,11 +203,11 @@ function EditPanel({
         <Field label="Quantity" field="quantity" value={mktFields.quantity} onChange={(v) => setMktFields({ ...mktFields, quantity: v })} />
         {/* Shipping Profile Select */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase tracking-wider">Shipping Profile</label>
+          <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Shipping Profile</label>
           <select
             value={mktFields.shippingProfileName}
             onChange={(e) => setMktFields({ ...mktFields, shippingProfileName: e.target.value })}
-            className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+            className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
           >
             <option value="">— Store default —</option>
             {(storeProfiles?.shippingProfiles ?? []).map((p) => (
@@ -202,11 +217,11 @@ function EditPanel({
         </div>
         {/* Return Profile Select */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase tracking-wider">Return Profile</label>
+          <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Return Profile</label>
           <select
             value={mktFields.returnProfileName}
             onChange={(e) => setMktFields({ ...mktFields, returnProfileName: e.target.value })}
-            className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+            className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
           >
             <option value="">— Store default —</option>
             {(storeProfiles?.returnProfiles ?? []).map((p) => (
@@ -216,11 +231,11 @@ function EditPanel({
         </div>
         {/* Payment Profile Select */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase tracking-wider">Payment Profile</label>
+          <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Payment Profile</label>
           <select
             value={mktFields.paymentProfileName}
             onChange={(e) => setMktFields({ ...mktFields, paymentProfileName: e.target.value })}
-            className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
+            className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
           >
             <option value="">— Store default —</option>
             {(storeProfiles?.paymentProfiles ?? []).map((p) => (
@@ -261,6 +276,24 @@ export default function CatalogProductDetail() {
 
   const { data: mktData, isLoading: mktLoading } = useMarketplaceListings(sku ?? null);
   const { data: stores = [], isLoading: storesLoading } = useEligibleStores();
+
+  // Initialize override category from listing, reset on store change
+  const [overrideCategoryId, setOverrideCategoryId] = useState('');
+  const [categorySearch, setCategorySearch] = useState('');
+  useEffect(() => {
+    const init = listing?.categoryId || '';
+    setOverrideCategoryId(init);
+    setCategorySearch('');
+  }, [listing?.categoryId, selectedStoreId]);
+
+  // Auto-fetch category suggestions when category is missing
+  const searchTerm = listing?.categoryName || listing?.title || '';
+  const { data: categorySuggestions = [] } = useQuery({
+    queryKey: ['category-suggestions', searchTerm],
+    queryFn: () => fetchCategorySuggestions(searchTerm),
+    enabled: !listing?.categoryId && searchTerm.length > 0,
+    staleTime: 300_000,
+  });
 
   // Fetch available profiles when a store is selected
   const { data: storeProfiles, isLoading: profilesLoading } = useQuery({
@@ -349,7 +382,7 @@ export default function CatalogProductDetail() {
         sku: currentListing.customLabelSku ?? id,
         title: currentListing.title ?? '',
         description: currentListing.description ?? '',
-        categoryId: currentListing.categoryId ?? '',
+        categoryId: overrideCategoryId || currentListing.categoryId || '',
         condition: currentListing.conditionId ?? '3000',
         price: parseFloat(currentListing.startPrice ?? '0'),
         quantity: parseInt(currentListing.quantity ?? '0', 10),
@@ -384,14 +417,14 @@ export default function CatalogProductDetail() {
   }
 
   if (!listing) {
-    return <div className="p-10 text-center text-slate-400">Listing not found</div>;
+    return <div className="p-10 text-center text-slate-500 dark:text-slate-400">Listing not found</div>;
   }
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-4">
       <button
         onClick={() => navigate('/catalog')}
-        className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
       >
         <ArrowLeft size={16} />
         Back to Catalog
@@ -401,9 +434,9 @@ export default function CatalogProductDetail() {
         <div className="flex-1 min-w-0">
           {/* Store + Marketplace context header */}
           {selectedStore && (
-            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50">
               <StoreIcon size={14} className="text-blue-400" />
-              <span className="text-sm text-slate-200 font-medium">{selectedStore.storeName}</span>
+              <span className="text-sm text-slate-700 dark:text-slate-200 font-medium">{selectedStore.storeName}</span>
               <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">
                 <Globe size={10} />
                 {marketplaceBadge(selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId)}
@@ -415,7 +448,7 @@ export default function CatalogProductDetail() {
           {selectedStore && preview ? (
             <EbayListingPreview listing={preview} />
           ) : selectedStore && !preview && !mktLoading ? (
-            <div className="border border-slate-700 rounded-lg p-8 text-center text-slate-400">
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center text-slate-500 dark:text-slate-400">
               No listing data available for {activeTab} marketplace
             </div>
           ) : mktLoading ? (
@@ -423,8 +456,8 @@ export default function CatalogProductDetail() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
             </div>
           ) : (
-            <div className="border border-slate-700 rounded-lg p-8 text-center text-slate-400">
-              <StoreIcon size={32} className="mx-auto mb-3 text-slate-600" />
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center text-slate-500 dark:text-slate-400">
+              <StoreIcon size={32} className="mx-auto mb-3 text-slate-400 dark:text-slate-600" />
               <p className="text-sm">Select a store from the sidebar to preview and publish</p>
             </div>
           )}
@@ -450,14 +483,14 @@ export default function CatalogProductDetail() {
 
         {/* Right sidebar */}
         <div className="w-80 shrink-0 space-y-3">
-          <div className="rounded-lg border border-slate-700/50 p-4 space-y-3">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-transparent p-4 space-y-3">
             {/* Store Selector */}
             <div>
-              <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1.5 block">
+              <label className="text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wider mb-1.5 block">
                 Target Store
               </label>
               {storesLoading ? (
-                <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-2">
                   <Loader2 size={12} className="animate-spin" />
                   Loading stores...
                 </div>
@@ -474,7 +507,7 @@ export default function CatalogProductDetail() {
                     setPublishError(null);
                     setPublishResult(null);
                   }}
-                  className="w-full bg-slate-800/60 border border-slate-700 rounded px-2 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                  className="w-full bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-2 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                 >
                   <option value="">— Select a store —</option>
                   {stores.map((store) => {
@@ -491,12 +524,12 @@ export default function CatalogProductDetail() {
 
             {/* Profiles from selected store / listing override */}
             {selectedStore && (
-              <div className="space-y-2 border-t border-slate-700/30 pt-3">
-                <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Profiles</p>
+              <div className="space-y-2 border-t border-slate-200/30 dark:border-slate-700/30 pt-3">
+                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wider">Profiles</p>
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-400">Shipping</span>
-                    <span className="text-[11px] text-slate-200 font-mono truncate max-w-[140px] text-right">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Shipping</span>
+                    <span className="text-[11px] text-slate-700 dark:text-slate-200 font-mono truncate max-w-[140px] text-right">
                       {currentListing?.shippingProfileName
                         ? (currentListing.shippingProfileName !== selectedStore.fulfillmentPolicyName
                           ? <><span className="text-blue-300">{currentListing.shippingProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
@@ -505,8 +538,8 @@ export default function CatalogProductDetail() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-400">Payment</span>
-                    <span className="text-[11px] text-slate-200 font-mono truncate max-w-[140px] text-right">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Payment</span>
+                    <span className="text-[11px] text-slate-700 dark:text-slate-200 font-mono truncate max-w-[140px] text-right">
                       {currentListing?.paymentProfileName
                         ? (currentListing.paymentProfileName !== selectedStore.paymentPolicyName
                           ? <><span className="text-blue-300">{currentListing.paymentProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
@@ -515,8 +548,8 @@ export default function CatalogProductDetail() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-400">Return</span>
-                    <span className="text-[11px] text-slate-200 font-mono truncate max-w-[140px] text-right">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Return</span>
+                    <span className="text-[11px] text-slate-700 dark:text-slate-200 font-mono truncate max-w-[140px] text-right">
                       {currentListing?.returnProfileName
                         ? (currentListing.returnProfileName !== selectedStore.returnPolicyName
                           ? <><span className="text-blue-300">{currentListing.returnProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
@@ -544,26 +577,71 @@ export default function CatalogProductDetail() {
             )}
 
             {/* Listing info */}
-            <div className="border-t border-slate-700/30 pt-3 space-y-2">
+            <div className="border-t border-slate-200/30 dark:border-slate-700/30 pt-3 space-y-2">
               <div>
-                <p className="text-xs text-slate-400">SKU</p>
-                <p className="text-sm text-slate-200 font-mono">{sku || '\u2014'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">SKU</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200 font-mono">{sku || '\u2014'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400">Marketplace</p>
-                <p className="text-sm text-slate-200">{selectedStore ? activeTab : '—'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Marketplace</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{selectedStore ? activeTab : '—'}</p>
               </div>
               {listing.sourceFileName && (
                 <div>
-                  <p className="text-xs text-slate-400">Source File</p>
-                  <p className="text-xs text-slate-300">{listing.sourceFileName}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Source File</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">{listing.sourceFileName}</p>
                 </div>
               )}
               <div>
-                <p className="text-xs text-slate-400">Imported</p>
-                <p className="text-xs text-slate-300">{new Date(listing.importedAt).toLocaleDateString()}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Imported</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">{new Date(listing.importedAt).toLocaleDateString()}</p>
               </div>
             </div>
+
+            {/* Category ID override */}
+            {selectedStore && (
+              <div className="border-t border-slate-200/30 dark:border-slate-700/30 pt-3">
+                <label className="text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wider mb-1.5 block">
+                  eBay Category ID
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={overrideCategoryId}
+                    onChange={(e) => setOverrideCategoryId(e.target.value)}
+                    placeholder={currentListing?.categoryId || categorySuggestions[0]?.id || 'e.g. 80764'}
+                    className="w-full bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-2 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                    list="category-suggestions"
+                  />
+                  {categorySuggestions.length > 0 && (
+                    <datalist id="category-suggestions">
+                      {categorySuggestions.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.id})</option>
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+                {!overrideCategoryId && !currentListing?.categoryId && (
+                  <div className="mt-1.5 space-y-1">
+                    {categorySuggestions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {categorySuggestions.slice(0, 4).map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => setOverrideCategoryId(s.id)}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 hover:bg-blue-600/30 text-slate-300 hover:text-blue-300 transition-colors"
+                          >
+                            {s.name} ({s.id})
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-amber-400">Required before publishing. Enter an eBay category ID.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Publish Button */}
             <button

@@ -372,7 +372,7 @@ export default function CatalogManager() {
 
   /* ── Render ────────────────────────────────────────────── */
   return (
-    <div className="space-y-3 sm:space-y-4 pb-24">
+    <div className="max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6 space-y-3 sm:space-y-4 pb-24">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 overflow-x-auto scrollbar-none">
         {breadcrumbs.map((crumb, i) => (
@@ -666,7 +666,7 @@ export default function CatalogManager() {
 
       {/* Bulk action bar (floating) */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-5 py-3 shadow-2xl shadow-black/50 flex items-center gap-4">
+        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-5 py-3 shadow-2xl shadow-black/50 flex flex-wrap items-center justify-center gap-2 sm:gap-4 max-w-[calc(100vw-2rem)] sm:max-w-none">
           <span className="text-sm text-slate-500 dark:text-slate-300">
             <span className="font-semibold text-blue-400">{selectedIds.size}</span> selected
           </span>
