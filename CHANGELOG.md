@@ -6,8 +6,9 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
-### Added
-- **Published Listings Management Module:** Central dashboard at `/published-listings` with Inventory API sync, **Trading API GetSellerList fallback** for legacy listings, **Browse API competitor pricing**, health flags (including price vs market), bulk actions, audit revisions, and scheduled 6h sync. Permissions: `published_listings.view|sync|manage|bulk`. Migration `1785000000000-PublishedListingsModule`.
+### Fixed
+- **Published listings sync:** Inventory API `GET /offer?sku=` 404 (inventory item without offer) no longer aborts full account sync; competitor pricing refresh runs after sync in ops script.
+ Central dashboard at `/published-listings` with Inventory API sync, **Trading API GetSellerList fallback** for legacy listings, **Browse API competitor pricing**, health flags (including price vs market), bulk actions, audit revisions, and scheduled 6h sync. Permissions: `published_listings.view|sync|manage|bulk`. Migration `1785000000000-PublishedListingsModule`.
 - **Pipeline-grade enrichment with stage tracking:** `inlineEnrichListing` now runs the full flow — vision part lookup → `EnrichmentPipeline.enrich()` (AI enrichment with category mapping, item specifics) → marketplace content generation (US/AU/DE). Stages written to new `enrichmentStage` column on `listing_records`. Frontend polls `GET /inventory/listings/:id/enrichment-status` and shows human-readable labels ("Detecting part from photos...", "Running AI enrichment...", "Generating US eBay listing..."). (`InventoryWorkbenchService`, `InventoryAutoTriggerService`)
 - **Inline enrichment (`POST /api/inventory/inline-enrich`):** Runs complete enrichment synchronously — creates marketplace `listing_records` directly, no BullMQ pipeline job. (`InventoryWorkbenchService.inlineEnrichListing`)
 - **Auto-trigger enrichment on 2 images:** Background `auto-enrich` job calls inline enrichment instead of pipeline. (`InventorySyncProcessor.handleAutoEnrich`)

@@ -247,18 +247,25 @@ export class EbayInventoryApiService {
     } = {},
   ): Promise<{ offers: EbayOffer[]; total: number }> {
     const cfg = await this.authHeaders(storeId);
-    const { data } = await this.http.get(`/offer`, {
-      ...cfg,
-      params: {
-        limit: params.limit ?? 25,
-        offset: params.offset ?? 0,
-        ...(params.sku ? { sku: params.sku } : {}),
-        ...(params.marketplaceId
-          ? { marketplace_id: toEbayInventoryApiMarketplaceId(params.marketplaceId) }
-          : {}),
-      },
-    });
-    return { offers: data.offers ?? [], total: data.total ?? 0 };
+    try {
+      const { data } = await this.http.get(`/offer`, {
+        ...cfg,
+        params: {
+          limit: params.limit ?? 25,
+          offset: params.offset ?? 0,
+          ...(params.sku ? { sku: params.sku } : {}),
+          ...(params.marketplaceId
+            ? { marketplace_id: toEbayInventoryApiMarketplaceId(params.marketplaceId) }
+            : {}),
+        },
+      });
+      return { offers: data.offers ?? [], total: data.total ?? 0 };
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        return { offers: [], total: 0 };
+      }
+      throw err;
+    }
   }
 
   /**

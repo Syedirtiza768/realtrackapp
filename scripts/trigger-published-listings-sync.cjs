@@ -30,25 +30,53 @@ async function main() {
 
     for (const account of accounts) {
       console.log(`\n--- ${account.accountDisplayName} (${account.id}) ---`);
-      const { syncLogIds } = await sync.enqueueSync({
-        organizationId: account.organizationId,
-        ebayAccountId: account.id,
-        trigger: 'manual',
-      });
-      const syncLogId = syncLogIds[0];
-      if (!syncLogId) {
-        console.warn('  No sync log created — skipped');
-        continue;
+      try {
+        const { syncLogIds } = await sync.enqueueSync({
+          organizationId: account.organizationId,
+          ebayAccountId: account.id,
+          trigger: 'manual',
+        });
+        const syncLogId = syncLogIds[0];
+        if (!syncLogId) {
+          console.warn('  No sync log created — skipped');
+          continue;
+        }
+        const result = await sync.syncAccount({
+          organizationId: account.organizationId,
+          ebayAccountId: account.id,
+          syncLogId,
+          trigger: 'manual',
+        });
+        console.log(
+          `  Sync: processed=${result.processed} created=${result.created} updated=${result.updated} failed=${result.failed}`,
+        );
+      } catch (err) {
+        console.error(`  Sync failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-      const result = await sync.syncAccount({
-        organizationId: account.organizationId,
-        ebayAccountId: account.id,
-        syncLogId,
-        trigger: 'manual',
-      });
-      console.log(
-        `  Done: processed=${result.processed} created=${result.created} updated=${result.updated} failed=${result.failed}`,
-      );
+    }
+
+    const pricing = app.get(
+      require('../dist/src/published-listings/services/published-listings-pricing.service.js')
+        .PublishedListingsPricingService,
+    );
+    console.log('\nRefreshing competitor pricing (Browse API)...');
+    for (const account of accounts) {
+      try {
+        const result = await pricing.refreshForAccount(
+          account.organizationId,
+          account.id,
+          100,
+        );
+        console.log(
+          `  ${account.accountDisplayName}: processed=${result.processed} updated=${result.updated} skipped=${result.skipped}`,
+        );
+      } catch (err) {
+        console.error(
+          `  Pricing failed for ${account.accountDisplayName}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
 
     console.log('\nAll account syncs complete.');
