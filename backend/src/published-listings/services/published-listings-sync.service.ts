@@ -244,68 +244,72 @@ export class PublishedListingsSyncService {
         failed += tradingResult.failed;
         warnings.push(...tradingResult.warnings);
 
-        const limit = 50;
-        let offset = 0;
+        // Optional Inventory API pass — disabled by default on full sync because it
+        // issues one offer lookup per SKU and stalls large stores (6000+ listings).
+        if (process.env.PUBLISHED_LISTINGS_INVENTORY_ENRICH === '1') {
+          const limit = 50;
+          let offset = 0;
 
-        for (;;) {
-          const page = await this.inventoryApi.getItems(storeId, limit, offset);
-          const items = page.inventoryItems ?? [];
-          if (!items.length) break;
+          for (;;) {
+            const page = await this.inventoryApi.getItems(storeId, limit, offset);
+            const items = page.inventoryItems ?? [];
+            if (!items.length) break;
 
-          for (const item of items) {
-            const sku = item.sku?.trim();
-            if (!sku) continue;
+            for (const item of items) {
+              const sku = item.sku?.trim();
+              if (!sku) continue;
 
-            let offerOffset = 0;
-            for (;;) {
-              const { offers, total } = await this.inventoryApi.getOffersBySku(
-                storeId,
-                sku,
-                100,
-                offerOffset,
-              );
-              if (!offers.length) break;
+              let offerOffset = 0;
+              for (;;) {
+                const { offers, total } = await this.inventoryApi.getOffersBySku(
+                  storeId,
+                  sku,
+                  100,
+                  offerOffset,
+                );
+                if (!offers.length) break;
 
-              for (const offer of offers) {
-                if (!this.isPublishedOffer(offer)) continue;
-                if (
-                  accountMarketplaceId &&
-                  offer.marketplaceId !== accountMarketplaceId
-                ) {
-                  continue;
-                }
-
-                processed += 1;
-                try {
-                  const result = await this.upsertFromOffer(
-                    account,
-                    offer,
-                    item,
-                    channelByOffer,
-                    channelByListing,
-                  );
-                  if (result.created) created += 1;
-                  else updated += 1;
-                  if (offer.listingId) {
-                    seenKeys.add(`${offer.marketplaceId}:${offer.listingId}`);
+                for (const offer of offers) {
+                  if (!this.isPublishedOffer(offer)) continue;
+                  if (
+                    accountMarketplaceId &&
+                    offer.marketplaceId !== accountMarketplaceId
+                  ) {
+                    continue;
                   }
-                } catch (e) {
-                  failed += 1;
-                  errors.push({
-                    sku,
-                    offerId: offer.offerId,
-                    message: e instanceof Error ? e.message : String(e),
-                  });
+
+                  processed += 1;
+                  try {
+                    const result = await this.upsertFromOffer(
+                      account,
+                      offer,
+                      item,
+                      channelByOffer,
+                      channelByListing,
+                    );
+                    if (result.created) created += 1;
+                    else updated += 1;
+                    if (offer.listingId) {
+                      seenKeys.add(`${offer.marketplaceId}:${offer.listingId}`);
+                    }
+                  } catch (e) {
+                    failed += 1;
+                    errors.push({
+                      sku,
+                      offerId: offer.offerId,
+                      message: e instanceof Error ? e.message : String(e),
+                    });
+                  }
                 }
+
+                offerOffset += offers.length;
+                if (offerOffset >= total) break;
               }
-
-              offerOffset += offers.length;
-              if (offerOffset >= total) break;
             }
-          }
 
-          if (!page.next || items.length < limit) break;
-          offset += limit;
+            if (!page.next || items.length < limit) break;
+            offset += limit;
+          }
         }
       }
 

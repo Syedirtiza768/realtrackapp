@@ -298,9 +298,9 @@ export class EbayTradingApiService {
       );
       if (!result.hasMore) break;
       page += 1;
-      if (page > 100) {
+      if (page > 500) {
         this.logger.warn(
-          `Trading API ActiveList pagination capped at page 100 for store ${storeId}`,
+          `Trading API ActiveList pagination capped at page 500 for store ${storeId}`,
         );
         break;
       }
