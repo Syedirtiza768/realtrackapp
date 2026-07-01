@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, ChevronDown, ChevronUp, Save, Loader2, Store as StoreIcon, Globe, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Send, Save, Loader2, Store as StoreIcon, Globe, CheckCircle2, XCircle, AlertTriangle, Pencil } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchWithAuth } from '../../lib/authApi';
 import { buildEbayPreview } from '../../lib/listingPreviewMapper';
-import { getStoresByChannel, getStoreProfiles, type StoreProfiles } from '../../lib/multiStoreApi';
+import { getStoresByChannel } from '../../lib/multiStoreApi';
 import { publishToEbay, type PublishResult } from '../../lib/publishApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
@@ -83,179 +83,6 @@ function useEligibleStores() {
   });
 }
 
-/* ── Edit Panel ────────────────────────────────────────────── */
-
-function EditPanel({
-  listing,
-  catalogProduct,
-  activeTab,
-  selectedStore,
-  storeProfiles,
-  onSaveShared,
-  onSaveMarketplace,
-  saving,
-}: {
-  listing: ListingDetail;
-  catalogProduct: any;
-  activeTab: string;
-  selectedStore: Store | null;
-  storeProfiles?: StoreProfiles;
-  onSaveShared: (fields: Record<string, any>) => void;
-  onSaveMarketplace: (fields: Record<string, any>) => void;
-  saving: boolean;
-}) {
-  const [sharedOpen, setSharedOpen] = useState(false);
-  const [mktOpen, setMktOpen] = useState(false);
-  const [sharedFields, setSharedFields] = useState<Record<string, string>>({
-    brand: catalogProduct?.brand ?? listing.cBrand ?? '',
-    mpn: catalogProduct?.mpn ?? listing.cManufacturerPartNumber ?? '',
-    oemPartNumber: catalogProduct?.oemPartNumber ?? listing.cOeOemPartNumber ?? '',
-    partType: catalogProduct?.partType ?? listing.cType ?? '',
-    placement: catalogProduct?.placement ?? '',
-    material: catalogProduct?.material ?? '',
-    features: catalogProduct?.features ?? listing.cFeatures ?? '',
-    countryOfOrigin: catalogProduct?.countryOfOrigin ?? '',
-  });
-  const [mktFields, setMktFields] = useState<Record<string, string>>({
-    title: listing.title ?? '',
-    description: listing.description ?? '',
-    price: listing.startPrice ?? '',
-    quantity: listing.quantity ?? '',
-    shippingProfileName: listing.shippingProfileName ?? '',
-    returnProfileName: listing.returnProfileName ?? '',
-    paymentProfileName: listing.paymentProfileName ?? '',
-  });
-
-  // When the selected store changes, update profiles from it
-  const prevStoreId = useRef<string | null>(null);
-  if (selectedStore?.id !== prevStoreId.current) {
-    prevStoreId.current = selectedStore?.id ?? null;
-    if (selectedStore) {
-      setMktFields((prev) => ({
-        ...prev,
-        shippingProfileName: selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? prev.shippingProfileName,
-        returnProfileName: selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? prev.returnProfileName,
-        paymentProfileName: selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? prev.paymentProfileName,
-      }));
-    }
-  }
-
-  const Section = ({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) => (
-    <div className="border border-slate-200 dark:border-slate-700/50 rounded-lg overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-        {label}
-        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-      </button>
-      {open && <div className="px-3 pb-3 space-y-2">{children}</div>}
-    </div>
-  );
-
-  const Field = ({ label, field, value, onChange, multiline, readOnly }: { label: string; field: string; value: string; onChange: (v: string) => void; multiline?: boolean; readOnly?: boolean }) => (
-    <div>
-      <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</label>
-      {multiline ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={3}
-          readOnly={readOnly}
-          className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
-        />
-      ) : (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          readOnly={readOnly}
-          className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
-        />
-      )}
-    </div>
-  );
-
-  return (
-    <div className="space-y-2 mt-3">
-      <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">Edit</p>
-
-      <Section label="Shared Fields" open={sharedOpen} onToggle={() => setSharedOpen(!sharedOpen)}>
-        <Field label="Brand" field="brand" value={sharedFields.brand} onChange={(v) => setSharedFields({ ...sharedFields, brand: v })} />
-        <Field label="MPN" field="mpn" value={sharedFields.mpn} onChange={(v) => setSharedFields({ ...sharedFields, mpn: v })} />
-        <Field label="OEM Part #" field="oemPartNumber" value={sharedFields.oemPartNumber} onChange={(v) => setSharedFields({ ...sharedFields, oemPartNumber: v })} />
-        <Field label="Type" field="partType" value={sharedFields.partType} onChange={(v) => setSharedFields({ ...sharedFields, partType: v })} />
-        <Field label="Placement" field="placement" value={sharedFields.placement} onChange={(v) => setSharedFields({ ...sharedFields, placement: v })} />
-        <Field label="Material" field="material" value={sharedFields.material} onChange={(v) => setSharedFields({ ...sharedFields, material: v })} />
-        <Field label="Features" field="features" value={sharedFields.features} onChange={(v) => setSharedFields({ ...sharedFields, features: v })} />
-        <Field label="Country of Origin" field="countryOfOrigin" value={sharedFields.countryOfOrigin} onChange={(v) => setSharedFields({ ...sharedFields, countryOfOrigin: v })} />
-        <button
-          onClick={() => onSaveShared(sharedFields)}
-          disabled={saving}
-          className="w-full mt-2 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save size={12} />}
-          Save Shared Fields
-        </button>
-      </Section>
-
-      <Section label={`${activeTab} Marketplace Fields`} open={mktOpen} onToggle={() => setMktOpen(!mktOpen)}>
-        <Field label="Title" field="title" value={mktFields.title} onChange={(v) => setMktFields({ ...mktFields, title: v })} />
-        <Field label="Description" field="description" value={mktFields.description} onChange={(v) => setMktFields({ ...mktFields, description: v })} multiline />
-        <Field label="Price" field="price" value={mktFields.price} onChange={(v) => setMktFields({ ...mktFields, price: v })} />
-        <Field label="Quantity" field="quantity" value={mktFields.quantity} onChange={(v) => setMktFields({ ...mktFields, quantity: v })} />
-        {/* Shipping Profile Select */}
-        <div>
-          <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Shipping Profile</label>
-          <select
-            value={mktFields.shippingProfileName}
-            onChange={(e) => setMktFields({ ...mktFields, shippingProfileName: e.target.value })}
-            className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
-          >
-            <option value="">— Store default —</option>
-            {(storeProfiles?.shippingProfiles ?? []).map((p) => (
-              <option key={p.id} value={p.name}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        {/* Return Profile Select */}
-        <div>
-          <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Return Profile</label>
-          <select
-            value={mktFields.returnProfileName}
-            onChange={(e) => setMktFields({ ...mktFields, returnProfileName: e.target.value })}
-            className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
-          >
-            <option value="">— Store default —</option>
-            {(storeProfiles?.returnProfiles ?? []).map((p) => (
-              <option key={p.id} value={p.name}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        {/* Payment Profile Select */}
-        <div>
-          <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Payment Profile</label>
-          <select
-            value={mktFields.paymentProfileName}
-            onChange={(e) => setMktFields({ ...mktFields, paymentProfileName: e.target.value })}
-            className="w-full mt-0.5 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
-          >
-            <option value="">— Store default —</option>
-            {(storeProfiles?.paymentProfiles ?? []).map((p) => (
-              <option key={p.id} value={p.name}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <button
-          onClick={() => onSaveMarketplace(mktFields)}
-          disabled={saving}
-          className="w-full mt-2 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save size={12} />}
-          Save {activeTab} Fields
-        </button>
-      </Section>
-    </div>
-  );
-}
-
 /* ── Main Component ────────────────────────────────────────── */
 
 export default function CatalogProductDetail() {
@@ -263,7 +90,8 @@ export default function CatalogProductDetail() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
-  const [editOpen, setEditOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedFields, setEditedFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [publishState, setPublishState] = useState<'idle' | 'publishing' | 'success' | 'failed'>('idle');
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -276,6 +104,22 @@ export default function CatalogProductDetail() {
 
   const { data: mktData, isLoading: mktLoading } = useMarketplaceListings(sku ?? null);
   const { data: stores = [], isLoading: storesLoading } = useEligibleStores();
+
+  // Marketplace tab state: allows switching US/AU/DE preview independently of store selection
+  const [selectedMktTab, setSelectedMktTab] = useState<string>('US');
+  // Available marketplaces from enriched sibling listings + the base listing
+  const availableMkts = useMemo<string[]>(() => {
+    const mktSet = new Set<string>();
+    // Base listing marketplace
+    if (listing?.marketplace) mktSet.add(listing.marketplace);
+    // Marketplace sibling keys
+    if (mktData?.listings) {
+      Object.keys(mktData.listings).forEach((mkt) => mktSet.add(mkt));
+    }
+    // Always include US as default
+    mktSet.add('US');
+    return Array.from(mktSet).sort();
+  }, [listing?.marketplace, mktData?.listings]);
 
   // Initialize override category from listing, reset on store change
   const [overrideCategoryId, setOverrideCategoryId] = useState('');
@@ -295,31 +139,26 @@ export default function CatalogProductDetail() {
     staleTime: 300_000,
   });
 
-  // Fetch available profiles when a store is selected
-  const { data: storeProfiles, isLoading: profilesLoading } = useQuery({
-    queryKey: ['store-profiles', selectedStoreId],
-    queryFn: () => getStoreProfiles(selectedStoreId),
-    enabled: !!selectedStoreId,
-    staleTime: 30_000,
-  });
-
   // Resolve selected store object
   const selectedStore = useMemo<Store | null>(() => {
     if (!selectedStoreId) return null;
     return stores.find((s) => s.id === selectedStoreId) ?? null;
   }, [stores, selectedStoreId]);
 
-  // Derive active marketplace tab from selected store
-  const activeTab = useMemo<string>(() => {
+  // Derive active marketplace tab from store (used for profiles / publish), but
+  // the preview/edit tab is controlled independently via selectedMktTab.
+  const storeMktTab = useMemo<string>(() => {
     if (!selectedStore) return 'US';
     return marketplaceIdToTab(selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId);
   }, [selectedStore]);
 
-  // Current listing for the active tab
+  // Current listing for the selected marketplace tab (preview/edit)
   const currentListing: ListingDetail | null = useMemo(() => {
-    if (!selectedStore) return listing ?? null;
-    return mktData?.listings?.[activeTab] ?? listing ?? null;
-  }, [selectedStore, mktData, activeTab, listing]);
+    return mktData?.listings?.[selectedMktTab] ?? listing ?? null;
+  }, [mktData, selectedMktTab, listing]);
+
+  // The marketplace context shown in the preview header (derived from the tab)
+  const previewMarketplace = selectedMktTab;
 
   // Build eBay preview
   const preview: EbayListing | null = useMemo(() => {
@@ -338,35 +177,60 @@ export default function CatalogProductDetail() {
     return errors;
   }, [selectedStore, currentListing]);
 
-  const handleSaveShared = async (fields: Record<string, any>) => {
-    if (!catalogProduct?.id) return;
+  // Track inline edit field changes
+  const handleFieldChange = (field: string, value: string) => {
+    setEditedFields((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Save all inline edits (shared + marketplace fields)
+  const handleSaveInlineEdits = async () => {
+    if (Object.keys(editedFields).length === 0) {
+      setEditMode(false);
+      return;
+    }
     setSaving(true);
     try {
-      await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(fields),
-      });
+      // Shared fields → catalog product
+      const sharedFields: Record<string, string> = {};
+      const sharedKeys = ['brand', 'mpn', 'oemPartNumber', 'partType', 'placement', 'material', 'features', 'countryOfManufacture'];
+      for (const k of sharedKeys) {
+        if (editedFields[k] !== undefined) sharedFields[k] = editedFields[k];
+      }
+      if (Object.keys(sharedFields).length > 0 && catalogProduct?.id) {
+        await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(sharedFields),
+        });
+      }
+
+      // Marketplace fields → listing record
+      const mktFields: Record<string, any> = {};
+      const mktKeys = ['title', 'description', 'price', 'quantity'];
+      for (const k of mktKeys) {
+        if (editedFields[k] !== undefined) mktFields[k] = editedFields[k];
+      }
+      if (Object.keys(mktFields).length > 0) {
+        const targetId = mktData?.listingIds?.[selectedMktTab] ?? id;
+        if (targetId) {
+          await fetchWithAuth(`/api/listings/${targetId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ ...mktFields, version: currentListing?.version ?? 1 }),
+          });
+        }
+      }
+
       qc.invalidateQueries({ queryKey: ['listing', id] });
       qc.invalidateQueries({ queryKey: ['marketplace-listings', sku] });
+      setEditedFields({});
+      setEditMode(false);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveMarketplace = async (fields: Record<string, any>) => {
-    const targetId = mktData?.listingIds?.[activeTab] ?? id;
-    if (!targetId) return;
-    setSaving(true);
-    try {
-      await fetchWithAuth(`/api/listings/${targetId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...fields, version: currentListing?.version ?? 1 }),
-      });
-      qc.invalidateQueries({ queryKey: ['listing', id] });
-      qc.invalidateQueries({ queryKey: ['marketplace-listings', sku] });
-    } finally {
-      setSaving(false);
-    }
+  const cancelEditing = () => {
+    setEditedFields({});
+    setEditMode(false);
   };
 
   const handlePublish = async () => {
@@ -432,28 +296,101 @@ export default function CatalogProductDetail() {
 
       <div className="flex gap-4">
         <div className="flex-1 min-w-0">
-          {/* Store + Marketplace context header */}
-          {selectedStore && (
-            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50">
-              <StoreIcon size={14} className="text-blue-400" />
-              <span className="text-sm text-slate-700 dark:text-slate-200 font-medium">{selectedStore.storeName}</span>
-              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">
-                <Globe size={10} />
-                {marketplaceBadge(selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId)}
-              </span>
+          {/* Marketplace tab switcher + Edit toggle */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1">
+              {!mktLoading && availableMkts.length > 1 && availableMkts.map((mkt) => (
+                <button
+                  key={mkt}
+                  onClick={() => {
+                    setSelectedMktTab(mkt);
+                    setPublishState('idle');
+                    setPublishError(null);
+                    setPublishResult(null);
+                  }}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    selectedMktTab === mkt
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Globe size={12} />
+                  {mkt}
+                </button>
+              ))}
             </div>
-          )}
+            {preview && (
+              <button
+                onClick={() => {
+                  if (editMode) {
+                    cancelEditing();
+                  } else {
+                    setEditMode(true);
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  editMode
+                    ? 'bg-slate-600 text-white hover:bg-slate-500'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Pencil size={12} />
+                {editMode ? 'Done Editing' : 'Edit'}
+              </button>
+            )}
+          </div>
 
-          {/* eBay Preview */}
-          {selectedStore && preview ? (
-            <EbayListingPreview listing={preview} />
-          ) : selectedStore && !preview && !mktLoading ? (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center text-slate-500 dark:text-slate-400">
-              No listing data available for {activeTab} marketplace
-            </div>
-          ) : mktLoading ? (
+          {/* eBay Preview — WYSIWYG inline editing when editMode is on */}
+          {mktLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+            </div>
+          ) : preview ? (
+            <>
+              {selectedStore && !editMode && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50">
+                  <StoreIcon size={14} className="text-blue-400" />
+                  <span className="text-sm text-slate-700 dark:text-slate-200 font-medium">{selectedStore.storeName}</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">
+                    <Globe size={10} />
+                    {marketplaceBadge(selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId)}
+                  </span>
+                </div>
+              )}
+              <EbayListingPreview
+                listing={preview}
+                editable={editMode}
+                onFieldChange={handleFieldChange}
+                editedFields={editedFields}
+              />
+              {/* Floating save/cancel bar when editing */}
+              {editMode && (
+                <div className="sticky bottom-0 z-10 mt-4 -mx-4 px-4 py-3 bg-slate-900/95 backdrop-blur border-t border-slate-700 flex items-center justify-end gap-3 rounded-b-lg">
+                  <button
+                    onClick={cancelEditing}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-500 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveInlineEdits}
+                    disabled={saving || Object.keys(editedFields).length === 0}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {saving ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    Save Changes
+                  </button>
+                </div>
+              )}
+            </>
+          ) : !mktLoading && currentListing ? (
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center text-slate-500 dark:text-slate-400">
+              No listing data available for {selectedMktTab} marketplace
             </div>
           ) : (
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center text-slate-500 dark:text-slate-400">
@@ -584,7 +521,7 @@ export default function CatalogProductDetail() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Marketplace</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{selectedStore ? activeTab : '—'}</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{selectedStore ? storeMktTab : '—'}</p>
               </div>
               {listing.sourceFileName && (
                 <div>
@@ -661,25 +598,6 @@ export default function CatalogProductDetail() {
                   : 'Select a store to publish'}
             </button>
 
-            <button
-              onClick={() => setEditOpen(!editOpen)}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm font-medium transition-colors"
-            >
-              {editOpen ? 'Hide Editor' : 'Edit Fields'}
-            </button>
-
-            {editOpen && currentListing && (
-              <EditPanel
-                listing={currentListing}
-                catalogProduct={mktData?.catalogProduct ?? catalogProduct}
-                activeTab={activeTab}
-                selectedStore={selectedStore}
-                storeProfiles={storeProfiles}
-                onSaveShared={handleSaveShared}
-                onSaveMarketplace={handleSaveMarketplace}
-                saving={saving}
-              />
-            )}
           </div>
         </div>
       </div>

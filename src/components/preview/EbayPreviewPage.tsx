@@ -16,7 +16,94 @@ function formatBytes(bytes: number): string {
 
 // ─── Exact eBay Listing Preview ─────────────────────────────────────────────
 
-export function EbayListingPreview({ listing }: { listing: EbayListing }) {
+/* ── Inline edit field helper ──────────────────────────── */
+
+function InlineEditField({
+  value,
+  onChange,
+  className,
+  style,
+  multiline,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  style?: React.CSSProperties;
+  multiline?: boolean;
+  placeholder?: string;
+}) {
+  const cls = 'bg-transparent border-0 border-b-2 border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors ' + (className ?? '');
+  if (multiline) {
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cls + ' resize-y min-h-[80px]'}
+        style={style}
+        placeholder={placeholder}
+      />
+    );
+  }
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={cls}
+      style={style}
+      placeholder={placeholder}
+    />
+  );
+}
+
+/** Maps an Item Specifics label to its EbayListing field name for inline editing. */
+const SPECIFICS_FIELD_MAP: Record<string, string> = {
+  'Brand': 'brand',
+  'Type': 'type',
+  'Manufacturer Part Number': 'mpn',
+  'OE/OEM Part Number': 'oemPartNumber',
+  'Placement on Vehicle': 'placement',
+  'Material': 'material',
+  'Features': 'features',
+  'Country/Region of Manufacture': 'countryOfManufacture',
+};
+
+/** Renders an inline-editable specifics cell when in edit mode, or plain text otherwise. */
+function SpecificsEditCell({
+  label,
+  value,
+  editedFields,
+  onFieldChange,
+}: {
+  label: string;
+  value: string;
+  editedFields?: Record<string, string>;
+  onFieldChange?: (field: string, value: string) => void;
+}) {
+  const field = SPECIFICS_FIELD_MAP[label];
+  if (!field) return <>{value}</>;
+  return (
+    <InlineEditField
+      value={editedFields?.[field] ?? value}
+      onChange={(v) => onFieldChange?.(field, v)}
+      style={{ width: '100%', fontWeight: 600, color: '#191919', fontSize: 14 }}
+      placeholder={value}
+    />
+  );
+}
+
+export function EbayListingPreview({
+  listing,
+  editable,
+  onFieldChange,
+  editedFields,
+}: {
+  listing: EbayListing;
+  editable?: boolean;
+  onFieldChange?: (field: string, value: string) => void;
+  editedFields?: Record<string, string>;
+}) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [imgErrors, setImgErrors] = useState<Set<number>>(new Set());
   const descIframeRef = useRef<HTMLIFrameElement>(null);
@@ -348,10 +435,19 @@ input[type="radio"][name="tab"] {
 
           {/* ══ RIGHT COLUMN: Details ══ */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Title */}
-            <h1 style={{ fontSize: 22, fontWeight: 400, color: '#191919', margin: '0 0 8px', lineHeight: 1.3 }}>
-              {listing.title}
-            </h1>
+            {/* Title — inline editable */}
+            {editable ? (
+              <InlineEditField
+                value={editedFields?.title ?? listing.title}
+                onChange={(v) => onFieldChange?.('title', v)}
+                style={{ fontSize: 22, fontWeight: 400, color: '#191919', margin: '0 0 8px', lineHeight: 1.3, width: '100%' }}
+                placeholder="Listing title"
+              />
+            ) : (
+              <h1 style={{ fontSize: 22, fontWeight: 400, color: '#191919', margin: '0 0 8px', lineHeight: 1.3 }}>
+                {listing.title}
+              </h1>
+            )}
 
             {/* SKU / Custom Label */}
             {listing.customLabel && (
@@ -366,20 +462,40 @@ input[type="radio"][name="tab"] {
               <span style={{ fontWeight: 600 }}>{conditionLabel}</span>
             </div>
 
-            {/* Quantity */}
-            {parseInt(listing.quantity) > 1 && (
+            {/* Quantity — inline editable */}
+            {editable ? (
+              <div style={{ fontSize: 14, color: '#707070', marginBottom: 12 }}>
+                Quantity:{' '}
+                <InlineEditField
+                  value={editedFields?.quantity ?? listing.quantity}
+                  onChange={(v) => onFieldChange?.('quantity', v)}
+                  style={{ color: '#191919', fontSize: 14, width: 60 }}
+                  placeholder="Qty"
+                />
+                {' '}available
+              </div>
+            ) : parseInt(listing.quantity) > 1 ? (
               <div style={{ fontSize: 14, color: '#707070', marginBottom: 12 }}>
                 Quantity: <span style={{ color: '#191919' }}>{listing.quantity} available</span>
               </div>
-            )}
+            ) : null}
 
-            {/* ── Price Block ── */}
+            {/* ── Price Block — inline editable ── */}
             <div style={{ marginTop: 12, marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid #e5e5e5' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 2 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#191919' }}>Price:</span>
-                <span style={{ fontSize: 24, fontWeight: 700, color: '#191919' }}>
-                  US ${parseFloat(listing.price || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+                {editable ? (
+                  <InlineEditField
+                    value={editedFields?.price ?? listing.price}
+                    onChange={(v) => onFieldChange?.('price', v)}
+                    style={{ fontSize: 24, fontWeight: 700, color: '#191919', width: 120 }}
+                    placeholder="0.00"
+                  />
+                ) : (
+                  <span style={{ fontSize: 24, fontWeight: 700, color: '#191919' }}>
+                    US ${parseFloat(listing.price || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
               </div>
               {listing.format === 'FixedPrice' && (
                 <div style={{ fontSize: 12, color: '#707070' }}>Buy It Now</div>
@@ -464,37 +580,40 @@ input[type="radio"][name="tab"] {
               <div style={{ border: '1px solid #e5e5e5', borderRadius: 12, overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                   <tbody>
-                    {specPairs.map((pair, rowIdx) => (
+                    {specPairs.map((pair, rowIdx) => {
+                      const val1 = pair[0];
+                      const val2 = pair[1];
+                      return (
                       <tr key={rowIdx} style={{ background: rowIdx % 2 === 0 ? '#f7f7f7' : '#fff' }}>
                         <td style={{
                           padding: '12px 16px', color: '#707070', fontWeight: 400, width: '18%',
                           borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
                           borderRight: '1px solid #e5e5e5', verticalAlign: 'top',
                         }}>
-                          {pair[0].label}
+                          {val1.label}
                         </td>
                         <td style={{
                           padding: '12px 16px', color: '#191919', fontWeight: 600, width: '32%',
                           borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
                           borderRight: '1px solid #e5e5e5', verticalAlign: 'top',
                         }}>
-                          {pair[0].value}
+                          {editable ? <SpecificsEditCell label={val1.label} value={val1.value} editedFields={editedFields} onFieldChange={onFieldChange} /> : val1.value}
                         </td>
-                        {pair[1] ? (
+                        {val2 ? (
                           <>
                             <td style={{
                               padding: '12px 16px', color: '#707070', fontWeight: 400, width: '18%',
                               borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
                               borderRight: '1px solid #e5e5e5', verticalAlign: 'top',
                             }}>
-                              {pair[1].label}
+                              {val2.label}
                             </td>
                             <td style={{
                               padding: '12px 16px', color: '#191919', fontWeight: 600, width: '32%',
                               borderBottom: rowIdx < specPairs.length - 1 ? '1px solid #e5e5e5' : 'none',
                               verticalAlign: 'top',
                             }}>
-                              {pair[1].value}
+                              {editable ? <SpecificsEditCell label={val2.label} value={val2.value} editedFields={editedFields} onFieldChange={onFieldChange} /> : val2.value}
                             </td>
                           </>
                         ) : (
@@ -503,7 +622,8 @@ input[type="radio"][name="tab"] {
                           }} />
                         )}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -542,8 +662,21 @@ input[type="radio"][name="tab"] {
             </div>
           )}
 
-          {/* ── Item Description ── */}
-          {safeDescription && (
+          {/* ── Item Description — inline editable ── */}
+          {editable ? (
+            <div style={{ marginBottom: 32 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#191919', marginBottom: 16 }}>Item description from the seller</h3>
+              <div style={{ border: '1px solid #e5e5e5', borderRadius: 12, overflow: 'hidden', padding: 8 }}>
+                <InlineEditField
+                  value={editedFields?.description ?? sanitizeDescription(listing.description ?? '')}
+                  onChange={(v) => onFieldChange?.('description', v)}
+                  multiline
+                  style={{ width: '100%', minHeight: 400, fontSize: 14, lineHeight: 1.5, fontFamily: 'Arial, sans-serif', padding: 12 }}
+                  placeholder="Enter HTML description..."
+                />
+              </div>
+            </div>
+          ) : safeDescription ? (
             <div style={{ marginBottom: 32 }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#191919', marginBottom: 16 }}>Item description from the seller</h3>
               <div style={{ border: '1px solid #e5e5e5', borderRadius: 12, overflow: 'hidden' }}>
@@ -556,7 +689,7 @@ input[type="radio"][name="tab"] {
                 />
               </div>
             </div>
-          )}
+          ) : null}
 
         </div>
 

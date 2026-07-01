@@ -719,6 +719,38 @@ export class InventoryWorkbenchService {
     // Save enrichment results to base listing
     await this.listingRepo.save(baseListing);
 
+    // Sync category data to the catalog product so catalog detail pages
+    // automatically show the enriched category without requiring user input.
+    if (baseListing.customLabelSku) {
+      try {
+        const catalogProduct = await this.productRepo.findOne({
+          where: { sku: baseListing.customLabelSku },
+        });
+        if (catalogProduct) {
+          let changed = false;
+          if (baseListing.categoryId && baseListing.categoryId !== catalogProduct.categoryId) {
+            catalogProduct.categoryId = baseListing.categoryId;
+            changed = true;
+          }
+          if (baseListing.categoryName && baseListing.categoryName !== catalogProduct.categoryName) {
+            catalogProduct.categoryName = baseListing.categoryName;
+            changed = true;
+          }
+          if (changed) {
+            await this.productRepo.save(catalogProduct);
+            this.logger.log(
+              `Synced category to catalog product ${catalogProduct.id}: "${baseListing.categoryName}" (${baseListing.categoryId})`,
+            );
+          }
+        }
+      } catch (syncErr) {
+        this.logger.warn(
+          `Failed to sync category to catalog product for SKU ${baseListing.customLabelSku}: ` +
+            `${syncErr instanceof Error ? syncErr.message : syncErr}`,
+        );
+      }
+    }
+
     // Stage 3: Generate marketplace content for US, AU, DE
     const marketplaceListings: Array<{ marketplace: string; listingId: string; title: string }> = [];
     const MARKETPLACES: Array<'US' | 'AU' | 'DE'> = ['US', 'AU', 'DE'];
@@ -897,15 +929,11 @@ export class InventoryWorkbenchService {
       );
     }
 
-    // Auto-trigger enrichment when 2+ images are attached and listing has part number + brand
-    if (merged.length >= 2) {
-      // Fire and forget — the background job handles failures gracefully
-      this.autoTrigger.enqueueAutoEnrich(listingId).catch((err) => {
-        this.logger.warn(
-          `Failed to enqueue auto-enrich for listing ${listingId}: ${err instanceof Error ? err.message : err}`,
-        );
-      });
-    }
+    // Note: Enrichment is NOT auto-triggered here.
+    // The frontend controls when enrichment starts (after verifying 2+ photos are uploaded).
+    // This avoids race conditions where the backend would enqueue enrichment
+    // before the frontend's own inline-enrich call, or before the user has
+    // finished uploading proper photos.
 
     return this.getListingDetail(listingId);
   }

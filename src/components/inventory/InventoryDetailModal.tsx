@@ -136,11 +136,12 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
       });
       setStagedImages([]);
       setUploadZoneKey((k) => k + 1);
-      await refetch();
+      const refetchResult = await refetch();
 
-      // Auto-trigger complete enrichment when exactly 2 images are attached
-      const totalAfterSave = (data?.imageUrls.length ?? 0) + stagedImages.length;
-      if (totalAfterSave >= 2) {
+      // Only trigger enrichment when 2+ proper photos are attached.
+      // Use the refetched data (not the stale closure) for the actual image count.
+      const actualImages = refetchResult.data?.imageUrls ?? [];
+      if (actualImages.length >= 2) {
         setEnrichingListingId(listingId);
         try {
           await inlineEnrich.mutateAsync(listingId);
