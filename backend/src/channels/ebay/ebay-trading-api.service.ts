@@ -37,6 +37,12 @@ function tagValue(block: string, tag: string): string | null {
   return raw.replace(/^<!\[CDATA\[|\]\]>$/g, '');
 }
 
+function parseActiveListItems(xml: string): TradingSellerListItem[] {
+  const section = xml.match(/<ActiveList>[\s\S]*?<\/ActiveList>/i)?.[0];
+  if (!section) return [];
+  return parseItems(section);
+}
+
 function parseItems(xml: string): TradingSellerListItem[] {
   const items: TradingSellerListItem[] = [];
   const blocks = xml.match(/<Item>[\s\S]*?<\/Item>/gi) ?? [];
@@ -119,6 +125,101 @@ export class EbayTradingApiService {
     return MARKETPLACE_SITE_ID[marketplaceId] ?? 0;
   }
 
+  private formatTradingDate(date: Date): string {
+    return date.toISOString().replace(/\.\d{3}Z$/, '.000Z');
+  }
+
+  private async postTradingRequest(
+    storeId: string,
+    callName: string,
+    body: string,
+    marketplaceId?: string | null,
+  ): Promise<string> {
+    const token = await this.auth.getAccessToken(storeId);
+    const siteId = this.resolveSiteId(marketplaceId);
+
+    const { data } = await this.http.post<string>(this.tradingUrl(), body, {
+      headers: {
+        'Content-Type': 'text/xml',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-DEV-NAME': '',
+        'X-EBAY-API-APP-NAME': '',
+        'X-EBAY-API-CERT-NAME': '',
+        'X-EBAY-API-CALL-NAME': callName,
+        'X-EBAY-API-SITEID': String(siteId),
+        'X-EBAY-API-IAF-TOKEN': token,
+      },
+      responseType: 'text',
+      transformResponse: [(r) => r],
+    });
+
+    return String(data);
+  }
+
+  /**
+   * GetMyeBaySelling ActiveList — canonical source for all live seller listings.
+   * GetSellerList requires date windows and misses GTC inventory; ActiveList does not.
+   */
+  async getMyeBaySellingActiveList(
+    storeId: string,
+    options: {
+      page?: number;
+      entriesPerPage?: number;
+      marketplaceId?: string | null;
+    } = {},
+  ): Promise<{
+    items: TradingSellerListItem[];
+    totalPages: number;
+    page: number;
+    hasMore: boolean;
+  }> {
+    const page = options.page ?? 1;
+    const entriesPerPage = Math.min(options.entriesPerPage ?? 200, 200);
+
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <DetailLevel>ReturnAll</DetailLevel>
+  <IncludeWatchCount>true</IncludeWatchCount>
+  <ActiveList>
+    <Include>true</Include>
+    <Pagination>
+      <EntriesPerPage>${entriesPerPage}</EntriesPerPage>
+      <PageNumber>${page}</PageNumber>
+    </Pagination>
+  </ActiveList>
+</GetMyeBaySellingRequest>`;
+
+    const xml = await this.postTradingRequest(
+      storeId,
+      'GetMyeBaySelling',
+      body,
+      options.marketplaceId,
+    );
+
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const err = tagValue(xml, 'LongMessage') ?? 'GetMyeBaySelling failed';
+      this.logger.warn(
+        `Trading API GetMyeBaySelling failed for store ${storeId}: ${err}`,
+      );
+      throw new Error(err);
+    }
+
+    const items = parseActiveListItems(xml);
+    const activeSection =
+      xml.match(/<ActiveList>[\s\S]*?<\/ActiveList>/i)?.[0] ?? xml;
+    const totalPages = Number(
+      tagValue(activeSection, 'TotalNumberOfPages') ?? '1',
+    );
+    return {
+      items,
+      totalPages: Number.isFinite(totalPages) ? totalPages : 1,
+      page,
+      hasMore: page < totalPages,
+    };
+  }
+
   async getSellerList(
     storeId: string,
     options: {
@@ -134,8 +235,11 @@ export class EbayTradingApiService {
   }> {
     const page = options.page ?? 1;
     const entriesPerPage = Math.min(options.entriesPerPage ?? 200, 200);
-    const token = await this.auth.getAccessToken(storeId);
-    const siteId = this.resolveSiteId(options.marketplaceId);
+    const now = new Date();
+    const endFrom = this.formatTradingDate(now);
+    const endTo = this.formatTradingDate(
+      new Date(now.getTime() + 119 * 24 * 60 * 60 * 1000),
+    );
 
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <GetSellerListRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -143,6 +247,8 @@ export class EbayTradingApiService {
   <WarningLevel>High</WarningLevel>
   <GranularityLevel>Coarse</GranularityLevel>
   <IncludeWatchCount>true</IncludeWatchCount>
+  <EndTimeFrom>${endFrom}</EndTimeFrom>
+  <EndTimeTo>${endTo}</EndTimeTo>
   <Pagination>
     <EntriesPerPage>${entriesPerPage}</EntriesPerPage>
     <PageNumber>${page}</PageNumber>
@@ -150,22 +256,12 @@ export class EbayTradingApiService {
   <DetailLevel>ReturnAll</DetailLevel>
 </GetSellerListRequest>`;
 
-    const { data } = await this.http.post<string>(this.tradingUrl(), body, {
-      headers: {
-        'Content-Type': 'text/xml',
-        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-        'X-EBAY-API-DEV-NAME': '',
-        'X-EBAY-API-APP-NAME': '',
-        'X-EBAY-API-CERT-NAME': '',
-        'X-EBAY-API-CALL-NAME': 'GetSellerList',
-        'X-EBAY-API-SITEID': String(siteId),
-        'X-EBAY-API-IAF-TOKEN': token,
-      },
-      responseType: 'text',
-      transformResponse: [(r) => r],
-    });
-
-    const xml = String(data);
+    const xml = await this.postTradingRequest(
+      storeId,
+      'GetSellerList',
+      body,
+      options.marketplaceId,
+    );
     if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
       const err = tagValue(xml, 'LongMessage') ?? 'GetSellerList failed';
       this.logger.warn(`Trading API GetSellerList failed for store ${storeId}: ${err}`);
@@ -182,7 +278,7 @@ export class EbayTradingApiService {
     };
   }
 
-  /** Paginate all active seller listings via Trading API. */
+  /** Paginate all active seller listings via Trading API (GetMyeBaySelling ActiveList). */
   async getAllActiveListings(
     storeId: string,
     marketplaceId?: string | null,
@@ -190,7 +286,7 @@ export class EbayTradingApiService {
     const all: TradingSellerListItem[] = [];
     let page = 1;
     for (;;) {
-      const result = await this.getSellerList(storeId, {
+      const result = await this.getMyeBaySellingActiveList(storeId, {
         page,
         entriesPerPage: 200,
         marketplaceId,
@@ -203,7 +299,9 @@ export class EbayTradingApiService {
       if (!result.hasMore) break;
       page += 1;
       if (page > 100) {
-        this.logger.warn(`Trading API pagination capped at page 100 for store ${storeId}`);
+        this.logger.warn(
+          `Trading API ActiveList pagination capped at page 100 for store ${storeId}`,
+        );
         break;
       }
     }

@@ -224,6 +224,19 @@ export class PublishedListingsSyncService {
           }
         }
       } else {
+        const tradingResult = await this.syncFromTradingApi(
+          account,
+          storeId,
+          payload.marketplaceId ?? null,
+          seenKeys,
+          channelByListing,
+        );
+        processed += tradingResult.processed;
+        created += tradingResult.created;
+        updated += tradingResult.updated;
+        failed += tradingResult.failed;
+        warnings.push(...tradingResult.warnings);
+
         const limit = 50;
         let offset = 0;
 
@@ -287,19 +300,6 @@ export class PublishedListingsSyncService {
           if (!page.next || items.length < limit) break;
           offset += limit;
         }
-
-        const tradingResult = await this.syncFromTradingApi(
-          account,
-          storeId,
-          payload.marketplaceId ?? null,
-          seenKeys,
-          channelByListing,
-        );
-        processed += tradingResult.processed;
-        created += tradingResult.created;
-        updated += tradingResult.updated;
-        failed += tradingResult.failed;
-        warnings.push(...tradingResult.warnings);
       }
 
       await this.accountRepo.update(account.id, {
@@ -544,7 +544,7 @@ export class PublishedListingsSyncService {
 
       if (items.length > 0) {
         this.logger.log(
-          `Trading API fallback for ${account.accountDisplayName}: ${items.length} active, ${created} new, ${updated} updated`,
+          `Trading API ActiveList for ${account.accountDisplayName}: ${items.length} active, ${created} new, ${updated} updated`,
         );
       }
     } catch (e) {
@@ -570,7 +570,11 @@ export class PublishedListingsSyncService {
   ): Promise<{ created: boolean }> {
     const channel = channelByListing.get(item.itemId);
     const listingStatus =
-      item.quantityAvailable <= 0 ? 'out_of_stock' : 'active';
+      item.listingStatus.toLowerCase() !== 'active'
+        ? 'ended'
+        : item.quantityAvailable <= 0
+          ? 'out_of_stock'
+          : 'active';
 
     const performanceMetrics: Record<string, unknown> = {};
     if (item.viewCount != null) performanceMetrics.viewCount = item.viewCount;
