@@ -14,6 +14,7 @@ import type { UpdateProductDto } from './catalog-product.service.js';
 import { TemplateGeneratorService } from './template-generator.service.js';
 import { parseCatalogProductListQuery } from './utils/catalog-product-list-query.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { CategoryLookupService } from './services/category-lookup.service.js';
 
 @Controller('catalog-products')
 @RequirePermissions('catalog.view')
@@ -21,6 +22,7 @@ export class CatalogProductController {
   constructor(
     private readonly productService: CatalogProductService,
     private readonly templateService: TemplateGeneratorService,
+    private readonly categoryLookup: CategoryLookupService,
   ) {}
 
   @Get()
@@ -44,6 +46,33 @@ export class CatalogProductController {
   @RequirePermissions('catalog.update')
   async update(@Param('id') id: string, @Body() dto: Record<string, unknown>) {
     return this.productService.update(id, dto);
+  }
+
+  @Post('backfill-categories')
+  @RequirePermissions('catalog.update')
+  async backfillCategories(@Body() body: { batchSize?: number; concurrency?: number; includeListings?: boolean }) {
+    const catalogResult = await this.categoryLookup.backfillMissingCategories(
+      body.batchSize ?? 10,
+      body.concurrency ?? 2,
+    );
+
+    let listingResult = { scanned: 0, updated: 0, failed: 0 };
+    if (body.includeListings !== false) {
+      listingResult = await this.categoryLookup.backfillListingRecords(
+        body.batchSize ?? 10,
+        body.concurrency ?? 2,
+      );
+    }
+
+    return {
+      catalog: catalogResult,
+      listings: listingResult,
+      total: {
+        scanned: catalogResult.scanned + listingResult.scanned,
+        updated: catalogResult.updated + listingResult.updated,
+        failed: catalogResult.failed + listingResult.failed,
+      },
+    };
   }
 
   @Post('export-templates')

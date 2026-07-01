@@ -108,8 +108,10 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 |--------|------|-------------|------------|
 | GET | `/api/catalog-products` | List catalog products | catalog.view |
 | GET | `/api/catalog-products/:id` | Get product details | catalog.view |
-| PUT | `/api/catalog-products/:id` | Update product | catalog.update |
-| DELETE | `/api/catalog-products/:id` | Delete product | catalog.update |
+| PATCH | `/api/catalog-products/:id` | Update product | catalog.update |
+| PATCH | `/api/catalog-products/by-sku/:sku` | Update product by SKU | catalog.update |
+| POST | `/api/catalog-products/backfill-categories` | Backfill missing eBay category IDs via Taxonomy API | catalog.update |
+| POST | `/api/catalog-products/export-templates` | Export listing templates as ZIP | catalog.export |
 
 ### Compliance
 

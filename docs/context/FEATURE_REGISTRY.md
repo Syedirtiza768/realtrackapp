@@ -46,6 +46,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Storage / image assets | — | `storage` | Implemented | S3 + thumbnails + cleanup |
 | Feature flags | — | `common/feature-flags` | Partial | Admin-gated; route on `/api/api/feature-flags` ⚠️ |
 | Health checks | — | `health` | Implemented | `@Public()` |
+| Auto category lookup (backfill + import) | — | `catalog-import` (`CategoryLookupService`) | Implemented | eBay Taxonomy API; backfill endpoint + import pipeline hook |
 
 ## Summary
 

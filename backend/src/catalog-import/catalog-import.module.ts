@@ -11,6 +11,7 @@ import { CsvImportProcessor } from './processors/csv-import.processor.js';
 import { DuplicateDetectionService } from './services/duplicate-detection.service.js';
 import { EbayComplianceService } from './services/ebay-compliance.service.js';
 import { ComplianceAuditService } from './services/compliance-audit.service.js';
+import { CategoryLookupService } from './services/category-lookup.service.js';
 import { ComplianceController } from './controllers/compliance.controller.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { OpenAiModule } from '../common/openai/openai.module.js';
@@ -47,6 +48,7 @@ import { HeavyJobLimiterModule } from '../common/jobs/heavy-job-limiter.module.j
     ComplianceAuditService,
     CatalogProductService,
     TemplateGeneratorService,
+    CategoryLookupService,
   ],
   exports: [CatalogImportService, DuplicateDetectionService, EbayComplianceService, ComplianceAuditService, CatalogProductService, TemplateGeneratorService],
 })

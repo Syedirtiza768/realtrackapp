@@ -16,6 +16,7 @@ import {
   DuplicateDetectionService,
 } from '../services/duplicate-detection.service.js';
 import { EbayComplianceService } from '../services/ebay-compliance.service.js';
+import { CategoryLookupService } from '../services/category-lookup.service.js';
 import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
 
 export interface CsvImportJobData {
@@ -65,6 +66,7 @@ export class CsvImportProcessor extends WorkerHost {
     private readonly storageService: StorageService,
     private readonly config: ConfigService,
     @Optional() private readonly browseApi?: EbayBrowseApiService,
+    @Optional() private readonly categoryLookup?: CategoryLookupService,
   ) {
     super();
   }
@@ -251,6 +253,7 @@ export class CsvImportProcessor extends WorkerHost {
         }
 
         await this.enrichRowsFromEbayBrowse(validRows);
+        await this.enrichMissingCategories(validRows);
 
         // Intra-import duplicate detection (same file / same import)
         const uniqueRows: ParsedRow[] = [];
@@ -750,6 +753,57 @@ export class CsvImportProcessor extends WorkerHost {
           }
         }),
       );
+    }
+  }
+
+  /**
+   * For rows missing a categoryId, look up the best eBay category via
+   * the Taxonomy API using available product data (brand, partType, title).
+   * Runs with limited concurrency to respect eBay rate limits.
+   */
+  private async enrichMissingCategories(
+    rows: Array<{ data: Record<string, string> }>,
+  ): Promise<void> {
+    if (!this.categoryLookup) return;
+
+    const targets = rows.filter((r) => {
+      const hasCategory = r.data['categoryId']?.trim();
+      const hasQuery = r.data['brand']?.trim() || r.data['title']?.trim();
+      return !hasCategory && hasQuery;
+    });
+    if (targets.length === 0) return;
+
+    this.logger.log(`Looking up eBay categories for ${targets.length} rows missing categoryId`);
+
+    // Concurrency: eBay Taxonomy API is generous, but be polite
+    const concurrency = 3;
+    let lookedUp = 0;
+
+    for (let i = 0; i < targets.length; i += concurrency) {
+      const slice = targets.slice(i, i + concurrency);
+      await Promise.all(
+        slice.map(async (r) => {
+          try {
+            const result = await this.categoryLookup!.lookupCategory(
+              r.data['title'],
+              r.data['brand'],
+              r.data['partType'],
+              r.data['mpn'],
+            );
+            if (result.categoryId) {
+              r.data['categoryId'] = result.categoryId;
+              r.data['categoryName'] = result.categoryName ?? '';
+              lookedUp++;
+            }
+          } catch {
+            // Silently skip — row keeps its null categoryId
+          }
+        }),
+      );
+    }
+
+    if (lookedUp > 0) {
+      this.logger.log(`Category enrichment complete: ${lookedUp}/${targets.length} rows resolved`);
     }
   }
 
