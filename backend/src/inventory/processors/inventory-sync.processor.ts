@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InventoryService } from '../inventory.service.js';
+import { InventoryWorkbenchService } from '../inventory-workbench.service.js';
 
 @Processor('inventory', { concurrency: 1 })
 export class InventorySyncProcessor extends WorkerHost {
@@ -11,6 +12,7 @@ export class InventorySyncProcessor extends WorkerHost {
   constructor(
     private readonly inventoryService: InventoryService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly workbench: InventoryWorkbenchService,
   ) {
     super();
   }
@@ -27,6 +29,10 @@ export class InventorySyncProcessor extends WorkerHost {
 
       case 'duplicate-scan':
         await this.handleDuplicateScan(job);
+        break;
+
+      case 'auto-enrich':
+        await this.handleAutoEnrich(job);
         break;
 
       default:
@@ -67,5 +73,24 @@ export class InventorySyncProcessor extends WorkerHost {
   private async handleDuplicateScan(_job: Job): Promise<void> {
     const duplicates = await this.inventoryService.findDuplicates(0.7);
     this.logger.log(`Duplicate scan found ${duplicates.length} potential pairs`);
+  }
+
+  /**
+   * Auto-enrich a single listing: vision lookup → AI marketplace content (US/AU/DE) inline.
+   * No pipeline job — all done synchronously right in the modal.
+   */
+  private async handleAutoEnrich(job: Job<{ listingId: string }>): Promise<void> {
+    const { listingId } = job.data;
+    this.logger.log(`Auto-enrich: starting inline enrichment for listing ${listingId}`);
+
+    try {
+      // Complete inline enrichment: vision lookup + AI content generation for US/AU/DE
+      await this.workbench.inlineEnrichListing(listingId);
+      this.logger.log(`Auto-enrich: inline enrichment completed for listing ${listingId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Auto-enrich failed for listing ${listingId}: ${message}`);
+      // Don't throw — let the listing stay visible so the user can retry
+    }
   }
 }

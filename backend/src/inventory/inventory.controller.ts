@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { InventoryService } from './inventory.service.js';
 import { InventoryWorkbenchService } from './inventory-workbench.service.js';
+import { InventoryAutoTriggerService } from './inventory-auto-trigger.service.js';
 import {
   AdjustInventoryDto,
   ReserveInventoryDto,
@@ -28,6 +29,8 @@ import {
   InventoryBulkPartLookupDto,
   InventoryEnrichDto,
   UpdateListingImagesDto,
+  InventoryInlineEnrichDto,
+  InventorySendToCatalogDto,
 } from './dto/inventory-workbench.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -39,9 +42,17 @@ export class InventoryController {
   constructor(
     private readonly inventoryService: InventoryService,
     private readonly workbench: InventoryWorkbenchService,
+    private readonly autoTrigger: InventoryAutoTriggerService,
   ) {}
 
   /* ── Workbench (must be registered before :listingId routes) ── */
+
+  @Get('listings/:listingId/enrichment-status')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'Get current enrichment status + stage for a listing (idle/ready/enriching/completed/failed + stage name)' })
+  async getEnrichmentStatus(@Param('listingId', ParseUUIDPipe) listingId: string) {
+    return this.autoTrigger.queryStatusWithStage(listingId);
+  }
 
   @Get('listings')
   @RequirePermissions('inventory.view')
@@ -91,6 +102,58 @@ export class InventoryController {
   })
   bulkLookupParts(@Body() dto: InventoryBulkPartLookupDto) {
     return this.workbench.bulkLookupParts(dto.listingIds);
+  }
+
+  @Post('inline-enrich')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Complete inline enrichment: vision part lookup + AI content generation for US/AU/DE marketplaces, no pipeline needed',
+  })
+  inlineEnrich(@Body() dto: InventoryInlineEnrichDto) {
+    return this.workbench.inlineEnrichListing(dto.listingId);
+  }
+
+  /* ── Filter metadata ───────────────────────────────────── */
+
+  @Get('filters/brands')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'Distinct brand values from listing records' })
+  getFilterBrands() {
+    return this.workbench.getFilterBrands();
+  }
+
+  @Get('filters/makes')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'Distinct extracted make values from listing records' })
+  getFilterMakes() {
+    return this.workbench.getFilterMakes();
+  }
+
+  @Get('filters/models')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'Distinct extracted model values, optionally filtered by make' })
+  getFilterModels(@Query('make') make?: string) {
+    return this.workbench.getFilterModels(make);
+  }
+
+  @Get('filters/categories')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'Distinct category names from listing records' })
+  getFilterCategories() {
+    return this.workbench.getFilterCategories();
+  }
+
+  /* ── Send to Catalog ───────────────────────────────────── */
+
+  @Post('send-to-catalog')
+  @Throttle({ medium: { limit: 10, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create/update catalog products from enriched listing data' })
+  sendToCatalog(@Body() dto: InventorySendToCatalogDto) {
+    return this.workbench.sendToCatalog(dto.listingIds);
   }
 
   @Post('send-to-pipeline')

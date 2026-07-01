@@ -232,15 +232,26 @@ export class EbayIntegrationsOAuthService {
       });
 
       this.logger.log(`Queuing policy sync for account ${savedAcct.id}`);
-      this.policySync.syncPolicies(
-        savedAcct.id,
-        pending.organizationId,
-        pending.userId,
-      ).then((result) => {
-        this.logger.log(`Auto-policy sync complete for ${savedAcct.id}: ${result.synced} policies`);
-      }).catch((err: unknown) => {
-        this.logger.error({ errMsg: (err as Error)?.message }, `Auto-policy sync failed for ${savedAcct.id}`);
-      });
+      // Defer sync to next tick so it fully detaches from the HTTP request context.
+      // Running async work inside an @Res() controller can deadlock TypeORM's
+      // connection pool because NestJS never "completes" the request observable.
+      const acctId = savedAcct.id;
+      const orgId = pending.organizationId;
+      const usrId = pending.userId;
+      setTimeout(() => {
+        this.policySync
+          .syncPolicies(acctId, orgId, usrId)
+          .then((result) => {
+            this.logger.log(
+              `Auto-policy sync complete for ${acctId}: ${result.synced} policies — ${result.message}`,
+            );
+          })
+          .catch((err: unknown) => {
+            this.logger.error(
+              `Auto-policy sync failed for ${acctId}: ${err instanceof Error ? err.message : err}`,
+            );
+          });
+      }, 1000);
 
       return { connectedEbayAccountId: savedAcct.id };
     } catch (e: unknown) {

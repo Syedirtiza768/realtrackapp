@@ -37,6 +37,7 @@ import AIUploadWizard from './components/motors/AIUploadWizard';
 import PipelineWizard from './components/pipeline/PipelineWizard';
 import EbayPreviewPage from './components/preview/EbayPreviewPage';
 import InventoryManager from './components/inventory/InventoryManager';
+import InventoryListingEditor from './components/inventory/InventoryListingEditor';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
@@ -80,6 +81,7 @@ function App() {
                             <Route path="/catalog/import" element={<ProtectedRoute permissions={['catalog.import']}><CatalogImportDashboard /></ProtectedRoute>} />
                             <Route path="/catalog/motors-filters" element={<ProtectedRoute permissions={['catalog.view']}><CatalogMotorsFiltersPage /></ProtectedRoute>} />
                             <Route path="/inventory" element={<ProtectedRoute permissions={['inventory.view']}><InventoryManager /></ProtectedRoute>} />
+          <Route path="/inventory/:id/edit" element={<ProtectedRoute permissions={['inventory.view', 'listings.update']}><InventoryListingEditor /></ProtectedRoute>} />
                             <Route path="/bulk-actions" element={<ProtectedRoute permissions={['listings.update']}><BulkActionsPage /></ProtectedRoute>} />
                             <Route path="/orders" element={<ProtectedRoute permissions={['orders.view']}><OrdersPage /></ProtectedRoute>} />
                             <Route path="/settings" element={<ProtectedRoute permissions={['settings.view']}><SettingsPage /></ProtectedRoute>} />

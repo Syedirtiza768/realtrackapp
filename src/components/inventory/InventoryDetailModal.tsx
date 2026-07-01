@@ -14,9 +14,10 @@ import {
   Sparkles,
   Loader2,
   Upload,
+  CheckCircle2,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { useInventoryDetail, useInventoryPartLookup, useUpdateInventoryImages } from '../../lib/inventoryApi';
+import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages } from '../../lib/inventoryApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import ImageUploadZone from '../listings/ImageUploadZone';
 import type { UploadedImage } from '../../lib/storageApi';
@@ -24,7 +25,6 @@ import type { UploadedImage } from '../../lib/storageApi';
 interface Props {
   listingId: string | null;
   onClose: () => void;
-  canFetchDetails?: boolean;
 }
 
 function stripHtml(html: string): string {
@@ -54,9 +54,20 @@ function DetailRow({
   );
 }
 
-export default function InventoryDetailModal({ listingId, onClose, canFetchDetails }: Props) {
+function stageLabel(stage: string | null): string {
+  const labels: Record<string, string> = {
+    vision_lookup: 'Detecting part from photos...',
+    enrichment: 'Running AI enrichment...',
+    generating_us: 'Generating US eBay listing...',
+    generating_au: 'Generating AU eBay listing...',
+    generating_de: 'Generating DE eBay listing...',
+  };
+  return stage ? (labels[stage] ?? 'Enriching...') : 'Enriching...';
+}
+
+export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const { data, isLoading, refetch } = useInventoryDetail(listingId);
-  const partLookup = useInventoryPartLookup();
+  const inlineEnrich = useInlineEnrichListing();
   const updateImages = useUpdateInventoryImages();
   const { has: hasPermission } = usePermissions();
   const canUploadImages = hasPermission('listings.update');
@@ -67,6 +78,16 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
   const [uploadZoneKey, setUploadZoneKey] = useState(0);
   const [stagedImages, setStagedImages] = useState<UploadedImage[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [enrichingListingId, setEnrichingListingId] = useState<string | null>(null);
+
+  // Poll enrichment status when actively enriching
+  const enrichStatusPoll = useEnrichmentStatus(enrichingListingId);
+  const enrichStage = enrichStatusPoll.data?.stage ?? null;
+  const enrichStatus = enrichStatusPoll.data?.status ?? null;
+
+  const isEnriching = enrichStatus === 'enriching';
+  const enrichCompleted = enrichStatus === 'completed';
+  const enrichFailed = enrichStatus === 'failed';
 
   const listing = data?.listing as {
     customLabelSku?: string;
@@ -116,10 +137,22 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
       setStagedImages([]);
       setUploadZoneKey((k) => k + 1);
       await refetch();
+
+      // Auto-trigger complete enrichment when exactly 2 images are attached
+      const totalAfterSave = (data?.imageUrls.length ?? 0) + stagedImages.length;
+      if (totalAfterSave >= 2) {
+        setEnrichingListingId(listingId);
+        try {
+          await inlineEnrich.mutateAsync(listingId);
+          await refetch();
+        } catch {
+          // polling will show 'failed' status
+        }
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to save photos');
     }
-  }, [listingId, stagedImages, updateImages, refetch]);
+  }, [listingId, stagedImages, updateImages, refetch, data?.imageUrls.length, inlineEnrich]);
 
   useEffect(() => {
     if (!listingId) return;
@@ -187,32 +220,30 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
           </button>
         </div>
 
-        {canFetchDetails && listingId && !isLoading && (
+        {listingId && !isLoading && enrichingListingId && (
           <div className="px-5 py-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await partLookup.mutateAsync(listingId);
-                  await refetch();
-                } catch {
-                  /* parent list shows action errors if needed */
-                }
-              }}
-              disabled={partLookup.isPending || (data?.imageUrls.length ?? 0) < 2}
-              className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Vision: OEM + brand + photos → title, category, SEO notes"
-            >
-              {partLookup.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
+            <div className="flex items-center gap-2 text-sm">
+              {isEnriching && (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                  <span className="text-slate-600 dark:text-slate-400">
+                    {stageLabel(enrichStage)}
+                  </span>
+                </>
               )}
-              Fetch details
-            </button>
-            {(data?.imageUrls.length ?? 0) < 2 && (
-              <p className="text-[11px] text-amber-400 mt-1">Requires 2+ photos (label + overall)</p>
-            )}
+              {enrichCompleted && (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span className="text-emerald-500 font-medium">Enrichment complete</span>
+                  <span className="text-xs text-slate-500">SEO listings created for US, AU, DE</span>
+                </>
+              )}
+              {enrichFailed && (
+                <span className="text-amber-400 text-xs">
+                  Enrichment failed — you can retry by re-uploading photos or from inventory actions.
+                </span>
+              )}
+            </div>
           </div>
         )}
 
@@ -289,7 +320,7 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
                       <Upload className="h-4 w-4" />
                       Add photos
                       <span className="text-xs font-normal text-slate-500">
-                        (min 2 for Fetch details: label + overall)
+                        (2 required: label close-up + overall shot for automatic enrichment)
                       </span>
                     </div>
                     <ImageUploadZone
@@ -403,6 +434,65 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
                   </div>
                 )}
 
+                {data.storeListings && data.storeListings.length > 0 && (
+                  <div>
+                    <h5 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                      Live eBay store listings
+                    </h5>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-slate-500 dark:text-slate-400 text-left border-b border-slate-200 dark:border-slate-700">
+                            <th className="pb-2 pr-2 font-medium">Store</th>
+                            <th className="pb-2 pr-2 font-medium">Mkt</th>
+                            <th className="pb-2 pr-2 font-medium">Price</th>
+                            <th className="pb-2 pr-2 font-medium">Qty</th>
+                            <th className="pb-2 pr-2 font-medium">Status</th>
+                            <th className="pb-2 font-medium">Offer</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.storeListings.map((s) => (
+                            <tr
+                              key={`${s.storeId}-${s.marketplaceId}`}
+                              className="border-b border-slate-100 dark:border-slate-800"
+                            >
+                              <td className="py-1.5 pr-2 text-slate-700 dark:text-slate-200">
+                                {s.storeName}
+                              </td>
+                              <td className="py-1.5 pr-2 font-mono text-slate-500">
+                                {s.marketplaceId.replace('EBAY_', '')}
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                {s.price != null ? `$${s.price.toFixed(2)}` : '—'}
+                              </td>
+                              <td className="py-1.5 pr-2">{s.quantity ?? '—'}</td>
+                              <td className="py-1.5 pr-2 capitalize">{s.status}</td>
+                              <td className="py-1.5">
+                                {s.listingUrl ? (
+                                  <a
+                                    href={s.listingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5"
+                                  >
+                                    {s.offerId?.slice(0, 8) ?? 'View'}
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-500 font-mono">
+                                    {s.offerId?.slice(0, 10) ?? '—'}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {data.marketplaceVariants.length > 0 && (
                   <div>
                     <h5 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
@@ -490,6 +580,13 @@ export default function InventoryDetailModal({ listingId, onClose, canFetchDetai
                     </div>
                   </div>
                 )}
+
+                <Link
+                  to={`/inventory/${listingId}/edit`}
+                  className="text-xs font-medium text-purple-400 hover:underline"
+                >
+                  Open full editor →
+                </Link>
 
                 <Link
                   to="/catalog"

@@ -38,7 +38,10 @@ export class RequestTimingInterceptor implements NestInterceptor {
   private recordTiming(req: Request, res: Response, start: bigint): void {
     const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
     const rounded = Math.round(durationMs * 100) / 100;
-    res.setHeader('X-Response-Time-Ms', String(rounded));
+
+    if (!res.headersSent) {
+      res.setHeader('X-Response-Time-Ms', String(rounded));
+    }
 
     if (durationMs >= this.slowThresholdMs) {
       this.logger.warn(

@@ -1203,9 +1203,6 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       );
 
       if (products.length > 0 && upsertCatalogProducts) {
-        const withFitment = products.filter(
-          (p) => Array.isArray(p.fitmentData) && (p.fitmentData as unknown[]).length > 0,
-        ).length;
         const CHUNK = 500;
 
         const skusToMerge = products.map((p) => p.sku?.trim()).filter((s): s is string => Boolean(s));
@@ -1231,8 +1228,28 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           'source_file', 'source_row', 'pipeline_job_id', 'fitment_data',
         ] as const;
 
-        for (let i = 0; i < products.length; i += CHUNK) {
-          const batch = products.slice(i, i + CHUNK);
+        // Deduplicate products by SKU (keep last occurrence) to prevent
+        // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+        const dedupedProductMap = new Map<string, (typeof products)[0]>();
+        const productsNoSku: (typeof products) = [];
+        for (const p of products) {
+          const s = p.sku?.trim();
+          if (s) dedupedProductMap.set(s, p);
+          else productsNoSku.push(p);
+        }
+        const dedupedProducts = [...dedupedProductMap.values(), ...productsNoSku];
+        if (dedupedProducts.length < products.length) {
+          this.logger.warn(
+            `Job ${jobId} [${marketplace}]: Deduplicated ${products.length} → ${dedupedProducts.length} catalog products by SKU`,
+          );
+        }
+
+        const withFitment = dedupedProducts.filter(
+          (p) => Array.isArray(p.fitmentData) && (p.fitmentData as unknown[]).length > 0,
+        ).length;
+
+        for (let i = 0; i < dedupedProducts.length; i += CHUNK) {
+          const batch = dedupedProducts.slice(i, i + CHUNK);
           const withSku = batch.filter((p) => p.sku?.trim());
           const withoutSku = batch.filter((p) => !p.sku?.trim());
 
@@ -1256,7 +1273,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           }
         }
         this.logger.log(
-          `Job ${jobId} [${marketplace}]: Saved ${products.length} products to catalog (${withFitment} with fitment rows)`,
+          `Job ${jobId} [${marketplace}]: Saved ${dedupedProducts.length} products to catalog (${withFitment} with fitment rows)`,
         );
       } else if (products.length > 0) {
         this.logger.log(
@@ -1265,6 +1282,22 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       }
 
       if (listingRecords.length > 0) {
+        // Deduplicate listing records by customLabelSku (keep last occurrence) to prevent
+        // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+        const dedupedLrMap = new Map<string, (typeof listingRecords)[0]>();
+        const lrNoSku: (typeof listingRecords) = [];
+        for (const lr of listingRecords) {
+          const s = lr.customLabelSku?.trim();
+          if (s) dedupedLrMap.set(s, lr);
+          else lrNoSku.push(lr);
+        }
+        const dedupedListingRecords = [...dedupedLrMap.values(), ...lrNoSku];
+        if (dedupedListingRecords.length < listingRecords.length) {
+          this.logger.warn(
+            `Job ${jobId} [${marketplace}]: Deduplicated ${listingRecords.length} → ${dedupedListingRecords.length} listing records by SKU`,
+          );
+        }
+
         const CHUNK = 500;
         let totalInserted = 0;
         // Map entity property names → DB column names (pipeline_job_id uses explicit name)
@@ -1304,9 +1337,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         };
         const ALL_COLS = Object.values(PROP_TO_COL); // all columns for INSERT / UPDATE on conflict
 
-        for (let i = 0; i < listingRecords.length; i += CHUNK) {
+        for (let i = 0; i < dedupedListingRecords.length; i += CHUNK) {
           try {
-            const batch = listingRecords.slice(i, i + CHUNK);
+            const batch = dedupedListingRecords.slice(i, i + CHUNK);
             // Build parameterised INSERT … ON CONFLICT DO UPDATE
             const values: unknown[] = [];
             const rowsSql: string[] = [];
@@ -1344,7 +1377,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           }
         }
         this.logger.log(
-          `Job ${jobId} [${marketplace}]: Attempted ${listingRecords.length} listing records, upserted ${totalInserted}`,
+          `Job ${jobId} [${marketplace}]: Attempted ${dedupedListingRecords.length} listing records, upserted ${totalInserted}`,
         );
       } else {
         this.logger.warn(`Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`);

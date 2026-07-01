@@ -11,19 +11,23 @@ import {
   ChevronDown,
   ChevronUp,
   Car,
-  Workflow,
   RefreshCw,
   Send,
-  Sparkles,
+  Calendar,
+  BookMarked,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import {
   useInventoryListings,
-  useInventoryPartLookup,
-  useInventoryBulkPartLookup,
-  useSendToPipeline,
+  useFilterBrands,
+  useFilterMakes,
+  useFilterModels,
+  useFilterCategories,
+  useSendToCatalog,
   type InventoryListingItem,
+  type EnrichmentStatus,
+  type InventoryStoreListing,
 } from '../../lib/inventoryApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import InventoryDetailModal from './InventoryDetailModal';
@@ -43,32 +47,113 @@ function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
   return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
 }
 
-function marketplaceSummary(item: InventoryListingItem): string {
+function EnrichmentBadge({ status, stage }: { status: EnrichmentStatus; stage?: string | null }) {
+  const stageHint = stage
+    ? { vision_lookup: 'Vision...', enrichment: 'AI Enrich...', generating_us: 'US...', generating_au: 'AU...', generating_de: 'DE...' }[stage] ?? stage
+    : undefined;
+
+  const config: Record<
+    EnrichmentStatus,
+    { variant: 'default' | 'success' | 'destructive' | 'warning' | 'secondary' | 'outline'; label: string; pulse?: boolean }
+  > = {
+    idle: { variant: 'outline', label: 'Idle' },
+    ready: { variant: 'warning', label: 'Ready', pulse: true },
+    enriching: { variant: 'default', label: stageHint ?? 'Enriching...', pulse: true },
+    completed: { variant: 'success', label: 'Enriched' },
+    failed: { variant: 'destructive', label: 'Failed' },
+  };
+  const cfg = config[status] ?? { variant: 'outline', label: status };
+  return (
+    <Badge variant={cfg.variant} className={cfg.pulse ? 'animate-pulse' : ''}>
+      {cfg.label}
+    </Badge>
+  );
+}
+
+function MarketplaceSummary({ item }: { item: InventoryListingItem }) {
   const mkts = (item.marketplaceVariants ?? [])
     .map((v) => v.marketplace)
     .filter((m): m is string => Boolean(m));
-  if (mkts.length === 0) return '—';
-  return [...new Set(mkts)].join(', ');
+  if (mkts.length === 0) return <span className="text-xs text-slate-500">—</span>;
+  return (
+    <span className="text-xs">
+      {mkts.map((m) => (
+        <span key={m} className="inline-block mr-1 px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-300 text-[10px] font-medium">
+          {m}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function marketplaceShort(id: string): string {
+  if (id.includes('AU')) return 'AU';
+  if (id.includes('DE')) return 'DE';
+  return 'US';
+}
+
+function StoreListingsSummary({ listings }: { listings: InventoryStoreListing[] }) {
+  if (!listings.length) {
+    return <span className="text-xs text-slate-500">—</span>;
+  }
+  return (
+    <div className="space-y-1 max-w-[200px]">
+      {listings.map((s) => (
+        <div
+          key={`${s.storeId}-${s.marketplaceId}`}
+          className="text-[10px] leading-tight"
+          title={s.offerId ? `Offer: ${s.offerId}` : undefined}
+        >
+          <span className="text-slate-600 dark:text-slate-300 truncate">{s.storeName}</span>
+          <span className="text-slate-400"> · {marketplaceShort(s.marketplaceId)}</span>
+          {s.price != null && (
+            <span className="text-emerald-500 dark:text-emerald-400"> ${s.price.toFixed(2)}</span>
+          )}
+          {s.quantity != null && (
+            <span className="text-slate-500"> ×{s.quantity}</span>
+          )}
+          <span
+            className={`ml-1 capitalize ${
+              s.status === 'published'
+                ? 'text-emerald-500'
+                : s.status === 'failed'
+                  ? 'text-red-400'
+                  : 'text-slate-400'
+            }`}
+          >
+            {s.status}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function InventoryManager() {
   const navigate = useNavigate();
   const { has: canEnrich } = usePermissions();
-  const canFetchDetails = canEnrich('inventory.enrich');
-  const canSendToPipeline = canFetchDetails;
+  const canSendToCatalog = canEnrich('inventory.enrich');
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [missingImagesFilter, setMissingImagesFilter] = useState(false);
+
+  // Advanced filters
+  const [dateAddedFrom, setDateAddedFrom] = useState('');
+  const [dateAddedTo, setDateAddedTo] = useState('');
+  const [brandFilter, setBrandFilter] = useState('');
+  const [makeFilter, setMakeFilter] = useState('');
+  const [modelFilter, setModelFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [lookupRowId, setLookupRowId] = useState<string | null>(null);
-  const [requeueWarning, setRequeueWarning] = useState<string | null>(null);
-  const [pendingSend, setPendingSend] = useState<string[] | null>(null);
+  const [catalogSuccess, setCatalogSuccess] = useState<string | null>(null);
   const limit = 25;
 
   useEffect(() => {
@@ -88,86 +173,45 @@ export default function InventoryManager() {
     status: statusFilter || undefined,
     search: debouncedSearch || undefined,
     missingImages: missingImagesFilter || undefined,
+    dateAddedFrom: dateAddedFrom || undefined,
+    dateAddedTo: dateAddedTo || undefined,
+    brand: brandFilter || undefined,
+    make: makeFilter || undefined,
+    model: modelFilter || undefined,
+    category: categoryFilter || undefined,
   });
 
-  const sendMutation = useSendToPipeline();
-  const partLookup = useInventoryPartLookup();
-  const bulkPartLookup = useInventoryBulkPartLookup();
+  // Filter metadata
+  const { data: brands } = useFilterBrands();
+  const { data: makes } = useFilterMakes();
+  const { data: models } = useFilterModels(makeFilter || undefined);
+  const { data: categories } = useFilterCategories();
+
+  const sendToCatalogMutation = useSendToCatalog();
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
 
   const selectedItems = items.filter((i) => selected.has(i.id));
-  const selectedWithPriorJob = selectedItems.filter((i) => i.hasCompletedPipelineJob === true);
 
-  const executeSendToPipeline = useCallback(
-    async (listingIds: string[]) => {
-      setActionError(null);
-      setRequeueWarning(null);
-      setPendingSend(null);
-      try {
-        const { job, warnings } = await sendMutation.mutateAsync(listingIds);
-        setSelected(new Set());
-        navigate(`/pipeline?job=${job.id}`);
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : 'Failed to send to pipeline');
-      }
-    },
-    [sendMutation, navigate],
-  );
-
-  const handleSendToPipeline = useCallback(() => {
-    if (!canSendToPipeline || selected.size === 0) return;
-
-    const ids = Array.from(selected);
-    if (selectedWithPriorJob.length > 0) {
-      const skus = selectedWithPriorJob.map((i) => i.sku || i.id).join(', ');
-      setRequeueWarning(
-        `${selectedWithPriorJob.length} selected part(s) were previously enriched (${skus}). A new pipeline job will be created.`,
-      );
-      setPendingSend(ids);
-      return;
-    }
-
-    void executeSendToPipeline(ids);
-  }, [canSendToPipeline, selected, selectedWithPriorJob, executeSendToPipeline]);
-
-  const confirmRequeue = useCallback(() => {
-    if (pendingSend) void executeSendToPipeline(pendingSend);
-  }, [pendingSend, executeSendToPipeline]);
-
-  const handleFetchDetails = useCallback(
-    async (listingId: string) => {
-      if (!canFetchDetails) return;
-      setActionError(null);
-      setLookupRowId(listingId);
-      try {
-        await partLookup.mutateAsync(listingId);
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : 'Fetch details failed');
-      } finally {
-        setLookupRowId(null);
-      }
-    },
-    [canFetchDetails, partLookup],
-  );
-
-  const handleBulkFetchDetails = useCallback(async () => {
-    if (!canFetchDetails || selected.size === 0) return;
+  const handleSendToCatalog = useCallback(async () => {
+    if (!canSendToCatalog || selected.size === 0) return;
     setActionError(null);
+    setCatalogSuccess(null);
     try {
-      const result = await bulkPartLookup.mutateAsync(Array.from(selected));
+      const result = await sendToCatalogMutation.mutateAsync(Array.from(selected));
+      const succeeded = result.results.filter((r) => r.success).length;
       const failed = result.results.filter((r) => !r.success);
+      setCatalogSuccess(`${succeeded} part(s) sent to catalog`);
       if (failed.length > 0) {
-        setActionError(
-          `${failed.length} fetch failed: ${failed.map((f) => f.error).filter(Boolean).join('; ')}`,
-        );
+        setActionError(`${failed.length} failed: ${failed.map((f) => f.error).filter(Boolean).join('; ')}`);
       }
+      setSelected(new Set());
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Bulk fetch details failed');
+      setActionError(err instanceof Error ? err.message : 'Failed to send to catalog');
     }
-  }, [canFetchDetails, selected, bulkPartLookup]);
+  }, [canSendToCatalog, selected, sendToCatalogMutation]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -186,6 +230,18 @@ export default function InventoryManager() {
     }
   };
 
+  const clearFilters = () => {
+    setDateAddedFrom('');
+    setDateAddedTo('');
+    setBrandFilter('');
+    setMakeFilter('');
+    setModelFilter('');
+    setCategoryFilter('');
+    setPage(1);
+  };
+
+  const hasActiveFilters = dateAddedFrom || dateAddedTo || brandFilter || makeFilter || modelFilter || categoryFilter;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -195,7 +251,7 @@ export default function InventoryManager() {
             Inventory
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Fetch details from OEM, brand, and photos — upload photos in part detail, then send to the enrichment pipeline (US / AU / DE)
+            Upload 2 photos per part to auto-enrich (vision → AI → SEO listings for US/AU/DE). Then send to catalog.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -209,73 +265,39 @@ export default function InventoryManager() {
             Refresh
           </button>
 
-          {canFetchDetails && selected.size > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={handleBulkFetchDetails}
-                disabled={bulkPartLookup.isPending || sendMutation.isPending}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-colors disabled:opacity-50"
-              >
-                {bulkPartLookup.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                Fetch details ({selected.size})
-              </button>
-              <button
-                type="button"
-                onClick={handleSendToPipeline}
-                disabled={sendMutation.isPending || bulkPartLookup.isPending}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-500 transition-colors disabled:opacity-50"
-              >
-                {sendMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                Send to pipeline ({selected.size})
-              </button>
-            </>
+          {canSendToCatalog && selected.size > 0 && (
+            <button
+              type="button"
+              onClick={handleSendToCatalog}
+              disabled={sendToCatalogMutation.isPending}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition-colors disabled:opacity-50"
+            >
+              {sendToCatalogMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <BookMarked className="h-4 w-4" />
+              )}
+              Send to catalog ({selected.size})
+            </button>
           )}
         </div>
       </div>
 
-      {requeueWarning && (
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm text-amber-300 font-medium">Re-queue enrichment?</p>
-                  <p className="text-xs text-amber-400/90 mt-1">{requeueWarning}</p>
-                </div>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRequeueWarning(null);
-                    setPendingSend(null);
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmRequeue}
-                  disabled={sendMutation.isPending}
-                  className="px-3 py-1.5 rounded-lg text-sm bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {catalogSuccess && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-900/20 border border-emerald-700/50">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <p className="text-emerald-400 text-sm">{catalogSuccess}</p>
+        </div>
+      )}
+
+      {(actionError || loadError) && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-red-900/20 border border-red-900/50">
+          <XCircle className="h-4 w-4 text-red-400 mt-0.5" />
+          <p className="text-red-400 text-sm">
+            {actionError ??
+              (loadError instanceof Error ? loadError.message : 'Failed to load inventory')}
+          </p>
+        </div>
       )}
 
       <Card>
@@ -307,7 +329,7 @@ export default function InventoryManager() {
               <option value="ready">Ready</option>
               <option value="published">Published</option>
             </select>
-            <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 cursor-pointer whitespace-nowrap">
               <input
                 type="checkbox"
                 checked={missingImagesFilter}
@@ -318,21 +340,111 @@ export default function InventoryManager() {
                 className="rounded border-slate-300 dark:border-slate-600 bg-slate-800 text-blue-500"
               />
               <ImageIcon className="h-4 w-4 text-amber-400" />
-              Missing Images Only
+              Missing Images
             </label>
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm border transition-colors ${
+                showAdvancedFilters || hasActiveFilters
+                  ? 'bg-blue-900/30 border-blue-700/50 text-blue-300'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              <Calendar className="h-4 w-4" />
+              Filters
+              {hasActiveFilters && <span className="ml-1 w-2 h-2 rounded-full bg-blue-400" />}
+            </button>
           </div>
+
+          {showAdvancedFilters && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Date Added From</label>
+                  <input
+                    type="date"
+                    value={dateAddedFrom}
+                    onChange={(e) => { setDateAddedFrom(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Date Added To</label>
+                  <input
+                    type="date"
+                    value={dateAddedTo}
+                    onChange={(e) => { setDateAddedTo(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Brand</label>
+                  <select
+                    value={brandFilter}
+                    onChange={(e) => { setBrandFilter(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">All Brands</option>
+                    {(brands ?? []).map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Make</label>
+                  <select
+                    value={makeFilter}
+                    onChange={(e) => { setMakeFilter(e.target.value); setModelFilter(''); setPage(1); }}
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">All Makes</option>
+                    {(makes ?? []).map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Model</label>
+                  <select
+                    value={modelFilter}
+                    onChange={(e) => { setModelFilter(e.target.value); setPage(1); }}
+                    disabled={!makeFilter}
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 disabled:opacity-40"
+                  >
+                    <option value="">All Models</option>
+                    {(models ?? []).map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Category</label>
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">All Categories</option>
+                    {(categories ?? []).map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="mt-3 text-xs text-blue-400 hover:underline"
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {(actionError || loadError) && (
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-red-900/20 border border-red-900/50">
-          <XCircle className="h-4 w-4 text-red-400 mt-0.5" />
-          <p className="text-red-400 text-sm">
-            {actionError ??
-              (loadError instanceof Error ? loadError.message : 'Failed to load inventory')}
-          </p>
-        </div>
-      )}
 
       {isLoading && (
         <div className="flex justify-center py-12">
@@ -369,6 +481,7 @@ export default function InventoryManager() {
                     <th className="pb-3 pr-3">SKU / Title</th>
                     <th className="pb-3 pr-3">Brand</th>
                     <th className="pb-3 pr-3">Marketplaces</th>
+                    <th className="pb-3 pr-3">eBay Stores</th>
                     <th className="pb-3 pr-3">
                       <span className="flex items-center gap-1">
                         <Car className="h-3 w-3" /> Fitments
@@ -376,8 +489,8 @@ export default function InventoryManager() {
                     </th>
                     <th className="pb-3 pr-3">Validation</th>
                     <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3 pr-3">Pipeline</th>
-                    <th className="pb-3">Actions</th>
+                    <th className="pb-3 pr-3">Enrichment</th>
+                    <th className="pb-3">Catalog</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -417,7 +530,7 @@ export default function InventoryManager() {
                               Intake
                             </Badge>
                           )}
-                          {item.hasCompletedPipelineJob && (
+                          {item.enrichmentStatus === 'completed' && (
                             <Badge variant="warning" className="ml-2 text-[10px] py-0">
                               Enriched
                             </Badge>
@@ -441,8 +554,11 @@ export default function InventoryManager() {
                           {item.brand}
                         </span>
                       </td>
-                      <td className="py-3 pr-3 text-xs text-slate-500 dark:text-slate-400">
-                        {marketplaceSummary(item)}
+                      <td className="py-3 pr-3">
+                        <MarketplaceSummary item={item} />
+                      </td>
+                      <td className="py-3 pr-3">
+                        <StoreListingsSummary listings={item.storeListings ?? []} />
                       </td>
                       <td className="py-3 pr-3">
                         <span
@@ -492,38 +608,17 @@ export default function InventoryManager() {
                       <td className="py-3 pr-3">
                         <StatusBadge status={item.status} />
                       </td>
-                      <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
-                        {item.pipelineJobId ? (
-                          <Link
-                            to={`/pipeline?job=${item.pipelineJobId}`}
-                            className="inline-flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 font-mono"
-                          >
-                            <Workflow className="h-3 w-3" />
-                            {item.pipelineJobId.slice(0, 8)}
-                          </Link>
-                        ) : (
-                          <span className="text-xs text-slate-500">—</span>
-                        )}
+                      <td className="py-3 pr-3">
+                        <EnrichmentBadge status={item.enrichmentStatus} stage={item.enrichmentStage} />
                       </td>
                       <td className="py-3" onClick={(e) => e.stopPropagation()}>
-                        {canFetchDetails && (
-                          <button
-                            type="button"
-                            onClick={() => handleFetchDetails(item.id)}
-                            disabled={
-                              lookupRowId === item.id ||
-                              partLookup.isPending ||
-                              bulkPartLookup.isPending
-                            }
-                            className="text-xs px-2 py-1 rounded bg-violet-600/20 text-violet-300 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
-                            title="Vision lookup: OEM + brand + photos"
-                          >
-                            {lookupRowId === item.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin inline" />
-                            ) : (
-                              'Fetch'
-                            )}
-                          </button>
+                        {item.enrichmentStatus === 'completed' ? (
+                          <span className="text-xs text-emerald-400 flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Ready
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-500">—</span>
                         )}
                       </td>
                     </tr>
@@ -565,13 +660,13 @@ export default function InventoryManager() {
         <Card>
           <CardContent className="py-12 text-center">
             <Package className="h-12 w-12 text-slate-500 dark:text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-500 dark:text-slate-400 text-sm">No parts in inventory yet.</p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">No parts match your filters.</p>
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
               Use{' '}
               <Link to="/listings/new" className="text-blue-400 hover:underline">
                 Add Part
               </Link>{' '}
-              for warehouse intake, then send parts to the pipeline from here.
+              for warehouse intake, then upload 2 photos to auto-enrich.
             </p>
           </CardContent>
         </Card>
@@ -580,7 +675,6 @@ export default function InventoryManager() {
       <InventoryDetailModal
         listingId={detailId}
         onClose={() => setDetailId(null)}
-        canFetchDetails={canFetchDetails}
       />
     </div>
   );

@@ -2,6 +2,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsInt,
   IsOptional,
   IsString,
@@ -37,6 +38,32 @@ export class InventoryListingsQueryDto {
   @Type(() => Boolean)
   @IsBoolean()
   missingImages?: boolean;
+
+  /* ── Advanced filters ─────────────────────────────────── */
+
+  @IsOptional()
+  @IsDateString()
+  dateAddedFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateAddedTo?: string;
+
+  @IsOptional()
+  @IsString()
+  brand?: string;
+
+  @IsOptional()
+  @IsString()
+  make?: string;
+
+  @IsOptional()
+  @IsString()
+  model?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
 }
 
 export class InventoryPartLookupDto {
@@ -68,4 +95,16 @@ export class UpdateListingImagesDto {
   @IsArray()
   @IsUUID('4', { each: true })
   uploadedAssetIds?: string[];
+}
+
+export class InventoryInlineEnrichDto {
+  @IsUUID()
+  listingId!: string;
+}
+
+export class InventorySendToCatalogDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  listingIds!: string[];
 }

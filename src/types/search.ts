@@ -77,6 +77,11 @@ export interface SearchItem {
   relevanceScore: number | null;
   titleHighlight: string | null;
   fitmentCount: number | null;
+  /** Marketplace this listing targets (US/AU/DE/GB etc) */
+  marketplace?: string | null;
+  pipelineJobId?: string | null;
+  /** Aggregated marketplaces across all SKU siblings (populated by catalog dedup) */
+  marketplaces?: string[];
 }
 
 /* -- Suggestions ----------------------------------------------------- */

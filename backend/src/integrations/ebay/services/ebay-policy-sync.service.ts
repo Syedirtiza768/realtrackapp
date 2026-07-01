@@ -52,9 +52,24 @@ export class EbayPolicySyncService {
     organizationId: string,
     userId?: string | null,
   ): Promise<{ ok: boolean; synced: number; message: string }> {
+    this.logger.log(`syncPolicies START account=${ebayAccountId}`);
+    try {
+      const result = await this._syncPoliciesInner(ebayAccountId, organizationId, userId);
+      this.logger.log(`syncPolicies DONE account=${ebayAccountId} ok=${result.ok} synced=${result.synced}`);
+      return result;
+    } catch (err: unknown) {
+      this.logger.error(`syncPolicies FAILED account=${ebayAccountId}: ${err instanceof Error ? err.message : err}`);
+      throw err;
+    }
+  }
+
+  private async _syncPoliciesInner(
+    ebayAccountId: string,
+    organizationId: string,
+    userId?: string | null,
+  ): Promise<{ ok: boolean; synced: number; message: string }> {
     const account = await this.accountRepo.findOne({
       where: { id: ebayAccountId, organizationId },
-      relations: ['marketplaces'],
     });
     if (!account) {
       throw new NotFoundException('eBay account not found');
@@ -166,11 +181,12 @@ export class EbayPolicySyncService {
 
       let locations: { merchantLocationKey: string; name: string }[] = [];
       try {
-        locations = await this.sellAccount.listInventoryLocations(
-          token,
-          baseUrl,
-          mp.marketplaceId,
-        );
+        locations = await Promise.race([
+          this.sellAccount.listInventoryLocations(token, baseUrl, mp.marketplaceId),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Inventory locations fetch timed out (30s)')), 30_000),
+          ),
+        ]);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.warn(

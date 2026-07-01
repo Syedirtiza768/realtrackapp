@@ -137,12 +137,49 @@ export default function CatalogManager() {
 
   const displayItems = infiniteScroll ? accumulatedItems : (data?.items ?? []);
 
+  // Deduplicate by SKU: group items with the same SKU, show one card per SKU
+  // with aggregated marketplace badges.
+  const dedupedItems = useMemo(() => {
+    const groups = new Map<string, { item: SearchItem; marketplaces: Set<string> }>();
+
+    for (const item of displayItems) {
+      const sku = item.customLabelSku?.trim();
+      if (!sku) {
+        // Items without SKU stay as-is (one card per listing record)
+        groups.set(item.id, { item, marketplaces: new Set(item.marketplace ? [item.marketplace] : []) });
+        continue;
+      }
+
+      if (!groups.has(sku)) {
+        groups.set(sku, { item, marketplaces: new Set() });
+      }
+
+      const group = groups.get(sku)!;
+      if (item.marketplace) group.marketplaces.add(item.marketplace);
+
+      // Prefer items with: title > image > later marketplace > current group
+      const existing = group.item;
+      const preferNew =
+        (item.title && !existing.title) ||
+        (item.itemPhotoUrl && !existing.itemPhotoUrl) ||
+        (item.marketplace && !existing.marketplace);
+      if (preferNew) {
+        group.item = item;
+      }
+    }
+
+    return Array.from(groups.values()).map(({ item, marketplaces }) => ({
+      ...item,
+      marketplaces: marketplaces.size > 0 ? [...marketplaces].sort() : undefined,
+    }));
+  }, [displayItems]);
+
   const { data: publishListingDetail, isLoading: publishListingLoading } =
     useListingDetailQuery(publishModalOpen ? publishTargetId : null);
 
   const publishListing: SearchItem | null = useMemo(() => {
     if (!publishTargetId) return null;
-    const fromGrid = displayItems.find((i) => i.id === publishTargetId);
+    const fromGrid = dedupedItems.find((i) => i.id === publishTargetId);
     if (fromGrid) return fromGrid;
     if (!publishListingDetail) return null;
     return {
@@ -500,7 +537,7 @@ export default function CatalogManager() {
               )}
 
               <ResultsGrid
-                items={displayItems}
+                items={dedupedItems}
                 total={total}
                 loading={loading}
                 page={page}

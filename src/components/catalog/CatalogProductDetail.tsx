@@ -1,13 +1,31 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, ChevronDown, ChevronUp, Save, Loader2 } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Send, ChevronDown, ChevronUp, Save, Loader2, Store as StoreIcon, Globe, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchWithAuth } from '../../lib/authApi';
 import { buildEbayPreview } from '../../lib/listingPreviewMapper';
+import { getStoresByChannel } from '../../lib/multiStoreApi';
+import { publishToEbay, type PublishResult } from '../../lib/publishApi';
+import { getAllImageUrls } from '../../lib/listingsApi';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
 import type { ListingDetail } from '../../types/search';
-import PublishModal from '../channels/PublishModal';
+import type { Store } from '../../types/multiStore';
 import { EbayListingPreview } from '../preview/EbayPreviewPage';
+
+/* ── Helpers ──────────────────────────────────────────────── */
+
+function marketplaceIdToTab(mkt: string | null | undefined): string {
+  if (!mkt) return 'US';
+  if (mkt.includes('_AU')) return 'AU';
+  if (mkt.includes('_DE')) return 'DE';
+  return 'US';
+}
+
+function marketplaceBadge(mkt: string | null | undefined): string {
+  return marketplaceIdToTab(mkt);
+}
+
+/* ── Hooks ────────────────────────────────────────────────── */
 
 function useListingDetail(id: string) {
   return useQuery({
@@ -17,12 +35,6 @@ function useListingDetail(id: string) {
   });
 }
 
-interface MarketplaceTabs {
-  listingIds: Record<string, string | null>;
-  listings: Record<string, ListingDetail | null>;
-  catalogProduct: any;
-}
-
 function useMarketplaceListings(sku: string | null) {
   return useQuery({
     queryKey: ['marketplace-listings', sku],
@@ -30,19 +42,29 @@ function useMarketplaceListings(sku: string | null) {
       if (!sku) return { listingIds: {} as Record<string, string | null>, listings: {} as Record<string, ListingDetail | null>, catalogProduct: null };
       const params = new URLSearchParams({ q: sku, exactSku: sku, limit: '10' });
       const data = await fetchWithAuth<{ items: Array<{ id: string; marketplace?: string }> }>(`/api/listings/search?${params}`);
-      const result: MarketplaceTabs = { listingIds: {}, listings: {}, catalogProduct: null };
+      const listingIds: Record<string, string | null> = {};
+      const listings: Record<string, ListingDetail | null> = {};
+      let catalogProduct: any = null;
       for (const item of data.items) {
         const mkt = (item as any).marketplace || 'US';
-        result.listingIds[mkt] = (item as any).id || null;
+        listingIds[mkt] = (item as any).id || null;
         if ((item as any).id) {
           const detailData = await fetchWithAuth<{ listing: ListingDetail; catalogProduct?: any }>(`/api/listings/${(item as any).id}`);
-          result.listings[mkt] = detailData.listing;
-          if (detailData.catalogProduct) result.catalogProduct = detailData.catalogProduct;
+          listings[mkt] = detailData.listing;
+          if (detailData.catalogProduct) catalogProduct = detailData.catalogProduct;
         }
       }
-      return result;
+      return { listingIds, listings, catalogProduct };
     },
     enabled: !!sku,
+  });
+}
+
+function useEligibleStores() {
+  return useQuery({
+    queryKey: ['ebay-stores-eligible'],
+    queryFn: () => getStoresByChannel('ebay'),
+    staleTime: 60_000,
   });
 }
 
@@ -52,6 +74,7 @@ function EditPanel({
   listing,
   catalogProduct,
   activeTab,
+  selectedStore,
   onSaveShared,
   onSaveMarketplace,
   saving,
@@ -59,6 +82,7 @@ function EditPanel({
   listing: ListingDetail;
   catalogProduct: any;
   activeTab: string;
+  selectedStore: Store | null;
   onSaveShared: (fields: Record<string, any>) => void;
   onSaveMarketplace: (fields: Record<string, any>) => void;
   saving: boolean;
@@ -85,6 +109,20 @@ function EditPanel({
     paymentProfile: listing.paymentProfileName ?? '',
   });
 
+  // When the selected store changes, update profiles from it
+  const prevStoreId = useRef<string | null>(null);
+  if (selectedStore?.id !== prevStoreId.current) {
+    prevStoreId.current = selectedStore?.id ?? null;
+    if (selectedStore) {
+      setMktFields((prev) => ({
+        ...prev,
+        shippingProfile: selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? prev.shippingProfile,
+        returnProfile: selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? prev.returnProfile,
+        paymentProfile: selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? prev.paymentProfile,
+      }));
+    }
+  }
+
   const Section = ({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) => (
     <div className="border border-slate-700/50 rounded-lg overflow-hidden">
       <button onClick={onToggle} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-800/40 transition-colors">
@@ -95,7 +133,7 @@ function EditPanel({
     </div>
   );
 
-  const Field = ({ label, field, value, onChange, multiline }: { label: string; field: string; value: string; onChange: (v: string) => void; multiline?: boolean }) => (
+  const Field = ({ label, field, value, onChange, multiline, readOnly }: { label: string; field: string; value: string; onChange: (v: string) => void; multiline?: boolean; readOnly?: boolean }) => (
     <div>
       <label className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</label>
       {multiline ? (
@@ -103,14 +141,16 @@ function EditPanel({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
-          className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+          readOnly={readOnly}
+          className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
         />
       ) : (
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+          readOnly={readOnly}
+          className="w-full mt-0.5 bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-60"
         />
       )}
     </div>
@@ -144,9 +184,10 @@ function EditPanel({
         <Field label="Description" field="description" value={mktFields.description} onChange={(v) => setMktFields({ ...mktFields, description: v })} multiline />
         <Field label="Price" field="price" value={mktFields.price} onChange={(v) => setMktFields({ ...mktFields, price: v })} />
         <Field label="Quantity" field="quantity" value={mktFields.quantity} onChange={(v) => setMktFields({ ...mktFields, quantity: v })} />
-        <Field label="Shipping Profile" field="shippingProfile" value={mktFields.shippingProfile} onChange={(v) => setMktFields({ ...mktFields, shippingProfile: v })} />
-        <Field label="Return Profile" field="returnProfile" value={mktFields.returnProfile} onChange={(v) => setMktFields({ ...mktFields, returnProfile: v })} />
-        <Field label="Payment Profile" field="paymentProfile" value={mktFields.paymentProfile} onChange={(v) => setMktFields({ ...mktFields, paymentProfile: v })} />
+        <Field label="Shipping Profile" field="shippingProfile" value={mktFields.shippingProfile} onChange={(v) => setMktFields({ ...mktFields, shippingProfile: v })} readOnly />
+        <Field label="Return Profile" field="returnProfile" value={mktFields.returnProfile} onChange={(v) => setMktFields({ ...mktFields, returnProfile: v })} readOnly />
+        <Field label="Payment Profile" field="paymentProfile" value={mktFields.paymentProfile} onChange={(v) => setMktFields({ ...mktFields, paymentProfile: v })} readOnly />
+        <p className="text-[10px] text-slate-500 italic">Profiles are inherited from the selected store and set at publish time.</p>
         <button
           onClick={() => onSaveMarketplace(mktFields)}
           disabled={saving}
@@ -166,24 +207,55 @@ export default function CatalogProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'US' | 'AU' | 'DE'>('US');
-  const [publishListingId, setPublishListingId] = useState<string | null>(null);
-  const [publishOpen, setPublishOpen] = useState(false);
+  const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [publishState, setPublishState] = useState<'idle' | 'publishing' | 'success' | 'failed'>('idle');
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
 
   const { data, isLoading } = useListingDetail(id!);
   const listing = data?.listing;
   const catalogProduct = data?.catalogProduct;
   const sku = listing?.customLabelSku;
 
-  const { data: mktData } = useMarketplaceListings(sku ?? null);
+  const { data: mktData, isLoading: mktLoading } = useMarketplaceListings(sku ?? null);
+  const { data: stores = [], isLoading: storesLoading } = useEligibleStores();
 
-  const currentListing: ListingDetail | null = mktData?.listings?.[activeTab] ?? listing ?? null;
+  // Resolve selected store object
+  const selectedStore = useMemo<Store | null>(() => {
+    if (!selectedStoreId) return null;
+    return stores.find((s) => s.id === selectedStoreId) ?? null;
+  }, [stores, selectedStoreId]);
 
-  const preview: EbayListing | null = currentListing
-    ? buildEbayPreview(currentListing, mktData?.catalogProduct ?? catalogProduct ?? null)
-    : null;
+  // Derive active marketplace tab from selected store
+  const activeTab = useMemo<string>(() => {
+    if (!selectedStore) return 'US';
+    return marketplaceIdToTab(selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId);
+  }, [selectedStore]);
+
+  // Current listing for the active tab
+  const currentListing: ListingDetail | null = useMemo(() => {
+    if (!selectedStore) return listing ?? null;
+    return mktData?.listings?.[activeTab] ?? listing ?? null;
+  }, [selectedStore, mktData, activeTab, listing]);
+
+  // Build eBay preview
+  const preview: EbayListing | null = useMemo(() => {
+    if (!currentListing) return null;
+    return buildEbayPreview(currentListing, mktData?.catalogProduct ?? catalogProduct ?? null);
+  }, [currentListing, mktData, catalogProduct]);
+
+  // Validation
+  const validationErrors = useMemo<string[]>(() => {
+    const errors: string[] = [];
+    if (!selectedStore) errors.push('No store selected');
+    if (!currentListing?.title) errors.push('Missing title');
+    if (!currentListing?.startPrice) errors.push('Missing price');
+    if (!currentListing?.quantity) errors.push('Missing quantity');
+    if (!getAllImageUrls(currentListing?.itemPhotoUrl).length) errors.push('No images');
+    return errors;
+  }, [selectedStore, currentListing]);
 
   const handleSaveShared = async (fields: Record<string, any>) => {
     if (!catalogProduct?.id) return;
@@ -216,6 +288,45 @@ export default function CatalogProductDetail() {
     }
   };
 
+  const handlePublish = async () => {
+    if (!selectedStore || !currentListing || !id) return;
+    setPublishState('publishing');
+    setPublishError(null);
+    setPublishResult(null);
+
+    try {
+      const res = await publishToEbay({
+        listingId: id,
+        storeIds: [selectedStore.id],
+        sku: currentListing.customLabelSku ?? id,
+        title: currentListing.title ?? '',
+        description: currentListing.description ?? '',
+        categoryId: currentListing.categoryId ?? '',
+        condition: currentListing.conditionId ?? '3000',
+        price: parseFloat(currentListing.startPrice ?? '0'),
+        quantity: parseInt(currentListing.quantity ?? '0', 10),
+        imageUrls: getAllImageUrls(currentListing.itemPhotoUrl),
+        aspects: {},
+        fulfillmentPolicyId: selectedStore.fulfillmentPolicyId ?? undefined,
+        paymentPolicyId: selectedStore.paymentPolicyId ?? undefined,
+        returnPolicyId: selectedStore.returnPolicyId ?? undefined,
+        merchantLocationKey: selectedStore.locationKey ?? undefined,
+      });
+
+      const first = res?.[0];
+      if (first?.success) {
+        setPublishState('success');
+        setPublishResult(first);
+      } else {
+        setPublishState('failed');
+        setPublishError(first?.error ?? 'Publish failed');
+      }
+    } catch (err: unknown) {
+      setPublishState('failed');
+      setPublishError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -225,13 +336,8 @@ export default function CatalogProductDetail() {
   }
 
   if (!listing) {
-    return (
-      <div className="p-10 text-center text-slate-400">Listing not found</div>
-    );
+    return <div className="p-10 text-center text-slate-400">Listing not found</div>;
   }
-
-  const tabs: Array<'US' | 'AU' | 'DE'> = ['US', 'AU', 'DE'];
-  const hasMarketplaceData = mktData && tabs.some((t) => mktData.listings?.[t]);
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-4">
@@ -245,32 +351,51 @@ export default function CatalogProductDetail() {
 
       <div className="flex gap-4">
         <div className="flex-1 min-w-0">
-          {/* Marketplace tabs */}
-          <div className="flex border-b border-slate-700/50 mb-3">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {tab === 'US' ? 'US' : tab === 'AU' ? 'AU' : 'DE'}
-                {mktData?.listings?.[tab] ? null : (
-                  <span className="ml-1.5 text-[10px] text-amber-400">(no data)</span>
-                )}
-              </button>
-            ))}
-          </div>
+          {/* Store + Marketplace context header */}
+          {selectedStore && (
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/50">
+              <StoreIcon size={14} className="text-blue-400" />
+              <span className="text-sm text-slate-200 font-medium">{selectedStore.storeName}</span>
+              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">
+                <Globe size={10} />
+                {marketplaceBadge(selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId)}
+              </span>
+            </div>
+          )}
 
           {/* eBay Preview */}
-          {preview ? (
+          {selectedStore && preview ? (
             <EbayListingPreview listing={preview} />
-          ) : (
+          ) : selectedStore && !preview && !mktLoading ? (
             <div className="border border-slate-700 rounded-lg p-8 text-center text-slate-400">
               No listing data available for {activeTab} marketplace
+            </div>
+          ) : mktLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+            </div>
+          ) : (
+            <div className="border border-slate-700 rounded-lg p-8 text-center text-slate-400">
+              <StoreIcon size={32} className="mx-auto mb-3 text-slate-600" />
+              <p className="text-sm">Select a store from the sidebar to preview and publish</p>
+            </div>
+          )}
+
+          {/* Publish result */}
+          {publishState === 'success' && publishResult && (
+            <div className="mt-3 flex items-center gap-2 px-4 py-3 rounded-lg border border-emerald-800/60 bg-emerald-950/20 text-sm">
+              <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+              <span className="text-emerald-300">
+                Published to {selectedStore?.storeName}
+                {publishResult.offerId ? ` (Offer: ${publishResult.offerId})` : ''}
+                {publishResult.listingId ? ` · Listing: ${publishResult.listingId}` : ''}
+              </span>
+            </div>
+          )}
+          {publishState === 'failed' && (
+            <div className="mt-3 flex items-center gap-2 px-4 py-3 rounded-lg border border-red-800/60 bg-red-950/20 text-sm">
+              <XCircle size={16} className="text-red-400 shrink-0" />
+              <span className="text-red-300">{publishError || 'Publish failed'}</span>
             </div>
           )}
         </div>
@@ -278,37 +403,124 @@ export default function CatalogProductDetail() {
         {/* Right sidebar */}
         <div className="w-80 shrink-0 space-y-3">
           <div className="rounded-lg border border-slate-700/50 p-4 space-y-3">
+            {/* Store Selector */}
             <div>
-              <p className="text-xs text-slate-500">SKU</p>
-              <p className="text-sm text-slate-200 font-mono">{sku || '\u2014'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Marketplace</p>
-              <p className="text-sm text-slate-200">{activeTab}</p>
-            </div>
-            {listing.sourceFileName && (
-              <div>
-                <p className="text-xs text-slate-500">Source File</p>
-                <p className="text-xs text-slate-400">{listing.sourceFileName}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-xs text-slate-500">Imported</p>
-              <p className="text-xs text-slate-400">{new Date(listing.importedAt).toLocaleDateString()}</p>
+              <label className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1.5 block">
+                Target Store
+              </label>
+              {storesLoading ? (
+                <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                  <Loader2 size={12} className="animate-spin" />
+                  Loading stores...
+                </div>
+              ) : stores.length === 0 ? (
+                <div className="text-xs text-amber-400 py-1">
+                  No eligible eBay stores found. Connect a store via Settings → Integrations.
+                </div>
+              ) : (
+                <select
+                  value={selectedStoreId}
+                  onChange={(e) => {
+                    setSelectedStoreId(e.target.value);
+                    setPublishState('idle');
+                    setPublishError(null);
+                    setPublishResult(null);
+                  }}
+                  className="w-full bg-slate-800/60 border border-slate-700 rounded px-2 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                >
+                  <option value="">— Select a store —</option>
+                  {stores.map((store) => {
+                    const badge = marketplaceBadge(store.marketplaceLabel ?? store.ebayMarketplaceId);
+                    return (
+                      <option key={store.id} value={store.id}>
+                        {store.storeName} ({badge})
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
             </div>
 
+            {/* Profiles from selected store */}
+            {selectedStore && (
+              <div className="space-y-2 border-t border-slate-700/30 pt-3">
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Profiles</p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-500">Shipping</span>
+                    <span className="text-[11px] text-slate-300 font-mono truncate max-w-[140px] text-right">
+                      {selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-500">Payment</span>
+                    <span className="text-[11px] text-slate-300 font-mono truncate max-w-[140px] text-right">
+                      {selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-500">Return</span>
+                    <span className="text-[11px] text-slate-300 font-mono truncate max-w-[140px] text-right">
+                      {selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Validation warnings */}
+            {selectedStore && validationErrors.length > 0 && publishState === 'idle' && (
+              <div className="border border-amber-800/60 bg-amber-950/30 rounded-lg p-3 flex items-start gap-2">
+                <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] text-amber-300 font-medium">Validation</p>
+                  <ul className="text-[10px] text-amber-400/70 mt-0.5 list-disc pl-3">
+                    {validationErrors.map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* Listing info */}
+            <div className="border-t border-slate-700/30 pt-3 space-y-2">
+              <div>
+                <p className="text-xs text-slate-500">SKU</p>
+                <p className="text-sm text-slate-200 font-mono">{sku || '\u2014'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Marketplace</p>
+                <p className="text-sm text-slate-200">{selectedStore ? activeTab : '—'}</p>
+              </div>
+              {listing.sourceFileName && (
+                <div>
+                  <p className="text-xs text-slate-500">Source File</p>
+                  <p className="text-xs text-slate-400">{listing.sourceFileName}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs text-slate-500">Imported</p>
+                <p className="text-xs text-slate-400">{new Date(listing.importedAt).toLocaleDateString()}</p>
+              </div>
+            </div>
+
+            {/* Publish Button */}
             <button
-              onClick={() => {
-                const targetId = hasMarketplaceData
-                  ? mktData?.listingIds?.[activeTab] ?? id!
-                  : id!;
-                setPublishListingId(targetId);
-                setPublishOpen(true);
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+              onClick={handlePublish}
+              disabled={!selectedStore || publishState === 'publishing'}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
             >
-              <Send size={14} />
-              Publish to eBay {activeTab}
+              {publishState === 'publishing' ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Send size={14} />
+              )}
+              {publishState === 'publishing'
+                ? `Publishing to ${selectedStore?.storeName ?? '...'}`
+                : selectedStore
+                  ? `Publish to ${selectedStore.storeName}`
+                  : 'Select a store to publish'}
             </button>
 
             <button
@@ -318,11 +530,12 @@ export default function CatalogProductDetail() {
               {editOpen ? 'Hide Editor' : 'Edit Fields'}
             </button>
 
-            {editOpen && (
+            {editOpen && currentListing && (
               <EditPanel
-                listing={currentListing ?? listing}
+                listing={currentListing}
                 catalogProduct={mktData?.catalogProduct ?? catalogProduct}
                 activeTab={activeTab}
+                selectedStore={selectedStore}
                 onSaveShared={handleSaveShared}
                 onSaveMarketplace={handleSaveMarketplace}
                 saving={saving}
@@ -331,15 +544,6 @@ export default function CatalogProductDetail() {
           </div>
         </div>
       </div>
-
-      {publishOpen && publishListingId && (
-        <PublishModal
-          mode="single"
-          listing={{ id: publishListingId } as any}
-          open={publishOpen}
-          onClose={() => { setPublishOpen(false); setPublishListingId(null); }}
-        />
-      )}
     </div>
   );
 }

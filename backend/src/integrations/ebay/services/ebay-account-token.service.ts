@@ -64,17 +64,22 @@ export class EbayAccountTokenService {
   async getValidAccessToken(ebayAccountId: string): Promise<string> {
     const account = await this.accountRepo.findOne({
       where: { id: ebayAccountId },
-      relations: ['oauthToken'],
     });
-    if (!account || !account.oauthToken) {
-      throw new UnauthorizedException('eBay account or token record not found');
+    if (!account) {
+      throw new UnauthorizedException('eBay account not found');
+    }
+    const oauthToken = await this.tokenRepo.findOne({
+      where: { ebayAccountId },
+    });
+    if (!oauthToken) {
+      throw new UnauthorizedException('eBay token record not found');
     }
     if (account.connectionStatus === 'disabled') {
       throw new UnauthorizedException('eBay account is disabled');
     }
     if (
       account.connectionStatus === 'reconnect_required' ||
-      account.oauthToken.reconnectRequired
+      oauthToken.reconnectRequired
     ) {
       throw new UnauthorizedException('eBay reconnect required');
     }
@@ -83,7 +88,7 @@ export class EbayAccountTokenService {
       return this.sellerpunditTokens.ensureFreshAccessToken(ebayAccountId);
     }
 
-    const row = account.oauthToken;
+    const row = oauthToken;
     const now = Date.now();
     const expires = new Date(row.accessTokenExpiresAt).getTime();
     if (expires - now > this.refreshBufferMs) {

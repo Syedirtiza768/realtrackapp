@@ -19,6 +19,19 @@ export interface Store {
   listingCount: number;
   createdAt: string;
   updatedAt: string;
+  /** eBay-specific columns */
+  ebayUserId?: string | null;
+  ebaySiteId?: string | null;
+  ebayMarketplaceId?: string | null;
+  fulfillmentPolicyId?: string | null;
+  paymentPolicyId?: string | null;
+  returnPolicyId?: string | null;
+  locationKey?: string | null;
+  /** Enriched fields from the filtered stores endpoint */
+  marketplaceLabel?: string;
+  fulfillmentPolicyName?: string | null;
+  paymentPolicyName?: string | null;
+  returnPolicyName?: string | null;
 }
 
 // ─── Per-Store Inventory Allocation ───

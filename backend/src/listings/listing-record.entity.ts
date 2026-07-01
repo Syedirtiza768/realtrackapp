@@ -338,6 +338,12 @@ export class ListingRecord {
   @Column({ type: 'varchar', length: 64, nullable: true })
   shopifyProductId: string | null;
 
+  /* ── Enrichment stage tracking (inline enrichment) ───────── */
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Index('idx_listing_enrichment_stage')
+  enrichmentStage: string | null;
+
   /* ── Extracted vehicle make/model (from title) ──────────── */
 
   @Column({ type: 'varchar', length: 100, nullable: true })

@@ -288,13 +288,18 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
-| GET | `/api/inventory/listings` | List workbench parts — one row per SKU (`page`, `limit`, `status`, `search`, `missingImages`) | inventory.view |
-| GET | `/api/inventory/listings/:listingId/detail` | Full part detail for modal (fitments, US/AU/DE variants, pipeline job) | inventory.view |
+| GET | `/api/inventory/listings` | List workbench parts — one row per SKU (`page`, `limit`, `status`, `search`, `missingImages`, `dateAddedFrom`, `dateAddedTo`, `brand`, `make`, `model`, `category`) | inventory.view |
+| GET | `/api/inventory/listings/:listingId/detail` | Full part detail for modal (fitments, US/AU/DE variants, pipeline job, enrichmentStage) | inventory.view |
+| GET | `/api/inventory/listings/:listingId/enrichment-status` | Poll enrichment progress — returns `{ status, stage }` with stage like `vision_lookup`, `enrichment`, `generating_us`, etc. | inventory.view |
 | PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing | listings.update |
-| POST | `/api/inventory/send-to-pipeline` | Build pipeline CSV from selected listings; `forceVision` on photos; returns `{ job, warnings }` | inventory.enrich |
-| POST | `/api/inventory/enrich` | Alias for `send-to-pipeline` (deprecated) | inventory.enrich |
 | POST | `/api/inventory/part-lookup` | Vision-first fetch details for one listing (OEM + brand + 2+ photos → title, category, SEO notes) | inventory.enrich |
 | POST | `/api/inventory/part-lookup/bulk` | Vision-first fetch details for multiple listings | inventory.enrich |
+| POST | `/api/inventory/inline-enrich` | **Complete inline enrichment:** vision part lookup + EnrichmentPipeline + AI content generation for US/AU/DE. Creates marketplace listing records directly — no pipeline job. | inventory.enrich |
+| POST | `/api/inventory/send-to-catalog` | **Send to catalog:** Create or update `CatalogProduct` records from enriched listing data (title, brand, price, images, fitments) | inventory.enrich |
+| GET | `/api/inventory/filters/brands` | Distinct brand values (`cBrand`) for filter dropdown | inventory.view |
+| GET | `/api/inventory/filters/makes` | Distinct extracted make values for filter dropdown | inventory.view |
+| GET | `/api/inventory/filters/models?make=X` | Distinct extracted model values, optionally filtered by make | inventory.view |
+| GET | `/api/inventory/filters/categories` | Distinct category names for filter dropdown | inventory.view |
 | GET | `/api/inventory/:listingId` | Get inventory ledger for a listing | inventory.view |
 | POST | `/api/inventory/:listingId/adjust` | Adjust quantity | inventory.adjust |
 | POST | `/api/inventory/:listingId/allocations` | Per-store allocation | inventory.allocate |

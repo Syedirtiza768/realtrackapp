@@ -236,6 +236,26 @@ export default function ResultsGrid({
                         )}
                       </a>
                       <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{item.customLabelSku}</div>
+                      {item.marketplaces && item.marketplaces.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1">
+                          {item.marketplaces.map((mkt) => (
+                            <span
+                              key={mkt}
+                              className={`text-[10px] font-medium px-1 py-0.5 rounded ${
+                                mkt === 'US'
+                                  ? 'bg-blue-900/30 text-blue-400'
+                                  : mkt === 'AU'
+                                    ? 'bg-green-900/30 text-green-400'
+                                    : mkt === 'DE'
+                                      ? 'bg-amber-900/30 text-amber-400'
+                                      : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {mkt}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="p-3 text-slate-500 dark:text-slate-400 text-xs hidden md:table-cell">{item.cBrand ?? '—'}</td>
                     <td className="p-3 text-slate-500 dark:text-slate-400 text-xs max-w-48 truncate hidden lg:table-cell">

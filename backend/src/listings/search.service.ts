@@ -122,7 +122,7 @@ export interface CategoryFacetBucket extends FacetBucket {
 /* ── Helper: split comma-separated filter into trimmed array ── */
 function splitFilter(val: string | undefined): string[] {
   if (!val?.trim()) return [];
-  return val.split(',').map((v) => v.trim()).filter(Boolean);
+  return val.split(',').map((v) => v.trim().replace(/^[\s.]+|[\s.]+$/g, '')).filter(Boolean);
 }
 
 /** Safely cast startPrice to numeric, handling European comma format ("139,99" → 139.99) */

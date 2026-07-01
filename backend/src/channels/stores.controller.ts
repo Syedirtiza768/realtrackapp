@@ -21,6 +21,8 @@ import {
   BulkPublishInstancesDto,
 } from './dto/store.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
 
 @ApiTags('stores')
 @Controller('stores')
@@ -37,9 +39,15 @@ export class StoresController {
   }
 
   @Get('by-channel/:channel')
-  @ApiOperation({ summary: 'List stores for a specific channel' })
-  getStoresByChannel(@Param('channel') channel: string) {
-    return this.storesService.getStoresByChannel(channel);
+  @ApiOperation({
+    summary:
+      'List stores for a specific channel (user-scoped, native OAuth only)',
+  })
+  getStoresByChannel(
+    @Param('channel') channel: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.storesService.getStoresByChannel(channel, user);
   }
 
   @Get(':storeId')
@@ -101,14 +109,18 @@ export class StoresController {
 
   @Post('instances')
   @RequirePermissions('stores.manage')
-  @ApiOperation({ summary: 'Create a listing channel instance (assign listing to store)' })
+  @ApiOperation({
+    summary: 'Create a listing channel instance (assign listing to store)',
+  })
   createInstance(@Body() dto: CreateInstanceDto) {
     return this.storesService.createInstance(dto);
   }
 
   @Post('instances/publish')
   @RequirePermissions('channels.publish')
-  @ApiOperation({ summary: 'Publish a listing channel instance to marketplace' })
+  @ApiOperation({
+    summary: 'Publish a listing channel instance to marketplace',
+  })
   publishInstance(@Body() dto: PublishInstanceDto) {
     return this.storesService.publishInstance(dto.instanceId);
   }
@@ -137,7 +149,10 @@ export class StoresController {
     dto: {
       listingId: string;
       storeIds: string[];
-      overrides?: Record<string, { price?: number; quantity?: number; title?: string }>;
+      overrides?: Record<
+        string,
+        { price?: number; quantity?: number; title?: string }
+      >;
     },
   ) {
     return this.storesService.publishToMultipleStores(

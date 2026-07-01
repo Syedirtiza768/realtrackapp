@@ -101,6 +101,27 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
               <Car size={10} /> {item.fitmentCount} fitment{item.fitmentCount !== 1 ? 's' : ''}
             </span>
           )}
+          {/* Marketplace badges */}
+          {item.marketplaces && item.marketplaces.length > 0 && (
+            <span className="flex items-center gap-0.5">
+              {item.marketplaces.map((mkt) => (
+                <span
+                  key={mkt}
+                  className={`text-[10px] font-medium px-1 py-0.5 rounded ${
+                    mkt === 'US'
+                      ? 'bg-blue-900/30 text-blue-400'
+                      : mkt === 'AU'
+                        ? 'bg-green-900/30 text-green-400'
+                        : mkt === 'DE'
+                          ? 'bg-amber-900/30 text-amber-400'
+                          : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {mkt}
+                </span>
+              ))}
+            </span>
+          )}
         </div>
 
         {/* Category (short) */}

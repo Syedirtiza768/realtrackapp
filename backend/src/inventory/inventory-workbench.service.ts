@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,10 +10,17 @@ import { ImageAsset } from '../storage/entities/image-asset.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PartFitment } from '../fitment/entities/part-fitment.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { Store } from '../channels/entities/store.entity.js';
+import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { SingleListingFormService } from '../ingestion/services/single-listing-form.service.js';
 import type { PartLookupResult } from '../ingestion/services/single-listing-form.service.js';
 import { PipelineService } from '../ingestion/pipeline.service.js';
+import { InventoryAutoTriggerService } from './inventory-auto-trigger.service.js';
+import type { EnrichmentStatus } from './inventory-auto-trigger.service.js';
 import type { InventoryListingsQueryDto } from './dto/inventory-workbench.dto.js';
+import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
+import { EnrichmentPipeline } from '../common/openai/pipelines/enrichment.pipeline.js';
 
 export interface InventoryMarketplaceVariant {
   listingId: string;
@@ -20,6 +28,20 @@ export interface InventoryMarketplaceVariant {
   status: string;
   ebayListingId?: string;
   pipelineJobId?: string;
+}
+
+export interface InventoryStoreListing {
+  storeId: string;
+  storeName: string;
+  marketplaceId: string;
+  offerId: string | null;
+  ebayListingId: string | null;
+  listingUrl: string | null;
+  price: number | null;
+  quantity: number | null;
+  status: string;
+  publishedAt: string | null;
+  lastSyncedAt: string | null;
 }
 
 export interface InventoryListingItem {
@@ -41,8 +63,10 @@ export interface InventoryListingItem {
   pipelineJobId?: string;
   pipelineJobStatus?: string;
   hasCompletedPipelineJob: boolean;
+  enrichmentStatus: EnrichmentStatus;
   intakeSource?: boolean;
   marketplaceVariants: InventoryMarketplaceVariant[];
+  storeListings: InventoryStoreListing[];
   importedAt?: string;
 }
 
@@ -96,6 +120,8 @@ function mapListingStatus(
 
 @Injectable()
 export class InventoryWorkbenchService {
+  private readonly logger = new Logger(InventoryWorkbenchService.name);
+
   constructor(
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
@@ -105,8 +131,17 @@ export class InventoryWorkbenchService {
     private readonly pipelineJobRepo: Repository<PipelineJob>,
     @InjectRepository(ImageAsset)
     private readonly imageAssetRepo: Repository<ImageAsset>,
+    @InjectRepository(CatalogProduct)
+    private readonly productRepo: Repository<CatalogProduct>,
+    @InjectRepository(EbayListingChannel)
+    private readonly channelRepo: Repository<EbayListingChannel>,
+    @InjectRepository(Store)
+    private readonly storeRepo: Repository<Store>,
     private readonly singleListingForm: SingleListingFormService,
     private readonly pipelineService: PipelineService,
+    private readonly autoTrigger: InventoryAutoTriggerService,
+    private readonly listingGenPipeline: ListingGenerationPipeline,
+    private readonly enrichmentPipeline: EnrichmentPipeline,
   ) {}
 
   async listListings(
@@ -138,6 +173,36 @@ export class InventoryWorkbenchService {
       whereClauses.push(
         `(l."itemPhotoUrl" IS NULL OR TRIM(l."itemPhotoUrl") = '' OR l."itemPhotoUrl" NOT LIKE '%|%')`,
       );
+    }
+
+    if (query.dateAddedFrom) {
+      whereClauses.push(`l."importedAt" >= $${paramIdx++}::timestamptz`);
+      params.push(query.dateAddedFrom);
+    }
+
+    if (query.dateAddedTo) {
+      whereClauses.push(`l."importedAt" <= $${paramIdx++}::timestamptz`);
+      params.push(query.dateAddedTo);
+    }
+
+    if (query.brand?.trim()) {
+      whereClauses.push(`l."cBrand" ILIKE $${paramIdx++}`);
+      params.push(`%${query.brand.trim()}%`);
+    }
+
+    if (query.make?.trim()) {
+      whereClauses.push(`l."extractedMake" ILIKE $${paramIdx++}`);
+      params.push(`%${query.make.trim()}%`);
+    }
+
+    if (query.model?.trim()) {
+      whereClauses.push(`l."extractedModel" ILIKE $${paramIdx++}`);
+      params.push(`%${query.model.trim()}%`);
+    }
+
+    if (query.category?.trim()) {
+      whereClauses.push(`l."categoryName" ILIKE $${paramIdx++}`);
+      params.push(`%${query.category.trim()}%`);
     }
 
     const whereSql = whereClauses.join(' AND ');
@@ -236,6 +301,7 @@ export class InventoryWorkbenchService {
     ]);
 
     const pipelineJobs = await this.loadPipelineJobsForListings(listings, siblings);
+    const storeListingsBySku = await this.loadStoreListingsBySkus(skus);
 
     const fitmentByListing = new Map(
       fitmentRows.map((r) => [r.listingId, Number(r.count)]),
@@ -282,6 +348,9 @@ export class InventoryWorkbenchService {
         ? pipelineJobs.get(listing.pipelineJobId)
         : undefined;
 
+      // Compute enrichment status from current state (no extra DB queries)
+      const enrichmentStatus = this.autoTrigger.deriveStatus(listing, primaryJob);
+
       return {
         id: listing.id,
         sku: listing.customLabelSku ?? '',
@@ -300,8 +369,12 @@ export class InventoryWorkbenchService {
         pipelineJobId: listing.pipelineJobId ?? undefined,
         pipelineJobStatus: primaryJob?.status,
         hasCompletedPipelineJob,
+        enrichmentStatus,
         intakeSource: listing.sourceFileName === 'warehouse-intake',
         marketplaceVariants,
+        storeListings: listing.customLabelSku
+          ? storeListingsBySku.get(listing.customLabelSku) ?? []
+          : [],
         importedAt: listing.importedAt
           ? new Date(listing.importedAt).toISOString()
           : undefined,
@@ -348,6 +421,9 @@ export class InventoryWorkbenchService {
     ]);
 
     const priorJobs = await this.getCompletedJobsForSku(sku, listing.id);
+    const storeListings = sku
+      ? (await this.loadStoreListingsBySkus([sku])).get(sku) ?? []
+      : [];
 
     return {
       listing: this.serializeListing(listing),
@@ -384,10 +460,77 @@ export class InventoryWorkbenchService {
             enrichedCount: pipelineJob.enrichedCount,
           }
         : null,
+      enrichmentStatus: this.autoTrigger.deriveStatus(listing, pipelineJob),
       priorCompletedJobs: priorJobs,
       missingFields: computeMissingFields(listing),
       imageUrls: parseImageUrls(listing.itemPhotoUrl),
+      storeListings,
     };
+  }
+
+  private async loadStoreListingsBySkus(
+    skus: string[],
+  ): Promise<Map<string, InventoryStoreListing[]>> {
+    const result = new Map<string, InventoryStoreListing[]>();
+    if (skus.length === 0) return result;
+
+    const products = await this.productRepo.find({
+      where: { sku: In(skus) },
+      select: ['id', 'sku'],
+    });
+    if (products.length === 0) return result;
+
+    const skuByProductId = new Map(
+      products.filter((p) => p.sku).map((p) => [p.id, p.sku!]),
+    );
+    const productIds = products.map((p) => p.id);
+
+    const channels = await this.channelRepo.find({
+      where: { catalogProductId: In(productIds) },
+      relations: ['ebayAccount'],
+    });
+
+    const storeIds = new Set<string>();
+    for (const ch of channels) {
+      if (ch.ebayAccount?.primaryStoreId) {
+        storeIds.add(ch.ebayAccount.primaryStoreId);
+      }
+    }
+
+    const stores =
+      storeIds.size > 0
+        ? await this.storeRepo.find({ where: { id: In([...storeIds]) } })
+        : [];
+    const storeMap = new Map(stores.map((s) => [s.id, s]));
+
+    for (const ch of channels) {
+      const sku = skuByProductId.get(ch.catalogProductId);
+      if (!sku) continue;
+
+      const account = ch.ebayAccount;
+      const storeId = account?.primaryStoreId ?? '';
+      const store = storeMap.get(storeId);
+
+      const entry: InventoryStoreListing = {
+        storeId,
+        storeName: store?.storeName ?? account?.ebayUserId ?? 'Unknown store',
+        marketplaceId: ch.marketplaceId,
+        offerId: ch.offerId,
+        ebayListingId: ch.listingId,
+        listingUrl: ch.listingUrl,
+        price: ch.channelPrice != null ? Number(ch.channelPrice) : null,
+        quantity: ch.channelQuantity,
+        status: ch.listingStatus,
+        publishedAt: ch.publishedAt ? ch.publishedAt.toISOString() : null,
+        lastSyncedAt: ch.lastSyncedAt ? ch.lastSyncedAt.toISOString() : null,
+      };
+
+      const list = result.get(sku) ?? [];
+      list.push(entry);
+      result.set(sku, list);
+    }
+
+    return result;
   }
 
   private async getCompletedJobsForSku(
@@ -456,6 +599,7 @@ export class InventoryWorkbenchService {
       pipelineJobId: listing.pipelineJobId,
       extractedMake: listing.extractedMake,
       extractedModel: listing.extractedModel,
+      enrichmentStage: listing.enrichmentStage,
       importedAt: listing.importedAt,
       updatedAt: listing.updatedAt,
       publishedAt: listing.publishedAt,
@@ -466,6 +610,228 @@ export class InventoryWorkbenchService {
     listingId: string,
   ): Promise<{ listing: ListingRecord; lookup: PartLookupResult }> {
     return this.singleListingForm.lookupAndApplyToListing(listingId);
+  }
+
+  /**
+   * Inline enrichment: full pipeline-grade enrichment with stage tracking.
+   * Stages: vision_lookup → enrichment → generating_us → generating_au → generating_de → completed
+   */
+  async inlineEnrichListing(
+    listingId: string,
+  ): Promise<{
+    baseListing: ListingRecord;
+    marketplaceListings: Array<{ marketplace: string; listingId: string; title: string }>;
+  }> {
+    const setStage = async (stage: string) => {
+      try {
+        await this.listingRepo.update(listingId, {
+          enrichmentStage: stage,
+        } as any);
+      } catch { /* non-critical — don't fail enrichment if stage write fails */ }
+    };
+
+    // Stage 1: Vision part lookup (identifies part from images)
+    this.logger.log(`Inline enrich [vision_lookup]: listing ${listingId}`);
+    await setStage('vision_lookup');
+    await this.singleListingForm.lookupAndApplyToListing(listingId);
+
+    // Read the updated base listing
+    const baseListing = await this.listingRepo.findOne({ where: { id: listingId } });
+    if (!baseListing || baseListing.deletedAt) {
+      throw new NotFoundException(`Listing ${listingId} not found after lookup`);
+    }
+
+    const sku = baseListing.customLabelSku;
+    if (!sku) {
+      await setStage('failed');
+      throw new BadRequestException('Listing has no SKU — cannot enrich');
+    }
+
+    const imageUrls = parseImageUrls(baseListing.itemPhotoUrl);
+
+    // Stage 2: Full AI enrichment (EnrichmentPipeline)
+    this.logger.log(`Inline enrich [enrichment]: listing ${listingId}`);
+    await setStage('enrichment');
+    try {
+      const enrichInput: Record<string, unknown> = {
+        sku: baseListing.customLabelSku,
+        partNumber: baseListing.cManufacturerPartNumber || baseListing.cOeOemPartNumber,
+        partName: baseListing.title,
+        partType: baseListing.cType,
+        brand: baseListing.cBrand,
+        price: baseListing.startPriceNum,
+        description: baseListing.description,
+        features: baseListing.cFeatures,
+        categoryName: baseListing.categoryName,
+        categoryId: baseListing.categoryId,
+        condition: baseListing.conditionId,
+        donorMake: baseListing.extractedMake,
+        donorModel: baseListing.extractedModel,
+        imageUrls,
+        image_count: imageUrls.length,
+      };
+      const enrichmentResult = await this.enrichmentPipeline.enrich(enrichInput);
+
+      // Apply enrichment results back to the base listing
+      if (enrichmentResult.title) baseListing.title = enrichmentResult.title.slice(0, 80);
+      if (enrichmentResult.brand) baseListing.cBrand = enrichmentResult.brand;
+      if (enrichmentResult.description) baseListing.description = enrichmentResult.description;
+      if (enrichmentResult.partType) baseListing.cType = enrichmentResult.partType;
+      if (enrichmentResult.mpn) baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
+      if (enrichmentResult.oemNumber) baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
+      if (enrichmentResult.features?.length) baseListing.cFeatures = enrichmentResult.features.join(' | ');
+      if (enrichmentResult.suggestedCategory && !baseListing.categoryName) {
+        baseListing.categoryName = enrichmentResult.suggestedCategory;
+      }
+
+      this.logger.log(
+        `Inline enrich [enrichment]: done for listing ${listingId} title="${enrichmentResult.title}" ` +
+        `model=${enrichmentResult.model} score=${enrichmentResult.validationScore}`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Inline enrich [enrichment]: AI enrichment failed for listing ${listingId}: ` +
+        `${err instanceof Error ? err.message : err} — continuing with vision lookup data`,
+      );
+    }
+
+    // Save enrichment results to base listing
+    await this.listingRepo.save(baseListing);
+
+    // Stage 3: Generate marketplace content for US, AU, DE
+    const marketplaceListings: Array<{ marketplace: string; listingId: string; title: string }> = [];
+    const MARKETPLACES: Array<'US' | 'AU' | 'DE'> = ['US', 'AU', 'DE'];
+
+    for (const mkt of MARKETPLACES) {
+      const stageName = `generating_${mkt.toLowerCase()}`;
+      this.logger.log(`Inline enrich [${stageName}]: listing ${listingId}`);
+      await setStage(stageName);
+
+      // Check if marketplace listing already exists
+      const existing = await this.listingRepo.findOne({
+        where: { customLabelSku: sku, marketplace: mkt, deletedAt: IsNull() },
+      });
+      if (existing) {
+        marketplaceListings.push({ marketplace: mkt, listingId: existing.id, title: existing.title ?? '' });
+        continue;
+      }
+
+      const productData: Record<string, unknown> = {
+        sku: baseListing.customLabelSku,
+        brand: baseListing.cBrand,
+        mpn: baseListing.cManufacturerPartNumber,
+        oem_number: baseListing.cOeOemPartNumber,
+        title: baseListing.title,
+        part_type: baseListing.cType,
+        placement: null,
+        material: null,
+        features: baseListing.cFeatures,
+        image_count: imageUrls.length,
+        extracted_make: baseListing.extractedMake,
+        extracted_model: baseListing.extractedModel,
+        price: baseListing.startPriceNum,
+        description: baseListing.description,
+      };
+
+      try {
+        const sellerCountry = mkt === 'DE' ? 'DE' : 'US';
+        const aiResult = await this.listingGenPipeline.generate(
+          productData,
+          baseListing.categoryName ?? 'eBay Motors Parts & Accessories',
+          baseListing.conditionId ?? 'Used',
+          { marketplace: mkt, sellerCountry },
+        );
+
+        const newListing = this.listingRepo.create({
+          sourceFileName: `inline-enrich-${mkt.toLowerCase()}`,
+          sourceFilePath: `inline-enrich:${listingId}/${mkt}`,
+          sheetName: `Inline Enrich ${mkt}`,
+          sourceRowNumber: baseListing.sourceRowNumber,
+          action: 'Add',
+          customLabelSku: sku,
+          categoryId: baseListing.categoryId,
+          categoryName: baseListing.categoryName,
+          title: aiResult.title.slice(0, 80),
+          description: aiResult.description,
+          startPrice: baseListing.startPrice,
+          startPriceNum: baseListing.startPriceNum,
+          quantity: baseListing.quantity,
+          quantityNum: baseListing.quantityNum,
+          itemPhotoUrl: baseListing.itemPhotoUrl,
+          conditionId: baseListing.conditionId,
+          format: baseListing.format,
+          duration: baseListing.duration,
+          location: baseListing.location,
+          shippingProfileName: baseListing.shippingProfileName,
+          returnProfileName: baseListing.returnProfileName,
+          paymentProfileName: baseListing.paymentProfileName,
+          cBrand: baseListing.cBrand,
+          cType: baseListing.cType,
+          cFeatures: baseListing.cFeatures,
+          cManufacturerPartNumber: baseListing.cManufacturerPartNumber,
+          cOeOemPartNumber: baseListing.cOeOemPartNumber,
+          extractedMake: baseListing.extractedMake,
+          extractedModel: baseListing.extractedModel,
+          marketplace: mkt,
+          version: 1,
+        });
+
+        const saved = await this.listingRepo.save(newListing);
+        marketplaceListings.push({ marketplace: mkt, listingId: saved.id, title: aiResult.title });
+        this.logger.log(`Inline enrich [${stageName}]: created ${mkt} listing for SKU ${sku}`);
+      } catch (err) {
+        this.logger.error(
+          `Inline enrich [${stageName}]: failed for ${mkt} (SKU ${sku}): ${err instanceof Error ? err.message : err}`,
+        );
+        const fallbackListing = this.listingRepo.create({
+          sourceFileName: `inline-enrich-${mkt.toLowerCase()}`,
+          sourceFilePath: `inline-enrich:${listingId}/${mkt}`,
+          sheetName: `Inline Enrich ${mkt}`,
+          sourceRowNumber: baseListing.sourceRowNumber,
+          action: 'Add',
+          customLabelSku: sku,
+          categoryId: baseListing.categoryId,
+          categoryName: baseListing.categoryName,
+          title: baseListing.title,
+          description: baseListing.description,
+          startPrice: baseListing.startPrice,
+          startPriceNum: baseListing.startPriceNum,
+          quantity: baseListing.quantity,
+          quantityNum: baseListing.quantityNum,
+          itemPhotoUrl: baseListing.itemPhotoUrl,
+          conditionId: baseListing.conditionId,
+          format: baseListing.format,
+          duration: baseListing.duration,
+          location: baseListing.location,
+          cBrand: baseListing.cBrand,
+          cType: baseListing.cType,
+          cFeatures: baseListing.cFeatures,
+          cManufacturerPartNumber: baseListing.cManufacturerPartNumber,
+          cOeOemPartNumber: baseListing.cOeOemPartNumber,
+          extractedMake: baseListing.extractedMake,
+          extractedModel: baseListing.extractedModel,
+          marketplace: mkt,
+          version: 1,
+        });
+        const saved = await this.listingRepo.save(fallbackListing);
+        marketplaceListings.push({ marketplace: mkt, listingId: saved.id, title: saved.title ?? '' });
+      }
+    }
+
+    // Mark base listing as 'ready'
+    if (baseListing.status === 'draft') {
+      baseListing.status = 'ready';
+      await this.listingRepo.save(baseListing);
+    }
+
+    // Final stage: completed
+    await setStage('completed');
+
+    this.logger.log(
+      `Inline enrich [completed]: listing ${listingId} (SKU ${sku}) — ${marketplaceListings.length} marketplace listing(s)`,
+    );
+
+    return { baseListing, marketplaceListings };
   }
 
   async updateListingImages(
@@ -497,6 +863,16 @@ export class InventoryWorkbenchService {
         { id: In(uploadedAssetIds) },
         { listingId: listing.id },
       );
+    }
+
+    // Auto-trigger enrichment when 2+ images are attached and listing has part number + brand
+    if (merged.length >= 2) {
+      // Fire and forget — the background job handles failures gracefully
+      this.autoTrigger.enqueueAutoEnrich(listingId).catch((err) => {
+        this.logger.warn(
+          `Failed to enqueue auto-enrich for listing ${listingId}: ${err instanceof Error ? err.message : err}`,
+        );
+      });
     }
 
     return this.getListingDetail(listingId);
@@ -646,5 +1022,146 @@ export class InventoryWorkbenchService {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
     return listing;
+  }
+
+  /* ── Filter metadata ─────────────────────────────────────── */
+
+  async getFilterBrands(): Promise<string[]> {
+    const rows = await this.listingRepo
+      .createQueryBuilder('l')
+      .select('DISTINCT l."cBrand"', 'brand')
+      .where('l."cBrand" IS NOT NULL AND TRIM(l."cBrand") != \'\'')
+      .andWhere('l."deletedAt" IS NULL')
+      .orderBy('l."cBrand"', 'ASC')
+      .getRawMany<{ brand: string }>();
+    return rows.map((r) => r.brand);
+  }
+
+  async getFilterMakes(): Promise<string[]> {
+    const rows = await this.listingRepo
+      .createQueryBuilder('l')
+      .select('DISTINCT l."extractedMake"', 'make')
+      .where('l."extractedMake" IS NOT NULL AND TRIM(l."extractedMake") != \'\'')
+      .andWhere('l."deletedAt" IS NULL')
+      .orderBy('l."extractedMake"', 'ASC')
+      .getRawMany<{ make: string }>();
+    return rows.map((r) => r.make);
+  }
+
+  async getFilterModels(make?: string): Promise<string[]> {
+    const qb = this.listingRepo
+      .createQueryBuilder('l')
+      .select('DISTINCT l."extractedModel"', 'model')
+      .where('l."extractedModel" IS NOT NULL AND TRIM(l."extractedModel") != \'\'')
+      .andWhere('l."deletedAt" IS NULL');
+
+    if (make?.trim()) {
+      qb.andWhere('l."extractedMake" ILIKE :make', { make: `%${make.trim()}%` });
+    }
+
+    qb.orderBy('l."extractedModel"', 'ASC');
+    const rows = await qb.getRawMany<{ model: string }>();
+    return rows.map((r) => r.model);
+  }
+
+  async getFilterCategories(): Promise<string[]> {
+    const rows = await this.listingRepo
+      .createQueryBuilder('l')
+      .select('DISTINCT l."categoryName"', 'category')
+      .where('l."categoryName" IS NOT NULL AND TRIM(l."categoryName") != \'\'')
+      .andWhere('l."deletedAt" IS NULL')
+      .orderBy('l."categoryName"', 'ASC')
+      .getRawMany<{ category: string }>();
+    return rows.map((r) => r.category);
+  }
+
+  /* ── Send to Catalog ─────────────────────────────────────── */
+
+  async sendToCatalog(listingIds: string[]): Promise<{
+    results: Array<{ listingId: string; sku: string; catalogProductId: string | null; success: boolean; error?: string }>;
+  }> {
+    const uniqueIds = [...new Set(listingIds)];
+    const listings = await this.listingRepo.find({ where: { id: In(uniqueIds) } });
+
+    const results: Array<{
+      listingId: string;
+      sku: string;
+      catalogProductId: string | null;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    for (const listing of listings) {
+      const sku = listing.customLabelSku;
+      if (!sku) {
+        results.push({ listingId: listing.id, sku: '', catalogProductId: null, success: false, error: 'No SKU' });
+        continue;
+      }
+
+      try {
+        const imageUrls = parseImageUrls(listing.itemPhotoUrl);
+
+        // Check if catalog product already exists for this SKU
+        let product = await this.productRepo.findOne({ where: { sku } });
+
+        if (product) {
+          // Update existing
+          product.title = listing.title ?? product.title;
+          product.brand = listing.cBrand ?? product.brand;
+          product.description = listing.description ?? product.description;
+          product.categoryName = listing.categoryName ?? product.categoryName;
+          product.categoryId = listing.categoryId ?? product.categoryId;
+          product.price = listing.startPriceNum ?? product.price;
+          product.quantity = listing.quantityNum ?? product.quantity;
+          product.conditionId = listing.conditionId ?? product.conditionId;
+          product.mpn = listing.cManufacturerPartNumber ?? product.mpn;
+          product.oemPartNumber = listing.cOeOemPartNumber ?? product.oemPartNumber;
+          product.partType = listing.cType ?? product.partType;
+          product.features = listing.cFeatures ?? product.features;
+          if (imageUrls.length > 0) product.imageUrls = imageUrls;
+          if (listing.extractedMake) (product as any).donorMake = listing.extractedMake;
+          product.optimizationStatus = 'completed';
+          await this.productRepo.save(product);
+        } else {
+          // Create new catalog product
+          const newProduct = this.productRepo.create({
+            sku,
+            title: listing.title ?? `SKU ${sku}`,
+            brand: listing.cBrand,
+            mpn: listing.cManufacturerPartNumber,
+            oemPartNumber: listing.cOeOemPartNumber,
+            description: listing.description,
+            categoryName: listing.categoryName,
+            categoryId: listing.categoryId,
+            price: listing.startPriceNum ?? 0,
+            quantity: listing.quantityNum ?? 1,
+            conditionId: listing.conditionId ?? 'Used',
+            partType: listing.cType,
+            features: listing.cFeatures,
+            importId: `inline:${listing.id}`,
+            sourceFile: listing.sourceFileName,
+            sourceRow: listing.sourceRowNumber,
+            optimizationStatus: 'completed',
+            imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+          } as any);
+          product = await this.productRepo.save(newProduct as any) as any;
+        }
+
+        results.push({
+          listingId: listing.id,
+          sku,
+          catalogProductId: product!.id,
+          success: true,
+        });
+
+        this.logger.log(`Send to catalog: ${product ? 'updated' : 'created'} product for SKU ${sku}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Send to catalog failed for listing ${listing.id} (SKU ${sku}): ${msg}`);
+        results.push({ listingId: listing.id, sku: sku ?? '', catalogProductId: null, success: false, error: msg });
+      }
+    }
+
+    return { results };
   }
 }

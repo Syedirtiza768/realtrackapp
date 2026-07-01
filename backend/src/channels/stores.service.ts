@@ -6,7 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Store } from './entities/store.entity.js';
 import { ListingChannelInstance } from './entities/listing-channel-instance.entity.js';
 import { DemoSimulationLog } from './entities/demo-simulation-log.entity.js';
@@ -14,6 +14,10 @@ import { ChannelConnection } from './entities/channel-connection.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { ConfigService } from '@nestjs/config';
 import { EbayPublishService } from './ebay/ebay-publish.service.js';
+import { StoreAccessService } from './store-access.service.js';
+import { User } from '../auth/entities/user.entity.js';
+import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
+import { EbayBusinessPolicy } from '../integrations/ebay/entities/ebay-business-policy.entity.js';
 
 @Injectable()
 export class StoresService {
@@ -30,9 +34,14 @@ export class StoresService {
     private readonly connectionRepo: Repository<ChannelConnection>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectRepository(ConnectedEbayAccount)
+    private readonly connectedAccountRepo: Repository<ConnectedEbayAccount>,
+    @InjectRepository(EbayBusinessPolicy)
+    private readonly policyRepo: Repository<EbayBusinessPolicy>,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
     private readonly ebayPublish: EbayPublishService,
+    private readonly storeAccess: StoreAccessService,
   ) {}
 
   private get isDemoMode(): boolean {
@@ -49,11 +58,88 @@ export class StoresService {
     });
   }
 
-  async getStoresByChannel(channel: string): Promise<Store[]> {
-    return this.storeRepo.find({
-      where: { channel },
+  /**
+   * List stores for a channel, filtered to stores the user can access.
+   * For eBay, only native OAuth stores with synced policies are returned,
+   * enriched with marketplace labels and policy display names.
+   */
+  async getStoresByChannel(channel: string, user?: User): Promise<any[]> {
+    // 1. Resolve accessible store IDs for the user
+    let accessibleIds: string[] | undefined;
+    if (user) {
+      accessibleIds = await this.storeAccess.resolveStoreFilter(user);
+      if (accessibleIds?.length === 0) return [];
+    }
+
+    const where: any = { channel };
+    if (accessibleIds) where.id = In(accessibleIds);
+
+    const stores = await this.storeRepo.find({
+      where,
       order: { isPrimary: 'DESC', createdAt: 'ASC' },
     });
+
+    if (!user || channel !== 'ebay') return stores;
+
+    // 2. For eBay: filter to native OAuth stores with policy data
+    const connectionIds = stores.map((s) => s.connectionId);
+    const accounts: ConnectedEbayAccount[] =
+      await this.connectedAccountRepo.find({
+        where: { channelConnectionId: In(connectionIds) },
+        relations: ['marketplaces'],
+      });
+    const accountByConnId = new Map(
+      accounts.map((a: ConnectedEbayAccount) => [a.channelConnectionId, a]),
+    );
+
+    const eligible: Array<
+      Store & {
+        marketplaceLabel: string;
+        fulfillmentPolicyName: string | null;
+        paymentPolicyName: string | null;
+        returnPolicyName: string | null;
+      }
+    > = [];
+    for (const store of stores) {
+      const account = accountByConnId.get(store.connectionId);
+      if (!account) continue;
+      if (account.connectionSource !== 'native_oauth') continue;
+      if (account.connectionStatus !== 'active') continue;
+
+      const mkt = (account.marketplaces ?? []).find(
+        (m) => m.marketplaceId === store.ebayMarketplaceId,
+      );
+      if (!mkt) continue;
+
+      // Must have at least fulfillment + payment + return policies synced
+      if (
+        !mkt.defaultFulfillmentPolicyId ||
+        !mkt.defaultPaymentPolicyId ||
+        !mkt.defaultReturnPolicyId
+      )
+        continue;
+
+      // 3. Enrich with policy display names from EbayBusinessPolicy table
+      const policies: EbayBusinessPolicy[] = await this.policyRepo.find({
+        where: {
+          ebayAccountId: account.id,
+          marketplaceId: mkt.marketplaceId,
+        },
+      });
+      const policyByName = new Map(
+        policies.map((p: EbayBusinessPolicy) => [p.policyType, p.name]),
+      );
+
+      eligible.push({
+        ...store,
+        marketplaceLabel: mkt.marketplaceId,
+        fulfillmentPolicyName: policyByName.get('fulfillment') ?? null,
+        paymentPolicyName: policyByName.get('payment') ?? null,
+        returnPolicyName: policyByName.get('return') ?? null,
+      });
+    }
+
+    return eligible;
   }
 
   async getStore(storeId: string): Promise<Store> {
@@ -72,7 +158,8 @@ export class StoresService {
     config?: Record<string, unknown>;
   }): Promise<Store> {
     const conn = await this.connectionRepo.findOneBy({ id: data.connectionId });
-    if (!conn) throw new NotFoundException(`Connection ${data.connectionId} not found`);
+    if (!conn)
+      throw new NotFoundException(`Connection ${data.connectionId} not found`);
 
     const store = this.storeRepo.create({
       connectionId: data.connectionId,
@@ -85,7 +172,9 @@ export class StoresService {
     });
 
     const saved = await this.storeRepo.save(store);
-    this.logger.log(`Created store "${saved.storeName}" (${saved.id}) for ${data.channel}`);
+    this.logger.log(
+      `Created store "${saved.storeName}" (${saved.id}) for ${data.channel}`,
+    );
 
     if (this.isDemoMode) {
       await this.logDemo({
@@ -101,7 +190,13 @@ export class StoresService {
 
   async updateStore(
     storeId: string,
-    data: Partial<{ storeName: string; storeUrl: string; status: string; isPrimary: boolean; config: Record<string, unknown> }>,
+    data: Partial<{
+      storeName: string;
+      storeUrl: string;
+      status: string;
+      isPrimary: boolean;
+      config: Record<string, unknown>;
+    }>,
   ): Promise<Store> {
     const store = await this.getStore(storeId);
     Object.assign(store, data);
@@ -110,7 +205,8 @@ export class StoresService {
 
   async deleteStore(storeId: string): Promise<void> {
     const result = await this.storeRepo.delete(storeId);
-    if (result.affected === 0) throw new NotFoundException(`Store ${storeId} not found`);
+    if (result.affected === 0)
+      throw new NotFoundException(`Store ${storeId} not found`);
   }
 
   // ─── Listing Channel Instances ───
@@ -122,15 +218,27 @@ export class StoresService {
     channel?: string;
     syncStatus?: string;
   }): Promise<ListingChannelInstance[]> {
-    const qb = this.instanceRepo.createQueryBuilder('i')
+    const qb = this.instanceRepo
+      .createQueryBuilder('i')
       .leftJoinAndSelect('i.store', 'store')
       .leftJoinAndSelect('i.connection', 'conn');
 
-    if (filters.listingId) qb.andWhere('i.listing_id = :listingId', { listingId: filters.listingId });
-    if (filters.storeId) qb.andWhere('i.store_id = :storeId', { storeId: filters.storeId });
-    if (filters.connectionId) qb.andWhere('i.connection_id = :connectionId', { connectionId: filters.connectionId });
-    if (filters.channel) qb.andWhere('i.channel = :channel', { channel: filters.channel });
-    if (filters.syncStatus) qb.andWhere('i.sync_status = :syncStatus', { syncStatus: filters.syncStatus });
+    if (filters.listingId)
+      qb.andWhere('i.listing_id = :listingId', {
+        listingId: filters.listingId,
+      });
+    if (filters.storeId)
+      qb.andWhere('i.store_id = :storeId', { storeId: filters.storeId });
+    if (filters.connectionId)
+      qb.andWhere('i.connection_id = :connectionId', {
+        connectionId: filters.connectionId,
+      });
+    if (filters.channel)
+      qb.andWhere('i.channel = :channel', { channel: filters.channel });
+    if (filters.syncStatus)
+      qb.andWhere('i.sync_status = :syncStatus', {
+        syncStatus: filters.syncStatus,
+      });
 
     return qb.orderBy('i.created_at', 'DESC').getMany();
   }
@@ -154,7 +262,8 @@ export class StoresService {
   }): Promise<ListingChannelInstance> {
     const store = await this.getStore(data.storeId);
     const listing = await this.listingRepo.findOneBy({ id: data.listingId });
-    if (!listing) throw new NotFoundException(`Listing ${data.listingId} not found`);
+    if (!listing)
+      throw new NotFoundException(`Listing ${data.listingId} not found`);
 
     // Check for existing instance at same store
     const existing = await this.instanceRepo.findOneBy({
@@ -181,7 +290,9 @@ export class StoresService {
     });
 
     const saved = await this.instanceRepo.save(instance);
-    this.logger.log(`Created instance ${saved.id} for listing ${data.listingId} at store ${store.storeName}`);
+    this.logger.log(
+      `Created instance ${saved.id} for listing ${data.listingId} at store ${store.storeName}`,
+    );
 
     // Update store listing count
     await this.updateStoreListingCount(data.storeId);
@@ -236,9 +347,13 @@ export class StoresService {
         simulatedLatencyMs: Math.round(simulatedDelay),
       });
 
-      this.logger.log(`[DEMO] Published instance ${instanceId} → ${externalId}`);
+      this.logger.log(
+        `[DEMO] Published instance ${instanceId} → ${externalId}`,
+      );
     } else {
-      const listing = await this.listingRepo.findOneBy({ id: instance.listingId });
+      const listing = await this.listingRepo.findOneBy({
+        id: instance.listingId,
+      });
       if (!listing) {
         instance.syncStatus = 'error';
         instance.lastError = `Listing ${instance.listingId} not found`;
@@ -246,13 +361,14 @@ export class StoresService {
         throw new NotFoundException(instance.lastError);
       }
 
-      const stub = this.ebayPublish.stubPublishRequest(
-        instance.listingId,
-        [instance.storeId],
-      );
+      const stub = this.ebayPublish.stubPublishRequest(instance.listingId, [
+        instance.storeId,
+      ]);
       if (instance.overrideTitle) stub.title = instance.overrideTitle;
-      if (instance.overridePrice != null) stub.price = Number(instance.overridePrice);
-      if (instance.overrideQuantity != null) stub.quantity = instance.overrideQuantity;
+      if (instance.overridePrice != null)
+        stub.price = Number(instance.overridePrice);
+      if (instance.overrideQuantity != null)
+        stub.quantity = instance.overrideQuantity;
 
       const results = await this.ebayPublish.publish(stub);
       const result = results[0];
@@ -278,9 +394,19 @@ export class StoresService {
   }
 
   async bulkPublishInstances(instanceIds: string[]): Promise<{
-    results: Array<{ instanceId: string; status: string; externalId?: string; error?: string }>;
+    results: Array<{
+      instanceId: string;
+      status: string;
+      externalId?: string;
+      error?: string;
+    }>;
   }> {
-    const results: Array<{ instanceId: string; status: string; externalId?: string; error?: string }> = [];
+    const results: Array<{
+      instanceId: string;
+      status: string;
+      externalId?: string;
+      error?: string;
+    }> = [];
 
     for (const id of instanceIds) {
       try {
@@ -333,9 +459,24 @@ export class StoresService {
   async publishToMultipleStores(
     listingId: string,
     storeIds: string[],
-    overrides?: Record<string, { price?: number; quantity?: number; title?: string }>,
-  ): Promise<{ results: Array<{ storeId: string; instanceId?: string; status: string; error?: string }> }> {
-    const results: Array<{ storeId: string; instanceId?: string; status: string; error?: string }> = [];
+    overrides?: Record<
+      string,
+      { price?: number; quantity?: number; title?: string }
+    >,
+  ): Promise<{
+    results: Array<{
+      storeId: string;
+      instanceId?: string;
+      status: string;
+      error?: string;
+    }>;
+  }> {
+    const results: Array<{
+      storeId: string;
+      instanceId?: string;
+      status: string;
+      error?: string;
+    }> = [];
 
     for (const storeId of storeIds) {
       try {
@@ -343,13 +484,19 @@ export class StoresService {
 
         // Create instance if not exists
         let instance: ListingChannelInstance;
-        const existing = await this.instanceRepo.findOneBy({ listingId, storeId });
+        const existing = await this.instanceRepo.findOneBy({
+          listingId,
+          storeId,
+        });
 
         if (existing) {
           instance = existing;
-          if (storeOverrides.price !== undefined) instance.overridePrice = storeOverrides.price;
-          if (storeOverrides.quantity !== undefined) instance.overrideQuantity = storeOverrides.quantity;
-          if (storeOverrides.title !== undefined) instance.overrideTitle = storeOverrides.title;
+          if (storeOverrides.price !== undefined)
+            instance.overridePrice = storeOverrides.price;
+          if (storeOverrides.quantity !== undefined)
+            instance.overrideQuantity = storeOverrides.quantity;
+          if (storeOverrides.title !== undefined)
+            instance.overrideTitle = storeOverrides.title;
           await this.instanceRepo.save(instance);
         } else {
           instance = await this.createInstance({
@@ -388,7 +535,12 @@ export class StoresService {
       channel: string;
       storeCount: number;
       publishedCount: number;
-      totalStores: Array<{ storeId: string; storeName: string; syncStatus: string; externalId: string | null }>;
+      totalStores: Array<{
+        storeId: string;
+        storeName: string;
+        syncStatus: string;
+        externalId: string | null;
+      }>;
     }>;
   }> {
     const instances = await this.instanceRepo.find({
@@ -405,17 +557,19 @@ export class StoresService {
       channelMap.set(inst.channel, existing);
     }
 
-    const channelSummary = Array.from(channelMap.entries()).map(([channel, insts]) => ({
-      channel,
-      storeCount: insts.length,
-      publishedCount: insts.filter((i) => i.syncStatus === 'synced').length,
-      totalStores: insts.map((i) => ({
-        storeId: i.storeId,
-        storeName: i.store?.storeName ?? 'Unknown',
-        syncStatus: i.syncStatus,
-        externalId: i.externalId,
-      })),
-    }));
+    const channelSummary = Array.from(channelMap.entries()).map(
+      ([channel, insts]) => ({
+        channel,
+        storeCount: insts.length,
+        publishedCount: insts.filter((i) => i.syncStatus === 'synced').length,
+        totalStores: insts.map((i) => ({
+          storeId: i.storeId,
+          storeName: i.store?.storeName ?? 'Unknown',
+          syncStatus: i.syncStatus,
+          externalId: i.externalId,
+        })),
+      }),
+    );
 
     return { instances, channelSummary };
   }
@@ -431,9 +585,16 @@ export class StoresService {
   }): Promise<{ logs: DemoSimulationLog[]; total: number }> {
     const qb = this.demoLogRepo.createQueryBuilder('d');
 
-    if (filters.channel) qb.andWhere('d.channel = :channel', { channel: filters.channel });
-    if (filters.operationType) qb.andWhere('d.operation_type = :opType', { opType: filters.operationType });
-    if (filters.listingId) qb.andWhere('d.listing_id = :listingId', { listingId: filters.listingId });
+    if (filters.channel)
+      qb.andWhere('d.channel = :channel', { channel: filters.channel });
+    if (filters.operationType)
+      qb.andWhere('d.operation_type = :opType', {
+        opType: filters.operationType,
+      });
+    if (filters.listingId)
+      qb.andWhere('d.listing_id = :listingId', {
+        listingId: filters.listingId,
+      });
 
     const [logs, total] = await qb
       .orderBy('d.created_at', 'DESC')
@@ -444,12 +605,12 @@ export class StoresService {
     return { logs, total };
   }
 
-  async simulateIncomingOrder(
-    instanceId: string,
-  ): Promise<DemoSimulationLog> {
+  async simulateIncomingOrder(instanceId: string): Promise<DemoSimulationLog> {
     const instance = await this.getInstance(instanceId);
     if (instance.syncStatus !== 'synced') {
-      throw new BadRequestException('Can only simulate orders for published instances');
+      throw new BadRequestException(
+        'Can only simulate orders for published instances',
+      );
     }
 
     const simulatedOrderId = `DEMO-ORD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -478,7 +639,9 @@ export class StoresService {
       notes: 'Simulated incoming order for demo',
     });
 
-    this.logger.log(`[DEMO] Simulated order ${simulatedOrderId} for instance ${instanceId}`);
+    this.logger.log(
+      `[DEMO] Simulated order ${simulatedOrderId} for instance ${instanceId}`,
+    );
     return log;
   }
 
@@ -507,7 +670,9 @@ export class StoresService {
     }
   }
 
-  private async logDemo(data: Partial<DemoSimulationLog>): Promise<DemoSimulationLog> {
+  private async logDemo(
+    data: Partial<DemoSimulationLog>,
+  ): Promise<DemoSimulationLog> {
     const log = this.demoLogRepo.create(data);
     return this.demoLogRepo.save(log);
   }

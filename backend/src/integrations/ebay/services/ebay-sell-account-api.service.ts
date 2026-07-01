@@ -175,7 +175,7 @@ export class EbaySellAccountApiService {
         const name = String(row.name ?? key);
         out.push({ merchantLocationKey: key, name, raw: row as Record<string, unknown> });
       }
-      if (locs.length < limit) break;
+      if (locs.length !== limit) break;
       offset += limit;
     }
     return out;
@@ -217,7 +217,10 @@ export class EbaySellAccountApiService {
         });
         const batch = mapPage(data).filter((p) => p.ebayPolicyId);
         out.push(...batch);
-        if (batch.length < limit) break;
+        // Break when the API returns fewer than requested (last page) OR
+        // more than requested (eBay ignored our limit and returned everything).
+        // Either way, fetching the next page would loop or be redundant.
+        if (batch.length !== limit) break;
         offset += limit;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

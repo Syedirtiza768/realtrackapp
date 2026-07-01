@@ -66,7 +66,21 @@
 
 ## Latest Session Summary
 
-**2026-06-11** — Comprehensive codebase analysis: verified all documentation counts, identified discrepancies (migrations 21→27, entities ~79→82, permissions ~90→73, specs 9→24, e2e 1→0), discovered DEBUG JWT logging security issue, confirmed double `/api` prefix bug, verified SellerPundit integration (19 files), AI routing system (39 files), and listing-optimization pipeline (transitively imported). Created `CURRENT_TRUE_STATE_OF_APPLICATION.md`. Updated all documentation files with corrected counts.
+**2026-07-01 (continued)** — Inventory pipeline hardening:
+- Auto-enrich now triggers on **2+ images only** (vision lookup runs inside the job; no longer requires part#/brand upfront).
+- `PUT /inventory/:id/editor` persists marketplace version edits to sibling listing records + `catalog_products.optimization_payload`.
+- Publish flow wires UI policy selections → `listing_store_overrides` → `ListingBuilderService` at publish time.
+- Inventory list + detail show per-store eBay listing status (store name, offer ID, live price/qty) from `ebay_listing_channels`.
+
+**2026-07-01** — Phase 1 of Inventory Auto-Enrich pipeline: created `InventoryAutoTriggerService` which detects when a listing reaches 2+ images with part number + brand and automatically enqueues a BullMQ `auto-enrich` job. The job runs vision lookup + pipeline enrichment + US/AU/DE optimization end-to-end. Added `enrichmentStatus` (idle/ready/enriching/completed/failed) to the inventory workbench list + detail endpoints, an enrichment status polling endpoint, and a frontend badge column with animated pulse for in-progress states.
+
+Phase 2: Created the unified multi-marketplace editor at `/inventory/:id/edit` with 3 marketplace tabs (US/AU/DE), editable fields (title, description, price, quantity, condition), store selector scoped to user-accessible eBay stores, and cascading payment/return/fulfillment policy dropdowns. The editor is served by `InventoryEditorService` (aggregates listing siblings + catalog product + accessible stores with policies). Frontend components: `InventoryListingEditor` (main page), `MarketplaceVersionEditor` (tab editor), `StorePolicySelector` (store+policy dropdowns).
+
+Phase 3: Added direct publish from the editor. New `InventoryPublishService` auto-creates a CatalogProduct from the listing (if none exists) and calls the existing multi-store publish flow (`EbayMultiStoreListingService.createPublishJob()`). New `POST /inventory/:id/publish` endpoint with `ebay.publish` permission gate. Frontend `PublishActionBar` shows target marketplaces with per-target progress tracking.
+
+Phase 4: Catalog dedup and polish — the catalog grid now groups listing records by SKU (one card per part) with colored marketplace badges (US/AU/DE) in grid and list views. The existing `/catalog/products/:id` detail page already shows multi-marketplace tabs. Backend + frontend compile clean.
+
+All 4 phases of the Inventory Auto-Enrich → Multi-Marketplace Editor → Publish pipeline are complete.
 
 ## Current Assumptions
 
