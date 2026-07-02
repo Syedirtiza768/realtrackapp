@@ -12,7 +12,7 @@ All queues run on Redis 7, configured globally in `app.module.ts` via `BullModul
 | Queue | Processor Location | Concurrency | Purpose |
 |-------|-------------------|-------------|---------|
 | `ingestion` | `ingestion/processors/ingestion.processor.ts` | 3 | Image/data ingestion |
-| `pipeline` | `ingestion/processors/pipeline.processor.ts` | 1 | Enrichment pipeline; enqueues `listing-optimization` |
+| `pipeline` | `ingestion/processors/pipeline.processor.ts` | `MAX_CONCURRENT_PIPELINE_JOBS` (default `2`) | Enrichment pipeline; enqueues `listing-optimization` |
 | `listing-optimization` | `listing-optimization/` | 1 | Listing optimization |
 | `catalog-import` | `catalog-import/processors/csv-import.processor.ts` | 1 | CSV/catalog import (memory-heavy) |
 | `fitment` | `fitment/processors/fitment-import.processor.ts` | 1 | Fitment import |

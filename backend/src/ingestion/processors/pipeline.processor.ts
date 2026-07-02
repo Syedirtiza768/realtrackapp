@@ -44,15 +44,27 @@ const ACTIVE_PIPELINE_STATUSES: PipelineJobStatus[] = [
   'output_generation',
 ];
 
-@Processor('pipeline', { concurrency: 1, lockDuration: 120 * 60 * 1000 })
+/** Align BullMQ worker concurrency with admission cap (see HeavyJobLimiterService). */
+const PIPELINE_WORKER_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.MAX_CONCURRENT_PIPELINE_JOBS ?? '2') || 2,
+);
+
+interface JobProgressState {
+  pendingUpdate: Partial<PipelineJob> | null;
+  pendingStageDetails: Record<string, unknown> | null;
+  flushTimer: ReturnType<typeof setTimeout> | null;
+}
+
+@Processor('pipeline', {
+  concurrency: PIPELINE_WORKER_CONCURRENCY,
+  lockDuration: 120 * 60 * 1000,
+})
 export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(PipelineProcessor.name);
 
-  // Debounce progress DB writes — accumulate updates and flush periodically
-  private pendingUpdate: Partial<PipelineJob> | null = null;
-  private pendingStageDetails: Record<string, unknown> | null = null;
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
-  private lastFlushJobId: string | null = null;
+  // Per-job debounced progress writes (safe when concurrency > 1)
+  private readonly progressByJob = new Map<string, JobProgressState>();
   private static readonly FLUSH_INTERVAL_MS = 1500; // flush at most every 1.5s
 
   constructor(
@@ -115,7 +127,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
   async process(job: Job<PipelineJobData>): Promise<void> {
     const { jobId, filePath } = job.data;
-    this.logger.log(`Starting pipeline job=${jobId}`);
+    this.logger.log(
+      `Starting pipeline job=${jobId} (worker concurrency=${PIPELINE_WORKER_CONCURRENCY})`,
+    );
 
     await this.updateStatus(jobId, 'uploading');
 
@@ -207,7 +221,30 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       this.logger.error(`Pipeline job=${jobId} failed: ${message}`);
       await this.fail(jobId, message);
       throw err;
+    } finally {
+      this.clearJobProgress(jobId);
     }
+  }
+
+  private getJobProgress(jobId: string): JobProgressState {
+    let state = this.progressByJob.get(jobId);
+    if (!state) {
+      state = {
+        pendingUpdate: null,
+        pendingStageDetails: null,
+        flushTimer: null,
+      };
+      this.progressByJob.set(jobId, state);
+    }
+    return state;
+  }
+
+  private clearJobProgress(jobId: string): void {
+    const state = this.progressByJob.get(jobId);
+    if (state?.flushTimer) {
+      clearTimeout(state.flushTimer);
+    }
+    this.progressByJob.delete(jobId);
   }
 
   private runPipeline(
@@ -268,6 +305,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
    * Stage transitions flush immediately; numeric stats are batched every 1.5s.
    */
   private async parseProgress(jobId: string, text: string): Promise<void> {
+    const state = this.getJobProgress(jobId);
     const lines = text.split('\n');
     let hasStageChange = false;
 
@@ -284,8 +322,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
       }
 
-      if (!this.pendingUpdate) this.pendingUpdate = {};
-      this.lastFlushJobId = jobId;
+      if (!state.pendingUpdate) state.pendingUpdate = {};
 
       // Stage transition
       const validStages: PipelineJobStatus[] = [
@@ -300,43 +337,43 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         fields.stage &&
         validStages.includes(fields.stage as PipelineJobStatus)
       ) {
-        this.pendingUpdate.status = fields.stage as PipelineJobStatus;
+        state.pendingUpdate.status = fields.stage as PipelineJobStatus;
         hasStageChange = true;
       } else if (fields.stage === 'enrichment_done') {
-        this.pendingUpdate.status = 'enrichment';
+        state.pendingUpdate.status = 'enrichment';
         hasStageChange = true;
       }
 
       // Numeric stats — accumulate without writing
       if (fields.total_parts)
-        this.pendingUpdate.totalParts = parseInt(fields.total_parts, 10);
+        state.pendingUpdate.totalParts = parseInt(fields.total_parts, 10);
       if (fields.processed)
-        this.pendingUpdate.processedParts = parseInt(fields.processed, 10);
+        state.pendingUpdate.processedParts = parseInt(fields.processed, 10);
       if (fields.enriched)
-        this.pendingUpdate.enrichedCount = parseInt(fields.enriched, 10);
+        state.pendingUpdate.enrichedCount = parseInt(fields.enriched, 10);
       if (fields.failed)
-        this.pendingUpdate.fallbackCount = parseInt(fields.failed, 10);
+        state.pendingUpdate.fallbackCount = parseInt(fields.failed, 10);
       if (fields.tokens)
-        this.pendingUpdate.openaiTokensUsed = parseInt(fields.tokens, 10);
+        state.pendingUpdate.openaiTokensUsed = parseInt(fields.tokens, 10);
       if (fields.vin_success)
-        this.pendingUpdate.vinDecodeSuccess = parseInt(fields.vin_success, 10);
+        state.pendingUpdate.vinDecodeSuccess = parseInt(fields.vin_success, 10);
       if (fields.vin_failed)
-        this.pendingUpdate.vinDecodeFailed = parseInt(fields.vin_failed, 10);
+        state.pendingUpdate.vinDecodeFailed = parseInt(fields.vin_failed, 10);
       if (fields.cat_api)
-        this.pendingUpdate.categoryApiCount = parseInt(fields.cat_api, 10);
+        state.pendingUpdate.categoryApiCount = parseInt(fields.cat_api, 10);
       if (fields.cat_fallback)
-        this.pendingUpdate.categoryFallbackCount = parseInt(
+        state.pendingUpdate.categoryFallbackCount = parseInt(
           fields.cat_fallback,
           10,
         );
       if (fields.cat_taxonomy_backoff === '1') {
-        if (!this.pendingStageDetails) this.pendingStageDetails = {};
-        this.pendingStageDetails.categoryTaxonomyBackoff = true;
+        if (!state.pendingStageDetails) state.pendingStageDetails = {};
+        state.pendingStageDetails.categoryTaxonomyBackoff = true;
         hasStageChange = true;
       }
       if (fields.enrichment_mode) {
-        if (!this.pendingStageDetails) this.pendingStageDetails = {};
-        this.pendingStageDetails.enrichmentMode = fields.enrichment_mode;
+        if (!state.pendingStageDetails) state.pendingStageDetails = {};
+        state.pendingStageDetails.enrichmentMode = fields.enrichment_mode;
         hasStageChange = true;
       }
     }
@@ -352,15 +389,16 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
   /** Flush accumulated progress to DB */
   private async flushProgress(jobId: string): Promise<void> {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
+    const state = this.getJobProgress(jobId);
+    if (state.flushTimer) {
+      clearTimeout(state.flushTimer);
+      state.flushTimer = null;
     }
 
-    const update = this.pendingUpdate;
-    const stagePatch = this.pendingStageDetails;
-    this.pendingUpdate = null;
-    this.pendingStageDetails = null;
+    const update = state.pendingUpdate;
+    const stagePatch = state.pendingStageDetails;
+    state.pendingUpdate = null;
+    state.pendingStageDetails = null;
 
     if (!update && !stagePatch) return;
 
@@ -386,9 +424,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
   /** Schedule a flush if one isn't already pending */
   private scheduleFlush(jobId: string): void {
-    if (this.flushTimer) return; // already scheduled
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
+    const state = this.getJobProgress(jobId);
+    if (state.flushTimer) return; // already scheduled
+    state.flushTimer = setTimeout(() => {
+      state.flushTimer = null;
       this.flushProgress(jobId).catch(() => {});
     }, PipelineProcessor.FLUSH_INTERVAL_MS);
   }
