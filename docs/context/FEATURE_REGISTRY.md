@@ -25,7 +25,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Motors Intelligence dashboard | `/motors`, `/motors/:id` | `motors-intelligence` | Partial | Candidate/attribute extraction, validation |
 | Motors AI upload | `/motors/upload` | `motors-intelligence` | Partial | `motors.manage` |
 | Motors review queue | `/motors/review` | `motors-intelligence` | Partial | Human-in-loop review |
-| Fitment manager (YMMT) | `/fitment` | `fitment` | Implemented | Make/model/year/submodel/engine |
+| Fitment manager (YMMT) | `/fitment` | `fitment` | Implemented | Make/model/year/submodel/engine; per-marketplace tree (US→`0`, AU→`15`, DE→`77`) |
 | VIN listings / lookup | `/fitment/vin` | `fitment` | Partial | `VinCache` |
 | Inventory manager | `/inventory` | `inventory` | Implemented | Ledger, allocations, events, sync |
 | Orders | `/orders` | `orders` | Implemented | eBay order import |

@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
-import { In, Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
@@ -38,17 +38,22 @@ export class ListingOptimizationService {
     bullJob?: Job,
   ): Promise<void> {
     const pipelineJob = await this.jobRepo.findOneBy({ id: jobId });
-    const byMkt = (pipelineJob?.optimizationByMarketplace ?? {}) as Record<string, any>;
+    const byMkt = (pipelineJob?.optimizationByMarketplace ?? {}) as Record<
+      string,
+      any
+    >;
     const existingStatus = byMkt[marketplace]?.status;
 
     if (existingStatus === 'completed' || existingStatus === 'needs_review') {
-      this.logger.log(`Optimization for job ${jobId} [${marketplace}] already completed, skipping`);
+      this.logger.log(
+        `Optimization for job ${jobId} [${marketplace}] already completed, skipping`,
+      );
       await this.refreshJobOptimizationAggregate(jobId);
       return;
     }
 
     const isRetry = existingStatus === 'running';
-    const existingCounts = isRetry ? byMkt[marketplace] ?? {} : {};
+    const existingCounts = isRetry ? (byMkt[marketplace] ?? {}) : {};
 
     await this.mergeOptimizationByMarketplace(jobId, marketplace, {
       status: 'running',
@@ -72,7 +77,7 @@ export class ListingOptimizationService {
       .andWhere('lr.customLabelSku IS NOT NULL')
       .getRawMany<{ sku: string }>();
 
-    const marketplaceSkus = new Set(marketplaceListingSkus.map(r => r.sku));
+    const marketplaceSkus = new Set(marketplaceListingSkus.map((r) => r.sku));
 
     let products = await this.productRepo.find({
       where: { pipelineJobId: jobId },
@@ -82,7 +87,9 @@ export class ListingOptimizationService {
     // Only process products that have a listing_record for this marketplace.
     // If no listing records exist for this marketplace, skip entirely.
     if (marketplaceSkus.size === 0) {
-      this.logger.log(`No listing records for job ${jobId} [${marketplace}], skipping optimization`);
+      this.logger.log(
+        `No listing records for job ${jobId} [${marketplace}], skipping optimization`,
+      );
       await this.mergeOptimizationByMarketplace(jobId, marketplace, {
         status: 'completed',
         passCount: 0,
@@ -94,9 +101,11 @@ export class ListingOptimizationService {
       await this.refreshJobOptimizationAggregate(jobId);
       return;
     }
-    products = products.filter(p => p.sku && marketplaceSkus.has(p.sku));
+    products = products.filter((p) => p.sku && marketplaceSkus.has(p.sku));
 
-    await this.jobRepo.update(jobId, { optimizationTotal: products.length } as any);
+    await this.jobRepo.update(jobId, {
+      optimizationTotal: products.length,
+    } as any);
 
     const PRODUCT_TIMEOUT_MS = 60_000;
     const EXTEND_LOCK_INTERVAL = 10; // extend BullMQ lock every 10 products
@@ -116,7 +125,9 @@ export class ListingOptimizationService {
         try {
           await bullJob.extendLock(bullJob.token!, EXTEND_LOCK_MS);
         } catch (e) {
-          this.logger.warn(`Failed to extend lock for job ${jobId} [${marketplace}]: ${String(e)}`);
+          this.logger.warn(
+            `Failed to extend lock for job ${jobId} [${marketplace}]: ${String(e)}`,
+          );
         }
         const pct = Math.floor((i / products.length) * 100);
         try {
@@ -130,21 +141,35 @@ export class ListingOptimizationService {
         await Promise.race([
           this.optimizeProduct(id, marketplace, { force: false }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Product ${id} optimization timed out after ${PRODUCT_TIMEOUT_MS}ms`)), PRODUCT_TIMEOUT_MS),
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `Product ${id} optimization timed out after ${PRODUCT_TIMEOUT_MS}ms`,
+                  ),
+                ),
+              PRODUCT_TIMEOUT_MS,
+            ),
           ),
         ]);
       } catch (err) {
-        this.logger.error(`Optimization failed for product ${id} [${marketplace}]: ${String(err)}`);
+        this.logger.error(
+          `Optimization failed for product ${id} [${marketplace}]: ${String(err)}`,
+        );
         // Mark product as failed so it's counted as processed — prevents the
         // job from getting stuck with processed < total forever.
-        await this.productRepo.update(id, {
-          optimizationStatus: 'failed',
-          optimizationErrors: [{
-            code: 'OPTIMIZATION_FAILED',
-            severity: 'error',
-            message: String(err).substring(0, 500),
-          }],
-        } as any).catch(() => {});
+        await this.productRepo
+          .update(id, {
+            optimizationStatus: 'failed',
+            optimizationErrors: [
+              {
+                code: 'OPTIMIZATION_FAILED',
+                severity: 'error',
+                message: String(err).substring(0, 500),
+              },
+            ],
+          } as any)
+          .catch(() => {});
       }
       completedCount++;
       await this.refreshJobOptimizationCounts(jobId, marketplace);
@@ -175,7 +200,29 @@ export class ListingOptimizationService {
       fitmentStatus: 'running',
     } as any);
 
-    const fitment = await this.fitmentDiscovery.discover(product);
+    // Resolve the per-marketplace categoryId from the matching listing record.
+    // Each marketplace (US/AU/DE) has its own category tree, so fitment must be
+    // discovered/validated against the listing record's categoryId for that
+    // marketplace rather than the shared catalog_product.categoryId.
+    let discoveryCategoryId: string | undefined;
+    if (product.sku) {
+      const mktListing = await this.listingRepo.findOne({
+        where: {
+          customLabelSku: product.sku,
+          marketplace,
+          deletedAt: IsNull(),
+        },
+        select: ['categoryId'],
+      });
+      if (mktListing?.categoryId) {
+        discoveryCategoryId = mktListing.categoryId;
+      }
+    }
+
+    const fitment = await this.fitmentDiscovery.discover(product, {
+      marketplace,
+      categoryId: discoveryCategoryId,
+    });
     const fitmentJson = this.fitmentDiscovery.toFitmentDataJson(fitment.rows);
 
     await this.productRepo.update(productId, {
@@ -195,12 +242,22 @@ export class ListingOptimizationService {
 
     const errors: OptimizationIssue[] = listing.complianceWarnings
       .filter((w) => w.severity === 'error')
-      .map((w) => ({ code: w.code, severity: w.severity, message: w.message, field: w.field }));
+      .map((w) => ({
+        code: w.code,
+        severity: w.severity,
+        message: w.message,
+        field: w.field,
+      }));
 
     const warnings: OptimizationIssue[] = [
       ...listing.complianceWarnings
         .filter((w) => w.severity !== 'error')
-        .map((w) => ({ code: w.code, severity: w.severity, message: w.message, field: w.field })),
+        .map((w) => ({
+          code: w.code,
+          severity: w.severity,
+          message: w.message,
+          field: w.field,
+        })),
       ...fitment.manualReviewReasons.map((msg) => ({
         code: 'FITMENT_REVIEW',
         severity: 'warning' as const,
@@ -228,7 +285,8 @@ export class ListingOptimizationService {
           : 'needs_review';
 
     const manualReview =
-      optimizationStatus === 'needs_review' || fitment.status === 'needs_review';
+      optimizationStatus === 'needs_review' ||
+      fitment.status === 'needs_review';
 
     const seoScore = listing.confidenceScores.overall;
     const readinessScore = listing.uploadReadinessScore;
@@ -250,7 +308,10 @@ export class ListingOptimizationService {
     } as any);
 
     if (product.pipelineJobId) {
-      await this.refreshJobOptimizationCounts(product.pipelineJobId, marketplace);
+      await this.refreshJobOptimizationCounts(
+        product.pipelineJobId,
+        marketplace,
+      );
     }
 
     return this.productRepo.findOneByOrFail({ id: productId });
@@ -273,7 +334,8 @@ export class ListingOptimizationService {
 
     return {
       jobId,
-      optimizationStatus: (job.optimizationStatus as OptimizationStatus) ?? 'pending',
+      optimizationStatus:
+        (job.optimizationStatus as OptimizationStatus) ?? 'pending',
       processed: mktData?.processed ?? job.optimizationProcessed ?? 0,
       total: mktData?.total ?? job.optimizationTotal ?? products.length,
       passCount: mktData?.passCount ?? job.optimizationPassCount ?? 0,
@@ -284,11 +346,13 @@ export class ListingOptimizationService {
     };
   }
 
-  async getProductOptimization(productId: string): Promise<ProductOptimizationSummary & {
-    fitmentRows: unknown;
-    fitmentData: unknown;
-    optimizationPayload: unknown;
-  }> {
+  async getProductOptimization(productId: string): Promise<
+    ProductOptimizationSummary & {
+      fitmentRows: unknown;
+      fitmentData: unknown;
+      optimizationPayload: unknown;
+    }
+  > {
     const product = await this.productRepo.findOneBy({ id: productId });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
     return {
@@ -299,7 +363,10 @@ export class ListingOptimizationService {
     };
   }
 
-  async markManualReview(productId: string, enabled = true): Promise<CatalogProduct> {
+  async markManualReview(
+    productId: string,
+    enabled = true,
+  ): Promise<CatalogProduct> {
     await this.productRepo.update(productId, {
       manualReview: enabled,
       optimizationStatus: enabled ? 'needs_review' : 'completed',
@@ -307,26 +374,30 @@ export class ListingOptimizationService {
     return this.productRepo.findOneByOrFail({ id: productId });
   }
 
-  async bypassJobOptimization(jobId: string): Promise<{ updatedCount: number }> {
+  async bypassJobOptimization(
+    jobId: string,
+  ): Promise<{ updatedCount: number }> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
     if (!job) throw new NotFoundException(`Pipeline job ${jobId} not found`);
 
-    const result = await this.productRepo.update(
-      { pipelineJobId: jobId },
-      {
-        optimizationStatus: 'completed',
-        manualReview: false,
-        optimizationErrors: [],
-        optimizationWarnings: [],
-      } as any,
-    );
+    const result = await this.productRepo.update({ pipelineJobId: jobId }, {
+      optimizationStatus: 'completed',
+      manualReview: false,
+      optimizationErrors: [],
+      optimizationWarnings: [],
+    } as any);
 
-    this.logger.warn(`Optimization bypassed for job ${jobId} — ${result.affected ?? 0} products updated`);
+    this.logger.warn(
+      `Optimization bypassed for job ${jobId} — ${result.affected ?? 0} products updated`,
+    );
 
     await this.productRepo
       .createQueryBuilder()
       .update(CatalogProduct)
-      .set({ optimizationPayload: () => `jsonb_set(COALESCE(optimization_payload, '{}'), '{validationStatus}', '"pass"')` })
+      .set({
+        optimizationPayload: () =>
+          `jsonb_set(COALESCE(optimization_payload, '{}'), '{validationStatus}', '"pass"')`,
+      })
       .where('pipeline_job_id = :jobId', { jobId })
       .execute();
 
@@ -344,38 +415,55 @@ export class ListingOptimizationService {
   canPublish(product: CatalogProduct): boolean {
     if (product.optimizationStatus !== 'completed') return false;
     if (product.manualReview) return false;
-    const payload = product.optimizationPayload as { validationStatus?: string } | null;
+    const payload = product.optimizationPayload as {
+      validationStatus?: string;
+    } | null;
     if (payload?.validationStatus === 'block') return false;
-    const errors = (product.optimizationErrors as unknown as OptimizationIssue[]) ?? [];
+    const errors =
+      (product.optimizationErrors as unknown as OptimizationIssue[]) ?? [];
     if (errors.some((e) => e.severity === 'error')) return false;
     return true;
   }
 
-  private toProductSummary(product: CatalogProduct): ProductOptimizationSummary {
+  private toProductSummary(
+    product: CatalogProduct,
+  ): ProductOptimizationSummary {
     const payload = product.optimizationPayload as {
       validationStatus?: 'pass' | 'review' | 'block';
       uploadReadinessScore?: number;
       missingDataReport?: string[];
     } | null;
 
-    const fitmentRows = Array.isArray(product.fitmentRows) ? product.fitmentRows : [];
+    const fitmentRows = Array.isArray(product.fitmentRows)
+      ? product.fitmentRows
+      : [];
 
     return {
       productId: product.id,
       sku: product.sku,
-      optimizationStatus: (product.optimizationStatus as OptimizationStatus) ?? 'pending',
-      fitmentStatus: (product.fitmentStatus as ProductOptimizationSummary['fitmentStatus']) ?? 'pending',
-      ebayValidationStatus: product.ebayValidationStatus as ProductOptimizationSummary['ebayValidationStatus'],
+      optimizationStatus:
+        (product.optimizationStatus as OptimizationStatus) ?? 'pending',
+      fitmentStatus:
+        (product.fitmentStatus as ProductOptimizationSummary['fitmentStatus']) ??
+        'pending',
+      ebayValidationStatus:
+        product.ebayValidationStatus as ProductOptimizationSummary['ebayValidationStatus'],
       optimizedTitle: product.optimizedTitle,
       validationStatus: payload?.validationStatus ?? 'review',
-      uploadReadinessScore: payload?.uploadReadinessScore ?? Number(product.readinessScore ?? 0),
+      uploadReadinessScore:
+        payload?.uploadReadinessScore ?? Number(product.readinessScore ?? 0),
       seoScore: Number(product.seoScore ?? 0),
       readinessScore: Number(product.readinessScore ?? 0),
-      fitmentConfidence: product.fitmentConfidence != null ? Number(product.fitmentConfidence) : null,
+      fitmentConfidence:
+        product.fitmentConfidence != null
+          ? Number(product.fitmentConfidence)
+          : null,
       fitmentRowCount: fitmentRows.length,
       manualReview: Boolean(product.manualReview),
-      errors: (product.optimizationErrors as unknown as OptimizationIssue[]) ?? [],
-      warnings: (product.optimizationWarnings as unknown as OptimizationIssue[]) ?? [],
+      errors:
+        (product.optimizationErrors as unknown as OptimizationIssue[]) ?? [],
+      warnings:
+        (product.optimizationWarnings as unknown as OptimizationIssue[]) ?? [],
       missingDataReport: payload?.missingDataReport ?? [],
       canPublish: this.canPublish(product),
     };
@@ -387,7 +475,12 @@ export class ListingOptimizationService {
   ): Promise<void> {
     const products = await this.productRepo.find({
       where: { pipelineJobId: jobId },
-      select: ['optimizationStatus', 'optimizationPayload', 'manualReview', 'optimizationErrors'],
+      select: [
+        'optimizationStatus',
+        'optimizationPayload',
+        'manualReview',
+        'optimizationErrors',
+      ],
     });
 
     let passCount = 0;
@@ -396,14 +489,25 @@ export class ListingOptimizationService {
     let processed = 0;
 
     for (const p of products) {
-      if (p.optimizationStatus === 'pending' || p.optimizationStatus === 'running') continue;
+      if (
+        p.optimizationStatus === 'pending' ||
+        p.optimizationStatus === 'running'
+      )
+        continue;
       processed++;
-      const payload = p.optimizationPayload as { validationStatus?: string } | null;
+      const payload = p.optimizationPayload as {
+        validationStatus?: string;
+      } | null;
       const status = payload?.validationStatus;
       if (status === 'block' || p.optimizationStatus === 'failed') blockCount++;
-      else if (status === 'review' || p.optimizationStatus === 'needs_review' || p.manualReview)
+      else if (
+        status === 'review' ||
+        p.optimizationStatus === 'needs_review' ||
+        p.manualReview
+      )
         reviewCount++;
-      else if (status === 'pass' && p.optimizationStatus === 'completed') passCount++;
+      else if (status === 'pass' && p.optimizationStatus === 'completed')
+        passCount++;
       else reviewCount++;
     }
 
@@ -452,14 +556,20 @@ export class ListingOptimizationService {
     if (!job) return;
 
     const byMkt = (job.optimizationByMarketplace ?? {}) as Record<string, any>;
-    const statuses = Object.values(byMkt).map((v: any) => v.status ?? 'pending');
+    const statuses = Object.values(byMkt).map(
+      (v: any) => v.status ?? 'pending',
+    );
 
     let aggregateStatus = 'completed';
     if (statuses.length === 0) aggregateStatus = 'pending';
-    else if (statuses.some((s: string) => s === 'running')) aggregateStatus = 'running';
-    else if (statuses.some((s: string) => s === 'failed')) aggregateStatus = 'needs_review';
-    else if (statuses.some((s: string) => s === 'needs_review')) aggregateStatus = 'needs_review';
-    else if (statuses.some((s: string) => s === 'pending')) aggregateStatus = 'pending';
+    else if (statuses.some((s: string) => s === 'running'))
+      aggregateStatus = 'running';
+    else if (statuses.some((s: string) => s === 'failed'))
+      aggregateStatus = 'needs_review';
+    else if (statuses.some((s: string) => s === 'needs_review'))
+      aggregateStatus = 'needs_review';
+    else if (statuses.some((s: string) => s === 'pending'))
+      aggregateStatus = 'pending';
 
     await this.jobRepo.update(jobId, {
       optimizationStatus: aggregateStatus,

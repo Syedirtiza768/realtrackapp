@@ -46,7 +46,7 @@ export class EbayMarketplaceConfigService {
       locale: 'en_AU',
       categoryTreeId: '15',
       defaultLanguage: 'en',
-      supportsMotorsFitment: false,
+      supportsMotorsFitment: true,
       requiresLocalizedDescription: false,
     },
   };

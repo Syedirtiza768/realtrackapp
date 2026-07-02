@@ -4,13 +4,17 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job, Queue } from 'bullmq';
 import { In, Repository } from 'typeorm';
-import { PipelineJob, PipelineJobStatus } from '../entities/pipeline-job.entity.js';
+import {
+  PipelineJob,
+  PipelineJobStatus,
+} from '../entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
+import { resolveCategoryTreeId } from '../../channels/ebay/ebay-marketplace-tree.util.js';
 import { ListingGenerationPipeline } from '../../common/openai/pipelines/listing-generation.pipeline.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
@@ -116,9 +120,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     await this.updateStatus(jobId, 'uploading');
 
     // Resolve paths — PIPELINE_PROJECT_ROOT is set in Docker; falls back to cwd/.. for bare-metal
-    const projectRoot = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-    const scriptPath = path.resolve(projectRoot, 'scripts', 'ebay-enrichment-pipeline.mjs');
-    const outputDir = path.resolve(projectRoot, 'output', `pipeline-${jobId.slice(0, 8)}`);
+    const projectRoot =
+      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const scriptPath = path.resolve(
+      projectRoot,
+      'scripts',
+      'ebay-enrichment-pipeline.mjs',
+    );
+    const outputDir = path.resolve(
+      projectRoot,
+      'output',
+      `pipeline-${jobId.slice(0, 8)}`,
+    );
 
     if (!fs.existsSync(scriptPath)) {
       await this.fail(jobId, `Pipeline script not found: ${scriptPath}`);
@@ -186,7 +199,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         );
       }
 
-      this.logger.log(`Pipeline job=${jobId} enrichment completed; queued mandatory listing optimization for US/AU/DE`);
+      this.logger.log(
+        `Pipeline job=${jobId} enrichment completed; queued mandatory listing optimization for US/AU/DE`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Pipeline job=${jobId} failed: ${message}`);
@@ -241,7 +256,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           this.logger.error(`Pipeline stderr: ${stderr.slice(-500)}`);
         }
         // Flush any pending progress before resolving
-        this.flushProgress(jobId).then(() => resolve(code ?? 1)).catch(() => resolve(code ?? 1));
+        this.flushProgress(jobId)
+          .then(() => resolve(code ?? 1))
+          .catch(() => resolve(code ?? 1));
       });
     });
   }
@@ -272,10 +289,17 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       // Stage transition
       const validStages: PipelineJobStatus[] = [
-        'uploading', 'vin_decode', 'category_mapping',
-        'enrichment', 'validation', 'output_generation',
+        'uploading',
+        'vin_decode',
+        'category_mapping',
+        'enrichment',
+        'validation',
+        'output_generation',
       ];
-      if (fields.stage && validStages.includes(fields.stage as PipelineJobStatus)) {
+      if (
+        fields.stage &&
+        validStages.includes(fields.stage as PipelineJobStatus)
+      ) {
         this.pendingUpdate.status = fields.stage as PipelineJobStatus;
         hasStageChange = true;
       } else if (fields.stage === 'enrichment_done') {
@@ -284,15 +308,27 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       }
 
       // Numeric stats — accumulate without writing
-      if (fields.total_parts) this.pendingUpdate.totalParts = parseInt(fields.total_parts, 10);
-      if (fields.processed) this.pendingUpdate.processedParts = parseInt(fields.processed, 10);
-      if (fields.enriched) this.pendingUpdate.enrichedCount = parseInt(fields.enriched, 10);
-      if (fields.failed) this.pendingUpdate.fallbackCount = parseInt(fields.failed, 10);
-      if (fields.tokens) this.pendingUpdate.openaiTokensUsed = parseInt(fields.tokens, 10);
-      if (fields.vin_success) this.pendingUpdate.vinDecodeSuccess = parseInt(fields.vin_success, 10);
-      if (fields.vin_failed) this.pendingUpdate.vinDecodeFailed = parseInt(fields.vin_failed, 10);
-      if (fields.cat_api) this.pendingUpdate.categoryApiCount = parseInt(fields.cat_api, 10);
-      if (fields.cat_fallback) this.pendingUpdate.categoryFallbackCount = parseInt(fields.cat_fallback, 10);
+      if (fields.total_parts)
+        this.pendingUpdate.totalParts = parseInt(fields.total_parts, 10);
+      if (fields.processed)
+        this.pendingUpdate.processedParts = parseInt(fields.processed, 10);
+      if (fields.enriched)
+        this.pendingUpdate.enrichedCount = parseInt(fields.enriched, 10);
+      if (fields.failed)
+        this.pendingUpdate.fallbackCount = parseInt(fields.failed, 10);
+      if (fields.tokens)
+        this.pendingUpdate.openaiTokensUsed = parseInt(fields.tokens, 10);
+      if (fields.vin_success)
+        this.pendingUpdate.vinDecodeSuccess = parseInt(fields.vin_success, 10);
+      if (fields.vin_failed)
+        this.pendingUpdate.vinDecodeFailed = parseInt(fields.vin_failed, 10);
+      if (fields.cat_api)
+        this.pendingUpdate.categoryApiCount = parseInt(fields.cat_api, 10);
+      if (fields.cat_fallback)
+        this.pendingUpdate.categoryFallbackCount = parseInt(
+          fields.cat_fallback,
+          10,
+        );
       if (fields.cat_taxonomy_backoff === '1') {
         if (!this.pendingStageDetails) this.pendingStageDetails = {};
         this.pendingStageDetails.categoryTaxonomyBackoff = true;
@@ -341,7 +377,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     if (Object.keys(merged).length > 0) {
       await this.jobRepo.update(jobId, merged as any);
       if (merged.status) {
-        this.logger.log(`Job ${jobId} → ${merged.status} (parts: ${merged.processedParts ?? '?'}/${merged.totalParts ?? '?'})`);
+        this.logger.log(
+          `Job ${jobId} → ${merged.status} (parts: ${merged.processedParts ?? '?'}/${merged.totalParts ?? '?'})`,
+        );
       }
     }
   }
@@ -358,7 +396,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   /**
    * Scan the output directory and record file paths in the job record.
    */
-  private async collectOutputs(jobId: string, outputDir: string): Promise<void> {
+  private async collectOutputs(
+    jobId: string,
+    outputDir: string,
+  ): Promise<void> {
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
     const update: Partial<PipelineJob> = {};
 
@@ -380,17 +421,23 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           const report = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
           const summary = report.summary ?? report;
           const summaryAny = summary as Record<string, unknown>;
-          if (summaryAny.totalInputParts) update.totalParts = summaryAny.totalInputParts as number;
-          else if (summaryAny.totalInput) update.totalParts = summaryAny.totalInput as number;
-          if (summaryAny.vinDecodeSuccess) update.vinDecodeSuccess = summaryAny.vinDecodeSuccess as number;
-          if (summaryAny.vinDecodeFail) update.vinDecodeFailed = summaryAny.vinDecodeFail as number;
+          if (summaryAny.totalInputParts)
+            update.totalParts = summaryAny.totalInputParts as number;
+          else if (summaryAny.totalInput)
+            update.totalParts = summaryAny.totalInput as number;
+          if (summaryAny.vinDecodeSuccess)
+            update.vinDecodeSuccess = summaryAny.vinDecodeSuccess as number;
+          if (summaryAny.vinDecodeFail)
+            update.vinDecodeFailed = summaryAny.vinDecodeFail as number;
           if (report.categoryMapping?.apiMapped != null) {
             update.categoryApiCount = report.categoryMapping.apiMapped;
           }
           if (report.categoryMapping?.fallbackMapped != null) {
-            update.categoryFallbackCount = report.categoryMapping.fallbackMapped;
+            update.categoryFallbackCount =
+              report.categoryMapping.fallbackMapped;
           }
-          if (report.openai?.totalTokens) update.openaiTokensUsed = report.openai.totalTokens;
+          if (report.openai?.totalTokens)
+            update.openaiTokensUsed = report.openai.totalTokens;
           if (summaryAny.totalAiEnriched != null) {
             update.enrichedCount = summaryAny.totalAiEnriched as number;
           } else if (summaryAny.totalProcessed) {
@@ -406,7 +453,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             (e: { type?: string }) => e.type === 'openai',
           );
           const taxonomyErrors = (report.categoryMapping?.taxonomyErrors ??
-            (report.errors ?? []).filter((e: { type?: string }) => e.type === 'taxonomy')) as Array<{
+            (report.errors ?? []).filter(
+              (e: { type?: string }) => e.type === 'taxonomy',
+            )) as Array<{
             type?: string;
             message: string;
             source?: string;
@@ -414,9 +463,12 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           }>;
           update.stageDetails = {
             enrichmentMode: summaryAny.enrichmentMode ?? null,
-            totalAiEnriched: summaryAny.totalAiEnriched ?? summaryAny.totalProcessed ?? 0,
+            totalAiEnriched:
+              summaryAny.totalAiEnriched ?? summaryAny.totalProcessed ?? 0,
             totalFallbackEnrichment:
-              summaryAny.totalFallbackEnrichment ?? summaryAny.totalFailedEnrichment ?? 0,
+              summaryAny.totalFallbackEnrichment ??
+              summaryAny.totalFailedEnrichment ??
+              0,
             totalListingsGenerated: summaryAny.totalListingsGenerated ?? null,
             openRouterModel: report.openai?.defaultModel ?? null,
             openRouterProbeErrors: probeErrors,
@@ -426,7 +478,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               apiMapped: report.categoryMapping?.apiMapped ?? 0,
               fallbackMapped: report.categoryMapping?.fallbackMapped ?? 0,
               apiRate: report.categoryMapping?.apiRate ?? '0%',
-              apiSkippedReason: report.categoryMapping?.apiSkippedReason ?? null,
+              apiSkippedReason:
+                report.categoryMapping?.apiSkippedReason ?? null,
               treeCacheHit: report.categoryMapping?.treeCacheHit ?? false,
               treeCacheSource: report.categoryMapping?.treeCacheSource ?? null,
               taxonomyErrors,
@@ -455,23 +508,37 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       for (const file of parentFiles) {
         const fullPath = path.join(parentOutput, file);
         const lower = file.toLowerCase();
-        if (lower.includes('us-motors') && !update.outputUsPath) update.outputUsPath = fullPath;
-        if (lower.startsWith('au-') && !update.outputAuPath) update.outputAuPath = fullPath;
-        if (lower.startsWith('de-') && !update.outputDePath) update.outputDePath = fullPath;
-        if (lower.includes('report') && lower.endsWith('.json') && !update.reportPath) update.reportPath = fullPath;
+        if (lower.includes('us-motors') && !update.outputUsPath)
+          update.outputUsPath = fullPath;
+        if (lower.startsWith('au-') && !update.outputAuPath)
+          update.outputAuPath = fullPath;
+        if (lower.startsWith('de-') && !update.outputDePath)
+          update.outputDePath = fullPath;
+        if (
+          lower.includes('report') &&
+          lower.endsWith('.json') &&
+          !update.reportPath
+        )
+          update.reportPath = fullPath;
       }
     }
 
     if (Object.keys(update).length > 0) {
       const existing = await this.jobRepo.findOneBy({ id: jobId });
       if (update.stageDetails && existing?.stageDetails) {
-        update.stageDetails = { ...existing.stageDetails, ...update.stageDetails };
+        update.stageDetails = {
+          ...existing.stageDetails,
+          ...update.stageDetails,
+        };
       }
       await this.jobRepo.update(jobId, update as any);
     }
   }
 
-  private async updateStatus(jobId: string, status: PipelineJobStatus): Promise<void> {
+  private async updateStatus(
+    jobId: string,
+    status: PipelineJobStatus,
+  ): Promise<void> {
     const update: Partial<PipelineJob> = { status };
     if (status === 'uploading') {
       update.startedAt = new Date();
@@ -494,7 +561,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
    */
   private async linkUploadedImages(jobId: string): Promise<void> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
-    const assetIds = (job?.stageDetails as Record<string, unknown>)?.uploadedAssetIds as string[] | undefined;
+    const assetIds = (job?.stageDetails as Record<string, unknown>)
+      ?.uploadedAssetIds as string[] | undefined;
     if (!assetIds || assetIds.length === 0) return;
 
     const listings = await this.listingRepo.find({
@@ -503,7 +571,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     });
     const primaryListing = listings[0];
     if (!primaryListing) {
-      this.logger.warn(`Job ${jobId}: Could not find listing record to link uploaded images`);
+      this.logger.warn(
+        `Job ${jobId}: Could not find listing record to link uploaded images`,
+      );
       return;
     }
 
@@ -525,40 +595,55 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
    */
   private async propagateSourceImages(jobId: string): Promise<void> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
-    const stageDetails = (job?.stageDetails ?? {}) as Record<string, unknown>;
-    const sourceListingIds = stageDetails.sourceListingIds as string[] | undefined;
-    const uploadedAssetIds = stageDetails.uploadedAssetIds as string[] | undefined;
+    const stageDetails = job?.stageDetails ?? {};
+    const sourceListingIds = stageDetails.sourceListingIds as
+      | string[]
+      | undefined;
+    const uploadedAssetIds = stageDetails.uploadedAssetIds as
+      | string[]
+      | undefined;
 
     const imageUrlSet = new Set<string>();
 
     const addUrls = (pipe: string | null | undefined): void => {
-      for (const url of (pipe ?? '').split('|').map((u) => u.trim()).filter(Boolean)) {
+      for (const url of (pipe ?? '')
+        .split('|')
+        .map((u) => u.trim())
+        .filter(Boolean)) {
         if (url.startsWith('http')) imageUrlSet.add(url);
       }
     };
 
     if (sourceListingIds?.length) {
-      const sources = await this.listingRepo.find({ where: { id: In(sourceListingIds) } });
+      const sources = await this.listingRepo.find({
+        where: { id: In(sourceListingIds) },
+      });
       for (const source of sources) {
         addUrls(source.itemPhotoUrl);
       }
     }
 
     if (uploadedAssetIds?.length) {
-      const assets = await this.imageAssetRepo.find({ where: { id: In(uploadedAssetIds) } });
+      const assets = await this.imageAssetRepo.find({
+        where: { id: In(uploadedAssetIds) },
+      });
       for (const asset of assets) {
         if (asset.cdnUrl?.startsWith('http')) imageUrlSet.add(asset.cdnUrl);
       }
     }
 
-    const pipelineListings = await this.listingRepo.find({ where: { pipelineJobId: jobId } });
+    const pipelineListings = await this.listingRepo.find({
+      where: { pipelineJobId: jobId },
+    });
     for (const listing of pipelineListings) {
       addUrls(listing.itemPhotoUrl);
     }
 
     const skus = [
       ...new Set(
-        pipelineListings.map((l) => l.customLabelSku?.trim()).filter((s): s is string => Boolean(s)),
+        pipelineListings
+          .map((l) => l.customLabelSku?.trim())
+          .filter((s): s is string => Boolean(s)),
       ),
     ];
     if (skus.length) {
@@ -593,7 +678,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     let catalogUpdated = 0;
     let listingsUpdated = 0;
 
-    const products = await this.productRepo.find({ where: { pipelineJobId: jobId } });
+    const products = await this.productRepo.find({
+      where: { pipelineJobId: jobId },
+    });
     for (const product of products) {
       if (!product.imageUrls?.length) {
         product.imageUrls = imageUrls;
@@ -634,7 +721,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     const products = await this.productRepo.find({
       where: { pipelineJobId: jobId },
     });
-    const productsWithSku = products.filter(p => p.sku?.trim());
+    const productsWithSku = products.filter((p) => p.sku?.trim());
     if (productsWithSku.length === 0) return;
 
     // 2. Get all listing records for this job, indexed by (sku → set of marketplaces)
@@ -658,7 +745,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
     // 3. Collect missing marketplace entries — (product, marketplace, template)
     const missingEntries: Array<{
-      product: typeof productsWithSku[number];
+      product: (typeof productsWithSku)[number];
       marketplace: 'US' | 'AU' | 'DE';
       template: Partial<ListingRecord>;
     }> = [];
@@ -677,7 +764,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     }
 
     if (missingEntries.length === 0) {
-      this.logger.log(`Job ${jobId}: All 3 marketplaces already have listing records — no action needed`);
+      this.logger.log(
+        `Job ${jobId}: All 3 marketplaces already have listing records — no action needed`,
+      );
       return;
     }
 
@@ -688,15 +777,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     // 4. Group missing entries by marketplace for batch AI generation
     const byMarketplace = new Map<'US' | 'AU' | 'DE', typeof missingEntries>();
     for (const entry of missingEntries) {
-      if (!byMarketplace.has(entry.marketplace)) byMarketplace.set(entry.marketplace, []);
+      if (!byMarketplace.has(entry.marketplace))
+        byMarketplace.set(entry.marketplace, []);
       byMarketplace.get(entry.marketplace)!.push(entry);
     }
 
-    const newListingRecords: Array<Partial<ListingRecord> & Record<string, unknown>> = [];
+    const newListingRecords: Array<
+      Partial<ListingRecord> & Record<string, unknown>
+    > = [];
 
     for (const [mkt, entries] of byMarketplace) {
       try {
-        const aiItems = entries.map(e => ({
+        const aiItems = entries.map((e) => ({
           productData: {
             sku: e.product.sku,
             brand: e.product.brand,
@@ -707,14 +799,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             placement: e.product.placement,
             material: e.product.material,
             features: e.product.features,
-            image_count: Array.isArray(e.product.imageUrls) ? e.product.imageUrls.length : 0,
+            image_count: Array.isArray(e.product.imageUrls)
+              ? e.product.imageUrls.length
+              : 0,
           },
-          categoryName: e.product.categoryName ?? 'eBay Motors Parts & Accessories',
+          categoryName:
+            e.product.categoryName ?? 'eBay Motors Parts & Accessories',
           condition: e.product.conditionId ?? 'Used',
           options: {
             marketplace: mkt,
             sellerCountry:
-              e.product.location?.includes('DE') || String(e.template.location ?? '').includes('DE')
+              e.product.location?.includes('DE') ||
+              String(e.template.location ?? '').includes('DE')
                 ? 'DE'
                 : 'US',
           },
@@ -737,7 +833,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             categoryId: product.categoryId ?? template.categoryId,
             categoryName: product.categoryName ?? template.categoryName,
             title: ai?.title ?? product.title ?? template.title,
-            description: ai?.description ?? product.description ?? template.description,
+            description:
+              ai?.description ?? product.description ?? template.description,
             startPrice: template.startPrice,
             startPriceNum: template.startPriceNum,
             quantity: template.quantity,
@@ -753,8 +850,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             cBrand: product.brand ?? template.cBrand,
             cType: product.partType ?? template.cType,
             cFeatures: product.features ?? template.cFeatures,
-            cManufacturerPartNumber: product.mpn ?? template.cManufacturerPartNumber,
-            cOeOemPartNumber: product.oemPartNumber ?? template.cOeOemPartNumber,
+            cManufacturerPartNumber:
+              product.mpn ?? template.cManufacturerPartNumber,
+            cOeOemPartNumber:
+              product.oemPartNumber ?? template.cOeOemPartNumber,
             extractedMake: template.extractedMake,
             extractedModel: template.extractedModel,
             pipelineJobId: jobId,
@@ -765,9 +864,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
         this.logger.log(
           `Job ${jobId} [${mkt}]: AI-generated ${entries.length} listing(s) ` +
-            `cost=${
-              aiResults.reduce((s, r) => s + r.rawResponse.estimatedCostUsd, 0).toFixed(4)
-            }`,
+            `cost=${aiResults
+              .reduce((s, r) => s + r.rawResponse.estimatedCostUsd, 0)
+              .toFixed(4)}`,
         );
       } catch (err) {
         this.logger.error(
@@ -802,8 +901,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             cBrand: product.brand ?? template.cBrand,
             cType: product.partType ?? template.cType,
             cFeatures: product.features ?? template.cFeatures,
-            cManufacturerPartNumber: product.mpn ?? template.cManufacturerPartNumber,
-            cOeOemPartNumber: product.oemPartNumber ?? template.cOeOemPartNumber,
+            cManufacturerPartNumber:
+              product.mpn ?? template.cManufacturerPartNumber,
+            cOeOemPartNumber:
+              product.oemPartNumber ?? template.cOeOemPartNumber,
             extractedMake: template.extractedMake,
             extractedModel: template.extractedModel,
             pipelineJobId: jobId,
@@ -862,7 +963,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
         return `"${c}" = EXCLUDED."${c}"`;
       }).join(', ');
-      const colList = ALL_COLS.map(c => `"${c}"`).join(', ');
+      const colList = ALL_COLS.map((c) => `"${c}"`).join(', ');
 
       for (let i = 0; i < newListingRecords.length; i += CHUNK) {
         const batch = newListingRecords.slice(i, i + CHUNK);
@@ -887,7 +988,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           RETURNING id
         `;
         const result = await this.listingRepo.query(sql, values);
-        totalInserted += (result?.length ?? 0);
+        totalInserted += result?.length ?? 0;
       }
 
       this.logger.log(
@@ -904,7 +1005,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
    * Parse all marketplace output XLSX files and save each listing row to catalog_products + listing_records.
    * Catalog master rows are upserted from US output only (AU/DE update listing_records per marketplace).
    */
-  private async saveToCatalog(jobId: string, outputDir: string, originalFilename?: string): Promise<void> {
+  private async saveToCatalog(
+    jobId: string,
+    outputDir: string,
+    originalFilename?: string,
+  ): Promise<void> {
     let catalogUpserted = false;
     for (const marketplace of ['US', 'AU', 'DE'] as const) {
       const didUpsertCatalog = await this.saveMarketplaceToCatalog(
@@ -930,14 +1035,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     upsertCatalogProducts = false,
   ): Promise<boolean> {
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
-    const mktFile = files.find(f => {
+    const mktFile = files.find((f) => {
       const lower = f.toLowerCase();
-      if (marketplace === 'US') return lower.includes('us-motors') || lower.includes('us_motors');
-      if (marketplace === 'AU') return lower.startsWith('au-') || lower.startsWith('au_');
+      if (marketplace === 'US')
+        return lower.includes('us-motors') || lower.includes('us_motors');
+      if (marketplace === 'AU')
+        return lower.startsWith('au-') || lower.startsWith('au_');
       return lower.startsWith('de-') || lower.startsWith('de_');
     });
     if (!mktFile) {
-      this.logger.warn(`Job ${jobId}: No ${marketplace} output file found for catalog save`);
+      this.logger.warn(
+        `Job ${jobId}: No ${marketplace} output file found for catalog save`,
+      );
       return false;
     }
 
@@ -946,7 +1055,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const wb = XLSX.readFile(mktPath);
       const ws = wb.Sheets['Listings'];
       if (!ws) {
-        this.logger.warn(`Job ${jobId}: No Listings sheet in ${marketplace} output`);
+        this.logger.warn(
+          `Job ${jobId}: No Listings sheet in ${marketplace} output`,
+        );
         return false;
       }
 
@@ -954,23 +1065,34 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       let headerIdx = -1;
       for (let i = 0; i < Math.min(rows.length, 10); i++) {
         const row = rows[i];
-        if (row?.some(h => h && /title/i.test(String(h)) && !/info/i.test(String(h)))) {
+        if (
+          row?.some(
+            (h) => h && /title/i.test(String(h)) && !/info/i.test(String(h)),
+          )
+        ) {
           headerIdx = i;
           break;
         }
       }
       if (headerIdx === -1) {
-        this.logger.warn(`Job ${jobId}: Could not find header row in ${marketplace} output`);
+        this.logger.warn(
+          `Job ${jobId}: Could not find header row in ${marketplace} output`,
+        );
         return false;
       }
 
-      const headers = rows[headerIdx].map(h => String(h ?? '').trim());
+      const headers = rows[headerIdx].map((h) => String(h ?? '').trim());
       const colIdx = (name: string): number => {
         const norm = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        return headers.findIndex(h => h.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm));
+        return headers.findIndex((h) =>
+          h
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '')
+            .includes(norm),
+        );
       };
       const colExact = (pattern: RegExp): number =>
-        headers.findIndex(h => pattern.test(String(h ?? '').trim()));
+        headers.findIndex((h) => pattern.test(String(h ?? '').trim()));
 
       // Column indices — US/AU use English headers, DE uses German
       const isDE = marketplace === 'DE';
@@ -986,36 +1108,38 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const iFormat = colIdx('Format');
       const iDuration = colIdx('Duration');
       const iLocation = colIdx('Location');
-      const iPicUrl = headers.findIndex(h => /picurl|item\s*photo\s*url/i.test(h));
+      const iPicUrl = headers.findIndex((h) =>
+        /picurl|item\s*photo\s*url/i.test(h),
+      );
       const iShipping = colIdx('Shippingprofilename');
       const iReturn = colIdx('Returnprofilename');
       const iPayment = colIdx('Paymentprofilename');
 
       // DE column name mappings for custom fields
       const iBrand = !isDE
-        ? headers.findIndex(h => /^C:Brand$/i.test(h))
-        : headers.findIndex(h => /^C:Hersteller$/i.test(h));
+        ? headers.findIndex((h) => /^C:Brand$/i.test(h))
+        : headers.findIndex((h) => /^C:Hersteller$/i.test(h));
       const iType = !isDE
-        ? headers.findIndex(h => /^C:Type$/i.test(h))
-        : headers.findIndex(h => /^C:Produktart$/i.test(h));
+        ? headers.findIndex((h) => /^C:Type$/i.test(h))
+        : headers.findIndex((h) => /^C:Produktart$/i.test(h));
       const iMpn = !isDE
-        ? headers.findIndex(h => /C:Manufacturer\s*Part\s*Number/i.test(h))
-        : headers.findIndex(h => /C:Herstellernummer/i.test(h));
+        ? headers.findIndex((h) => /C:Manufacturer\s*Part\s*Number/i.test(h))
+        : headers.findIndex((h) => /C:Herstellernummer/i.test(h));
       const iOem = !isDE
-        ? headers.findIndex(h => /C:OE.*OEM.*Part.*Number/i.test(h))
-        : headers.findIndex(h => /C:OE.*OEM.*Referenznummer/i.test(h));
+        ? headers.findIndex((h) => /C:OE.*OEM.*Part.*Number/i.test(h))
+        : headers.findIndex((h) => /C:OE.*OEM.*Referenznummer/i.test(h));
       const iPlacement = !isDE
-        ? headers.findIndex(h => /C:Placement/i.test(h))
-        : headers.findIndex(h => /C:Einbauposition/i.test(h));
+        ? headers.findIndex((h) => /C:Placement/i.test(h))
+        : headers.findIndex((h) => /C:Einbauposition/i.test(h));
       const iMaterial = !isDE
-        ? headers.findIndex(h => /^C:Material$/i.test(h))
-        : headers.findIndex(h => /^C:Material$|^C:Material\b/i.test(h));
+        ? headers.findIndex((h) => /^C:Material$/i.test(h))
+        : headers.findIndex((h) => /^C:Material$|^C:Material\b/i.test(h));
       const iFeatures = !isDE
-        ? headers.findIndex(h => /^C:Features$/i.test(h))
-        : headers.findIndex(h => /^C:Merkmale$|^C:Features$/i.test(h));
+        ? headers.findIndex((h) => /^C:Features$/i.test(h))
+        : headers.findIndex((h) => /^C:Merkmale$|^C:Features$/i.test(h));
       const iCountry = !isDE
-        ? headers.findIndex(h => /C:Country/i.test(h))
-        : headers.findIndex(h => /C:Herstellungsland/i.test(h));
+        ? headers.findIndex((h) => /C:Country/i.test(h))
+        : headers.findIndex((h) => /C:Herstellungsland/i.test(h));
       const iRelationship = colExact(/^Relationship$/i);
       const iRelationshipDetails = colExact(/^Relationship\s*details$/i);
 
@@ -1037,7 +1161,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             const details = get(row, iRelationshipDetails);
             if (details) {
               const parts: Record<string, string> = {};
-              details.split('|').forEach(pair => {
+              details.split('|').forEach((pair) => {
                 const [k, ...v] = pair.split('=');
                 if (k && v.length) parts[k.trim()] = v.join('=').trim();
               });
@@ -1045,7 +1169,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               const model = parts['Model'] || '';
               const year = parts['Year'] || '';
               if (make && model && year) {
-                if (!compatibilities.has(currentProductIdx)) compatibilities.set(currentProductIdx, []);
+                if (!compatibilities.has(currentProductIdx))
+                  compatibilities.set(currentProductIdx, []);
                 compatibilities.get(currentProductIdx)!.push({
                   Make: make,
                   Model: model,
@@ -1074,7 +1199,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         const picUrl = get(row, iPicUrl);
         const imageUrls = picUrl ? picUrl.split('|').filter(Boolean) : [];
         for (let ai = 0; ai <= 7; ai++) {
-          const colName = ai === 0 ? 'AdditionalPicURL' : `AdditionalPicURL${ai}`;
+          const colName =
+            ai === 0 ? 'AdditionalPicURL' : `AdditionalPicURL${ai}`;
           const addIdx = headers.indexOf(colName);
           if (addIdx >= 0) {
             const url = get(row, addIdx);
@@ -1163,20 +1289,28 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       for (const [idx, fitments] of compatibilities) {
         if (products[idx]) {
-          products[idx].fitmentData = fitments as Record<string, unknown>[];
+          products[idx].fitmentData = fitments;
         }
       }
 
       let mvlRejectedTotal = 0;
       let mvlValidatedTotal = 0;
       for (const product of products) {
-        const rawFitment = product.fitmentData as Record<string, unknown>[] | undefined;
+        const rawFitment = product.fitmentData as
+          | Record<string, unknown>[]
+          | undefined;
         if (!Array.isArray(rawFitment) || rawFitment.length === 0) continue;
 
         const categoryId =
           product.categoryId?.trim() || EbayMvlService.MOTORS_PARTS_CATEGORY;
         try {
-          const mvlResult = await this.mvlService.validateFitmentData(rawFitment, categoryId);
+          const mvlResult = await this.mvlService.validateFitmentData(
+            rawFitment,
+            categoryId,
+            {
+              treeId: resolveCategoryTreeId(marketplace),
+            },
+          );
           product.fitmentData = mvlResult.accepted;
           mvlRejectedTotal += mvlResult.rejectedCount;
           mvlValidatedTotal += mvlResult.validCount;
@@ -1205,12 +1339,21 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       if (products.length > 0 && upsertCatalogProducts) {
         const CHUNK = 500;
 
-        const skusToMerge = products.map((p) => p.sku?.trim()).filter((s): s is string => Boolean(s));
+        const skusToMerge = products
+          .map((p) => p.sku?.trim())
+          .filter((s): s is string => Boolean(s));
         if (skusToMerge.length > 0) {
-          const existingProducts = await this.productRepo.find({ where: { sku: In(skusToMerge) } });
-          const existingBySku = new Map(existingProducts.map((p) => [p.sku!, p]));
+          const existingProducts = await this.productRepo.find({
+            where: { sku: In(skusToMerge) },
+          });
+          const existingBySku = new Map(
+            existingProducts.map((p) => [p.sku!, p]),
+          );
           for (const product of products) {
-            if ((!product.imageUrls || product.imageUrls.length === 0) && product.sku) {
+            if (
+              (!product.imageUrls || product.imageUrls.length === 0) &&
+              product.sku
+            ) {
               const existing = existingBySku.get(product.sku);
               if (existing?.imageUrls?.length) {
                 product.imageUrls = existing.imageUrls;
@@ -1221,23 +1364,49 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
         // PostgreSQL column names (snake_case) — orUpdate uses DB names, not entity property names
         const upsertColumns = [
-          'title', 'description', 'brand', 'brand_normalized', 'mpn', 'mpn_normalized',
-          'part_type', 'placement', 'material', 'features', 'country_of_origin', 'oem_part_number',
-          'price', 'quantity', 'condition_id', 'category_id', 'category_name', 'image_urls',
-          'location', 'format', 'duration', 'shipping_profile', 'return_profile', 'payment_profile',
-          'source_file', 'source_row', 'pipeline_job_id', 'fitment_data',
+          'title',
+          'description',
+          'brand',
+          'brand_normalized',
+          'mpn',
+          'mpn_normalized',
+          'part_type',
+          'placement',
+          'material',
+          'features',
+          'country_of_origin',
+          'oem_part_number',
+          'price',
+          'quantity',
+          'condition_id',
+          'category_id',
+          'category_name',
+          'image_urls',
+          'location',
+          'format',
+          'duration',
+          'shipping_profile',
+          'return_profile',
+          'payment_profile',
+          'source_file',
+          'source_row',
+          'pipeline_job_id',
+          'fitment_data',
         ] as const;
 
         // Deduplicate products by SKU (keep last occurrence) to prevent
         // "ON CONFLICT DO UPDATE command cannot affect row a second time"
         const dedupedProductMap = new Map<string, (typeof products)[0]>();
-        const productsNoSku: (typeof products) = [];
+        const productsNoSku: typeof products = [];
         for (const p of products) {
           const s = p.sku?.trim();
           if (s) dedupedProductMap.set(s, p);
           else productsNoSku.push(p);
         }
-        const dedupedProducts = [...dedupedProductMap.values(), ...productsNoSku];
+        const dedupedProducts = [
+          ...dedupedProductMap.values(),
+          ...productsNoSku,
+        ];
         if (dedupedProducts.length < products.length) {
           this.logger.warn(
             `Job ${jobId} [${marketplace}]: Deduplicated ${products.length} → ${dedupedProducts.length} catalog products by SKU`,
@@ -1245,7 +1414,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
 
         const withFitment = dedupedProducts.filter(
-          (p) => Array.isArray(p.fitmentData) && (p.fitmentData as unknown[]).length > 0,
+          (p) =>
+            Array.isArray(p.fitmentData) &&
+            (p.fitmentData as unknown[]).length > 0,
         ).length;
 
         for (let i = 0; i < dedupedProducts.length; i += CHUNK) {
@@ -1285,7 +1456,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         // Deduplicate listing records by customLabelSku (keep last occurrence) to prevent
         // "ON CONFLICT DO UPDATE command cannot affect row a second time"
         const dedupedLrMap = new Map<string, (typeof listingRecords)[0]>();
-        const lrNoSku: (typeof listingRecords) = [];
+        const lrNoSku: typeof listingRecords = [];
         for (const lr of listingRecords) {
           const s = lr.customLabelSku?.trim();
           if (s) dedupedLrMap.set(s, lr);
@@ -1353,7 +1524,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               }
               rowsSql.push(`(${rowParams.join(', ')})`);
             }
-            const colList = ALL_COLS.map(c => `"${c}"`).join(', ');
+            const colList = ALL_COLS.map((c) => `"${c}"`).join(', ');
             const updateSet = ALL_COLS.map((c) => {
               if (c === 'itemPhotoUrl') {
                 return `"${c}" = COALESCE(NULLIF(EXCLUDED."${c}", ''), listing_records."${c}")`;
@@ -1369,7 +1540,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               RETURNING id
             `;
             const result = await this.listingRepo.query(sql, values);
-            totalInserted += (result?.length ?? 0);
+            totalInserted += result?.length ?? 0;
           } catch (insertErr) {
             this.logger.error(
               `Job ${jobId} [${marketplace}]: Listing batch upsert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
@@ -1380,12 +1551,16 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           `Job ${jobId} [${marketplace}]: Attempted ${dedupedListingRecords.length} listing records, upserted ${totalInserted}`,
         );
       } else {
-        this.logger.warn(`Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`);
+        this.logger.warn(
+          `Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`,
+        );
       }
 
       return upsertCatalogProducts && products.length > 0;
     } catch (err) {
-      this.logger.error(`Job ${jobId} [${marketplace}]: Failed to save to catalog: ${err instanceof Error ? err.message : err}`);
+      this.logger.error(
+        `Job ${jobId} [${marketplace}]: Failed to save to catalog: ${err instanceof Error ? err.message : err}`,
+      );
       return false;
     }
   }

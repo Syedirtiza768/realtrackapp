@@ -22,7 +22,11 @@ import type { InventoryListingsQueryDto } from './dto/inventory-workbench.dto.js
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import { EnrichmentPipeline } from '../common/openai/pipelines/enrichment.pipeline.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
-import { translatePartNameToGerman, formatGermanPlacement } from '../channels/ebay/ebay-german-listing.util.js';
+import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
+import {
+  translatePartNameToGerman,
+  formatGermanPlacement,
+} from '../channels/ebay/ebay-german-listing.util.js';
 
 export interface InventoryMarketplaceVariant {
   listingId: string;
@@ -91,7 +95,10 @@ function computeMissingFields(listing: ListingRecord): string[] {
   const missing: string[] = [];
   if (!listing.title?.trim()) missing.push('Title');
   if (!listing.cBrand?.trim()) missing.push('Brand');
-  if (!listing.cOeOemPartNumber?.trim() && !listing.cManufacturerPartNumber?.trim()) {
+  if (
+    !listing.cOeOemPartNumber?.trim() &&
+    !listing.cManufacturerPartNumber?.trim()
+  ) {
     missing.push('OEM/MPN');
   }
   if (parseImageUrls(listing.itemPhotoUrl).length < 2) {
@@ -260,11 +267,10 @@ export class InventoryWorkbenchService {
       LIMIT $${paramIdx++} OFFSET $${paramIdx++}
     `;
 
-    const idRows: Array<{ id: string }> = await this.listingRepo.query(listSql, [
-      ...params,
-      limit,
-      offset,
-    ]);
+    const idRows: Array<{ id: string }> = await this.listingRepo.query(
+      listSql,
+      [...params, limit, offset],
+    );
 
     if (idRows.length === 0) {
       return { items: [], total };
@@ -303,7 +309,10 @@ export class InventoryWorkbenchService {
         : Promise.resolve([] as ListingRecord[]),
     ]);
 
-    const pipelineJobs = await this.loadPipelineJobsForListings(listings, siblings);
+    const pipelineJobs = await this.loadPipelineJobsForListings(
+      listings,
+      siblings,
+    );
     const storeListingsBySku = await this.loadStoreListingsBySkus(skus);
 
     const fitmentByListing = new Map(
@@ -329,15 +338,14 @@ export class InventoryWorkbenchService {
 
       const skuKey = listing.customLabelSku ?? listing.id;
       const variantRows = siblingsBySku.get(skuKey) ?? [listing];
-      const marketplaceVariants: InventoryMarketplaceVariant[] = variantRows.map(
-        (v) => ({
+      const marketplaceVariants: InventoryMarketplaceVariant[] =
+        variantRows.map((v) => ({
           listingId: v.id,
           marketplace: v.marketplace,
           status: v.status,
           ebayListingId: v.ebayListingId ?? undefined,
           pipelineJobId: v.pipelineJobId ?? undefined,
-        }),
-      );
+        }));
 
       const jobIds = new Set(
         variantRows
@@ -352,7 +360,10 @@ export class InventoryWorkbenchService {
         : undefined;
 
       // Compute enrichment status from current state (no extra DB queries)
-      const enrichmentStatus = this.autoTrigger.deriveStatus(listing, primaryJob);
+      const enrichmentStatus = this.autoTrigger.deriveStatus(
+        listing,
+        primaryJob,
+      );
 
       return {
         id: listing.id,
@@ -376,7 +387,7 @@ export class InventoryWorkbenchService {
         intakeSource: listing.sourceFileName === 'warehouse-intake',
         marketplaceVariants,
         storeListings: listing.customLabelSku
-          ? storeListingsBySku.get(listing.customLabelSku) ?? []
+          ? (storeListingsBySku.get(listing.customLabelSku) ?? [])
           : [],
         importedAt: listing.importedAt
           ? new Date(listing.importedAt).toISOString()
@@ -425,7 +436,7 @@ export class InventoryWorkbenchService {
 
     const priorJobs = await this.getCompletedJobsForSku(sku, listing.id);
     const storeListings = sku
-      ? (await this.loadStoreListingsBySkus([sku])).get(sku) ?? []
+      ? ((await this.loadStoreListingsBySkus([sku])).get(sku) ?? [])
       : [];
 
     return {
@@ -619,18 +630,22 @@ export class InventoryWorkbenchService {
    * Inline enrichment: full pipeline-grade enrichment with stage tracking.
    * Stages: vision_lookup → enrichment → generating_us → generating_au → generating_de → completed
    */
-  async inlineEnrichListing(
-    listingId: string,
-  ): Promise<{
+  async inlineEnrichListing(listingId: string): Promise<{
     baseListing: ListingRecord;
-    marketplaceListings: Array<{ marketplace: string; listingId: string; title: string }>;
+    marketplaceListings: Array<{
+      marketplace: string;
+      listingId: string;
+      title: string;
+    }>;
   }> {
     const setStage = async (stage: string) => {
       try {
         await this.listingRepo.update(listingId, {
           enrichmentStage: stage,
         } as any);
-      } catch { /* non-critical — don't fail enrichment if stage write fails */ }
+      } catch {
+        /* non-critical — don't fail enrichment if stage write fails */
+      }
     };
 
     // Stage 1: Vision part lookup (identifies part from images)
@@ -639,9 +654,13 @@ export class InventoryWorkbenchService {
     await this.singleListingForm.lookupAndApplyToListing(listingId);
 
     // Read the updated base listing
-    const baseListing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const baseListing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!baseListing || baseListing.deletedAt) {
-      throw new NotFoundException(`Listing ${listingId} not found after lookup`);
+      throw new NotFoundException(
+        `Listing ${listingId} not found after lookup`,
+      );
     }
 
     const sku = baseListing.customLabelSku;
@@ -658,7 +677,8 @@ export class InventoryWorkbenchService {
     try {
       const enrichInput: Record<string, unknown> = {
         sku: baseListing.customLabelSku,
-        partNumber: baseListing.cManufacturerPartNumber || baseListing.cOeOemPartNumber,
+        partNumber:
+          baseListing.cManufacturerPartNumber || baseListing.cOeOemPartNumber,
         partName: baseListing.title,
         partType: baseListing.cType,
         brand: baseListing.cBrand,
@@ -673,16 +693,23 @@ export class InventoryWorkbenchService {
         imageUrls,
         image_count: imageUrls.length,
       };
-      const enrichmentResult = await this.enrichmentPipeline.enrich(enrichInput);
+      const enrichmentResult =
+        await this.enrichmentPipeline.enrich(enrichInput);
 
       // Apply enrichment results back to the base listing
-      if (enrichmentResult.title) baseListing.title = enrichmentResult.title.slice(0, 80);
+      if (enrichmentResult.title)
+        baseListing.title = enrichmentResult.title.slice(0, 80);
       if (enrichmentResult.brand) baseListing.cBrand = enrichmentResult.brand;
-      if (enrichmentResult.description) baseListing.description = enrichmentResult.description;
-      if (enrichmentResult.partType) baseListing.cType = enrichmentResult.partType;
-      if (enrichmentResult.mpn) baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
-      if (enrichmentResult.oemNumber) baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
-      if (enrichmentResult.features?.length) baseListing.cFeatures = enrichmentResult.features.join(' | ');
+      if (enrichmentResult.description)
+        baseListing.description = enrichmentResult.description;
+      if (enrichmentResult.partType)
+        baseListing.cType = enrichmentResult.partType;
+      if (enrichmentResult.mpn)
+        baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
+      if (enrichmentResult.oemNumber)
+        baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
+      if (enrichmentResult.features?.length)
+        baseListing.cFeatures = enrichmentResult.features.join(' | ');
       if (enrichmentResult.suggestedCategory) {
         baseListing.categoryName = enrichmentResult.suggestedCategory;
         // Resolve numeric eBay category ID from the suggested category name
@@ -707,12 +734,12 @@ export class InventoryWorkbenchService {
 
       this.logger.log(
         `Inline enrich [enrichment]: done for listing ${listingId} title="${enrichmentResult.title}" ` +
-        `model=${enrichmentResult.model} score=${enrichmentResult.validationScore}`,
+          `model=${enrichmentResult.model} score=${enrichmentResult.validationScore}`,
       );
     } catch (err) {
       this.logger.warn(
         `Inline enrich [enrichment]: AI enrichment failed for listing ${listingId}: ` +
-        `${err instanceof Error ? err.message : err} — continuing with vision lookup data`,
+          `${err instanceof Error ? err.message : err} — continuing with vision lookup data`,
       );
     }
 
@@ -728,11 +755,17 @@ export class InventoryWorkbenchService {
         });
         if (catalogProduct) {
           let changed = false;
-          if (baseListing.categoryId && baseListing.categoryId !== catalogProduct.categoryId) {
+          if (
+            baseListing.categoryId &&
+            baseListing.categoryId !== catalogProduct.categoryId
+          ) {
             catalogProduct.categoryId = baseListing.categoryId;
             changed = true;
           }
-          if (baseListing.categoryName && baseListing.categoryName !== catalogProduct.categoryName) {
+          if (
+            baseListing.categoryName &&
+            baseListing.categoryName !== catalogProduct.categoryName
+          ) {
             catalogProduct.categoryName = baseListing.categoryName;
             changed = true;
           }
@@ -752,20 +785,43 @@ export class InventoryWorkbenchService {
     }
 
     // Stage 3: Generate marketplace content for US, AU, DE
-    const marketplaceListings: Array<{ marketplace: string; listingId: string; title: string }> = [];
+    const marketplaceListings: Array<{
+      marketplace: string;
+      listingId: string;
+      title: string;
+    }> = [];
     const MARKETPLACES: Array<'US' | 'AU' | 'DE'> = ['US', 'AU', 'DE'];
+    let anyCategoryResolved = Boolean(baseListing.categoryId);
 
     for (const mkt of MARKETPLACES) {
       const stageName = `generating_${mkt.toLowerCase()}`;
       this.logger.log(`Inline enrich [${stageName}]: listing ${listingId}`);
       await setStage(stageName);
 
+      // Resolve this marketplace's category against its own category tree.
+      const mktCategory = await this.resolveCategoryForMarketplace(
+        mkt,
+        baseListing,
+      );
+      if (mktCategory) anyCategoryResolved = true;
+
       // Check if marketplace listing already exists
       const existing = await this.listingRepo.findOne({
         where: { customLabelSku: sku, marketplace: mkt, deletedAt: IsNull() },
       });
       if (existing) {
-        marketplaceListings.push({ marketplace: mkt, listingId: existing.id, title: existing.title ?? '' });
+        // Backfill categoryId on the existing listing if it was left empty.
+        if (!existing.categoryId && mktCategory) {
+          await this.listingRepo.update(existing.id, {
+            categoryId: mktCategory.categoryId,
+            categoryName: mktCategory.categoryName,
+          });
+        }
+        marketplaceListings.push({
+          marketplace: mkt,
+          listingId: existing.id,
+          title: existing.title ?? '',
+        });
         continue;
       }
 
@@ -789,11 +845,17 @@ export class InventoryWorkbenchService {
       // DE-specific: provide German context for natural German output
       if (mkt === 'DE') {
         const partTypeRaw =
-          typeof productData.part_type === 'string' ? productData.part_type : '';
+          typeof productData.part_type === 'string'
+            ? productData.part_type
+            : '';
         const placementRaw =
-          typeof productData.placement === 'string' ? productData.placement : '';
-        productData.germanPartType = translatePartNameToGerman(partTypeRaw) || partTypeRaw;
-        productData.germanPlacement = formatGermanPlacement(placementRaw) || placementRaw;
+          typeof productData.placement === 'string'
+            ? productData.placement
+            : '';
+        productData.germanPartType =
+          translatePartNameToGerman(partTypeRaw) || partTypeRaw;
+        productData.germanPlacement =
+          formatGermanPlacement(placementRaw) || placementRaw;
         productData.marketplaceLanguage = 'German';
       }
 
@@ -813,8 +875,8 @@ export class InventoryWorkbenchService {
           sourceRowNumber: baseListing.sourceRowNumber,
           action: 'Add',
           customLabelSku: sku,
-          categoryId: baseListing.categoryId,
-          categoryName: baseListing.categoryName,
+          categoryId: mktCategory?.categoryId ?? baseListing.categoryId,
+          categoryName: mktCategory?.categoryName ?? baseListing.categoryName,
           title: aiResult.title.slice(0, 80),
           description: aiResult.description,
           startPrice: baseListing.startPrice,
@@ -841,8 +903,14 @@ export class InventoryWorkbenchService {
         });
 
         const saved = await this.listingRepo.save(newListing);
-        marketplaceListings.push({ marketplace: mkt, listingId: saved.id, title: aiResult.title });
-        this.logger.log(`Inline enrich [${stageName}]: created ${mkt} listing for SKU ${sku}`);
+        marketplaceListings.push({
+          marketplace: mkt,
+          listingId: saved.id,
+          title: aiResult.title,
+        });
+        this.logger.log(
+          `Inline enrich [${stageName}]: created ${mkt} listing for SKU ${sku}`,
+        );
       } catch (err) {
         this.logger.error(
           `Inline enrich [${stageName}]: failed for ${mkt} (SKU ${sku}): ${err instanceof Error ? err.message : err}`,
@@ -854,8 +922,8 @@ export class InventoryWorkbenchService {
           sourceRowNumber: baseListing.sourceRowNumber,
           action: 'Add',
           customLabelSku: sku,
-          categoryId: baseListing.categoryId,
-          categoryName: baseListing.categoryName,
+          categoryId: mktCategory?.categoryId ?? baseListing.categoryId,
+          categoryName: mktCategory?.categoryName ?? baseListing.categoryName,
           title: baseListing.title,
           description: baseListing.description,
           startPrice: baseListing.startPrice,
@@ -878,7 +946,11 @@ export class InventoryWorkbenchService {
           version: 1,
         });
         const saved = await this.listingRepo.save(fallbackListing);
-        marketplaceListings.push({ marketplace: mkt, listingId: saved.id, title: saved.title ?? '' });
+        marketplaceListings.push({
+          marketplace: mkt,
+          listingId: saved.id,
+          title: saved.title ?? '',
+        });
       }
     }
 
@@ -888,14 +960,148 @@ export class InventoryWorkbenchService {
       await this.listingRepo.save(baseListing);
     }
 
-    // Final stage: completed
-    await setStage('completed');
+    // Upsert the catalog product master row so the catalog detail page has a
+    // categoryId / fitmentData source even without a batch pipeline run.
+    await this.upsertCatalogProductFromListing(baseListing);
+
+    // Final stage: only mark 'completed' when at least one marketplace
+    // category was resolved. Otherwise surface 'needs_review' so the empty
+    // category is not silently hidden behind a "completed" status.
+    const finalStage = anyCategoryResolved ? 'completed' : 'needs_review';
+    await setStage(finalStage);
 
     this.logger.log(
-      `Inline enrich [completed]: listing ${listingId} (SKU ${sku}) — ${marketplaceListings.length} marketplace listing(s)`,
+      `Inline enrich [${finalStage}]: listing ${listingId} (SKU ${sku}) — ${marketplaceListings.length} marketplace listing(s)`,
     );
 
     return { baseListing, marketplaceListings };
+  }
+
+  /**
+   * Resolve an eBay category ID for a specific marketplace using that
+   * marketplace's own category tree. Each marketplace (US/AU/DE) has a
+   * distinct tree, so a category resolved against the US tree is invalid for
+   * AU/DE and vice-versa. Builds a focused query from brand + part type /
+   * category name / title and picks the top suggestion.
+   */
+  private async resolveCategoryForMarketplace(
+    mkt: 'US' | 'AU' | 'DE',
+    listing: ListingRecord,
+  ): Promise<{ categoryId: string; categoryName: string } | null> {
+    // US reuses the base listing category when already resolved against the US tree.
+    if (mkt === 'US' && listing.categoryId) {
+      return {
+        categoryId: listing.categoryId,
+        categoryName: listing.categoryName ?? listing.categoryId,
+      };
+    }
+
+    const query = this.buildCategoryQuery(listing);
+    if (!query) return null;
+
+    const treeId = resolveCategoryTreeId(mkt);
+    try {
+      const suggestions = await this.taxonomy.getCategorySuggestions(
+        query,
+        treeId,
+      );
+      const best = suggestions[0]?.category;
+      if (best?.categoryId) {
+        this.logger.log(
+          `Resolved ${mkt} category for SKU ${listing.customLabelSku}: "${best.categoryName}" (${best.categoryId}) [tree ${treeId}]`,
+        );
+        return {
+          categoryId: best.categoryId,
+          categoryName: best.categoryName ?? best.categoryId,
+        };
+      }
+      this.logger.warn(
+        `No category suggestions for ${mkt} (tree ${treeId}) query "${query}" — SKU ${listing.customLabelSku}`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Category resolution failed for ${mkt} (tree ${treeId}) query "${query}": ` +
+          `${err instanceof Error ? err.message : err}`,
+      );
+    }
+    return null;
+  }
+
+  /** Build a focused query for eBay's category suggestion API. */
+  private buildCategoryQuery(listing: ListingRecord): string {
+    const brand = listing.cBrand?.trim();
+    const partType = listing.cType?.trim();
+    const categoryName = listing.categoryName?.trim();
+    const title = listing.title?.trim();
+
+    // Brand + part type is the most effective suggestion query.
+    if (brand && partType) return `${brand} ${partType}`;
+    // Fall back to the (AI-suggested or imported) category name.
+    if (categoryName) return categoryName;
+    // Last resort: first few meaningful title terms.
+    if (title) {
+      const words = title
+        .replace(
+          /\b(New|OEM|Genuine|Left|Right|Front|Rear|Driver|Passenger|Upper|Lower|Assembly|Set|Pair)\b/gi,
+          '',
+        )
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 5);
+      return [brand, ...words].filter(Boolean).join(' ').trim();
+    }
+    return '';
+  }
+
+  /**
+   * Upsert (find-or-create) the catalog product master row for a SKU so that
+   * the catalog detail page has a categoryId / fitmentData source even when the
+   * product was not created by the batch pipeline.
+   */
+  private async upsertCatalogProductFromListing(
+    listing: ListingRecord,
+  ): Promise<void> {
+    if (!listing.customLabelSku) return;
+    try {
+      const existing = await this.productRepo.findOne({
+        where: { sku: listing.customLabelSku },
+      });
+      const patch: Partial<CatalogProduct> = {};
+      if (listing.categoryId) patch.categoryId = listing.categoryId;
+      if (listing.categoryName) patch.categoryName = listing.categoryName;
+      if (listing.cBrand) patch.brand = listing.cBrand;
+      if (listing.cManufacturerPartNumber)
+        patch.mpn = listing.cManufacturerPartNumber;
+      if (listing.cOeOemPartNumber)
+        patch.oemPartNumber = listing.cOeOemPartNumber;
+      if (listing.title) patch.title = listing.title;
+
+      if (existing) {
+        let changed = false;
+        for (const [k, v] of Object.entries(patch)) {
+          if (v && (existing as any)[k] !== v) {
+            (existing as any)[k] = v;
+            changed = true;
+          }
+        }
+        if (changed) await this.productRepo.save(existing);
+      } else {
+        const created = this.productRepo.create({
+          sku: listing.customLabelSku,
+          title: listing.title,
+          ...patch,
+        } as any);
+        await this.productRepo.save(created);
+        this.logger.log(
+          `Created catalog product for SKU ${listing.customLabelSku} from inline enrichment`,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to upsert catalog product for SKU ${listing.customLabelSku}: ` +
+          `${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   async updateListingImages(
@@ -903,7 +1109,9 @@ export class InventoryWorkbenchService {
     imageUrls: string[],
     uploadedAssetIds?: string[],
   ) {
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
@@ -955,7 +1163,8 @@ export class InventoryWorkbenchService {
 
     for (const listingId of listingIds) {
       try {
-        const { lookup } = await this.singleListingForm.lookupAndApplyToListing(listingId);
+        const { lookup } =
+          await this.singleListingForm.lookupAndApplyToListing(listingId);
         results.push({ listingId, success: true, lookup });
       } catch (err) {
         results.push({
@@ -969,7 +1178,9 @@ export class InventoryWorkbenchService {
     return { results };
   }
 
-  async buildRequeueWarnings(listingIds: string[]): Promise<InventoryRequeueWarning[]> {
+  async buildRequeueWarnings(
+    listingIds: string[],
+  ): Promise<InventoryRequeueWarning[]> {
     const uniqueIds = [...new Set(listingIds)];
     const listings = await this.listingRepo.find({
       where: { id: In(uniqueIds) },
@@ -984,7 +1195,10 @@ export class InventoryWorkbenchService {
 
       const related = listing.customLabelSku
         ? await this.listingRepo.find({
-            where: { customLabelSku: listing.customLabelSku, deletedAt: IsNull() },
+            where: {
+              customLabelSku: listing.customLabelSku,
+              deletedAt: IsNull(),
+            },
             select: ['id', 'pipelineJobId'],
           })
         : [{ id: listing.id, pipelineJobId: listing.pipelineJobId }];
@@ -1042,7 +1256,8 @@ export class InventoryWorkbenchService {
         );
       }
       const partNumber =
-        listing.cOeOemPartNumber?.trim() || listing.cManufacturerPartNumber?.trim();
+        listing.cOeOemPartNumber?.trim() ||
+        listing.cManufacturerPartNumber?.trim();
       if (!partNumber) {
         throw new BadRequestException(
           `Listing ${listing.customLabelSku ?? listing.id} is missing an OEM/part number`,
@@ -1057,10 +1272,14 @@ export class InventoryWorkbenchService {
 
     const warnings = await this.buildRequeueWarnings(uniqueIds);
 
-    const job = await this.pipelineService.createBatchJobFromListings(uniqueIds, userId, {
-      source: 'inventory',
-      forceVision: true,
-    });
+    const job = await this.pipelineService.createBatchJobFromListings(
+      uniqueIds,
+      userId,
+      {
+        source: 'inventory',
+        forceVision: true,
+      },
+    );
 
     return { job, warnings };
   }
@@ -1077,7 +1296,9 @@ export class InventoryWorkbenchService {
   }
 
   async getListingOrThrow(listingId: string): Promise<ListingRecord> {
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
@@ -1101,7 +1322,9 @@ export class InventoryWorkbenchService {
     const rows = await this.listingRepo
       .createQueryBuilder('l')
       .select('DISTINCT l."extractedMake"', 'make')
-      .where('l."extractedMake" IS NOT NULL AND TRIM(l."extractedMake") != \'\'')
+      .where(
+        'l."extractedMake" IS NOT NULL AND TRIM(l."extractedMake") != \'\'',
+      )
       .andWhere('l."deletedAt" IS NULL')
       .orderBy('l."extractedMake"', 'ASC')
       .getRawMany<{ make: string }>();
@@ -1112,11 +1335,15 @@ export class InventoryWorkbenchService {
     const qb = this.listingRepo
       .createQueryBuilder('l')
       .select('DISTINCT l."extractedModel"', 'model')
-      .where('l."extractedModel" IS NOT NULL AND TRIM(l."extractedModel") != \'\'')
+      .where(
+        'l."extractedModel" IS NOT NULL AND TRIM(l."extractedModel") != \'\'',
+      )
       .andWhere('l."deletedAt" IS NULL');
 
     if (make?.trim()) {
-      qb.andWhere('l."extractedMake" ILIKE :make', { make: `%${make.trim()}%` });
+      qb.andWhere('l."extractedMake" ILIKE :make', {
+        make: `%${make.trim()}%`,
+      });
     }
 
     qb.orderBy('l."extractedModel"', 'ASC');
@@ -1138,10 +1365,18 @@ export class InventoryWorkbenchService {
   /* ── Send to Catalog ─────────────────────────────────────── */
 
   async sendToCatalog(listingIds: string[]): Promise<{
-    results: Array<{ listingId: string; sku: string; catalogProductId: string | null; success: boolean; error?: string }>;
+    results: Array<{
+      listingId: string;
+      sku: string;
+      catalogProductId: string | null;
+      success: boolean;
+      error?: string;
+    }>;
   }> {
     const uniqueIds = [...new Set(listingIds)];
-    const listings = await this.listingRepo.find({ where: { id: In(uniqueIds) } });
+    const listings = await this.listingRepo.find({
+      where: { id: In(uniqueIds) },
+    });
 
     const results: Array<{
       listingId: string;
@@ -1154,7 +1389,13 @@ export class InventoryWorkbenchService {
     for (const listing of listings) {
       const sku = listing.customLabelSku;
       if (!sku) {
-        results.push({ listingId: listing.id, sku: '', catalogProductId: null, success: false, error: 'No SKU' });
+        results.push({
+          listingId: listing.id,
+          sku: '',
+          catalogProductId: null,
+          success: false,
+          error: 'No SKU',
+        });
         continue;
       }
 
@@ -1175,11 +1416,13 @@ export class InventoryWorkbenchService {
           product.quantity = listing.quantityNum ?? product.quantity;
           product.conditionId = listing.conditionId ?? product.conditionId;
           product.mpn = listing.cManufacturerPartNumber ?? product.mpn;
-          product.oemPartNumber = listing.cOeOemPartNumber ?? product.oemPartNumber;
+          product.oemPartNumber =
+            listing.cOeOemPartNumber ?? product.oemPartNumber;
           product.partType = listing.cType ?? product.partType;
           product.features = listing.cFeatures ?? product.features;
           if (imageUrls.length > 0) product.imageUrls = imageUrls;
-          if (listing.extractedMake) (product as any).donorMake = listing.extractedMake;
+          if (listing.extractedMake)
+            (product as any).donorMake = listing.extractedMake;
           product.optimizationStatus = 'completed';
           await this.productRepo.save(product);
         } else {
@@ -1204,7 +1447,7 @@ export class InventoryWorkbenchService {
             optimizationStatus: 'completed',
             imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
           } as any);
-          product = await this.productRepo.save(newProduct as any) as any;
+          product = await this.productRepo.save(newProduct as any);
         }
 
         results.push({
@@ -1214,11 +1457,21 @@ export class InventoryWorkbenchService {
           success: true,
         });
 
-        this.logger.log(`Send to catalog: ${product ? 'updated' : 'created'} product for SKU ${sku}`);
+        this.logger.log(
+          `Send to catalog: ${product ? 'updated' : 'created'} product for SKU ${sku}`,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(`Send to catalog failed for listing ${listing.id} (SKU ${sku}): ${msg}`);
-        results.push({ listingId: listing.id, sku: sku ?? '', catalogProductId: null, success: false, error: msg });
+        this.logger.error(
+          `Send to catalog failed for listing ${listing.id} (SKU ${sku}): ${msg}`,
+        );
+        results.push({
+          listingId: listing.id,
+          sku: sku ?? '',
+          catalogProductId: null,
+          success: false,
+          error: msg,
+        });
       }
     }
 

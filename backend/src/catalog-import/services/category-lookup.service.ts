@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, IsNull } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { EbayTaxonomyApiService } from '../../channels/ebay/ebay-taxonomy-api.service.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
@@ -21,7 +21,7 @@ export class CategoryLookupService {
   /** Known tree IDs for common marketplaces (avoids API call) */
   private static readonly KNOWN_TREE_IDS: Record<string, string> = {
     EBAY_US: '0',
-    EBAY_AU: '100',
+    EBAY_AU: '15',
     EBAY_DE: '77',
     EBAY_GB: '3',
   };
@@ -55,10 +55,14 @@ export class CategoryLookupService {
     }
 
     try {
-      const suggestions = await this.taxonomy.getCategorySuggestions(query, treeId);
+      const suggestions = await this.taxonomy.getCategorySuggestions(
+        query,
+        treeId,
+      );
       const first = suggestions?.[0];
       if (first?.category?.categoryId) {
-        const isExact = first.relevancy === 'RELEVANT' || first.relevancy?.includes('HIGH');
+        const isExact =
+          first.relevancy === 'RELEVANT' || first.relevancy?.includes('HIGH');
         return {
           categoryId: first.category.categoryId,
           categoryName: first.category.categoryName ?? null,
@@ -67,7 +71,9 @@ export class CategoryLookupService {
       }
       return { categoryId: null, categoryName: null, confidence: 'none' };
     } catch (err) {
-      this.logger.warn(`eBay category lookup failed for query "${query}": ${(err as Error).message}`);
+      this.logger.warn(
+        `eBay category lookup failed for query "${query}": ${(err as Error).message}`,
+      );
       return { categoryId: null, categoryName: null, confidence: 'none' };
     }
   }
@@ -118,7 +124,9 @@ export class CategoryLookupService {
       );
     }
 
-    this.logger.log(`Updated product ${product.id} (${product.sku ?? 'no-sku'}) → category ${result.categoryId} (${result.categoryName})`);
+    this.logger.log(
+      `Updated product ${product.id} (${product.sku ?? 'no-sku'}) → category ${result.categoryId} (${result.categoryName})`,
+    );
     return true;
   }
 
@@ -130,8 +138,12 @@ export class CategoryLookupService {
     batchSize = 10,
     concurrency = 2,
   ): Promise<{ scanned: number; updated: number; failed: number }> {
-    const total = await this.productRepo.count({ where: { categoryId: IsNull() } });
-    this.logger.log(`Backfill starting: ${total} products with missing categoryId`);
+    const total = await this.productRepo.count({
+      where: { categoryId: IsNull() },
+    });
+    this.logger.log(
+      `Backfill starting: ${total} products with missing categoryId`,
+    );
 
     let scanned = 0;
     let updated = 0;
@@ -160,10 +172,14 @@ export class CategoryLookupService {
         }
       }
 
-      this.logger.log(`Backfill progress: ${scanned}/${total} scanned, ${updated} updated, ${failed} failed`);
+      this.logger.log(
+        `Backfill progress: ${scanned}/${total} scanned, ${updated} updated, ${failed} failed`,
+      );
     }
 
-    this.logger.log(`Backfill complete: ${scanned} scanned, ${updated} updated, ${failed} failed`);
+    this.logger.log(
+      `Backfill complete: ${scanned} scanned, ${updated} updated, ${failed} failed`,
+    );
     return { scanned, updated, failed };
   }
 
@@ -182,10 +198,14 @@ export class CategoryLookupService {
       where: { categoryId: IsNull() },
     });
     if (total === 0) {
-      this.logger.log('ListingRecord backfill: no records with missing categoryId');
+      this.logger.log(
+        'ListingRecord backfill: no records with missing categoryId',
+      );
       return { scanned: 0, updated: 0, failed: 0 };
     }
-    this.logger.log(`ListingRecord backfill starting: ${total} records with missing categoryId`);
+    this.logger.log(
+      `ListingRecord backfill starting: ${total} records with missing categoryId`,
+    );
 
     let scanned = 0;
     let updated = 0;
@@ -213,16 +233,23 @@ export class CategoryLookupService {
       }
     }
 
-    this.logger.log(`ListingRecord backfill complete: ${scanned} scanned, ${updated} updated, ${failed} failed`);
+    this.logger.log(
+      `ListingRecord backfill complete: ${scanned} scanned, ${updated} updated, ${failed} failed`,
+    );
     return { scanned, updated, failed };
   }
 
   // ── Private ────────────────────────────────────────────────
 
-  private async lookupAndUpdateListingRecord(rec: ListingRecord): Promise<boolean> {
+  private async lookupAndUpdateListingRecord(
+    rec: ListingRecord,
+  ): Promise<boolean> {
     // First try: use categoryName as query if available (it was imported but ID wasn't)
     if (rec.categoryName && !rec.categoryId) {
-      const nameResult = await this.lookupByCategoryName(rec.categoryName, rec.marketplace);
+      const nameResult = await this.lookupByCategoryName(
+        rec.categoryName,
+        rec.marketplace,
+      );
       if (nameResult.categoryId) {
         await this.listingRepo.update(rec.id, {
           categoryId: nameResult.categoryId,
@@ -262,10 +289,14 @@ export class CategoryLookupService {
     // Try the category name as a suggestion query
     const treeId = await this.resolveTreeId(marketplace);
     try {
-      const suggestions = await this.taxonomy.getCategorySuggestions(categoryName, treeId);
+      const suggestions = await this.taxonomy.getCategorySuggestions(
+        categoryName,
+        treeId,
+      );
       // Find the best match — exact name match or closest
       const exact = suggestions.find(
-        (s) => s.category.categoryName.toLowerCase() === categoryName.toLowerCase(),
+        (s) =>
+          s.category.categoryName.toLowerCase() === categoryName.toLowerCase(),
       );
       if (exact?.category?.categoryId) {
         return {
@@ -305,8 +336,11 @@ export class CategoryLookupService {
     // Strategy 2: Extract key terms from title (strip brand, colors, positions, condition words)
     if (title) {
       const cleaned = title
-        .replace(new RegExp(`\\b${brand ?? ''}\\b`, 'gi'), '')  // remove brand (already included)
-        .replace(/\b(New|OEM|Genuine|Left|Right|Front|Rear|Driver|Passenger|Upper|Lower|Inner|Outer|Gray|Black|White|Assembly|Set|Pair)\b/gi, '')
+        .replace(new RegExp(`\\b${brand ?? ''}\\b`, 'gi'), '') // remove brand (already included)
+        .replace(
+          /\b(New|OEM|Genuine|Left|Right|Front|Rear|Driver|Passenger|Upper|Lower|Inner|Outer|Gray|Black|White|Assembly|Set|Pair)\b/gi,
+          '',
+        )
         .replace(/\s+/g, ' ')
         .trim();
       const words = cleaned.split(' ').filter(Boolean);

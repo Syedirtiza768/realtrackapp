@@ -85,11 +85,17 @@ class MvlValueCache {
   }
 
   setMakes(categoryId: string, values: string[]) {
-    this.makes.set(this.makeKey(categoryId), new Set(values.map((v) => v.toLowerCase())));
+    this.makes.set(
+      this.makeKey(categoryId),
+      new Set(values.map((v) => v.toLowerCase())),
+    );
   }
 
   setModels(categoryId: string, make: string, values: string[]) {
-    this.models.set(this.modelKey(categoryId, make), new Set(values.map((v) => v.toLowerCase())));
+    this.models.set(
+      this.modelKey(categoryId, make),
+      new Set(values.map((v) => v.toLowerCase())),
+    );
   }
 
   setYears(categoryId: string, make: string, model: string, values: string[]) {
@@ -97,15 +103,23 @@ class MvlValueCache {
   }
 
   hasMake(categoryId: string, make: string) {
-    return this.makes.get(this.makeKey(categoryId))?.has(make.toLowerCase()) ?? false;
+    return (
+      this.makes.get(this.makeKey(categoryId))?.has(make.toLowerCase()) ?? false
+    );
   }
 
   hasModel(categoryId: string, make: string, model: string) {
-    return this.models.get(this.modelKey(categoryId, make))?.has(model.toLowerCase()) ?? false;
+    return (
+      this.models
+        .get(this.modelKey(categoryId, make))
+        ?.has(model.toLowerCase()) ?? false
+    );
   }
 
   hasYear(categoryId: string, make: string, model: string, year: string) {
-    return this.years.get(this.yearKey(categoryId, make, model))?.has(year) ?? false;
+    return (
+      this.years.get(this.yearKey(categoryId, make, model))?.has(year) ?? false
+    );
   }
 }
 
@@ -130,9 +144,7 @@ export class EbayMvlService {
   /** eBay Motors Parts & Accessories root category */
   static readonly MOTORS_PARTS_CATEGORY = '6000';
 
-  constructor(
-    private readonly taxonomyApi: EbayTaxonomyApiService,
-  ) {}
+  constructor(private readonly taxonomyApi: EbayTaxonomyApiService) {}
 
   /* ─── Compatibility Tree ─── */
 
@@ -274,8 +286,17 @@ export class EbayMvlService {
     query?: string,
     limit = 50,
     offset = 0,
+    treeId = EbayMvlService.DEFAULT_TREE_ID,
   ): Promise<{ options: PropertyValueOption[]; hasMore: boolean }> {
-    return this.getPropertyValues(categoryId, 'Make', {}, query, limit, offset);
+    return this.getPropertyValues(
+      categoryId,
+      'Make',
+      {},
+      query,
+      limit,
+      offset,
+      treeId,
+    );
   }
 
   /* ─── Convenience: Get Models ─── */
@@ -289,6 +310,7 @@ export class EbayMvlService {
     query?: string,
     limit = 50,
     offset = 0,
+    treeId = EbayMvlService.DEFAULT_TREE_ID,
   ): Promise<{ options: PropertyValueOption[]; hasMore: boolean }> {
     return this.getPropertyValues(
       categoryId,
@@ -297,6 +319,7 @@ export class EbayMvlService {
       query,
       limit,
       offset,
+      treeId,
     );
   }
 
@@ -309,11 +332,20 @@ export class EbayMvlService {
     categoryId: string,
     make: string,
     model: string,
+    treeId = EbayMvlService.DEFAULT_TREE_ID,
   ): Promise<{ options: PropertyValueOption[]; hasMore: boolean }> {
-    return this.getPropertyValues(categoryId, 'Year', {
-      Make: make,
-      Model: model,
-    });
+    return this.getPropertyValues(
+      categoryId,
+      'Year',
+      {
+        Make: make,
+        Model: model,
+      },
+      undefined,
+      100,
+      0,
+      treeId,
+    );
   }
 
   /* ─── MVL validation & canonicalization ─── */
@@ -325,12 +357,13 @@ export class EbayMvlService {
     categoryId: string,
     make: string,
     model?: string,
+    treeId = EbayMvlService.DEFAULT_TREE_ID,
   ): Promise<{ make?: string; model?: string; mvlMatched: boolean }> {
     const makeQuery = make.trim();
     if (!makeQuery) return { mvlMatched: false };
 
     try {
-      const makes = await this.getMakes(categoryId, makeQuery, 100);
+      const makes = await this.getMakes(categoryId, makeQuery, 100, 0, treeId);
       const canonicalMake = this.pickCanonical(makes.options, makeQuery);
       if (!canonicalMake) return { mvlMatched: false };
 
@@ -338,7 +371,14 @@ export class EbayMvlService {
         return { make: canonicalMake, mvlMatched: true };
       }
 
-      const models = await this.getModels(categoryId, canonicalMake, model.trim(), 100);
+      const models = await this.getModels(
+        categoryId,
+        canonicalMake,
+        model.trim(),
+        100,
+        0,
+        treeId,
+      );
       const canonicalModel = this.pickCanonical(models.options, model.trim());
       return {
         make: canonicalMake,
@@ -360,7 +400,7 @@ export class EbayMvlService {
   async validateFitmentData(
     fitmentData: Record<string, unknown>[] | null | undefined,
     categoryId: string,
-    options?: { keepNeedsReview?: boolean },
+    options?: { keepNeedsReview?: boolean; treeId?: string },
   ): Promise<MvlValidationSummary> {
     const empty: MvlValidationSummary = {
       accepted: [],
@@ -380,7 +420,12 @@ export class EbayMvlService {
     }
 
     const keepNeedsReview = options?.keepNeedsReview !== false;
-    const validated = await this.validateParsedRows(parsedRows, categoryId);
+    const treeId = options?.treeId ?? EbayMvlService.DEFAULT_TREE_ID;
+    const validated = await this.validateParsedRows(
+      parsedRows,
+      categoryId,
+      treeId,
+    );
 
     const accepted: Record<string, unknown>[] = [];
     let rejectedCount = parseRejected;
@@ -417,6 +462,7 @@ export class EbayMvlService {
   async validateParsedRows(
     rows: ParsedFitmentRow[],
     categoryId: string,
+    treeId = EbayMvlService.DEFAULT_TREE_ID,
   ): Promise<MvlValidatedRow[]> {
     if (rows.length === 0) return [];
 
@@ -425,7 +471,9 @@ export class EbayMvlService {
 
     for (const parsed of rows) {
       try {
-        results.push(await this.validateSingleRow(parsed, categoryId, cache));
+        results.push(
+          await this.validateSingleRow(parsed, categoryId, cache, treeId),
+        );
       } catch (err) {
         this.logger.warn(
           `MVL validation unavailable for ${parsed.make} ${parsed.model}: ${err instanceof Error ? err.message : err}`,
@@ -448,9 +496,10 @@ export class EbayMvlService {
     parsed: ParsedFitmentRow,
     categoryId: string,
     cache: MvlValueCache,
+    treeId = EbayMvlService.DEFAULT_TREE_ID,
   ): Promise<MvlValidatedRow> {
     if (!cache.hasMakeList(categoryId)) {
-      const makes = await this.getMakes(categoryId, undefined, 5000);
+      const makes = await this.getMakes(categoryId, undefined, 5000, 0, treeId);
       cache.setMakes(
         categoryId,
         makes.options.map((o) => o.value),
@@ -459,7 +508,12 @@ export class EbayMvlService {
 
     let row = parsed;
     if (!cache.hasMake(categoryId, row.make)) {
-      const canonical = await this.resolveCanonicalMakeModel(categoryId, row.make);
+      const canonical = await this.resolveCanonicalMakeModel(
+        categoryId,
+        row.make,
+        undefined,
+        treeId,
+      );
       if (canonical.make) row = { ...row, make: canonical.make };
     }
 
@@ -475,7 +529,14 @@ export class EbayMvlService {
     }
 
     if (!cache.hasModelList(categoryId, row.make)) {
-      const models = await this.getModels(categoryId, row.make, undefined, 5000);
+      const models = await this.getModels(
+        categoryId,
+        row.make,
+        undefined,
+        5000,
+        0,
+        treeId,
+      );
       cache.setModels(
         categoryId,
         row.make,
@@ -484,7 +545,12 @@ export class EbayMvlService {
     }
 
     if (!cache.hasModel(categoryId, row.make, row.model)) {
-      const resolved = await this.resolveCanonicalMakeModel(categoryId, row.make, row.model);
+      const resolved = await this.resolveCanonicalMakeModel(
+        categoryId,
+        row.make,
+        row.model,
+        treeId,
+      );
       if (resolved.model) row = { ...row, model: resolved.model };
     }
 
@@ -500,7 +566,12 @@ export class EbayMvlService {
     }
 
     if (!cache.hasYearList(categoryId, row.make, row.model)) {
-      const years = await this.getYears(categoryId, row.make, row.model);
+      const years = await this.getYears(
+        categoryId,
+        row.make,
+        row.model,
+        treeId,
+      );
       cache.setYears(
         categoryId,
         row.make,

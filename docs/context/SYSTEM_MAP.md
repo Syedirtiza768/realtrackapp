@@ -187,6 +187,7 @@ module-name/
 | **common/openai** | `common/openai/` | `openai-queue.service.ts` | OpenAI client, queued calls |
 | **common/scheduler** | `common/scheduler/` | `scheduler.service.ts` | Cron jobs feeding queues |
 | **common/feature-flags** | `common/feature-flags/` | `feature-flag.controller.ts`, `feature-flag.entity.ts` | Feature flags |
+| **channels/ebay (util)** | `channels/ebay/` | `ebay-marketplace-tree.util.ts` | Canonical eBay category tree IDs per marketplace (US→`0`, AU→`15`, DE→`77`); `resolveCategoryTreeId()` |
 
 ### Migrations (`backend/src/migrations/`)
 

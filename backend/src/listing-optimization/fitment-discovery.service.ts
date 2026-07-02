@@ -4,9 +4,13 @@ import type { MvlValidatedRow } from '../fitment/ebay-mvl.service.js';
 import type { ParsedFitmentRow } from '../fitment/fitment-mvl.util.js';
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
 import { extractMakeModelFromTitle } from '../listings/utils/extract-make-model-from-title.js';
 import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
-import type { FitmentRow, FitmentStatus } from './listing-optimization.types.js';
+import type {
+  FitmentRow,
+  FitmentStatus,
+} from './listing-optimization.types.js';
 
 const VIN_REGEX = /\b([A-HJ-NPR-Z0-9]{17})\b/gi;
 
@@ -30,22 +34,41 @@ export class FitmentDiscoveryService {
     private readonly taxonomy: EbayTaxonomyApiService,
   ) {}
 
-  async discover(product: CatalogProduct): Promise<FitmentDiscoveryResult> {
+  async discover(
+    product: CatalogProduct,
+    options?: {
+      marketplace?: string | null;
+      categoryId?: string;
+    },
+  ): Promise<FitmentDiscoveryResult> {
     const manualReviewReasons: string[] = [];
     const donorVin = this.extractDonorVin(product);
     let donorVinDecoded: Record<string, unknown> | null = null;
 
-    const categoryId = product.categoryId ?? EbayMvlService.MOTORS_PARTS_CATEGORY;
+    // Resolve the target marketplace's category tree + category id. Defaults
+    // to the US tree + the product's own category (or the Motors P&A root).
+    const treeId = resolveCategoryTreeId(options?.marketplace ?? null);
+    const categoryId =
+      options?.categoryId ??
+      product.categoryId ??
+      EbayMvlService.MOTORS_PARTS_CATEGORY;
     let categorySupportsCompatibility = true;
     try {
-      const props = await this.taxonomy.getCompatibilityProperties('0', categoryId);
+      const props = await this.taxonomy.getCompatibilityProperties(
+        treeId,
+        categoryId,
+      );
       categorySupportsCompatibility = props.length > 0;
       if (!categorySupportsCompatibility) {
-        manualReviewReasons.push('Category does not support automotive compatibility');
+        manualReviewReasons.push(
+          'Category does not support automotive compatibility',
+        );
       }
     } catch {
       categorySupportsCompatibility = false;
-      manualReviewReasons.push('Could not verify eBay compatibility support for category');
+      manualReviewReasons.push(
+        'Could not verify eBay compatibility support for category',
+      );
     }
 
     const candidates: FitmentRow[] = [];
@@ -77,27 +100,44 @@ export class FitmentDiscoveryService {
             confidence: 0.55,
             source: 'donor_vin_nhtsa',
             validationStatus: 'needs_review',
-            notes: 'Donor vehicle from VIN decode — verify part fits this vehicle',
+            notes:
+              'Donor vehicle from VIN decode — verify part fits this vehicle',
           });
-          manualReviewReasons.push('Fitment includes donor vehicle only from VIN decode');
+          manualReviewReasons.push(
+            'Fitment includes donor vehicle only from VIN decode',
+          );
         }
       } catch (err) {
-        this.logger.warn(`Donor VIN decode failed for ${donorVin}: ${String(err)}`);
+        this.logger.warn(
+          `Donor VIN decode failed for ${donorVin}: ${String(err)}`,
+        );
         manualReviewReasons.push('Donor VIN could not be decoded');
       }
     }
 
     if (!product.oemPartNumber && !product.mpn) {
-      manualReviewReasons.push('OEM/MPN missing — cannot verify interchange fitment');
+      manualReviewReasons.push(
+        'OEM/MPN missing — cannot verify interchange fitment',
+      );
     }
 
-    const validated = await this.validateAgainstEbay(candidates, categoryId);
+    const validated = await this.validateAgainstEbay(
+      candidates,
+      categoryId,
+      treeId,
+    );
     const deduped = this.deduplicateFitments(validated);
 
-    const validCount = deduped.filter((r) => r.validationStatus === 'valid').length;
+    const validCount = deduped.filter(
+      (r) => r.validationStatus === 'valid',
+    ).length;
     const onlyDonor =
       deduped.length > 0 &&
-      deduped.every((r) => r.source === 'donor_vin_nhtsa' || r.validationStatus === 'needs_review');
+      deduped.every(
+        (r) =>
+          r.source === 'donor_vin_nhtsa' ||
+          r.validationStatus === 'needs_review',
+      );
 
     if (deduped.length === 0) {
       return {
@@ -115,7 +155,9 @@ export class FitmentDiscoveryService {
     }
 
     if (onlyDonor) {
-      manualReviewReasons.push('Only donor vehicle known — do not assume broad interchange');
+      manualReviewReasons.push(
+        'Only donor vehicle known — do not assume broad interchange',
+      );
     }
 
     const avgConfidence =
@@ -153,7 +195,12 @@ export class FitmentDiscoveryService {
     if (yearPrefix) {
       const start = parseInt(yearPrefix[1], 10);
       const end = yearPrefix[2] ? parseInt(yearPrefix[2], 10) : start;
-      if (Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start <= 35) {
+      if (
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        end >= start &&
+        end - start <= 35
+      ) {
         for (let y = start; y <= end; y++) {
           rows.push({
             year: String(y),
@@ -162,7 +209,8 @@ export class FitmentDiscoveryService {
             confidence: 0.5,
             source: 'title_parse',
             validationStatus: 'needs_review',
-            notes: 'Derived from listing title year range — verify compatibility',
+            notes:
+              'Derived from listing title year range — verify compatibility',
           });
         }
         return rows;
@@ -189,12 +237,17 @@ export class FitmentDiscoveryService {
     if (product.donorVin?.trim()) {
       return product.donorVin.trim().toUpperCase();
     }
-    const haystack = [product.title, product.description, product.sku].filter(Boolean).join(' ');
+    const haystack = [product.title, product.description, product.sku]
+      .filter(Boolean)
+      .join(' ');
     const match = haystack.match(VIN_REGEX);
     return match?.[0]?.toUpperCase() ?? null;
   }
 
-  private rowFromRaw(raw: Record<string, unknown>, source: string): FitmentRow | null {
+  private rowFromRaw(
+    raw: Record<string, unknown>,
+    source: string,
+  ): FitmentRow | null {
     const make = String(raw['Make'] ?? raw['make'] ?? '').trim();
     const model = String(raw['Model'] ?? raw['model'] ?? '').trim();
     const year = String(raw['Year'] ?? raw['year'] ?? '').trim();
@@ -206,9 +259,13 @@ export class FitmentDiscoveryService {
       model,
       trim: String(raw['Trim'] ?? raw['trim'] ?? '').trim() || undefined,
       engine: String(raw['Engine'] ?? raw['engine'] ?? '').trim() || undefined,
-      drivetrain: String(raw['Drivetrain'] ?? raw['drivetrain'] ?? '').trim() || undefined,
-      bodyType: String(raw['Body Style'] ?? raw['bodyStyle'] ?? '').trim() || undefined,
-      position: String(raw['Position'] ?? raw['position'] ?? '').trim() || undefined,
+      drivetrain:
+        String(raw['Drivetrain'] ?? raw['drivetrain'] ?? '').trim() ||
+        undefined,
+      bodyType:
+        String(raw['Body Style'] ?? raw['bodyStyle'] ?? '').trim() || undefined,
+      position:
+        String(raw['Position'] ?? raw['position'] ?? '').trim() || undefined,
       notes: String(raw['Notes'] ?? raw['notes'] ?? '').trim() || undefined,
       confidence: 0.82,
       source,
@@ -229,6 +286,7 @@ export class FitmentDiscoveryService {
   private async validateAgainstEbay(
     rows: FitmentRow[],
     categoryId: string,
+    treeId = '0',
   ): Promise<FitmentRow[]> {
     if (rows.length === 0) return [];
 
@@ -249,7 +307,11 @@ export class FitmentDiscoveryService {
       });
     }
 
-    const validated = await this.mvl.validateParsedRows(parsed, categoryId);
+    const validated = await this.mvl.validateParsedRows(
+      parsed,
+      categoryId,
+      treeId,
+    );
     const validationByIndex = new Map<number, MvlValidatedRow>();
     indicesToValidate.forEach((rowIndex, vi) => {
       validationByIndex.set(rowIndex, validated[vi]);
@@ -296,7 +358,8 @@ export class FitmentDiscoveryService {
         make: result.row.make,
         model: result.row.model,
         year: result.row.year,
-        validationStatus: row.source === 'donor_vin_nhtsa' ? 'needs_review' : 'valid',
+        validationStatus:
+          row.source === 'donor_vin_nhtsa' ? 'needs_review' : 'valid',
         confidence: row.source === 'donor_vin_nhtsa' ? row.confidence : 0.9,
       };
     });
