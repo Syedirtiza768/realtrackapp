@@ -16,7 +16,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | AI listing generation | (in editor) | `listings` (`listing-generation.controller`) | Partial | OpenAI-backed; verify quality/limits |
 | Listings v2 (cached) | — | `listings` (`listings-v2.controller`) | Partial | Redis cache interceptor |
 | Export rules | — | `listings` (`export-rule.controller`) | Partial | Route on `/api/api/export-rules` ⚠️ |
-| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted automotive search |
+| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted automotive search; bulk **List on Channels** and **Export Templates** include shipping/return/payment profile dropdowns (fetched per store) |
 | Catalog CSV/bulk import | `/catalog/import` | `catalog-import` | Implemented | BullMQ; memory-heavy |
 | Motors filters view | `/catalog/motors-filters` | `catalog-import` | Implemented | Motors-specific facets |
 | Compliance audits | (catalog) | `catalog-import` (`compliance.controller`) | Partial | `catalog.compliance` |

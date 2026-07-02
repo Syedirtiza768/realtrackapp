@@ -78,7 +78,15 @@ export class CatalogProductController {
   @Post('export-templates')
   @RequirePermissions('catalog.export')
   async exportTemplates(
-    @Body() body: { ids?: string[]; listingIds?: string[]; formats?: ('us' | 'au' | 'de')[] },
+    @Body() body: {
+      ids?: string[];
+      listingIds?: string[];
+      formats?: ('us' | 'au' | 'de')[];
+      shippingProfile?: string;
+      returnProfile?: string;
+      paymentProfile?: string;
+      persistProfiles?: boolean;
+    },
     @Res() res: express.Response,
   ) {
     let products = body.ids?.length
@@ -94,6 +102,21 @@ export class CatalogProductController {
       res.status(404).json({ error: 'No catalog products found for given IDs' });
       return;
     }
+
+    if (body.persistProfiles && body.listingIds?.length) {
+      await this.productService.persistProfileOverridesForListings(body.listingIds, {
+        shippingProfile: body.shippingProfile,
+        returnProfile: body.returnProfile,
+        paymentProfile: body.paymentProfile,
+      });
+    }
+
+    const profileOverrides = {
+      shippingProfile: body.shippingProfile,
+      returnProfile: body.returnProfile,
+      paymentProfile: body.paymentProfile,
+    };
+    products = this.productService.applyProfileOverrides(products, profileOverrides);
 
     const formats = body.formats || ['us', 'au', 'de'];
     const zip = await this.templateService.generateTemplatesZip(products, formats);

@@ -23,6 +23,7 @@ import ActiveFilterTags from './ActiveFilterTags';
 import ResultsGrid from './ResultsGrid';
 import CatalogPreviewModal from './CatalogPreviewModal';
 import PublishModal from '../channels/PublishModal';
+import ExportTemplatesModal from './ExportTemplatesModal';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
 import { deleteListing } from '../../lib/listingsApi';
 import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
@@ -86,6 +87,7 @@ export default function CatalogManager() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPublishOpen, setBulkPublishOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   // For infinite scroll mode
   const [infiniteScroll, setInfiniteScroll] = useState(false);
@@ -257,29 +259,9 @@ export default function CatalogManager() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const handleExportTemplates = useCallback(async () => {
+  const handleExportTemplates = useCallback(() => {
     if (selectedIds.size === 0) return;
-    setExporting(true);
-    try {
-      const res = await fetch('/api/catalog-products/export-templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ listingIds: Array.from(selectedIds) }),
-      });
-      if (!res.ok) throw new Error('Export failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const disp = res.headers.get('Content-Disposition');
-      a.download = disp?.match(/filename="(.+)"/)?.[1] || 'listings.zip';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export templates failed:', err);
-    } finally {
-      setExporting(false);
-    }
+    setExportModalOpen(true);
   }, [selectedIds]);
 
   const handleExportCsv = useCallback(async () => {
@@ -334,6 +316,7 @@ export default function CatalogManager() {
     setPublishModalOpen(false);
     setPublishTargetId(null);
     setBulkPublishOpen(false);
+    setExportModalOpen(false);
     setSelectedIds(new Set());
     refetch();
   }, [refetch]);
@@ -664,6 +647,14 @@ export default function CatalogManager() {
         onComplete={handlePublishComplete}
       />
 
+      {/* Export templates modal */}
+      <ExportTemplatesModal
+        open={exportModalOpen}
+        listingIds={Array.from(selectedIds)}
+        onClose={() => setExportModalOpen(false)}
+        onComplete={handlePublishComplete}
+      />
+
       {/* Bulk action bar (floating) */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-5 py-3 shadow-2xl shadow-black/50 flex flex-wrap items-center justify-center gap-2 sm:gap-4 max-w-[calc(100vw-2rem)] sm:max-w-none">
@@ -681,7 +672,7 @@ export default function CatalogManager() {
             disabled={exporting}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg text-xs font-medium transition-colors"
           >
-            <Download size={12} /> {exporting ? 'Exporting…' : 'Export Templates'}
+            <Download size={12} /> Export Templates
           </button>
           {showCatalogDestructiveUi && (
             <button

@@ -196,6 +196,18 @@ export class ListingRecord {
   cOeOemPartNumber: string | null;
 
   @Column({ type: 'text', nullable: true })
+  cMaterial: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  cPlacement: string | null;
+
+  @Column({ name: 'country_of_origin', type: 'text', nullable: true })
+  countryOfOrigin: string | null;
+
+  @Column({ name: 'condition_label', type: 'text', nullable: true })
+  conditionLabel: string | null;
+
+  @Column({ type: 'text', nullable: true })
   cOperatingMode: string | null;
 
   @Column({ type: 'text', nullable: true })

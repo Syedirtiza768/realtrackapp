@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { Store } from '../entities/store.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
@@ -411,20 +411,72 @@ export class EbayPublishService {
   async publishByListingIds(
     listingIds: string[],
     storeIds: string[],
+    options?: {
+      fulfillmentPolicyId?: string;
+      paymentPolicyId?: string;
+      returnPolicyId?: string;
+      shippingProfileName?: string;
+      returnProfileName?: string;
+      paymentProfileName?: string;
+    },
   ): Promise<Array<{ listingId: string; results: PublishResult[] }>> {
     if (!storeIds.length) {
       throw new BadRequestException('At least one storeId is required');
     }
+
+    if (
+      options?.shippingProfileName ||
+      options?.returnProfileName ||
+      options?.paymentProfileName
+    ) {
+      await this.applyListingProfileNames(listingIds, options);
+    }
+
     const allResults: Array<{ listingId: string; results: PublishResult[] }> = [];
     for (const listingId of listingIds) {
-      const results = await this.publish(this.stubPublishRequest(listingId, storeIds));
+      const results = await this.publish(
+        this.stubPublishRequest(listingId, storeIds, options),
+      );
       allResults.push({ listingId, results });
     }
     return allResults;
   }
 
+  private async applyListingProfileNames(
+    listingIds: string[],
+    options: {
+      shippingProfileName?: string;
+      returnProfileName?: string;
+      paymentProfileName?: string;
+    },
+  ): Promise<void> {
+    const listings = await this.listingRepo.findBy({ id: In(listingIds) });
+    for (const listing of listings) {
+      if (options.shippingProfileName) {
+        listing.shippingProfileName = options.shippingProfileName;
+      }
+      if (options.returnProfileName) {
+        listing.returnProfileName = options.returnProfileName;
+      }
+      if (options.paymentProfileName) {
+        listing.paymentProfileName = options.paymentProfileName;
+      }
+    }
+    if (listings.length) {
+      await this.listingRepo.save(listings);
+    }
+  }
+
   /** Minimal publish payload; enrichment fills title, SKU, images, condition, policies. */
-  stubPublishRequest(listingId: string, storeIds: string[]): PublishRequest {
+  stubPublishRequest(
+    listingId: string,
+    storeIds: string[],
+    options?: {
+      fulfillmentPolicyId?: string;
+      paymentPolicyId?: string;
+      returnPolicyId?: string;
+    },
+  ): PublishRequest {
     return {
       listingId,
       storeIds,
@@ -438,6 +490,9 @@ export class EbayPublishService {
       quantity: 0,
       imageUrls: [],
       aspects: {},
+      fulfillmentPolicyId: options?.fulfillmentPolicyId,
+      paymentPolicyId: options?.paymentPolicyId,
+      returnPolicyId: options?.returnPolicyId,
     };
   }
 

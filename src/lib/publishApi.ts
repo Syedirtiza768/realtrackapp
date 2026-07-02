@@ -67,8 +67,16 @@ export function batchPublishToEbay(items: PublishRequest[]): Promise<BatchPublis
 export function publishListingIdsToEbay(
   listingIds: string[],
   storeIds: string[],
+  options?: {
+    fulfillmentPolicyId?: string;
+    paymentPolicyId?: string;
+    returnPolicyId?: string;
+    shippingProfileName?: string;
+    returnProfileName?: string;
+    paymentProfileName?: string;
+  },
 ): Promise<BatchPublishResult[]> {
-  return authPost(`${BASE}/publish-by-listings`, { listingIds, storeIds });
+  return authPost(`${BASE}/publish-by-listings`, { listingIds, storeIds, ...options });
 }
 
 /**

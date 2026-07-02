@@ -129,6 +129,30 @@ class PublishByListingIdsDto {
   @IsArray()
   @IsString({ each: true })
   storeIds!: string[];
+
+  @IsOptional()
+  @IsString()
+  fulfillmentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  returnPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  shippingProfileName?: string;
+
+  @IsOptional()
+  @IsString()
+  returnProfileName?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentProfileName?: string;
 }
 
 class UpdatePriceQuantityDto {
@@ -189,7 +213,14 @@ export class EbayPublishController {
       'Publish listing records by ID; backend enriches SKU, images, condition, and policies',
   })
   async publishByListingIds(@Body() dto: PublishByListingIdsDto) {
-    return this.publishService.publishByListingIds(dto.listingIds, dto.storeIds);
+    return this.publishService.publishByListingIds(dto.listingIds, dto.storeIds, {
+      fulfillmentPolicyId: dto.fulfillmentPolicyId,
+      paymentPolicyId: dto.paymentPolicyId,
+      returnPolicyId: dto.returnPolicyId,
+      shippingProfileName: dto.shippingProfileName,
+      returnProfileName: dto.returnProfileName,
+      paymentProfileName: dto.paymentProfileName,
+    });
   }
 
   @Patch('offers/price-quantity')

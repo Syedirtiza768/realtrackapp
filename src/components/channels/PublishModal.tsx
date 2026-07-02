@@ -20,10 +20,10 @@ import {
   ChevronUp,
   Store as StoreIcon,
 } from 'lucide-react';
-import { getStoresByChannel } from '../../lib/multiStoreApi';
+import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
 import {
   publishToEbay,
-  batchPublishToEbay,
+  publishListingIdsToEbay,
   type PublishRequest,
   type PublishResult,
   type BatchPublishResult,
@@ -31,6 +31,12 @@ import {
 import type { SearchItem } from '../../types/search';
 import type { Store } from '../../types/multiStore';
 import { getAllImageUrls } from '../../lib/listingsApi';
+import ProfileSelectors from '../catalog/ProfileSelectors';
+import {
+  EMPTY_PROFILE_SELECTION,
+  defaultProfileSelection,
+  type ProfileSelection,
+} from '../catalog/profileUtils';
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -102,6 +108,8 @@ export default function PublishModal(props: Props) {
   const [step, setStep] = useState<Step>('select');
   const [results, setResults] = useState<PublishResult[]>([]);
   const [bulkResults, setBulkResults] = useState<BatchPublishResult[]>([]);
+  const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
+  const [profileStoreId, setProfileStoreId] = useState<string>('');
 
   // Reset when modal opens
   useEffect(() => {
@@ -112,8 +120,41 @@ export default function PublishModal(props: Props) {
       setStep('select');
       setResults([]);
       setBulkResults([]);
+      setProfiles(EMPTY_PROFILE_SELECTION);
+      setProfileStoreId('');
     }
   }, [open]);
+
+  const profileSourceStoreId = useMemo(() => {
+    if (profileStoreId) return profileStoreId;
+    const selectedStores = activeStores.filter((s) => selected.has(s.id));
+    return selectedStores[0]?.id ?? '';
+  }, [profileStoreId, activeStores, selected]);
+
+  const profileSourceStore = useMemo(
+    () => activeStores.find((s) => s.id === profileSourceStoreId) ?? null,
+    [activeStores, profileSourceStoreId],
+  );
+
+  const { data: storeProfiles, isLoading: profilesLoading } = useQuery({
+    queryKey: ['store-profiles-publish', profileSourceStoreId],
+    queryFn: () => getStoreProfiles(profileSourceStoreId),
+    enabled: open && !!profileSourceStoreId,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!storeProfiles || !profileSourceStore) return;
+    const listingProfiles =
+      mode === 'single' && listing
+        ? {
+            shippingProfileName: (listing as SearchItem & { shippingProfileName?: string | null }).shippingProfileName,
+            returnProfileName: (listing as SearchItem & { returnProfileName?: string | null }).returnProfileName,
+            paymentProfileName: (listing as SearchItem & { paymentProfileName?: string | null }).paymentProfileName,
+          }
+        : null;
+    setProfiles(defaultProfileSelection(storeProfiles, profileSourceStore, listingProfiles));
+  }, [storeProfiles, profileSourceStore, mode, listing]);
 
   /* ── Validation (single mode only) ─────────────────────── */
   const validation = useMemo(() => {
@@ -177,13 +218,25 @@ export default function PublishModal(props: Props) {
         quantity: ov?.quantity ?? parseInt(listing.quantity ?? '0', 10),
         imageUrls: getAllImageUrls(listing.itemPhotoUrl),
         aspects: {},
-        fulfillmentPolicyId: (store.config as Record<string, string>)?.fulfillmentPolicyId ?? undefined,
-        paymentPolicyId: (store.config as Record<string, string>)?.paymentPolicyId ?? undefined,
-        returnPolicyId: (store.config as Record<string, string>)?.returnPolicyId ?? undefined,
+        fulfillmentPolicyId:
+          profiles.fulfillmentPolicyId ??
+          (store.config as Record<string, string>)?.fulfillmentPolicyId ??
+          store.fulfillmentPolicyId ??
+          undefined,
+        paymentPolicyId:
+          profiles.paymentPolicyId ??
+          (store.config as Record<string, string>)?.paymentPolicyId ??
+          store.paymentPolicyId ??
+          undefined,
+        returnPolicyId:
+          profiles.returnPolicyId ??
+          (store.config as Record<string, string>)?.returnPolicyId ??
+          store.returnPolicyId ??
+          undefined,
         merchantLocationKey: (store.config as Record<string, string>)?.locationKey ?? undefined,
       };
     },
-    [listing, overrides],
+    [listing, overrides, profiles],
   );
 
   /* ── Publish mutation ───────────────────────────────────── */
@@ -211,20 +264,14 @@ export default function PublishModal(props: Props) {
         return { type: 'single' as const, results: allResults };
       } else if (mode === 'bulk' && listingIds) {
         const storeIdArray = Array.from(selected);
-        const items: PublishRequest[] = listingIds.map((lid) => ({
-          listingId: lid,
-          storeIds: storeIdArray,
-          sku: lid,
-          title: '',
-          description: '',
-          categoryId: '',
-          condition: 'NEW',
-          price: 0,
-          quantity: 0,
-          imageUrls: [],
-          aspects: {},
-        }));
-        const batchRes = await batchPublishToEbay(items);
+        const batchRes = await publishListingIdsToEbay(listingIds, storeIdArray, {
+          fulfillmentPolicyId: profiles.fulfillmentPolicyId,
+          paymentPolicyId: profiles.paymentPolicyId,
+          returnPolicyId: profiles.returnPolicyId,
+          shippingProfileName: profiles.shippingProfileName || undefined,
+          returnProfileName: profiles.returnProfileName || undefined,
+          paymentProfileName: profiles.paymentProfileName || undefined,
+        });
         return { type: 'bulk' as const, batchResults: batchRes };
       }
       throw new Error('Invalid mode');
@@ -507,6 +554,43 @@ export default function PublishModal(props: Props) {
                       <p className="text-xs mt-1">
                         Go to Settings → Channels to connect your eBay account.
                       </p>
+                    </div>
+                  )}
+
+                  {/* Shipping / return / payment profiles */}
+                  {selected.size > 0 && (
+                    <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-3">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
+                        Shipping / Return / Payment
+                      </p>
+                      {selected.size > 1 && (
+                        <div>
+                          <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                            Profile source store
+                          </label>
+                          <select
+                            value={profileStoreId || profileSourceStoreId}
+                            onChange={(e) => setProfileStoreId(e.target.value)}
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          >
+                            {activeStores
+                              .filter((s) => selected.has(s.id))
+                              .map((store) => (
+                                <option key={store.id} value={store.id}>
+                                  {store.storeName}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
+                      <ProfileSelectors
+                        profiles={storeProfiles}
+                        loading={profilesLoading && !!profileSourceStoreId}
+                        storeLabel={profileSourceStore?.storeName}
+                        value={profiles}
+                        onChange={setProfiles}
+                        disabled={!profileSourceStoreId}
+                      />
                     </div>
                   )}
                 </div>

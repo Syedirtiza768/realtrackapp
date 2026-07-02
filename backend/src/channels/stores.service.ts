@@ -163,14 +163,14 @@ export class StoresService {
    * for the store's connected eBay account + marketplace.
    */
   async getStoreProfiles(storeId: string): Promise<{
-    shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string }>;
+    shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string }>;
     returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
     paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
   }> {
     const store = await this.getStore(storeId);
 
     // Shipping profiles: first from local table, then fall back to eBay fulfillment policies
-    let shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string }> = [];
+    let shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string }> = [];
     const localShipping = await this.shippingProfileRepo.find({
       where: { active: true },
       order: { isDefault: 'DESC', name: 'ASC' },
@@ -205,6 +205,7 @@ export class StoresService {
             carrier: '',
             service: '',
             costType: '',
+            ebayPolicyId: p.ebayPolicyId,
           }));
         }
 

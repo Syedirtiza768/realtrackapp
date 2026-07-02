@@ -198,7 +198,7 @@ export default function CatalogProductDetail() {
     try {
       // Shared fields → catalog product
       const sharedFields: Record<string, string> = {};
-      const sharedKeys = ['brand', 'mpn', 'oemPartNumber', 'partType', 'placement', 'material', 'features', 'countryOfManufacture'];
+      const sharedKeys = ['brand', 'mpn', 'oemPartNumber', 'partType', 'placement', 'material', 'features', 'countryOfOrigin'];
       for (const k of sharedKeys) {
         if (editedFields[k] !== undefined) sharedFields[k] = editedFields[k];
       }

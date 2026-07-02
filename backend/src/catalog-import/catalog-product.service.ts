@@ -96,6 +96,61 @@ export class CatalogProductService {
       .getMany();
   }
 
+  applyProfileOverrides(
+    products: CatalogProduct[],
+    overrides: {
+      shippingProfile?: string;
+      returnProfile?: string;
+      paymentProfile?: string;
+    },
+  ): CatalogProduct[] {
+    const { shippingProfile, returnProfile, paymentProfile } = overrides;
+    if (!shippingProfile && !returnProfile && !paymentProfile) {
+      return products;
+    }
+    return products.map((p) => {
+      const copy = { ...p } as CatalogProduct;
+      if (shippingProfile) copy.shippingProfile = shippingProfile;
+      if (returnProfile) copy.returnProfile = returnProfile;
+      if (paymentProfile) copy.paymentProfile = paymentProfile;
+      return copy;
+    });
+  }
+
+  async persistProfileOverridesForListings(
+    listingIds: string[],
+    overrides: {
+      shippingProfile?: string;
+      returnProfile?: string;
+      paymentProfile?: string;
+    },
+  ): Promise<void> {
+    const { shippingProfile, returnProfile, paymentProfile } = overrides;
+    if (!shippingProfile && !returnProfile && !paymentProfile) return;
+
+    const listings = await this.listingRepo.findBy({ id: In(listingIds) });
+    const skus = [
+      ...new Set(
+        listings
+          .map((l) => l.customLabelSku)
+          .filter((s): s is string => s != null && s !== ''),
+      ),
+    ];
+    if (!skus.length) return;
+
+    const products = await this.productRepo.findBy({ sku: In(skus) });
+    for (const product of products) {
+      if (shippingProfile) product.shippingProfile = shippingProfile;
+      if (returnProfile) product.returnProfile = returnProfile;
+      if (paymentProfile) product.paymentProfile = paymentProfile;
+      await this.update(product.id, {
+        shippingProfile: product.shippingProfile ?? undefined,
+        returnProfile: product.returnProfile ?? undefined,
+        paymentProfile: product.paymentProfile ?? undefined,
+      });
+    }
+  }
+
   async update(id: string, dto: UpdateProductDto): Promise<CatalogProduct> {
     const product = await this.findOne(id);
 
@@ -164,6 +219,7 @@ export class CatalogProductService {
       listing.quantityNum = product.quantity;
       listing.itemPhotoUrl = product.imageUrls?.length ? product.imageUrls.join('|') : null;
       listing.conditionId = product.conditionId;
+      listing.conditionLabel = product.conditionLabel;
       listing.categoryId = product.categoryId;
       listing.categoryName = product.categoryName;
       listing.format = product.format;
@@ -177,6 +233,9 @@ export class CatalogProductService {
       listing.cFeatures = product.features;
       listing.cManufacturerPartNumber = product.mpn;
       listing.cOeOemPartNumber = product.oemPartNumber;
+      listing.cMaterial = product.material;
+      listing.cPlacement = product.placement;
+      listing.countryOfOrigin = product.countryOfOrigin;
     }
 
     await this.listingRepo.save(listings);

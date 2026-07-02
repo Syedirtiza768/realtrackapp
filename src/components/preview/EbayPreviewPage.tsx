@@ -66,7 +66,7 @@ const SPECIFICS_FIELD_MAP: Record<string, string> = {
   'Placement on Vehicle': 'placement',
   'Material': 'material',
   'Features': 'features',
-  'Country/Region of Manufacture': 'countryOfManufacture',
+  'Country/Region of Manufacture': 'countryOfOrigin',
 };
 
 /** Renders an inline-editable specifics cell when in edit mode, or plain text otherwise. */

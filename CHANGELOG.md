@@ -6,7 +6,11 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Fixed
+- **Catalog product field persistence:** Fixed field name mismatch where frontend sent `countryOfManufacture` but backend expected `countryOfOrigin`. Added missing `cMaterial`, `cPlacement`, `countryOfOrigin`, and `conditionLabel` columns to `listing_records` entity. Updated `syncToListingRecord()` to sync these fields from catalog products to listing records. Migration `1785100000000-AddFieldsToListingRecord`.
+
 ### Added
+- **Catalog bulk profile selection:** When listing on channels or downloading export templates from the catalog bulk action bar, users can pick shipping, return, and payment profiles from store-fetched dropdowns. Profiles apply to eBay publish (`publish-by-listings` policy IDs + profile names) and export templates (`export-templates` overrides with optional persist). Components: `ProfileSelectors`, `ExportTemplatesModal`; `PublishModal` bulk/single flows updated.
 - **Published Listings Management Module:** Central dashboard at `/published-listings` with Inventory API sync, **Trading API GetSellerList fallback** for legacy listings, **Browse API competitor pricing**, health flags (including price vs market), bulk actions, audit revisions, and scheduled 6h sync. Permissions: `published_listings.view|sync|manage|bulk`. Migration `1785000000000-PublishedListingsModule`.
 
 ### Fixed
