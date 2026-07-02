@@ -163,7 +163,7 @@ export class StoresService {
    * for the store's connected eBay account + marketplace.
    */
   async getStoreProfiles(storeId: string): Promise<{
-    shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string }>;
+    shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string; shippingCost?: number; currency?: string }>;
     returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
     paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
   }> {
@@ -199,14 +199,35 @@ export class StoresService {
         // Fulfillment policies as shipping profiles (fallback if no local shipping profiles)
         const fulfillPolicies = policies.filter((p) => p.policyType === 'fulfillment');
         if (shippingProfiles.length === 0 && fulfillPolicies.length > 0) {
-          shippingProfiles = fulfillPolicies.map((p) => ({
-            id: p.id,
-            name: p.name,
-            carrier: '',
-            service: '',
-            costType: '',
-            ebayPolicyId: p.ebayPolicyId,
-          }));
+          shippingProfiles = fulfillPolicies.map((p) => {
+            // Extract shipping cost from raw_payload
+            let shippingCost: number | undefined;
+            let currency: string | undefined;
+            try {
+              const raw = p.rawPayload as Record<string, unknown>;
+              const shippingOptions = raw?.shippingOptions as Array<Record<string, unknown>> | undefined;
+              if (shippingOptions?.[0]?.shippingServices) {
+                const services = shippingOptions[0].shippingServices as Array<Record<string, unknown>>;
+                if (services[0]?.shippingCost) {
+                  const cost = services[0].shippingCost as { value?: string; currency?: string };
+                  shippingCost = cost.value ? parseFloat(cost.value) : undefined;
+                  currency = cost.currency;
+                }
+              }
+            } catch (e) {
+              // Ignore parsing errors
+            }
+            return {
+              id: p.id,
+              name: p.name,
+              carrier: '',
+              service: '',
+              costType: '',
+              ebayPolicyId: p.ebayPolicyId,
+              shippingCost,
+              currency,
+            };
+          });
         }
 
         returnProfiles = policies

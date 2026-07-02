@@ -43,7 +43,7 @@ async function putJson<T>(path: string, body?: unknown): Promise<T> {
 /* ── Stores ───────────────────────────────────────────────── */
 
 export interface StoreProfiles {
-  shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string }>;
+  shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string; shippingCost?: number; currency?: string }>;
   returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
   paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
 }

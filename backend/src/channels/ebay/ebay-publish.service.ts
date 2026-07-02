@@ -322,6 +322,50 @@ export class EbayPublishService {
     };
   }
 
+  /** Extract and log policy details for debugging shipping cost discrepancies. */
+  private async logPolicyDetails(
+    fulfillmentPolicyId: string | undefined,
+    storeName: string,
+    sku: string,
+  ): Promise<void> {
+    if (!fulfillmentPolicyId) return;
+    
+    try {
+      const policy = await this.policyRepo.findOne({
+        where: { ebayPolicyId: fulfillmentPolicyId },
+      });
+      
+      if (!policy) {
+        this.logger.warn(
+          `Policy ${fulfillmentPolicyId} not found in database for SKU ${sku} on "${storeName}"`,
+        );
+        return;
+      }
+      
+      const raw = policy.rawPayload as Record<string, unknown>;
+      const shippingOptions = raw?.shippingOptions as Array<Record<string, unknown>> | undefined;
+      let shippingCost: string | undefined;
+      let serviceCode: string | undefined;
+      
+      if (shippingOptions?.[0]?.shippingServices) {
+        const services = shippingOptions[0].shippingServices as Array<Record<string, unknown>>;
+        if (services[0]?.shippingCost) {
+          const cost = services[0].shippingCost as { value?: string; currency?: string };
+          shippingCost = cost.value ? `${cost.value} ${cost.currency || 'USD'}` : undefined;
+        }
+        serviceCode = services[0]?.shippingServiceCode as string;
+      }
+      
+      this.logger.log(
+        `Policy details for SKU ${sku} on "${storeName}": ` +
+        `ID=${fulfillmentPolicyId}, Name="${policy.name}", ` +
+        `ShippingCost=${shippingCost || 'N/A'}, Service=${serviceCode || 'N/A'}`,
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to log policy details for ${fulfillmentPolicyId}: ${err}`);
+    }
+  }
+
   private validateDirectOffer(
     offer: EbayOffer,
     store: Store,
@@ -573,6 +617,14 @@ export class EbayPublishService {
       }
 
       const offer = this.buildOffer(req, store);
+      
+      // Log policy details for debugging shipping cost discrepancies
+      await this.logPolicyDetails(
+        offer.listingPolicies?.fulfillmentPolicyId,
+        store.storeName,
+        req.sku,
+      );
+      
       const offerValidationError = this.validateDirectOffer(offer, store);
       if (offerValidationError) {
         return {

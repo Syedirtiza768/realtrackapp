@@ -98,7 +98,7 @@ export default function ProfileSelectors({
             <option value="">— Select —</option>
             {profiles.shippingProfiles.map((p) => (
               <option key={p.id} value={p.name}>
-                {p.name}
+                {p.name}{p.shippingCost != null ? ` (${p.currency || 'USD'} ${p.shippingCost})` : ''}
               </option>
             ))}
           </select>
