@@ -1,0 +1,32 @@
+feat: ECU vision prompt + eBay catalog lookup by MPN for fitment discovery
+
+Two new data sources for resolving category and fitment on parts where the
+vision model cannot determine vehicle identity (e.g. ECUs, electronic modules).
+
+ECU Identification Prompt:
+- New specialised vision prompt for ECUs/TCMs/BCMs that focuses on reading
+  ALL label text (HW#, SW#, OE#) instead of guessing vehicle make/model
+- Auto-detected from part type keywords (ecu, tcm, bcm, steuergerät, etc.)
+- Applied in both VisionEnrichmentPipeline (batch) and SingleListingFormService
+  (inline enrichment)
+
+eBay Catalog Lookup by MPN:
+- New searchByMpn() on EbayBrowseApiService searches eBay for existing listings
+  of the same part number via Browse API item_summary/search
+- Extracts categoryId, EPID, and Year/Make/Model from item specifics
+- Added as Source 4 in FitmentDiscoveryService (confidence 0.70), between
+  catalog fitment data (0.82) and title parsing (0.48)
+- If eBay listing has a category and the product doesn't, applies it as fallback
+- Added EbayCatalogLookupResult type to ebay-api.types.ts
+
+Files changed:
+- backend/src/common/openai/prompts/ecu-identification.prompt.ts (new)
+- backend/src/common/openai/pipelines/vision-enrichment.pipeline.ts
+- backend/src/channels/ebay/ebay-browse-api.service.ts
+- backend/src/channels/ebay/ebay-api.types.ts
+- backend/src/listing-optimization/fitment-discovery.service.ts
+- backend/src/inventory/inventory-workbench.service.ts
+- backend/src/ingestion/services/single-listing-form.service.ts
+- backend/src/listing-optimization/fitment-discovery.service.spec.ts
+
+Co-authored-by: CommandCodeBot <noreply@commandcode.ai>

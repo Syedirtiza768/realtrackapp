@@ -4,6 +4,7 @@ import type { MvlValidatedRow } from '../fitment/ebay-mvl.service.js';
 import type { ParsedFitmentRow } from '../fitment/fitment-mvl.util.js';
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import { EbayBrowseApiService } from '../channels/ebay/ebay-browse-api.service.js';
 import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
 import { extractMakeModelFromTitle } from '../listings/utils/extract-make-model-from-title.js';
 import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
@@ -22,6 +23,9 @@ export interface FitmentDiscoveryResult {
   donorVin: string | null;
   categorySupportsCompatibility: boolean;
   manualReviewReasons: string[];
+  /** Category resolved from eBay catalog lookup (when no other source had a category) */
+  ebayCatalogCategoryId?: string | null;
+  ebayCatalogCategoryName?: string | null;
 }
 
 @Injectable()
@@ -32,6 +36,7 @@ export class FitmentDiscoveryService {
     private readonly vinDecode: VinDecodeService,
     private readonly mvl: EbayMvlService,
     private readonly taxonomy: EbayTaxonomyApiService,
+    private readonly browseApi: EbayBrowseApiService,
   ) {}
 
   async discover(
@@ -77,6 +82,83 @@ export class FitmentDiscoveryService {
       for (const raw of product.fitmentData) {
         const row = this.rowFromRaw(raw, 'catalog_fitment');
         if (row) candidates.push(row);
+      }
+    }
+
+    // ── Source 4: eBay catalog lookup by MPN ──
+    // Searches eBay for existing listings of this part to find category,
+    // EPID, and Year/Make/Model fitment from item specifics.
+    let ebayCatalogCategoryId: string | null = null;
+    let ebayCatalogCategoryName: string | null = null;
+
+    if (candidates.length === 0) {
+      const searchMpn = product.mpn || product.oemPartNumber;
+      if (searchMpn) {
+        try {
+          const catalogResult = await this.browseApi.searchByMpn(
+            product.brand ?? '',
+            searchMpn,
+            { categoryIds: EbayMvlService.MOTORS_PARTS_CATEGORY, limit: 5 },
+          );
+
+          if (catalogResult.found) {
+            const best = catalogResult.items[0];
+
+            // Use the category from the eBay listing if the product has none
+            if (best.categoryId && !product.categoryId) {
+              ebayCatalogCategoryId = best.categoryId;
+              ebayCatalogCategoryName = best.categoryName;
+            }
+
+            // Extract fitment hints from item aspects
+            for (const item of catalogResult.items) {
+              for (const hint of item.fitmentHints) {
+                if (hint.make && hint.model) {
+                  candidates.push({
+                    year: hint.year || '',
+                    make: hint.make,
+                    model: hint.model,
+                    confidence: 0.70,
+                    source: 'ebay_catalog_lookup',
+                    validationStatus: 'needs_review',
+                    notes: `Fitment from eBay listing ${item.itemId} — verify compatibility`,
+                  });
+                }
+              }
+            }
+
+            // Also try to extract vehicle from the listing title
+            if (candidates.length === 0 && best.title) {
+              const { make, model } = extractMakeModelFromTitle(best.title);
+              if (make && model) {
+                candidates.push({
+                  year: '',
+                  make,
+                  model,
+                  confidence: 0.65,
+                  source: 'ebay_catalog_lookup',
+                  validationStatus: 'needs_review',
+                  notes: `Make/model inferred from eBay listing title — verify compatibility`,
+                });
+              }
+            }
+
+            if (candidates.length > 0) {
+              this.logger.log(
+                `eBay catalog lookup for "${searchMpn}": found ${catalogResult.items.length} items, ` +
+                `${candidates.length} fitment hint(s), category=${ebayCatalogCategoryId ?? 'n/a'}`,
+              );
+            } else {
+              this.logger.debug(
+                `eBay catalog lookup for "${searchMpn}": found items but no fitment hints`,
+              );
+            }
+          }
+        } catch (err) {
+          this.logger.warn(
+            `eBay catalog lookup failed for MPN "${searchMpn}": ${err instanceof Error ? err.message : err}`,
+          );
+        }
       }
     }
 
@@ -151,6 +233,8 @@ export class FitmentDiscoveryService {
           ...manualReviewReasons,
           'No verified compatibility rows — manual fitment review required',
         ],
+        ebayCatalogCategoryId,
+        ebayCatalogCategoryName,
       };
     }
 
@@ -178,6 +262,8 @@ export class FitmentDiscoveryService {
       donorVin,
       categorySupportsCompatibility,
       manualReviewReasons,
+      ebayCatalogCategoryId,
+      ebayCatalogCategoryName,
     };
   }
 

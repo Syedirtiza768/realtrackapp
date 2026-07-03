@@ -6,6 +6,10 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Added
+- **ECU vision identification prompt:** Specialised AI vision prompt for ECUs, TCMs, BCMs, and electronic control modules. Extracts hardware numbers, software numbers, OE/OEM numbers, and all visible label text instead of hallucinating vehicle make/model. Auto-detected from part type keywords (ECU, TCM, BCM, Steuergerät, etc.).
+- **eBay catalog lookup by MPN in fitment discovery:** When no catalog fitment data exists, searches eBay Browse API for existing listings of the same part number. Extracts category ID, EPID, and Year/Make/Model from item specifics. Applied to both fitment rows and category resolution. Confidence: 0.70.
+
 ### Fixed
 - **Inventory inline enrich async + stuck jobs:** `POST /api/inventory/inline-enrich` enqueues BullMQ `auto-enrich` (no blocking HTTP). `updateListingImages` auto-enqueues at 2+ photos. `POST /api/inventory/listings/:id/retry-enrichment` forces re-run. `enrichmentStage=failed` on errors; `needs_review` when category ID or fitment missing after run.
 - **eBay Taxonomy 429 during inline enrich:** Category suggestions retry with exponential backoff; in-memory cache + 800ms spacing between US/AU/DE lookups. Improved category query strings (skip generic `OEM` part type).

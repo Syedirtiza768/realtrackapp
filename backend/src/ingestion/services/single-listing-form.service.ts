@@ -19,6 +19,10 @@ import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import {
+  ECU_IDENTIFICATION_PROMPT,
+  isEcuPartType,
+} from '../../common/openai/prompts/ecu-identification.prompt.js';
+import {
   AUTOMOTIVE_OEM_BRANDS,
   SKU_PREFIX,
 } from '../constants/automotive-oem-brands.js';
@@ -50,6 +54,8 @@ export interface PartLookupDto {
   vin?: string;
   /** CDN URLs from uploaded listing images — required for automatic vision fallback */
   imageUrls?: string[];
+  /** Part type hint (e.g. "OEM", "ECU", "TCM") — used to select specialised vision prompts */
+  partType?: string;
 }
 
 export interface CreateIntakePartDto {
@@ -322,6 +328,7 @@ export class SingleListingFormService {
       partNumber,
       brand: listing.cBrand?.trim() || undefined,
       imageUrls,
+      partType: listing.cType?.trim() || undefined,
     });
 
     if (lookup.partName?.trim()) {
@@ -389,6 +396,7 @@ export class SingleListingFormService {
         partNumber,
         imageUrls,
         dto.brand,
+        dto.partType,
       );
 
       return {
@@ -490,25 +498,66 @@ export class SingleListingFormService {
     partNumberHint: string,
     imageUrls: string[],
     brandHint?: string,
+    partType?: string,
   ): Promise<{ result: Partial<PartLookupResult>; costUsd: number; visionModel: string }> {
     const brandLine = brandHint?.trim()
       ? `Brand / OEM manufacturer hint: ${brandHint.trim()}`
       : 'Brand hint: not provided — infer from labels when visible';
-    const prompt = SINGLE_LISTING_VISION_PROMPT.replace(
-      '{partNumberHint}',
-      partNumberHint,
-    ).replace('{brandHint}', brandLine);
+
+    // Use the specialised ECU prompt for electronic modules (ECU, TCM, BCM, etc.)
+    // which extracts part numbers and visible label text instead of guessing vehicle identity.
+    const useEcuPrompt = isEcuPartType(partType);
+
+    let prompt: string;
+    if (useEcuPrompt) {
+      prompt = ECU_IDENTIFICATION_PROMPT;
+      this.logger.log(`Using ECU identification prompt for partType="${partType}"`);
+    } else {
+      prompt = SINGLE_LISTING_VISION_PROMPT
+        .replace('{partNumberHint}', partNumberHint)
+        .replace('{brandHint}', brandLine);
+    }
     const visionResult = await this.visionPipeline.analyze(
       imageUrls,
       {
         partNumber: partNumberHint,
         donorMake: brandHint,
-        partType: 'single_listing_form',
+        partType: useEcuPrompt ? (partType ?? 'ecu') : 'single_listing_form',
       },
       prompt,
     );
 
     const parsed = visionResult.raw as Record<string, unknown>;
+
+    // For ECU prompts, the output schema is different (partNumbers, visibleText, vehicleApplication)
+    if (useEcuPrompt && visionResult.ecuIdentifiers) {
+      const ecu = visionResult.ecuIdentifiers;
+      const visibleText = ecu.visibleText ?? [];
+      const bestPartNumber = ecu.mpn || ecu.oemNumber || ecu.hardwareNumber || partNumberHint;
+      let note = '';
+      if (ecu.hardwareNumber) note += `HW: ${ecu.hardwareNumber}. `;
+      if (ecu.softwareNumber) note += `SW: ${ecu.softwareNumber}. `;
+      if (ecu.otherNumbers?.length) note += `Other: ${ecu.otherNumbers.join(', ')}. `;
+      if (visibleText.length > 0) {
+        note += `Visible text: ${visibleText.slice(0, 8).join('; ')}`;
+      }
+
+      return {
+        result: {
+          partName: ecu.partType ? `${ecu.brand ?? ''} ${ecu.partType} ${bestPartNumber}`.trim() : undefined,
+          brand: ecu.brand ?? undefined,
+          model: ecu.vehicleModel ?? undefined,
+          category: ecu.partType ?? 'Engine Control Units (ECUs)',
+          note: note.trim() || undefined,
+          partNumber: bestPartNumber,
+          confidence: this.normalizeConfidence(ecu.confidence?.overall),
+        },
+        costUsd: visionResult.estimatedCostUsd,
+        visionModel: visionResult.model,
+      };
+    }
+
+    // Standard (non-ECU) result extraction
     const coverage = parsed.imageCoverage as Record<string, unknown> | undefined;
     const hasLabelShot = coverage?.hasLabelShot === true;
     const hasOverallShot = coverage?.hasOverallShot === true;

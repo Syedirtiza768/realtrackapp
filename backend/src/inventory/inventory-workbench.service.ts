@@ -1144,6 +1144,28 @@ export class InventoryWorkbenchService {
         donorVinDecoded: fitmentResult.donorVinDecoded,
       } as any);
 
+      // If the product had no category but the eBay catalog lookup found one,
+      // apply it to both the product and the listing.
+      if (
+        fitmentResult.ebayCatalogCategoryId &&
+        !product.categoryId &&
+        !listing.categoryId
+      ) {
+        const catId = fitmentResult.ebayCatalogCategoryId;
+        const catName = fitmentResult.ebayCatalogCategoryName ?? catId;
+        await this.productRepo.update(product.id, {
+          categoryId: catId,
+          categoryName: catName,
+        } as any);
+        await this.listingRepo.update(listingId, {
+          categoryId: catId,
+          categoryName: catName,
+        } as Partial<ListingRecord>);
+        this.logger.log(
+          `Applied eBay catalog category to listing ${listingId}: "${catName}" (${catId})`,
+        );
+      }
+
       if (fitmentJson.length > 0) {
         this.logger.log(
           `Inline enrich: persisted ${fitmentJson.length} fitment row(s) for SKU ${listing.customLabelSku}`,

@@ -5,6 +5,7 @@ import type {
   EbaySearchResult,
   EbayItemSummary,
   EbayItem,
+  EbayCatalogLookupResult,
 } from './ebay-api.types.js';
 
 /**
@@ -161,5 +162,178 @@ export class EbayBrowseApiService {
       minPrice,
       maxPrice,
     };
+  }
+
+  // ──────────────────────────── Catalog Lookup by MPN ─────────────
+
+  /**
+   * Search eBay for existing listings of a part by brand + MPN.
+   * Returns catalog information including EPID, category, item specifics,
+   * and any Year/Make/Model fitment hints from the listings.
+   *
+   * Used by FitmentDiscoveryService to resolve category and fitment for
+   * parts that have no catalog fitment data (e.g. ECUs where the vision
+   * model can identify the part number but not the vehicle).
+   */
+  async searchByMpn(
+    brand: string,
+    mpn: string,
+    options?: { categoryIds?: string; limit?: number },
+  ): Promise<EbayCatalogLookupResult> {
+    if (!mpn?.trim()) {
+      return { found: false, items: [] };
+    }
+
+    const query = [brand?.trim(), mpn.trim()].filter(Boolean).join(' ');
+    const limit = options?.limit ?? 10;
+
+    try {
+      const cfg = await this.appHeaders();
+      const params: Record<string, string | number> = {
+        q: query,
+        limit,
+      };
+      if (options?.categoryIds) {
+        params.category_ids = options.categoryIds;
+      }
+
+      const { data } = await this.http.get<EbaySearchResult>(
+        '/item_summary/search',
+        { ...cfg, params },
+      );
+
+      const summaries = data.itemSummaries ?? [];
+      if (summaries.length === 0) {
+        this.logger.debug(`eBay catalog lookup: no results for "${query}"`);
+        return { found: false, items: [] };
+      }
+
+      // Fetch full item details for the top results to get EPID + aspects
+      const detailResults = await Promise.allSettled(
+        summaries.slice(0, Math.min(3, summaries.length)).map((s) =>
+          this.getItem(s.itemId).catch(() => null),
+        ),
+      );
+
+      const items: EbayCatalogLookupResult['items'] = [];
+
+      for (const settled of detailResults) {
+        const item = settled.status === 'fulfilled' ? settled.value : null;
+        if (!item) continue;
+
+        const aspects: Record<string, string[]> = {};
+        if (Array.isArray(item.localizedAspects)) {
+          for (const a of item.localizedAspects) {
+            aspects[a.name] = [a.value];
+          }
+        }
+
+        // Extract Year/Make/Model from item aspects
+        const fitmentHints = this.extractFitmentFromAspects(aspects);
+
+        items.push({
+          itemId: item.itemId,
+          title: item.title,
+          brand: item.brand ?? null,
+          mpn: item.mpn ?? null,
+          epid: item.epid ?? null,
+          categoryId: item.categories?.[0]?.categoryId ?? null,
+          categoryName: item.categories?.[0]?.categoryName ?? null,
+          aspects,
+          fitmentHints,
+        });
+      }
+
+      // Also extract from summaries that didn't get full detail
+      for (const s of summaries.slice(items.length)) {
+        items.push({
+          itemId: s.itemId,
+          title: s.title,
+          brand: null,
+          mpn: null,
+          epid: null,
+          categoryId: s.categories?.[0]?.categoryId ?? null,
+          categoryName: s.categories?.[0]?.categoryName ?? null,
+          aspects: {},
+          fitmentHints: [],
+        });
+      }
+
+      this.logger.log(
+        `eBay catalog lookup: found ${items.length} items for "${query}" — ` +
+        `EPIDs: ${items.filter((i) => i.epid).map((i) => i.epid).join(', ') || 'none'}`,
+      );
+
+      return { found: items.length > 0, items };
+    } catch (err) {
+      this.logger.warn(
+        `eBay catalog lookup failed for "${query}": ${err instanceof Error ? err.message : err}`,
+      );
+      return { found: false, items: [] };
+    }
+  }
+
+  /**
+   * Extract Year/Make/Model fitment hints from eBay item aspects.
+   * Sellers include vehicle compatibility as item specifics like
+   * "Compatible Vehicles", "Manufacturer Part Number", "Year", "Make", "Model".
+   */
+  private extractFitmentFromAspects(
+    aspects: Record<string, string[]>,
+  ): Array<{ year?: string; make?: string; model?: string }> {
+    const hints: Array<{ year?: string; make?: string; model?: string }> = [];
+
+    // Direct aspect keys that eBay sellers use
+    const yearValues = aspects['Year'] ?? aspects['Model Year'] ?? [];
+    const makeValues = aspects['Make'] ?? aspects['Manufacturer'] ?? [];
+    const modelValues = aspects['Model'] ?? aspects['Vehicle Model'] ?? [];
+
+    if (yearValues.length > 0 || makeValues.length > 0 || modelValues.length > 0) {
+      // Pair up Year/Make/Model values
+      const maxLen = Math.max(yearValues.length, makeValues.length, modelValues.length);
+      for (let i = 0; i < maxLen; i++) {
+        const hint: { year?: string; make?: string; model?: string } = {};
+        if (yearValues[i]) hint.year = yearValues[i];
+        if (makeValues[i]) hint.make = makeValues[i];
+        if (modelValues[i]) hint.model = modelValues[i];
+        if (hint.year || hint.make || hint.model) hints.push(hint);
+      }
+    }
+
+    // Also check "Compatible Vehicles" or "Vehicle Type" aspects
+    const compatVehicles = aspects['Compatible Vehicles'] ?? aspects['Vehicle Type'] ?? [];
+    for (const cv of compatVehicles) {
+      // Try to parse "2018 Toyota Camry" or "Toyota Camry 2018" format
+      const parsed = this.parseVehicleString(cv);
+      if (parsed) hints.push(parsed);
+    }
+
+    return hints;
+  }
+
+  /** Parse a vehicle string like "2018 Toyota Camry" into year/make/model */
+  private parseVehicleString(text: string): { year?: string; make?: string; model?: string } | null {
+    if (!text?.trim()) return null;
+    const trimmed = text.trim();
+
+    // Try "YEAR MAKE MODEL" format
+    const yearFirst = trimmed.match(/^(\d{4})\s+([A-Za-z-]+)\s+(.+)$/);
+    if (yearFirst) {
+      return { year: yearFirst[1], make: yearFirst[2], model: yearFirst[3].trim() };
+    }
+
+    // Try "MAKE MODEL YEAR" format
+    const yearLast = trimmed.match(/^([A-Za-z-]+)\s+(.+)\s+(\d{4})$/);
+    if (yearLast) {
+      return { year: yearLast[3], make: yearLast[1], model: yearLast[2].trim() };
+    }
+
+    // Try "MAKE MODEL" format (no year)
+    const noYear = trimmed.match(/^([A-Za-z-]+)\s+(.+)$/);
+    if (noYear) {
+      return { make: noYear[1], model: noYear[2].trim() };
+    }
+
+    return null;
   }
 }

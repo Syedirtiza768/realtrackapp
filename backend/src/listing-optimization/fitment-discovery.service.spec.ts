@@ -1,6 +1,7 @@
 import type { VinDecodeService } from '../fitment/vin-decode.service.js';
 import type { EbayMvlService } from '../fitment/ebay-mvl.service.js';
 import type { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import type { EbayBrowseApiService } from '../channels/ebay/ebay-browse-api.service.js';
 import { FitmentDiscoveryService } from './fitment-discovery.service.js';
 import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 
@@ -29,6 +30,7 @@ describe('FitmentDiscoveryService', () => {
   let vinDecode: { decode: jest.Mock };
   let mvl: { validateParsedRows: jest.Mock };
   let taxonomy: { getCompatibilityProperties: jest.Mock };
+  let browseApi: { searchByMpn: jest.Mock };
 
   beforeEach(() => {
     vinDecode = { decode: jest.fn() };
@@ -38,10 +40,14 @@ describe('FitmentDiscoveryService', () => {
     taxonomy = {
       getCompatibilityProperties: jest.fn().mockResolvedValue([{ propertyName: 'Make' }]),
     };
+    browseApi = {
+      searchByMpn: jest.fn().mockResolvedValue({ found: false, items: [] }),
+    };
     svc = new FitmentDiscoveryService(
       vinDecode as unknown as VinDecodeService,
       mvl as unknown as EbayMvlService,
       taxonomy as unknown as EbayTaxonomyApiService,
+      browseApi as unknown as EbayBrowseApiService,
     );
   });
 

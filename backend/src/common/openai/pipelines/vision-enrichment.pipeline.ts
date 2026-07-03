@@ -7,6 +7,10 @@ import { applyListingGuards } from '../listing-guards.js';
 import { AiRunLogService } from '../ai-run-log.service.js';
 import type { PartContext } from '../ai-routing-policy.types.js';
 import type { OpenAiChatResponse } from '../openai.types.js';
+import {
+  ECU_IDENTIFICATION_PROMPT,
+  isEcuPartType,
+} from '../prompts/ecu-identification.prompt.js';
 
 const MOTOR_PARTS_PROMPT = `Analyze this motor part image and extract:
 1. Part title (max 80 chars, eBay-optimized)
@@ -47,6 +51,26 @@ Return JSON only with these exact keys:
 
 Include confidence 0.0-1.0 for each field. Be conservative with confidence scores.`;
 
+export interface EcuIdentifiers {
+  partType: string | null;
+  brand: string | null;
+  mpn: string | null;
+  oemNumber: string | null;
+  hardwareNumber: string | null;
+  softwareNumber: string | null;
+  otherNumbers: string[];
+  visibleText: string[];
+  vehicleMake: string | null;
+  vehicleModel: string | null;
+  vehicleYearRange: string | null;
+  confidence: {
+    brand: number;
+    partNumbers: number;
+    vehicleApplication: number;
+    overall: number;
+  };
+}
+
 export interface VisionEnrichmentResult {
   raw: Record<string, unknown>;
   provider: string;
@@ -61,6 +85,8 @@ export interface VisionEnrichmentResult {
   softFails: string[];
   guardFixes: string[];
   rawResponse: OpenAiChatResponse;
+  /** Present only when an ECU identification prompt was used */
+  ecuIdentifiers?: EcuIdentifiers;
 }
 
 @Injectable()
@@ -83,17 +109,24 @@ export class VisionEnrichmentPipeline {
     partContext: PartContext = {},
     prompt?: string,
   ): Promise<VisionEnrichmentResult> {
+    // Auto-detect ECU / electronic modules and use the specialised prompt
+    // unless the caller explicitly supplied a custom prompt.
+    const useEcuPrompt = !prompt && isEcuPartType(partContext.partType);
+    const effectivePrompt = prompt ?? (useEcuPrompt ? ECU_IDENTIFICATION_PROMPT : MOTOR_PARTS_PROMPT);
+    const systemPrompt = useEcuPrompt
+      ? 'You are an expert at identifying automotive electronic control modules (ECUs, TCMs, BCMs) from their labels and physical appearance.'
+      : 'You are an expert automotive parts vision analyst for eBay Motors listings.';
+
     const route = this.modelRouter.selectVisionRoute(partContext);
     const response = await this.openai.chat({
-      userPrompt: prompt ?? MOTOR_PARTS_PROMPT,
-      systemPrompt:
-        'You are an expert automotive parts vision analyst for eBay Motors listings.',
+      userPrompt: effectivePrompt,
+      systemPrompt,
       imageUrls,
       model: route.model,
       costLane: route.lane,
       jsonMode: true,
       temperature: 0.1,
-      maxTokens: 2000,
+      maxTokens: useEcuPrompt ? 2500 : 2000,
     });
 
     let parsed =
@@ -142,7 +175,7 @@ export class VisionEnrichmentPipeline {
       guardFixes,
     });
 
-    return {
+    const result: VisionEnrichmentResult = {
       raw: parsed,
       provider: 'openai_vision',
       model: route.model,
@@ -157,5 +190,38 @@ export class VisionEnrichmentPipeline {
       guardFixes,
       rawResponse: response,
     };
+
+    // Extract ECU identifiers when the ECU prompt was used
+    if (useEcuPrompt && parsed && typeof parsed === 'object') {
+      const partNums = (parsed as Record<string, unknown>).partNumbers as Record<string, unknown> | undefined;
+      const vehicleApp = (parsed as Record<string, unknown>).vehicleApplication as Record<string, unknown> | undefined;
+      const ecuConfidence = (parsed as Record<string, unknown>).confidence as Record<string, unknown> | undefined;
+      result.ecuIdentifiers = {
+        partType: (parsed as Record<string, unknown>).partType as string ?? null,
+        brand: (parsed as Record<string, unknown>).brand as string ?? null,
+        mpn: partNums?.mpn as string ?? null,
+        oemNumber: partNums?.oemNumber as string ?? null,
+        hardwareNumber: partNums?.hardwareNumber as string ?? null,
+        softwareNumber: partNums?.softwareNumber as string ?? null,
+        otherNumbers: Array.isArray(partNums?.otherNumbers) ? partNums.otherNumbers as string[] : [],
+        visibleText: Array.isArray((parsed as Record<string, unknown>).visibleText) ? (parsed as Record<string, unknown>).visibleText as string[] : [],
+        vehicleMake: vehicleApp?.make as string ?? null,
+        vehicleModel: vehicleApp?.model as string ?? null,
+        vehicleYearRange: vehicleApp?.yearRange as string ?? null,
+        confidence: {
+          brand: Number(ecuConfidence?.brand) || 0,
+          partNumbers: Number(ecuConfidence?.partNumbers) || 0,
+          vehicleApplication: Number(ecuConfidence?.vehicleApplication) || 0,
+          overall: Number(ecuConfidence?.overall) || 0,
+        },
+      };
+      this.logger.log(
+        `ECU identification: partType=${result.ecuIdentifiers.partType}, ` +
+        `brand=${result.ecuIdentifiers.brand}, mpn=${result.ecuIdentifiers.mpn}, ` +
+        `oem=${result.ecuIdentifiers.oemNumber}, hw=${result.ecuIdentifiers.hardwareNumber}`,
+      );
+    }
+
+    return result;
   }
 }

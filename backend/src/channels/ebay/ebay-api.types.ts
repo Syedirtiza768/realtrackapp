@@ -344,6 +344,27 @@ export interface EbayItem extends EbayItemSummary {
   }>;
 }
 
+/** Result of searching eBay for listings by brand + MPN. */
+export interface EbayCatalogLookupResult {
+  found: boolean;
+  items: Array<{
+    itemId: string;
+    title: string;
+    brand: string | null;
+    mpn: string | null;
+    epid: string | null;
+    categoryId: string | null;
+    categoryName: string | null;
+    aspects: Record<string, string[]>;
+    /** Year/Make/Model extracted from item aspects if present */
+    fitmentHints: Array<{
+      year?: string;
+      make?: string;
+      model?: string;
+    }>;
+  }>;
+}
+
 // ════════════════════════════════════════════
 //  Common types
 // ════════════════════════════════════════════
