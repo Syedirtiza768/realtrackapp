@@ -1,12 +1,17 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Save, Loader2, Store as StoreIcon, Globe, CheckCircle2, XCircle, AlertTriangle, Pencil } from 'lucide-react';
+import { ArrowLeft, Send, Save, Loader2, Store as StoreIcon, Globe, CheckCircle2, XCircle, AlertTriangle, Pencil, GripVertical, X, Image as ImageIcon } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { fetchWithAuth } from '../../lib/authApi';
 import { buildEbayPreview } from '../../lib/listingPreviewMapper';
 import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
 import { publishToEbay, type PublishResult } from '../../lib/publishApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
+import type { UploadedImage } from '../../lib/storageApi';
+import ImageUploadZone from '../listings/ImageUploadZone';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
 import type { ListingDetail } from '../../types/search';
 import type { Store } from '../../types/multiStore';
@@ -83,6 +88,53 @@ function useEligibleStores() {
   });
 }
 
+/* ── Sortable Image Thumbnail ─────────────────────────────── */
+
+interface SortableImageProps {
+  id: string;
+  url: string;
+  index: number;
+  onRemove: (index: number) => void;
+}
+
+function SortableImage({ id, url, index, onRemove }: SortableImageProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative shrink-0 group">
+      <div className="w-16 h-16 rounded border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <img src={url} alt="" className="w-full h-full object-cover" />
+      </div>
+      <button
+        type="button"
+        className="absolute -top-1 -left-1 p-0.5 rounded bg-slate-700 text-white opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={10} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onRemove(index)}
+        className="absolute -top-1 -right-1 p-0.5 rounded-full bg-red-600 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500"
+      >
+        <X size={10} />
+      </button>
+      {index === 0 && (
+        <span className="absolute bottom-0 left-0 right-0 text-[8px] text-center bg-blue-600 text-white rounded-b px-0.5">
+          Primary
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Component ────────────────────────────────────────── */
 
 export default function CatalogProductDetail() {
@@ -96,6 +148,84 @@ export default function CatalogProductDetail() {
   const [publishState, setPublishState] = useState<'idle' | 'publishing' | 'success' | 'failed'>('idle');
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+
+  /* ── Image management state ─────────────────────────────── */
+  const catalogImages = useMemo(() => {
+    if (catalogProduct?.imageUrls?.length) return catalogProduct.imageUrls as string[];
+    if (listing?.itemPhotoUrl) return getAllImageUrls(listing.itemPhotoUrl);
+    return [];
+  }, [catalogProduct?.imageUrls, listing?.itemPhotoUrl]);
+
+  const [localImages, setLocalImages] = useState<string[]>([]);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [savingImages, setSavingImages] = useState(false);
+  const [uploadZoneKey, setUploadZoneKey] = useState(0);
+
+  useEffect(() => {
+    setLocalImages(catalogImages);
+    setOrderDirty(false);
+  }, [catalogImages]);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLocalImages((prev) => {
+      const oldIndex = prev.findIndex((u) => u === active.id);
+      const newIndex = prev.findIndex((u) => u === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      setOrderDirty(true);
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }, []);
+
+  const handleRemoveImage = useCallback((index: number) => {
+    setLocalImages((prev) => {
+      const next = [...prev];
+      next.splice(index, 1);
+      setOrderDirty(true);
+      return next;
+    });
+  }, []);
+
+  const handleSaveImages = useCallback(async () => {
+    if (!catalogProduct?.id || !orderDirty) return;
+    setSavingImages(true);
+    try {
+      await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ imageUrls: localImages }),
+      });
+      setOrderDirty(false);
+      qc.invalidateQueries({ queryKey: ['listing', id] });
+      qc.invalidateQueries({ queryKey: ['marketplace-listings', sku] });
+    } finally {
+      setSavingImages(false);
+    }
+  }, [catalogProduct?.id, orderDirty, localImages, qc, id, sku]);
+
+  const handleUploadComplete = useCallback(async (uploaded: UploadedImage[]) => {
+    if (!catalogProduct?.id || uploaded.length === 0) return;
+    const newUrls = uploaded.map((img) => img.cdnUrl).filter(Boolean);
+    const merged = [...localImages, ...newUrls];
+    setLocalImages(merged);
+    setSavingImages(true);
+    try {
+      await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ imageUrls: merged }),
+      });
+      setOrderDirty(false);
+      setUploadZoneKey((k) => k + 1);
+      qc.invalidateQueries({ queryKey: ['listing', id] });
+      qc.invalidateQueries({ queryKey: ['marketplace-listings', sku] });
+    } finally {
+      setSavingImages(false);
+    }
+  }, [catalogProduct?.id, localImages, qc, id, sku]);
 
   const { data, isLoading } = useListingDetail(id!);
   const listing = data?.listing;
@@ -428,6 +558,60 @@ export default function CatalogProductDetail() {
 
         {/* Right sidebar */}
         <div className="w-80 shrink-0 space-y-3">
+          {/* Image Manager */}
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-transparent p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wider">
+                Images ({localImages.length})
+              </p>
+              {orderDirty && (
+                <button
+                  onClick={handleSaveImages}
+                  disabled={savingImages}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+                >
+                  {savingImages ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                  Save
+                </button>
+              )}
+            </div>
+
+            {localImages.length > 0 ? (
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext items={localImages} strategy={horizontalListSortingStrategy}>
+                  <div className="flex flex-wrap gap-2">
+                    {localImages.map((url, i) => (
+                      <SortableImage
+                        key={url}
+                        id={url}
+                        url={url}
+                        index={i}
+                        onRemove={handleRemoveImage}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            ) : (
+              <div className="flex items-center justify-center h-16 rounded border border-dashed border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-600">
+                <ImageIcon size={20} />
+              </div>
+            )}
+
+            <div className="border-t border-slate-200/30 dark:border-slate-700/30 pt-3">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-2">Upload new images</p>
+              <ImageUploadZone
+                key={uploadZoneKey}
+                onImagesChange={handleUploadComplete}
+                maxImages={Math.max(0, 24 - localImages.length)}
+              />
+            </div>
+          </div>
+
           <div className="rounded-lg border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-transparent p-4 space-y-3">
             {/* Store Selector */}
             <div>
