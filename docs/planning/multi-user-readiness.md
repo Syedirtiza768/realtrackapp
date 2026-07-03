@@ -21,7 +21,7 @@
 
 | ID | Task | Status |
 |----|------|--------|
-| P1.1 | Listing SKU unique index + create race fix | Done |
+| P1.1 | Listing SKU unique index + create race fix | Done (sequence `sku_seq` — migration `1785200000000`) |
 | P1.2 | Optimistic locking on PATCH status / bulk | Done |
 | P1.3 | `createdBy` on all job paths | Done |
 | P1.4 | Job list scoping by user/role | Done |

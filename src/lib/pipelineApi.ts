@@ -232,16 +232,6 @@ export interface PartLookupPricingEstimate {
   };
 }
 
-export function useNextSingleListingSku() {
-  return useQuery({
-    queryKey: ['single-listing-next-sku'],
-    queryFn: ({ signal }) =>
-      fetchJson<{ sku: string }>('/pipeline/single-listing/next-sku', signal),
-    staleTime: Infinity,
-    retry: 2,
-  });
-}
-
 export function useSingleListingBrands() {
   return useQuery({
     queryKey: ['single-listing-brands'],
@@ -294,7 +284,6 @@ export function useAddIntakePart() {
         input,
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['single-listing-next-sku'] });
       qc.invalidateQueries({ queryKey: ['inventory-listings'] });
     },
   });

@@ -7,6 +7,7 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Fixed
+- **SKU allocation race condition:** Replaced application-level `readMax + check + retry` SKU allocation with a PostgreSQL `SEQUENCE` (`sku_seq`). Concurrent listing creation now gets guaranteed-unique `BLA-XXXXX` SKUs via `nextval()`. Removed `GET /pipeline/single-listing/next-sku` endpoint (SKU is now assigned server-side at save time). Frontend shows "Auto-assigned on save" instead of a pre-fetched SKU. Migration `1785200000000-CreateSkuSequence` seeds the sequence from existing data.
 - **Catalog product field persistence:** Fixed field name mismatch where frontend sent `countryOfManufacture` but backend expected `countryOfOrigin`. Added missing `cMaterial`, `cPlacement`, `countryOfOrigin`, and `conditionLabel` columns to `listing_records` entity. Updated `syncToListingRecord()` to sync these fields from catalog products to listing records. Migration `1785100000000-AddFieldsToListingRecord`.
 
 ### Added

@@ -146,7 +146,6 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — part type, condition, brand, part #, price, qty → draft listing (photos optional) | listings.create |
 | POST | `/api/pipeline/single` | Submit single listing to enrichment pipeline | pipeline.run |
 | GET | `/api/pipeline/single-listing/lookup-pricing` | OpenRouter cost estimates (incl. 15k parts) | listings.create |
-| GET | `/api/pipeline/single-listing/next-sku` | Allocate next `BLA-#####` SKU | listings.create |
 | GET | `/api/pipeline/single-listing/brands` | Brand/make options (catalog + OEM list); `?q=` filter | listings.create |
 | POST | `/api/pipeline/single-listing/part-lookup` | AI lookup: vision when 2+ images; OEM text when no photos | listings.create **or** inventory.enrich |
 | GET | `/api/pipeline/jobs` | List pipeline jobs | pipeline.view |

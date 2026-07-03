@@ -169,13 +169,6 @@ export class PipelineController {
     return { job };
   }
 
-  @Get('single-listing/next-sku')
-  @RequirePermissions('listings.create')
-  @ApiOperation({ summary: 'Allocate the next auto-generated BLA- SKU for a new single listing' })
-  async nextSingleListingSku() {
-    return this.singleListingForm.generateNextSku();
-  }
-
   @Get('single-listing/brands')
   @RequirePermissions('listings.create')
   @ApiOperation({ summary: 'List brand/make options (catalog + static OEM list) for new listing form' })

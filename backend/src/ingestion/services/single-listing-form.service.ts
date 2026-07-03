@@ -226,11 +226,6 @@ export class SingleListingFormService {
     };
   }
 
-  async generateNextSku(): Promise<{ sku: string }> {
-    const sku = await this.allocateSku();
-    return { sku };
-  }
-
   async createIntakePart(
     dto: CreateIntakePartDto,
   ): Promise<{ listing: ListingRecord }> {
@@ -589,13 +584,11 @@ export class SingleListingFormService {
   }
 
   async allocateSku(): Promise<string> {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const nextNum = (await this.readMaxSkuNumber()) + 1 + attempt;
-      const sku = this.formatSku(nextNum);
-      const taken = await this.isSkuTaken(sku);
-      if (!taken) return sku;
-    }
-    throw new ServiceUnavailableException('Could not allocate a unique SKU. Try again.');
+    const rows = await this.listingRepo.query<{ nextval: string }[]>(
+      `SELECT nextval('sku_seq') AS nextval`,
+    );
+    const nextNum = Number(rows[0]?.nextval);
+    return this.formatSku(nextNum);
   }
 
   /** Next row index for warehouse-intake parts (uq_listing_source_row requires unique triple). */
@@ -611,46 +604,6 @@ export class SingleListingFormService {
 
   private formatSku(num: number): string {
     return `${SKU_PREFIX}-${String(num).padStart(5, '0')}`;
-  }
-
-  private async readMaxSkuNumber(): Promise<number> {
-    const pattern = `${SKU_PREFIX}-%`;
-
-    const [listingMax, catalogMax] = await Promise.all([
-      this.listingRepo
-        .createQueryBuilder('r')
-        .select(
-          `COALESCE(MAX(CAST(SUBSTRING(r."customLabelSku" FROM ${SKU_PREFIX.length + 2}) AS INTEGER)), 0)`,
-          'maxNum',
-        )
-        .where(`r."customLabelSku" LIKE :pattern`, { pattern })
-        .andWhere(`r."customLabelSku" ~ :regex`, { regex: `^${SKU_PREFIX}-[0-9]+$` })
-        .andWhere(`r."deletedAt" IS NULL`)
-        .getRawOne<{ maxNum: string }>(),
-      this.catalogProductRepo
-        .createQueryBuilder('p')
-        .select(
-          `COALESCE(MAX(CAST(SUBSTRING(p.sku FROM ${SKU_PREFIX.length + 2}) AS INTEGER)), 0)`,
-          'maxNum',
-        )
-        .where(`p.sku LIKE :pattern`, { pattern })
-        .andWhere(`p.sku ~ :regex`, { regex: `^${SKU_PREFIX}-[0-9]+$` })
-        .getRawOne<{ maxNum: string }>(),
-    ]);
-
-    return Math.max(Number(listingMax?.maxNum ?? 0), Number(catalogMax?.maxNum ?? 0));
-  }
-
-  private async isSkuTaken(sku: string): Promise<boolean> {
-    const [listing, product] = await Promise.all([
-      this.listingRepo
-        .createQueryBuilder('r')
-        .where(`r."customLabelSku" = :sku`, { sku })
-        .andWhere(`r."deletedAt" IS NULL`)
-        .getCount(),
-      this.catalogProductRepo.count({ where: { sku } }),
-    ]);
-    return listing > 0 || product > 0;
   }
 
   private str(value: unknown): string | undefined {

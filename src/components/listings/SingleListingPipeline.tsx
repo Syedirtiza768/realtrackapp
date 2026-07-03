@@ -12,7 +12,6 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
   useAddIntakePart,
-  useNextSingleListingSku,
   usePartLookup,
   useSingleListingBrands,
   type PartLookupResult,
@@ -57,8 +56,6 @@ type PreviewState =
 export default function SingleListingPipeline() {
   const addPartMutation = useAddIntakePart();
   const partLookupMutation = usePartLookup();
-  const { data: skuData, isLoading: skuLoading, error: skuError, refetch: refetchSku } =
-    useNextSingleListingSku();
   const { data: brandsData } = useSingleListingBrands();
 
   const [partType, setPartType] = useState<PartType>(() => {
@@ -78,7 +75,6 @@ export default function SingleListingPipeline() {
   const [lookupWarning, setLookupWarning] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
 
-  const sku = skuData?.sku ?? '';
   const brands = brandsData?.brands ?? [];
 
   useEffect(() => {
@@ -97,10 +93,10 @@ export default function SingleListingPipeline() {
     const pn = partNumber.trim();
     const pr = parseFloat(price);
     const identifier = isAftermarket ? brand.trim() : vehicleMake.trim();
-    return Boolean(pn && identifier && sku && Number.isFinite(pr) && pr > 0);
-  }, [partNumber, brand, vehicleMake, price, sku, isAftermarket]);
+    return Boolean(pn && identifier && Number.isFinite(pr) && pr > 0);
+  }, [partNumber, brand, vehicleMake, price, isAftermarket]);
 
-  const resetForm = useCallback(async () => {
+  const resetForm = useCallback(() => {
     setPartNumber('');
     setBrand('');
     setVehicleMake('');
@@ -112,8 +108,7 @@ export default function SingleListingPipeline() {
     setError(null);
     setLookupWarning(null);
     setPreview({ status: 'idle' });
-    await refetchSku();
-  }, [refetchSku]);
+  }, []);
 
   const handleProcessSku = useCallback(
     async (e?: React.FormEvent) => {
@@ -144,10 +139,6 @@ export default function SingleListingPipeline() {
       }
       if (!Number.isFinite(pr) || pr <= 0) {
         setError('Enter a valid price greater than zero');
-        return;
-      }
-      if (!sku) {
-        setError('SKU is still loading — please wait and try again');
         return;
       }
       if (!Number.isFinite(qty) || qty < 1) {
@@ -184,7 +175,6 @@ export default function SingleListingPipeline() {
 
       try {
         const result = await addPartMutation.mutateAsync({
-          sku,
           partNumber: pn,
           brand: effectiveBrand,
           partType,
@@ -197,7 +187,7 @@ export default function SingleListingPipeline() {
           description: lookup?.note?.trim(),
         });
 
-        const savedSku = result.listing.customLabelSku ?? sku;
+        const savedSku = result.listing.customLabelSku ?? '';
         setPartNumber('');
         setBrand('');
         setVehicleMake('');
@@ -209,7 +199,6 @@ export default function SingleListingPipeline() {
         setLookupWarning(null);
         setError(null);
         setPreview({ status: 'saved', sku: savedSku });
-        await refetchSku();
       } catch (err) {
         setPreview({ status: 'idle' });
         setError(err instanceof Error ? err.message : 'Failed to save part');
@@ -220,14 +209,12 @@ export default function SingleListingPipeline() {
       brand,
       price,
       quantity,
-      sku,
       partType,
       conditionId,
       vehicleMake,
       isAftermarket,
       partLookupMutation,
       addPartMutation,
-      refetchSku,
     ],
   );
 
@@ -269,20 +256,12 @@ export default function SingleListingPipeline() {
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 SKU
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={skuLoading ? 'Generating…' : sku}
-                  readOnly
-                  className={`${inputClassName} bg-slate-50 dark:bg-slate-900/60 font-mono cursor-not-allowed`}
-                />
-                {skuLoading && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400" />
-                )}
-              </div>
-              {skuError && (
-                <p className="text-[11px] text-red-400 mt-1">Could not generate SKU — refresh</p>
-              )}
+              <input
+                type="text"
+                value="Auto-assigned on save"
+                readOnly
+                className={`${inputClassName} bg-slate-50 dark:bg-slate-900/60 text-slate-400 dark:text-slate-500 font-mono cursor-not-allowed`}
+              />
             </div>
 
             <div>
@@ -474,7 +453,7 @@ export default function SingleListingPipeline() {
               </button>
               <button
                 type="submit"
-                disabled={isBusy || skuLoading || !mandatoryFilled}
+                disabled={isBusy || !mandatoryFilled}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium text-sm disabled:opacity-50 transition-colors"
               >
                 {isBusy ? (

@@ -114,6 +114,8 @@ Grouped by module:
 
 **Indexes**: SKU, categoryId, title, brand, condition, type, source file, org, extractedMake, extractedModel, searchVector (GIN).
 
+**SKU generation**: PostgreSQL sequence `sku_seq` (migration `1785200000000`). `allocateSku()` calls `nextval('sku_seq')` and formats as `BLA-XXXXX`. Atomic under concurrency — no application-level locking needed.
+
 #### `listing_revisions` (ListingRevision)
 
 `id`, `listingRecordId` FK, `version`, `data` (jsonb snapshot), `createdBy`, `createdAt`
