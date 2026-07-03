@@ -97,6 +97,18 @@ class PublishDto {
   @IsOptional()
   @IsString()
   listingDuration?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedFulfillmentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedReturnPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedPaymentPolicyName?: string;
 }
 
 class PublishOfferDto {
