@@ -252,13 +252,13 @@ export default function CatalogProductDetail() {
       setProfiles(EMPTY_PROFILE_SELECTION);
       return;
     }
-    const listingProfiles = currentListing ? {
-      shippingProfileName: currentListing.shippingProfileName ?? null,
-      returnProfileName: currentListing.returnProfileName ?? null,
-      paymentProfileName: currentListing.paymentProfileName ?? null,
+    const listingProfiles = listing ? {
+      shippingProfileName: listing.shippingProfileName ?? null,
+      returnProfileName: listing.returnProfileName ?? null,
+      paymentProfileName: listing.paymentProfileName ?? null,
     } : null;
     setProfiles(defaultProfileSelection(storeProfiles, selectedStore, listingProfiles));
-  }, [storeProfiles, selectedStore, currentListing]);
+  }, [storeProfiles, selectedStore, listing]);
 
   // Marketplace tab state: allows switching US/AU/DE preview independently of store selection
   const [selectedMktTab, setSelectedMktTab] = useState<string>('US');
