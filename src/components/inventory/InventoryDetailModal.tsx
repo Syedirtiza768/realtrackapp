@@ -327,7 +327,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                     <ImageUploadZone
                       key={uploadZoneKey}
                       onImagesChange={setStagedImages}
-                      maxImages={12}
+                      maxImages={24}
                     />
                     {stagedImages.length > 0 && (
                       <button

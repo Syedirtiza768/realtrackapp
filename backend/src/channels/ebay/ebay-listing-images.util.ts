@@ -1,4 +1,4 @@
-export const EBAY_MAX_LISTING_IMAGES = 12;
+export const EBAY_MAX_LISTING_IMAGES = 24;
 
 const PLACEHOLDER_IMAGE_PATTERN = /placeholder|no-image|default-image|logo-only/i;
 

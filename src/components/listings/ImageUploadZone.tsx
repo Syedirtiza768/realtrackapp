@@ -34,7 +34,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
 export default function ImageUploadZone({
   onImagesChange,
-  maxImages = 12,
+  maxImages = 24,
 }: ImageUploadZoneProps) {
   const [files, setFiles] = useState<FileState[]>([]);
   const [isDragging, setIsDragging] = useState(false);
