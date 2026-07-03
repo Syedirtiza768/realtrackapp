@@ -1,0 +1,13 @@
+feat: drag-and-drop image reorder and remove in listing detail modal
+
+- Installed @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
+- Added SortableImage component with drag handle and remove button
+- Thumbnails are now sortable via drag-and-drop, with "Primary" badge on first image
+- X button on each thumbnail removes the image from the listing
+- "Save image order" button appears when order changes or images removed
+- New PATCH /inventory/listings/:id/images/reorder backend endpoint
+- reorderListingImages() updates pipe-delimited URL string and syncs
+  image_assets.sort_order + isPrimary for eBay publish ordering
+- New useReorderInventoryImages() frontend mutation
+
+Co-authored-by: CommandCodeBot <noreply@commandcode.ai>

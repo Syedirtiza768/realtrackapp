@@ -97,6 +97,12 @@ export class UpdateListingImagesDto {
   uploadedAssetIds?: string[];
 }
 
+export class ReorderImagesDto {
+  @IsArray()
+  @IsString({ each: true })
+  imageUrls!: string[];
+}
+
 export class InventoryInlineEnrichDto {
   @IsUUID()
   listingId!: string;

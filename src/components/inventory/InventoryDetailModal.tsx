@@ -15,9 +15,26 @@ import {
   Loader2,
   Upload,
   CheckCircle2,
+  GripVertical,
+  Save,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Badge } from '../ui/badge';
-import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment } from '../../lib/inventoryApi';
+import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment, useReorderInventoryImages } from '../../lib/inventoryApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import ImageUploadZone from '../listings/ImageUploadZone';
 import type { UploadedImage } from '../../lib/storageApi';
@@ -68,11 +85,72 @@ function stageLabel(stage: string | null): string {
   return stage ? (labels[stage] ?? 'Enriching...') : 'Enriching...';
 }
 
+interface SortableImageProps {
+  id: string;
+  url: string;
+  index: number;
+  isActive: boolean;
+  canEdit: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}
+
+function SortableImage({ id, url, index, isActive, canEdit, onSelect, onRemove }: SortableImageProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative shrink-0 group">
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`w-14 h-14 rounded border overflow-hidden block ${
+          isActive
+            ? 'border-blue-500 ring-1 ring-blue-500'
+            : 'border-slate-200 dark:border-slate-700'
+        }`}
+      >
+        <img src={url} alt="" className="w-full h-full object-cover" />
+      </button>
+      {canEdit && (
+        <>
+          <button
+            type="button"
+            className="absolute -top-1 -left-1 p-0.5 rounded bg-slate-700 text-white opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={10} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="absolute -top-1 -right-1 p-0.5 rounded-full bg-red-600 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500"
+          >
+            <X size={10} />
+          </button>
+          {index === 0 && (
+            <span className="absolute bottom-0 left-0 right-0 text-[8px] text-center bg-blue-600 text-white rounded-b px-0.5">
+              Primary
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const { data, isLoading, refetch } = useInventoryDetail(listingId);
   const inlineEnrich = useInlineEnrichListing();
   const retryEnrich = useRetryInventoryEnrichment();
   const updateImages = useUpdateInventoryImages();
+  const reorderImages = useReorderInventoryImages();
   const { has: hasPermission } = usePermissions();
   const canUploadImages = hasPermission('listings.update');
 
@@ -83,6 +161,53 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const [stagedImages, setStagedImages] = useState<UploadedImage[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [enrichingListingId, setEnrichingListingId] = useState<string | null>(null);
+
+  // Local image order state for drag-and-drop reordering
+  const [localImages, setLocalImages] = useState<string[]>([]);
+  const [orderDirty, setOrderDirty] = useState(false);
+
+  // Sync local images when data loads
+  useEffect(() => {
+    setLocalImages(images);
+    setOrderDirty(false);
+  }, [data?.imageUrls]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLocalImages((prev) => {
+      const oldIndex = prev.findIndex((u) => u === active.id);
+      const newIndex = prev.findIndex((u) => u === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      setOrderDirty(true);
+      return reordered;
+    });
+  }, []);
+
+  const handleRemoveImage = useCallback((url: string) => {
+    setLocalImages((prev) => {
+      const next = prev.filter((u) => u !== url);
+      setOrderDirty(true);
+      return next;
+    });
+    setActiveImg((prev) => Math.min(prev, Math.max(0, localImages.length - 2)));
+  }, [localImages.length]);
+
+  const handleSaveOrder = useCallback(async () => {
+    if (!listingId || !orderDirty) return;
+    try {
+      await reorderImages.mutateAsync({ listingId, imageUrls: localImages });
+      setOrderDirty(false);
+      await refetch();
+    } catch {
+      // error handled by mutation
+    }
+  }, [listingId, orderDirty, localImages, reorderImages, refetch]);
 
   // Poll enrichment status when actively enriching
   const enrichStatusPoll = useEnrichmentStatus(enrichingListingId);
@@ -164,11 +289,11 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowLeft') setActiveImg((p) => Math.max(0, p - 1));
-      if (e.key === 'ArrowRight') setActiveImg((p) => Math.min((images.length || 1) - 1, p + 1));
+      if (e.key === 'ArrowRight') setActiveImg((p) => Math.min((localImages.length || 1) - 1, p + 1));
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [listingId, onClose, images.length]);
+  }, [listingId, onClose, localImages.length]);
 
   if (!listingId) return null;
 
@@ -289,15 +414,15 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
           <div className="overflow-y-auto flex-1 p-5">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                {images.length > 0 ? (
+                {localImages.length > 0 ? (
                   <div className="space-y-3">
                     <div className="relative aspect-square bg-slate-50 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
                       <img
-                        src={images[activeImg]}
+                        src={localImages[activeImg]}
                         alt={listing?.title ?? 'Part'}
                         className="w-full h-full object-contain"
                       />
-                      {images.length > 1 && (
+                      {localImages.length > 1 && (
                         <>
                           <button
                             type="button"
@@ -310,9 +435,9 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                           <button
                             type="button"
                             onClick={() =>
-                              setActiveImg((p) => Math.min(images.length - 1, p + 1))
+                              setActiveImg((p) => Math.min(localImages.length - 1, p + 1))
                             }
-                            disabled={activeImg === images.length - 1}
+                            disabled={activeImg === localImages.length - 1}
                             className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/50 text-white disabled:opacity-30"
                           >
                             <ChevronRight size={18} />
@@ -320,23 +445,44 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                         </>
                       )}
                     </div>
-                    {images.length > 1 && (
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {images.map((url, i) => (
-                          <button
-                            key={url}
-                            type="button"
-                            onClick={() => setActiveImg(i)}
-                            className={`shrink-0 w-14 h-14 rounded border overflow-hidden ${
-                              i === activeImg
-                                ? 'border-blue-500 ring-1 ring-blue-500'
-                                : 'border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
+                    {localImages.length > 1 && (
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext items={localImages} strategy={horizontalListSortingStrategy}>
+                          <div className="flex gap-2 overflow-x-auto pb-1 items-end">
+                            {localImages.map((url, i) => (
+                              <SortableImage
+                                key={url}
+                                id={url}
+                                url={url}
+                                index={i}
+                                isActive={i === activeImg}
+                                canEdit={canUploadImages}
+                                onSelect={() => setActiveImg(i)}
+                                onRemove={() => handleRemoveImage(url)}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    )}
+                    {orderDirty && (
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveOrder()}
+                        disabled={reorderImages.isPending}
+                        className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {reorderImages.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Save className="h-3.5 w-3.5" />
+                        )}
+                        Save image order
+                      </button>
                     )}
                   </div>
                 ) : (

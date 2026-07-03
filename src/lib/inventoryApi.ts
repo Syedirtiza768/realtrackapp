@@ -335,6 +335,25 @@ export function useUpdateInventoryImages() {
   });
 }
 
+export function useReorderInventoryImages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { listingId: string; imageUrls: string[] }) =>
+      fetchWithAuth<InventoryListingDetail>(
+        `${API}/inventory/listings/${input.listingId}/images/reorder`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrls: input.imageUrls }),
+        },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+      qc.invalidateQueries({ queryKey: ['inventory-detail', vars.listingId] });
+    },
+  });
+}
+
 /* ─── Filter metadata hooks ─── */
 
 export function useFilterBrands() {

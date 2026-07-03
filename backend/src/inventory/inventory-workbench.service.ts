@@ -1380,6 +1380,55 @@ export class InventoryWorkbenchService {
     return detail;
   }
 
+  /**
+   * Reorder or remove images for a listing.
+   * Accepts the complete desired URL array — replaces the existing pipe-delimited string.
+   * Also syncs sort_order and isPrimary on image_assets so eBay publish respects the new order.
+   */
+  async reorderListingImages(listingId: string, imageUrls: string[]) {
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
+    if (!listing || listing.deletedAt) {
+      throw new NotFoundException(`Listing ${listingId} not found`);
+    }
+
+    const existing = parseImageUrls(listing.itemPhotoUrl);
+    const incoming = imageUrls.map((u) => u.trim()).filter(Boolean);
+
+    // Validate: all incoming URLs must already exist (no new URLs via reorder)
+    for (const url of incoming) {
+      if (!existing.includes(url)) {
+        throw new BadRequestException(
+          `URL not found on listing: ${url.slice(0, 80)}...`,
+        );
+      }
+    }
+
+    // Update the pipe-delimited string
+    listing.itemPhotoUrl = incoming.length > 0 ? incoming.join('|') : null;
+    await this.listingRepo.save(listing);
+
+    // Sync sort_order and isPrimary on image_assets
+    if (incoming.length > 0) {
+      const assets = await this.imageAssetRepo.find({
+        where: { listingId },
+      });
+
+      for (let i = 0; i < incoming.length; i++) {
+        const url = incoming[i];
+        const asset = assets.find((a) => a.cdnUrl === url);
+        if (asset) {
+          asset.sortOrder = i;
+          asset.isPrimary = i === 0;
+          await this.imageAssetRepo.save(asset);
+        }
+      }
+    }
+
+    return this.getListingDetail(listingId);
+  }
+
   async bulkLookupParts(listingIds: string[]): Promise<{
     results: Array<{
       listingId: string;

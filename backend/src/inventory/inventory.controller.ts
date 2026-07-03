@@ -29,6 +29,7 @@ import {
   InventoryBulkPartLookupDto,
   InventoryEnrichDto,
   UpdateListingImagesDto,
+  ReorderImagesDto,
   InventoryInlineEnrichDto,
   InventorySendToCatalogDto,
 } from './dto/inventory-workbench.dto.js';
@@ -80,6 +81,16 @@ export class InventoryController {
       dto.imageUrls,
       dto.uploadedAssetIds,
     );
+  }
+
+  @Patch('listings/:listingId/images/reorder')
+  @RequirePermissions('listings.update')
+  @ApiOperation({ summary: 'Reorder or remove images for a listing. Pass the complete desired URL array.' })
+  reorderImages(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+    @Body() dto: ReorderImagesDto,
+  ) {
+    return this.workbench.reorderListingImages(listingId, dto.imageUrls);
   }
 
   @Post('part-lookup')
