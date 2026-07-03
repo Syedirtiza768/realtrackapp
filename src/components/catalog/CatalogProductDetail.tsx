@@ -246,20 +246,6 @@ export default function CatalogProductDetail() {
     staleTime: 60_000,
   });
 
-  // Initialize profiles when storeProfiles or store changes
-  useEffect(() => {
-    if (!storeProfiles || !selectedStore) {
-      setProfiles(EMPTY_PROFILE_SELECTION);
-      return;
-    }
-    const listingProfiles = listing ? {
-      shippingProfileName: listing.shippingProfileName ?? null,
-      returnProfileName: listing.returnProfileName ?? null,
-      paymentProfileName: listing.paymentProfileName ?? null,
-    } : null;
-    setProfiles(defaultProfileSelection(storeProfiles, selectedStore, listingProfiles));
-  }, [storeProfiles, selectedStore, listing]);
-
   // Marketplace tab state: allows switching US/AU/DE preview independently of store selection
   const [selectedMktTab, setSelectedMktTab] = useState<string>('US');
   // Available marketplaces from enriched sibling listings + the base listing
@@ -302,6 +288,20 @@ export default function CatalogProductDetail() {
     if (!selectedStoreId) return null;
     return stores.find((s) => s.id === selectedStoreId) ?? null;
   }, [stores, selectedStoreId]);
+
+  // Initialize profiles when storeProfiles or store changes
+  useEffect(() => {
+    if (!storeProfiles || !selectedStore) {
+      setProfiles(EMPTY_PROFILE_SELECTION);
+      return;
+    }
+    const listingProfiles = listing ? {
+      shippingProfileName: listing.shippingProfileName ?? null,
+      returnProfileName: listing.returnProfileName ?? null,
+      paymentProfileName: listing.paymentProfileName ?? null,
+    } : null;
+    setProfiles(defaultProfileSelection(storeProfiles, selectedStore, listingProfiles));
+  }, [storeProfiles, selectedStore, listing]);
 
   // Derive active marketplace tab from store (used for profiles / publish), but
   // the preview/edit tab is controlled independently via selectedMktTab.
