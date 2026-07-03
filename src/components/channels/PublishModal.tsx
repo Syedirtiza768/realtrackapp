@@ -143,6 +143,15 @@ export default function PublishModal(props: Props) {
     staleTime: 60_000,
   });
 
+  const hasNoPolicies = useMemo(() => {
+    if (!storeProfiles) return false;
+    return (
+      (storeProfiles.shippingProfiles?.length ?? 0) +
+      (storeProfiles.returnProfiles?.length ?? 0) +
+      (storeProfiles.paymentProfiles?.length ?? 0)
+    ) === 0;
+  }, [storeProfiles]);
+
   useEffect(() => {
     if (!storeProfiles || !profileSourceStore) return;
     const listingProfiles =
@@ -234,6 +243,9 @@ export default function PublishModal(props: Props) {
           store.returnPolicyId ??
           undefined,
         merchantLocationKey: (store.config as Record<string, string>)?.locationKey ?? undefined,
+        requestedFulfillmentPolicyName: profiles.shippingProfileName || undefined,
+        requestedReturnPolicyName: profiles.returnProfileName || undefined,
+        requestedPaymentPolicyName: profiles.paymentProfileName || undefined,
       };
     },
     [listing, overrides, profiles],
@@ -591,6 +603,19 @@ export default function PublishModal(props: Props) {
                         onChange={setProfiles}
                         disabled={!profileSourceStoreId}
                       />
+                      {hasNoPolicies && (
+                        <div className="border border-red-800/60 bg-red-950/30 rounded-lg p-3 flex items-start gap-2">
+                          <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs text-red-300 font-medium">No eBay policies found</p>
+                            <p className="text-xs text-red-400/70 mt-0.5">
+                              This store has no shipping, return, or payment policies synced from eBay.
+                              Publishing will fail until you sync policies.
+                              Go to Settings → eBay Integrations and click &quot;Sync Policies&quot;.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -709,7 +734,7 @@ export default function PublishModal(props: Props) {
               </button>
               <button
                 onClick={handlePublish}
-                disabled={selected.size === 0 || storesLoading}
+                disabled={selected.size === 0 || storesLoading || hasNoPolicies}
                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
                 <Send size={13} />

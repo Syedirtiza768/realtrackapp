@@ -5,6 +5,7 @@ import { SchedulerLeaderService } from './scheduler-leader.service.js';
 import { SchedulerService } from './scheduler.service.js';
 import { PricingIntelligenceModule } from '../../pricing-intelligence/pricing-intelligence.module.js';
 import { SellerpunditModule } from '../../integrations/sellerpundit/sellerpundit.module.js';
+import { EbayIntegrationsModule } from '../../integrations/ebay/ebay-integrations.module.js';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 
 /**
@@ -29,6 +30,7 @@ import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected
     TypeOrmModule.forFeature([ConnectedEbayAccount]),
     PricingIntelligenceModule,
     SellerpunditModule,
+    EbayIntegrationsModule,
   ],
   providers: [SchedulerLeaderService, SchedulerService],
   exports: [SchedulerLeaderService],

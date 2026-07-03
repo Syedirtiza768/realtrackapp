@@ -126,56 +126,60 @@ export class SellerpunditPolicySyncService {
     let synced = 0;
 
     for (const mp of marketplaces) {
-      await this.policyRepo.delete({ ebayAccountId, marketplaceId: mp.marketplaceId });
-
+      // Fetch from API FIRST — if this fails, existing policies are untouched
       const [fulfill, payment, ret] = await Promise.all([
         this.fetchPolicies(jwt, accountName, 'shipping'),
         this.fetchPolicies(jwt, accountName, 'payment'),
         this.fetchPolicies(jwt, accountName, 'return'),
       ]);
 
-      for (const p of fulfill) {
-        await this.policyRepo.save(
-          this.policyRepo.create({
-            ebayAccountId,
-            marketplaceId: mp.marketplaceId,
-            policyType: 'fulfillment',
-            ebayPolicyId: p.ebayPolicyId,
-            name: p.name,
-            rawPayload: p.raw,
-            isDefault: p.isDefault,
-          }),
-        );
-        synced++;
-      }
-      for (const p of payment) {
-        await this.policyRepo.save(
-          this.policyRepo.create({
-            ebayAccountId,
-            marketplaceId: mp.marketplaceId,
-            policyType: 'payment',
-            ebayPolicyId: p.ebayPolicyId,
-            name: p.name,
-            rawPayload: p.raw,
-            isDefault: p.isDefault,
-          }),
-        );
-        synced++;
-      }
-      for (const p of ret) {
-        await this.policyRepo.save(
-          this.policyRepo.create({
-            ebayAccountId,
-            marketplaceId: mp.marketplaceId,
-            policyType: 'return',
-            ebayPolicyId: p.ebayPolicyId,
-            name: p.name,
-            rawPayload: p.raw,
-            isDefault: p.isDefault,
-          }),
-        );
-        synced++;
-      }
+      // Atomic replace: delete old + insert new in a single transaction
+      await this.policyRepo.manager.transaction(async (trx) => {
+        await trx.delete(EbayBusinessPolicy, { ebayAccountId, marketplaceId: mp.marketplaceId });
+
+        for (const p of fulfill) {
+          await trx.save(
+            trx.create(EbayBusinessPolicy, {
+              ebayAccountId,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'fulfillment',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+        for (const p of payment) {
+          await trx.save(
+            trx.create(EbayBusinessPolicy, {
+              ebayAccountId,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'payment',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+        for (const p of ret) {
+          await trx.save(
+            trx.create(EbayBusinessPolicy, {
+              ebayAccountId,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'return',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+      });
 
       const fulfillPick = pickPolicyIdForMarketplace(fulfill, mp.marketplaceId);
       const paymentPick = pickPolicyIdForMarketplace(payment, mp.marketplaceId);

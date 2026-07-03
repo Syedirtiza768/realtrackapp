@@ -9,6 +9,7 @@ import { PriceMonitorService } from '../../pricing-intelligence/price-monitor.se
 import { SellerpunditPolicySyncService } from '../../integrations/sellerpundit/sellerpundit-policy-sync.service.js';
 import { SellerpunditTokenSyncService } from '../../integrations/sellerpundit/sellerpundit-token-sync.service.js';
 import { SellerpunditAuthService } from '../../integrations/sellerpundit/sellerpundit-auth.service.js';
+import { EbayPolicySyncService } from '../../integrations/ebay/services/ebay-policy-sync.service.js';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 
 /**
@@ -42,6 +43,7 @@ export class SchedulerService {
     private readonly spPolicySync: SellerpunditPolicySyncService,
     private readonly spTokenSync: SellerpunditTokenSyncService,
     private readonly spAuth: SellerpunditAuthService,
+    private readonly nativePolicySync: EbayPolicySyncService,
     @Optional()
     private readonly priceMonitor?: PriceMonitorService,
   ) {}
@@ -260,6 +262,69 @@ export class SchedulerService {
       }
 
       this.logger.log(`SellerPundit auto-sync complete: ${ok} ok, ${failed} failed`);
+    });
+  }
+
+  /* ─── Native OAuth: Policy Refresh every 8 hours ─── */
+
+  @Cron('0 */8 * * *', { name: 'native-oauth-policy-sync' })
+  async scheduleNativeOAuthPolicySync(): Promise<void> {
+    await this.leader.runIfLeader('native-oauth-policy-sync', 28_000, async () => {
+      const accounts = await this.accountRepo.find({
+        where: { connectionSource: 'native_oauth' },
+      });
+      if (!accounts.length) {
+        this.logger.debug('No native OAuth accounts — skipping policy sync');
+        return;
+      }
+
+      // Skip accounts synced within the last 4 hours
+      const now = Date.now();
+      const fourHoursMs = 4 * 60 * 60 * 1000;
+      const eligible = accounts.filter((a) => {
+        if (!a.lastSuccessfulSyncAt) return true;
+        return now - new Date(a.lastSuccessfulSyncAt).getTime() > fourHoursMs;
+      });
+
+      if (!eligible.length) {
+        this.logger.debug('All native OAuth accounts recently synced — skipping');
+        return;
+      }
+
+      this.logger.log(
+        `Native OAuth auto-sync: refreshing policies for ${eligible.length} account(s)`,
+      );
+
+      let ok = 0;
+      let failed = 0;
+
+      for (const account of eligible) {
+        try {
+          const result = await this.nativePolicySync.syncPolicies(
+            account.id,
+            account.organizationId,
+          );
+          if (result.ok) {
+            ok++;
+            this.logger.log(
+              `Native OAuth policies synced for ${account.accountDisplayName ?? account.id}: ${result.synced} policy row(s)`,
+            );
+          } else {
+            failed++;
+            this.logger.warn(
+              `Native OAuth policy sync returned not-ok for ${account.id}: ${result.message}`,
+            );
+          }
+        } catch (e: unknown) {
+          failed++;
+          const msg = e instanceof Error ? e.message : String(e);
+          this.logger.error(
+            `Native OAuth policy sync failed for account ${account.id} (${account.accountDisplayName ?? account.ebayUserId}): ${msg}`,
+          );
+        }
+      }
+
+      this.logger.log(`Native OAuth auto-sync complete: ${ok} ok, ${failed} failed`);
     });
   }
 }

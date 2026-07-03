@@ -112,6 +112,12 @@ export interface PublishRequest {
   listingDuration?: string;
   /** Internal: skip SellerPundit bulk-create (direct eBay Inventory API retry) */
   forceDirectEbay?: boolean;
+  /** Name of the user-selected shipping profile (for validation/debugging) */
+  requestedFulfillmentPolicyName?: string;
+  /** Name of the user-selected return profile (for validation/debugging) */
+  requestedReturnPolicyName?: string;
+  /** Name of the user-selected payment profile (for validation/debugging) */
+  requestedPaymentPolicyName?: string;
 }
 
 /**
@@ -519,6 +525,9 @@ export class EbayPublishService {
       fulfillmentPolicyId?: string;
       paymentPolicyId?: string;
       returnPolicyId?: string;
+      shippingProfileName?: string;
+      returnProfileName?: string;
+      paymentProfileName?: string;
     },
   ): PublishRequest {
     return {
@@ -537,6 +546,9 @@ export class EbayPublishService {
       fulfillmentPolicyId: options?.fulfillmentPolicyId,
       paymentPolicyId: options?.paymentPolicyId,
       returnPolicyId: options?.returnPolicyId,
+      requestedFulfillmentPolicyName: options?.shippingProfileName,
+      requestedReturnPolicyName: options?.returnProfileName,
+      requestedPaymentPolicyName: options?.paymentProfileName,
     };
   }
 
@@ -979,6 +991,46 @@ export class EbayPublishService {
       }
     }
 
+    // Log which source provided each policy ID
+    const fulfillmentSource = this.policyResolutionSource(
+      req.fulfillmentPolicyId, refreshed.fulfillmentPolicyId, synced.fulfillmentPolicyId,
+      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultFulfillmentPolicyId : undefined, store.fulfillmentPolicyId,
+    );
+    const paymentSource = this.policyResolutionSource(
+      req.paymentPolicyId, refreshed.paymentPolicyId, synced.paymentPolicyId,
+      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultPaymentPolicyId : undefined, store.paymentPolicyId,
+    );
+    const returnSource = this.policyResolutionSource(
+      req.returnPolicyId, refreshed.returnPolicyId, synced.returnPolicyId,
+      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultReturnPolicyId : undefined, store.returnPolicyId,
+    );
+    this.logger.log(
+      `Policy resolution for "${store.storeName}" (${marketplaceId}): ` +
+      `fulfillment=${fulfillmentPolicyId ?? 'NONE'} [${fulfillmentSource}], ` +
+      `payment=${paymentPolicyId ?? 'NONE'} [${paymentSource}], ` +
+      `return=${returnPolicyId ?? 'NONE'} [${returnSource}]`,
+    );
+
+    // Validate: if user selected a profile by name but we couldn't resolve it to an ID, fail loudly
+    if (req.requestedFulfillmentPolicyName && !fulfillmentPolicyId) {
+      throw new BadRequestException(
+        `Shipping profile "${req.requestedFulfillmentPolicyName}" could not be resolved to an eBay fulfillment policy. ` +
+        `Sync eBay policies in Settings → eBay Integrations, then try again.`,
+      );
+    }
+    if (req.requestedPaymentPolicyName && !paymentPolicyId) {
+      throw new BadRequestException(
+        `Payment profile "${req.requestedPaymentPolicyName}" could not be resolved to an eBay payment policy. ` +
+        `Sync eBay policies in Settings → eBay Integrations, then try again.`,
+      );
+    }
+    if (req.requestedReturnPolicyName && !returnPolicyId) {
+      throw new BadRequestException(
+        `Return profile "${req.requestedReturnPolicyName}" could not be resolved to an eBay return policy. ` +
+        `Sync eBay policies in Settings → eBay Integrations, then try again.`,
+      );
+    }
+
     if (mpRow && merchantLocationKey && !mpRow.defaultInventoryLocationKey) {
       mpRow.defaultInventoryLocationKey = merchantLocationKey;
       await this.mpRepo.save(mpRow);
@@ -1167,6 +1219,22 @@ export class EbayPublishService {
     }
   }
 
+  /** Determine which source provided the winning policy ID for logging. */
+  private policyResolutionSource(
+    reqId?: string | null,
+    refreshedId?: string | null,
+    syncedId?: string | null,
+    defaultId?: string | null,
+    storeId?: string | null,
+  ): string {
+    if (reqId && coalesceValidPolicyId(reqId)) return 'user-selected';
+    if (refreshedId && coalesceValidPolicyId(refreshedId)) return 'ebay-api-refresh';
+    if (syncedId && coalesceValidPolicyId(syncedId)) return 'synced-table';
+    if (defaultId && coalesceValidPolicyId(defaultId)) return 'marketplace-default';
+    if (storeId && coalesceValidPolicyId(storeId)) return 'store-fallback';
+    return 'none';
+  }
+
   private async persistAccountApiPolicies(
     ebayAccountId: string,
     marketplaceId: string,
@@ -1200,47 +1268,50 @@ export class EbayPublishService {
       return;
     }
 
-    await this.policyRepo.delete({ ebayAccountId, marketplaceId });
+    // Atomic replace: delete old + insert new in a single transaction
+    await this.policyRepo.manager.transaction(async (trx) => {
+      await trx.delete(EbayBusinessPolicy, { ebayAccountId, marketplaceId });
 
-    for (const p of lists.fulfill) {
-      await this.policyRepo.save(
-        this.policyRepo.create({
-          ebayAccountId,
-          marketplaceId,
-          policyType: 'fulfillment',
-          ebayPolicyId: p.ebayPolicyId,
-          name: p.name,
-          rawPayload: p.raw,
-          isDefault: p.isDefault,
-        }),
-      );
-    }
-    for (const p of lists.payment) {
-      await this.policyRepo.save(
-        this.policyRepo.create({
-          ebayAccountId,
-          marketplaceId,
-          policyType: 'payment',
-          ebayPolicyId: p.ebayPolicyId,
-          name: p.name,
-          rawPayload: p.raw,
-          isDefault: p.isDefault,
-        }),
-      );
-    }
-    for (const p of lists.ret) {
-      await this.policyRepo.save(
-        this.policyRepo.create({
-          ebayAccountId,
-          marketplaceId,
-          policyType: 'return',
-          ebayPolicyId: p.ebayPolicyId,
-          name: p.name,
-          rawPayload: p.raw,
-          isDefault: p.isDefault,
-        }),
-      );
-    }
+      for (const p of lists.fulfill) {
+        await trx.save(
+          trx.create(EbayBusinessPolicy, {
+            ebayAccountId,
+            marketplaceId,
+            policyType: 'fulfillment',
+            ebayPolicyId: p.ebayPolicyId,
+            name: p.name,
+            rawPayload: p.raw,
+            isDefault: p.isDefault,
+          }),
+        );
+      }
+      for (const p of lists.payment) {
+        await trx.save(
+          trx.create(EbayBusinessPolicy, {
+            ebayAccountId,
+            marketplaceId,
+            policyType: 'payment',
+            ebayPolicyId: p.ebayPolicyId,
+            name: p.name,
+            rawPayload: p.raw,
+            isDefault: p.isDefault,
+          }),
+        );
+      }
+      for (const p of lists.ret) {
+        await trx.save(
+          trx.create(EbayBusinessPolicy, {
+            ebayAccountId,
+            marketplaceId,
+            policyType: 'return',
+            ebayPolicyId: p.ebayPolicyId,
+            name: p.name,
+            rawPayload: p.raw,
+            isDefault: p.isDefault,
+          }),
+        );
+      }
+    });
 
     const mpRow = await this.mpRepo.findOne({
       where: { ebayAccountId, marketplaceId },

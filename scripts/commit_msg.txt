@@ -1,0 +1,10 @@
+fix: prevent wrong shipping policy on published listings
+
+- Add 8-hour cron for native OAuth policy sync (ebay_business_policies was empty)
+- Fetch-first + transactional replace for all policy sync paths (prevents data loss)
+- Throw BadRequestException when user-selected policy name can't be resolved to eBay ID
+- Log policy resolution source (user-selected / synced-table / marketplace-default)
+- Disable publish button + show warning when no eBay policies are synced
+- Pass requestedPolicyName through bulk publish path for validation
+
+Co-authored-by: CommandCodeBot <noreply@commandcode.ai>

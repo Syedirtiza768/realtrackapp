@@ -130,6 +130,7 @@ import { FitmentModule } from '../../fitment/fitment.module.js';
     EbayApiAuditService,
     ListingActionLogWriterService,
     EbayIntegrationPermissionsService,
+    EbayPolicySyncService,
   ],
 })
 export class EbayIntegrationsModule {}

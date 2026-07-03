@@ -29,6 +29,9 @@ export interface PublishRequest {
   merchantLocationKey?: string;
   listingFormat?: 'FIXED_PRICE' | 'AUCTION';
   listingDuration?: string;
+  requestedFulfillmentPolicyName?: string;
+  requestedReturnPolicyName?: string;
+  requestedPaymentPolicyName?: string;
 }
 
 export interface PublishResult {

@@ -114,11 +114,7 @@ export class EbayPolicySyncService {
     let synced = 0;
 
     for (const mp of marketplaces) {
-      await this.policyRepo.delete({
-        ebayAccountId,
-        marketplaceId: mp.marketplaceId,
-      });
-
+      // Fetch from API FIRST — if this fails, existing policies are untouched
       let fulfill: EbayPolicyListItem[] = [];
       let payment: EbayPolicyListItem[] = [];
       let ret: EbayPolicyListItem[] = [];
@@ -136,48 +132,56 @@ export class EbayPolicySyncService {
         throw err;
       }
 
-      for (const p of fulfill) {
-        await this.policyRepo.save(
-          this.policyRepo.create({
-            ebayAccountId,
-            marketplaceId: mp.marketplaceId,
-            policyType: 'fulfillment',
-            ebayPolicyId: p.ebayPolicyId,
-            name: p.name,
-            rawPayload: p.raw,
-            isDefault: p.isDefault,
-          }),
-        );
-        synced++;
-      }
-      for (const p of payment) {
-        await this.policyRepo.save(
-          this.policyRepo.create({
-            ebayAccountId,
-            marketplaceId: mp.marketplaceId,
-            policyType: 'payment',
-            ebayPolicyId: p.ebayPolicyId,
-            name: p.name,
-            rawPayload: p.raw,
-            isDefault: p.isDefault,
-          }),
-        );
-        synced++;
-      }
-      for (const p of ret) {
-        await this.policyRepo.save(
-          this.policyRepo.create({
-            ebayAccountId,
-            marketplaceId: mp.marketplaceId,
-            policyType: 'return',
-            ebayPolicyId: p.ebayPolicyId,
-            name: p.name,
-            rawPayload: p.raw,
-            isDefault: p.isDefault,
-          }),
-        );
-        synced++;
-      }
+      // Atomic replace: delete old + insert new in a single transaction
+      await this.policyRepo.manager.transaction(async (trx) => {
+        await trx.delete(EbayBusinessPolicy, {
+          ebayAccountId,
+          marketplaceId: mp.marketplaceId,
+        });
+
+        for (const p of fulfill) {
+          await trx.save(
+            trx.create(EbayBusinessPolicy, {
+              ebayAccountId,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'fulfillment',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+        for (const p of payment) {
+          await trx.save(
+            trx.create(EbayBusinessPolicy, {
+              ebayAccountId,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'payment',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+        for (const p of ret) {
+          await trx.save(
+            trx.create(EbayBusinessPolicy, {
+              ebayAccountId,
+              marketplaceId: mp.marketplaceId,
+              policyType: 'return',
+              ebayPolicyId: p.ebayPolicyId,
+              name: p.name,
+              rawPayload: p.raw,
+              isDefault: p.isDefault,
+            }),
+          );
+          synced++;
+        }
+      });
 
       let locations: { merchantLocationKey: string; name: string }[] = [];
       try {
@@ -281,56 +285,59 @@ export class EbayPolicySyncService {
         ]);
         if (!fulfill.length && !payment.length && !ret.length) continue;
 
-        await this.policyRepo.delete({
-          ebayAccountId: account.id,
-          marketplaceId: mp.marketplaceId,
-        });
+        // Atomic replace in transaction
+        await this.policyRepo.manager.transaction(async (trx) => {
+          await trx.delete(EbayBusinessPolicy, {
+            ebayAccountId: account.id,
+            marketplaceId: mp.marketplaceId,
+          });
 
-        for (const p of fulfill) {
-          if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
-          await this.policyRepo.save(
-            this.policyRepo.create({
-              ebayAccountId: account.id,
-              marketplaceId: mp.marketplaceId,
-              policyType: 'fulfillment',
-              ebayPolicyId: p.ebayPolicyId,
-              name: p.name,
-              rawPayload: p.raw,
-              isDefault: p.isDefault,
-            }),
-          );
-          synced++;
-        }
-        for (const p of payment) {
-          if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
-          await this.policyRepo.save(
-            this.policyRepo.create({
-              ebayAccountId: account.id,
-              marketplaceId: mp.marketplaceId,
-              policyType: 'payment',
-              ebayPolicyId: p.ebayPolicyId,
-              name: p.name,
-              rawPayload: p.raw,
-              isDefault: p.isDefault,
-            }),
-          );
-          synced++;
-        }
-        for (const p of ret) {
-          if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
-          await this.policyRepo.save(
-            this.policyRepo.create({
-              ebayAccountId: account.id,
-              marketplaceId: mp.marketplaceId,
-              policyType: 'return',
-              ebayPolicyId: p.ebayPolicyId,
-              name: p.name,
-              rawPayload: p.raw,
-              isDefault: p.isDefault,
-            }),
-          );
-          synced++;
-        }
+          for (const p of fulfill) {
+            if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
+            await trx.save(
+              trx.create(EbayBusinessPolicy, {
+                ebayAccountId: account.id,
+                marketplaceId: mp.marketplaceId,
+                policyType: 'fulfillment',
+                ebayPolicyId: p.ebayPolicyId,
+                name: p.name,
+                rawPayload: p.raw,
+                isDefault: p.isDefault,
+              }),
+            );
+            synced++;
+          }
+          for (const p of payment) {
+            if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
+            await trx.save(
+              trx.create(EbayBusinessPolicy, {
+                ebayAccountId: account.id,
+                marketplaceId: mp.marketplaceId,
+                policyType: 'payment',
+                ebayPolicyId: p.ebayPolicyId,
+                name: p.name,
+                rawPayload: p.raw,
+                isDefault: p.isDefault,
+              }),
+            );
+            synced++;
+          }
+          for (const p of ret) {
+            if (!isLikelyEbayRestPolicyId(p.ebayPolicyId)) continue;
+            await trx.save(
+              trx.create(EbayBusinessPolicy, {
+                ebayAccountId: account.id,
+                marketplaceId: mp.marketplaceId,
+                policyType: 'return',
+                ebayPolicyId: p.ebayPolicyId,
+                name: p.name,
+                rawPayload: p.raw,
+                isDefault: p.isDefault,
+              }),
+            );
+            synced++;
+          }
+        });
 
         const pick = (items: EbayPolicyListItem[]) =>
           items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId;
