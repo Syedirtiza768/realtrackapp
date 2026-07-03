@@ -22,6 +22,7 @@ export type EnrichmentStatus =
   | 'ready'
   | 'enriching'
   | 'completed'
+  | 'needs_review'
   | 'failed';
 
 export interface InventoryMarketplaceVariant {
@@ -224,19 +225,44 @@ export function useInventoryPartLookup() {
   });
 }
 
-export interface InlineEnrichResult {
-  baseListing: Record<string, unknown>;
-  marketplaceListings: Array<{ marketplace: string; listingId: string; title: string }>;
+export interface InlineEnrichEnqueueResult {
+  listingId: string;
+  queued: boolean;
+  reason?: string;
 }
 
 export function useInlineEnrichListing() {
   const qc = useQueryClient();
   return useMutation({
+    mutationFn: (args: string | { listingId: string; force?: boolean }) => {
+      const listingId = typeof args === 'string' ? args : args.listingId;
+      const force = typeof args === 'string' ? undefined : args.force;
+      return postJson<InlineEnrichEnqueueResult>('/inventory/inline-enrich', {
+        listingId,
+        force,
+      });
+    },
+    onSuccess: (_data, args) => {
+      const listingId = typeof args === 'string' ? args : args.listingId;
+      qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+      qc.invalidateQueries({ queryKey: ['inventory-detail', listingId] });
+      qc.invalidateQueries({ queryKey: ['inventory-enrichment-status', listingId] });
+    },
+  });
+}
+
+export function useRetryInventoryEnrichment() {
+  const qc = useQueryClient();
+  return useMutation({
     mutationFn: (listingId: string) =>
-      postJson<InlineEnrichResult>('/inventory/inline-enrich', { listingId }),
+      postJson<InlineEnrichEnqueueResult>(
+        `/inventory/listings/${listingId}/retry-enrichment`,
+        {},
+      ),
     onSuccess: (_data, listingId) => {
       qc.invalidateQueries({ queryKey: ['inventory-listings'] });
       qc.invalidateQueries({ queryKey: ['inventory-detail', listingId] });
+      qc.invalidateQueries({ queryKey: ['inventory-enrichment-status', listingId] });
     },
   });
 }

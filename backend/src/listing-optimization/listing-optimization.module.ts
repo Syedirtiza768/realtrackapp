@@ -32,6 +32,10 @@ import { ListingOptimizationProcessor } from './processors/listing-optimization.
     ListingOptimizationProcessor,
     EnterpriseListingIntelligenceService,
   ],
-  exports: [ListingOptimizationService, EnterpriseListingIntelligenceService],
+  exports: [
+    ListingOptimizationService,
+    EnterpriseListingIntelligenceService,
+    FitmentDiscoveryService,
+  ],
 })
 export class ListingOptimizationModule {}

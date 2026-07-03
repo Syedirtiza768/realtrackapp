@@ -28,6 +28,8 @@ import { IngestionModule } from '../ingestion/ingestion.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
 import { EbayIntegrationsModule } from '../integrations/ebay/ebay-integrations.module.js';
 
+import { ListingOptimizationModule } from '../listing-optimization/listing-optimization.module.js';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -42,6 +44,7 @@ import { EbayIntegrationsModule } from '../integrations/ebay/ebay-integrations.m
     IngestionModule,
     ChannelsModule,
     EbayIntegrationsModule,
+    ListingOptimizationModule,
   ],
   controllers: [InventoryController, InventoryEditorController],
   providers: [

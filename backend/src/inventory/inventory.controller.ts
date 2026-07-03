@@ -105,14 +105,30 @@ export class InventoryController {
   }
 
   @Post('inline-enrich')
-  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @Throttle({ medium: { limit: 10, ttl: 60_000 } })
   @RequirePermissions('inventory.enrich')
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
-    summary: 'Complete inline enrichment: vision part lookup + AI content generation for US/AU/DE marketplaces, no pipeline needed',
+    summary:
+      'Enqueue background inline enrichment (vision lookup + AI + US/AU/DE). Poll enrichment-status for progress.',
   })
-  inlineEnrich(@Body() dto: InventoryInlineEnrichDto) {
-    return this.workbench.inlineEnrichListing(dto.listingId);
+  async inlineEnrich(@Body() dto: InventoryInlineEnrichDto) {
+    const result = await this.autoTrigger.enqueueAutoEnrich(dto.listingId, {
+      force: dto.force,
+    });
+    return { listingId: dto.listingId, ...result };
+  }
+
+  @Post('listings/:listingId/retry-enrichment')
+  @Throttle({ medium: { limit: 10, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Force re-enqueue inline enrichment for a stuck or incomplete listing' })
+  async retryEnrichment(@Param('listingId', ParseUUIDPipe) listingId: string) {
+    const result = await this.autoTrigger.enqueueAutoEnrich(listingId, {
+      force: true,
+    });
+    return { listingId, ...result };
   }
 
   /* ── Filter metadata ───────────────────────────────────── */

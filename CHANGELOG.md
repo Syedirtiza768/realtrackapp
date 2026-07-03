@@ -7,6 +7,11 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Fixed
+- **Inventory inline enrich async + stuck jobs:** `POST /api/inventory/inline-enrich` enqueues BullMQ `auto-enrich` (no blocking HTTP). `updateListingImages` auto-enqueues at 2+ photos. `POST /api/inventory/listings/:id/retry-enrichment` forces re-run. `enrichmentStage=failed` on errors; `needs_review` when category ID or fitment missing after run.
+- **eBay Taxonomy 429 during inline enrich:** Category suggestions retry with exponential backoff; in-memory cache + 800ms spacing between US/AU/DE lookups. Improved category query strings (skip generic `OEM` part type).
+- **Inline enrich fitment:** Runs `FitmentDiscoveryService` and writes `catalog_products.fitmentData`. `completed` requires both resolved `categoryId` and fitment rows.
+
+### Fixed
 - **SKU allocation race condition:** Replaced application-level `readMax + check + retry` SKU allocation with a PostgreSQL `SEQUENCE` (`sku_seq`). Concurrent listing creation now gets guaranteed-unique `BLA-XXXXX` SKUs via `nextval()`. Removed `GET /pipeline/single-listing/next-sku` endpoint (SKU is now assigned server-side at save time). Frontend shows "Auto-assigned on save" instead of a pre-fetched SKU. Migration `1785200000000-CreateSkuSequence` seeds the sequence from existing data.
 - **Catalog product field persistence:** Fixed field name mismatch where frontend sent `countryOfManufacture` but backend expected `countryOfOrigin`. Added missing `cMaterial`, `cPlacement`, `countryOfOrigin`, and `conditionLabel` columns to `listing_records` entity. Updated `syncToListingRecord()` to sync these fields from catalog products to listing records. Migration `1785100000000-AddFieldsToListingRecord`.
 

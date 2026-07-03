@@ -17,7 +17,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages } from '../../lib/inventoryApi';
+import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment } from '../../lib/inventoryApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import ImageUploadZone from '../listings/ImageUploadZone';
 import type { UploadedImage } from '../../lib/storageApi';
@@ -61,6 +61,9 @@ function stageLabel(stage: string | null): string {
     generating_us: 'Generating US eBay listing...',
     generating_au: 'Generating AU eBay listing...',
     generating_de: 'Generating DE eBay listing...',
+    needs_review: 'Needs review (category or fitment)',
+    failed: 'Enrichment failed',
+    completed: 'Enriched',
   };
   return stage ? (labels[stage] ?? 'Enriching...') : 'Enriching...';
 }
@@ -68,6 +71,7 @@ function stageLabel(stage: string | null): string {
 export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const { data, isLoading, refetch } = useInventoryDetail(listingId);
   const inlineEnrich = useInlineEnrichListing();
+  const retryEnrich = useRetryInventoryEnrichment();
   const updateImages = useUpdateInventoryImages();
   const { has: hasPermission } = usePermissions();
   const canUploadImages = hasPermission('listings.update');
@@ -87,6 +91,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
 
   const isEnriching = enrichStatus === 'enriching';
   const enrichCompleted = enrichStatus === 'completed';
+  const enrichNeedsReview = enrichStatus === 'needs_review';
   const enrichFailed = enrichStatus === 'failed';
 
   const listing = data?.listing as {
@@ -144,10 +149,9 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
       if (actualImages.length >= 2) {
         setEnrichingListingId(listingId);
         try {
-          await inlineEnrich.mutateAsync(listingId);
-          await refetch();
+          await inlineEnrich.mutateAsync({ listingId });
         } catch {
-          // polling will show 'failed' status
+          // polling will show failed / ready status
         }
       }
     } catch (err) {
@@ -239,10 +243,37 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                   <span className="text-xs text-slate-500">SEO listings created for US, AU, DE</span>
                 </>
               )}
+              {enrichNeedsReview && (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  <span className="text-amber-500 text-xs">
+                    Missing eBay category ID or fitment — retry enrichment when rate limits clear.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => listingId && retryEnrich.mutate(listingId)}
+                    disabled={retryEnrich.isPending}
+                    className="text-xs text-violet-500 hover:text-violet-400 underline"
+                  >
+                    Retry enrichment
+                  </button>
+                </>
+              )}
               {enrichFailed && (
-                <span className="text-amber-400 text-xs">
-                  Enrichment failed — you can retry by re-uploading photos or from inventory actions.
-                </span>
+                <>
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  <span className="text-amber-400 text-xs">
+                    Enrichment failed — retry below or re-upload photos.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => listingId && retryEnrich.mutate(listingId)}
+                    disabled={retryEnrich.isPending}
+                    className="text-xs text-violet-500 hover:text-violet-400 underline"
+                  >
+                    Retry enrichment
+                  </button>
+                </>
               )}
             </div>
           </div>

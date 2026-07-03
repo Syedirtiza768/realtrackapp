@@ -100,6 +100,10 @@ export class UpdateListingImagesDto {
 export class InventoryInlineEnrichDto {
   @IsUUID()
   listingId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
 }
 
 export class InventorySendToCatalogDto {

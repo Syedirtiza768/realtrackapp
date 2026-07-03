@@ -79,18 +79,17 @@ export class InventorySyncProcessor extends WorkerHost {
    * Auto-enrich a single listing: vision lookup → AI marketplace content (US/AU/DE) inline.
    * No pipeline job — all done synchronously right in the modal.
    */
-  private async handleAutoEnrich(job: Job<{ listingId: string }>): Promise<void> {
+  private async handleAutoEnrich(job: Job<{ listingId: string; force?: boolean }>): Promise<void> {
     const { listingId } = job.data;
     this.logger.log(`Auto-enrich: starting inline enrichment for listing ${listingId}`);
 
     try {
-      // Complete inline enrichment: vision lookup + AI content generation for US/AU/DE
       await this.workbench.inlineEnrichListing(listingId);
       this.logger.log(`Auto-enrich: inline enrichment completed for listing ${listingId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Auto-enrich failed for listing ${listingId}: ${message}`);
-      // Don't throw — let the listing stay visible so the user can retry
+      throw err;
     }
   }
 }

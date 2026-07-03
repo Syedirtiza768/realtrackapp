@@ -60,6 +60,7 @@ function EnrichmentBadge({ status, stage }: { status: EnrichmentStatus; stage?: 
     ready: { variant: 'warning', label: 'Ready', pulse: true },
     enriching: { variant: 'default', label: stageHint ?? 'Enriching...', pulse: true },
     completed: { variant: 'success', label: 'Enriched' },
+    needs_review: { variant: 'warning', label: 'Needs review' },
     failed: { variant: 'destructive', label: 'Failed' },
   };
   const cfg = config[status] ?? { variant: 'outline', label: status };

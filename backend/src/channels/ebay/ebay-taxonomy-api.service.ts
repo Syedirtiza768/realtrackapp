@@ -52,6 +52,32 @@ export class EbayTaxonomyApiService {
     return { headers: { Authorization: `Bearer ${token}` } };
   }
 
+  /** Retry eBay taxonomy calls on 429 rate limits with exponential backoff. */
+  private async withRateLimitRetry<T>(
+    label: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    const delaysMs = [2000, 5000, 12_000, 30_000, 60_000];
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err: unknown) {
+        lastErr = err;
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status;
+        if (status !== 429 || attempt >= maxAttempts - 1) throw err;
+        const wait = delaysMs[attempt] ?? 25_000;
+        this.logger.warn(
+          `eBay Taxonomy ${label} rate-limited (429) — retry ${attempt + 1}/${maxAttempts - 1} in ${wait}ms`,
+        );
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+    throw lastErr;
+  }
+
   // ──────────────────────────── Category Trees ────────────────────
 
   /**
@@ -108,12 +134,17 @@ export class EbayTaxonomyApiService {
     treeId?: string,
   ): Promise<EbayCategorySuggestion[]> {
     const id = treeId ?? EbayTaxonomyApiService.EBAY_US_TREE_ID;
-    const cfg = await this.appHeaders();
-    const { data } = await this.http.get(
-      `/category_tree/${id}/get_category_suggestions`,
-      { ...cfg, params: { q: query } },
+    return this.withRateLimitRetry(
+      `getCategorySuggestions(tree=${id}, q="${query.slice(0, 40)}")`,
+      async () => {
+        const cfg = await this.appHeaders();
+        const { data } = await this.http.get(
+          `/category_tree/${id}/get_category_suggestions`,
+          { ...cfg, params: { q: query } },
+        );
+        return data.categorySuggestions ?? [];
+      },
     );
-    return data.categorySuggestions ?? [];
   }
 
   // ──────────────────────────── Item Aspects ──────────────────────
