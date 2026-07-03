@@ -12,6 +12,8 @@ import { publishToEbay, type PublishResult } from '../../lib/publishApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
 import type { UploadedImage } from '../../lib/storageApi';
 import ImageUploadZone from '../listings/ImageUploadZone';
+import ProfileSelectors from './ProfileSelectors';
+import { EMPTY_PROFILE_SELECTION, defaultProfileSelection, type ProfileSelection } from './profileUtils';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
 import type { ListingDetail } from '../../types/search';
 import type { Store } from '../../types/multiStore';
@@ -148,6 +150,7 @@ export default function CatalogProductDetail() {
   const [publishState, setPublishState] = useState<'idle' | 'publishing' | 'success' | 'failed'>('idle');
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+  const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
 
   const { data, isLoading } = useListingDetail(id!);
   const listing = data?.listing;
@@ -242,6 +245,20 @@ export default function CatalogProductDetail() {
     enabled: !!selectedStoreId,
     staleTime: 60_000,
   });
+
+  // Initialize profiles when storeProfiles or store changes
+  useEffect(() => {
+    if (!storeProfiles || !selectedStore) {
+      setProfiles(EMPTY_PROFILE_SELECTION);
+      return;
+    }
+    const listingProfiles = currentListing ? {
+      shippingProfileName: currentListing.shippingProfileName ?? null,
+      returnProfileName: currentListing.returnProfileName ?? null,
+      paymentProfileName: currentListing.paymentProfileName ?? null,
+    } : null;
+    setProfiles(defaultProfileSelection(storeProfiles, selectedStore, listingProfiles));
+  }, [storeProfiles, selectedStore, currentListing]);
 
   // Marketplace tab state: allows switching US/AU/DE preview independently of store selection
   const [selectedMktTab, setSelectedMktTab] = useState<string>('US');
@@ -388,10 +405,13 @@ export default function CatalogProductDetail() {
         quantity: parseInt(currentListing.quantity ?? '0', 10),
         imageUrls: getAllImageUrls(currentListing.itemPhotoUrl),
         aspects: {},
-        fulfillmentPolicyId: selectedStore.fulfillmentPolicyId ?? undefined,
-        paymentPolicyId: selectedStore.paymentPolicyId ?? undefined,
-        returnPolicyId: selectedStore.returnPolicyId ?? undefined,
+        fulfillmentPolicyId: profiles.fulfillmentPolicyId ?? selectedStore.fulfillmentPolicyId ?? undefined,
+        paymentPolicyId: profiles.paymentPolicyId ?? selectedStore.paymentPolicyId ?? undefined,
+        returnPolicyId: profiles.returnPolicyId ?? selectedStore.returnPolicyId ?? undefined,
         merchantLocationKey: selectedStore.locationKey ?? undefined,
+        requestedFulfillmentPolicyName: profiles.shippingProfileName || undefined,
+        requestedReturnPolicyName: profiles.returnProfileName || undefined,
+        requestedPaymentPolicyName: profiles.paymentProfileName || undefined,
       });
 
       const first = res?.[0];
@@ -654,39 +674,13 @@ export default function CatalogProductDetail() {
             {/* Profiles from selected store / listing override */}
             {selectedStore && (
               <div className="space-y-2 border-t border-slate-200/30 dark:border-slate-700/30 pt-3">
-                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wider">Profiles</p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Shipping</span>
-                    <span className="text-[11px] text-slate-700 dark:text-slate-200 font-mono truncate max-w-[140px] text-right">
-                      {currentListing?.shippingProfileName
-                        ? (currentListing.shippingProfileName !== selectedStore.fulfillmentPolicyName
-                          ? <><span className="text-blue-300">{currentListing.shippingProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
-                          : currentListing.shippingProfileName)
-                        : (selectedStore.fulfillmentPolicyName ?? selectedStore.fulfillmentPolicyId ?? '—')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Payment</span>
-                    <span className="text-[11px] text-slate-700 dark:text-slate-200 font-mono truncate max-w-[140px] text-right">
-                      {currentListing?.paymentProfileName
-                        ? (currentListing.paymentProfileName !== selectedStore.paymentPolicyName
-                          ? <><span className="text-blue-300">{currentListing.paymentProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
-                          : currentListing.paymentProfileName)
-                        : (selectedStore.paymentPolicyName ?? selectedStore.paymentPolicyId ?? '—')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Return</span>
-                    <span className="text-[11px] text-slate-700 dark:text-slate-200 font-mono truncate max-w-[140px] text-right">
-                      {currentListing?.returnProfileName
-                        ? (currentListing.returnProfileName !== selectedStore.returnPolicyName
-                          ? <><span className="text-blue-300">{currentListing.returnProfileName}</span><span className="text-[9px] text-blue-400 ml-1">●</span></>
-                          : currentListing.returnProfileName)
-                        : (selectedStore.returnPolicyName ?? selectedStore.returnPolicyId ?? '—')}
-                    </span>
-                  </div>
-                </div>
+                <ProfileSelectors
+                  profiles={storeProfiles}
+                  loading={false}
+                  storeLabel={selectedStore.storeName}
+                  value={profiles}
+                  onChange={setProfiles}
+                />
               </div>
             )}
 
