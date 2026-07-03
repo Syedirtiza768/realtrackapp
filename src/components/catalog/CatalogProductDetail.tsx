@@ -149,6 +149,11 @@ export default function CatalogProductDetail() {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
 
+  const { data, isLoading } = useListingDetail(id!);
+  const listing = data?.listing;
+  const catalogProduct = data?.catalogProduct;
+  const sku = listing?.customLabelSku;
+
   /* ── Image management state ─────────────────────────────── */
   const catalogImages = useMemo(() => {
     if (catalogProduct?.imageUrls?.length) return catalogProduct.imageUrls as string[];
@@ -226,11 +231,6 @@ export default function CatalogProductDetail() {
       setSavingImages(false);
     }
   }, [catalogProduct?.id, localImages, qc, id, sku]);
-
-  const { data, isLoading } = useListingDetail(id!);
-  const listing = data?.listing;
-  const catalogProduct = data?.catalogProduct;
-  const sku = listing?.customLabelSku;
 
   const { data: mktData, isLoading: mktLoading } = useMarketplaceListings(sku ?? null);
   const { data: stores = [], isLoading: storesLoading } = useEligibleStores();
