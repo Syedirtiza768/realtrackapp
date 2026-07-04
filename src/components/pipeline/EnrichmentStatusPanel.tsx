@@ -91,6 +91,7 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
   const taxonomyErrors = summary.categoryMapping?.taxonomyErrors ?? [];
   const categoryFallbackOnly =
     (summary.categoryMapping?.apiMapped ?? job.categoryApiCount) === 0 &&
+    (summary.categoryMapping?.aiMapped ?? 0) === 0 &&
     (summary.categoryMapping?.fallbackMapped ?? job.categoryFallbackCount) > 0;
   const otherErrors = (summary.enrichmentErrors ?? []).filter(
     (e) => e.type !== 'openai' && e.type !== 'taxonomy',
@@ -176,8 +177,13 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
             </div>
             <p className="text-sm mt-2">
               {summary.categoryMapping?.apiMapped ?? job.categoryApiCount} via Taxonomy API,{' '}
-              {summary.categoryMapping?.fallbackMapped ?? job.categoryFallbackCount} keyword fallback
-              {summary.categoryMapping?.apiRate ? ` (${summary.categoryMapping.apiRate} API rate)` : ''}
+              {summary.categoryMapping?.aiMapped ?? 0} via AI
+              {summary.categoryMapping?.aiModel
+                ? ` (${summary.categoryMapping.aiModel})`
+                : ''}
+              , {summary.categoryMapping?.fallbackMapped ?? job.categoryFallbackCount}{' '}
+              keyword fallback
+              {summary.categoryMapping?.apiRate ? ` (${summary.categoryMapping.apiRate} API+AI rate)` : ''}
             </p>
             {summary.categoryMapping?.treeCacheHit && (
               <p className="text-xs mt-1 opacity-80">
@@ -212,7 +218,9 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
               ))}
             </ul>
             <p className="text-xs text-amber-600 dark:text-amber-200/80">
-              The pipeline caches the Motors category tree on disk and backs off after rate limits. Wait for the retry window, then re-run the job.
+              Category suggestions are cached on disk for 90 days. Re-runs reuse cached mappings without calling eBay.
+              If you still see rate limits, wait for the daily quota to reset or raise{' '}
+              <code className="font-mono">PIPELINE_TAXONOMY_DAILY_QUOTA</code> after confirming your eBay app tier.
             </p>
           </div>
         )}

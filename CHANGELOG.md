@@ -6,7 +6,11 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Added
+- **AI category mapping tier:** When eBay Taxonomy quota is exhausted (`PIPELINE_CATEGORY_MODE=auto`), pipeline batches category classification via OpenRouter (`openai/gpt-4o-mini` default), resolves to real eBay IDs via `shared/motors-leaf-categories.json`, and caches 90 days. Benchmark: `node scripts/model-comparison/category-model-benchmark.mjs`.
+
 ### Changed
+- **Pipeline speed & progress accuracy:** Fixed misleading `output_generation` stage during AU/DE localization and image fetch (now stays on `validation` with `subStage` labels). Default localization mode `copy` AI-translates titles and descriptions for AU/DE; fitment/compatibility data (`_fitments`, `Compatibility`, `fitment_flat`) is built before localization and preserved in all marketplaces. `PIPELINE_FAST_MODE=1` enables rule-only localization, skips validation, and skips post-pipeline marketplace AI backfill.
 - **Neutral processing UI (Tier A):** Pipeline job view no longer shows AI token counts or OpenRouter messaging; stale-progress hint and enrichment status panel use generic “processing / content service” language. Inventory enrichment badges and stage labels de-emphasize AI. Removed `Sparkles` icon app-wide (replaced with contextual icons).
 
 ### Added
@@ -15,7 +19,8 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Image reorder and remove:** Drag-and-drop reordering of listing images via `@dnd-kit/sortable`. Remove button on each thumbnail. "Save image order" button updates the pipe-delimited URL string and syncs `image_assets.sort_order` for eBay publish. New `PATCH /inventory/listings/:id/images/reorder` endpoint.
 
 ### Fixed
-- **Inventory inline enrich async + stuck jobs:** `POST /api/inventory/inline-enrich` enqueues BullMQ `auto-enrich` (no blocking HTTP). `updateListingImages` auto-enqueues at 2+ photos. `POST /api/inventory/listings/:id/retry-enrichment` forces re-run. `enrichmentStage=failed` on errors; `needs_review` when category ID or fitment missing after run.
+- **Pipeline upload 503:** Upload no longer counts queued `pending` jobs against `MAX_CONCURRENT_PIPELINE_JOBS` (only actively processing stages). Stale jobs with no progress for 6h are auto-failed to free slots. Upload UI now shows the backend error message (e.g. capacity reached) instead of generic "503 Service Unavailable".
+ `POST /api/inventory/inline-enrich` enqueues BullMQ `auto-enrich` (no blocking HTTP). `updateListingImages` auto-enqueues at 2+ photos. `POST /api/inventory/listings/:id/retry-enrichment` forces re-run. `enrichmentStage=failed` on errors; `needs_review` when category ID or fitment missing after run.
 - **eBay Taxonomy 429 during inline enrich:** Category suggestions retry with exponential backoff; in-memory cache + 800ms spacing between US/AU/DE lookups. Improved category query strings (skip generic `OEM` part type).
 - **Inline enrich fitment:** Runs `FitmentDiscoveryService` and writes `catalog_products.fitmentData`. `completed` requires both resolved `categoryId` and fitment rows.
 

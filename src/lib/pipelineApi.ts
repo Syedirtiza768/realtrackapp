@@ -148,7 +148,19 @@ export function useUploadPipelineFile() {
               const payload = JSON.parse(xhr.responseText) as { job: PipelineJobApi };
               resolve({ job: normalizePipelineJob(payload.job) });
             } else {
-              reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+              let message = `Upload failed: ${xhr.status} ${xhr.statusText}`;
+              try {
+                const body = JSON.parse(xhr.responseText) as {
+                  message?: string | string[];
+                };
+                const raw = body.message;
+                if (raw) {
+                  message = Array.isArray(raw) ? raw.join('; ') : raw;
+                }
+              } catch {
+                // keep default message
+              }
+              reject(new Error(message));
             }
           };
 

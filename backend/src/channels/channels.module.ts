@@ -31,6 +31,7 @@ import { FeatureFlagModule } from '../common/feature-flags/feature-flag.module.j
 import { EbayAuthService } from './ebay/ebay-auth.service.js';
 import { EbayInventoryApiService } from './ebay/ebay-inventory-api.service.js';
 import { EbayTaxonomyApiService } from './ebay/ebay-taxonomy-api.service.js';
+import { EbayTaxonomyCacheService } from './ebay/ebay-taxonomy-cache.service.js';
 import { EbayFulfillmentApiService } from './ebay/ebay-fulfillment-api.service.js';
 import { EbayBrowseApiService } from './ebay/ebay-browse-api.service.js';
 import { EbayTradingApiService } from './ebay/ebay-trading-api.service.js';
@@ -83,6 +84,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     // ── New eBay API services ──
     EbayAuthService,
     EbayInventoryApiService,
+    EbayTaxonomyCacheService,
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,
@@ -101,6 +103,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     // ── Export new eBay services for use by other modules ──
     EbayAuthService,
     EbayInventoryApiService,
+    EbayTaxonomyCacheService,
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,

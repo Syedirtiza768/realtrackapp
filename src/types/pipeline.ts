@@ -32,11 +32,17 @@ export type EnrichmentMode = 'ai' | 'fallback' | 'mixed' | 'none';
 
 export interface PipelineCategoryMappingSummary {
   apiMapped?: number;
+  aiMapped?: number;
   fallbackMapped?: number;
   apiRate?: string;
+  categoryMode?: string;
+  aiModel?: string;
   apiSkippedReason?: string | null;
   treeCacheHit?: boolean;
   treeCacheSource?: string | null;
+  aiCacheHits?: number;
+  aiApiCalls?: number;
+  aiTokensUsed?: number;
   taxonomyErrors?: Array<{ type?: string; message: string; source?: string; status?: number | null }>;
 }
 

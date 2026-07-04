@@ -85,6 +85,13 @@ function stageProgress(status: PipelineJobStatus): number {
   return stageWeights[status] ?? 0;
 }
 
+const SUB_STAGE_LABELS: Record<string, string> = {
+  localization: 'Localizing AU/DE listing copy',
+  localization_rule: 'Applying AU/DE marketplace rules',
+  images: 'Fetching listing images',
+  images_done: 'Images ready — writing templates next',
+};
+
 /* -------------------------------------------------------------
  *  MAIN COMPONENT
  * ------------------------------------------------------------- */
@@ -354,11 +361,18 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
 
   // Current stage description
   const currentStage = PIPELINE_STAGES.find((s) => s.key === job.status);
+  const subStage =
+    typeof job.stageDetails?.subStage === 'string'
+      ? job.stageDetails.subStage
+      : null;
+  const subStageLabel = subStage ? SUB_STAGE_LABELS[subStage] : null;
   const statusLabel = isQueued
-    ? 'Queued � waiting for the pipeline worker (one job runs at a time)'
-    : hasPartCounts
-      ? `${job.processedParts} / ${job.totalParts} parts`
-      : currentStage?.description ?? 'Processing...';
+    ? 'Queued — waiting for the pipeline worker (one job runs at a time)'
+    : subStageLabel
+      ? subStageLabel
+      : hasPartCounts
+        ? `${job.processedParts} / ${job.totalParts} parts`
+        : currentStage?.description ?? 'Processing...';
 
   return (
     <div className="space-y-4">

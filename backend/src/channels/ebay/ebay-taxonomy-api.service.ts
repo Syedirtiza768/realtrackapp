@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 import { EbayAuthService } from './ebay-auth.service.js';
+import { EbayTaxonomyCacheService } from './ebay-taxonomy-cache.service.js';
 import type {
   EbayCategoryTree,
   EbayCategorySubtree,
@@ -66,17 +68,26 @@ class TokenBucketRateLimiter {
 export class EbayTaxonomyApiService {
   private readonly logger = new Logger(EbayTaxonomyApiService.name);
   private readonly http: AxiosInstance;
-  private readonly rateLimiter = new TokenBucketRateLimiter(10); // 10 requests/second
+  private readonly rateLimiter: TokenBucketRateLimiter;
 
   /** eBay Motors Parts & Accessories category tree ID (US) */
   static readonly EBAY_US_TREE_ID = '0';
   /** eBay US marketplace ID for taxonomy calls */
   static readonly EBAY_US_MARKETPLACE = 'EBAY_US';
 
-  constructor(private readonly auth: EbayAuthService) {
-    const config = this.auth.getApiConfig();
+  constructor(
+    private readonly auth: EbayAuthService,
+    private readonly config: ConfigService,
+    private readonly taxonomyCache: EbayTaxonomyCacheService,
+  ) {
+    const rps =
+      Number(this.config.get('EBAY_TAXONOMY_RPS')) ||
+      Number(this.config.get('PIPELINE_TAXONOMY_RPS')) ||
+      2;
+    this.rateLimiter = new TokenBucketRateLimiter(rps);
+    const apiConfig = this.auth.getApiConfig();
     this.http = axios.create({
-      baseURL: `${config.baseUrl}/commerce/taxonomy/v1`,
+      baseURL: `${apiConfig.baseUrl}/commerce/taxonomy/v1`,
       timeout: 30_000,
       headers: {
         'Content-Type': 'application/json',
@@ -105,10 +116,23 @@ export class EbayTaxonomyApiService {
         return await fn();
       } catch (err: unknown) {
         lastErr = err;
-        const status = (err as { response?: { status?: number } })?.response
-          ?.status;
+        const response = (err as { response?: { status?: number; headers?: Record<string, string> } })
+          ?.response;
+        const status = response?.status;
         if (status !== 429 || attempt >= maxAttempts - 1) throw err;
-        const wait = delaysMs[attempt] ?? 25_000;
+
+        const retryAfterHeader = response?.headers?.['retry-after'];
+        let wait = delaysMs[attempt] ?? 25_000;
+        if (retryAfterHeader) {
+          const seconds = Number(retryAfterHeader);
+          if (Number.isFinite(seconds) && seconds > 0) {
+            wait = seconds * 1000;
+          } else {
+            const date = Date.parse(retryAfterHeader);
+            if (Number.isFinite(date)) wait = Math.max(0, date - Date.now());
+          }
+        }
+
         this.logger.warn(
           `eBay Taxonomy ${label} rate-limited (429) — retry ${attempt + 1}/${maxAttempts - 1} in ${wait}ms`,
         );
@@ -177,18 +201,58 @@ export class EbayTaxonomyApiService {
     treeId?: string,
   ): Promise<EbayCategorySuggestion[]> {
     const id = treeId ?? EbayTaxonomyApiService.EBAY_US_TREE_ID;
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+
+    const cached = this.taxonomyCache.getSuggestion(id, trimmed);
+    if (cached !== undefined) {
+      if (!cached?.categoryId) return [];
+      return [
+        {
+          category: {
+            categoryId: cached.categoryId,
+            categoryName: cached.categoryName,
+          },
+          categoryTreeNodeLevel: 0,
+          relevancy: 'RELEVANT',
+          categoryTreeNodeAncestors: [],
+        } as EbayCategorySuggestion,
+      ];
+    }
+
+    if (!this.taxonomyCache.hasDailyQuota()) {
+      this.logger.warn(
+        `Taxonomy daily quota exhausted (${this.taxonomyCache.getDailyUsage()}) — skipping suggest for "${trimmed.slice(0, 40)}"`,
+      );
+      return [];
+    }
+
     await this.rateLimiter.acquire();
-    return this.withRateLimitRetry(
-      `getCategorySuggestions(tree=${id}, q="${query.slice(0, 40)}")`,
+    const suggestions = await this.withRateLimitRetry(
+      `getCategorySuggestions(tree=${id}, q="${trimmed.slice(0, 40)}")`,
       async () => {
         const cfg = await this.appHeaders();
         const { data } = await this.http.get(
           `/category_tree/${id}/get_category_suggestions`,
-          { ...cfg, params: { q: query } },
+          { ...cfg, params: { q: trimmed } },
         );
-        return data.categorySuggestions ?? [];
+        return (data.categorySuggestions ?? []) as EbayCategorySuggestion[];
       },
     );
+
+    this.taxonomyCache.incrementDailyUsage();
+
+    const best = suggestions[0];
+    if (best?.category?.categoryId) {
+      this.taxonomyCache.setSuggestion(id, trimmed, {
+        categoryId: best.category.categoryId,
+        categoryName: best.category.categoryName,
+      });
+    } else {
+      this.taxonomyCache.setSuggestion(id, trimmed, null);
+    }
+
+    return suggestions;
   }
 
   // ──────────────────────────── Item Aspects ──────────────────────

@@ -1,0 +1,196 @@
+{
+  "model": "openai/gpt-4.1-mini",
+  "latencyMs": 6723,
+  "exact": 18,
+  "partial": 0,
+  "accuracy": 0.9,
+  "accuracyPartial": 0.9,
+  "tokens": 1298,
+  "promptTokens": 776,
+  "completionTokens": 522,
+  "costUsd": 0.0011455999999999999,
+  "costPer1000Parts": 0.05727999999999999,
+  "valueScore": 785.6145251396649,
+  "details": [
+    {
+      "partName": "Seat frame upholstery",
+      "expected": "Seats",
+      "predicted": "Seats",
+      "aiName": "Seats",
+      "confidence": 0.9,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Headrest guide",
+      "expected": "Seats",
+      "predicted": "Seats",
+      "aiName": "Seats",
+      "confidence": 0.85,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Door armrest",
+      "expected": "Interior Door Panels & Parts",
+      "predicted": "Interior Door Panels & Parts",
+      "aiName": "Interior Door Panels & Parts",
+      "confidence": 0.9,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Interior door panel",
+      "expected": "Interior Door Panels & Parts",
+      "predicted": "Interior Door Panels & Parts",
+      "aiName": "Interior Door Panels & Parts",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Exterior door shell",
+      "expected": "Exterior Door Panels & Frames",
+      "predicted": "Exterior Door Panels & Frames",
+      "aiName": "Exterior Door Panels & Frames",
+      "confidence": 0.9,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Door handle",
+      "expected": "Door Handles",
+      "predicted": "Door Handles",
+      "aiName": "Door Handles",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Window regulator",
+      "expected": "Window Motors, Parts & Accessories",
+      "predicted": "Window Motors, Parts & Accessories",
+      "aiName": "Window Motors, Parts & Accessories",
+      "confidence": 0.9,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Dashboard trim",
+      "expected": "Dashboards & Dashboard Parts",
+      "predicted": "Dashboards & Dashboard Parts",
+      "aiName": "Dashboards & Dashboard Parts",
+      "confidence": 0.9,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Instrument cluster",
+      "expected": "Dashboards & Dashboard Parts",
+      "predicted": "Dashboards & Dashboard Parts",
+      "aiName": "Dashboards & Dashboard Parts",
+      "confidence": 0.85,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Headlight",
+      "expected": "Headlights",
+      "predicted": "Headlights",
+      "aiName": "Headlights",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Tail light",
+      "expected": "Tail Lights",
+      "predicted": "Turn Signals",
+      "aiName": "Turn Signals",
+      "confidence": 0.7,
+      "exact": false,
+      "partial": false
+    },
+    {
+      "partName": "Side mirror",
+      "expected": "Exterior Mirrors",
+      "predicted": "Exterior Mirrors",
+      "aiName": "Exterior Mirrors",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Brake caliper",
+      "expected": "Brake Discs, Rotors & Hardware",
+      "predicted": "Brake Discs, Rotors & Hardware",
+      "aiName": "Brake Discs, Rotors & Hardware",
+      "confidence": 0.7,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Alternator",
+      "expected": "Complete Engines",
+      "predicted": "Alternators & Generators",
+      "aiName": "Alternators & Generators",
+      "confidence": 0.95,
+      "exact": false,
+      "partial": false
+    },
+    {
+      "partName": "Radiator",
+      "expected": "Radiators & Parts",
+      "predicted": "Radiators & Parts",
+      "aiName": "Radiators & Parts",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Control unit",
+      "expected": "Engine Computers",
+      "predicted": "Engine Computers",
+      "aiName": "Engine Computers",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Speaker",
+      "expected": "Car Speakers",
+      "predicted": "Car Speakers",
+      "aiName": "Car Speakers",
+      "confidence": 0.9,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Center console",
+      "expected": "Center Consoles",
+      "predicted": "Center Consoles",
+      "aiName": "Center Consoles",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Wheel",
+      "expected": "Wheels",
+      "predicted": "Wheels",
+      "aiName": "Wheels",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    },
+    {
+      "partName": "Bumper cover",
+      "expected": "Bumpers & Parts",
+      "predicted": "Bumpers & Parts",
+      "aiName": "Bumpers & Parts",
+      "confidence": 0.95,
+      "exact": true,
+      "partial": true
+    }
+  ]
+}

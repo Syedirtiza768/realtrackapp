@@ -183,10 +183,15 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       // Save enriched listings to catalog_products + listing_records
       await this.saveToCatalog(jobId, outputDir, job.data.originalFilename);
 
-      // Ensure every catalog product has US, AU, and DE listing records.
-      // For any missing marketplace, generate marketplace-appropriate AI content
-      // (English for US/AU, German for DE) and create the listing record.
-      await this.ensureMissingMarketplaceListings(jobId);
+      // Backfill only when pipeline output did not already produce all marketplaces.
+      const skipBackfill = this.isPipelineFastMode();
+      if (!skipBackfill) {
+        await this.ensureMissingMarketplaceListings(jobId);
+      } else {
+        this.logger.log(
+          `Job ${jobId}: PIPELINE_FAST_MODE — skipping marketplace listing backfill`,
+        );
+      }
 
       await this.linkUploadedImages(jobId);
       await this.propagateSourceImages(jobId);
@@ -237,6 +242,12 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       this.progressByJob.set(jobId, state);
     }
     return state;
+  }
+
+  private isPipelineFastMode(): boolean {
+    return /^(1|true|yes|on)$/i.test(
+      String(process.env.PIPELINE_FAST_MODE ?? '').trim(),
+    );
   }
 
   private clearJobProgress(jobId: string): void {
@@ -366,6 +377,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           fields.cat_fallback,
           10,
         );
+      if (fields.cat_ai) {
+        if (!state.pendingStageDetails) state.pendingStageDetails = {};
+        state.pendingStageDetails.categoryAiCount = parseInt(fields.cat_ai, 10);
+        hasStageChange = true;
+      }
       if (fields.cat_taxonomy_backoff === '1') {
         if (!state.pendingStageDetails) state.pendingStageDetails = {};
         state.pendingStageDetails.categoryTaxonomyBackoff = true;
@@ -374,6 +390,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       if (fields.enrichment_mode) {
         if (!state.pendingStageDetails) state.pendingStageDetails = {};
         state.pendingStageDetails.enrichmentMode = fields.enrichment_mode;
+        hasStageChange = true;
+      }
+      if (fields.sub_stage) {
+        if (!state.pendingStageDetails) state.pendingStageDetails = {};
+        state.pendingStageDetails.subStage = fields.sub_stage;
         hasStageChange = true;
       }
     }
@@ -515,12 +536,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             localization: report.localization ?? null,
             categoryMapping: {
               apiMapped: report.categoryMapping?.apiMapped ?? 0,
+              aiMapped: report.categoryMapping?.aiMapped ?? 0,
               fallbackMapped: report.categoryMapping?.fallbackMapped ?? 0,
               apiRate: report.categoryMapping?.apiRate ?? '0%',
+              categoryMode: report.categoryMapping?.categoryMode ?? null,
+              aiModel: report.categoryMapping?.aiModel ?? null,
               apiSkippedReason:
                 report.categoryMapping?.apiSkippedReason ?? null,
               treeCacheHit: report.categoryMapping?.treeCacheHit ?? false,
               treeCacheSource: report.categoryMapping?.treeCacheSource ?? null,
+              aiCacheHits: report.categoryMapping?.aiCacheHits ?? 0,
+              aiApiCalls: report.categoryMapping?.aiApiCalls ?? 0,
+              aiTokensUsed: report.categoryMapping?.aiTokensUsed ?? 0,
               taxonomyErrors,
             },
           };

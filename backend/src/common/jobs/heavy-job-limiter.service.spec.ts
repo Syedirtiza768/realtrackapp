@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { getQueueToken } from '@nestjs/bullmq';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { CatalogImport } from '../../catalog-import/entities/catalog-import.entity.js';
 import { PipelineJob } from '../../ingestion/entities/pipeline-job.entity.js';
@@ -9,15 +10,18 @@ import { HeavyJobLimiterService } from './heavy-job-limiter.service.js';
 describe('HeavyJobLimiterService', () => {
   let service: HeavyJobLimiterService;
   let pipelineCount: jest.Mock;
+  let pipelineFind: jest.Mock;
   let importCount: jest.Mock;
   let configGet: jest.Mock;
 
   beforeEach(async () => {
     pipelineCount = jest.fn();
+    pipelineFind = jest.fn().mockResolvedValue([]);
     importCount = jest.fn();
     configGet = jest.fn((key: string, fallback?: string) => {
       if (key === 'MAX_CONCURRENT_PIPELINE_JOBS') return '2';
       if (key === 'MAX_CONCURRENT_CATALOG_IMPORTS') return '2';
+      if (key === 'PIPELINE_JOB_STALE_MINUTES') return '360';
       return fallback;
     });
 
@@ -26,11 +30,23 @@ describe('HeavyJobLimiterService', () => {
         HeavyJobLimiterService,
         {
           provide: getRepositoryToken(PipelineJob),
-          useValue: { count: pipelineCount },
+          useValue: {
+            count: pipelineCount,
+            find: pipelineFind,
+            update: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(CatalogImport),
           useValue: { count: importCount },
+        },
+        {
+          provide: getQueueToken('pipeline'),
+          useValue: {
+            getWaiting: jest.fn().mockResolvedValue([]),
+            getActive: jest.fn().mockResolvedValue([]),
+            getDelayed: jest.fn().mockResolvedValue([]),
+          },
         },
         {
           provide: ConfigService,

@@ -34,6 +34,11 @@ import {
   buildMotorsEnrichmentUserPrompt,
 } from './lib/motors-enrichment-prompt.mjs';
 import { createEnrichmentCache } from './lib/enrichment-cache.mjs';
+import { createTaxonomyClient, MOTORS_CATEGORY_TREE_ID } from './lib/taxonomy-client.mjs';
+import {
+  createAiCategoryClassifier,
+  AI_CATEGORY_DEFAULT_MODEL,
+} from './lib/ai-category-classifier.mjs';
 import {
   getEnrichmentProfile,
   getLowValueMaxPrice,
@@ -122,7 +127,7 @@ const CONFIG = {
     aiConcurrency: 8,
     localizationConcurrency: 6,
     imageConcurrency: 6,
-    categoryConcurrency: 3,
+    categoryConcurrency: 2,
     vinBatchConcurrency: 6,
   },
   ebay: {
@@ -177,8 +182,31 @@ const imageConcurrency = Number(env.PIPELINE_IMAGE_CONCURRENCY);
 if (imageConcurrency > 0) CONFIG.pipeline.imageConcurrency = imageConcurrency;
 const categoryConcurrency = Number(env.PIPELINE_CATEGORY_CONCURRENCY);
 if (categoryConcurrency > 0) CONFIG.pipeline.categoryConcurrency = categoryConcurrency;
+const taxonomyRps = Number(env.PIPELINE_TAXONOMY_RPS);
+const taxonomyDailyQuota = Number(env.PIPELINE_TAXONOMY_DAILY_QUOTA);
+const categoryMode = String(env.PIPELINE_CATEGORY_MODE || 'auto').toLowerCase();
+const categoryAiModel =
+  env.PIPELINE_CATEGORY_AI_MODEL || AI_CATEGORY_DEFAULT_MODEL;
+const categoryAiBatchSize = Number(env.PIPELINE_CATEGORY_AI_BATCH_SIZE);
+const categoryAiMinConfidence = Number(env.PIPELINE_CATEGORY_AI_MIN_CONFIDENCE);
 const vinBatchConcurrency = Number(env.PIPELINE_VIN_BATCH_CONCURRENCY);
 if (vinBatchConcurrency > 0) CONFIG.pipeline.vinBatchConcurrency = vinBatchConcurrency;
+
+const pipelineFastMode = /^(1|true|yes|on)$/i.test(
+  String(env.PIPELINE_FAST_MODE || '').trim(),
+);
+const localizationMode = String(
+  env.PIPELINE_LOCALIZATION_MODE ||
+    (pipelineFastMode ? 'rule' : 'ai'),
+).toLowerCase();
+const localizationModel =
+  env.PIPELINE_LOCALIZATION_MODEL || 'openai/gpt-4o-mini';
+const localizationBatchSize = Number(env.PIPELINE_LOCALIZATION_BATCH_SIZE);
+const skipImageValidation =
+  pipelineFastMode ||
+  /^(1|true|yes|on)$/i.test(String(env.PIPELINE_SKIP_IMAGE_VALIDATION || '').trim());
+const skipImageFetch =
+  /^(1|true|yes|on)$/i.test(String(env.PIPELINE_SKIP_IMAGE_FETCH || '').trim());
 
 const RUN_MODE = env.AI_RUN_MODE || 'default';
 const PROMPT_VERSION = env.AI_PROMPT_VERSION || MOTORS_PROMPT_VERSION;
@@ -287,6 +315,7 @@ const REPORT = {
   vinDecodeSuccess: 0,
   vinDecodeFail: 0,
   categoryMappingApi: 0,
+  categoryMappingAi: 0,
   categoryMappingFallback: 0,
   taxonomyErrors: [],
   taxonomyTreeCacheHit: false,
@@ -359,6 +388,12 @@ const log = {
     console.log(`[PROGRESS] ${pairs}`);
   },
 };
+
+if (pipelineFastMode) {
+  log.info(
+    'PIPELINE_FAST_MODE enabled — rule-based AU/DE localization, skipping image URL validation',
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 //  UTILITIES
@@ -502,67 +537,10 @@ async function decodeVin(vin) {
 
 let ebayAppToken = null;
 let ebayTokenExpiry = 0;
-let motorsCategoryTreeId = null;
-let motorsCategoryTreeVersion = null;
-let treeIdResolvePromise = null;
 let taxonomyApiEnabled = true;
-
-const TAXONOMY_BACKOFF_MS = {
-  429: 15 * 60 * 1000,
-  default: 5 * 60 * 1000,
-};
-
-function taxonomyDiskCachePath() {
-  return path.resolve(ROOT, 'output', '.ebay-taxonomy-cache.json');
-}
 
 function taxonomyCacheScopeKey() {
   return `${CONFIG.ebay.marketplaceId}:${CONFIG.ebay.sandbox ? 'sandbox' : 'production'}`;
-}
-
-function loadTaxonomyDiskCache() {
-  const cachePath = taxonomyDiskCachePath();
-  if (!fs.existsSync(cachePath)) return null;
-  try {
-    const parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-    const entry = parsed?.entries?.[taxonomyCacheScopeKey()];
-    return entry && typeof entry === 'object' ? entry : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveTaxonomyDiskCache(entry) {
-  const cachePath = taxonomyDiskCachePath();
-  let parsed = { version: 1, entries: {} };
-  if (fs.existsSync(cachePath)) {
-    try {
-      parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-      if (!parsed.entries || typeof parsed.entries !== 'object') parsed.entries = {};
-    } catch {
-      parsed = { version: 1, entries: {} };
-    }
-  }
-  parsed.entries[taxonomyCacheScopeKey()] = {
-    ...entry,
-    marketplaceId: CONFIG.ebay.marketplaceId,
-    sandbox: CONFIG.ebay.sandbox,
-    updatedAt: new Date().toISOString(),
-  };
-  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
-  fs.writeFileSync(cachePath, JSON.stringify(parsed, null, 2));
-}
-
-const TAXONOMY_FORCE = String(env.PIPELINE_TAXONOMY_FORCE || '').toLowerCase() === 'true';
-
-function isTaxonomyInBackoff(entry) {
-  if (TAXONOMY_FORCE) return false;
-  if (!entry?.treeFailure?.retryAfter) return false;
-  return Date.now() < Date.parse(entry.treeFailure.retryAfter);
-}
-
-function taxonomyBackoffMs(status) {
-  return TAXONOMY_BACKOFF_MS[status] ?? TAXONOMY_BACKOFF_MS.default;
 }
 
 function recordTaxonomyError(message, status, source) {
@@ -578,27 +556,6 @@ function recordTaxonomyError(message, status, source) {
   if (REPORT.errors.length < 50) {
     REPORT.errors.push({ type: 'taxonomy', message: `[${source}] ${text}` });
   }
-}
-
-function markTaxonomyBackoff(message, status, source) {
-  const backoffMs = taxonomyBackoffMs(status);
-  const retryAfter = new Date(Date.now() + backoffMs).toISOString();
-  const diskEntry = loadTaxonomyDiskCache() ?? {};
-  saveTaxonomyDiskCache({
-    categoryTreeId: diskEntry.categoryTreeId ?? motorsCategoryTreeId ?? null,
-    categoryTreeVersion: diskEntry.categoryTreeVersion ?? motorsCategoryTreeVersion ?? null,
-    treeFailure: {
-      message,
-      status: status ?? null,
-      source,
-      failedAt: new Date().toISOString(),
-      retryAfter,
-    },
-  });
-  taxonomyApiEnabled = false;
-  REPORT.taxonomyApiSkippedReason = message;
-  recordTaxonomyError(`${message} (retry after ${retryAfter})`, status, source);
-  log.warn(`eBay taxonomy backoff until ${retryAfter}: ${message}`);
 }
 
 async function getEbayAppToken() {
@@ -642,159 +599,54 @@ async function getEbayAppToken() {
   }
 }
 
-const categorySuggestionCache = new Map();
+const taxonomyClient = createTaxonomyClient({
+  rootDir: ROOT,
+  scopeKey: taxonomyCacheScopeKey(),
+  getToken: getEbayAppToken,
+  baseUrl: CONFIG.ebay.baseUrl,
+  requestsPerSecond: taxonomyRps > 0 ? taxonomyRps : 2,
+  dailyQuota: taxonomyDailyQuota > 0 ? taxonomyDailyQuota : 4800,
+  log: (level, msg) => log[level]?.(msg) ?? log.info(msg),
+});
 
-async function fetchMotorsCategoryTreeIdFromApi() {
-  const token = await getEbayAppToken();
-  if (!token) return null;
+const aiCategoryClassifier = createAiCategoryClassifier({
+  rootDir: ROOT,
+  getOpenAI: () => getOpenAI(),
+  model: categoryAiModel,
+  batchSize: categoryAiBatchSize > 0 ? categoryAiBatchSize : 12,
+  minConfidence:
+    categoryAiMinConfidence > 0 && categoryAiMinConfidence <= 1
+      ? categoryAiMinConfidence
+      : 0.55,
+  log: (level, msg) => log[level]?.(msg) ?? log.info(msg),
+  onTokens: (tokens) => {
+    REPORT.openaiTokensUsed += tokens;
+  },
+});
 
-  try {
-    const { data } = await axios.get(
-      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/get_default_category_tree_id`,
-      {
-        params: { marketplace_id: CONFIG.ebay.marketplaceId },
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 15000,
-      }
-    );
-    motorsCategoryTreeId = data.categoryTreeId;
-    motorsCategoryTreeVersion = data.categoryTreeVersion ?? null;
-    if (motorsCategoryTreeId) {
-      log.info(`eBay Motors category tree: ${motorsCategoryTreeId}`);
-      REPORT.taxonomyTreeCacheSource = 'api';
-      saveTaxonomyDiskCache({
-        categoryTreeId: motorsCategoryTreeId,
-        categoryTreeVersion: motorsCategoryTreeVersion,
-        treeFailure: null,
-      });
-    }
-    return motorsCategoryTreeId;
-  } catch (err) {
-    const status = err.response?.status ?? null;
-    const message = err.response?.data?.errors?.[0]?.message || err.message;
-    log.warn(`Failed to resolve Motors category tree: ${message}`);
-    markTaxonomyBackoff(message, status, 'category_tree');
-    return null;
-  }
-}
-
-async function getMotorsCategoryTreeId() {
-  if (motorsCategoryTreeId) return motorsCategoryTreeId;
-
-  const diskEntry = loadTaxonomyDiskCache();
-  if (isTaxonomyInBackoff(diskEntry)) {
-    const message = diskEntry.treeFailure.message;
-    REPORT.taxonomyApiSkippedReason = message;
-    taxonomyApiEnabled = false;
-    recordTaxonomyError(
-      `${message} (retry after ${diskEntry.treeFailure.retryAfter})`,
-      diskEntry.treeFailure.status,
-      diskEntry.treeFailure.source || 'category_tree',
-    );
-    return null;
-  }
-
-  if (diskEntry?.categoryTreeId) {
-    motorsCategoryTreeId = diskEntry.categoryTreeId;
-    motorsCategoryTreeVersion = diskEntry.categoryTreeVersion ?? null;
-    REPORT.taxonomyTreeCacheHit = true;
-    REPORT.taxonomyTreeCacheSource = 'disk';
-    log.info(`eBay Motors category tree loaded from disk cache: ${motorsCategoryTreeId}`);
-    return motorsCategoryTreeId;
-  }
-
-  if (!treeIdResolvePromise) {
-    treeIdResolvePromise = fetchMotorsCategoryTreeIdFromApi().finally(() => {
-      treeIdResolvePromise = null;
-    });
-  }
-  return treeIdResolvePromise;
-}
+// Motors tree ID is fixed — no API call needed (see ebay-marketplace-tree.util.ts).
+REPORT.taxonomyTreeCacheHit = true;
+REPORT.taxonomyTreeCacheSource = 'known';
 
 async function suggestCategory(keywords) {
   if (!taxonomyApiEnabled) return null;
 
-  const cacheKey = keywords.toLowerCase().trim();
-  if (categorySuggestionCache.has(cacheKey)) return categorySuggestionCache.get(cacheKey);
-
-  const token = await getEbayAppToken();
-  if (!token) return null;
-
-  const treeId = await getMotorsCategoryTreeId();
-  if (!treeId) return null;
-
   try {
-    const { data } = await axios.get(
-      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
-      {
-        params: { q: keywords },
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 15000,
-      }
-    );
-
-    const suggestions = data.categorySuggestions || [];
-    if (suggestions.length > 0) {
-      const best = suggestions[0];
-      const result = {
-        categoryId: best.category?.categoryId,
-        categoryName: best.category?.categoryName,
-        categoryPath: best.categoryTreeNodeAncestors?.map(a => a.categoryName).join(' > ') || '',
-      };
-      categorySuggestionCache.set(cacheKey, result);
-      REPORT.categoryMappingApi++;
-      return result;
-    }
+    const result = await taxonomyClient.suggestCategory(keywords);
+    if (result) REPORT.categoryMappingApi++;
+    return result;
   } catch (err) {
     const status = err.response?.status ?? null;
     const message = err.response?.data?.errors?.[0]?.message || err.message;
     log.warn(`eBay category suggestion failed for "${keywords}": ${message}`);
     recordTaxonomyError(message, status, 'category_suggestion');
-    if (status === 429) {
-      markTaxonomyBackoff(message, status, 'category_suggestion');
-    }
-  }
-
-  categorySuggestionCache.set(cacheKey, null);
-  return null;
-}
-
-const aspectCache = new Map();
-
-async function getCategoryAspects(categoryId) {
-  if (aspectCache.has(categoryId)) return aspectCache.get(categoryId);
-
-  const token = await getEbayAppToken();
-  if (!token) return null;
-
-  const treeId = await getMotorsCategoryTreeId();
-  if (!treeId) return null;
-
-  try {
-    const { data } = await axios.get(
-      `${CONFIG.ebay.baseUrl}/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category`,
-      {
-        params: { category_id: categoryId },
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 15000,
-      }
-    );
-
-    const aspects = (data.aspects || []).map(a => ({
-      name: a.localizedAspectName,
-      required: a.aspectConstraint?.aspectRequired || false,
-      mode: a.aspectConstraint?.aspectMode || 'FREE_TEXT',
-      values: (a.aspectValues || []).map(v => v.localizedValue),
-      usage: a.aspectConstraint?.aspectUsage || 'RECOMMENDED',
-    }));
-
-    aspectCache.set(categoryId, aspects);
-    return aspects;
-  } catch (err) {
-    log.warn(`eBay aspects fetch failed for category ${categoryId}: ${err.message}`);
-    aspectCache.set(categoryId, null);
     return null;
   }
+}
+
+async function getCategoryAspects(categoryId) {
+  if (!taxonomyApiEnabled) return null;
+  return taxonomyClient.getCategoryAspects(categoryId);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1625,108 +1477,165 @@ function getVehicleInfo(part, vinData) {
 // ═══════════════════════════════════════════════════════════════════════
 
 async function mapCategories(parts, vinData) {
-  log.step('Category Mapping (eBay Taxonomy API + Fallback)');
+  const useEbay = categoryMode !== 'keyword' && categoryMode !== 'ai';
+  const useAi =
+    categoryMode !== 'keyword' &&
+    categoryMode !== 'ebay' &&
+    Boolean(CONFIG.openai.apiKey);
 
-  // Resolve tree once — disk cache, single-flight API, or backoff skip
-  const treeId = await getMotorsCategoryTreeId();
-  const useTaxonomyApi = Boolean(treeId) && taxonomyApiEnabled;
+  log.step(
+    `Category Mapping (mode=${categoryMode}: eBay=${useEbay}, AI=${useAi}, keyword fallback)`,
+  );
 
-  if (!useTaxonomyApi) {
+  const token = await getEbayAppToken();
+  const taxonomyAvailable = useEbay && Boolean(token) && taxonomyApiEnabled;
+
+  if (!taxonomyAvailable && useEbay) {
     const reason = REPORT.taxonomyApiSkippedReason || 'eBay taxonomy unavailable';
-    log.warn(`Skipping eBay category API for this run: ${reason}`);
+    log.warn(`eBay category API skipped: ${reason}`);
     recordTaxonomyError(reason, null, 'category_mapping');
-  } else if (REPORT.taxonomyTreeCacheHit) {
-    log.info('Using cached eBay Motors category tree (disk)');
+  } else if (taxonomyAvailable) {
+    const taxStats = taxonomyClient.getStats();
+    log.info(
+      `eBay Motors category tree ${MOTORS_CATEGORY_TREE_ID}. ` +
+      `Suggestion cache: ${taxStats.suggestionCacheHits} warm, ` +
+      `daily ${taxStats.dailyUsage}/${taxStats.dailyQuota}`,
+    );
   }
 
-  // First pass: deduplicate lookups by partKey
   const partTypeCache = new Map();
-  const uniqueLookups = []; // { partKey, keywords, parts: [part, ...] }
+  const uniqueLookups = [];
 
   for (const part of parts) {
-    const vehicle = getVehicleInfo(part, vinData);
     const partKey = `${part.partName}|${part.note}`.toLowerCase();
-
     if (partTypeCache.has(partKey)) {
       part._category = partTypeCache.get(partKey);
       continue;
     }
-
-    // Mark as pending to avoid duplicates in the lookup queue
     partTypeCache.set(partKey, null);
+    const vehicle = getVehicleInfo(part, vinData);
     const keywords = `${vehicle.make} ${part.partName}`.replace(/[^\w\s]/g, ' ').trim();
-    if (!uniqueLookups.find(l => l.partKey === partKey)) {
-      uniqueLookups.push({ partKey, keywords, parts: [part] });
-    } else {
-      uniqueLookups.find(l => l.partKey === partKey).parts.push(part);
-    }
+    const existing = uniqueLookups.find((l) => l.partKey === partKey);
+    if (existing) existing.parts.push(part);
+    else uniqueLookups.push({ partKey, keywords, parts: [part] });
   }
 
-  log.info(`${uniqueLookups.length} unique category lookups needed for ${parts.length} parts`);
+  log.info(`${uniqueLookups.length} unique category lookups for ${parts.length} parts`);
 
-  if (!useTaxonomyApi) {
+  const pendingAi = [];
+
+  if (taxonomyAvailable) {
+    const CAT_CONCURRENCY = Math.min(CONFIG.pipeline.categoryConcurrency, 2);
+
+    for (let i = 0; i < uniqueLookups.length; i += CAT_CONCURRENCY) {
+      if (taxonomyClient.isRateLimited()) {
+        pendingAi.push(...uniqueLookups.slice(i));
+        log.warn('eBay Taxonomy rate-limited — routing remaining lookups to AI/keyword tiers');
+        break;
+      }
+
+      const group = uniqueLookups.slice(i, i + CAT_CONCURRENCY);
+      const results = await Promise.allSettled(
+        group.map(async (lookup) => {
+          const category = await suggestCategory(lookup.keywords);
+          if (category) {
+            return { partKey: lookup.partKey, category, lookup };
+          }
+          return { partKey: lookup.partKey, category: null, lookup };
+        }),
+      );
+
+      for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        if (r.value.category) {
+          partTypeCache.set(r.value.partKey, r.value.category);
+        } else if (useAi) {
+          pendingAi.push(r.value.lookup);
+        } else {
+          const category = fallbackCategoryMatch(
+            r.value.lookup.parts[0].partName,
+            r.value.lookup.parts[0].note,
+          );
+          partTypeCache.set(r.value.partKey, category);
+          REPORT.categoryMappingFallback++;
+        }
+      }
+
+      if (taxonomyClient.isRateLimited()) {
+        pendingAi.push(...uniqueLookups.slice(i + CAT_CONCURRENCY));
+        log.warn('eBay Taxonomy halted after 429 — switching to AI tier');
+        break;
+      }
+    }
+
+    const taxStats = taxonomyClient.getStats();
+    if (taxStats.dailyQuotaSkipped > 0) {
+      const msg = `Daily Taxonomy budget exhausted (${taxStats.dailyUsage}/${taxStats.dailyQuota})`;
+      REPORT.taxonomyApiSkippedReason = msg;
+      recordTaxonomyError(msg, 429, 'category_mapping');
+      log.warn(msg);
+    }
+  } else if (useAi) {
+    pendingAi.push(...uniqueLookups);
+  } else {
     for (const lookup of uniqueLookups) {
       const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
       partTypeCache.set(lookup.partKey, category);
       REPORT.categoryMappingFallback++;
     }
-  } else {
-    // Second pass: parallel category lookups with concurrency control
-    const CAT_CONCURRENCY = CONFIG.pipeline.categoryConcurrency;
-    let apiAttempts = 0;
+  }
 
-    for (let i = 0; i < uniqueLookups.length; i += CAT_CONCURRENCY) {
-      if (!taxonomyApiEnabled) break;
+  if (pendingAi.length && useAi) {
+    const dedupedAi = pendingAi.filter(
+      (l, idx, arr) => arr.findIndex((x) => x.partKey === l.partKey) === idx,
+    );
+    const aiResults = await aiCategoryClassifier.classifyLookups(
+      dedupedAi,
+      (part) => getVehicleInfo(part, vinData),
+    );
+    const aiStats = aiCategoryClassifier.getStats();
+    REPORT.categoryMappingAi = aiStats.apiMapped;
 
-      const group = uniqueLookups.slice(i, i + CAT_CONCURRENCY);
-
-      const results = await Promise.allSettled(
-        group.map(async (lookup) => {
-          let category = null;
-          if (apiAttempts < 5000) {
-            category = await suggestCategory(lookup.keywords);
-            apiAttempts++;
-          }
-          if (!category) {
-            category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
-            REPORT.categoryMappingFallback++;
-          }
-          return { partKey: lookup.partKey, category };
-        })
-      );
-
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          partTypeCache.set(r.value.partKey, r.value.category);
-        }
+    for (const lookup of dedupedAi) {
+      if (partTypeCache.get(lookup.partKey)) continue;
+      const aiCategory = aiResults.get(lookup.partKey);
+      if (aiCategory) {
+        partTypeCache.set(lookup.partKey, aiCategory);
+        continue;
       }
-
-      // Light rate limiting — only every 60 calls
-      if (apiAttempts > 0 && apiAttempts % 60 === 0) await sleep(200);
+      const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
+      partTypeCache.set(lookup.partKey, category);
+      REPORT.categoryMappingFallback++;
     }
 
-    // If taxonomy was disabled mid-run, fallback remaining unique keys
-    if (!taxonomyApiEnabled) {
-      for (const lookup of uniqueLookups) {
-        if (partTypeCache.get(lookup.partKey)) continue;
-        const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
-        partTypeCache.set(lookup.partKey, category);
-        REPORT.categoryMappingFallback++;
-      }
+    log.info(
+      `AI categories: ${aiStats.apiMapped} mapped, ${aiStats.cacheHits} cache hits, ` +
+      `${aiStats.apiCalls} API batches, model=${aiStats.model}, tokens≈${aiStats.tokensUsed}`,
+    );
+  } else if (pendingAi.length) {
+    for (const lookup of pendingAi) {
+      if (partTypeCache.get(lookup.partKey)) continue;
+      const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
+      partTypeCache.set(lookup.partKey, category);
+      REPORT.categoryMappingFallback++;
     }
   }
 
-  // Apply cached results to all parts
   for (const part of parts) {
     if (part._category) continue;
     const partKey = `${part.partName}|${part.note}`.toLowerCase();
     part._category = partTypeCache.get(partKey) || null;
   }
 
-  log.info(`Category mapping: ${REPORT.categoryMappingApi} via API, ${REPORT.categoryMappingFallback} fallback`);
+  const taxStats = taxonomyClient.getStats();
+  log.info(
+    `Category mapping: ${REPORT.categoryMappingApi} eBay API (${taxStats.suggestionCacheHits} cache hits), ` +
+    `${REPORT.categoryMappingAi} AI, ${REPORT.categoryMappingFallback} keyword fallback`,
+  );
   log.progress({
     stage: 'category_mapping',
     cat_api: REPORT.categoryMappingApi,
+    cat_ai: REPORT.categoryMappingAi,
     cat_fallback: REPORT.categoryMappingFallback,
     cat_taxonomy_backoff: REPORT.taxonomyApiSkippedReason ? 1 : 0,
     total_parts: parts.length,
@@ -2487,30 +2396,55 @@ function getEnrichmentMode() {
 }
 
 async function localizeBatchForMarketplace(batchParts, marketplace, locale) {
-  const itemsForPrompt = batchParts.map((part, idx) => ({
-    index: idx,
-    title: part._enriched.title,
-    type: part._enriched.type,
-    placement: part._enriched.placement,
-    material: part._enriched.material,
-    color: part._enriched.color,
-    bundleDescription: part._enriched.bundleDescription,
-  }));
+  const includesDescription =
+    localizationMode === 'copy' || localizationMode === 'ai';
+
+  const itemsForPrompt = batchParts.map((part, idx) => {
+    const item = { index: idx, title: part._enriched.title };
+    if (localizationMode === 'titles_only' || localizationMode === 'ai') {
+      item.type = part._enriched.type;
+      item.placement = part._enriched.placement;
+      item.material = part._enriched.material;
+      item.color = part._enriched.color;
+      item.bundleDescription = part._enriched.bundleDescription;
+    }
+    if (includesDescription) {
+      item.description = part._enriched.description;
+    }
+    return item;
+  });
 
   const localeGuide = marketplace === 'DE'
     ? `Schreibe natürliches Deutsch für eBay.de Gebrauchtteile. Keine wörtliche Übersetzung. Vermeide "gebraucht OE", "Genuine OEM", englische Positionswörter. Nutze z. B. Armlehne, hinten links, Original gebraucht, Teilenummer. Titel max. 80 Zeichen. Teilenummern unverändert lassen.`
     : 'Australian English spelling (colour, metre, organise). Title max 80 chars. Keep part numbers unchanged.';
 
-  const systemPrompt = `Localize eBay Motors listing fields for ${marketplace}. ${localeGuide}
-Do NOT translate HTML descriptions — only the fields in the user JSON.
+  const fitmentNote =
+    'Vehicle fitment/compatibility tables are added separately — do NOT include fitment tables or Year/Make/Model lists in the description.';
+
+  let systemPrompt;
+  if (localizationMode === 'copy') {
+    systemPrompt = `Localize eBay Motors listing title and description HTML for ${marketplace}. ${localeGuide}
+${fitmentNote}
+- Translate the description HTML body (Details, Compatibility notes, Condition). Keep simple HTML tags (<p>, <ul>, <li>, <strong>).
+- Part numbers and MPNs must stay unchanged.
+Return JSON: { "items": [{ "index": N, "title": "...", "description": "..." }] }`;
+  } else if (localizationMode === 'titles_only') {
+    systemPrompt = `Localize eBay Motors listing fields for ${marketplace}. ${localeGuide}
+Do NOT translate descriptions — only the fields in the user JSON.
 Return JSON: { "items": [{ "index": N, "title": "...", "type": "...", "placement": "...", "material": "...", "color": "...", "bundleDescription": "..." }] }`;
+  } else {
+    systemPrompt = `Localize eBay Motors listing fields for ${marketplace}. ${localeGuide}
+${fitmentNote}
+- Translate title, description HTML, type, placement, material, color, bundleDescription.
+Return JSON: { "items": [{ "index": N, "title": "...", "description": "...", "type": "...", "placement": "...", "material": "...", "color": "...", "bundleDescription": "..." }] }`;
+  }
 
   const client = getOpenAI();
   if (!client) return null;
 
   try {
     const response = await client.chat.completions.create({
-      model: CONFIG.openai.model,
+      model: localizationModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: JSON.stringify(itemsForPrompt) },
@@ -2548,7 +2482,7 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
     part._localized[marketplace] = applyRuleBasedLocalization(part._enriched, locale);
   }
 
-  if (!openaiAvailable) {
+  if (!openaiAvailable || localizationMode === 'rule') {
     for (const part of enriched) {
       if (marketplace === 'AU') REPORT.localization.auRuleOnly++;
       if (marketplace === 'DE') REPORT.localization.deRuleOnly++;
@@ -2556,7 +2490,15 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
     return;
   }
 
-  const batches = chunk(enriched, CONFIG.openai.batchSize);
+  const includesDescription =
+    localizationMode === 'copy' || localizationMode === 'ai';
+  const locBatchSize =
+    localizationBatchSize > 0
+      ? localizationBatchSize
+      : includesDescription
+        ? 8
+        : Math.max(CONFIG.openai.batchSize, 12);
+  const batches = chunk(enriched, locBatchSize);
   const locPool = createConcurrencyPool(CONFIG.pipeline.localizationConcurrency);
 
   await Promise.allSettled(
@@ -2576,15 +2518,23 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
           if (idx < 0 || idx >= batch.length) continue;
           const part = batch[idx];
           const base = part._localized[marketplace];
+          const titlesOnly = localizationMode === 'titles_only';
+          const copyMode = localizationMode === 'copy';
+          const localizedDescription =
+            (copyMode || localizationMode === 'ai') && item.description
+              ? String(item.description).trim()
+              : base.description;
           part._localized[marketplace] = {
             ...base,
             title: clean(item.title || base.title).slice(0, 80),
-            description: base.description,
-            type: clean(item.type || base.type),
-            placement: clean(item.placement || base.placement),
-            material: clean(item.material || base.material),
-            color: clean(item.color || base.color),
-            bundleDescription: clean(item.bundleDescription || base.bundleDescription),
+            description: localizedDescription || base.description,
+            type: titlesOnly || copyMode ? base.type : clean(item.type || base.type),
+            placement: titlesOnly || copyMode ? base.placement : clean(item.placement || base.placement),
+            material: titlesOnly || copyMode ? base.material : clean(item.material || base.material),
+            color: titlesOnly || copyMode ? base.color : clean(item.color || base.color),
+            bundleDescription: titlesOnly || copyMode
+              ? base.bundleDescription
+              : clean(item.bundleDescription || base.bundleDescription),
             aiTranslated: true,
           };
           if (marketplace === 'AU') REPORT.localization.auAiTranslated++;
@@ -2597,7 +2547,10 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
 
 async function localizeAllMarketplaceCopy(parts) {
   log.step('Marketplace Copy Localization (AU · DE)');
-  log.progress({ stage: 'output_generation', localization: 'started' });
+  log.progress({
+    stage: 'validation',
+    sub_stage: localizationMode === 'rule' ? 'localization_rule' : 'localization',
+  });
 
   // AU and DE are independent — run in parallel
   await Promise.all([
@@ -3358,6 +3311,7 @@ function imageCacheKey(part) {
  */
 async function fetchImages(parts) {
   log.step('Image Enrichment & Validation');
+  log.progress({ stage: 'validation', sub_stage: 'images' });
   const forceVision = process.env.PIPELINE_FORCE_VISION === '1';
   if (forceVision) {
     log.info('PIPELINE_FORCE_VISION enabled — validating warehouse photos for all parts with source images');
@@ -3378,15 +3332,13 @@ async function fetchImages(parts) {
 
   const toBeFetched = parts.filter((p) => {
     if (!p._enriched) return false;
+    if (skipImageFetch) return false;
     if (forceVision && (p._gridx?.images || (p._images && p._images.length > 0))) return true;
     return !p._images || p._images.length === 0;
   });
   REPORT.images.totalParts = parts.filter(p => p._enriched).length;
-  if (!toBeFetched.length) {
-    log.info('No additional image API fetch needed — all parts have source images or none require enrichment');
-    return;
-  }
 
+  if (!skipImageFetch && toBeFetched.length) {
   log.info(`Fetching images for ${toBeFetched.length} parts via ${IMAGE_API_URL}...`);
 
   const IMAGE_BATCH_SIZE = 25;
@@ -3467,7 +3419,16 @@ async function fetchImages(parts) {
     ),
   );
 
-  // ── URL validation pass (parallel) ──
+  // ── URL validation pass (parallel) — optional; slow on large jobs ──
+  if (skipImageValidation) {
+    log.info('Skipping image URL validation (PIPELINE_SKIP_IMAGE_VALIDATION or PIPELINE_FAST_MODE)');
+    for (const p of toBeFetched) {
+      if (p._images?.length) {
+        REPORT.images.accessible += p._images.length;
+        REPORT.images.validated += p._images.length;
+      }
+    }
+  } else {
   log.info('Validating enriched image URLs...');
   const uniqueUrls = [...new Set(
     toBeFetched
@@ -3538,6 +3499,12 @@ async function fetchImages(parts) {
 
     REPORT.images.validated += validated.length + removed.length;
   }
+  } // end skipImageValidation else
+  } else if (skipImageFetch) {
+    log.info('PIPELINE_SKIP_IMAGE_FETCH enabled — using source/upload images only');
+  } else {
+    log.info('No additional image API fetch needed — all parts have source images or none require enrichment');
+  }
 
   // Final observability summary — count all enriched parts, not only API fetch candidates
   const allEnriched = parts.filter((p) => p._enriched);
@@ -3562,7 +3529,8 @@ async function fetchImages(parts) {
   if (REPORT.images.failedEnrichments.length > 0) log.warn(`${REPORT.images.failedEnrichments.length} parts had API failures`);
 
   log.progress({
-    stage: 'image_enrichment',
+    stage: 'validation',
+    sub_stage: 'images_done',
     with_images: imagesWithPrimary,
     no_images: missingImages.length,
     total_parts: toBeFetched.length,
@@ -4275,14 +4243,30 @@ function generateReport() {
     },
     categoryMapping: {
       apiMapped: REPORT.categoryMappingApi,
+      aiMapped: REPORT.categoryMappingAi,
       fallbackMapped: REPORT.categoryMappingFallback,
-      apiRate: REPORT.categoryMappingApi > 0
-        ? `${((REPORT.categoryMappingApi / (REPORT.categoryMappingApi + REPORT.categoryMappingFallback)) * 100).toFixed(1)}%`
-        : '0%',
+      categoryMode,
+      aiModel: aiCategoryClassifier.getStats().model,
+      apiRate: (() => {
+        const total =
+          REPORT.categoryMappingApi +
+          REPORT.categoryMappingAi +
+          REPORT.categoryMappingFallback;
+        if (!total) return '0%';
+        const apiPlusAi = REPORT.categoryMappingApi + REPORT.categoryMappingAi;
+        return `${((apiPlusAi / total) * 100).toFixed(1)}%`;
+      })(),
       taxonomyErrors: REPORT.taxonomyErrors.slice(0, 20),
       apiSkippedReason: REPORT.taxonomyApiSkippedReason,
       treeCacheHit: REPORT.taxonomyTreeCacheHit,
       treeCacheSource: REPORT.taxonomyTreeCacheSource,
+      suggestionCacheHits: taxonomyClient.getStats().suggestionCacheHits,
+      suggestionApiCalls: taxonomyClient.getStats().suggestionApiCalls,
+      aiCacheHits: aiCategoryClassifier.getStats().cacheHits,
+      aiApiCalls: aiCategoryClassifier.getStats().apiCalls,
+      aiTokensUsed: aiCategoryClassifier.getStats().tokensUsed,
+      dailyTaxonomyUsage: taxonomyClient.getStats().dailyUsage,
+      dailyTaxonomyQuota: taxonomyClient.getStats().dailyQuota,
     },
     openai: {
       defaultModel: CONFIG.openai.model,

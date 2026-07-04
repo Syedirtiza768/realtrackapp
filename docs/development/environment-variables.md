@@ -143,8 +143,25 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `PIPELINE_AI_CONCURRENCY` | `3` (t3.medium) | Max parallel OpenRouter enrichment batches |
 | `PIPELINE_AI_BATCH_SIZE` | `6` (t3.medium) | Parts per AI batch (structured JSON) |
 | `PIPELINE_LOCALIZATION_CONCURRENCY` | `3` (t3.medium) | Parallel AU/DE localization batches |
+| `PIPELINE_LOCALIZATION_MODE` | `copy` | `copy` = AI title + description; `titles_only` = AI titles only; `ai` = all fields + description; `rule` = rule-based only |
+| `PIPELINE_LOCALIZATION_MODEL` | `openai/gpt-4o-mini` | OpenRouter model for AU/DE localization (faster than enrichment model) |
+| `PIPELINE_LOCALIZATION_BATCH_SIZE` | `8` | Parts per localization AI batch (smaller when descriptions included) |
+| `PIPELINE_FAST_MODE` | `0` | `1` = rule localization + skip image validation + skip marketplace backfill |
+| `PIPELINE_SKIP_IMAGE_VALIDATION` | `true` | Skip slow HTTP validation of image URLs after fetch |
+| `PIPELINE_SKIP_IMAGE_FETCH` | `0` | Use source/upload images only — no image API |
+| `PIPELINE_MIRROR_IMAGES` | `true` | Mirror listing images to S3 after pipeline (backend) |
+| `MAX_CONCURRENT_PIPELINE_JOBS` | `2` | Max jobs **actively processing** (not queued `pending`); upload returns 503 when full |
+| `PIPELINE_JOB_STALE_MINUTES` | `360` | Auto-fail stuck processing jobs with no DB progress (frees upload slots) |
 | `PIPELINE_IMAGE_CONCURRENCY` | `3` (t3.medium) | Parallel image-enrichment API batches |
-| `PIPELINE_CATEGORY_CONCURRENCY` | `2` (t3.medium) | Parallel eBay taxonomy lookups |
+| `PIPELINE_CATEGORY_CONCURRENCY` | `2` (t3.medium) | Parallel eBay taxonomy lookups (capped at 2; rate limiter is primary throttle) |
+| `PIPELINE_CATEGORY_MODE` | `auto` | `auto` = eBay cache/API → AI → keyword; `ebay`, `ai`, or `keyword` |
+| `PIPELINE_CATEGORY_AI_MODEL` | `openai/gpt-4o-mini` | OpenRouter model for AI category tier (see `docs/model-comparison/category-benchmark/REPORT.md`) |
+| `PIPELINE_CATEGORY_AI_BATCH_SIZE` | `12` | Parts per AI category batch |
+| `PIPELINE_CATEGORY_AI_MIN_CONFIDENCE` | `0.55` | Min AI confidence before keyword fallback |
+| `PIPELINE_TAXONOMY_RPS` | `2` | Max eBay Taxonomy API requests per second |
+| `PIPELINE_TAXONOMY_DAILY_QUOTA` | `4800` | Daily Taxonomy API budget (eBay Tier-1 limit is 5,000/day) |
+| `EBAY_TAXONOMY_RPS` | `2` | Backend Taxonomy API rate limit (requests/second) |
+| `EBAY_TAXONOMY_CACHE_PATH` | `config/.ebay-taxonomy-suggestions-cache.json` | Shared persistent category suggestion cache |
 | `PIPELINE_VIN_BATCH_CONCURRENCY` | `3` (t3.medium) | Parallel NHTSA VIN decode batches |
 | `PIPELINE_IMAGE_SKU_CONCURRENCY` | `2` (t3.medium) | Parallel S3 image mirror per SKU |
 | `CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY` | `2` (t3.medium) | eBay browse calls during CSV import |
