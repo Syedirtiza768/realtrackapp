@@ -95,7 +95,9 @@ src/components/
 ├── ingestion/          # Ingestion
 │   └── IngestionManager.tsx
 ├── pipeline/           # Pipeline
-│   └── PipelineWizard.tsx
+│   ├── PipelinePage.tsx      # Bulk upload + team assignment + queue table
+│   ├── PipelineQueue.tsx     # Upload history table (status filter, pagination)
+│   └── PipelineWizard.tsx    # Job detail / processing step
 ├── motors/             # Motors intelligence
 │   ├── MotorsDashboard.tsx
 │   ├── MotorsProductDetail.tsx
