@@ -27,7 +27,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | `/listings/new` | `SingleListingPipeline` | `listings.create` | **Add Part** — GridConnect-style intake: part type (OEM/Aftermarket/Salvage), condition (New/Used), brand, part #, price, qty → draft inventory (photos optional; add on Inventory) |
 | `/listings/:id/edit` | `ListingEditor` | `listings.update` | Edit listing |
 | `/listings/:id/history` | `RevisionHistory` | `listings.view` | View revisions |
-| `/catalog` | `CatalogManager` | `catalog.view` | Catalog browser |
+| `/catalog` | `CatalogManager` | `catalog.view` | Table-first catalog ops: quick filters, team badges, workflow status, bulk publish/policies |
 | `/catalog/import` | `CatalogImportDashboard` | `catalog.import` | CSV import |
 | `/catalog/motors-filters` | `CatalogMotorsFiltersPage` | `catalog.view` | Motors filters |
 | `/catalog/products/:productId/publish/ebay` | `EbayPublishWizardPage` | `ebay.publish` | Publish to eBay |

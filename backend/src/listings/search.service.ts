@@ -73,11 +73,19 @@ export interface SearchItem {
   pUpc: string | null;
   marketplace: string | null;
   pipelineJobId: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  teamColor: string | null;
+  /** Workflow status for catalog table: published | ready_to_publish | need_images */
+  catalogStatus: CatalogListingStatus;
+  shippingProfileName: string | null;
   /** FTS relevance score (0-1+), null if no search query */
   relevanceScore: number | null;
   /** Headline with <mark> tags around matched terms */
   titleHighlight: string | null;
 }
+
+export type CatalogListingStatus = 'published' | 'ready_to_publish' | 'need_images';
 
 export interface SuggestionResult {
   suggestions: Suggestion[];
@@ -107,10 +115,16 @@ export interface DynamicFacets {
   models: FacetBucket[];
   pipelineJobs: FacetBucket[];
   marketplaces: FacetBucket[];
-  teams: FacetBucket[];
+  teams: TeamFacetBucket[];
+  shippingProfiles: FacetBucket[];
   priceRange: { min: number | null; max: number | null };
   totalFiltered: number;
   queryTimeMs: number;
+}
+
+export interface TeamFacetBucket extends FacetBucket {
+  label: string;
+  color?: string;
 }
 
 export interface FacetBucket {
@@ -134,6 +148,40 @@ const SAFE_PRICE = `NULLIF(REPLACE(r."startPrice", ',', '.'), '')::numeric`;
 /** Escape `%`, `_`, and `\` for use in `ILIKE ... ESCAPE '\\'` */
 function escapeForLike(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+const PUBLISHED_SQL = `(
+  r.status = 'published'
+  OR r."publishedAt" IS NOT NULL
+  OR (r."ebayListingId" IS NOT NULL AND r."ebayListingId" != '')
+)`;
+
+const HAS_IMAGE_SQL = `(r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != '')`;
+
+const SAFE_QTY = `COALESCE(
+  r."quantityNum",
+  NULLIF(REPLACE(r.quantity, ',', '.'), '')::numeric,
+  0
+)`;
+
+function deriveCatalogStatus(row: {
+  status?: string | null;
+  publishedAt?: Date | string | null;
+  ebayListingId?: string | null;
+  itemPhotoUrl?: string | null;
+}): CatalogListingStatus {
+  const isPublished =
+    row.status === 'published' ||
+    row.publishedAt != null ||
+    (row.ebayListingId != null && String(row.ebayListingId).trim() !== '');
+
+  if (isPublished) return 'published';
+
+  const hasImage =
+    row.itemPhotoUrl != null && String(row.itemPhotoUrl).trim() !== '';
+  if (!hasImage) return 'need_images';
+
+  return 'ready_to_publish';
 }
 
 /* ────────────────────────────────────────────────────────────── */
@@ -165,6 +213,7 @@ export class SearchService {
     const hasQuery = q.length > 0;
 
     const qb = this.repo.createQueryBuilder('r');
+    qb.leftJoin('teams', 'tm', 'tm.id = r.team_id');
 
     /* -- Select columns ---------------------------------------- */
     qb.select([
@@ -191,7 +240,14 @@ export class SearchService {
       'r.pUpc',
       'r.marketplace',
       'r.pipelineJobId',
+      'r.teamId',
+      'r.status',
+      'r.publishedAt',
+      'r.ebayListingId',
+      'r.shippingProfileName',
     ]);
+    qb.addSelect('tm.name', 'teamName');
+    qb.addSelect('tm.color', 'teamColor');
 
     /* -- Full-text search scoring ------------------------------ */
     if (hasQuery) {
@@ -268,6 +324,7 @@ export class SearchService {
 
     /* -- Multi-select filters ---------------------------------- */
     this.applyMultiFilters(qb, dto);
+    this.applyExtendedFilters(qb, dto);
 
     /* -- Range filters ----------------------------------------- */
     if (dto.minPrice != null) {
@@ -376,6 +433,16 @@ export class SearchService {
       pUpc: row.r_pUpc ?? null,
       marketplace: row.r_marketplace ?? null,
       pipelineJobId: row.r_pipelineJobId ?? row.r_pipeline_job_id ?? null,
+      teamId: row.r_teamId ?? row.r_team_id ?? null,
+      teamName: row.teamName ?? null,
+      teamColor: row.teamColor ?? null,
+      shippingProfileName: row.r_shippingProfileName ?? null,
+      catalogStatus: deriveCatalogStatus({
+        status: row.r_status,
+        publishedAt: row.r_publishedAt,
+        ebayListingId: row.r_ebayListingId,
+        itemPhotoUrl: row.r_itemPhotoUrl,
+      }),
       relevanceScore: hasQuery
         ? parseFloat(row.relevanceScore ?? '0')
         : null,
@@ -688,6 +755,44 @@ export class SearchService {
       if (excludeDimension !== 'team' && teamArr.length) {
         fb.andWhere(`r.team_id IN (:...facetTeamIds)`, { facetTeamIds: teamArr });
       }
+      const shipArr = splitFilter(dto.shippingProfiles);
+      if (excludeDimension !== 'shippingProfile' && shipArr.length) {
+        fb.andWhere(`r."shippingProfileName" IN (:...facetShip)`, { facetShip: shipArr });
+      }
+      if (excludeDimension !== 'dateAdded') {
+        if (dto.importedFrom?.trim()) {
+          fb.andWhere(`r."importedAt" >= :facetImportedFrom`, {
+            facetImportedFrom: dto.importedFrom.trim(),
+          });
+        }
+        if (dto.importedTo?.trim()) {
+          fb.andWhere(`r."importedAt" < (:facetImportedTo::date + interval '1 day')`, {
+            facetImportedTo: dto.importedTo.trim(),
+          });
+        }
+      }
+      const stockArr = splitFilter(dto.stockLevel);
+      if (excludeDimension !== 'stockLevel' && stockArr.length) {
+        const clauses: string[] = [];
+        if (stockArr.includes('in_stock')) clauses.push(`${SAFE_QTY} > 0`);
+        if (stockArr.includes('out_of_stock')) clauses.push(`${SAFE_QTY} <= 0`);
+        if (stockArr.includes('low_stock')) {
+          clauses.push(`(${SAFE_QTY} > 0 AND ${SAFE_QTY} <= 2)`);
+        }
+        if (clauses.length) fb.andWhere(`(${clauses.join(' OR ')})`);
+      }
+      const statusArr = splitFilter(dto.catalogStatus);
+      if (excludeDimension !== 'catalogStatus' && statusArr.length) {
+        const clauses: string[] = [];
+        if (statusArr.includes('published')) clauses.push(PUBLISHED_SQL);
+        if (statusArr.includes('need_images')) {
+          clauses.push(`(NOT ${PUBLISHED_SQL} AND NOT ${HAS_IMAGE_SQL})`);
+        }
+        if (statusArr.includes('ready_to_publish')) {
+          clauses.push(`(NOT ${PUBLISHED_SQL} AND ${HAS_IMAGE_SQL})`);
+        }
+        if (clauses.length) fb.andWhere(`(${clauses.join(' OR ')})`);
+      }
       return fb;
     };
 
@@ -696,7 +801,7 @@ export class SearchService {
       brandsRaw, catsRaw, condsRaw, typesRaw, srcRaw,
       formatsRaw, locationsRaw, mpnsRaw,
       makesRaw, modelsRaw,
-      pipelineJobsRaw, marketplacesRaw, teamsRaw,
+      pipelineJobsRaw, marketplacesRaw, teamsRaw, shippingProfilesRaw,
       priceRaw, totalFiltered,
     ] = await Promise.all([
         // Brands facet
@@ -821,18 +926,31 @@ export class SearchService {
           .innerJoin('teams', 'tm', 'tm.id = r.team_id')
           .select('r.team_id', 'value')
           .addSelect('tm.name', 'label')
+          .addSelect('tm.color', 'color')
           .addSelect('COUNT(*)', 'count')
           .andWhere(`r.team_id IS NOT NULL`)
           .groupBy('r.team_id')
           .addGroupBy('tm.name')
+          .addGroupBy('tm.color')
           .orderBy('count', 'DESC')
           .limit(50)
-          .getRawMany<{ value: string; label: string; count: string }>(),
+          .getRawMany<{ value: string; label: string; color: string; count: string }>(),
+
+        // Shipping profiles facet
+        buildFacetQb('shippingProfile')
+          .select('r."shippingProfileName"', 'value')
+          .addSelect('COUNT(*)', 'count')
+          .andWhere(`r."shippingProfileName" IS NOT NULL AND r."shippingProfileName" != ''`)
+          .groupBy('r."shippingProfileName"')
+          .orderBy('count', 'DESC')
+          .limit(50)
+          .getRawMany<{ value: string; count: string }>(),
 
         // Price range (within filtered set)
         (() => {
           const pqb = buildBaseQb();
           this.applyMultiFilters(pqb, dto);
+          this.applyExtendedFilters(pqb, dto);
           return pqb
             .select(`MIN(${SAFE_PRICE})`, 'min')
             .addSelect(`MAX(${SAFE_PRICE})`, 'max')
@@ -843,6 +961,7 @@ export class SearchService {
         (() => {
           const cqb = buildBaseQb();
           this.applyMultiFilters(cqb, dto);
+          this.applyExtendedFilters(cqb, dto);
           return cqb.getCount();
         })(),
       ]);
@@ -863,6 +982,11 @@ export class SearchService {
       teams: teamsRaw.map((r) => ({
         value: r.value,
         label: r.label,
+        color: r.color,
+        count: Number(r.count),
+      })),
+      shippingProfiles: shippingProfilesRaw.map((r) => ({
+        value: r.value,
         count: Number(r.count),
       })),
       priceRange: {
@@ -953,6 +1077,63 @@ export class SearchService {
     }
     if (modelArr.length) {
       qb.andWhere(`r."extractedModel" IN (:...models)`, { models: modelArr });
+    }
+  }
+
+  private applyExtendedFilters(
+    qb: SelectQueryBuilder<ListingRecord>,
+    dto: SearchQueryDto,
+  ) {
+    const shipArr = splitFilter(dto.shippingProfiles);
+    if (shipArr.length) {
+      qb.andWhere(`r."shippingProfileName" IN (:...shippingProfiles)`, {
+        shippingProfiles: shipArr,
+      });
+    }
+
+    if (dto.importedFrom?.trim()) {
+      qb.andWhere(`r."importedAt" >= :importedFrom`, {
+        importedFrom: dto.importedFrom.trim(),
+      });
+    }
+    if (dto.importedTo?.trim()) {
+      qb.andWhere(`r."importedAt" < (:importedTo::date + interval '1 day')`, {
+        importedTo: dto.importedTo.trim(),
+      });
+    }
+
+    const stockArr = splitFilter(dto.stockLevel);
+    if (stockArr.length) {
+      const clauses: string[] = [];
+      if (stockArr.includes('in_stock')) {
+        clauses.push(`${SAFE_QTY} > 0`);
+      }
+      if (stockArr.includes('out_of_stock')) {
+        clauses.push(`${SAFE_QTY} <= 0`);
+      }
+      if (stockArr.includes('low_stock')) {
+        clauses.push(`(${SAFE_QTY} > 0 AND ${SAFE_QTY} <= 2)`);
+      }
+      if (clauses.length) {
+        qb.andWhere(`(${clauses.join(' OR ')})`);
+      }
+    }
+
+    const statusArr = splitFilter(dto.catalogStatus);
+    if (statusArr.length) {
+      const clauses: string[] = [];
+      if (statusArr.includes('published')) {
+        clauses.push(PUBLISHED_SQL);
+      }
+      if (statusArr.includes('need_images')) {
+        clauses.push(`(NOT ${PUBLISHED_SQL} AND NOT ${HAS_IMAGE_SQL})`);
+      }
+      if (statusArr.includes('ready_to_publish')) {
+        clauses.push(`(NOT ${PUBLISHED_SQL} AND ${HAS_IMAGE_SQL})`);
+      }
+      if (clauses.length) {
+        qb.andWhere(`(${clauses.join(' OR ')})`);
+      }
     }
   }
 

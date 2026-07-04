@@ -11,6 +11,7 @@ interface Props {
   searchQuery: string;
   onChange: (filters: ActiveFilters) => void;
   onClearSearch: () => void;
+  teamLabels?: Map<string, string>;
 }
 
 interface Tag {
@@ -19,7 +20,7 @@ interface Tag {
   onRemove: () => void;
 }
 
-export default function ActiveFilterTags({ filters, searchQuery, onChange, onClearSearch }: Props) {
+export default function ActiveFilterTags({ filters, searchQuery, onChange, onClearSearch, teamLabels }: Props) {
   const tags: Tag[] = [];
 
   // Search query tag
@@ -163,8 +164,45 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
   for (const teamId of filters.teamIds) {
     tags.push({
       key: 'team:' + teamId,
-      label: 'Team: ' + teamId.slice(0, 8),
+      label: 'Team: ' + (teamLabels?.get(teamId) ?? teamId.slice(0, 8)),
       onRemove: () => onChange({ ...filters, teamIds: filters.teamIds.filter((t) => t !== teamId) }),
+    });
+  }
+
+  for (const level of filters.stockLevels) {
+    const label =
+      level === 'in_stock' ? 'In stock' : level === 'low_stock' ? 'Low stock' : 'Out of stock';
+    tags.push({
+      key: 'stock:' + level,
+      label: 'Stock: ' + label,
+      onRemove: () =>
+        onChange({ ...filters, stockLevels: filters.stockLevels.filter((s) => s !== level) }),
+    });
+  }
+
+  for (const ship of filters.shippingProfiles) {
+    tags.push({
+      key: 'ship:' + ship,
+      label: 'Shipping: ' + ship,
+      onRemove: () =>
+        onChange({
+          ...filters,
+          shippingProfiles: filters.shippingProfiles.filter((s) => s !== ship),
+        }),
+    });
+  }
+
+  if (filters.dateAddedPreset !== 'all') {
+    const presetLabel =
+      filters.dateAddedPreset === 'last_7'
+        ? 'Last 7 days'
+        : filters.dateAddedPreset === 'last_30'
+          ? 'Last 30 days'
+          : 'Last 90 days';
+    tags.push({
+      key: 'dateAdded',
+      label: 'Date: ' + presetLabel,
+      onRemove: () => onChange({ ...filters, dateAddedPreset: 'all' }),
     });
   }
 

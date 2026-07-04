@@ -83,6 +83,25 @@ export class SearchQueryDto {
   @IsOptional() @IsString()
   hasPrice?: string;       // '1' = only with price
 
+  /** Comma-separated catalog workflow statuses: published, ready_to_publish, need_images */
+  @IsOptional() @IsString()
+  catalogStatus?: string;
+
+  /** Stock tier: in_stock | out_of_stock | low_stock (comma-separated) */
+  @IsOptional() @IsString()
+  stockLevel?: string;
+
+  /** Comma-separated shipping profile names */
+  @IsOptional() @IsString()
+  shippingProfiles?: string;
+
+  /** Imported-at range (ISO date YYYY-MM-DD) */
+  @IsOptional() @IsString()
+  importedFrom?: string;
+
+  @IsOptional() @IsString()
+  importedTo?: string;
+
   /* -- Filter logic --------------------------------------- */
   @IsOptional() @IsIn(['and', 'or'])
   filterMode?: 'and' | 'or'; // default 'and'

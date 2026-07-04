@@ -81,7 +81,12 @@ src/components/
 │   ├── ListingEditor.tsx
 │   └── RevisionHistory.tsx
 ├── catalog/            # Catalog
-│   ├── CatalogManager.tsx
+│   ├── CatalogManager.tsx      # Table-first search + bulk ops
+│   ├── CatalogTable.tsx
+│   ├── CatalogFilterBar.tsx
+│   ├── CatalogBulkBar.tsx
+│   ├── TeamBadge.tsx
+│   ├── ListingStatusCell.tsx
 │   ├── BulkActionsPage.tsx
 │   └── EbayPublishWizardPage.tsx
 ├── catalog-import/     # Catalog import

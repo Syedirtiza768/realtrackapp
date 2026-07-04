@@ -25,6 +25,7 @@ interface Props {
   onSearch: (value: string) => void;
   recentSearches?: string[];
   onClearRecent?: () => void;
+  placeholder?: string;
 }
 
 const TYPE_ICONS: Record<string, typeof Tag> = {
@@ -49,6 +50,7 @@ export default function SearchBar({
   onSearch,
   recentSearches = [],
   onClearRecent,
+  placeholder = 'Search SKU, title, brand, part number, category…',
 }: Props) {
   const [focused, setFocused] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -154,7 +156,7 @@ export default function SearchBar({
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Search SKU, title, brand, part number, category…"
+          placeholder={placeholder}
           className="bg-transparent border-none focus:outline-none text-sm w-full text-slate-600 dark:text-slate-200 placeholder:text-slate-500 dark:text-slate-600"
           autoComplete="off"
           spellCheck={false}

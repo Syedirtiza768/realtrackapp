@@ -16,6 +16,8 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Catalog bulk policy edit:** "Edit Policies" action on selected listings respects the active team filter; server validates team scope via `POST /api/listings/bulk-profiles`.
 
 ### Changed
+- **Catalog operations redesign:** `/catalog` now uses a table-first layout matching the operations mock — horizontal quick filters (stock, brand, condition, team, shipping, date added), inline bulk action bar, header actions (Refresh, Export, Edit Policies, Add Part), and paginated dense table with Team badges and workflow Status column (Publish / Published / Need Images). Advanced facets moved to a slide-over panel.
+- **Catalog search API enrichment:** `GET /api/listings/search` and facets now return `teamId`, `teamName`, `teamColor`, `catalogStatus`, and `shippingProfileName` per row. New query filters: `stockLevel`, `shippingProfiles`, `catalogStatus`, `importedFrom`, `importedTo`. Team facet includes `color`.
 - **AI category classifier default:** `PIPELINE_CATEGORY_AI_MODEL` defaults to `google/gemini-2.5-flash` (90% benchmark accuracy on Motors leaf categories). Marketplace-aware prompts and per-tree Taxonomy resolution for AU/DE.
 
 ### Added

@@ -57,16 +57,22 @@ export function MobileFilterDrawer({
   onClose,
   children,
   filterCount,
+  variant = 'mobile',
 }: {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
   filterCount: number;
+  /** mobile: hidden on lg+; all: visible at every breakpoint */
+  variant?: 'mobile' | 'all';
 }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 lg:hidden" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-50 ${variant === 'mobile' ? 'lg:hidden' : ''}`}
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/60 animate-fade-in" />
       <div
         className="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col animate-slide-in-left"

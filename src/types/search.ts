@@ -29,9 +29,20 @@ export interface SearchQuery {
   maxPrice?: number;
   hasImage?: string;
   hasPrice?: string;
+  catalogStatus?: string;
+  stockLevel?: string;
+  shippingProfiles?: string;
+  importedFrom?: string;
+  importedTo?: string;
   filterMode?: 'and' | 'or';
   sort?: SortMode;
 }
+
+export type CatalogListingStatus = 'published' | 'ready_to_publish' | 'need_images';
+
+export type StockLevelFilter = 'in_stock' | 'out_of_stock' | 'low_stock';
+
+export type DateAddedPreset = 'all' | 'last_7' | 'last_30' | 'last_90';
 
 export type SortMode =
   | 'relevance'
@@ -83,6 +94,11 @@ export interface SearchItem {
   pipelineJobId?: string | null;
   /** Aggregated marketplaces across all SKU siblings (populated by catalog dedup) */
   marketplaces?: string[];
+  teamId?: string | null;
+  teamName?: string | null;
+  teamColor?: string | null;
+  catalogStatus?: CatalogListingStatus;
+  shippingProfileName?: string | null;
 }
 
 /* -- Suggestions ----------------------------------------------------- */
@@ -115,10 +131,16 @@ export interface DynamicFacets {
   models: FacetBucket[];
   pipelineJobs: FacetBucket[];
   marketplaces: FacetBucket[];
-  teams: FacetBucket[];
+  teams: TeamFacetBucket[];
+  shippingProfiles: FacetBucket[];
   priceRange: { min: number | null; max: number | null };
   totalFiltered: number;
   queryTimeMs: number;
+}
+
+export interface TeamFacetBucket extends FacetBucket {
+  label: string;
+  color?: string;
 }
 
 export interface FacetBucket {
@@ -213,6 +235,10 @@ export interface ActiveFilters {
   maxPrice: number | null;
   hasImage: boolean;
   hasPrice: boolean;
+  stockLevels: StockLevelFilter[];
+  shippingProfiles: string[];
+  dateAddedPreset: DateAddedPreset;
+  catalogStatuses: CatalogListingStatus[];
 }
 
 export const EMPTY_FILTERS: ActiveFilters = {
@@ -236,7 +262,30 @@ export const EMPTY_FILTERS: ActiveFilters = {
   maxPrice: null,
   hasImage: false,
   hasPrice: false,
+  stockLevels: [],
+  shippingProfiles: [],
+  dateAddedPreset: 'all',
+  catalogStatuses: [],
 };
+
+function datePresetToRange(preset: DateAddedPreset): { from?: string; to?: string } {
+  if (preset === 'all') return {};
+  const now = new Date();
+  const to = now.toISOString().slice(0, 10);
+  const fromDate = new Date(now);
+  if (preset === 'last_7') fromDate.setDate(fromDate.getDate() - 7);
+  else if (preset === 'last_30') fromDate.setDate(fromDate.getDate() - 30);
+  else if (preset === 'last_90') fromDate.setDate(fromDate.getDate() - 90);
+  return { from: fromDate.toISOString().slice(0, 10), to };
+}
+
+export function datePresetToQuery(preset: DateAddedPreset): { importedFrom?: string; importedTo?: string } {
+  const { from, to } = datePresetToRange(preset);
+  return {
+    importedFrom: from,
+    importedTo: to,
+  };
+}
 
 export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
   return {
@@ -257,6 +306,10 @@ export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
     maxPrice: f.maxPrice ?? undefined,
     hasImage: f.hasImage ? '1' : undefined,
     hasPrice: f.hasPrice ? '1' : undefined,
+    stockLevel: f.stockLevels.length ? f.stockLevels.join(',') : undefined,
+    shippingProfiles: f.shippingProfiles.length ? f.shippingProfiles.join(',') : undefined,
+    catalogStatus: f.catalogStatuses.length ? f.catalogStatuses.join(',') : undefined,
+    ...datePresetToQuery(f.dateAddedPreset),
   };
 }
 
@@ -279,6 +332,10 @@ export function countActiveFilters(f: ActiveFilters): number {
   if (f.maxPrice != null) count++;
   if (f.hasImage) count++;
   if (f.hasPrice) count++;
+  count += f.stockLevels.length;
+  count += f.shippingProfiles.length;
+  if (f.dateAddedPreset !== 'all') count++;
+  count += f.catalogStatuses.length;
   return count;
 }
 

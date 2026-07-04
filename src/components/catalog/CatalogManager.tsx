@@ -4,28 +4,26 @@
  *  DetailModal, ActiveFilterTags, breadcrumbs, sorting.
  * ────────────────────────────────────────────────────────── */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Download,
-  SlidersHorizontal,
-  Zap,
-  ChevronRight,
-  Home,
   PlusCircle,
-  Send,
-  Trash2,
   Shield,
+  RefreshCw,
+  ChevronDown,
+  Trash2,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, CardContent, CardHeader } from '../ui/card';
 import SearchBar from './SearchBar';
 import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
 import ActiveFilterTags from './ActiveFilterTags';
-import ResultsGrid from './ResultsGrid';
 import CatalogPreviewModal from './CatalogPreviewModal';
 import PublishModal from '../channels/PublishModal';
 import ExportTemplatesModal from './ExportTemplatesModal';
 import BulkPolicyEditModal from './BulkPolicyEditModal';
+import CatalogFilterBar from './CatalogFilterBar';
+import CatalogBulkBar from './CatalogBulkBar';
+import CatalogTable from './CatalogTable';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
 import { deleteListing } from '../../lib/listingsApi';
 import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
@@ -33,10 +31,30 @@ import type { SearchItem } from '../../types/search';
 import { authHeaders } from '../../lib/authApi';
 import { showCatalogDestructiveUi } from '../../lib/catalogDestructiveUi';
 import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
-import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
+import { EMPTY_FILTERS, filtersToQuery } from '../../types/search';
 
-const PAGE_SIZE = 60;
+const DEFAULT_PAGE_SIZE = 25;
 const RECENT_KEY = 'lp_recent_searches';
+
+function countAdvancedFilters(f: ActiveFilters): number {
+  let count = 0;
+  count += f.categories.length;
+  count += f.makes.length;
+  count += f.models.length;
+  count += f.types.length;
+  count += f.sourceFiles.length;
+  count += f.formats.length;
+  count += f.locations.length;
+  count += f.mpns.length;
+  count += f.pipelineJobIds.length;
+  count += f.marketplaces.length;
+  count += f.catalogStatuses.length;
+  if (f.minPrice != null) count++;
+  if (f.maxPrice != null) count++;
+  if (f.hasImage) count++;
+  if (f.hasPrice) count++;
+  return count;
+}
 
 /* ── Recent searches persistence ──────────────────────────── */
 function loadRecent(): string[] {
@@ -56,11 +74,14 @@ export default function CatalogManager() {
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [sortMode, setSortMode] = useState<SortMode>('relevance');
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [filters, setFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -94,55 +115,34 @@ export default function CatalogManager() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
 
-  // For infinite scroll mode
-  const [infiniteScroll, setInfiniteScroll] = useState(false);
-  const [accumulatedItems, setAccumulatedItems] = useState<import('../../types/search').SearchItem[]>([]);
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [exportMenuOpen]);
 
   /* ── Build search query object ──────────────────────────── */
   const apiQuery: SearchQuery = useMemo(
     () => ({
-      limit: PAGE_SIZE,
-      offset: infiniteScroll ? 0 : page * PAGE_SIZE,
+      limit: pageSize,
+      offset: page * pageSize,
       q: searchQuery || undefined,
       sort: sortMode,
       ...filtersToQuery(filters),
     }),
-    [searchQuery, page, sortMode, filters, infiniteScroll],
+    [searchQuery, page, pageSize, sortMode, filters],
   );
 
-  // For infinite scroll, use cursor-based loading
-  const infiniteQuery: SearchQuery = useMemo(
-    () => ({
-      limit: PAGE_SIZE,
-      offset: accumulatedItems.length,
-      q: searchQuery || undefined,
-      sort: sortMode,
-      ...filtersToQuery(filters),
-    }),
-    [searchQuery, sortMode, filters, accumulatedItems.length],
-  );
-
-  const { data, loading, error, refetch } = useSearch(infiniteScroll ? infiniteQuery : apiQuery);
+  const { data, loading, error, refetch } = useSearch(apiQuery);
   const { data: facets, loading: facetsLoading } = useDynamicFacets(apiQuery);
   const summary = useSummary();
 
-  /* ── Infinite scroll accumulation ──────────────────────── */
-  useEffect(() => {
-    if (infiniteScroll && data?.items) {
-      if (data.offset === 0) {
-        setAccumulatedItems(data.items);
-      } else {
-        setAccumulatedItems((prev) => [...prev, ...data.items]);
-      }
-    }
-  }, [data, infiniteScroll]);
-
-  // Reset accumulated items when query changes fundamentally
-  useEffect(() => {
-    setAccumulatedItems([]);
-  }, [searchQuery, sortMode, filters]);
-
-  const displayItems = infiniteScroll ? accumulatedItems : (data?.items ?? []);
+  const displayItems = data?.items ?? [];
 
   // Deduplicate by SKU: group items with the same SKU, show one card per SKU
   // with aggregated marketplace badges.
@@ -169,7 +169,8 @@ export default function CatalogManager() {
       const preferNew =
         (item.title && !existing.title) ||
         (item.itemPhotoUrl && !existing.itemPhotoUrl) ||
-        (item.marketplace && !existing.marketplace);
+        (item.marketplace && !existing.marketplace) ||
+        (item.teamName && !existing.teamName);
       if (preferNew) {
         group.item = item;
       }
@@ -199,12 +200,10 @@ export default function CatalogManager() {
   }, [publishTargetId, displayItems, publishListingDetail]);
 
   const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const hasMore = infiniteScroll && data?.nextCursor !== null;
-  const queryTimeMs = data?.queryTimeMs ?? 0;
+  const advancedFilterCount = countAdvancedFilters(filters);
 
   /* ── Reset page on filter/search change ─────────────────── */
-  useEffect(() => { setPage(0); }, [searchQuery, filters, sortMode]);
+  useEffect(() => { setPage(0); }, [searchQuery, filters, sortMode, pageSize]);
 
   /* ── Handlers ───────────────────────────────────────────── */
   const handleSearch = useCallback((val: string) => {
@@ -241,9 +240,9 @@ export default function CatalogManager() {
     setFilters(f);
   }, []);
 
-  const loadMore = useCallback(() => {
-    // Trigger re-fetch with new offset
-    setAccumulatedItems((prev) => prev); // force update
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setPage(0);
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
@@ -270,6 +269,11 @@ export default function CatalogManager() {
   }, [selectedIds]);
 
   const handleBulkPolicyEdit = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setPolicyModalOpen(true);
+  }, [selectedIds]);
+
+  const handleHeaderPolicyEdit = useCallback(() => {
     if (selectedIds.size === 0) return;
     setPolicyModalOpen(true);
   }, [selectedIds]);
@@ -352,219 +356,184 @@ export default function CatalogManager() {
     }
   }, [deleteConfirmId, refetch]);
 
-  const activeFilterCount = countActiveFilters(filters);
-
-  /* ── Breadcrumbs ────────────────────────────────────────── */
-  const breadcrumbs = useMemo(() => {
-    const crumbs: { label: string; onClick?: () => void }[] = [
-      { label: 'Home', onClick: () => { /* navigate to / */ } },
-      { label: 'Catalog' },
-    ];
-    if (searchQuery.trim()) {
-      crumbs.push({ label: `"${searchQuery}"` });
+  const teamLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of facets?.teams ?? []) {
+      if (t.label) map.set(t.value, t.label);
     }
-    if (filters.categoryNames.length === 1) {
-      const parts = filters.categoryNames[0].split('/').filter(Boolean);
-      crumbs.push({ label: parts[parts.length - 1] });
-    }
-    return crumbs;
-  }, [searchQuery, filters]);
+    return map;
+  }, [facets?.teams]);
 
   /* ── Render ────────────────────────────────────────────── */
   return (
-    <div className="max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6 space-y-3 sm:space-y-4 pb-24">
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 overflow-x-auto scrollbar-none">
-        {breadcrumbs.map((crumb, i) => (
-          <span key={i} className="flex items-center gap-1 whitespace-nowrap">
-            {i > 0 && <ChevronRight size={11} className="text-slate-600 dark:text-slate-700 shrink-0" />}
-            {i === 0 && <Home size={11} className="shrink-0" />}
-            {crumb.onClick ? (
-              <button onClick={crumb.onClick} className="hover:text-slate-500 dark:text-slate-300 transition-colors">
-                {crumb.label}
-              </button>
-            ) : (
-              <span className={i === breadcrumbs.length - 1 ? 'text-slate-500 dark:text-slate-300' : ''}>
-                {crumb.label}
-              </span>
-            )}
-          </span>
-        ))}
-      </nav>
-
-      {/* Header — stacks on mobile, side-by-side on sm+ */}
+    <div className="mx-auto max-w-[1920px] space-y-4 px-2 pb-12 sm:px-4 lg:px-6">
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Catalog</h2>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 truncate">
-            {summary
-              ? `${summary.totalRecords.toLocaleString()} listings · ${summary.uniqueSkus.toLocaleString()} unique SKUs · ${summary.files} source files`
-              : 'Loading…'}
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+            Catalog
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Search, review, assign teams, and manage parts.
           </p>
+          {summary && (
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              {summary.totalRecords.toLocaleString()} listings ·{' '}
+              {summary.uniqueSkus.toLocaleString()} SKUs
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          {/* New Listing */}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            title="Refresh"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <Download size={14} /> Export
+              <ChevronDown size={12} />
+            </button>
+            {exportMenuOpen && (
+              <div className="absolute right-0 top-full z-30 mt-1 min-w-[10rem] rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    void handleExportCsv();
+                  }}
+                  disabled={exporting}
+                  className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  {exporting ? 'Exporting…' : 'Export CSV'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    if (selectedIds.size > 0) setExportModalOpen(true);
+                  }}
+                  disabled={selectedIds.size === 0}
+                  className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Export templates…
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleHeaderPolicyEdit}
+            disabled={selectedIds.size === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <Shield size={14} /> Edit Policies
+          </button>
+
+          <button
+            type="button"
             onClick={() => navigate('/listings/new')}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700"
           >
-            <PlusCircle size={14} /> New Listing
-          </button>
-          {/* Toggle infinite scroll */}
-          <button
-            onClick={() => {
-              setInfiniteScroll((v) => !v);
-              setAccumulatedItems([]);
-              setPage(0);
-            }}
-            className={`hidden sm:flex items-center gap-1.5 px-3 py-2 border rounded-lg text-xs transition-colors ${
-              infiniteScroll
-                ? 'border-blue-600 text-blue-400 bg-blue-600/10'
-                : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800'
-            }`}
-          >
-            <Zap size={13} />
-            {infiniteScroll ? 'Infinite Scroll' : 'Pagination'}
-          </button>
-          <button
-            onClick={handleExportCsv}
-            disabled={exporting}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 text-xs transition-colors disabled:opacity-50"
-          >
-            <Download size={14} /> {exporting ? 'Exporting…' : 'Export'}
+            <PlusCircle size={14} /> Add Part
           </button>
         </div>
       </div>
 
-      {/* Search bar */}
       <SearchBar
         value={searchInput}
         onChange={setSearchInput}
         onSearch={handleSearch}
         recentSearches={recentSearches}
-        onClearRecent={() => { setRecentSearches([]); saveRecent([]); }}
+        onClearRecent={() => {
+          setRecentSearches([]);
+          saveRecent([]);
+        }}
+        placeholder="Search by SKU, title, part number, or notes…"
       />
 
-      {/* Active filter tags */}
+      <CatalogFilterBar
+        facets={facets}
+        filters={filters}
+        onChange={handleFilterChange}
+        onAdvancedClick={() => setAdvancedFilterOpen(true)}
+        advancedFilterCount={advancedFilterCount}
+        loading={facetsLoading}
+      />
+
       <ActiveFilterTags
         filters={filters}
         searchQuery={searchQuery}
         onChange={handleFilterChange}
         onClearSearch={handleClearSearch}
+        teamLabels={teamLabelById}
       />
 
-      {/* Main content layout: sidebar + results */}
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-5">
-        {/* Desktop filter sidebar */}
-        <aside className="hidden lg:block w-64 shrink-0">
-          <FilterSidebar
-            facets={facets}
-            filters={filters}
-            onChange={handleFilterChange}
-            loading={facetsLoading}
-          />
-        </aside>
-
-        {/* Results area */}
-        <div className="flex-1 min-w-0">
-          <Card>
-            <CardHeader className="border-b border-slate-200 dark:border-slate-800 py-3 px-3 sm:px-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                {/* Left: result info */}
-                <div className="flex items-center gap-3">
-                  {/* Mobile filter button */}
-                  <button
-                    onClick={() => setMobileFilterOpen(true)}
-                    className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-colors"
-                  >
-                    <SlidersHorizontal size={13} />
-                    Filters
-                    {activeFilterCount > 0 && (
-                      <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5 ml-0.5">
-                        {activeFilterCount}
-                      </span>
-                    )}
-                  </button>
-
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    {loading ? (
-                      'Searching…'
-                    ) : (
-                      <>
-                        <span className="text-slate-500 dark:text-slate-300 font-semibold">{total.toLocaleString()}</span> results
-                        {queryTimeMs > 0 && (
-                          <span className="text-slate-500 dark:text-slate-600"> ({queryTimeMs}ms)</span>
-                        )}
-                        {!infiniteScroll && totalPages > 1 && (
-                          <span className="text-slate-500 dark:text-slate-600">
-                            {' · Page '}
-                            <span className="text-slate-500 dark:text-slate-400">{page + 1}</span>
-                            {' of '}
-                            {totalPages}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </span>
-                </div>
-
-                {/* Right: sort + view */}
-                <div className="flex items-center gap-2">
-                  <select
-                    value={sortMode}
-                    onChange={(e) => setSortMode(e.target.value as SortMode)}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-500 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                  >
-                    <option value="relevance">Relevance</option>
-                    <option value="price_asc">Price: Low → High</option>
-                    <option value="price_desc">Price: High → Low</option>
-                    <option value="newest">Newest First</option>
-                    <option value="title_asc">Title: A → Z</option>
-                    <option value="title_desc">Title: Z → A</option>
-                    <option value="sku_asc">SKU: A → Z</option>
-                  </select>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="pt-5 relative">
-              {/* Error state */}
-              {error && (
-                <div className="rounded-xl border border-red-800 bg-red-950/40 p-5 text-center text-red-400 text-sm mb-4">
-                  <p className="font-medium mb-1">Failed to load results</p>
-                  <p className="text-xs text-red-500">{error}. Make sure the backend is running.</p>
-                </div>
-              )}
-
-              <ResultsGrid
-                items={dedupedItems}
-                total={total}
-                loading={loading}
-                page={page}
-                pageSize={PAGE_SIZE}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                onPageChange={setPage}
-                onQuickView={setDetailId}
-                onDelete={showCatalogDestructiveUi ? handleDelete : undefined}
-                onPublish={handlePublish}
-                infiniteScroll={infiniteScroll}
-                hasMore={hasMore}
-                onLoadMore={loadMore}
-                selectedIds={selectedIds}
-                onToggleSelect={handleToggleSelect}
-                onSelectAll={handleSelectAll}
-              />
-            </CardContent>
-          </Card>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          Failed to load results: {error}
         </div>
+      )}
+
+      <div className="relative">
+        <CatalogBulkBar
+          count={selectedIds.size}
+          onPublish={handleBulkPublish}
+          onEditPolicies={handleBulkPolicyEdit}
+          onExport={handleExportTemplates}
+          onMore={() => setMoreMenuOpen((v) => !v)}
+          onClear={() => setSelectedIds(new Set())}
+        />
+
+        {moreMenuOpen && selectedIds.size > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {showCatalogDestructiveUi && (
+              <button
+                type="button"
+                onClick={() => setBulkDeleteConfirm(true)}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400"
+              >
+                <Trash2 size={12} /> Delete selected
+              </button>
+            )}
+          </div>
+        )}
+
+        <CatalogTable
+          items={dedupedItems}
+          total={total}
+          loading={loading}
+          page={page}
+          pageSize={pageSize}
+          sortMode={sortMode}
+          onSortChange={setSortMode}
+          onPageChange={setPage}
+          onPageSizeChange={handlePageSizeChange}
+          onQuickView={setDetailId}
+          onPublish={handlePublish}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectAll={handleSelectAll}
+        />
       </div>
 
-      {/* Mobile filter drawer */}
+      {/* Advanced filter drawer (all breakpoints) */}
       <MobileFilterDrawer
-        open={mobileFilterOpen}
-        onClose={() => setMobileFilterOpen(false)}
-        filterCount={activeFilterCount}
+        open={advancedFilterOpen}
+        onClose={() => setAdvancedFilterOpen(false)}
+        filterCount={advancedFilterCount}
+        variant="all"
       >
         <FilterSidebar
           facets={facets}
@@ -682,48 +651,6 @@ export default function CatalogManager() {
         onClose={() => setPolicyModalOpen(false)}
         onComplete={handlePublishComplete}
       />
-
-      {/* Bulk action bar (floating) */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-5 py-3 shadow-2xl shadow-black/50 flex flex-wrap items-center justify-center gap-2 sm:gap-4 max-w-[calc(100vw-2rem)] sm:max-w-none">
-          <span className="text-sm text-slate-500 dark:text-slate-300">
-            <span className="font-semibold text-blue-400">{selectedIds.size}</span> selected
-          </span>
-          <button
-            onClick={handleBulkPublish}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
-          >
-            <Send size={12} /> List on Channels
-          </button>
-          <button
-            onClick={handleBulkPolicyEdit}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-medium transition-colors"
-          >
-            <Shield size={12} /> Edit Policies
-          </button>
-          <button
-            onClick={handleExportTemplates}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg text-xs font-medium transition-colors"
-          >
-            <Download size={12} /> Export Templates
-          </button>
-          {showCatalogDestructiveUi && (
-            <button
-              onClick={() => setBulkDeleteConfirm(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
-            >
-              <Trash2 size={12} /> Delete
-            </button>
-          )}
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:text-slate-200 transition-colors"
-          >
-            Clear
-          </button>
-        </div>
-      )}
     </div>
   );
 }
