@@ -7,6 +7,21 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   X,
   Pencil,
   Copy,
@@ -14,7 +29,6 @@ import {
   Tag,
   Layers,
   Globe,
-  Truck,
   Users,
   MapPin,
   CircleDollarSign,
@@ -22,11 +36,11 @@ import {
   Package,
   Calendar,
   Car,
-  Upload,
   Image as ImageIcon,
   Loader2,
   Save,
   Store as StoreIcon,
+  GripVertical,
   type LucideIcon,
 } from 'lucide-react';
 import { fetchWithAuth } from '../../lib/authApi';
@@ -225,6 +239,58 @@ function EditableField({ icon: Icon, label, value, onChange, type = 'text', mono
   );
 }
 
+interface SortableImageProps {
+  id: string;
+  url: string;
+  index: number;
+  canEdit: boolean;
+  onRemove: (index: number) => void;
+}
+
+function SortableImage({ id, url, index, canEdit, onRemove }: SortableImageProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative shrink-0 group">
+      <div className="h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+      </div>
+      {canEdit && (
+        <>
+          <button
+            type="button"
+            className="absolute -top-1 -left-1 cursor-grab rounded bg-slate-700 p-0.5 text-white opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+            aria-label="Drag to reorder"
+          >
+            <GripVertical size={10} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="absolute -top-1 -right-1 rounded-full bg-red-600 p-0.5 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500"
+            aria-label="Remove image"
+          >
+            <X size={10} />
+          </button>
+        </>
+      )}
+      {index === 0 && (
+        <span className="absolute bottom-0 left-0 right-0 rounded-b bg-blue-600 px-0.5 text-center text-[8px] text-white">
+          Primary
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function CatalogInventoryDetailModal({ id, searchItem, onClose }: Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -247,9 +313,14 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [copiedSku, setCopiedSku] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
   const [uploadZoneKey, setUploadZoneKey] = useState(0);
   const [savingImages, setSavingImages] = useState(false);
+  const [localImages, setLocalImages] = useState<string[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
 
   const { data: storeProfiles, isLoading: profilesLoading } = useQuery({
     queryKey: ['store-profiles', selectedStoreId],
@@ -263,11 +334,23 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
     return stores.find((s) => s.id === selectedStoreId) ?? null;
   }, [stores, selectedStoreId]);
 
-  const images = useMemo(() => {
+  const catalogImages = useMemo(() => {
     if (catalogProduct?.imageUrls?.length) return catalogProduct.imageUrls;
     if (listing?.itemPhotoUrl) return getAllImageUrls(listing.itemPhotoUrl);
     return [];
   }, [catalogProduct?.imageUrls, listing?.itemPhotoUrl]);
+
+  useEffect(() => {
+    setLocalImages(catalogImages);
+    setImageError(null);
+  }, [catalogImages]);
+
+  const imagesDirty = useMemo(() => {
+    if (localImages.length !== catalogImages.length) return true;
+    return localImages.some((url, i) => url !== catalogImages[i]);
+  }, [localImages, catalogImages]);
+
+  const canManageImages = canUploadImages && !!(catalogProduct?.id || listing);
 
   const fitmentLabels = useMemo(
     () => dedupeFitments((catalogProduct?.fitmentData ?? []) as Record<string, unknown>[]),
@@ -277,7 +360,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
   const qty = parseQuantity(editMode && draft ? draft.quantity : listing?.quantity);
   const stockStatus = deriveStockStatus(qty);
   const catalogStatus: CatalogListingStatus =
-    searchItem?.catalogStatus ?? (images.length === 0 ? 'need_images' : 'ready_to_publish');
+    searchItem?.catalogStatus ?? (localImages.length === 0 ? 'need_images' : 'ready_to_publish');
   const ebayStatus = EBAY_STATUS[catalogStatus] ?? EBAY_STATUS.ready_to_publish;
 
   const categoryParts = formatCategoryBreadcrumb(
@@ -418,26 +501,80 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
     setTimeout(() => setCopiedSku(false), 1500);
   };
 
-  const handleUploadComplete = useCallback(
-    async (uploaded: UploadedImage[]) => {
-      if (!catalogProduct?.id || uploaded.length === 0) return;
-      const newUrls = uploaded.map((img) => img.cdnUrl).filter(Boolean);
-      const merged = [...images, ...newUrls];
-      setSavingImages(true);
-      try {
+  const persistImages = useCallback(
+    async (urls: string[]) => {
+      if (!id || !listing) return;
+      if (catalogProduct?.id && canEditCatalog) {
         await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ imageUrls: merged }),
+          body: JSON.stringify({ imageUrls: urls }),
         });
+      } else if (canEditListing) {
+        await fetchWithAuth(`/api/listings/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            itemPhotoUrl: urls.length > 0 ? urls.join('|') : '',
+            version: listing.version,
+          }),
+        });
+      }
+      await qc.invalidateQueries({ queryKey: ['catalog-listing-detail', id] });
+      await qc.invalidateQueries({ queryKey: ['listing', id] });
+    },
+    [id, listing, catalogProduct?.id, canEditCatalog, canEditListing, qc],
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLocalImages((prev) => {
+      const oldIndex = prev.findIndex((u) => u === active.id);
+      const newIndex = prev.findIndex((u) => u === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }, []);
+
+  const handleRemoveImage = useCallback((index: number) => {
+    setLocalImages((prev) => {
+      const next = [...prev];
+      next.splice(index, 1);
+      return next;
+    });
+  }, []);
+
+  const handleSaveImages = useCallback(async () => {
+    if (!imagesDirty) return;
+    setSavingImages(true);
+    setImageError(null);
+    try {
+      await persistImages(localImages);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Failed to save images');
+    } finally {
+      setSavingImages(false);
+    }
+  }, [imagesDirty, localImages, persistImages]);
+
+  const handleUploadComplete = useCallback(
+    async (uploaded: UploadedImage[]) => {
+      if (uploaded.length === 0 || !listing) return;
+      const newUrls = uploaded.map((img) => img.cdnUrl).filter(Boolean);
+      if (newUrls.length === 0) return;
+      const merged = [...localImages, ...newUrls].slice(0, 24);
+      setSavingImages(true);
+      setImageError(null);
+      try {
+        await persistImages(merged);
+        setLocalImages(merged);
         setUploadZoneKey((k) => k + 1);
-        setShowUpload(false);
-        qc.invalidateQueries({ queryKey: ['catalog-listing-detail', id] });
-        qc.invalidateQueries({ queryKey: ['listing', id] });
+      } catch (err) {
+        setImageError(err instanceof Error ? err.message : 'Failed to upload images');
       } finally {
         setSavingImages(false);
       }
     },
-    [catalogProduct?.id, images, id, qc],
+    [localImages, listing, persistImages],
   );
 
   useEffect(() => {
@@ -452,8 +589,8 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
   if (!id) return null;
 
   const thumbVisible = 6;
-  const visibleImages = images.slice(0, thumbVisible);
-  const overflowCount = Math.max(0, images.length - thumbVisible);
+  const visibleImages = localImages.slice(0, thumbVisible);
+  const overflowCount = Math.max(0, localImages.length - thumbVisible);
   const displayDraft = draft ?? (listing ? buildDraft(listing, catalogProduct, searchItem) : null);
 
   return (
@@ -508,8 +645,8 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
               {/* Hero */}
               <div className="flex gap-4 border-b border-slate-100 pb-5 dark:border-slate-800">
                 <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-                  {images[0] ? (
-                    <img src={images[0]} alt="" className="h-full w-full object-cover" />
+                {localImages[0] ? (
+                  <img src={localImages[0]} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-slate-400">
                       <Package size={24} />
@@ -827,21 +964,82 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
               <div className="border-b border-slate-100 py-4 dark:border-slate-800">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Product Images ({images.length}/24)
+                    Product Images ({localImages.length}/24)
                   </p>
-                  {canUploadImages && catalogProduct?.id && (
+                  {canManageImages && imagesDirty && (
                     <button
                       type="button"
-                      onClick={() => setShowUpload((v) => !v)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      onClick={() => void handleSaveImages()}
+                      disabled={savingImages}
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                     >
-                      <Upload size={12} />
-                      Upload Images
+                      {savingImages ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Save size={12} />
+                      )}
+                      Save order
                     </button>
                   )}
                 </div>
 
-                {images.length > 0 ? (
+                {canManageImages ? (
+                  <>
+                    {localImages.length > 0 ? (
+                      <DndContext
+                        sensors={dndSensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext
+                          items={localImages}
+                          strategy={horizontalListSortingStrategy}
+                        >
+                          <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
+                            {localImages.map((url, i) => (
+                              <SortableImage
+                                key={url}
+                                id={url}
+                                url={url}
+                                index={i}
+                                canEdit
+                                onRemove={handleRemoveImage}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    ) : (
+                      <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 dark:border-slate-600">
+                        <ImageIcon size={16} className="mr-1.5" />
+                        No images — upload below
+                      </div>
+                    )}
+                    <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+                      Drag to reorder · hover to delete · first image is primary
+                    </p>
+                    <div className="mt-3 border-t border-slate-200/60 pt-3 dark:border-slate-700/60">
+                      <p className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Add images
+                      </p>
+                      {savingImages ? (
+                        <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
+                          <Loader2 size={16} className="animate-spin" />
+                          Saving…
+                        </div>
+                      ) : (
+                        <ImageUploadZone
+                          key={uploadZoneKey}
+                          onImagesChange={handleUploadComplete}
+                          maxImages={Math.max(0, 24 - localImages.length)}
+                        />
+                      )}
+                    </div>
+                    {imageError && (
+                      <p className="mt-2 text-xs text-red-500">{imageError}</p>
+                    )}
+                  </>
+                ) : localImages.length > 0 ? (
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {visibleImages.map((url, i) => {
                       const isLast = i === visibleImages.length - 1 && overflowCount > 0;
@@ -864,23 +1062,6 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                   <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 dark:border-slate-600">
                     <ImageIcon size={16} className="mr-1.5" />
                     No images
-                  </div>
-                )}
-
-                {showUpload && catalogProduct?.id && (
-                  <div className="mt-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                    {savingImages ? (
-                      <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
-                        <Loader2 size={16} className="animate-spin" />
-                        Saving images…
-                      </div>
-                    ) : (
-                      <ImageUploadZone
-                        key={uploadZoneKey}
-                        onImagesChange={handleUploadComplete}
-                        maxImages={Math.max(0, 24 - images.length)}
-                      />
-                    )}
                   </div>
                 )}
               </div>
