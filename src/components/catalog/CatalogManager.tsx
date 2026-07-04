@@ -17,7 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import SearchBar from './SearchBar';
 import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
 import ActiveFilterTags from './ActiveFilterTags';
-import CatalogPreviewModal from './CatalogPreviewModal';
+import CatalogInventoryDetailModal from './CatalogInventoryDetailModal';
 import PublishModal from '../channels/PublishModal';
 import ExportTemplatesModal from './ExportTemplatesModal';
 import BulkPolicyEditModal from './BulkPolicyEditModal';
@@ -77,7 +77,10 @@ export default function CatalogManager() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [filters, setFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailSelection, setDetailSelection] = useState<{
+    id: string;
+    item: SearchItem;
+  } | null>(null);
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -520,7 +523,7 @@ export default function CatalogManager() {
           onSortChange={setSortMode}
           onPageChange={setPage}
           onPageSizeChange={handlePageSizeChange}
-          onQuickView={setDetailId}
+          onQuickView={(id, item) => setDetailSelection({ id, item })}
           onPublish={handlePublish}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
@@ -543,8 +546,12 @@ export default function CatalogManager() {
         />
       </MobileFilterDrawer>
 
-      {/* Detail modal */}
-      <CatalogPreviewModal id={detailId} onClose={() => setDetailId(null)} onPublish={handlePublish} />
+      {/* Inventory summary modal */}
+      <CatalogInventoryDetailModal
+        id={detailSelection?.id ?? null}
+        searchItem={detailSelection?.item ?? null}
+        onClose={() => setDetailSelection(null)}
+      />
 
       {/* Delete confirmation modal */}
       {showCatalogDestructiveUi && deleteConfirmId && (

@@ -82,6 +82,7 @@ src/components/
 │   └── RevisionHistory.tsx
 ├── catalog/            # Catalog
 │   ├── CatalogManager.tsx      # Table-first search + bulk ops
+│   ├── CatalogInventoryDetailModal.tsx  # Row quick-view summary; links to product editor
 │   ├── CatalogTable.tsx
 │   ├── CatalogFilterBar.tsx
 │   ├── CatalogBulkBar.tsx

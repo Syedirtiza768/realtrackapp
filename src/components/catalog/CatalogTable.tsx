@@ -16,7 +16,7 @@ interface Props {
   onSortChange: (sort: SortMode) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
-  onQuickView: (id: string) => void;
+  onQuickView: (id: string, item: SearchItem) => void;
   onPublish?: (id: string) => void;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -171,7 +171,7 @@ export default function CatalogTable({
                   <td className="max-w-xs px-3 py-3">
                     <button
                       type="button"
-                      onClick={() => onQuickView(item.id)}
+                      onClick={() => onQuickView(item.id, item)}
                       className="line-clamp-2 text-left font-medium text-slate-800 hover:text-blue-600 dark:text-slate-100 dark:hover:text-blue-400"
                     >
                       {item.titleHighlight ? (
