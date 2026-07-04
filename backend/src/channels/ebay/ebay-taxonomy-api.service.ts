@@ -10,6 +10,45 @@ import type {
 } from './ebay-api.types.js';
 
 /**
+ * Simple token bucket rate limiter.
+ * Allows up to `maxTokens` requests per second, with tokens refilling over time.
+ */
+class TokenBucketRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly maxTokens: number;
+  private readonly refillRate: number; // tokens per millisecond
+
+  constructor(maxPerSecond: number) {
+    this.maxTokens = maxPerSecond;
+    this.tokens = maxPerSecond;
+    this.refillRate = maxPerSecond / 1000;
+    this.lastRefill = Date.now();
+  }
+
+  async acquire(): Promise<void> {
+    this.refill();
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return;
+    }
+
+    // Calculate wait time for next token
+    const waitMs = Math.ceil((1 - this.tokens) / this.refillRate);
+    await new Promise((r) => setTimeout(r, waitMs));
+    this.refill();
+    this.tokens -= 1;
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = now - this.lastRefill;
+    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
+    this.lastRefill = now;
+  }
+}
+
+/**
  * EbayTaxonomyApiService — Typed client for the eBay Taxonomy API v1.
  *
  * Covers:
@@ -27,6 +66,7 @@ import type {
 export class EbayTaxonomyApiService {
   private readonly logger = new Logger(EbayTaxonomyApiService.name);
   private readonly http: AxiosInstance;
+  private readonly rateLimiter = new TokenBucketRateLimiter(10); // 10 requests/second
 
   /** eBay Motors Parts & Accessories category tree ID (US) */
   static readonly EBAY_US_TREE_ID = '0';
@@ -86,6 +126,7 @@ export class EbayTaxonomyApiService {
   async getDefaultCategoryTreeId(
     marketplace = EbayTaxonomyApiService.EBAY_US_MARKETPLACE,
   ): Promise<string> {
+    await this.rateLimiter.acquire();
     const cfg = await this.appHeaders();
     const { data } = await this.http.get(`/get_default_category_tree_id`, {
       ...cfg,
@@ -99,6 +140,7 @@ export class EbayTaxonomyApiService {
    */
   async getCategoryTree(treeId?: string): Promise<EbayCategoryTree> {
     const id = treeId ?? EbayTaxonomyApiService.EBAY_US_TREE_ID;
+    await this.rateLimiter.acquire();
     const cfg = await this.appHeaders();
     const { data } = await this.http.get<EbayCategoryTree>(
       `/category_tree/${id}`,
@@ -115,6 +157,7 @@ export class EbayTaxonomyApiService {
     treeId?: string,
   ): Promise<EbayCategorySubtree> {
     const id = treeId ?? EbayTaxonomyApiService.EBAY_US_TREE_ID;
+    await this.rateLimiter.acquire();
     const cfg = await this.appHeaders();
     const { data } = await this.http.get<EbayCategorySubtree>(
       `/category_tree/${id}/get_category_subtree`,
@@ -134,6 +177,7 @@ export class EbayTaxonomyApiService {
     treeId?: string,
   ): Promise<EbayCategorySuggestion[]> {
     const id = treeId ?? EbayTaxonomyApiService.EBAY_US_TREE_ID;
+    await this.rateLimiter.acquire();
     return this.withRateLimitRetry(
       `getCategorySuggestions(tree=${id}, q="${query.slice(0, 40)}")`,
       async () => {
@@ -158,6 +202,7 @@ export class EbayTaxonomyApiService {
     treeId?: string,
   ): Promise<EbayAspect[]> {
     const id = treeId ?? EbayTaxonomyApiService.EBAY_US_TREE_ID;
+    await this.rateLimiter.acquire();
     const cfg = await this.appHeaders();
     const { data } = await this.http.get(
       `/category_tree/${id}/get_item_aspects_for_category`,
@@ -176,6 +221,7 @@ export class EbayTaxonomyApiService {
     categoryTreeId: string,
     categoryId: string,
   ): Promise<EbayCompatibilityProperty[]> {
+    await this.rateLimiter.acquire();
     const cfg = await this.appHeaders();
     const { data } = await this.http.get(
       `/category_tree/${categoryTreeId}/get_compatibility_properties`,
@@ -196,6 +242,7 @@ export class EbayTaxonomyApiService {
     compatibilityPropertyName: string,
     filter?: Record<string, string>,
   ): Promise<{ value: string; applicableProperties?: Record<string, string> }[]> {
+    await this.rateLimiter.acquire();
     const cfg = await this.appHeaders();
     const params: Record<string, string> = {
       category_id: categoryId,
