@@ -246,12 +246,13 @@ function ProductRow({
 export function useOptimizationDownloadGate(job: PipelineJob | null | undefined) {
   const jobId = job?.id ?? null;
   const jobCompleted = job?.status === 'completed';
+  const hasOutputFiles = Boolean(
+    job?.outputUsPath || job?.outputAuPath || job?.outputDePath,
+  );
   const { data: optimization } = useJobOptimization(jobId, jobCompleted);
   const optStatus = optimization?.optimizationStatus ?? job?.optimizationStatus ?? 'pending';
-  const canDownload =
-    jobCompleted &&
-    optStatus !== 'pending' &&
-    optStatus !== 'running';
+  // Enrichment XLSX files are ready as soon as the pipeline completes; do not block on SEO optimization.
+  const canDownload = jobCompleted && hasOutputFiles;
   return { canDownload, optimization, optStatus };
 }
 
@@ -269,7 +270,8 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
   const optimization = activeTab !== 'all' ? (optimizationMkt ?? optimizationAll) : optimizationAll;
 
   const optStatus = optimization?.optimizationStatus ?? job.optimizationStatus ?? 'pending';
-  const canDownload = optStatus !== 'running' && optStatus !== 'pending';
+  const hasOutputFiles = Boolean(job.outputUsPath || job.outputAuPath || job.outputDePath);
+  const canDownload = hasOutputFiles;
 
   const processed = optimization?.processed ?? job.optimizationProcessed ?? 0;
   const total = optimization?.total ?? job.optimizationTotal ?? 0;
@@ -352,7 +354,13 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
 
         {!canDownload && job.status === 'completed' && (
           <p className="text-xs text-amber-400/90 border border-amber-500/30 rounded-md px-3 py-2 bg-amber-500/5">
-            Downloads and export are available after mandatory optimization completes.
+            Output files are not available yet — wait for enrichment to finish.
+          </p>
+        )}
+
+        {canDownload && (optStatus === 'running' || optStatus === 'pending') && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 rounded-md px-3 py-2">
+            Downloads use enriched templates. Mandatory SEO optimization continues in the background.
           </p>
         )}
 

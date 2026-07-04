@@ -15,7 +15,6 @@ import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-mod
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 import { resolveCategoryTreeId } from '../../channels/ebay/ebay-marketplace-tree.util.js';
-import { ListingGenerationPipeline } from '../../common/openai/pipelines/listing-generation.pipeline.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -82,7 +81,6 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     private readonly optimizationQueue: Queue,
     private readonly pipelineOutputImages: PipelineOutputImageService,
     private readonly mvlService: EbayMvlService,
-    private readonly listingGenPipeline: ListingGenerationPipeline,
   ) {
     super();
   }
@@ -176,23 +174,17 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       // Scan output directory for generated files
       await this.collectOutputs(jobId, outputDir);
+      await this.touchSubStage(jobId, 'writing_done');
 
       // Mirror remote listing images to S3 and rewrite output XLSX PicURL columns
+      await this.touchSubStage(jobId, 'mirror_images');
       await this.pipelineOutputImages.mirrorImagesInOutputDir(jobId, outputDir);
 
-      // Save enriched listings to catalog_products + listing_records
+      // Import US/AU/DE XLSX rows into catalog (script already localized all marketplaces)
+      await this.touchSubStage(jobId, 'catalog_import');
       await this.saveToCatalog(jobId, outputDir, job.data.originalFilename);
 
-      // Backfill only when pipeline output did not already produce all marketplaces.
-      const skipBackfill = this.isPipelineFastMode();
-      if (!skipBackfill) {
-        await this.ensureMissingMarketplaceListings(jobId);
-      } else {
-        this.logger.log(
-          `Job ${jobId}: PIPELINE_FAST_MODE — skipping marketplace listing backfill`,
-        );
-      }
-
+      await this.touchSubStage(jobId, 'finalizing');
       await this.linkUploadedImages(jobId);
       await this.propagateSourceImages(jobId);
 
@@ -244,10 +236,24 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     return state;
   }
 
-  private isPipelineFastMode(): boolean {
-    return /^(1|true|yes|on)$/i.test(
-      String(process.env.PIPELINE_FAST_MODE ?? '').trim(),
-    );
+  /** Pipeline script already validates fitment; re-validating every row via eBay MVL on import is slow. */
+  private shouldSkipMvlOnImport(): boolean {
+    const raw = process.env.PIPELINE_SKIP_MVL_ON_IMPORT;
+    if (raw == null || String(raw).trim() === '') return true;
+    return /^(1|true|yes|on)$/i.test(String(raw).trim());
+  }
+
+  private async touchSubStage(
+    jobId: string,
+    subStage: string,
+  ): Promise<void> {
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    await this.jobRepo.update(jobId, {
+      stageDetails: {
+        ...(job?.stageDetails ?? {}),
+        subStage,
+      },
+    } as any);
   }
 
   private clearJobProgress(jobId: string): void {
@@ -610,6 +616,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       update.startedAt = new Date();
     } else if (status === 'completed') {
       update.completedAt = new Date();
+      const job = await this.jobRepo.findOneBy({ id: jobId });
+      update.stageDetails = {
+        ...(job?.stageDetails ?? {}),
+        subStage: 'done',
+      };
     }
     await this.jobRepo.update(jobId, update as any);
   }
@@ -766,305 +777,6 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     this.logger.log(
       `Job ${jobId}: Propagated ${imageUrls.length} source image(s) to ${catalogUpdated} catalog product(s) and ${listingsUpdated} listing row(s)`,
     );
-  }
-
-  /**
-   * After saveToCatalog completes, ensure every catalog product has listing records
-   * for ALL THREE marketplaces (US, AU, DE). For any missing marketplace, generate
-   * marketplace-appropriate content via AI and create the listing record.
-   *
-   * This is the key fix for the "only DE listing was produced" issue — it guarantees
-   * that regardless of which marketplace file was imported, the system auto-creates
-   * listings for the other two markets with proper localization:
-   *  - US: English, eBay US optimized, SEO
-   *  - AU: English, eBay AU optimized, SEO
-   *  - DE: German (de-DE), native German copywriting, SEO
-   */
-  private async ensureMissingMarketplaceListings(jobId: string): Promise<void> {
-    const MARKETPLACES = ['US', 'AU', 'DE'] as const;
-
-    // 1. Get all catalog products for this job that have a SKU
-    const products = await this.productRepo.find({
-      where: { pipelineJobId: jobId },
-    });
-    const productsWithSku = products.filter((p) => p.sku?.trim());
-    if (productsWithSku.length === 0) return;
-
-    // 2. Get all listing records for this job, indexed by (sku → set of marketplaces)
-    const listingRecords = await this.listingRepo.find({
-      where: { pipelineJobId: jobId },
-    });
-
-    const existingBySku = new Map<string, Set<string>>();
-    const templateBySku = new Map<string, Partial<ListingRecord>>();
-    for (const lr of listingRecords) {
-      if (!lr.customLabelSku) continue;
-      if (!existingBySku.has(lr.customLabelSku)) {
-        existingBySku.set(lr.customLabelSku, new Set());
-      }
-      const mkt = (lr as any).marketplace as string;
-      if (mkt) existingBySku.get(lr.customLabelSku)!.add(mkt);
-      if (!templateBySku.has(lr.customLabelSku)) {
-        templateBySku.set(lr.customLabelSku, lr);
-      }
-    }
-
-    // 3. Collect missing marketplace entries — (product, marketplace, template)
-    const missingEntries: Array<{
-      product: (typeof productsWithSku)[number];
-      marketplace: 'US' | 'AU' | 'DE';
-      template: Partial<ListingRecord>;
-    }> = [];
-
-    for (const product of productsWithSku) {
-      const sku = product.sku!;
-      const existing = existingBySku.get(sku) ?? new Set();
-      const template = templateBySku.get(sku);
-      if (!template) continue; // no source listing record at all — skip
-
-      for (const mkt of MARKETPLACES) {
-        if (!existing.has(mkt)) {
-          missingEntries.push({ product, marketplace: mkt, template });
-        }
-      }
-    }
-
-    if (missingEntries.length === 0) {
-      this.logger.log(
-        `Job ${jobId}: All 3 marketplaces already have listing records — no action needed`,
-      );
-      return;
-    }
-
-    this.logger.log(
-      `Job ${jobId}: Generating ${missingEntries.length} missing marketplace listing record(s) across ${productsWithSku.length} product(s)`,
-    );
-
-    // 4. Group missing entries by marketplace for batch AI generation
-    const byMarketplace = new Map<'US' | 'AU' | 'DE', typeof missingEntries>();
-    for (const entry of missingEntries) {
-      if (!byMarketplace.has(entry.marketplace))
-        byMarketplace.set(entry.marketplace, []);
-      byMarketplace.get(entry.marketplace)!.push(entry);
-    }
-
-    const newListingRecords: Array<
-      Partial<ListingRecord> & Record<string, unknown>
-    > = [];
-
-    for (const [mkt, entries] of byMarketplace) {
-      try {
-        const aiItems = entries.map((e) => ({
-          productData: {
-            sku: e.product.sku,
-            brand: e.product.brand,
-            mpn: e.product.mpn,
-            oem_number: e.product.oemPartNumber,
-            title: e.product.title,
-            part_type: e.product.partType,
-            placement: e.product.placement,
-            material: e.product.material,
-            features: e.product.features,
-            image_count: Array.isArray(e.product.imageUrls)
-              ? e.product.imageUrls.length
-              : 0,
-          },
-          categoryName:
-            e.product.categoryName ?? 'eBay Motors Parts & Accessories',
-          condition: e.product.conditionId ?? 'Used',
-          options: {
-            marketplace: mkt,
-            sellerCountry:
-              e.product.location?.includes('DE') ||
-              String(e.template.location ?? '').includes('DE')
-                ? 'DE'
-                : 'US',
-          },
-        }));
-
-        const aiResults = await this.listingGenPipeline.generateBatch(aiItems);
-
-        for (let i = 0; i < entries.length; i++) {
-          const { product, template } = entries[i];
-          const ai = aiResults[i];
-          const sourceSku = product.sku ?? template.customLabelSku ?? 'UNKNOWN';
-
-          newListingRecords.push({
-            sourceFileName: `generated-${mkt.toLowerCase()}-${jobId.slice(0, 8)}`,
-            sourceFilePath: `pipeline:${jobId}/${mkt}`,
-            sheetName: `Pipeline ${jobId.slice(0, 8)}`,
-            sourceRowNumber: template.sourceRowNumber,
-            action: 'Add',
-            customLabelSku: sourceSku,
-            categoryId: product.categoryId ?? template.categoryId,
-            categoryName: product.categoryName ?? template.categoryName,
-            title: ai?.title ?? product.title ?? template.title,
-            description:
-              ai?.description ?? product.description ?? template.description,
-            startPrice: template.startPrice,
-            startPriceNum: template.startPriceNum,
-            quantity: template.quantity,
-            quantityNum: template.quantityNum,
-            itemPhotoUrl: template.itemPhotoUrl,
-            conditionId: product.conditionId ?? template.conditionId,
-            format: template.format,
-            duration: template.duration,
-            location: template.location,
-            shippingProfileName: template.shippingProfileName,
-            returnProfileName: template.returnProfileName,
-            paymentProfileName: template.paymentProfileName,
-            cBrand: product.brand ?? template.cBrand,
-            cType: product.partType ?? template.cType,
-            cFeatures: product.features ?? template.cFeatures,
-            cManufacturerPartNumber:
-              product.mpn ?? template.cManufacturerPartNumber,
-            cOeOemPartNumber:
-              product.oemPartNumber ?? template.cOeOemPartNumber,
-            extractedMake: template.extractedMake,
-            extractedModel: template.extractedModel,
-            pipelineJobId: jobId,
-            marketplace: mkt,
-            version: 1,
-          });
-        }
-
-        this.logger.log(
-          `Job ${jobId} [${mkt}]: AI-generated ${entries.length} listing(s) ` +
-            `cost=${aiResults
-              .reduce((s, r) => s + r.rawResponse.estimatedCostUsd, 0)
-              .toFixed(4)}`,
-        );
-      } catch (err) {
-        this.logger.error(
-          `Job ${jobId}: AI generation failed for marketplace ${mkt}: ${err instanceof Error ? err.message : err}`,
-        );
-        // Fallback: create listing records without AI content — basic data is better than nothing
-        for (const { product, template } of entries) {
-          const sourceSku = product.sku ?? template.customLabelSku ?? 'UNKNOWN';
-          newListingRecords.push({
-            sourceFileName: `generated-${mkt.toLowerCase()}-${jobId.slice(0, 8)}`,
-            sourceFilePath: `pipeline:${jobId}/${mkt}`,
-            sheetName: `Pipeline ${jobId.slice(0, 8)}`,
-            sourceRowNumber: template.sourceRowNumber,
-            action: 'Add',
-            customLabelSku: sourceSku,
-            categoryId: product.categoryId ?? template.categoryId,
-            categoryName: product.categoryName ?? template.categoryName,
-            title: product.title ?? template.title,
-            description: product.description ?? template.description,
-            startPrice: template.startPrice,
-            startPriceNum: template.startPriceNum,
-            quantity: template.quantity,
-            quantityNum: template.quantityNum,
-            itemPhotoUrl: template.itemPhotoUrl,
-            conditionId: product.conditionId ?? template.conditionId,
-            format: template.format,
-            duration: template.duration,
-            location: template.location,
-            shippingProfileName: template.shippingProfileName,
-            returnProfileName: template.returnProfileName,
-            paymentProfileName: template.paymentProfileName,
-            cBrand: product.brand ?? template.cBrand,
-            cType: product.partType ?? template.cType,
-            cFeatures: product.features ?? template.cFeatures,
-            cManufacturerPartNumber:
-              product.mpn ?? template.cManufacturerPartNumber,
-            cOeOemPartNumber:
-              product.oemPartNumber ?? template.cOeOemPartNumber,
-            extractedMake: template.extractedMake,
-            extractedModel: template.extractedModel,
-            pipelineJobId: jobId,
-            marketplace: mkt,
-            version: 1,
-          });
-        }
-      }
-    }
-
-    if (newListingRecords.length === 0) return;
-
-    // 5. Bulk insert new listing records (uses same pattern as saveMarketplaceToCatalog)
-    try {
-      const CHUNK = 500;
-      let totalInserted = 0;
-
-      const PROP_TO_COL: Record<string, string> = {
-        sourceFileName: 'sourceFileName',
-        sourceFilePath: 'sourceFilePath',
-        sheetName: 'sheetName',
-        sourceRowNumber: 'sourceRowNumber',
-        action: 'action',
-        customLabelSku: 'customLabelSku',
-        categoryId: 'categoryId',
-        categoryName: 'categoryName',
-        title: 'title',
-        startPrice: 'startPrice',
-        startPriceNum: 'startPriceNum',
-        quantity: 'quantity',
-        quantityNum: 'quantityNum',
-        itemPhotoUrl: 'itemPhotoUrl',
-        conditionId: 'conditionId',
-        description: 'description',
-        format: 'format',
-        duration: 'duration',
-        location: 'location',
-        shippingProfileName: 'shippingProfileName',
-        returnProfileName: 'returnProfileName',
-        paymentProfileName: 'paymentProfileName',
-        cBrand: 'cBrand',
-        cType: 'cType',
-        cFeatures: 'cFeatures',
-        cManufacturerPartNumber: 'cManufacturerPartNumber',
-        cOeOemPartNumber: 'cOeOemPartNumber',
-        extractedMake: 'extractedMake',
-        extractedModel: 'extractedModel',
-        pipelineJobId: 'pipeline_job_id',
-        marketplace: 'marketplace',
-        version: 'version',
-      };
-      const ALL_COLS = Object.values(PROP_TO_COL);
-      const updateSet = ALL_COLS.map((c) => {
-        if (c === 'itemPhotoUrl') {
-          return `"${c}" = COALESCE(NULLIF(EXCLUDED."${c}", ''), listing_records."${c}")`;
-        }
-        return `"${c}" = EXCLUDED."${c}"`;
-      }).join(', ');
-      const colList = ALL_COLS.map((c) => `"${c}"`).join(', ');
-
-      for (let i = 0; i < newListingRecords.length; i += CHUNK) {
-        const batch = newListingRecords.slice(i, i + CHUNK);
-        const values: unknown[] = [];
-        const rowsSql: string[] = [];
-        let paramIdx = 0;
-        for (const lr of batch) {
-          const rowParams: string[] = [];
-          for (const col of ALL_COLS) {
-            paramIdx++;
-            rowParams.push(`$${paramIdx}`);
-            values.push((lr as Record<string, unknown>)[col] ?? null);
-          }
-          rowsSql.push(`(${rowParams.join(', ')})`);
-        }
-        const sql = `
-          INSERT INTO "listing_records" (${colList})
-          VALUES ${rowsSql.join(',\n')}
-          ON CONFLICT ("customLabelSku", "marketplace")
-          WHERE ("customLabelSku" IS NOT NULL) AND ("deletedAt" IS NULL) AND ("marketplace" IS NOT NULL)
-          DO UPDATE SET ${updateSet}
-          RETURNING id
-        `;
-        const result = await this.listingRepo.query(sql, values);
-        totalInserted += result?.length ?? 0;
-      }
-
-      this.logger.log(
-        `Job ${jobId}: Created ${totalInserted} missing marketplace listing records for ${missingEntries.length} marketplace(s)`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `Job ${jobId}: Failed to insert missing marketplace listing records: ${err instanceof Error ? err.message : err}`,
-      );
-    }
   }
 
   /**
@@ -1361,35 +1073,41 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       let mvlRejectedTotal = 0;
       let mvlValidatedTotal = 0;
-      for (const product of products) {
-        const rawFitment = product.fitmentData as
-          | Record<string, unknown>[]
-          | undefined;
-        if (!Array.isArray(rawFitment) || rawFitment.length === 0) continue;
+      if (!this.shouldSkipMvlOnImport()) {
+        for (const product of products) {
+          const rawFitment = product.fitmentData as
+            | Record<string, unknown>[]
+            | undefined;
+          if (!Array.isArray(rawFitment) || rawFitment.length === 0) continue;
 
-        const categoryId =
-          product.categoryId?.trim() || EbayMvlService.MOTORS_PARTS_CATEGORY;
-        try {
-          const mvlResult = await this.mvlService.validateFitmentData(
-            rawFitment,
-            categoryId,
-            {
-              treeId: resolveCategoryTreeId(marketplace),
-            },
-          );
-          product.fitmentData = mvlResult.accepted;
-          mvlRejectedTotal += mvlResult.rejectedCount;
-          mvlValidatedTotal += mvlResult.validCount;
-          if (mvlResult.apiUnavailable) {
+          const categoryId =
+            product.categoryId?.trim() || EbayMvlService.MOTORS_PARTS_CATEGORY;
+          try {
+            const mvlResult = await this.mvlService.validateFitmentData(
+              rawFitment,
+              categoryId,
+              {
+                treeId: resolveCategoryTreeId(marketplace),
+              },
+            );
+            product.fitmentData = mvlResult.accepted;
+            mvlRejectedTotal += mvlResult.rejectedCount;
+            mvlValidatedTotal += mvlResult.validCount;
+            if (mvlResult.apiUnavailable) {
+              this.logger.warn(
+                `Job ${jobId} [${marketplace}]: eBay MVL API unavailable — fitment kept as needs_review where possible`,
+              );
+            }
+          } catch (err) {
             this.logger.warn(
-              `Job ${jobId} [${marketplace}]: eBay MVL API unavailable — fitment kept as needs_review where possible`,
+              `Job ${jobId} [${marketplace}]: MVL validation failed for SKU ${product.sku ?? '?'}: ${err instanceof Error ? err.message : err}`,
             );
           }
-        } catch (err) {
-          this.logger.warn(
-            `Job ${jobId} [${marketplace}]: MVL validation failed for SKU ${product.sku ?? '?'}: ${err instanceof Error ? err.message : err}`,
-          );
         }
+      } else {
+        this.logger.log(
+          `Job ${jobId} [${marketplace}]: PIPELINE_SKIP_MVL_ON_IMPORT — using fitment from pipeline output as-is`,
+        );
       }
 
       if (mvlRejectedTotal > 0 || mvlValidatedTotal > 0) {

@@ -90,6 +90,13 @@ const SUB_STAGE_LABELS: Record<string, string> = {
   localization_rule: 'Applying AU/DE marketplace rules',
   images: 'Fetching listing images',
   images_done: 'Images ready — writing templates next',
+  writing_us: 'Writing US Motors template',
+  writing_au: 'Writing AU template',
+  writing_de: 'Writing DE template',
+  writing_done: 'Templates saved — importing to catalog',
+  mirror_images: 'Mirroring listing images to storage',
+  catalog_import: 'Saving listings to catalog',
+  finalizing: 'Finalizing job',
 };
 
 /* -------------------------------------------------------------
@@ -368,11 +375,13 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
   const subStageLabel = subStage ? SUB_STAGE_LABELS[subStage] : null;
   const statusLabel = isQueued
     ? 'Queued — waiting for the pipeline worker (one job runs at a time)'
-    : subStageLabel
-      ? subStageLabel
-      : hasPartCounts
-        ? `${job.processedParts} / ${job.totalParts} parts`
-        : currentStage?.description ?? 'Processing...';
+    : terminal && job.status === 'completed'
+      ? 'Enrichment complete'
+      : subStageLabel
+        ? subStageLabel
+        : hasPartCounts
+          ? `${job.processedParts} / ${job.totalParts} parts`
+          : currentStage?.description ?? 'Processing...';
 
   return (
     <div className="space-y-4">
@@ -529,7 +538,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
       {job.status === 'completed' && <OptimizationStatusPanel job={job} />}
 
       {job.status === 'completed' && (
-        <Card className={!optimizationAllowsDownload ? 'opacity-60' : ''}>
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Download className="h-5 w-5 text-green-400" />
@@ -539,7 +548,12 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
           <CardContent>
             {!optimizationAllowsDownload && (
               <p className="text-xs text-amber-400 mb-3">
-                Exports unlock after automatic Max SEO optimization finishes for this job.
+                Output files are not ready yet — enrichment may still be finalizing.
+              </p>
+            )}
+            {optimizationAllowsDownload && job.optimizationStatus === 'running' && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                Templates are ready. SEO optimization continues in the background and does not block download.
               </p>
             )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -150,6 +150,9 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `PIPELINE_SKIP_IMAGE_VALIDATION` | `true` | Skip slow HTTP validation of image URLs after fetch |
 | `PIPELINE_SKIP_IMAGE_FETCH` | `0` | Use source/upload images only — no image API |
 | `PIPELINE_MIRROR_IMAGES` | `true` | Mirror listing images to S3 after pipeline (backend) |
+| `PIPELINE_SKIP_MVL_ON_IMPORT` | `true` | Skip per-row eBay MVL API re-validation when importing pipeline XLSX to catalog (large jobs) |
+| `PIPELINE_EXPORT_MAX_FITMENT_ROWS` | `80` | Max compatibility rows per listing in export templates |
+| `PIPELINE_DESC_MAX_FITMENT_ROWS` | `30` | Max fitment rows embedded in listing description HTML |
 | `MAX_CONCURRENT_PIPELINE_JOBS` | `2` | Max jobs **actively processing** (not queued `pending`); upload returns 503 when full |
 | `PIPELINE_JOB_STALE_MINUTES` | `360` | Auto-fail stuck processing jobs with no DB progress (frees upload slots) |
 | `PIPELINE_IMAGE_CONCURRENCY` | `3` (t3.medium) | Parallel image-enrichment API batches |

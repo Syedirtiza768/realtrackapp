@@ -207,6 +207,16 @@ const skipImageValidation =
   /^(1|true|yes|on)$/i.test(String(env.PIPELINE_SKIP_IMAGE_VALIDATION || '').trim());
 const skipImageFetch =
   /^(1|true|yes|on)$/i.test(String(env.PIPELINE_SKIP_IMAGE_FETCH || '').trim());
+/** Max compatibility rows per listing in export files (eBay File Exchange). */
+const exportMaxFitmentRows = Math.max(
+  1,
+  Number(env.PIPELINE_EXPORT_MAX_FITMENT_ROWS || 80) || 80,
+);
+/** Max fitment rows embedded in listing description HTML (compatibility rows carry the rest). */
+const descMaxFitmentRows = Math.max(
+  1,
+  Number(env.PIPELINE_DESC_MAX_FITMENT_ROWS || 30) || 30,
+);
 
 const RUN_MODE = env.AI_RUN_MODE || 'default';
 const PROMPT_VERSION = env.AI_PROMPT_VERSION || MOTORS_PROMPT_VERSION;
@@ -394,6 +404,9 @@ if (pipelineFastMode) {
     'PIPELINE_FAST_MODE enabled — rule-based AU/DE localization, skipping image URL validation',
   );
 }
+log.info(
+  `Export fitment caps: ${exportMaxFitmentRows} compatibility rows/listing, ${descMaxFitmentRows} rows in description HTML`,
+);
 
 // ═══════════════════════════════════════════════════════════════════════
 //  UTILITIES
@@ -2362,9 +2375,21 @@ function applyRuleBasedLocalization(enriched, locale) {
   return copy;
 }
 
+function fitmentsForExport(part, vinData) {
+  const vehicle = getVehicleInfo(part, vinData);
+  const source = part._fitments?.length
+    ? part._fitments
+    : vehicle.year
+      ? [vehicle]
+      : [];
+  return source.slice(0, exportMaxFitmentRows);
+}
+
 function wrapInTabbedDescriptionLocalized(descriptionText, fitments, locale = 'en-US') {
   const shell = MARKETPLACE_TAB_SHELLS[locale] || MARKETPLACE_TAB_SHELLS['en-US'];
-  const rows = (fitments || []).filter(f => f.make && f.model && f.year);
+  const allRows = (fitments || []).filter(f => f.make && f.model && f.year);
+  const truncated = allRows.length > descMaxFitmentRows;
+  const rows = allRows.slice(0, descMaxFitmentRows);
   const fitmentTableRows = rows
     .map(
       (f) =>
@@ -2372,10 +2397,13 @@ function wrapInTabbedDescriptionLocalized(descriptionText, fitments, locale = 'e
     )
     .join('');
 
-  const fitmentCount = rows.length;
+  const fitmentCount = allRows.length;
   const [cYear, cMake, cModel, cSub, cTrim, cEngine] = shell.fitmentCols;
+  const truncatedNote = truncated
+    ? `<p style="font-size: 12px;color: #666;margin-top: 8px;">Showing ${rows.length} of ${allRows.length} vehicles — see Compatibility rows in the listing file for the full fitment list.</p>`
+    : '';
   const fitmentSection = fitmentTableRows
-    ? `<div class="fitment-section" style="margin-top: 15px;"><h3 style="font-size: 16px;font-weight: bold;margin-bottom: 10px;color: #333;">${shell.fitmentHeading(fitmentCount)}</h3><p style="font-size: 13px;color: #555;margin-bottom: 8px;">${shell.fitmentIntro}</p><table class="fitment" style="width: 100%;border-collapse: collapse;margin-bottom: 10px;font-size: 13px;"><thead><tr style="background-color: #333;color: white;"><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cYear}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cMake}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cModel}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cSub}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cTrim}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cEngine}</th></tr></thead><tbody>${fitmentTableRows}</tbody></table></div>`
+    ? `<div class="fitment-section" style="margin-top: 15px;"><h3 style="font-size: 16px;font-weight: bold;margin-bottom: 10px;color: #333;">${shell.fitmentHeading(fitmentCount)}</h3><p style="font-size: 13px;color: #555;margin-bottom: 8px;">${shell.fitmentIntro}</p><table class="fitment" style="width: 100%;border-collapse: collapse;margin-bottom: 10px;font-size: 13px;"><thead><tr style="background-color: #333;color: white;"><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cYear}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cMake}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cModel}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cSub}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cTrim}</th><th style="padding: 8px;text-align: left;border: 1px solid #ddd;">${cEngine}</th></tr></thead><tbody>${fitmentTableRows}</tbody></table>${truncatedNote}</div>`
     : '';
 
   const tabLabels = shell.tabs.map((label, i) => `<label for="tab${i + 1}">${label}</label>`).join('');
@@ -3758,7 +3786,7 @@ function generateUSMotorsOutput(parts, vinData) {
     listingsData.push(row);
 
     // Comprehensive fitment rows — one row per year in the expanded platform range
-    for (const fitRow of buildCompatibilityRows(fullHeaders, part._fitments || (vehicle.year ? [vehicle] : []))) {
+    for (const fitRow of buildCompatibilityRows(fullHeaders, fitmentsForExport(part, vinData))) {
       listingsData.push(fitRow);
     }
   }
@@ -3784,7 +3812,7 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   // Wrap description in rich tabbed HTML with embedded fitment table
   const descriptionHtml = wrapInTabbedDescription(
     enriched.description,
-    part._fitments || []
+    part._fitments || [],
   );
 
   set('*Action(SiteID=eBayMotors|Country=US|Currency=USD|Version=1193)', 'Add');
@@ -3973,7 +4001,7 @@ function generateAUOutput(parts, vinData) {
     listingsData.push(row);
 
     // Comprehensive fitment rows
-    for (const fitRow of buildCompatibilityRows(fullHeaders, part._fitments || (vehicle.year ? [vehicle] : []))) {
+    for (const fitRow of buildCompatibilityRows(fullHeaders, fitmentsForExport(part, vinData))) {
       listingsData.push(fitRow);
     }
   }
@@ -4109,7 +4137,7 @@ function generateDEOutput(parts, vinData) {
     listingsData.push(row);
 
     // Comprehensive fitment rows
-    for (const fitRow of buildCompatibilityRows(fullHeaders, part._fitments || (vehicle.year ? [vehicle] : []))) {
+    for (const fitRow of buildCompatibilityRows(fullHeaders, fitmentsForExport(part, vinData))) {
       listingsData.push(fitRow);
     }
   }
@@ -4395,29 +4423,49 @@ async function main() {
     localizeAllMarketplaceCopy(parts),
   ]);
 
-  // ── Step 7: Generate Template Outputs (parallel) ──
+  // ── Step 7: Generate Template Outputs (sequential — lower peak memory for large jobs) ──
   log.step('Generating Output Templates');
-  log.progress({ stage: 'output_generation', total_parts: parts.length, processed: enrichedParts.length });
+  log.progress({
+    stage: 'output_generation',
+    sub_stage: 'writing_us',
+    total_parts: enrichedParts.length,
+    processed: 0,
+  });
 
-  // Generate all three regional templates in parallel
   const dateSuffix = new Date().toISOString().slice(0, 10);
-  const [usWb, auWb, deWb] = await Promise.all([
-    Promise.resolve(generateUSMotorsOutput(enrichedParts, vinData)),
-    Promise.resolve(generateAUOutput(enrichedParts, vinData)),
-    Promise.resolve(generateDEOutput(enrichedParts, vinData)),
-  ]);
-
   const usPath = path.join(CONFIG.outputDir, `US-Motors-Listings-${dateSuffix}.xlsx`);
   const auPath = path.join(CONFIG.outputDir, `AU-Category-Listings-${dateSuffix}.xlsx`);
   const dePath = path.join(CONFIG.outputDir, `DE-Category-Listings-${dateSuffix}.xlsx`);
 
+  const usWb = generateUSMotorsOutput(enrichedParts, vinData);
   XLSX.writeFile(usWb, usPath);
-  XLSX.writeFile(auWb, auPath);
-  XLSX.writeFile(deWb, dePath);
-
   log.info(`  ✓ US Motors: ${usPath}`);
+  log.progress({
+    stage: 'output_generation',
+    sub_stage: 'writing_au',
+    total_parts: enrichedParts.length,
+    processed: Math.ceil(enrichedParts.length / 3),
+  });
+
+  const auWb = generateAUOutput(enrichedParts, vinData);
+  XLSX.writeFile(auWb, auPath);
   log.info(`  ✓ AU: ${auPath}`);
+  log.progress({
+    stage: 'output_generation',
+    sub_stage: 'writing_de',
+    total_parts: enrichedParts.length,
+    processed: Math.ceil((enrichedParts.length * 2) / 3),
+  });
+
+  const deWb = generateDEOutput(enrichedParts, vinData);
+  XLSX.writeFile(deWb, dePath);
   log.info(`  ✓ DE: ${dePath}`);
+  log.progress({
+    stage: 'output_generation',
+    sub_stage: 'writing_done',
+    total_parts: enrichedParts.length,
+    processed: enrichedParts.length,
+  });
 
   // ── Step 8: Generate Report ──
   log.step('Pipeline Report');
