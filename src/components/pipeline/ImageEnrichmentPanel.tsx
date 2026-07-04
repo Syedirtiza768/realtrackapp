@@ -13,7 +13,6 @@ import {
   Loader2,
   Star,
   Eye,
-  Sparkles,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -136,7 +135,7 @@ export default function ImageEnrichmentPanel({
             onClick={() => setExpanded(!expanded)}
           >
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-purple-400" />
+              <ImageIcon className="h-5 w-5 text-purple-400" />
               Image Enrichment
               {progress && (
                 <Badge variant="secondary">

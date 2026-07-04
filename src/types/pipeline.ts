@@ -186,7 +186,7 @@ export const PIPELINE_STAGES: Array<{
   { key: 'uploading', label: 'Upload', description: 'Uploading file' },
   { key: 'vin_decode', label: 'VIN Decode', description: 'Decoding VINs via NHTSA' },
   { key: 'category_mapping', label: 'Categories', description: 'Mapping eBay categories' },
-  { key: 'enrichment', label: 'Enrichment', description: 'AI-powered listing enrichment' },
+  { key: 'enrichment', label: 'Enrichment', description: 'Building listing content' },
   { key: 'validation', label: 'Validation', description: 'Compliance checks' },
   { key: 'output_generation', label: 'Output', description: 'Generating templates' },
 ];

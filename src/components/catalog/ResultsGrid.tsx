@@ -14,7 +14,7 @@ import {
   Eye,
   Package,
   Send,
-  Sparkles,
+  Search,
   ArrowDown,
   Car,
   Trash2,
@@ -325,7 +325,7 @@ export default function ResultsGrid({
       {/* Empty state */}
       {!loading && items.length === 0 && (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 p-12 text-center">
-          <Sparkles className="mx-auto text-slate-500 dark:text-slate-600 mb-4" size={32} />
+          <Search className="mx-auto text-slate-500 dark:text-slate-600 mb-4" size={32} />
           <h4 className="text-lg font-semibold text-slate-600 dark:text-slate-200 mb-1">No results found</h4>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
             Try adjusting your search terms or removing some filters to see more results.

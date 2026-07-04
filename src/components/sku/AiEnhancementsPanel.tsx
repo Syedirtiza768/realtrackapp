@@ -8,7 +8,7 @@
 import React, { useState, useCallback } from 'react';
 import { sanitizeHtml } from '../../lib/sanitize';
 import {
-  Sparkles,
+  Wand2,
   Type,
   FileText,
   ListChecks,
@@ -48,7 +48,7 @@ const TYPE_ICONS: Record<string, React.ComponentType<any>> = {
 const STATUS_CONFIG: Record<string, { icon: React.ComponentType<any>; bg: string; text: string; label: string }> = {
   requested: { icon: Clock, bg: 'bg-slate-100', text: 'text-slate-500 dark:text-slate-600', label: 'Requested' },
   processing: { icon: Loader2, bg: 'bg-blue-100', text: 'text-blue-700', label: 'Processing' },
-  generated: { icon: Sparkles, bg: 'bg-purple-100', text: 'text-purple-700', label: 'Generated' },
+  generated: { icon: Wand2, bg: 'bg-purple-100', text: 'text-purple-700', label: 'Generated' },
   approved: { icon: CheckCircle2, bg: 'bg-green-100', text: 'text-green-700', label: 'Approved' },
   rejected: { icon: XCircle, bg: 'bg-red-100', text: 'text-red-700', label: 'Rejected' },
 };
@@ -161,7 +161,7 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
             disabled={requesting !== null}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
           >
-            {requesting === 'all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {requesting === 'all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
             Generate All
           </button>
         </div>
@@ -178,7 +178,7 @@ export default function AiEnhancementsPanel({ listingId }: { listingId: string }
         const meta = ENHANCEMENT_TYPE_META[type];
         const typeEnhancements = enhByType[type] ?? [];
         const latest = typeEnhancements[0]; // already sorted by version DESC
-        const Icon = TYPE_ICONS[type] ?? Sparkles;
+        const Icon = TYPE_ICONS[type] ?? Wand2;
 
         return (
           <div key={type} className="bg-white rounded-lg border border-slate-200 overflow-hidden">

@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Workflow,
   ExternalLink,
-  Sparkles,
   Loader2,
   Upload,
   CheckCircle2,
@@ -74,7 +73,7 @@ function DetailRow({
 function stageLabel(stage: string | null): string {
   const labels: Record<string, string> = {
     vision_lookup: 'Detecting part from photos...',
-    enrichment: 'Running AI enrichment...',
+    enrichment: 'Enriching listing...',
     generating_us: 'Generating US eBay listing...',
     generating_au: 'Generating AU eBay listing...',
     generating_de: 'Generating DE eBay listing...',

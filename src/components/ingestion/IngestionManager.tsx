@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Camera, Upload, Layers, Play, Trash2, Sparkles, Download, Filter, RefreshCw } from 'lucide-react';
+import { Camera, Upload, Layers, Play, Trash2, FileText, Download, Filter, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -558,7 +558,7 @@ export default function IngestionManager() {
                                             </div>
                                             <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
                                                 <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
-                                                    <Sparkles size={12} /> Generated Listing Seed
+                                                    <FileText size={12} /> Generated Listing Seed
                                                 </div>
                                                 <div className="space-y-1 text-sm">
                                                     <div className="text-slate-600 dark:text-slate-200 line-clamp-1">{entry.generatedData.seoTitle}</div>

@@ -21,7 +21,6 @@ import {
   Car,
   ImageIcon,
   DollarSign,
-  Sparkles,
   RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -501,7 +500,7 @@ function ComplianceDetail({ result }: { result: ComplianceResult }) {
             id="autoCorrections"
             open={openSections.has('autoCorrections')}
             onToggle={() => toggleSection('autoCorrections')}
-            icon={<Sparkles className="h-4 w-4 text-purple-400" />}
+            icon={<FileText className="h-4 w-4 text-purple-400" />}
             label={`Auto-Corrections (${result.autoCorrections.length})`}
           >
             <div className="space-y-1.5">
@@ -597,7 +596,7 @@ function SpecificsSection({ data }: { data: ItemSpecificsResult }) {
           <p className="text-purple-400 mb-1">Auto-Filled:</p>
           {data.autoFilled.map((f, i) => (
             <div key={i} className="flex items-center gap-2 text-slate-500 dark:text-slate-300">
-              <Sparkles className="h-3 w-3 text-purple-400" />
+              <FileText className="h-3 w-3 text-purple-400" />
               {f.field}: <span className="text-green-400">{f.value}</span>
             </div>
           ))}

@@ -1,4 +1,4 @@
-import { AlertTriangle, Bot, CheckCircle2, Download, FolderTree, ShieldAlert, Sparkles } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, Download, FolderTree, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import type { PipelineEnrichmentSummary, PipelineJob } from '../../types/pipeline';
 import { downloadPipelineFile } from '../../lib/pipelineApi';
@@ -47,19 +47,19 @@ const MODE_META: Record<
   { label: string; tone: 'success' | 'warning' | 'danger' | 'muted'; description: string }
 > = {
   ai: {
-    label: 'AI enrichment',
+    label: 'Full enrichment',
     tone: 'success',
-    description: 'OpenRouter validated and listings were enriched with AI.',
+    description: 'Listings were enriched successfully.',
   },
   mixed: {
     label: 'Mixed enrichment',
     tone: 'warning',
-    description: 'Some parts used AI enrichment; others fell back to rule-based copy.',
+    description: 'Some parts used full enrichment; others used rule-based copy.',
   },
   fallback: {
     label: 'Fallback enrichment',
     tone: 'danger',
-    description: 'OpenRouter was unavailable — all listings used rule-based fallback copy.',
+    description: 'Content service was unavailable — all listings used rule-based fallback copy.',
   },
   none: {
     label: 'No enrichment',
@@ -108,7 +108,7 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           {mode === 'ai' ? (
-            <Sparkles className="h-5 w-5 text-green-400" />
+            <CheckCircle2 className="h-5 w-5 text-green-400" />
           ) : mode === 'fallback' ? (
             <ShieldAlert className="h-5 w-5 text-red-400" />
           ) : (
@@ -121,16 +121,13 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
         <div className={`rounded-lg border px-4 py-3 ${toneClasses(meta.tone)}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold">{meta.label}</p>
-            {summary.openRouterModel && (
-              <span className="text-xs opacity-80">Model: {summary.openRouterModel}</span>
-            )}
           </div>
           <p className="text-sm mt-1 opacity-90">{meta.description}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">AI enriched</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Enriched</p>
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{summary.totalAiEnriched ?? 0}</p>
           </div>
           <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
@@ -224,7 +221,7 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
           <div className="rounded-lg border border-red-200 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 p-4 space-y-2">
             <div className="flex items-center gap-2 text-red-600 dark:text-red-300 font-medium">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-              OpenRouter probe failed
+              Content service check failed
             </div>
             <ul className="space-y-2 text-sm text-red-500 dark:text-red-200/90">
               {probeErrors.map((err, i) => (
@@ -234,7 +231,7 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
               ))}
             </ul>
             <p className="text-xs text-red-500 dark:text-red-300/80">
-              Check `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and model env vars. Re-run after fixing credentials.
+              Content enrichment is unavailable. Contact your administrator or re-run after service is restored.
             </p>
           </div>
         )}
@@ -255,7 +252,7 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
         {mode === 'ai' && probeErrors.length === 0 && (
           <div className="flex items-center gap-2 text-sm text-green-400">
             <CheckCircle2 className="h-4 w-4" />
-            OpenRouter validated successfully for this job.
+            Enrichment service validated successfully for this job.
           </div>
         )}
 

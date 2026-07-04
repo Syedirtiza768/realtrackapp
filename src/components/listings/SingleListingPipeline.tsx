@@ -6,7 +6,7 @@ import {
   FileText,
   Loader2,
   PackagePlus,
-  Sparkles,
+  ScanLine,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -463,7 +463,7 @@ export default function SingleListingPipeline() {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} />
+                    <ScanLine size={16} />
                     Process SKU (Enter)
                   </>
                 )}

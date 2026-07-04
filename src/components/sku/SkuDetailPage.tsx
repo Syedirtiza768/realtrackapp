@@ -11,7 +11,7 @@ import {
   Package,
   Radio,
   BarChart3,
-  Sparkles,
+  Wand2,
   History,
   ExternalLink,
   RefreshCw,
@@ -53,7 +53,7 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ComponentType<any> }> 
   { id: 'overview', label: 'Overview', icon: Package },
   { id: 'channels', label: 'Channels', icon: Radio },
   { id: 'inventory', label: 'Inventory', icon: BarChart3 },
-  { id: 'ai', label: 'AI Enhancements', icon: Sparkles },
+  { id: 'ai', label: 'AI Enhancements', icon: Wand2 },
   { id: 'activity', label: 'Activity', icon: History },
 ];
 

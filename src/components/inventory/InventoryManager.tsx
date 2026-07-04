@@ -49,7 +49,7 @@ function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
 
 function EnrichmentBadge({ status, stage }: { status: EnrichmentStatus; stage?: string | null }) {
   const stageHint = stage
-    ? { vision_lookup: 'Vision...', enrichment: 'AI Enrich...', generating_us: 'US...', generating_au: 'AU...', generating_de: 'DE...' }[stage] ?? stage
+    ? { vision_lookup: 'Vision...', enrichment: 'Enrich...', generating_us: 'US...', generating_au: 'AU...', generating_de: 'DE...' }[stage] ?? stage
     : undefined;
 
   const config: Record<
@@ -252,7 +252,7 @@ export default function InventoryManager() {
             Inventory
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Upload 2 photos per part to auto-enrich (vision → AI → SEO listings for US/AU/DE). Then send to catalog.
+            Upload 2 photos per part to auto-enrich listings for US/AU/DE. Then send to catalog.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

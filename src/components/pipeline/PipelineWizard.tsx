@@ -418,7 +418,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
               {!isQueued && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Last update {formatElapsed(secondsSinceUpdate)} ago
-                  {progressLooksStale && ' � AI batches can pause for several minutes on slow OpenRouter responses'}
+                  {progressLooksStale && ' — processing may pause briefly during large batches'}
                 </p>
               )}
             </div>
@@ -507,7 +507,7 @@ function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }
           }
         />
         <StatCard label="Enriched" value={job.enrichedCount} sub={`${job.fallbackCount} fallback`} />
-        <StatCard label="AI Tokens" value={job.openaiTokensUsed.toLocaleString()} sub={`$${(job.openaiCostUsd ?? 0).toFixed(4)}`} />
+        <StatCard label="Total Parts" value={job.totalParts} sub={`${job.processedParts} processed`} />
       </div>
 
       <EnrichmentStatusPanel job={job} />

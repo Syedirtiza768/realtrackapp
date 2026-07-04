@@ -9,7 +9,7 @@ import {
     PackageX,
     Loader2,
     Store,
-    Sparkles,
+    Layers,
     Radio,
     FileSpreadsheet,
     Cpu,
@@ -382,7 +382,7 @@ export default function Dashboard() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-purple-500" />
+                                <Layers className="h-4 w-4 text-purple-500" />
                                 AI Enhancements
                             </CardTitle>
                         </CardHeader>
@@ -500,7 +500,7 @@ export default function Dashboard() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-purple-500" />
+                            <Layers className="h-4 w-4 text-purple-500" />
                             AI Enhancement Stats
                         </CardTitle>
                     </CardHeader>

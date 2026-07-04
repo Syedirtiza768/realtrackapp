@@ -6,6 +6,9 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Changed
+- **Neutral processing UI (Tier A):** Pipeline job view no longer shows AI token counts or OpenRouter messaging; stale-progress hint and enrichment status panel use generic “processing / content service” language. Inventory enrichment badges and stage labels de-emphasize AI. Removed `Sparkles` icon app-wide (replaced with contextual icons).
+
 ### Added
 - **ECU vision identification prompt:** Specialised AI vision prompt for ECUs, TCMs, BCMs, and electronic control modules. Extracts hardware numbers, software numbers, OE/OEM numbers, and all visible label text instead of hallucinating vehicle make/model. Auto-detected from part type keywords (ECU, TCM, BCM, Steuergerät, etc.).
 - **eBay catalog lookup by MPN in fitment discovery:** When no catalog fitment data exists, searches eBay Browse API for existing listings of the same part number. Extracts category ID, EPID, and Year/Make/Model from item specifics. Applied to both fitment rows and category resolution. Confidence: 0.70.

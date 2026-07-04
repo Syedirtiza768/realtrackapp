@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-    Sparkles,
+    Info,
     Save,
     Eye,
     CheckCircle,
@@ -266,7 +266,7 @@ export default function ListingEditor() {
                 <div className="lg:col-span-7 flex flex-col gap-4 sm:gap-6 overflow-y-auto lg:pr-4 scrollbar-thin">
 
                     <div className="bg-blue-900/10 border border-blue-500/20 rounded-lg p-4 flex gap-3">
-                        <Sparkles className="text-blue-400 shrink-0" size={20} />
+                        <Info className="text-blue-400 shrink-0" size={20} />
                         <div>
                             <h4 className="text-sm font-medium text-blue-400">AI Generated Content</h4>
                             <p className="text-xs text-blue-400/80 mt-1">

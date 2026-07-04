@@ -7,7 +7,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload, X, Check, AlertTriangle, Loader2,
-  ChevronRight, Eye, Sparkles, ArrowLeft, Camera, Zap, FileCheck,
+  ChevronRight, Eye, FileText, ArrowLeft, Camera, Zap, FileCheck,
   Shield, Car, Package, Edit3,
 } from 'lucide-react';
 import type {
@@ -38,7 +38,7 @@ interface UploadFileState {
 
 /* ── Stage icon + color config ────────────────────────────── */
 
-const STAGE_CONFIG: Record<string, { icon: typeof Sparkles; color: string; activeColor: string }> = {
+const STAGE_CONFIG: Record<string, { icon: typeof Upload; color: string; activeColor: string }> = {
   upload:     { icon: Upload,    color: 'text-gray-400', activeColor: 'text-blue-500' },
   extraction: { icon: Eye,       color: 'text-gray-400', activeColor: 'text-purple-500' },
   identity:   { icon: Package,   color: 'text-gray-400', activeColor: 'text-indigo-500' },
@@ -256,7 +256,7 @@ export default function AIUploadWizard() {
             Back
           </button>
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-600" />
+            <FileText className="w-5 h-5 text-purple-600" />
             <h1 className="text-lg font-semibold text-gray-900">
               AI Listing Engine
             </h1>
@@ -371,7 +371,7 @@ function UploadStep({
       {/* Hero prompt */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
-          <Sparkles className="w-3.5 h-3.5" />
+          <Camera className="w-3.5 h-3.5" />
           Powered by OpenAI Vision + eBay Motors API
         </div>
         <h2 className="text-2xl font-bold text-gray-900">
@@ -581,7 +581,7 @@ function AnalyzingStep({ progress }: { progress: PipelineProgress | null }) {
     <div className="max-w-2xl mx-auto space-y-8 py-8">
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
-          <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+          <Loader2 className="w-3.5 h-3.5 animate-pulse" />
           AI Pipeline Running
         </div>
         <h2 className="text-xl font-semibold text-gray-900">
@@ -798,7 +798,7 @@ function ResultsStep({
           {product.generatedTitle && (
             <div className="px-5 py-4 border-t space-y-3">
               <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                <FileCheck className="w-3.5 h-3.5 text-purple-500" />
                 AI-Generated Listing
               </h3>
               <div className="bg-gray-50 rounded-lg p-4 space-y-2">

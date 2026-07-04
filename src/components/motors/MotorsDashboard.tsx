@@ -13,7 +13,7 @@ import {
   Search,
   Filter,
   BarChart3,
-  Sparkles,
+  FileText,
   Camera,
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
@@ -35,7 +35,7 @@ const STATUS_CONFIG: Record<MotorsProductStatus, StatusInfo> = {
   extracting:         { label: 'Extracting',       color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',  icon: Eye },
   identifying:        { label: 'Identifying',      color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300', icon: Search },
   resolving_fitment:  { label: 'Fitment',          color: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300', icon: Cpu },
-  generating_listing: { label: 'Generating',       color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300', icon: Sparkles },
+  generating_listing: { label: 'Generating',       color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300', icon: FileText },
   validating:         { label: 'Validating',       color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300', icon: CheckCircle },
   review_required:    { label: 'Review Required',  color: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300', icon: AlertTriangle },
   approved:           { label: 'Approved',         color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300', icon: CheckCircle },
