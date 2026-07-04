@@ -468,16 +468,42 @@ export class EbayMvlService {
 
     const cache = new MvlValueCache();
     const results: MvlValidatedRow[] = [];
+    let consecutiveApiFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 5;
+    let apiDisabled = false;
 
     for (const parsed of rows) {
+      // Circuit breaker: if API keeps failing, skip remaining rows immediately
+      if (apiDisabled) {
+        results.push({
+          row: parsed,
+          status: 'needs_review',
+          rejectedReason: 'eBay MVL API unavailable',
+          serialized: serializeValidatedFitmentRow(parsed, 'needs_review', {
+            MvlRejectedReason: 'eBay MVL API unavailable',
+          }),
+        });
+        continue;
+      }
+
       try {
         results.push(
           await this.validateSingleRow(parsed, categoryId, cache, treeId),
         );
+        consecutiveApiFailures = 0; // Reset on success
       } catch (err) {
+        consecutiveApiFailures++;
         this.logger.warn(
           `MVL validation unavailable for ${parsed.make} ${parsed.model}: ${err instanceof Error ? err.message : err}`,
         );
+
+        if (consecutiveApiFailures >= MAX_CONSECUTIVE_FAILURES) {
+          apiDisabled = true;
+          this.logger.warn(
+            `MVL circuit breaker triggered after ${consecutiveApiFailures} consecutive failures — skipping remaining rows`,
+          );
+        }
+
         results.push({
           row: parsed,
           status: 'needs_review',
