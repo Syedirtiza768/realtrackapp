@@ -10,7 +10,10 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Pipeline exit code 1 crash:** `categoryAiMinConfidence` variable was referenced in the AI category classifier setup but never declared, causing `ReferenceError` at line 643 and every pipeline job to exit with code 1. Added the missing `const categoryAiMinConfidence = Number(env.PIPELINE_CATEGORY_AI_MIN_CONFIDENCE)` declaration alongside `categoryAiModel` and `categoryAiBatchSize`.
 
 ### Added
-- **Per-marketplace category mapping (US/AU/DE):** Enrichment pipeline resolves category IDs separately for each Motors marketplace tree (US `0`, AU `15`, DE `77`) via eBay Taxonomy + Gemini 2.5 Flash fallback. AU/DE output files no longer reuse US category IDs. Categories stored on `part._categories.{US,AU,DE}` and written to each regional template.
+- **Teams foundation:** `teams` and `team_members` tables, RBAC permissions (`teams.view`, `teams.manage`), Settings → Teams admin UI, and team assignment on pipeline upload. Every part in an upload inherits the selected team; catalog search supports `teamIds` filter with membership-scoped access; pipeline queue shows upload ID, team, condition, and uploader.
+- **Pipeline page redesign:** Single-page layout matching the operations mockup — bulk upload card (condition + team + drag-drop), rules explainer, and paginated pipeline queue with status filters.
+- **Docker migration entrypoint:** Backend container runs pending TypeORM migrations on start when `DB_MIGRATIONS_RUN=true` (uses `DB_MIGRATION_HOST` for direct Postgres, avoiding PgBouncer for DDL).
+- **Catalog bulk policy edit:** "Edit Policies" action on selected listings respects the active team filter; server validates team scope via `POST /api/listings/bulk-profiles`.
 
 ### Changed
 - **AI category classifier default:** `PIPELINE_CATEGORY_AI_MODEL` defaults to `google/gemini-2.5-flash` (90% benchmark accuracy on Motors leaf categories). Marketplace-aware prompts and per-tree Taxonomy resolution for AU/DE.

@@ -23,6 +23,7 @@ export interface SearchQuery {
   makes?: string;         // comma-separated fitment make IDs
   models?: string;        // comma-separated fitment model IDs
   pipelineJobIds?: string; // comma-separated pipeline job UUIDs
+  teamIds?: string;        // comma-separated team UUIDs
   marketplaces?: string;  // comma-separated marketplace codes
   minPrice?: number;
   maxPrice?: number;
@@ -114,6 +115,7 @@ export interface DynamicFacets {
   models: FacetBucket[];
   pipelineJobs: FacetBucket[];
   marketplaces: FacetBucket[];
+  teams: FacetBucket[];
   priceRange: { min: number | null; max: number | null };
   totalFiltered: number;
   queryTimeMs: number;
@@ -205,6 +207,7 @@ export interface ActiveFilters {
   models: string[];           // vehicle model names (extracted from title)
   modelNames: string[];       // same as models (kept for compat)
   pipelineJobIds: string[];   // pipeline job UUIDs
+  teamIds: string[];          // team UUIDs
   marketplaces: string[];     // marketplace codes
   minPrice: number | null;
   maxPrice: number | null;
@@ -227,6 +230,7 @@ export const EMPTY_FILTERS: ActiveFilters = {
   models: [],
   modelNames: [],
   pipelineJobIds: [],
+  teamIds: [],
   marketplaces: [],
   minPrice: null,
   maxPrice: null,
@@ -247,6 +251,7 @@ export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
     makes: f.makes.length ? f.makes.join(',') : undefined,
     models: f.models.length ? f.models.join(',') : undefined,
     pipelineJobIds: f.pipelineJobIds.length ? f.pipelineJobIds.join(',') : undefined,
+    teamIds: f.teamIds.length ? f.teamIds.join(',') : undefined,
     marketplaces: f.marketplaces.length ? f.marketplaces.join(',') : undefined,
     minPrice: f.minPrice ?? undefined,
     maxPrice: f.maxPrice ?? undefined,
@@ -268,6 +273,7 @@ export function countActiveFilters(f: ActiveFilters): number {
   count += f.makes.length;
   count += f.models.length;
   count += f.pipelineJobIds.length;
+  count += f.teamIds.length;
   count += f.marketplaces.length;
   if (f.minPrice != null) count++;
   if (f.maxPrice != null) count++;

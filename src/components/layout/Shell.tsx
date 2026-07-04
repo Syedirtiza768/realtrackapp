@@ -74,6 +74,7 @@ const NAV_ITEMS: NavItem[] = [
     { icon: Bell, label: 'Notifications', path: '/notifications', permission: 'notifications.view' },
     { icon: Settings, label: 'Settings', path: '/settings', permission: 'settings.view' },
     { icon: Settings, label: 'Users', path: '/settings/users', permission: 'users.view' },
+    { icon: Settings, label: 'Teams', path: '/settings/teams', permission: 'teams.manage' },
     { icon: Settings, label: 'Permissions', path: '/settings/permissions', permission: 'roles.view' },
     { icon: Settings, label: 'Client settings', path: '/settings/client', permission: 'client_settings.view' },
     { icon: ShoppingBag, label: 'eBay stores', path: '/settings/integrations/ebay', permission: 'ebay.view' },

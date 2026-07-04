@@ -812,6 +812,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     originalFilename?: string,
     upsertCatalogProducts = false,
   ): Promise<boolean> {
+    const dbJob = await this.jobRepo.findOneBy({ id: jobId });
+    const jobTeamId = dbJob?.teamId ?? null;
+    const uploadConditionLabel = dbJob?.conditionLabel ?? null;
+    const uploadConditionId = uploadConditionLabel
+      ? ({ Used: '3000', New: '1000', Refurbished: '2500' } as Record<string, string>)[uploadConditionLabel] ?? null
+      : null;
+
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
     const mktFile = files.find((f) => {
       const lower = f.toLowerCase();
@@ -1010,7 +1017,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           oemPartNumber: get(row, iOem) || null,
           price,
           quantity,
-          conditionId: get(row, iConditionId) || null,
+          conditionId: get(row, iConditionId) || uploadConditionId || null,
+          conditionLabel: uploadConditionLabel || null,
           categoryId: get(row, iCategoryId) || null,
           categoryName: get(row, iCategoryName) || null,
           imageUrls,
@@ -1023,6 +1031,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           sourceFile: originalFilename ?? mktFile,
           sourceRow: i,
           pipelineJobId: jobId,
+          teamId: jobTeamId,
         });
 
         listingRecords.push({
@@ -1040,7 +1049,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           quantity: qtyStr || null,
           quantityNum: quantity,
           itemPhotoUrl: imageUrls.join('|') || null,
-          conditionId: get(row, iConditionId) || null,
+          conditionId: get(row, iConditionId) || uploadConditionId || null,
           description: get(row, iDesc) || null,
           format: get(row, iFormat) || null,
           duration: get(row, iDuration) || null,
@@ -1058,10 +1067,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         } satisfies Partial<ListingRecord> & { marketplace?: string });
       }
 
-      // Set marketplace + pipelineJobId on each listing record
+      // Set marketplace + pipelineJobId + team on each listing record
       for (const lr of listingRecords) {
         (lr as any).pipelineJobId = jobId;
         (lr as any).marketplace = marketplace;
+        (lr as any).teamId = jobTeamId;
         (lr as any).version = 1;
       }
 

@@ -59,6 +59,9 @@ export class SearchQueryDto {
   @IsOptional() @IsString()
   marketplaces?: string;    // comma-separated: "US,DE"
 
+  @IsOptional() @IsString()
+  teamIds?: string;         // comma-separated team UUIDs
+
   /* -- Vehicle make/model filters (comma-separated names) - */
   @IsOptional() @IsString()
   makes?: string;          // make names: "Audi,BMW,Mercedes-Benz"

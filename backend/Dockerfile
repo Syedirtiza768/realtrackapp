@@ -40,6 +40,10 @@ COPY --from=builder /app/shared ./shared
 # Create uploads directory
 RUN mkdir -p uploads/catalog
 
+# Entrypoint runs migrations on container start when DB_MIGRATIONS_RUN=true
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 4191
 
-CMD ["node", "dist/src/main.js"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

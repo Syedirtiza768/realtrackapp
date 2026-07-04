@@ -21,7 +21,9 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `DB_PASSWORD` | `postgres` | DB password (**secret**) |
 | `DB_NAME` | `listingpro` | Database name |
 | `DB_SYNCHRONIZE` | `false` | TypeORM auto-sync (keep false) |
-| `DB_MIGRATIONS_RUN` | `true` | Run migrations on boot |
+| `DB_MIGRATIONS_RUN` | `true` | Enable migration runner (Docker entrypoint + optional Nest boot) |
+| `DB_MIGRATIONS_AT_ENTRYPOINT` | `true` | Run migrations in container entrypoint before API start |
+| `DB_MIGRATION_HOST` | `postgres` | Direct Postgres host for DDL (bypasses PgBouncer in prod overlay) |
 | `DB_POOL_MAX` / `DB_POOL_MIN` | `10` / `2` (t3.medium) | Connection pool |
 | `DB_LOGGING` | `false` | SQL logging |
 

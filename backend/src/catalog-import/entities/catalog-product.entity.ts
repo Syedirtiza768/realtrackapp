@@ -203,6 +203,10 @@ export class CatalogProduct {
   @Column({ name: 'pipeline_job_id', type: 'uuid', nullable: true })
   pipelineJobId!: string | null;
 
+  @Column({ name: 'team_id', type: 'uuid', nullable: true })
+  @Index('idx_catalog_team')
+  teamId!: string | null;
+
   /* ── Audit columns ─────────────────────────────────────── */
 
   @CreateDateColumn({ type: 'timestamptz' })

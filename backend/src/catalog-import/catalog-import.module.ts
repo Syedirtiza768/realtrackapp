@@ -22,6 +22,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
 import { RbacModule } from '../rbac/rbac.module.js';
 import { HeavyJobLimiterModule } from '../common/jobs/heavy-job-limiter.module.js';
+import { ListingsModule } from '../listings/listings.module.js';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { HeavyJobLimiterModule } from '../common/jobs/heavy-job-limiter.module.j
     OpenAiModule,
     StorageModule,
     ChannelsModule,
+    ListingsModule,
   ],
   controllers: [CatalogImportController, ComplianceController, CatalogProductController],
   providers: [

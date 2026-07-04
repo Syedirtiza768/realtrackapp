@@ -30,6 +30,7 @@ import { RequirePermissions, RequireAnyPermission } from '../rbac/decorators/req
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { User } from '../auth/entities/user.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { TeamsService } from '../teams/teams.service.js';
 
 /**
  * PipelineController — REST endpoints for the enrichment pipeline.
@@ -44,6 +45,7 @@ export class PipelineController {
     private readonly pipelineService: PipelineService,
     private readonly singleListingForm: SingleListingFormService,
     private readonly rbac: RbacService,
+    private readonly teamsService: TeamsService,
   ) {}
 
   @Post('jobs/:id/enterprise-optimize')
@@ -154,16 +156,22 @@ export class PipelineController {
   @ApiOperation({ summary: 'Upload an Excel/CSV file and start enrichment pipeline' })
   async uploadAndStart(
     @UploadedFile() file: Express.Multer.File,
+    @Body('teamId') teamId: string,
+    @Body('conditionLabel') conditionLabel: string,
     @CurrentUser() user: User,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
 
+    const manageAllTeams = await this.rbac.userHasPermission(user.id, 'teams.manage');
     const job = await this.pipelineService.createJobFromUpload(
       file.originalname,
       file.buffer,
       user.id,
+      teamId,
+      conditionLabel,
+      manageAllTeams,
     );
 
     return { job };
@@ -223,16 +231,31 @@ export class PipelineController {
   async listJobs(
     @CurrentUser() user: User,
     @Query('status') status?: string,
+    @Query('displayStatus') displayStatus?: string,
+    @Query('teamIds') teamIds?: string,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
     const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    const manageAllTeams = await this.rbac.userHasPermission(user.id, 'teams.manage');
+    const parsedTeamIds = teamIds
+      ? teamIds.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+    if (parsedTeamIds?.length) {
+      await this.teamsService.assertUserCanAccessTeams(
+        user.id,
+        parsedTeamIds,
+        manageAllTeams,
+      );
+    }
     return this.pipelineService.listJobs(
       status,
       limit ?? 20,
       offset ?? 0,
       user.id,
       viewAll,
+      displayStatus,
+      parsedTeamIds,
     );
   }
 

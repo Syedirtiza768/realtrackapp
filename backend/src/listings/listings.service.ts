@@ -1,4 +1,5 @@
 ﻿import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -12,6 +13,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { QueryFailedError } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { BulkUpdateDto } from './dto/bulk-update.dto';
+import { BulkProfilesDto } from './dto/bulk-profiles.dto';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingsQueryDto } from './dto/listings-query.dto';
 import { PatchStatusDto } from './dto/patch-status.dto';
@@ -26,6 +28,7 @@ import { ListingActionLog } from '../integrations/ebay/entities/listing-action-l
 import { RbacService } from '../rbac/rbac.service.js';
 import { StoreAccessService } from '../channels/store-access.service.js';
 import { User } from '../auth/entities/user.entity.js';
+import { TeamsService } from '../teams/teams.service.js';
 
 /**
  * Maps each Excel header text (normalized to lowercase) to the
@@ -218,6 +221,7 @@ export class ListingsService {
     private readonly dataSource: DataSource,
     private readonly rbac: RbacService,
     private readonly storeAccess: StoreAccessService,
+    private readonly teamsService: TeamsService,
   ) {}
 
   /* ── Query methods ──────────────────────────────────────── */
@@ -637,6 +641,54 @@ export class ListingsService {
     }
 
     return { updated: updated.length, failed };
+  }
+
+  async bulkApplyProfiles(dto: BulkProfilesDto, user: User): Promise<{ updated: number }> {
+    const { shippingProfile, returnProfile, paymentProfile } = dto;
+    if (!shippingProfile && !returnProfile && !paymentProfile) {
+      throw new BadRequestException('At least one profile must be provided');
+    }
+
+    const listings = await this.listingRepo.findBy({ id: In(dto.ids) });
+    if (!listings.length) {
+      throw new NotFoundException('No listings found for given IDs');
+    }
+
+    const manageAll = await this.rbac.userHasPermission(user.id, 'teams.manage');
+    await this.teamsService.assertListingsTeamScope(
+      listings.map((l) => ({ id: l.id, teamId: l.teamId })),
+      user.id,
+      manageAll,
+      dto.teamIds,
+    );
+
+    for (const listing of listings) {
+      if (shippingProfile) listing.shippingProfileName = shippingProfile;
+      if (returnProfile) listing.returnProfileName = returnProfile;
+      if (paymentProfile) listing.paymentProfileName = paymentProfile;
+    }
+    await this.listingRepo.save(listings);
+
+    const skus = [
+      ...new Set(
+        listings
+          .map((l) => l.customLabelSku)
+          .filter((s): s is string => s != null && s !== ''),
+      ),
+    ];
+    if (skus.length) {
+      const products = await this.catalogProductRepo.findBy({ sku: In(skus) });
+      for (const product of products) {
+        if (shippingProfile) product.shippingProfile = shippingProfile;
+        if (returnProfile) product.returnProfile = returnProfile;
+        if (paymentProfile) product.paymentProfile = paymentProfile;
+      }
+      if (products.length) {
+        await this.catalogProductRepo.save(products);
+      }
+    }
+
+    return { updated: listings.length };
   }
 
   async bulkSoftDelete(ids: string[]) {

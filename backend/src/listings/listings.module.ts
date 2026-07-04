@@ -22,6 +22,8 @@ import { ExportRuleService } from './export-rule.service';
 import { ListingGenerationService } from './listing-generation.service';
 import { ChannelsModule } from '../channels/channels.module';
 import { TemplateModule } from '../templates/template.module';
+import { TeamsModule } from '../teams/teams.module.js';
+import { RbacModule } from '../rbac/rbac.module.js';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { TemplateModule } from '../templates/template.module';
     ]),
     ChannelsModule,
     TemplateModule,
+    TeamsModule,
+    RbacModule,
   ],
   controllers: [ListingsController, ListingsV2Controller, ExportRuleController, ListingGenerationController],
   providers: [ListingsService, SearchService, ExportRuleService, ListingGenerationService],

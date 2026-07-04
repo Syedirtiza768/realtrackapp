@@ -159,6 +159,15 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     });
   }
 
+  // Team tags
+  for (const teamId of filters.teamIds) {
+    tags.push({
+      key: 'team:' + teamId,
+      label: 'Team: ' + teamId.slice(0, 8),
+      onRemove: () => onChange({ ...filters, teamIds: filters.teamIds.filter((t) => t !== teamId) }),
+    });
+  }
+
   // Pipeline job tags
   for (const pj of filters.pipelineJobIds) {
     tags.push({

@@ -111,6 +111,19 @@ export async function authPut<T = unknown>(
 }
 
 /**
+ * Convenience: PATCH with auth
+ */
+export async function authPatch<T = unknown>(
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  return fetchWithAuth<T>(path, {
+    method: 'PATCH',
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+}
+
+/**
  * Convenience: DELETE with auth
  */
 export async function authDelete<T = unknown>(path: string): Promise<T> {

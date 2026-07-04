@@ -15,6 +15,9 @@ import { TemplateGeneratorService } from './template-generator.service.js';
 import { parseCatalogProductListQuery } from './utils/catalog-product-list-query.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { CategoryLookupService } from './services/category-lookup.service.js';
+import { ListingsService } from '../listings/listings.service.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { User } from '../auth/entities/user.entity.js';
 
 @Controller('catalog-products')
 @RequirePermissions('catalog.view')
@@ -23,6 +26,7 @@ export class CatalogProductController {
     private readonly productService: CatalogProductService,
     private readonly templateService: TemplateGeneratorService,
     private readonly categoryLookup: CategoryLookupService,
+    private readonly listingsService: ListingsService,
   ) {}
 
   @Get()
@@ -86,7 +90,9 @@ export class CatalogProductController {
       returnProfile?: string;
       paymentProfile?: string;
       persistProfiles?: boolean;
+      teamIds?: string[];
     },
+    @CurrentUser() user: User,
     @Res() res: express.Response,
   ) {
     let products = body.ids?.length
@@ -104,11 +110,16 @@ export class CatalogProductController {
     }
 
     if (body.persistProfiles && body.listingIds?.length) {
-      await this.productService.persistProfileOverridesForListings(body.listingIds, {
-        shippingProfile: body.shippingProfile,
-        returnProfile: body.returnProfile,
-        paymentProfile: body.paymentProfile,
-      });
+      await this.listingsService.bulkApplyProfiles(
+        {
+          ids: body.listingIds,
+          shippingProfile: body.shippingProfile,
+          returnProfile: body.returnProfile,
+          paymentProfile: body.paymentProfile,
+          teamIds: body.teamIds,
+        },
+        user,
+      );
     }
 
     const profileOverrides = {

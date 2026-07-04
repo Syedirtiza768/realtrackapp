@@ -5,6 +5,8 @@ import { SearchQueryDto } from './dto/search-query.dto';
 import { ListingRecord } from './listing-record.entity';
 import { StoreAccessService } from '../channels/store-access.service.js';
 import { User } from '../auth/entities/user.entity.js';
+import { TeamsService } from '../teams/teams.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 
 /* ── Simple in-memory cache ───────────────────────────────── */
 interface CacheEntry<T> {
@@ -105,6 +107,7 @@ export interface DynamicFacets {
   models: FacetBucket[];
   pipelineJobs: FacetBucket[];
   marketplaces: FacetBucket[];
+  teams: FacetBucket[];
   priceRange: { min: number | null; max: number | null };
   totalFiltered: number;
   queryTimeMs: number;
@@ -145,6 +148,8 @@ export class SearchService {
     @InjectRepository(ListingRecord)
     private readonly repo: Repository<ListingRecord>,
     private readonly storeAccess: StoreAccessService,
+    private readonly teamsService: TeamsService,
+    private readonly rbac: RbacService,
   ) {}
 
   /* ──────────────────────────────────────────────────────────
@@ -295,6 +300,9 @@ export class SearchService {
         qb.andWhere(StoreAccessService.SCOPED_LISTINGS_SQL, { storeIds });
       }
     }
+
+    /* -- Team scope (membership + optional filter) ---------------- */
+    await this.applyTeamScope(qb, dto, user);
 
     /* -- Sorting ----------------------------------------------- */
     const sort = dto.sort ?? (hasQuery ? 'relevance' : 'newest');
@@ -561,6 +569,7 @@ export class SearchService {
 
     // Pre-compute store filter for dynamic facets
     const storeFilter = await this.buildStoreFilterSql(user);
+    const teamScopeIds = await this.resolveTeamScopeIds(dto, user);
 
     // Build base WHERE — same text-match rules as SearchService.search (FTS + SKU + ILIKE when vector null)
     const buildBaseQb = () => {
@@ -611,6 +620,13 @@ export class SearchService {
         base.andWhere(`${SAFE_PRICE} <= :maxPrice`, { maxPrice: dto.maxPrice });
       }
       if (storeFilter) base.andWhere(storeFilter.sql, storeFilter.params);
+      if (teamScopeIds !== null) {
+        if (teamScopeIds.length === 0) {
+          base.andWhere('1 = 0');
+        } else {
+          base.andWhere('r.team_id IN (:...teamScopeIds)', { teamScopeIds });
+        }
+      }
       return base;
     };
 
@@ -668,6 +684,10 @@ export class SearchService {
       if (excludeDimension !== 'marketplace' && mktArr.length) {
         fb.andWhere(`r.marketplace IN (:...facetMkt)`, { facetMkt: mktArr });
       }
+      const teamArr = splitFilter(dto.teamIds);
+      if (excludeDimension !== 'team' && teamArr.length) {
+        fb.andWhere(`r.team_id IN (:...facetTeamIds)`, { facetTeamIds: teamArr });
+      }
       return fb;
     };
 
@@ -676,7 +696,7 @@ export class SearchService {
       brandsRaw, catsRaw, condsRaw, typesRaw, srcRaw,
       formatsRaw, locationsRaw, mpnsRaw,
       makesRaw, modelsRaw,
-      pipelineJobsRaw, marketplacesRaw,
+      pipelineJobsRaw, marketplacesRaw, teamsRaw,
       priceRaw, totalFiltered,
     ] = await Promise.all([
         // Brands facet
@@ -796,6 +816,19 @@ export class SearchService {
           .orderBy('count', 'DESC')
           .getRawMany<{ value: string; count: string }>(),
 
+        // Teams facet
+        buildFacetQb('team')
+          .innerJoin('teams', 'tm', 'tm.id = r.team_id')
+          .select('r.team_id', 'value')
+          .addSelect('tm.name', 'label')
+          .addSelect('COUNT(*)', 'count')
+          .andWhere(`r.team_id IS NOT NULL`)
+          .groupBy('r.team_id')
+          .addGroupBy('tm.name')
+          .orderBy('count', 'DESC')
+          .limit(50)
+          .getRawMany<{ value: string; label: string; count: string }>(),
+
         // Price range (within filtered set)
         (() => {
           const pqb = buildBaseQb();
@@ -827,6 +860,11 @@ export class SearchService {
       models: modelsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       pipelineJobs: pipelineJobsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       marketplaces: marketplacesRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      teams: teamsRaw.map((r) => ({
+        value: r.value,
+        label: r.label,
+        count: Number(r.count),
+      })),
       priceRange: {
         min: priceRaw?.min != null ? parseFloat(priceRaw.min) : null,
         max: priceRaw?.max != null ? parseFloat(priceRaw.max) : null,
@@ -916,5 +954,36 @@ export class SearchService {
     if (modelArr.length) {
       qb.andWhere(`r."extractedModel" IN (:...models)`, { models: modelArr });
     }
+  }
+
+  private async resolveTeamScopeIds(
+    dto: SearchQueryDto,
+    user?: User,
+  ): Promise<string[] | null> {
+    if (!user) return null;
+    const manageAll = await this.rbac.userHasPermission(user.id, 'teams.manage');
+    const requested = splitFilter(dto.teamIds);
+    if (manageAll) {
+      return requested.length ? requested : null;
+    }
+    const userTeams = await this.teamsService.getUserTeamIds(user.id);
+    if (requested.length) {
+      return requested.filter((id) => userTeams.includes(id));
+    }
+    return userTeams;
+  }
+
+  private async applyTeamScope(
+    qb: SelectQueryBuilder<ListingRecord>,
+    dto: SearchQueryDto,
+    user?: User,
+  ): Promise<void> {
+    const scope = await this.resolveTeamScopeIds(dto, user);
+    if (scope === null) return;
+    if (scope.length === 0) {
+      qb.andWhere('1 = 0');
+      return;
+    }
+    qb.andWhere('r.team_id IN (:...teamScopeIds)', { teamScopeIds: scope });
   }
 }

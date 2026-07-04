@@ -320,6 +320,10 @@ export class ListingRecord {
   @Index('idx_listing_pipeline_job')
   pipelineJobId: string | null;
 
+  @Column({ name: 'team_id', type: 'uuid', nullable: true })
+  @Index('idx_listing_team')
+  teamId: string | null;
+
   @Column({ type: 'varchar', length: 3, nullable: true })
   @Index('idx_listing_marketplace')
   marketplace: string | null;

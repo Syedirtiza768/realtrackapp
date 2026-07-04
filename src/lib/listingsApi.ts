@@ -227,6 +227,17 @@ export async function bulkUpdateListings(
   return apiMutate<BulkUpdateResponse>('/listings/bulk', 'POST', { ids, changes, versions });
 }
 
+/** Bulk apply eBay business policies (POST /api/listings/bulk-profiles) */
+export async function bulkApplyListingProfiles(input: {
+  ids: string[];
+  shippingProfile?: string;
+  returnProfile?: string;
+  paymentProfile?: string;
+  teamIds?: string[];
+}): Promise<{ updated: number }> {
+  return apiMutate<{ updated: number }>('/listings/bulk-profiles', 'POST', input);
+}
+
 /** Fetch revision history for a listing */
 export async function fetchRevisions(
   id: string,

@@ -56,6 +56,9 @@ services:
     environment:
       DB_HOST: pgbouncer
       DB_PORT: 6432
+      DB_MIGRATION_HOST: postgres
+      DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-true}
+      DB_MIGRATIONS_AT_ENTRYPOINT: ${DB_MIGRATIONS_AT_ENTRYPOINT:-true}
       DB_POOL_MAX: ${DB_POOL_MAX:-25}
       DB_POOL_MIN: ${DB_POOL_MIN:-5}
       REDIS_SOCKET_ADAPTER: ${REDIS_SOCKET_ADAPTER:-true}

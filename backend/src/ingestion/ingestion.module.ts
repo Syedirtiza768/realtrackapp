@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RbacModule } from '../rbac/rbac.module.js';
+import { User } from '../auth/entities/user.entity.js';
 import { IngestionJob } from './entities/ingestion-job.entity.js';
 import { AiResult } from './entities/ai-result.entity.js';
 import { ImageAsset } from '../storage/entities/image-asset.entity.js';
@@ -30,10 +31,11 @@ import { HeavyJobLimiterModule } from '../common/jobs/heavy-job-limiter.module.j
 import { FitmentModule } from '../fitment/fitment.module.js';
 import { PipelineOutputImageService } from './services/pipeline-output-image.service.js';
 import { SingleListingFormService } from './services/single-listing-form.service.js';
+import { TeamsModule } from '../teams/teams.module.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob, CatalogProduct]),
+    TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob, CatalogProduct, User]),
     RbacModule,
     BullModule.registerQueue({ name: 'ingestion' }),
     BullModule.registerQueue({ name: 'pipeline' }),
@@ -46,6 +48,7 @@ import { SingleListingFormService } from './services/single-listing-form.service
     OpenAiModule,
     ChannelsModule,
     HeavyJobLimiterModule,
+    TeamsModule,
   ],
   controllers: [IngestionController, ReviewController, PipelineController, ImageEnrichmentController],
   providers: [

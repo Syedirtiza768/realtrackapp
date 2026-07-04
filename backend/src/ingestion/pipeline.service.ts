@@ -15,9 +15,32 @@ import { applyCreatedByVisibility, canViewJob, withCreatedByBackfill } from '../
 import { HeavyJobLimiterService } from '../common/jobs/heavy-job-limiter.service.js';
 import { SingleListingFormService } from './services/single-listing-form.service.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
+import { TeamsService } from '../teams/teams.service.js';
+import { User } from '../auth/entities/user.entity.js';
+import {
+  PIPELINE_CONDITION_OPTIONS,
+  mapPipelineDisplayStatus,
+  type PipelineDisplayStatus,
+} from './pipeline.constants.js';
 
 const SINGLE_LISTING_DEFAULT_PRICE = 100;
 const SINGLE_LISTING_DEFAULT_QUANTITY = 1;
+
+export { PIPELINE_CONDITION_OPTIONS, mapPipelineDisplayStatus, type PipelineDisplayStatus } from './pipeline.constants.js';
+
+export interface PipelineJobListItem {
+  id: string;
+  uploadCode: string | null;
+  status: string;
+  displayStatus: PipelineDisplayStatus;
+  originalFilename: string;
+  totalParts: number;
+  conditionLabel: string | null;
+  team: { id: string; name: string; color: string } | null;
+  uploadedBy: { id: string; name: string } | null;
+  createdAt: Date;
+  fileSizeBytes: number | null;
+}
 
 export interface CreatePipelineJobDto {
   originalFilename: string;
@@ -84,7 +107,17 @@ export class PipelineService {
     private readonly listingOptimization: ListingOptimizationService,
     private readonly heavyJobLimiter: HeavyJobLimiterService,
     private readonly singleListingForm: SingleListingFormService,
+    private readonly teamsService: TeamsService,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
+
+  private async nextUploadCode(): Promise<string> {
+    const rows = await this.jobRepo.query(`SELECT nextval('pipeline_upload_seq') AS n`);
+    const n = Number(rows[0]?.n ?? 1);
+    const year = new Date().getFullYear();
+    return `UPL-${year}-${String(n).padStart(6, '0')}`;
+  }
 
   private pipelineUploadRoot(): string {
     const projectRoot = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
@@ -104,6 +137,9 @@ export class PipelineService {
     originalFilename: string,
     fileBuffer: Buffer,
     userId?: string,
+    teamId?: string,
+    conditionLabel?: string,
+    manageAllTeams = false,
   ): Promise<PipelineJob> {
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
 
@@ -114,6 +150,23 @@ export class PipelineService {
       );
     }
 
+    if (!teamId) {
+      throw new BadRequestException('teamId is required');
+    }
+    if (!conditionLabel?.trim()) {
+      throw new BadRequestException('conditionLabel is required');
+    }
+    if (!PIPELINE_CONDITION_OPTIONS[conditionLabel.trim()]) {
+      throw new BadRequestException(
+        `Invalid conditionLabel. Allowed: ${Object.keys(PIPELINE_CONDITION_OPTIONS).join(', ')}`,
+      );
+    }
+    if (userId) {
+      await this.teamsService.assertUserCanAccessTeam(userId, teamId, manageAllTeams);
+    }
+
+    const uploadCode = await this.nextUploadCode();
+
     const placeholder = await this.jobRepo.save(
       this.jobRepo.create({
         originalFilename,
@@ -121,6 +174,9 @@ export class PipelineService {
         fileSizeBytes: fileBuffer.length,
         status: 'pending',
         createdBy: userId ?? null,
+        teamId,
+        conditionLabel: conditionLabel.trim(),
+        uploadCode,
       }),
     );
 
@@ -438,15 +494,87 @@ export class PipelineService {
     offset = 0,
     viewerId?: string,
     viewAll = true,
-  ): Promise<{ jobs: PipelineJob[]; total: number }> {
+    displayStatus?: string,
+    teamIds?: string[],
+  ): Promise<{ jobs: PipelineJobListItem[]; total: number }> {
     const qb = this.jobRepo.createQueryBuilder('j').orderBy('j.createdAt', 'DESC');
     if (status) qb.andWhere('j.status = :status', { status });
     if (viewerId) {
       applyCreatedByVisibility(qb, 'j', viewerId, viewAll);
     }
+    if (!viewAll && viewerId) {
+      const accessible = await this.teamsService.getUserTeamIds(viewerId);
+      if (accessible.length === 0) {
+        qb.andWhere('1 = 0');
+      } else {
+        qb.andWhere('(j.team_id IN (:...accessibleTeams) OR j.team_id IS NULL)', {
+          accessibleTeams: accessible,
+        });
+      }
+    }
+    if (teamIds?.length) {
+      qb.andWhere('j.team_id IN (:...filterTeamIds)', { filterTeamIds: teamIds });
+    }
+    if (displayStatus) {
+      switch (displayStatus) {
+        case 'queued':
+          qb.andWhere('j.status = :queuedStatus', { queuedStatus: 'pending' });
+          break;
+        case 'uploaded':
+          qb.andWhere('j.status = :uploadedStatus', { uploadedStatus: 'completed' });
+          break;
+        case 'failed':
+          qb.andWhere('j.status IN (:...failedStatuses)', {
+            failedStatuses: ['failed', 'cancelled'],
+          });
+          break;
+        case 'processing':
+          qb.andWhere('j.status NOT IN (:...terminalStatuses)', {
+            terminalStatuses: ['pending', 'completed', 'failed', 'cancelled'],
+          });
+          break;
+        default:
+          break;
+      }
+    }
     qb.take(limit).skip(offset);
     const [jobs, total] = await qb.getManyAndCount();
-    return { jobs, total };
+    return { jobs: await this.enrichJobList(jobs), total };
+  }
+
+  private async enrichJobList(jobs: PipelineJob[]): Promise<PipelineJobListItem[]> {
+    if (jobs.length === 0) return [];
+
+    const teamIds = [...new Set(jobs.map((j) => j.teamId).filter(Boolean))] as string[];
+    const userIds = [...new Set(jobs.map((j) => j.createdBy).filter(Boolean))] as string[];
+
+    const teamMap = await this.teamsService.findTeamsByIds(teamIds);
+    const users = userIds.length
+      ? await this.userRepo.find({ where: { id: In(userIds) }, select: ['id', 'name', 'email'] })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return jobs.map((job) => {
+      const team = job.teamId ? teamMap.get(job.teamId) : undefined;
+      const user = job.createdBy ? userMap.get(job.createdBy) : undefined;
+      return {
+        id: job.id,
+        uploadCode: job.uploadCode,
+        status: job.status,
+        displayStatus: mapPipelineDisplayStatus(job.status),
+        originalFilename: job.originalFilename,
+        totalParts: job.totalParts,
+        conditionLabel: job.conditionLabel,
+        team: team
+          ? { id: team.id, name: team.name, color: team.color }
+          : null,
+        uploadedBy: user
+          ? { id: user.id, name: user.name || user.email }
+          : null,
+        createdAt: job.createdAt,
+        fileSizeBytes: job.fileSizeBytes,
+      };
+    });
   }
 
   /**

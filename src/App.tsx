@@ -34,7 +34,7 @@ import MotorsDashboard from './components/motors/MotorsDashboard';
 import MotorsProductDetail from './components/motors/MotorsProductDetail';
 import ReviewQueue from './components/motors/ReviewQueue';
 import AIUploadWizard from './components/motors/AIUploadWizard';
-import PipelineWizard from './components/pipeline/PipelineWizard';
+import PipelinePage from './components/pipeline/PipelinePage';
 import EbayPreviewPage from './components/preview/EbayPreviewPage';
 import InventoryManager from './components/inventory/InventoryManager';
 import InventoryListingEditor from './components/inventory/InventoryListingEditor';
@@ -47,6 +47,7 @@ import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import VinListingsPage from './components/fitment/VinListingsPage';
 import ClientSettingsPage from './components/settings/ClientSettingsPage';
 import UsersAdminPage from './components/settings/UsersAdminPage';
+import TeamsAdminPage from './components/settings/TeamsAdminPage';
 import PermissionsPage from './components/settings/PermissionsPage';
 import AiRoutingDashboardPage from './components/settings/AiRoutingDashboardPage';
 import PublishedListingsPage from './components/published-listings/PublishedListingsPage';
@@ -91,6 +92,7 @@ function App() {
                             <Route path="/settings" element={<ProtectedRoute permissions={['settings.view']}><SettingsPage /></ProtectedRoute>} />
                             <Route path="/settings/client" element={<ClientSettingsPage />} />
                             <Route path="/settings/users" element={<UsersAdminPage />} />
+                            <Route path="/settings/teams" element={<TeamsAdminPage />} />
                             <Route path="/settings/permissions" element={<PermissionsPage />} />
                             <Route path="/settings/ai-routing" element={<AiRoutingDashboardPage />} />
                             <Route path="/settings/integrations/ebay" element={<ProtectedRoute permissions={['ebay.view']}><EbayStoresSettingsPage /></ProtectedRoute>} />
@@ -107,7 +109,7 @@ function App() {
                             <Route path="/motors/upload" element={<ProtectedRoute permissions={['motors.manage']}><AIUploadWizard /></ProtectedRoute>} />
                             <Route path="/motors/review" element={<ProtectedRoute permissions={['motors.review']}><ReviewQueue /></ProtectedRoute>} />
                             <Route path="/motors/:id" element={<ProtectedRoute permissions={['motors.view']}><MotorsProductDetail /></ProtectedRoute>} />
-                            <Route path="/pipeline" element={<ProtectedRoute permissions={['pipeline.view']}><PipelineWizard /></ProtectedRoute>} />
+                            <Route path="/pipeline" element={<ProtectedRoute permissions={['pipeline.view']}><PipelinePage /></ProtectedRoute>} />
                             <Route path="/preview" element={<ProtectedRoute permissions={['listings.view']}><EbayPreviewPage /></ProtectedRoute>} />
                             <Route path="*" element={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Page not found</div>} />
                         </Routes>

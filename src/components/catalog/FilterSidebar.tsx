@@ -290,7 +290,18 @@ export default function FilterSidebar({ facets, filters, onChange, loading }: Pr
         defaultExpanded
       />
 
-      {/* ── 14. Pipeline Job ──────────────────────────────── */}
+      {/* ── 14. Team ──────────────────────────────────────── */}
+      <MultiSelectFacet
+        title="Team"
+        buckets={facets?.teams ?? []}
+        selected={filters.teamIds}
+        onChange={(vals) => onChange({ ...filters, teamIds: vals })}
+        getLabel={(b) => b.label ?? b.value.slice(0, 8)}
+        loading={loading}
+        defaultExpanded
+      />
+
+      {/* ── 15. Pipeline Job ──────────────────────────────── */}
       <MultiSelectFacet
         title="Pipeline Job"
         buckets={facets?.pipelineJobs ?? []}

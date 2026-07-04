@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { BulkUpdateDto } from './dto/bulk-update.dto';
+import { BulkProfilesDto } from './dto/bulk-profiles.dto';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingsQueryDto } from './dto/listings-query.dto';
 import { PatchStatusDto } from './dto/patch-status.dto';
@@ -90,6 +91,12 @@ export class ListingsController {
   @RequirePermissions('listings.update')
   bulkUpdate(@Body() dto: BulkUpdateDto) {
     return this.listingsService.bulkUpdate(dto);
+  }
+
+  @Post('bulk-profiles')
+  @RequirePermissions('listings.update')
+  bulkApplyProfiles(@Body() dto: BulkProfilesDto, @CurrentUser() user: User) {
+    return this.listingsService.bulkApplyProfiles(dto, user);
   }
 
   @Post('bulk-delete')

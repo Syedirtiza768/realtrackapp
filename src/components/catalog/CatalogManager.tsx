@@ -14,6 +14,7 @@ import {
   PlusCircle,
   Send,
   Trash2,
+  Shield,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '../ui/card';
@@ -24,6 +25,7 @@ import ResultsGrid from './ResultsGrid';
 import CatalogPreviewModal from './CatalogPreviewModal';
 import PublishModal from '../channels/PublishModal';
 import ExportTemplatesModal from './ExportTemplatesModal';
+import BulkPolicyEditModal from './BulkPolicyEditModal';
 import { useSearch, useSummary, useDynamicFacets } from '../../lib/searchApi';
 import { deleteListing } from '../../lib/listingsApi';
 import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
@@ -69,12 +71,14 @@ export default function CatalogManager() {
   // Hydrate filters from URL params on mount
   useEffect(() => {
     const pjParam = searchParams.get('pipelineJobIds');
+    const teamParam = searchParams.get('teamIds');
     const mktParam = searchParams.get('marketplaces');
     const qParam = searchParams.get('q');
-    if (pjParam || mktParam || qParam) {
+    if (pjParam || teamParam || mktParam || qParam) {
       setFilters(prev => ({
         ...prev,
         pipelineJobIds: pjParam ? pjParam.split(',').filter(Boolean) : prev.pipelineJobIds,
+        teamIds: teamParam ? teamParam.split(',').filter(Boolean) : prev.teamIds,
         marketplaces: mktParam ? mktParam.split(',').filter(Boolean) : prev.marketplaces,
       }));
       if (qParam) {
@@ -88,6 +92,7 @@ export default function CatalogManager() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPublishOpen, setBulkPublishOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [policyModalOpen, setPolicyModalOpen] = useState(false);
 
   // For infinite scroll mode
   const [infiniteScroll, setInfiniteScroll] = useState(false);
@@ -263,6 +268,18 @@ export default function CatalogManager() {
     if (selectedIds.size === 0) return;
     setExportModalOpen(true);
   }, [selectedIds]);
+
+  const handleBulkPolicyEdit = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setPolicyModalOpen(true);
+  }, [selectedIds]);
+
+  const teamFilterLabels = useMemo(() => {
+    if (!filters.teamIds.length || !facets?.teams) return [];
+    return filters.teamIds.map(
+      (id) => facets.teams.find((t) => t.value === id)?.label ?? id.slice(0, 8),
+    );
+  }, [filters.teamIds, facets?.teams]);
 
   const handleExportCsv = useCallback(async () => {
     setExporting(true);
@@ -651,7 +668,18 @@ export default function CatalogManager() {
       <ExportTemplatesModal
         open={exportModalOpen}
         listingIds={Array.from(selectedIds)}
+        teamIds={filters.teamIds}
+        teamLabels={teamFilterLabels}
         onClose={() => setExportModalOpen(false)}
+        onComplete={handlePublishComplete}
+      />
+
+      <BulkPolicyEditModal
+        open={policyModalOpen}
+        listingIds={Array.from(selectedIds)}
+        teamIds={filters.teamIds}
+        teamLabels={teamFilterLabels}
+        onClose={() => setPolicyModalOpen(false)}
         onComplete={handlePublishComplete}
       />
 
@@ -666,6 +694,12 @@ export default function CatalogManager() {
             className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
           >
             <Send size={12} /> List on Channels
+          </button>
+          <button
+            onClick={handleBulkPolicyEdit}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            <Shield size={12} /> Edit Policies
           </button>
           <button
             onClick={handleExportTemplates}

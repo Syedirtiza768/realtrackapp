@@ -135,6 +135,17 @@ export class PipelineJob {
   @Column({ name: 'error_count', type: 'integer', default: 0 })
   errorCount!: number;
 
+  // ─── Team & upload metadata ───
+  @Column({ name: 'team_id', type: 'uuid', nullable: true })
+  @Index('idx_pipeline_job_team')
+  teamId!: string | null;
+
+  @Column({ name: 'condition_label', type: 'varchar', length: 50, nullable: true })
+  conditionLabel!: string | null;
+
+  @Column({ name: 'upload_code', type: 'varchar', length: 30, nullable: true })
+  uploadCode!: string | null;
+
   // ─── Metadata ───
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy!: string | null;

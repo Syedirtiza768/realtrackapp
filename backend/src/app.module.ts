@@ -40,6 +40,7 @@ import { PricingIntelligenceModule } from './pricing-intelligence/pricing-intell
 import { EbayIntegrationsModule } from './integrations/ebay/ebay-integrations.module';
 import { ClientSettingsModule } from './client-settings/client-settings.module.js';
 import { PublishedListingsModule } from './published-listings/published-listings.module.js';
+import { TeamsModule } from './teams/teams.module.js';
 
 @Module({
   imports: [
@@ -67,7 +68,9 @@ import { PublishedListingsModule } from './published-listings/published-listings
         autoLoadEntities: true,
         entities: [ListingRecord, ListingRevision, ListingCompliance],
         synchronize: config.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
-        migrationsRun: config.get<string>('DB_MIGRATIONS_RUN', 'false') === 'true',
+        migrationsRun:
+          config.get<string>('DB_MIGRATIONS_RUN', 'false') === 'true' &&
+          config.get<string>('DB_MIGRATIONS_AT_ENTRYPOINT', 'false') !== 'true',
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
         migrationsTableName: 'typeorm_migrations',
         // ─── Connection pool tuning ───
@@ -121,6 +124,7 @@ import { PublishedListingsModule } from './published-listings/published-listings
     EbayIntegrationsModule,
     ClientSettingsModule,
     PublishedListingsModule,
+    TeamsModule,
   ],
   controllers: [AppController],
   providers: [

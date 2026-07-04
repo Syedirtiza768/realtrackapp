@@ -25,6 +25,8 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { PipelineJob, PipelineJobStatus } from '../../types/pipeline';
 import { PIPELINE_STAGES } from '../../types/pipeline';
+import { listTeams, PIPELINE_CONDITIONS, type PipelineConditionLabel } from '../../lib/teamsApi';
+import { useQuery } from '@tanstack/react-query';
 import ImageEnrichmentPanel from './ImageEnrichmentPanel';
 import EnrichmentStatusPanel from './EnrichmentStatusPanel';
 import OptimizationStatusPanel, { useOptimizationDownloadGate } from './OptimizationStatusPanel';
@@ -220,7 +222,14 @@ function PipelineStatsBar() {
 function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [condition, setCondition] = useState<PipelineConditionLabel>('Used');
+  const [teamId, setTeamId] = useState('');
   const { upload, uploading, progress, error } = useUploadPipelineFile();
+  const { data: teams = [] } = useQuery({
+    queryKey: ['teams'],
+    queryFn: ({ signal }) => listTeams(signal),
+  });
+  const selectedTeamId = teamId || teams[0]?.id || '';
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -229,14 +238,18 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
         alert('Please upload an Excel (.xlsx/.xls) or CSV file');
         return;
       }
+      if (!selectedTeamId) {
+        alert('Select a team before uploading');
+        return;
+      }
       try {
-        const result = await upload(file);
+        const result = await upload(file, selectedTeamId, condition);
         if (result?.job) onJobCreated(result.job);
       } catch {
         // error state is handled by the hook
       }
     },
-    [upload, onJobCreated],
+    [upload, onJobCreated, selectedTeamId, condition],
   );
 
   const handleDrop = useCallback(
@@ -258,6 +271,32 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
         </CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <label className="block text-sm">
+            <span className="text-slate-500 dark:text-slate-400">Condition</span>
+            <select
+              value={condition}
+              onChange={(e) => setCondition(e.target.value as PipelineConditionLabel)}
+              className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm"
+            >
+              {PIPELINE_CONDITIONS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-500 dark:text-slate-400">Team</span>
+            <select
+              value={selectedTeamId}
+              onChange={(e) => setTeamId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm"
+            >
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
@@ -322,7 +361,7 @@ function UploadStep({ onJobCreated }: { onJobCreated: (job: PipelineJob) => void
  *  PROCESSING STEP
  * ------------------------------------------------------------- */
 
-function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }) {
+export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () => void }) {
   const { data } = usePipelineJob(jobId);
   const retryMutation = useRetryPipelineJob();
   const cancelMutation = useCancelPipelineJob();
@@ -673,15 +712,15 @@ function HistoryStep({ onViewJob }: { onViewJob: (id: string) => void }) {
                   <div className="min-w-0">
                     <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{job.originalFilename}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {new Date(job.createdAt).toLocaleString()} &middot; {formatBytes(job.fileSizeBytes)}
+                      {new Date(job.createdAt).toLocaleString()} &middot; {formatBytes(job.fileSizeBytes ?? 0)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   {job.totalParts > 0 && (
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{job.processedParts}/{job.totalParts} parts</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{job.totalParts} parts</span>
                   )}
-                  {statusBadge(job.status)}
+                  {statusBadge(job.displayStatus === 'uploaded' ? 'completed' : job.displayStatus === 'queued' ? 'pending' : job.displayStatus === 'failed' ? 'failed' : 'enrichment')}
                   <button
                     onClick={(e) => { e.stopPropagation(); downloadPipelineFile(job.id, 'input'); }}
                     title="Download original input file"

@@ -119,7 +119,7 @@ export function useUploadPipelineFile() {
   const qc = useQueryClient();
 
   const upload = useCallback(
-    async (file: File) => {
+    async (file: File, teamId: string, conditionLabel: string) => {
       setUploading(true);
       setProgress(0);
       setError(null);
@@ -128,6 +128,8 @@ export function useUploadPipelineFile() {
       try {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('teamId', teamId);
+        formData.append('conditionLabel', conditionLabel);
 
         const response = await new Promise<{ job: PipelineJob }>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
@@ -318,14 +320,46 @@ export function useCreateSingleListing() {
  *  JOBS
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-export function usePipelineJobs(status?: string) {
-  const qs = status ? `?status=${status}` : '';
-  return useQuery<{ data: PipelineJob[]; total: number }>({
-    queryKey: ['pipeline-jobs', status],
+export type PipelineDisplayStatus = 'queued' | 'processing' | 'uploaded' | 'failed';
+
+export interface PipelineJobListItem {
+  id: string;
+  uploadCode: string | null;
+  status: string;
+  displayStatus: PipelineDisplayStatus;
+  originalFilename: string;
+  totalParts: number;
+  conditionLabel: string | null;
+  team: { id: string; name: string; color: string } | null;
+  uploadedBy: { id: string; name: string } | null;
+  createdAt: string;
+  fileSizeBytes: number;
+}
+
+export interface PipelineJobsQuery {
+  status?: string;
+  displayStatus?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export function usePipelineJobs(query: PipelineJobsQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  if (query.displayStatus) params.set('displayStatus', query.displayStatus);
+  if (query.limit != null) params.set('limit', String(query.limit));
+  if (query.offset != null) params.set('offset', String(query.offset));
+  const qs = params.toString() ? `?${params.toString()}` : '';
+
+  return useQuery<{ data: PipelineJobListItem[]; total: number }>({
+    queryKey: ['pipeline-jobs', query],
     queryFn: async ({ signal }) => {
-      const response = await fetchJson<{ jobs: PipelineJobApi[]; total: number }>(`/pipeline/jobs${qs}`, signal);
+      const response = await fetchJson<{ jobs: PipelineJobListItem[]; total: number }>(
+        `/pipeline/jobs${qs}`,
+        signal,
+      );
       return {
-        data: response.jobs.map(normalizePipelineJob),
+        data: response.jobs,
         total: toNumber(response.total),
       };
     },

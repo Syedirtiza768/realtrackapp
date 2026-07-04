@@ -103,6 +103,10 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   ]),
   p('roles.assign', 'Assign roles to users', 'roles', ADMIN_UP),
 
+  // ── Teams ──
+  p('teams.view', 'View teams', 'teams', READ_ONLY),
+  p('teams.manage', 'Manage teams and member assignments', 'teams', ADMIN_UP),
+
   // ── Client settings / white-label ──
   p('client_settings.view', 'View client settings', 'client_settings', SUPER_ADMIN_ONLY),
   p('client_settings.manage', 'Manage client settings', 'client_settings', SUPER_ADMIN_ONLY),
