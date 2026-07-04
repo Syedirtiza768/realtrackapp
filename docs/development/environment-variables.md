@@ -157,8 +157,8 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `PIPELINE_JOB_STALE_MINUTES` | `360` | Auto-fail stuck processing jobs with no DB progress (frees upload slots) |
 | `PIPELINE_IMAGE_CONCURRENCY` | `3` (t3.medium) | Parallel image-enrichment API batches |
 | `PIPELINE_CATEGORY_CONCURRENCY` | `2` (t3.medium) | Parallel eBay taxonomy lookups (capped at 2; rate limiter is primary throttle) |
-| `PIPELINE_CATEGORY_MODE` | `auto` | `auto` = eBay cache/API → AI → keyword; `ebay`, `ai`, or `keyword` |
-| `PIPELINE_CATEGORY_AI_MODEL` | `openai/gpt-4o-mini` | OpenRouter model for AI category tier (see `docs/model-comparison/category-benchmark/REPORT.md`) |
+| `PIPELINE_CATEGORY_MODE` | `auto` | `auto` = eBay Taxonomy per marketplace (US/AU/DE trees) → Gemini AI → keyword+Taxonomy fallback |
+| `PIPELINE_CATEGORY_AI_MODEL` | `google/gemini-2.5-flash` | OpenRouter model for AI category tier; resolves AU/DE IDs via Taxonomy on trees `15`/`77` (see `docs/model-comparison/category-benchmark/REPORT.md`) |
 | `PIPELINE_CATEGORY_AI_BATCH_SIZE` | `12` | Parts per AI category batch |
 | `PIPELINE_CATEGORY_AI_MIN_CONFIDENCE` | `0.55` | Min AI confidence before keyword fallback |
 | `PIPELINE_TAXONOMY_RPS` | `2` | Max eBay Taxonomy API requests per second |

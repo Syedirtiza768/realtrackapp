@@ -6,8 +6,17 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Fixed
+- **Pipeline exit code 1 crash:** `categoryAiMinConfidence` variable was referenced in the AI category classifier setup but never declared, causing `ReferenceError` at line 643 and every pipeline job to exit with code 1. Added the missing `const categoryAiMinConfidence = Number(env.PIPELINE_CATEGORY_AI_MIN_CONFIDENCE)` declaration alongside `categoryAiModel` and `categoryAiBatchSize`.
+
 ### Added
-- **AI category mapping tier:** When eBay Taxonomy quota is exhausted (`PIPELINE_CATEGORY_MODE=auto`), pipeline batches category classification via OpenRouter (`openai/gpt-4o-mini` default), resolves to real eBay IDs via `shared/motors-leaf-categories.json`, and caches 90 days. Benchmark: `node scripts/model-comparison/category-model-benchmark.mjs`.
+- **Per-marketplace category mapping (US/AU/DE):** Enrichment pipeline resolves category IDs separately for each Motors marketplace tree (US `0`, AU `15`, DE `77`) via eBay Taxonomy + Gemini 2.5 Flash fallback. AU/DE output files no longer reuse US category IDs. Categories stored on `part._categories.{US,AU,DE}` and written to each regional template.
+
+### Changed
+- **AI category classifier default:** `PIPELINE_CATEGORY_AI_MODEL` defaults to `google/gemini-2.5-flash` (90% benchmark accuracy on Motors leaf categories). Marketplace-aware prompts and per-tree Taxonomy resolution for AU/DE.
+
+### Added
+- **AI category mapping tier:** When eBay Taxonomy quota is exhausted (`PIPELINE_CATEGORY_MODE=auto`), pipeline batches category classification via OpenRouter (`google/gemini-2.5-flash` default), resolves to real eBay IDs via Taxonomy API per marketplace tree, and caches 90 days. Benchmark: `node scripts/model-comparison/category-model-benchmark.mjs`.
 
 ### Changed
 - **Pipeline output stage reliability (659+ part jobs):** Cap export fitment rows (`PIPELINE_EXPORT_MAX_FITMENT_ROWS=80`, description HTML `PIPELINE_DESC_MAX_FITMENT_ROWS=30`) to avoid multi-hundred-thousand-row XLSX files. Write US/AU/DE templates sequentially with progress sub-stages. Skip redundant marketplace AI backfill when all three regional outputs exist. Skip per-row eBay MVL re-validation on catalog import by default (`PIPELINE_SKIP_MVL_ON_IMPORT=true`). Post-output steps now report sub-stages (`mirror_images`, `catalog_import`, `finalizing`) instead of appearing stuck on Output.

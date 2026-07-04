@@ -40,6 +40,14 @@ import {
   AI_CATEGORY_DEFAULT_MODEL,
 } from './lib/ai-category-classifier.mjs';
 import {
+  PIPELINE_MARKETPLACES,
+  getMarketplaceConfig,
+  getPartCategory,
+  setPartCategory,
+  buildCategoryKeywords,
+  normalizeCategoryResult,
+} from './lib/marketplace-category.mjs';
+import {
   getEnrichmentProfile,
   getLowValueMaxPrice,
 } from './lib/token-optimization.mjs';
@@ -327,6 +335,11 @@ const REPORT = {
   categoryMappingApi: 0,
   categoryMappingAi: 0,
   categoryMappingFallback: 0,
+  categoryByMarketplace: {
+    US: { api: 0, ai: 0, fallback: 0, cross: 0 },
+    AU: { api: 0, ai: 0, fallback: 0, cross: 0 },
+    DE: { api: 0, ai: 0, fallback: 0, cross: 0 },
+  },
   taxonomyErrors: [],
   taxonomyTreeCacheHit: false,
   taxonomyTreeCacheSource: null,
@@ -635,26 +648,79 @@ const aiCategoryClassifier = createAiCategoryClassifier({
   onTokens: (tokens) => {
     REPORT.openaiTokensUsed += tokens;
   },
+  resolveOnTree: async (categoryName, lookup) => {
+    const { treeId, vinData } = _categoryMappingContext;
+    const keywords = buildCategoryKeywords(
+      lookup,
+      (p) => getVehicleInfo(p, vinData),
+      categoryName,
+    );
+    const result = await suggestCategoryForTree(keywords, treeId);
+    if (result?.categoryId) {
+      return { ...result, confidence: 0.85 };
+    }
+    const nameOnly = await suggestCategoryForTree(categoryName, treeId);
+    if (nameOnly?.categoryId) {
+      return { ...nameOnly, confidence: 0.75 };
+    }
+    return null;
+  },
 });
 
-// Motors tree ID is fixed — no API call needed (see ebay-marketplace-tree.util.ts).
+// Motors tree ID is fixed for US — AU/DE use marketplace-specific trees (see marketplace-category.mjs).
 REPORT.taxonomyTreeCacheHit = true;
 REPORT.taxonomyTreeCacheSource = 'known';
 
-async function suggestCategory(keywords) {
-  if (!taxonomyApiEnabled) return null;
+/** @type {{ vinData: Map<string, object>|null; marketplace: string; treeId: string }} */
+let _categoryMappingContext = { vinData: null, marketplace: 'US', treeId: '0' };
+
+const marketplaceDefaultCategories = new Map();
+
+async function suggestCategoryForTree(keywords, treeId) {
+  if (!taxonomyApiEnabled || !keywords?.trim()) return null;
 
   try {
-    const result = await taxonomyClient.suggestCategory(keywords);
-    if (result) REPORT.categoryMappingApi++;
+    const result = await taxonomyClient.suggestCategory(keywords, treeId);
     return result;
   } catch (err) {
     const status = err.response?.status ?? null;
     const message = err.response?.data?.errors?.[0]?.message || err.message;
-    log.warn(`eBay category suggestion failed for "${keywords}": ${message}`);
+    log.warn(`eBay category suggestion failed (tree ${treeId}) for "${keywords.slice(0, 40)}": ${message}`);
     recordTaxonomyError(message, status, 'category_suggestion');
     return null;
   }
+}
+
+async function getDefaultCategoryForTree(treeId, fallbackQuery) {
+  if (marketplaceDefaultCategories.has(treeId)) {
+    return marketplaceDefaultCategories.get(treeId);
+  }
+  const resolved = await suggestCategoryForTree(fallbackQuery, treeId);
+  const fallback = resolved || { categoryId: '262124', categoryName: 'Car & Truck Parts & Accessories' };
+  marketplaceDefaultCategories.set(treeId, fallback);
+  return fallback;
+}
+
+function bumpCategoryStat(marketplace, source) {
+  const bucket = REPORT.categoryByMarketplace[marketplace];
+  if (!bucket) return;
+  if (source === 'api') {
+    bucket.api += 1;
+    REPORT.categoryMappingApi += 1;
+  } else if (source === 'ai') {
+    bucket.ai += 1;
+    REPORT.categoryMappingAi += 1;
+  } else if (source === 'cross') {
+    bucket.cross += 1;
+    REPORT.categoryMappingApi += 1;
+  } else {
+    bucket.fallback += 1;
+    REPORT.categoryMappingFallback += 1;
+  }
+}
+
+async function suggestCategory(keywords) {
+  return suggestCategoryForTree(keywords, MOTORS_CATEGORY_TREE_ID);
 }
 
 async function getCategoryAspects(categoryId) {
@@ -1489,6 +1555,185 @@ function getVehicleInfo(part, vinData) {
 //  CATEGORY MAPPING
 // ═══════════════════════════════════════════════════════════════════════
 
+async function fallbackCategoryForMarketplace(lookup, vinData, marketplace, usCategoryName) {
+  const cfg = getMarketplaceConfig(marketplace);
+  const usFallback = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
+  const hintName = usCategoryName || usFallback.categoryName;
+  const keywords = buildCategoryKeywords(lookup, (p) => getVehicleInfo(p, vinData), hintName);
+  let resolved = await suggestCategoryForTree(keywords, cfg.treeId);
+  if (resolved) {
+    return normalizeCategoryResult(resolved, marketplace, 'fallback');
+  }
+  resolved = await suggestCategoryForTree(hintName, cfg.treeId);
+  if (resolved) {
+    return normalizeCategoryResult(resolved, marketplace, 'fallback');
+  }
+  const defaultCat = await getDefaultCategoryForTree(cfg.treeId, cfg.fallbackQuery);
+  return normalizeCategoryResult(defaultCat, marketplace, 'fallback');
+}
+
+async function mapCategoriesForMarketplace(parts, vinData, marketplace, uniqueLookups, useEbay, useAi) {
+  const cfg = getMarketplaceConfig(marketplace);
+  _categoryMappingContext = { vinData, marketplace, treeId: cfg.treeId };
+
+  log.info(
+    `Category mapping [${marketplace}] tree=${cfg.treeId} (${cfg.label}) model=${categoryAiModel}`,
+  );
+
+  const partTypeCache = new Map();
+  const taxonomyAvailable = useEbay && taxonomyApiEnabled;
+  const pendingAi = [];
+
+  if (taxonomyAvailable) {
+    const CAT_CONCURRENCY = Math.min(CONFIG.pipeline.categoryConcurrency, 2);
+
+    for (let i = 0; i < uniqueLookups.length; i += CAT_CONCURRENCY) {
+      if (taxonomyClient.isRateLimited()) {
+        pendingAi.push(...uniqueLookups.slice(i));
+        log.warn(`[${marketplace}] Taxonomy rate-limited — routing to AI/fallback`);
+        break;
+      }
+
+      const group = uniqueLookups.slice(i, i + CAT_CONCURRENCY);
+      const results = await Promise.allSettled(
+        group.map(async (lookup) => {
+          const keywords = buildCategoryKeywords(lookup, (p) => getVehicleInfo(p, vinData));
+          const category = await suggestCategoryForTree(keywords, cfg.treeId);
+          return { partKey: lookup.partKey, category, lookup };
+        }),
+      );
+
+      for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        if (r.value.category) {
+          const normalized = normalizeCategoryResult(r.value.category, marketplace, 'api');
+          partTypeCache.set(r.value.partKey, normalized);
+          bumpCategoryStat(marketplace, 'api');
+        } else if (useAi) {
+          pendingAi.push(r.value.lookup);
+        } else {
+          const category = await fallbackCategoryForMarketplace(
+            r.value.lookup,
+            vinData,
+            marketplace,
+            getPartCategory(r.value.lookup.parts[0], 'US')?.categoryName,
+          );
+          partTypeCache.set(r.value.partKey, category);
+          bumpCategoryStat(marketplace, 'fallback');
+        }
+      }
+
+      if (taxonomyClient.isRateLimited()) {
+        pendingAi.push(...uniqueLookups.slice(i + CAT_CONCURRENCY));
+        break;
+      }
+    }
+  } else if (useAi) {
+    pendingAi.push(...uniqueLookups);
+  } else {
+    for (const lookup of uniqueLookups) {
+      const category = await fallbackCategoryForMarketplace(
+        lookup,
+        vinData,
+        marketplace,
+        getPartCategory(lookup.parts[0], 'US')?.categoryName,
+      );
+      partTypeCache.set(lookup.partKey, category);
+      bumpCategoryStat(marketplace, 'fallback');
+    }
+  }
+
+  if (pendingAi.length && useAi) {
+    const dedupedAi = pendingAi.filter(
+      (l, idx, arr) => arr.findIndex((x) => x.partKey === l.partKey) === idx,
+    );
+    const aiBefore = aiCategoryClassifier.getStats().apiMapped;
+    const aiResults = await aiCategoryClassifier.classifyLookups(
+      dedupedAi,
+      (part) => getVehicleInfo(part, vinData),
+      marketplace,
+    );
+    const aiMappedNow = aiCategoryClassifier.getStats().apiMapped - aiBefore;
+    REPORT.categoryByMarketplace[marketplace].ai += aiMappedNow;
+    REPORT.categoryMappingAi += aiMappedNow;
+
+    for (const lookup of dedupedAi) {
+      if (partTypeCache.get(lookup.partKey)) continue;
+      const aiCategory = aiResults.get(lookup.partKey);
+      if (aiCategory) {
+        partTypeCache.set(
+          lookup.partKey,
+          normalizeCategoryResult(aiCategory, marketplace, 'ai'),
+        );
+        continue;
+      }
+      const category = await fallbackCategoryForMarketplace(
+        lookup,
+        vinData,
+        marketplace,
+        getPartCategory(lookup.parts[0], 'US')?.categoryName,
+      );
+      partTypeCache.set(lookup.partKey, category);
+      bumpCategoryStat(marketplace, 'fallback');
+    }
+  } else if (pendingAi.length) {
+    for (const lookup of pendingAi) {
+      if (partTypeCache.get(lookup.partKey)) continue;
+      const category = await fallbackCategoryForMarketplace(
+        lookup,
+        vinData,
+        marketplace,
+        getPartCategory(lookup.parts[0], 'US')?.categoryName,
+      );
+      partTypeCache.set(lookup.partKey, category);
+      bumpCategoryStat(marketplace, 'fallback');
+    }
+  }
+
+  // Cross-resolve AU/DE from US category name when still missing
+  if (marketplace !== 'US' && taxonomyAvailable) {
+    for (const lookup of uniqueLookups) {
+      if (partTypeCache.get(lookup.partKey)) continue;
+      const usCat = getPartCategory(lookup.parts[0], 'US');
+      if (!usCat?.categoryName) continue;
+      const keywords = buildCategoryKeywords(
+        lookup,
+        (p) => getVehicleInfo(p, vinData),
+        usCat.categoryName,
+      );
+      const cross = await suggestCategoryForTree(keywords, cfg.treeId);
+      if (cross) {
+        partTypeCache.set(
+          lookup.partKey,
+          normalizeCategoryResult(cross, marketplace, 'cross'),
+        );
+        bumpCategoryStat(marketplace, 'cross');
+      }
+    }
+  }
+
+  for (const lookup of uniqueLookups) {
+    if (!partTypeCache.get(lookup.partKey)) {
+      const category = await fallbackCategoryForMarketplace(
+        lookup,
+        vinData,
+        marketplace,
+        getPartCategory(lookup.parts[0], 'US')?.categoryName,
+      );
+      partTypeCache.set(lookup.partKey, category);
+      bumpCategoryStat(marketplace, 'fallback');
+    }
+    for (const part of lookup.parts) {
+      setPartCategory(part, marketplace, partTypeCache.get(lookup.partKey));
+    }
+  }
+
+  const stats = REPORT.categoryByMarketplace[marketplace];
+  log.info(
+    `[${marketplace}] categories: api=${stats.api} ai=${stats.ai} cross=${stats.cross} fallback=${stats.fallback}`,
+  );
+}
+
 async function mapCategories(parts, vinData) {
   const useEbay = categoryMode !== 'keyword' && categoryMode !== 'ai';
   const useAi =
@@ -1497,7 +1742,7 @@ async function mapCategories(parts, vinData) {
     Boolean(CONFIG.openai.apiKey);
 
   log.step(
-    `Category Mapping (mode=${categoryMode}: eBay=${useEbay}, AI=${useAi}, keyword fallback)`,
+    `Category Mapping (mode=${categoryMode}: eBay=${useEbay}, AI=${useAi}, AI model=${categoryAiModel})`,
   );
 
   const token = await getEbayAppToken();
@@ -1510,146 +1755,54 @@ async function mapCategories(parts, vinData) {
   } else if (taxonomyAvailable) {
     const taxStats = taxonomyClient.getStats();
     log.info(
-      `eBay Motors category tree ${MOTORS_CATEGORY_TREE_ID}. ` +
+      `eBay Taxonomy enabled for ${PIPELINE_MARKETPLACES.join('/')}. ` +
       `Suggestion cache: ${taxStats.suggestionCacheHits} warm, ` +
       `daily ${taxStats.dailyUsage}/${taxStats.dailyQuota}`,
     );
   }
 
-  const partTypeCache = new Map();
-  const uniqueLookups = [];
+  for (const part of parts) {
+    part._categories = part._categories || {};
+  }
 
+  const uniqueLookups = [];
   for (const part of parts) {
     const partKey = `${part.partName}|${part.note}`.toLowerCase();
-    if (partTypeCache.has(partKey)) {
-      part._category = partTypeCache.get(partKey);
-      continue;
-    }
-    partTypeCache.set(partKey, null);
-    const vehicle = getVehicleInfo(part, vinData);
-    const keywords = `${vehicle.make} ${part.partName}`.replace(/[^\w\s]/g, ' ').trim();
     const existing = uniqueLookups.find((l) => l.partKey === partKey);
     if (existing) existing.parts.push(part);
-    else uniqueLookups.push({ partKey, keywords, parts: [part] });
+    else uniqueLookups.push({ partKey, parts: [part] });
   }
 
-  log.info(`${uniqueLookups.length} unique category lookups for ${parts.length} parts`);
+  log.info(`${uniqueLookups.length} unique category lookups for ${parts.length} parts × ${PIPELINE_MARKETPLACES.length} marketplaces`);
 
-  const pendingAi = [];
-
-  if (taxonomyAvailable) {
-    const CAT_CONCURRENCY = Math.min(CONFIG.pipeline.categoryConcurrency, 2);
-
-    for (let i = 0; i < uniqueLookups.length; i += CAT_CONCURRENCY) {
-      if (taxonomyClient.isRateLimited()) {
-        pendingAi.push(...uniqueLookups.slice(i));
-        log.warn('eBay Taxonomy rate-limited — routing remaining lookups to AI/keyword tiers');
-        break;
-      }
-
-      const group = uniqueLookups.slice(i, i + CAT_CONCURRENCY);
-      const results = await Promise.allSettled(
-        group.map(async (lookup) => {
-          const category = await suggestCategory(lookup.keywords);
-          if (category) {
-            return { partKey: lookup.partKey, category, lookup };
-          }
-          return { partKey: lookup.partKey, category: null, lookup };
-        }),
-      );
-
-      for (const r of results) {
-        if (r.status !== 'fulfilled') continue;
-        if (r.value.category) {
-          partTypeCache.set(r.value.partKey, r.value.category);
-        } else if (useAi) {
-          pendingAi.push(r.value.lookup);
-        } else {
-          const category = fallbackCategoryMatch(
-            r.value.lookup.parts[0].partName,
-            r.value.lookup.parts[0].note,
-          );
-          partTypeCache.set(r.value.partKey, category);
-          REPORT.categoryMappingFallback++;
-        }
-      }
-
-      if (taxonomyClient.isRateLimited()) {
-        pendingAi.push(...uniqueLookups.slice(i + CAT_CONCURRENCY));
-        log.warn('eBay Taxonomy halted after 429 — switching to AI tier');
-        break;
-      }
-    }
-
-    const taxStats = taxonomyClient.getStats();
-    if (taxStats.dailyQuotaSkipped > 0) {
-      const msg = `Daily Taxonomy budget exhausted (${taxStats.dailyUsage}/${taxStats.dailyQuota})`;
-      REPORT.taxonomyApiSkippedReason = msg;
-      recordTaxonomyError(msg, 429, 'category_mapping');
-      log.warn(msg);
-    }
-  } else if (useAi) {
-    pendingAi.push(...uniqueLookups);
-  } else {
-    for (const lookup of uniqueLookups) {
-      const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
-      partTypeCache.set(lookup.partKey, category);
-      REPORT.categoryMappingFallback++;
-    }
-  }
-
-  if (pendingAi.length && useAi) {
-    const dedupedAi = pendingAi.filter(
-      (l, idx, arr) => arr.findIndex((x) => x.partKey === l.partKey) === idx,
+  for (const marketplace of PIPELINE_MARKETPLACES) {
+    await mapCategoriesForMarketplace(
+      parts,
+      vinData,
+      marketplace,
+      uniqueLookups,
+      useEbay,
+      useAi,
     );
-    const aiResults = await aiCategoryClassifier.classifyLookups(
-      dedupedAi,
-      (part) => getVehicleInfo(part, vinData),
-    );
-    const aiStats = aiCategoryClassifier.getStats();
-    REPORT.categoryMappingAi = aiStats.apiMapped;
-
-    for (const lookup of dedupedAi) {
-      if (partTypeCache.get(lookup.partKey)) continue;
-      const aiCategory = aiResults.get(lookup.partKey);
-      if (aiCategory) {
-        partTypeCache.set(lookup.partKey, aiCategory);
-        continue;
-      }
-      const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
-      partTypeCache.set(lookup.partKey, category);
-      REPORT.categoryMappingFallback++;
-    }
-
-    log.info(
-      `AI categories: ${aiStats.apiMapped} mapped, ${aiStats.cacheHits} cache hits, ` +
-      `${aiStats.apiCalls} API batches, model=${aiStats.model}, tokens≈${aiStats.tokensUsed}`,
-    );
-  } else if (pendingAi.length) {
-    for (const lookup of pendingAi) {
-      if (partTypeCache.get(lookup.partKey)) continue;
-      const category = fallbackCategoryMatch(lookup.parts[0].partName, lookup.parts[0].note);
-      partTypeCache.set(lookup.partKey, category);
-      REPORT.categoryMappingFallback++;
-    }
   }
 
   for (const part of parts) {
-    if (part._category) continue;
-    const partKey = `${part.partName}|${part.note}`.toLowerCase();
-    part._category = partTypeCache.get(partKey) || null;
+    part._category = getPartCategory(part, 'US');
   }
 
   const taxStats = taxonomyClient.getStats();
   log.info(
-    `Category mapping: ${REPORT.categoryMappingApi} eBay API (${taxStats.suggestionCacheHits} cache hits), ` +
-    `${REPORT.categoryMappingAi} AI, ${REPORT.categoryMappingFallback} keyword fallback`,
+    `Category mapping totals: ${REPORT.categoryMappingApi} eBay API (${taxStats.suggestionCacheHits} cache hits), ` +
+    `${REPORT.categoryMappingAi} AI (${categoryAiModel}), ${REPORT.categoryMappingFallback} fallback`,
   );
   log.progress({
     stage: 'category_mapping',
     cat_api: REPORT.categoryMappingApi,
     cat_ai: REPORT.categoryMappingAi,
     cat_fallback: REPORT.categoryMappingFallback,
+    cat_us: REPORT.categoryByMarketplace.US.api + REPORT.categoryByMarketplace.US.ai,
+    cat_au: REPORT.categoryByMarketplace.AU.api + REPORT.categoryByMarketplace.AU.ai,
+    cat_de: REPORT.categoryByMarketplace.DE.api + REPORT.categoryByMarketplace.DE.ai,
     cat_taxonomy_backoff: REPORT.taxonomyApiSkippedReason ? 1 : 0,
     total_parts: parts.length,
   });
@@ -1787,7 +1940,7 @@ async function enrichBatch(batchParts, vinData, options = {}) {
       partName: part.partName,
       partNumber: part.partNumber,
       note: part.note,
-      category: part._category?.categoryName || '',
+      category: getPartCategory(part, 'US')?.categoryName || part._category?.categoryName || '',
       price: part.price,
     };
     // Strip empty values to reduce token usage
@@ -2644,7 +2797,33 @@ function expandOemNumbers(partNumber) {
 //  COMPLIANCE VALIDATION
 // ═══════════════════════════════════════════════════════════════════════
 
-function validateAndFix(parts) {
+async function syncCategoryHintToMarketplaces(part, catHint, vinData) {
+  if (!catHint?.categoryId || !catHint?.categoryName) return;
+  setPartCategory(
+    part,
+    'US',
+    normalizeCategoryResult(
+      { categoryId: catHint.categoryId, categoryName: catHint.categoryName },
+      'US',
+      'hint',
+    ),
+  );
+  const lookup = {
+    partKey: `${part.partName}|${part.note}`.toLowerCase(),
+    parts: [part],
+  };
+  for (const marketplace of ['AU', 'DE']) {
+    const resolved = await fallbackCategoryForMarketplace(
+      lookup,
+      vinData,
+      marketplace,
+      catHint.categoryName,
+    );
+    if (resolved) setPartCategory(part, marketplace, resolved);
+  }
+}
+
+async function validateAndFix(parts, vinData) {
   log.step('Compliance Validation');
   let fixes = 0;
 
@@ -2812,17 +2991,24 @@ function validateAndFix(parts) {
       );
     }
 
-    // Interior vs exterior category correction
-    const catHint = resolveEnglishCategory(part.partName, part.note) || resolveMotorsCategoryFromPart(part.partName, part.note);
-    if (catHint && part._category?.categoryId) {
+    // Interior vs exterior category correction (US hint → re-resolve AU/DE IDs)
+    const catHint =
+      resolveEnglishCategory(part.partName, part.note) ||
+      resolveMotorsCategoryFromPart(part.partName, part.note);
+    const usCategory = getPartCategory(part, 'US');
+    if (catHint && usCategory?.categoryId) {
       const exteriorIds = new Set(['33697', '174105']);
       const interiorIds = new Set(['33695', '33717', '174090']);
       if (
-        interiorIds.has(catHint.categoryId) &&
-        exteriorIds.has(String(part._category.categoryId))
+        interiorIds.has(String(catHint.categoryId)) &&
+        exteriorIds.has(String(usCategory.categoryId))
       ) {
-        part._category = catHint;
-        REPORT.validationFixes.push({ sku: part.sku, field: 'category', fix: `corrected to ${catHint.name}` });
+        await syncCategoryHintToMarketplaces(part, catHint, vinData);
+        REPORT.validationFixes.push({
+          sku: part.sku,
+          field: 'category',
+          fix: `corrected to ${catHint.categoryName} (US/AU/DE)`,
+        });
         fixes++;
       }
     }
@@ -3817,8 +4003,8 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
 
   set('*Action(SiteID=eBayMotors|Country=US|Currency=USD|Version=1193)', 'Add');
   set('Custom label (SKU)', part.sku || part.category);
-  set('Category ID', part._category?.categoryId || '262124');
-  set('Category Name', part._category?.categoryName || 'Car & Truck Parts & Accessories');
+  set('Category ID', getPartCategory(part, 'US')?.categoryId || part._category?.categoryId || '262124');
+  set('Category Name', getPartCategory(part, 'US')?.categoryName || part._category?.categoryName || 'Car & Truck Parts & Accessories');
   set('Title', enriched.title);
   set('P:UPC', 'Does not apply');
   set('Start price', part.price);
@@ -3931,8 +4117,8 @@ function generateAUOutput(parts, vinData) {
 
     set('*Action(SiteID=Australia|Country=AU|Currency=AUD|Version=1193)', 'Add');
     set('Custom label (SKU)', part.sku || part.category);
-    set('Category ID', part._category?.categoryId || '262124');
-    set('Category name', part._category?.categoryName || 'Car & Truck Parts & Accessories');
+    set('Category ID', getPartCategory(part, 'AU')?.categoryId || '262124');
+    set('Category name', getPartCategory(part, 'AU')?.categoryName || 'Car & Truck Parts & Accessories');
     set('Title', e.title);
     set('P:UPC', 'Does not apply');
     set('Start price', Math.round(part.price * 1.55 * 100) / 100); // ~USD→AUD
@@ -4057,8 +4243,8 @@ function generateDEOutput(parts, vinData) {
 
     set('*Action(SiteID=Germany|Country=DE|Currency=EUR|Version=1193)', 'Add');
     set('Custom label (SKU)', part.sku || part.category);
-    set('Category ID', part._category?.categoryId || '262124');
-    set('Category name', part._category?.categoryName || 'Car & Truck Parts & Accessories');
+    set('Category ID', getPartCategory(part, 'DE')?.categoryId || '262124');
+    set('Category name', getPartCategory(part, 'DE')?.categoryName || 'Car & Truck Parts & Accessories');
     set('Title', e.title);
     set('P:EAN', 'Nicht zutreffend');  // "Does not apply" in German
     set('Start price', Math.round(part.price * 0.92 * 100) / 100); // ~USD→EUR
@@ -4206,7 +4392,12 @@ function saveCheckpoint(parts, step) {
         sku: p.sku,
         partNumber: p.partNumber,
         hasEnriched: !!p._enriched,
-        hasCategory: !!p._category,
+        hasCategory: !!getPartCategory(p, 'US'),
+        categories: p._categories
+          ? Object.fromEntries(
+              PIPELINE_MARKETPLACES.map((m) => [m, getPartCategory(p, m)?.categoryId ?? null]),
+            )
+          : null,
       })),
     };
     fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint));
@@ -4275,6 +4466,7 @@ function generateReport() {
       fallbackMapped: REPORT.categoryMappingFallback,
       categoryMode,
       aiModel: aiCategoryClassifier.getStats().model,
+      byMarketplace: REPORT.categoryByMarketplace,
       apiRate: (() => {
         const total =
           REPORT.categoryMappingApi +
@@ -4415,7 +4607,7 @@ async function main() {
   log.info(`${enrichedParts.length} enriched parts ready for validation + image + localization`);
 
   // Validation is sync and mutates _enriched — must finish before localization reads copy
-  validateAndFix(parts);
+  await validateAndFix(parts, vinData);
 
   // Images and AU/DE localization are independent — run together (~2× vs sequential)
   await Promise.all([

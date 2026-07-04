@@ -160,8 +160,8 @@ export function createTaxonomyClient(options) {
     persistDisk();
   }
 
-  function getCachedSuggestion(query) {
-    const key = `${MOTORS_CATEGORY_TREE_ID}::${normQuery(query)}`;
+  function getCachedSuggestion(query, treeId = MOTORS_CATEGORY_TREE_ID) {
+    const key = `${treeId}::${normQuery(query)}`;
     if (!normQuery(query)) return undefined;
 
     if (memoryCache.has(key)) return memoryCache.get(key);
@@ -176,26 +176,28 @@ export function createTaxonomyClient(options) {
     return entry.result;
   }
 
-  function setCachedSuggestion(query, result) {
-    const key = `${MOTORS_CATEGORY_TREE_ID}::${normQuery(query)}`;
+  function setCachedSuggestion(query, result, treeId = MOTORS_CATEGORY_TREE_ID) {
+    const key = `${treeId}::${normQuery(query)}`;
     if (!normQuery(query)) return;
     memoryCache.set(key, result);
     scope().suggestions[key] = { result, cachedAt: Date.now() };
     persistDisk();
   }
 
-  function getCachedAspects(categoryId) {
-    const entry = scope().aspects[categoryId];
+  function getCachedAspects(categoryId, treeId = MOTORS_CATEGORY_TREE_ID) {
+    const key = `${treeId}::${categoryId}`;
+    const entry = scope().aspects[key];
     if (!entry) return undefined;
     if (Date.now() - entry.cachedAt > SUGGESTION_TTL_MS) {
-      delete scope().aspects[categoryId];
+      delete scope().aspects[key];
       return undefined;
     }
     return entry.aspects;
   }
 
-  function setCachedAspects(categoryId, aspects) {
-    scope().aspects[categoryId] = { aspects, cachedAt: Date.now() };
+  function setCachedAspects(categoryId, aspects, treeId = MOTORS_CATEGORY_TREE_ID) {
+    const key = `${treeId}::${categoryId}`;
+    scope().aspects[key] = { aspects, cachedAt: Date.now() };
     persistDisk();
   }
 
@@ -221,10 +223,10 @@ export function createTaxonomyClient(options) {
     throw lastErr;
   }
 
-  async function suggestCategory(keywords) {
+  async function suggestCategory(keywords, treeId = MOTORS_CATEGORY_TREE_ID) {
     if (stats.rateLimitHalted) return null;
 
-    const cached = getCachedSuggestion(keywords);
+    const cached = getCachedSuggestion(keywords, treeId);
     if (cached !== undefined) {
       stats.suggestionCacheHits++;
       return cached;
@@ -241,7 +243,7 @@ export function createTaxonomyClient(options) {
     try {
       const { data } = await withRetry(`suggest("${keywords.slice(0, 40)}")`, () =>
         axios.get(
-          `${baseUrl}/commerce/taxonomy/v1/category_tree/${MOTORS_CATEGORY_TREE_ID}/get_category_suggestions`,
+          `${baseUrl}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
           {
             params: { q: keywords },
             headers: { Authorization: `Bearer ${token}` },
@@ -262,11 +264,11 @@ export function createTaxonomyClient(options) {
           categoryPath:
             best.categoryTreeNodeAncestors?.map((a) => a.categoryName).join(' > ') || '',
         };
-        setCachedSuggestion(keywords, result);
+        setCachedSuggestion(keywords, result, treeId);
         return result;
       }
 
-      setCachedSuggestion(keywords, null);
+      setCachedSuggestion(keywords, null, treeId);
       return null;
     } catch (err) {
       stats.suggestionApiErrors++;
@@ -274,8 +276,8 @@ export function createTaxonomyClient(options) {
     }
   }
 
-  async function getCategoryAspects(categoryId) {
-    const cached = getCachedAspects(categoryId);
+  async function getCategoryAspects(categoryId, treeId = MOTORS_CATEGORY_TREE_ID) {
+    const cached = getCachedAspects(categoryId, treeId);
     if (cached !== undefined) {
       stats.aspectCacheHits++;
       return cached;
@@ -289,7 +291,7 @@ export function createTaxonomyClient(options) {
     try {
       const { data } = await withRetry(`aspects(${categoryId})`, () =>
         axios.get(
-          `${baseUrl}/commerce/taxonomy/v1/category_tree/${MOTORS_CATEGORY_TREE_ID}/get_item_aspects_for_category`,
+          `${baseUrl}/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category`,
           {
             params: { category_id: categoryId },
             headers: { Authorization: `Bearer ${token}` },
@@ -309,10 +311,10 @@ export function createTaxonomyClient(options) {
         usage: a.aspectConstraint?.aspectUsage || 'RECOMMENDED',
       }));
 
-      setCachedAspects(categoryId, aspects);
+      setCachedAspects(categoryId, aspects, treeId);
       return aspects;
     } catch {
-      setCachedAspects(categoryId, null);
+      setCachedAspects(categoryId, null, treeId);
       return null;
     }
   }

@@ -14,14 +14,22 @@ import {
 const DEFAULT_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const DEFAULT_BATCH_SIZE = 12;
 const DEFAULT_MIN_CONFIDENCE = 0.55;
-const DEFAULT_MODEL = 'openai/gpt-4o-mini';
+const DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function buildSystemPrompt() {
-  return `You are an expert in eBay Motors Parts & Accessories taxonomy for US listings.
+function buildSystemPrompt(marketplace = 'US') {
+  const marketplaceGuide =
+    marketplace === 'DE'
+      ? 'Target marketplace: eBay Germany (EBAY_DE, category tree 77). Category names are in English but IDs must be valid for the DE Auto & Motorrad tree.'
+      : marketplace === 'AU'
+        ? 'Target marketplace: eBay Australia (EBAY_AU, category tree 15). Category names are in English but IDs must be valid for the AU Motors tree.'
+        : 'Target marketplace: eBay Motors US (EBAY_MOTORS_US, category tree 0).';
+
+  return `You are an expert in eBay Motors Parts & Accessories taxonomy.
+${marketplaceGuide}
 Given automotive parts, pick the single best leaf category for each part.
 Use ONLY category names from this exact list (copy spelling precisely):
 
@@ -70,6 +78,8 @@ function parseJson(content) {
  * @param {number} [options.minConfidence]
  * @param {(level: string, msg: string) => void} [options.log]
  * @param {(tokens: number, model: string) => void} [options.onTokens]
+ * @param {(categoryName: string, lookup: object) => Promise<object|null>} [options.resolveOnTree]
+ *   For non-US marketplaces: map AI category name → marketplace-specific ID via Taxonomy API.
  */
 export function createAiCategoryClassifier(options) {
   const {
@@ -80,6 +90,7 @@ export function createAiCategoryClassifier(options) {
     minConfidence = DEFAULT_MIN_CONFIDENCE,
     log = () => {},
     onTokens = () => {},
+    resolveOnTree = null,
   } = options;
 
   const cachePath = path.resolve(rootDir, 'config/.ai-category-cache.json');
@@ -117,12 +128,12 @@ export function createAiCategoryClassifier(options) {
     }
   }
 
-  function cacheKey(partKey, modelId) {
-    return `${modelId}::${partKey}`;
+  function cacheKey(partKey, modelId, marketplace = 'US') {
+    return `${modelId}::${marketplace}::${partKey}`;
   }
 
-  function getCached(partKey) {
-    const key = cacheKey(partKey, model);
+  function getCached(partKey, marketplace = 'US') {
+    const key = cacheKey(partKey, model, marketplace);
     if (memory.has(key)) return memory.get(key);
     const entry = disk.entries[key];
     if (!entry) return undefined;
@@ -134,14 +145,14 @@ export function createAiCategoryClassifier(options) {
     return entry.result;
   }
 
-  function setCached(partKey, result) {
-    const key = cacheKey(partKey, model);
+  function setCached(partKey, result, marketplace = 'US') {
+    const key = cacheKey(partKey, model, marketplace);
     memory.set(key, result);
-    disk.entries[key] = { result, cachedAt: Date.now(), model };
+    disk.entries[key] = { result, cachedAt: Date.now(), model, marketplace };
     persistDisk();
   }
 
-  async function classifyBatch(batch, maxRetries = 3) {
+  async function classifyBatch(batch, marketplace = 'US', maxRetries = 3) {
     const client = getOpenAI();
     if (!client) return null;
 
@@ -150,7 +161,7 @@ export function createAiCategoryClassifier(options) {
         const response = await client.chat.completions.create({
           model,
           messages: [
-            { role: 'system', content: buildSystemPrompt() },
+            { role: 'system', content: buildSystemPrompt(marketplace) },
             { role: 'user', content: buildUserPrompt(batch) },
           ],
           temperature: 0.1,
@@ -186,13 +197,14 @@ export function createAiCategoryClassifier(options) {
    * Classify unique lookups: { partKey, keywords, parts: [{ partName, note, ... }] }
    * @param {Array} lookups
    * @param {(part) => { make?: string }} getVehicle
+   * @param {string} [marketplace]
    */
-  async function classifyLookups(lookups, getVehicle) {
+  async function classifyLookups(lookups, getVehicle, marketplace = 'US') {
     const results = new Map();
     const pending = [];
 
     for (const lookup of lookups) {
-      const cached = getCached(lookup.partKey);
+      const cached = getCached(lookup.partKey, marketplace);
       if (cached !== undefined) {
         stats.cacheHits++;
         if (cached) results.set(lookup.partKey, cached);
@@ -203,7 +215,10 @@ export function createAiCategoryClassifier(options) {
 
     if (!pending.length) return results;
 
-    log('info', `AI category mapping: ${pending.length} lookups (${stats.cacheHits} cache hits) model=${model}`);
+    log(
+      'info',
+      `AI category mapping [${marketplace}]: ${pending.length} lookups (${stats.cacheHits} cache hits) model=${model}`,
+    );
 
     for (let i = 0; i < pending.length; i += batchSize) {
       const group = pending.slice(i, i + batchSize);
@@ -218,9 +233,9 @@ export function createAiCategoryClassifier(options) {
         };
       });
 
-      const items = await classifyBatch(batch);
+      const items = await classifyBatch(batch, marketplace);
       if (!items) {
-        for (const row of group) setCached(row.partKey, null);
+        for (const row of group) setCached(row.partKey, null, marketplace);
         continue;
       }
 
@@ -232,27 +247,33 @@ export function createAiCategoryClassifier(options) {
 
         if (!aiName || aiConf < minConfidence) {
           stats.apiLowConfidence++;
-          setCached(row.partKey, null);
+          setCached(row.partKey, null, marketplace);
           continue;
         }
 
-        const resolved = resolveCategoryByName(aiName, minConfidence);
-        if (!resolved) {
+        let resolved = null;
+        if (marketplace === 'US') {
+          resolved = resolveCategoryByName(aiName, minConfidence);
+        } else if (typeof resolveOnTree === 'function') {
+          resolved = await resolveOnTree(aiName, row);
+        }
+
+        if (!resolved?.categoryId) {
           stats.apiLowConfidence++;
-          setCached(row.partKey, null);
+          setCached(row.partKey, null, marketplace);
           continue;
         }
 
         const category = {
           categoryId: resolved.categoryId,
-          categoryName: resolved.categoryName,
-          categoryPath: '',
+          categoryName: resolved.categoryName || aiName,
+          categoryPath: resolved.categoryPath || '',
           source: 'ai',
-          aiConfidence: Math.min(aiConf, resolved.confidence),
+          aiConfidence: Math.min(aiConf, resolved.confidence ?? aiConf),
           aiModel: model,
         };
         stats.apiMapped++;
-        setCached(row.partKey, category);
+        setCached(row.partKey, category, marketplace);
         results.set(row.partKey, category);
       }
     }
