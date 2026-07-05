@@ -2,6 +2,7 @@ import { AlertTriangle, Bot, CheckCircle2, Download, FolderTree, ShieldAlert } f
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import type { PipelineEnrichmentSummary, PipelineJob } from '../../types/pipeline';
 import { downloadPipelineFile } from '../../lib/pipelineApi';
+import { usePermissions } from '../../hooks/usePermissions';
 
 function parseEnrichmentSummary(job: PipelineJob): PipelineEnrichmentSummary | null {
   const raw = job.stageDetails;
@@ -82,6 +83,7 @@ function toneClasses(tone: 'success' | 'warning' | 'danger' | 'muted') {
 }
 
 export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
+  const { isSuperAdmin } = usePermissions();
   const summary = parseEnrichmentSummary(job);
   if (!summary) return null;
 
@@ -195,7 +197,7 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
                 API skipped: {summary.categoryMapping.apiSkippedReason}
               </p>
             )}
-            {categoryFallbackOnly && taxonomyErrors.length === 0 && !summary.categoryMapping?.apiSkippedReason && (
+            {isSuperAdmin && categoryFallbackOnly && taxonomyErrors.length === 0 && !summary.categoryMapping?.apiSkippedReason && (
               <p className="text-xs mt-2 opacity-90">
                 All categories used keyword fallback. Check eBay credentials and Taxonomy API rate limits.
               </p>
