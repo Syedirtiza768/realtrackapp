@@ -167,9 +167,11 @@ export default function CatalogManager() {
       const group = groups.get(sku)!;
       if (item.marketplace) group.marketplaces.add(item.marketplace);
 
-      // Prefer items with: title > image > later marketplace > current group
+      // Prefer items with: US marketplace > title > image > later marketplace > current group
       const existing = group.item;
       const preferNew =
+        (item.marketplace === 'US' && existing.marketplace !== 'US') ||
+        (item.marketplace !== 'DE' && existing.marketplace === 'DE' && item.marketplace !== 'US') ||
         (item.title && !existing.title) ||
         (item.itemPhotoUrl && !existing.itemPhotoUrl) ||
         (item.marketplace && !existing.marketplace) ||
