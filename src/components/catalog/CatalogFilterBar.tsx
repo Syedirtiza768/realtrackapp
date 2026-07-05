@@ -118,6 +118,7 @@ const DATE_OPTIONS: { value: DateAddedPreset; label: string }[] = [
   { value: 'last_7', label: 'Last 7 days' },
   { value: 'last_30', label: 'Last 30 days' },
   { value: 'last_90', label: 'Last 90 days' },
+  { value: 'custom', label: 'Custom Range' },
 ];
 
 export default function CatalogFilterBar({
@@ -164,7 +165,11 @@ export default function CatalogFilterBar({
         : `${filters.shippingProfiles.length} selected`;
 
   const dateSummary =
-    DATE_OPTIONS.find((o) => o.value === filters.dateAddedPreset)?.label ?? 'All time';
+    filters.dateAddedPreset === 'custom'
+      ? (filters.dateAddedFrom || filters.dateAddedTo)
+        ? `${filters.dateAddedFrom || '…'} – ${filters.dateAddedTo || '…'}`
+        : 'Custom Range'
+      : DATE_OPTIONS.find((o) => o.value === filters.dateAddedPreset)?.label ?? 'All time';
 
   const toggleInList = <T extends string>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -271,6 +276,28 @@ export default function CatalogFilterBar({
             onToggle={() => onChange({ ...filters, dateAddedPreset: opt.value })}
           />
         ))}
+        {filters.dateAddedPreset === 'custom' && (
+          <div className="border-t border-slate-200 dark:border-slate-700 px-3 py-2 space-y-2">
+            <div>
+              <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-0.5">From</label>
+              <input
+                type="date"
+                value={filters.dateAddedFrom}
+                onChange={(e) => onChange({ ...filters, dateAddedFrom: e.target.value })}
+                className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-700 dark:text-slate-200"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-0.5">To</label>
+              <input
+                type="date"
+                value={filters.dateAddedTo}
+                onChange={(e) => onChange({ ...filters, dateAddedTo: e.target.value })}
+                className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-700 dark:text-slate-200"
+              />
+            </div>
+          </div>
+        )}
       </FilterDropdown>
 
       <button

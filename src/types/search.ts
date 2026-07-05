@@ -42,7 +42,7 @@ export type CatalogListingStatus = 'published' | 'ready_to_publish' | 'need_imag
 
 export type StockLevelFilter = 'in_stock' | 'out_of_stock' | 'low_stock';
 
-export type DateAddedPreset = 'all' | 'last_7' | 'last_30' | 'last_90';
+export type DateAddedPreset = 'all' | 'last_7' | 'last_30' | 'last_90' | 'custom';
 
 export type SortMode =
   | 'relevance'
@@ -238,6 +238,8 @@ export interface ActiveFilters {
   stockLevels: StockLevelFilter[];
   shippingProfiles: string[];
   dateAddedPreset: DateAddedPreset;
+  dateAddedFrom: string;    // YYYY-MM-DD, used when preset is 'custom'
+  dateAddedTo: string;      // YYYY-MM-DD, used when preset is 'custom'
   catalogStatuses: CatalogListingStatus[];
 }
 
@@ -265,11 +267,13 @@ export const EMPTY_FILTERS: ActiveFilters = {
   stockLevels: [],
   shippingProfiles: [],
   dateAddedPreset: 'all',
+  dateAddedFrom: '',
+  dateAddedTo: '',
   catalogStatuses: [],
 };
 
 function datePresetToRange(preset: DateAddedPreset): { from?: string; to?: string } {
-  if (preset === 'all') return {};
+  if (preset === 'all' || preset === 'custom') return {};
   const now = new Date();
   const to = now.toISOString().slice(0, 10);
   const fromDate = new Date(now);
@@ -309,7 +313,9 @@ export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
     stockLevel: f.stockLevels.length ? f.stockLevels.join(',') : undefined,
     shippingProfiles: f.shippingProfiles.length ? f.shippingProfiles.join(',') : undefined,
     catalogStatus: f.catalogStatuses.length ? f.catalogStatuses.join(',') : undefined,
-    ...datePresetToQuery(f.dateAddedPreset),
+    ...(f.dateAddedPreset === 'custom'
+      ? { importedFrom: f.dateAddedFrom || undefined, importedTo: f.dateAddedTo || undefined }
+      : datePresetToQuery(f.dateAddedPreset)),
   };
 }
 
@@ -334,7 +340,8 @@ export function countActiveFilters(f: ActiveFilters): number {
   if (f.hasPrice) count++;
   count += f.stockLevels.length;
   count += f.shippingProfiles.length;
-  if (f.dateAddedPreset !== 'all') count++;
+  if (f.dateAddedPreset === 'custom' && (f.dateAddedFrom || f.dateAddedTo)) count++;
+  else if (f.dateAddedPreset !== 'all' && f.dateAddedPreset !== 'custom') count++;
   count += f.catalogStatuses.length;
   return count;
 }

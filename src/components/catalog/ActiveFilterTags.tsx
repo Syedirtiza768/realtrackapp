@@ -192,7 +192,13 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     });
   }
 
-  if (filters.dateAddedPreset !== 'all') {
+  if (filters.dateAddedPreset === 'custom' && (filters.dateAddedFrom || filters.dateAddedTo)) {
+    tags.push({
+      key: 'dateAdded',
+      label: `Date: ${filters.dateAddedFrom || '…'} – ${filters.dateAddedTo || '…'}`,
+      onRemove: () => onChange({ ...filters, dateAddedPreset: 'all', dateAddedFrom: '', dateAddedTo: '' }),
+    });
+  } else if (filters.dateAddedPreset !== 'all' && filters.dateAddedPreset !== 'custom') {
     const presetLabel =
       filters.dateAddedPreset === 'last_7'
         ? 'Last 7 days'

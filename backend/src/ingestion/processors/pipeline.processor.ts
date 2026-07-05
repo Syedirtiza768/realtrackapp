@@ -1298,6 +1298,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           extractedModel: 'extractedModel',
           pipelineJobId: 'pipeline_job_id',
           marketplace: 'marketplace',
+          teamId: 'team_id',
           version: 'version',
         };
         const ALL_COLS = Object.values(PROP_TO_COL); // all columns for INSERT / UPDATE on conflict
