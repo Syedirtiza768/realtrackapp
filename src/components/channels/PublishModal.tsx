@@ -276,14 +276,7 @@ export default function PublishModal(props: Props) {
         return { type: 'single' as const, results: allResults };
       } else if (mode === 'bulk' && listingIds) {
         const storeIdArray = Array.from(selected);
-        const batchRes = await publishListingIdsToEbay(listingIds, storeIdArray, {
-          fulfillmentPolicyId: profiles.fulfillmentPolicyId,
-          paymentPolicyId: profiles.paymentPolicyId,
-          returnPolicyId: profiles.returnPolicyId,
-          shippingProfileName: profiles.shippingProfileName || undefined,
-          returnProfileName: profiles.returnProfileName || undefined,
-          paymentProfileName: profiles.paymentProfileName || undefined,
-        });
+        const batchRes = await publishListingIdsToEbay(listingIds, storeIdArray);
         return { type: 'bulk' as const, batchResults: batchRes };
       }
       throw new Error('Invalid mode');
@@ -569,8 +562,8 @@ export default function PublishModal(props: Props) {
                     </div>
                   )}
 
-                  {/* Shipping / return / payment profiles */}
-                  {selected.size > 0 && (
+                  {/* Shipping / return / payment profiles (single mode only) */}
+                  {mode === 'single' && selected.size > 0 && (
                     <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-3">
                       <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
                         Shipping / Return / Payment
@@ -616,6 +609,14 @@ export default function PublishModal(props: Props) {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Bulk mode: use existing policies */}
+                  {mode === 'bulk' && selected.size > 0 && (
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
+                      Policies (shipping, return, payment) will use each listing's existing assignments.
+                      To change policies, use the <strong>Shipping</strong> button in the bulk action bar.
                     </div>
                   )}
                 </div>
@@ -734,7 +735,7 @@ export default function PublishModal(props: Props) {
               </button>
               <button
                 onClick={handlePublish}
-                disabled={selected.size === 0 || storesLoading || hasNoPolicies}
+                disabled={selected.size === 0 || storesLoading || (mode === 'single' && hasNoPolicies)}
                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
                 <Send size={13} />
