@@ -25,33 +25,33 @@ INSERT INTO catalog_products (
   "updatedAt"
 )
 SELECT
-  lr.custom_label_sku,
+  lr."customLabelSku",
   lr.title,
   lr.description,
-  lr.c_brand,
-  LOWER(TRIM(lr.c_brand)),
-  lr.c_manufacturer_part_number,
-  LOWER(REPLACE(REPLACE(lr.c_manufacturer_part_number, ' ', ''), '-', '')),
-  lr.c_oe_oem_part_number,
-  lr.c_type,
-  lr.category_name,
-  lr.condition_id,
-  lr.start_price_num,
-  lr.quantity_num,
+  lr."cBrand",
+  LOWER(TRIM(lr."cBrand")),
+  lr."cManufacturerPartNumber",
+  LOWER(REPLACE(REPLACE(lr."cManufacturerPartNumber", ' ', ''), '-', '')),
+  lr."cOeOemPartNumber",
+  lr."cType",
+  lr."categoryName",
+  lr."conditionId",
+  lr."startPriceNum",
+  lr."quantityNum",
   CASE
-    WHEN lr.item_photo_url IS NOT NULL AND lr.item_photo_url != ''
-    THEN string_to_array(lr.item_photo_url, '|')
+    WHEN lr."itemPhotoUrl" IS NOT NULL AND lr."itemPhotoUrl" != ''
+    THEN string_to_array(lr."itemPhotoUrl", '|')
     ELSE '{}'::text[]
   END,
   'warehouse-intake',
-  lr.source_row_number,
+  lr."sourceRowNumber",
   NOW(),
   NOW()
 FROM listing_records lr
-WHERE lr.source_file_name = 'warehouse-intake'
-  AND lr.custom_label_sku IS NOT NULL
-  AND lr.deleted_at IS NULL
+WHERE lr."sourceFileName" = 'warehouse-intake'
+  AND lr."customLabelSku" IS NOT NULL
+  AND lr."deletedAt" IS NULL
   AND NOT EXISTS (
     SELECT 1 FROM catalog_products cp
-    WHERE cp.sku = lr.custom_label_sku
+    WHERE cp.sku = lr."customLabelSku"
   );
