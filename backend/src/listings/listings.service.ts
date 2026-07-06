@@ -507,12 +507,12 @@ export class ListingsService {
       });
       await em.save(ListingRevision, revision);
 
-      // ── Audit log entry (user-initiated only) ──
-      if (user) {
+      // ── Audit log entry (user-initiated only, requires org) ──
+      if (user && saved.organizationId) {
         const diff = this.computeDiff(beforeSnapshot, afterSnapshot);
         if (Object.keys(diff).length > 0) {
           const actionLog = this.actionLogRepo.create({
-            organizationId: saved.organizationId ?? undefined,
+            organizationId: saved.organizationId,
             userId: user.id,
             action: 'listing.updated',
             beforeSnapshot: beforeSnapshot,
@@ -576,10 +576,10 @@ export class ListingsService {
       });
       await em.save(ListingRevision, revision);
 
-      // ── Audit log entry (user-initiated only) ──
-      if (user) {
+      // ── Audit log entry (user-initiated only, requires org) ──
+      if (user && saved.organizationId) {
         const actionLog = this.actionLogRepo.create({
-          organizationId: saved.organizationId ?? undefined,
+          organizationId: saved.organizationId,
           userId: user.id,
           action: `listing.status_changed:${oldStatus}→${dto.status}`,
           beforeSnapshot: beforeSnapshot,
