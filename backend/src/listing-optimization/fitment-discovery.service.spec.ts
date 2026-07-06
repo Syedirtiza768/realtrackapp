@@ -1,7 +1,7 @@
 import type { VinDecodeService } from '../fitment/vin-decode.service.js';
 import type { EbayMvlService } from '../fitment/ebay-mvl.service.js';
 import type { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
-import type { EbayBrowseApiService } from '../channels/ebay/ebay-browse-api.service.js';
+import type { MvlFitmentExpanderService } from '../fitment/mvl-fitment-expander.service.js';
 import { FitmentDiscoveryService } from './fitment-discovery.service.js';
 import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 
@@ -32,10 +32,20 @@ describe('FitmentDiscoveryService', () => {
   let taxonomy: { getCompatibilityProperties: jest.Mock };
   let browseApi: { searchByMpn: jest.Mock };
 
+  let mvlExpander: { expand: jest.Mock; getExpansionMode: jest.Mock };
+
   beforeEach(() => {
     vinDecode = { decode: jest.fn() };
     mvl = {
       validateParsedRows: jest.fn().mockResolvedValue([]),
+    };
+    mvlExpander = {
+      getExpansionMode: jest.fn().mockReturnValue('hybrid'),
+      expand: jest.fn().mockResolvedValue({
+        expandedRows: [],
+        manualReviewReasons: [],
+        needsAiInterchange: false,
+      }),
     };
     taxonomy = {
       getCompatibilityProperties: jest.fn().mockResolvedValue([{ propertyName: 'Make' }]),
@@ -46,6 +56,7 @@ describe('FitmentDiscoveryService', () => {
     svc = new FitmentDiscoveryService(
       vinDecode as unknown as VinDecodeService,
       mvl as unknown as EbayMvlService,
+      mvlExpander as unknown as MvlFitmentExpanderService,
       taxonomy as unknown as EbayTaxonomyApiService,
       browseApi as unknown as EbayBrowseApiService,
     );

@@ -20,6 +20,7 @@ import { EbayMvlService } from './ebay-mvl.service.js';
 import { EbayMvlStoreService } from './ebay-mvl-store.service.js';
 import { EbayMvlImportService } from './ebay-mvl-import.service.js';
 import { VinDecodeService } from './vin-decode.service.js';
+import { MvlFitmentExpanderService } from './mvl-fitment-expander.service.js';
 import { VinExportService } from './vin-export.service.js';
 import { VinDbExportService } from './vin-db-export.service.js';
 import { EbayVinSearchService } from './ebay-vin-search.service.js';
@@ -52,12 +53,13 @@ import { ChannelsModule } from '../channels/channels.module.js';
     EbayMvlService,
     EbayMvlStoreService,
     EbayMvlImportService,
+    MvlFitmentExpanderService,
     VinDecodeService,
     VinExportService,
     VinDbExportService,
     EbayVinSearchService,
     BrandVinDecoderRegistry,
   ],
-  exports: [FitmentService, FitmentMatcherService, EbayMvlService, EbayMvlStoreService, EbayMvlImportService, VinDecodeService, VinExportService, VinDbExportService, EbayVinSearchService, BrandVinDecoderRegistry],
+  exports: [FitmentService, FitmentMatcherService, EbayMvlService, EbayMvlStoreService, EbayMvlImportService, MvlFitmentExpanderService, VinDecodeService, VinExportService, VinDbExportService, EbayVinSearchService, BrandVinDecoderRegistry],
 })
 export class FitmentModule {}

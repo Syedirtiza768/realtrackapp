@@ -87,6 +87,18 @@ export class AiRunLog {
   @Column({ name: 'fitment_row_count', type: 'int', nullable: true })
   fitmentRowCount!: number | null;
 
+  @Column({ name: 'fitment_source', type: 'varchar', length: 20, nullable: true })
+  fitmentSource!: string | null;
+
+  @Column({ name: 'fitment_rows_pre', type: 'int', nullable: true })
+  fitmentRowsPre!: number | null;
+
+  @Column({ name: 'fitment_rows_post', type: 'int', nullable: true })
+  fitmentRowsPost!: number | null;
+
+  @Column({ name: 'tokens_saved_estimate', type: 'int', nullable: true })
+  tokensSavedEstimate!: number | null;
+
   @Column({ name: 'human_approved', type: 'boolean', nullable: true })
   humanApproved!: boolean | null;
 

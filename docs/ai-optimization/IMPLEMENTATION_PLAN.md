@@ -81,7 +81,15 @@ Benchmark run on **8 representative parts** from `docs/2008 Mercedes C350 AMG.xl
 
 **Still open:**
 
-- eBay API credentials **not configured** — category falls back to `262124`; fitment is model-asserted (Phase 4)
+- Optimizer does not yet append rows to `ai_routing_policy_history` on each policy write
+
+**Resolved (2026-07-07): MVL-driven fitment expansion**
+
+- Enrichment prompt v4 removes AI `compatibility[]`; `MvlFitmentExpanderService` + pipeline `mvl-fitment-expander` expand fitment from platform ranges + local MVL DB
+- Default `FITMENT_EXPANSION_MODE=hybrid`; set `ai` for legacy v3 prompt with AI fitment in JSON
+- Interchange micro-call (`FITMENT_AI_INTERCHANGE=auto`) when row count &lt; `FITMENT_MIN_MVL_ROWS`
+
+**Still open (fitment-related):**
 - DE marketplace: aspect names localized; title/description remain English (Phase 4 translation)
 - `enhancement_id` not linked on enhancement *create* (only backfill on approve/reject)
 - Guard auto-fixes not written to `compliance_audit_logs`

@@ -1,16 +1,16 @@
 import type { PromptTemplate } from '../openai.types.js';
 
-export const MOTORS_ENRICHMENT_PROMPT_VERSION = 'enrichment-v2-compact';
+export const MOTORS_ENRICHMENT_PROMPT_VERSION = 'enrichment-v4-mvl-fitment';
 
-const COMPACT_FITMENT_NOTE = `profile=compact: omit compatibility ([]) — listing copy only.`;
+const COMPACT_NOTE = `profile=compact: interchangeHints MUST be []. Listing copy only.`;
 
-const FULL_FITMENT_NOTE = `profile=full: compatibility as yearStart/yearEnd ranges (max 25), not one row per year. Research MPN interchange beyond donor.`;
+const FULL_NOTE = `profile=full: interchangeHints optional (max 3 cross-platform hints). compatibility[] removed — fitment via MVL expander.`;
 
 export const MOTORS_ENRICHMENT_FULL_PROMPT: PromptTemplate = {
   name: 'motors-enrichment-full',
-  systemPrompt: `Automotive parts interchange specialist for eBay Motors. Return JSON with title (≤80), HTML description, brand, type, mpn, itemSpecifics, compatibility[], technicalNotes.
-Rules: use provided MPN only; include compatibility disclaimer; Mercedes→Mercedes-Benz.
-${FULL_FITMENT_NOTE}`,
+  systemPrompt: `Automotive parts eBay listing copywriter. Return JSON with title (≤80), HTML description, brand, type, mpn, itemSpecifics, interchangeHints[], technicalNotes.
+Rules: use provided MPN only; do not emit compatibility[] — fitment expanded from MVL separately.
+${FULL_NOTE}`,
   userPrompt: `Enrich this part (profile=full):
 {{rawData}}`,
   jsonMode: true,
@@ -19,11 +19,13 @@ ${FULL_FITMENT_NOTE}`,
 
 export const MOTORS_ENRICHMENT_COMPACT_PROMPT: PromptTemplate = {
   name: 'motors-enrichment-compact',
-  systemPrompt: `Automotive parts eBay listing copywriter. Return JSON with title (≤80), HTML description, brand, type, mpn, itemSpecifics. compatibility MUST be [].
-Rules: use provided MPN only; donor vehicle context is enough; include compatibility disclaimer.
-${COMPACT_FITMENT_NOTE}`,
+  systemPrompt: `Automotive parts eBay listing copywriter. Return JSON with title (≤80), HTML description, brand, type, mpn, itemSpecifics. interchangeHints MUST be [].
+${COMPACT_NOTE}`,
   userPrompt: `Enrich this part (profile=compact, price below threshold):
 {{rawData}}`,
   jsonMode: true,
   temperature: 0.15,
 };
+
+/** Legacy v3 — use when FITMENT_EXPANSION_MODE=ai */
+export const MOTORS_ENRICHMENT_PROMPT_VERSION_LEGACY = 'enrichment-v3-platform-fitment';

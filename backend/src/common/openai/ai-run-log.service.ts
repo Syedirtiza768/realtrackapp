@@ -27,6 +27,10 @@ export interface CreateAiRunLogInput {
   escalated?: boolean;
   passedGate?: boolean;
   fitmentRowCount?: number | null;
+  fitmentSource?: string | null;
+  fitmentRowsPre?: number | null;
+  fitmentRowsPost?: number | null;
+  tokensSavedEstimate?: number | null;
   guardFixes?: string[] | null;
 }
 
@@ -64,6 +68,10 @@ export class AiRunLogService {
       escalated: input.escalated ?? false,
       passedGate: input.passedGate ?? false,
       fitmentRowCount: input.fitmentRowCount ?? null,
+      fitmentSource: input.fitmentSource ?? null,
+      fitmentRowsPre: input.fitmentRowsPre ?? null,
+      fitmentRowsPost: input.fitmentRowsPost ?? null,
+      tokensSavedEstimate: input.tokensSavedEstimate ?? null,
       guardFixes: input.guardFixes ?? null,
     });
     return this.repo.save(row);

@@ -32,7 +32,17 @@ import {
   PROMPT_VERSION as MOTORS_PROMPT_VERSION,
   buildMotorsEnrichmentSystemPrompt,
   buildMotorsEnrichmentUserPrompt,
+  buildMotorsEnrichmentSystemPromptLegacy,
+  PROMPT_VERSION_LEGACY,
 } from './lib/motors-enrichment-prompt.mjs';
+import { expandAllPartsWithMvl } from './lib/mvl-fitment-expander.mjs';
+import { buildPnVehicleMap, resolveFitmentExpansionMode } from './lib/mvl-fitment-expander-core.mjs';
+import {
+  buildInterchangeSystemPrompt,
+  buildInterchangeUserPrompt,
+  INTERCHANGE_PROMPT_VERSION,
+} from './lib/motors-interchange-prompt.mjs';
+import { SHARED_PLATFORMS } from './lib/shared-platforms.mjs';
 import { createEnrichmentCache } from './lib/enrichment-cache.mjs';
 import { createTaxonomyClient, MOTORS_CATEGORY_TREE_ID } from './lib/taxonomy-client.mjs';
 import {
@@ -227,7 +237,11 @@ const descMaxFitmentRows = Math.max(
 );
 
 const RUN_MODE = env.AI_RUN_MODE || 'default';
-const PROMPT_VERSION = env.AI_PROMPT_VERSION || MOTORS_PROMPT_VERSION;
+const FITMENT_EXPANSION_MODE = resolveFitmentExpansionMode(env);
+const PROMPT_VERSION =
+  FITMENT_EXPANSION_MODE === 'ai'
+    ? (env.AI_PROMPT_VERSION || PROMPT_VERSION_LEGACY)
+    : (env.AI_PROMPT_VERSION || MOTORS_PROMPT_VERSION);
 const LOW_VALUE_MAX_PRICE = getLowValueMaxPrice(env);
 const modelRouter = createModelRouter(env);
 const enrichmentCache = createEnrichmentCache(ROOT, PROMPT_VERSION);
@@ -241,85 +255,7 @@ const IMAGE_API_URL =
 // ─── Automotive Platform Year Ranges ──────────────────────────────────────────
 // Loaded from shared/automotive-platform-ranges.json via scripts/lib/platform-generation.mjs
 
-/**
- * Cross-platform sharing map: makes/models that share platforms and may
- * interchange parts (e.g. VW/Audi MQB, Lexus/Toyota, GM trucks).
- * Key: "Make|Model" → array of related "Make|Model" that share parts.
- */
-const SHARED_PLATFORMS = {
-  // VW Group — MQB / MLB / PQ35
-  'Volkswagen|Golf':    ['Audi|A3', 'Volkswagen|Jetta'],
-  'Audi|A3':            ['Volkswagen|Golf', 'Volkswagen|Jetta'],
-  'Volkswagen|Jetta':   ['Volkswagen|Golf', 'Audi|A3'],
-  'Audi|Q7':            ['Volkswagen|Touareg', 'Porsche|Cayenne', 'Bentley|Bentayga'],
-  'Porsche|Cayenne':    ['Audi|Q7', 'Volkswagen|Touareg', 'Bentley|Bentayga'],
-  'Volkswagen|Passat':  ['Audi|A4'],
-  'Audi|A4':            ['Volkswagen|Passat'],
-  // Toyota / Lexus shared
-  'Toyota|Camry':       ['Lexus|ES'],
-  'Lexus|ES':           ['Toyota|Camry'],
-  'Toyota|RAV4':        ['Lexus|NX'],
-  'Lexus|NX':           ['Toyota|RAV4'],
-  'Toyota|Highlander':  ['Lexus|RX'],
-  'Lexus|RX':           ['Toyota|Highlander'],
-  'Toyota|4Runner':     ['Lexus|GX'],
-  'Lexus|GX':           ['Toyota|4Runner'],
-  // Honda / Acura shared
-  'Honda|Accord':       ['Acura|TLX'],
-  'Acura|TLX':          ['Honda|Accord'],
-  'Honda|Pilot':        ['Acura|MDX'],
-  'Acura|MDX':          ['Honda|Pilot'],
-  'Honda|CR-V':         ['Acura|RDX'],
-  'Acura|RDX':          ['Honda|CR-V'],
-  // Nissan / Infiniti shared
-  'Nissan|Altima':      ['Infiniti|Q50'],
-  'Infiniti|Q50':       ['Nissan|Altima'],
-  'Nissan|Pathfinder':  ['Infiniti|QX60'],
-  'Infiniti|QX60':      ['Nissan|Pathfinder'],
-  // GM shared platforms (trucks)
-  'Chevrolet|Silverado':['GMC|Sierra'],
-  'GMC|Sierra':         ['Chevrolet|Silverado'],
-  'Chevrolet|Tahoe':    ['GMC|Yukon', 'Cadillac|Escalade'],
-  'GMC|Yukon':          ['Chevrolet|Tahoe', 'Cadillac|Escalade'],
-  'Cadillac|Escalade':  ['Chevrolet|Tahoe', 'GMC|Yukon'],
-  'Chevrolet|Traverse': ['GMC|Acadia', 'Cadillac|XT5'],
-  'GMC|Acadia':         ['Chevrolet|Traverse', 'Cadillac|XT5'],
-  'Cadillac|XT5':       ['Chevrolet|Traverse', 'GMC|Acadia'],
-  // Ford / Lincoln shared
-  'Ford|Explorer':      ['Lincoln|Aviator'],
-  'Lincoln|Aviator':    ['Ford|Explorer'],
-  'Ford|Escape':        ['Lincoln|Corsair'],
-  'Lincoln|Corsair':    ['Ford|Escape'],
-  'Ford|F-150':         ['Lincoln|Navigator'],
-  'Lincoln|Navigator':  ['Ford|F-150'],
-  // Jaguar / Land Rover shared (iQ / PLA)
-  'Jaguar|XE':          ['Jaguar|F-Pace', 'Land Rover|Range Rover Velar'],
-  'Jaguar|F-Pace':      ['Jaguar|XE', 'Land Rover|Range Rover Velar'],
-  'Land Rover|Range Rover Velar': ['Jaguar|F-Pace', 'Jaguar|XE'],
-  'Land Rover|Range Rover Evoque':['Land Rover|Discovery Sport'],
-  // Hyundai / Kia / Genesis shared
-  'Hyundai|Tucson':     ['Kia|Sportage'],
-  'Kia|Sportage':       ['Hyundai|Tucson'],
-  'Hyundai|Santa Fe':   ['Kia|Sorento'],
-  'Kia|Sorento':        ['Hyundai|Santa Fe'],
-  'Hyundai|Sonata':     ['Kia|K5', 'Kia|Optima'],
-  'Kia|K5':             ['Hyundai|Sonata'],
-  'Kia|Optima':         ['Hyundai|Sonata'],
-  'Hyundai|Elantra':    ['Kia|Forte'],
-  'Genesis|G70':        ['Kia|Stinger'],
-  'Genesis|GV80':       ['Genesis|G80'],
-  'Genesis|G80':        ['Genesis|GV80'],
-  // Dodge / Jeep / Ram shared (Stellantis)
-  'Dodge|Durango':      ['Jeep|Grand Cherokee'],
-  'Jeep|Grand Cherokee':['Dodge|Durango'],
-  'Dodge|Charger':      ['Dodge|Challenger'],
-  'Dodge|Challenger':   ['Dodge|Charger'],
-  // Subaru shared
-  'Subaru|Impreza':     ['Subaru|Crosstrek', 'Subaru|WRX'],
-  'Subaru|WRX':         ['Subaru|Impreza'],
-  'Subaru|Crosstrek':   ['Subaru|Impreza'],
-  'Subaru|Outback':     ['Subaru|Legacy'],
-};
+// SHARED_PLATFORMS — imported from ./lib/shared-platforms.mjs
 
 // ═══════════════════════════════════════════════════════════════════════
 //  LOGGING & REPORTING
@@ -378,8 +314,12 @@ const REPORT = {
     sharedPlatformExpanded: 0,
     singleVehicle: 0,
     totalCompatEntries: 0,
-    incomplete: [],          // SKUs with partial fitment data
-    noFitment: [],           // SKUs with no fitment at all
+    mvlExpanded: 0,
+    mvlRejected: 0,
+    interchangeMicroCalls: 0,
+    expansionMode: FITMENT_EXPANSION_MODE,
+    incomplete: [],
+    noFitment: [],
   },
   aiRunLogs: [],
   routing: {
@@ -1885,7 +1825,7 @@ async function validateOpenAiKey() {
   return false;
 }
 
-function logAiRun(part, route, validation, attempt, guardFixes = []) {
+function logAiRun(part, route, validation, attempt, guardFixes = [], extra = {}) {
   const entry = {
     sku: part.sku,
     partNumber: part.partNumber,
@@ -1901,7 +1841,11 @@ function logAiRun(part, route, validation, attempt, guardFixes = []) {
     softFails: validation?.softFails ?? [],
     escalated: attempt > 1,
     passedGate: validation?.pass ?? false,
-    fitmentRowCount: validation?.fitmentRowCount ?? 0,
+    fitmentRowCount: validation?.fitmentRowCount ?? part._fitments?.length ?? 0,
+    fitmentSource: part._fitmentSource ?? extra.fitmentSource ?? null,
+    fitmentRowsPre: extra.fitmentRowsPre ?? null,
+    fitmentRowsPost: part._fitments?.length ?? extra.fitmentRowsPost ?? null,
+    tokensSavedEstimate: extra.tokensSavedEstimate ?? null,
     guardFixes,
     createdAt: new Date().toISOString(),
   };
@@ -1950,7 +1894,10 @@ async function enrichBatch(batchParts, vinData, options = {}) {
     return obj;
   });
 
-  const systemPrompt = buildMotorsEnrichmentSystemPrompt();
+  const systemPrompt =
+    FITMENT_EXPANSION_MODE === 'ai'
+      ? buildMotorsEnrichmentSystemPromptLegacy()
+      : buildMotorsEnrichmentSystemPrompt();
   const userPrompt = buildMotorsEnrichmentUserPrompt(partsForPrompt);
 
   const client = getOpenAI();
@@ -2283,6 +2230,7 @@ function applyEnrichmentBatchResults(batch, enrichedItems, vinData) {
         bundleDescription: clean(item.bundleDescription),
         itemSpecifics: sanitizeItemSpecifics(item.itemSpecifics),
         compatibility: Array.isArray(item.compatibility) ? item.compatibility : [],
+        interchangeHints: Array.isArray(item.interchangeHints) ? item.interchangeHints : [],
         technicalNotes: clean(item.technicalNotes),
       };
       const vehicle = getVehicleInfo(part, vinData);
@@ -3176,6 +3124,159 @@ function ensureFitmentExportColumns(headers) {
 }
 
 /**
+ * MVL-driven fitment expansion (deterministic) — replaces AI compatibility in v4 prompt.
+ */
+async function runMvlFitmentExpansion(parts, vinData) {
+  if (FITMENT_EXPANSION_MODE === 'ai') {
+    log.info('FITMENT_EXPANSION_MODE=ai — using legacy expandFitments with AI compatibility');
+    return { interchangeQueue: [], expander: null };
+  }
+
+  log.step(`MVL Fitment Expansion (mode=${FITMENT_EXPANSION_MODE})`);
+
+  const pnVehicleMap = buildPnVehicleMap(parts, (part) => {
+    const v = getVehicleInfo(part, vinData);
+    const decoded = vinData.get(part.vin);
+    return {
+      year: v.year,
+      make: normalizeBrand(v.make || part.brand),
+      model: v.model,
+      trim: v.trim || '',
+      engine: v.engine || decoded?.engineModel || '',
+      submodel: '',
+      bodyType: decoded?.bodyClass || '',
+    };
+  });
+
+  const { stats, expander, interchangeQueue } = await expandAllPartsWithMvl(
+    parts,
+    {
+      env,
+      marketplace: 'US',
+      vinData,
+      pnVehicleMap,
+      getDonor: (part) => {
+        const v = getVehicleInfo(part, vinData);
+        const decoded = vinData.get(part.vin);
+        return {
+          year: v.year,
+          make: normalizeBrand(v.make || part.brand),
+          model: v.model,
+          trim: v.trim || '',
+          engine: v.engine || decoded?.engineModel || '',
+          bodyClass: decoded?.bodyClass || '',
+        };
+      },
+      getProfile: (part) => getEnrichmentProfile(part.price, LOW_VALUE_MAX_PRICE),
+      getEbayFitmentModelFields,
+    },
+    log,
+  );
+
+  REPORT.fitment.mvlExpanded = stats.mvlExpanded;
+  REPORT.fitment.mvlRejected = stats.mvlRejected;
+
+  for (const part of parts) {
+    if (part._fitments?.length) {
+      generateFitmentOutput(part);
+    }
+  }
+
+  return { interchangeQueue, expander, stats };
+}
+
+/**
+ * Small AI micro-call for parts where MVL expansion is thin.
+ */
+async function runInterchangeMicroCalls(queue, vinData) {
+  if (!queue?.length) return;
+  const mode = String(env.FITMENT_AI_INTERCHANGE || 'auto').trim().toLowerCase();
+  if (mode === 'off') return;
+
+  const client = getOpenAI();
+  if (!client) return;
+
+  log.info(`Interchange micro-call for ${queue.length} parts`);
+  const batches = chunk(queue, 8);
+  const { createMvlFitmentExpander } = await import('./lib/mvl-fitment-expander.mjs');
+
+  for (const batch of batches) {
+    const partsForPrompt = batch.map((part, idx) => {
+      const vehicle = getVehicleInfo(part, vinData);
+      return {
+        index: idx,
+        sku: part.sku,
+        mpn: part.partNumber,
+        partName: part.partName,
+        vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
+        placement: part._enriched?.placement || '',
+        type: part._enriched?.type || '',
+        existingRows: part._fitments?.length ?? 0,
+      };
+    });
+
+    try {
+      const response = await client.chat.completions.create({
+        model: CONFIG.openai.model,
+        messages: [
+          { role: 'system', content: buildInterchangeSystemPrompt() },
+          { role: 'user', content: buildInterchangeUserPrompt(partsForPrompt) },
+        ],
+        temperature: 0.15,
+        max_tokens: 1200,
+        response_format: { type: 'json_object' },
+      });
+
+      REPORT.openaiCalls++;
+      REPORT.fitment.interchangeMicroCalls++;
+      const usage = response.usage;
+      if (usage) REPORT.openaiTokensUsed += usage.total_tokens || 0;
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) continue;
+      const parsed = parseOpenAiJson(content);
+      const items = Array.isArray(parsed) ? parsed : (parsed.items || []);
+
+      for (const item of items) {
+        const idx = item.index ?? 0;
+        const part = batch[idx];
+        if (!part) continue;
+        const hints = Array.isArray(item.interchangeHints) ? item.interchangeHints : [];
+        if (!hints.length) continue;
+
+        if (!part._enriched) part._enriched = {};
+        part._enriched.interchangeHints = [
+          ...(part._enriched.interchangeHints || []),
+          ...hints,
+        ].slice(0, 5);
+
+        const expander = createMvlFitmentExpander({ env });
+        const vehicle = getVehicleInfo(part, vinData);
+        const donor = {
+          year: vehicle.year,
+          make: normalizeBrand(vehicle.make),
+          model: vehicle.model,
+        };
+        const refreshed = await expander.expandPart(part, {
+          donor,
+          pnVehicleMap: null,
+          profile: getEnrichmentProfile(part.price, LOW_VALUE_MAX_PRICE),
+          getEbayFitmentModelFields,
+        });
+        if (refreshed.expandedRows?.length) {
+          part._fitments = refreshed.expandedRows;
+          part._fitmentSource = 'mvl+ai';
+          generateFitmentOutput(part);
+        }
+        await expander.close();
+      }
+    } catch (err) {
+      log.warn(`Interchange micro-call failed: ${err.message}`);
+    }
+  }
+}
+
+/**
  * Expands per-part fitment data from a single VIN year to the complete
  * platform generation year range (e.g. 2015 BMW 3-Series → 2011-2019 F3x).
  *
@@ -3216,6 +3317,9 @@ function expandFitments(parts, vinData) {
   let singleVehicle = 0;
 
   for (const part of parts) {
+    if (part._fitments?.length && part._fitmentSource && FITMENT_EXPANSION_MODE !== 'ai') {
+      continue;
+    }
     const vehicle = getVehicleInfo(part, vinData);
     const decoded = vinData.get(part.vin);
 
@@ -4612,7 +4716,13 @@ async function main() {
   await enrichAllParts(parts, vinData);
   saveCheckpoint(parts, 'enrichment');
 
-  // ── Step 5.5: Fitment expansion (after AI — merges platform years + AI compatibility) ──
+  // ── Step 5.4: MVL fitment expansion (deterministic; v4 prompt has no compatibility[]) ──
+  const { interchangeQueue, expander: mvlExpander } = await runMvlFitmentExpansion(parts, vinData);
+  await runInterchangeMicroCalls(interchangeQueue, vinData);
+  if (mvlExpander) await mvlExpander.close();
+  saveCheckpoint(parts, 'mvl-fitment');
+
+  // ── Step 5.5: Legacy fitment expansion fallback (skipped when MVL rows present) ──
   expandFitments(parts, vinData);
 
   // ── Step 6: Compliance Validation + Image Enrichment (parallel) ──

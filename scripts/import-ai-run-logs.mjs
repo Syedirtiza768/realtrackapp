@@ -65,12 +65,14 @@ const insertSql = `
     sku, part_number, part_type, price, lane, model, attempt,
     prompt_version, routing_policy_version, validation_score,
     hard_fails, soft_fails, escalated, passed_gate, fitment_row_count,
+    fitment_source, fitment_rows_pre, fitment_rows_post, tokens_saved_estimate,
     guard_fixes, created_at
   ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10,
     $11::jsonb, $12::jsonb, $13, $14, $15,
-    $16::jsonb, COALESCE($17::timestamptz, NOW())
+    $16, $17, $18, $19,
+    $20::jsonb, COALESCE($21::timestamptz, NOW())
   )
 `;
 
@@ -96,6 +98,10 @@ async function main() {
         Boolean(row.escalated),
         Boolean(row.passedGate),
         row.fitmentRowCount ?? null,
+        row.fitmentSource ?? null,
+        row.fitmentRowsPre ?? null,
+        row.fitmentRowsPost ?? null,
+        row.tokensSavedEstimate ?? null,
         row.guardFixes?.length ? JSON.stringify(row.guardFixes) : null,
         row.createdAt ?? null,
       ]);

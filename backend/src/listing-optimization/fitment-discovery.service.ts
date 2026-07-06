@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EbayMvlService } from '../fitment/ebay-mvl.service.js';
+import { MvlFitmentExpanderService } from '../fitment/mvl-fitment-expander.service.js';
 import type { MvlValidatedRow } from '../fitment/ebay-mvl.service.js';
 import type { ParsedFitmentRow } from '../fitment/fitment-mvl.util.js';
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
@@ -35,6 +36,7 @@ export class FitmentDiscoveryService {
   constructor(
     private readonly vinDecode: VinDecodeService,
     private readonly mvl: EbayMvlService,
+    private readonly mvlExpander: MvlFitmentExpanderService,
     private readonly taxonomy: EbayTaxonomyApiService,
     private readonly browseApi: EbayBrowseApiService,
   ) {}
@@ -188,6 +190,46 @@ export class FitmentDiscoveryService {
           manualReviewReasons.push(
             'Fitment includes donor vehicle only from VIN decode',
           );
+
+          if (candidates.length <= 1 && this.mvlExpander.getExpansionMode() !== 'ai') {
+            const mvlResult = await this.mvlExpander.expand({
+              donor: {
+                year: decoded.year,
+                make: decoded.make,
+                model: decoded.model,
+                trim: decoded.trim,
+                engine: this.formatEngine(decoded),
+                bodyClass: decoded.bodyClass,
+              },
+              partType: product.partType ?? undefined,
+              placement: product.placement ?? undefined,
+              mpn: product.mpn ?? product.oemPartNumber ?? undefined,
+              profile: 'full',
+              marketplace: options?.marketplace,
+              treeId,
+            });
+            for (const row of mvlResult.expandedRows) {
+              candidates.push({
+                year: row.year,
+                make: row.make,
+                model: row.model,
+                trim: row.trim,
+                engine: row.engine,
+                confidence: row.source === 'platform_generation' ? 0.88 : 0.75,
+                source: `mvl_${row.source}`,
+                validationStatus: 'needs_review',
+                notes: row.notes,
+              });
+            }
+            manualReviewReasons.push(
+              ...mvlResult.manualReviewReasons,
+            );
+            if (mvlResult.needsAiInterchange) {
+              manualReviewReasons.push(
+                'MVL expansion thin — AI interchange micro-lane recommended',
+              );
+            }
+          }
         }
       } catch (err) {
         this.logger.warn(

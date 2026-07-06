@@ -297,6 +297,131 @@ export class EbayMvlStoreService {
     };
   }
 
+  async queryYearsInRange(
+    marketplace: MvlMarketplace,
+    make: string,
+    model: string,
+    yearStart: number,
+    yearEnd: number,
+  ): Promise<number[]> {
+    const releaseId = await this.getActiveReleaseId(marketplace);
+    if (!releaseId) return [];
+
+    const rows = await this.entryRepo
+      .createQueryBuilder('e')
+      .select('DISTINCT e.year', 'year')
+      .where('e.release_id = :releaseId', { releaseId })
+      .andWhere('e.marketplace = :marketplace', { marketplace })
+      .andWhere('LOWER(e.make) = LOWER(:make)', { make })
+      .andWhere('LOWER(e.model) = LOWER(:model)', { model })
+      .andWhere('e.year BETWEEN :yearStart AND :yearEnd', { yearStart, yearEnd })
+      .orderBy('e.year', 'ASC')
+      .getRawMany<{ year: number }>();
+
+    return rows.map((r) => Number(r.year)).filter((y) => Number.isFinite(y));
+  }
+
+  async queryModelsInYearRange(
+    marketplace: MvlMarketplace,
+    make: string,
+    yearStart: number,
+    yearEnd: number,
+  ): Promise<Array<{ model: string; minYear: number; maxYear: number }>> {
+    const releaseId = await this.getActiveReleaseId(marketplace);
+    if (!releaseId) return [];
+
+    const rows = await this.entryRepo
+      .createQueryBuilder('e')
+      .select('e.model', 'model')
+      .addSelect('MIN(e.year)', 'minYear')
+      .addSelect('MAX(e.year)', 'maxYear')
+      .where('e.release_id = :releaseId', { releaseId })
+      .andWhere('e.marketplace = :marketplace', { marketplace })
+      .andWhere('LOWER(e.make) = LOWER(:make)', { make })
+      .andWhere('e.year BETWEEN :yearStart AND :yearEnd', { yearStart, yearEnd })
+      .groupBy('e.model')
+      .orderBy('e.model', 'ASC')
+      .getRawMany<{ model: string; minYear: string; maxYear: string }>();
+
+    return rows.map((r) => ({
+      model: r.model,
+      minYear: Number(r.minYear),
+      maxYear: Number(r.maxYear),
+    }));
+  }
+
+  async queryModelsByPlatform(
+    marketplace: MvlMarketplace,
+    make: string,
+    platform: string,
+  ): Promise<Array<{ model: string; minYear: number; maxYear: number }>> {
+    const releaseId = await this.getActiveReleaseId(marketplace);
+    if (!releaseId || !platform.trim()) return [];
+
+    const rows = await this.entryRepo
+      .createQueryBuilder('e')
+      .select('e.model', 'model')
+      .addSelect('MIN(e.year)', 'minYear')
+      .addSelect('MAX(e.year)', 'maxYear')
+      .where('e.release_id = :releaseId', { releaseId })
+      .andWhere('e.marketplace = :marketplace', { marketplace })
+      .andWhere('LOWER(e.make) = LOWER(:make)', { make })
+      .andWhere('LOWER(e.platform) = LOWER(:platform)', { platform })
+      .groupBy('e.model')
+      .orderBy('e.model', 'ASC')
+      .getRawMany<{ model: string; minYear: string; maxYear: string }>();
+
+    return rows.map((r) => ({
+      model: r.model,
+      minYear: Number(r.minYear),
+      maxYear: Number(r.maxYear),
+    }));
+  }
+
+  async filterRowsAgainstMvl(
+    marketplace: MvlMarketplace,
+    rows: Array<{
+      year: string;
+      make: string;
+      model: string;
+      trim?: string;
+      engine?: string;
+      submodel?: string;
+      bodyType?: string;
+      notes?: string;
+      source: string;
+      mvlSource?: string;
+    }>,
+  ): Promise<{
+    accepted: typeof rows;
+    rejectedCount: number;
+    usedDb: boolean;
+  }> {
+    const releaseId = await this.getActiveReleaseId(marketplace);
+    if (!releaseId || rows.length === 0) {
+      return { accepted: rows, rejectedCount: 0, usedDb: false };
+    }
+
+    const accepted: typeof rows = [];
+    let rejectedCount = 0;
+
+    for (const row of rows) {
+      const year = parseInt(row.year, 10);
+      if (!row.make || !row.model || !Number.isFinite(year)) {
+        rejectedCount++;
+        continue;
+      }
+      const ok = await this.hasYear(marketplace, row.make, row.model, row.year);
+      if (ok) {
+        accepted.push({ ...row, mvlSource: 'database' });
+      } else {
+        rejectedCount++;
+      }
+    }
+
+    return { accepted, rejectedCount, usedDb: true };
+  }
+
   private pickCanonical(
     options: PropertyValueOption[],
     query: string,
