@@ -158,11 +158,6 @@ export class EbayMvlImportService {
       throw new BadRequestException(`No headers found in ${fileName}`);
     }
 
-    const parsed = parseMvlSheetRows(marketplace, headers, rows);
-    if (parsed.length === 0) {
-      throw new BadRequestException(`No MVL entries parsed from ${fileName}`);
-    }
-
     const versionLabel = extractVersionLabel(fileName, detected.sheetName);
     const release = await this.releaseRepo.save(
       this.releaseRepo.create({
@@ -177,10 +172,11 @@ export class EbayMvlImportService {
     );
 
     try {
-      const entryCount = await this.bulkInsertEntries(
+      const entryCount = await this.parseAndInsertInChunks(
         release.id,
         marketplace,
-        parsed,
+        headers,
+        rows,
       );
 
       const previousActive = await this.releaseRepo.findOne({
@@ -226,11 +222,51 @@ export class EbayMvlImportService {
     }
   }
 
+  private async parseAndInsertInChunks(
+    releaseId: string,
+    marketplace: MvlMarketplace,
+    headers: string[],
+    rows: unknown[][],
+  ): Promise<number> {
+    const chunkSize = Math.max(
+      500,
+      parseInt(process.env.EBAY_MVL_PARSE_CHUNK_SIZE ?? '5000', 10) || 5000,
+    );
+    let totalInserted = 0;
+
+    for (let offset = 0; offset < rows.length; offset += chunkSize) {
+      const chunk = rows.slice(offset, offset + chunkSize);
+      const parsed = parseMvlSheetRows(marketplace, headers, chunk);
+      if (parsed.length === 0) continue;
+
+      totalInserted += await this.bulkInsertEntries(
+        releaseId,
+        marketplace,
+        parsed,
+        { logProgress: false },
+      );
+
+      const rowsDone = Math.min(offset + chunkSize, rows.length);
+      if (rowsDone % 20_000 === 0 || rowsDone === rows.length) {
+        this.logger.log(
+          `MVL insert progress (${marketplace}): ${rowsDone}/${rows.length} source rows, ${totalInserted} entries`,
+        );
+      }
+    }
+
+    if (totalInserted === 0) {
+      throw new BadRequestException('No MVL entries parsed from workbook');
+    }
+    return totalInserted;
+  }
+
   private async bulkInsertEntries(
     releaseId: string,
     marketplace: MvlMarketplace,
     parsed: ParsedMvlEntry[],
+    options?: { logProgress?: boolean },
   ): Promise<number> {
+    const logProgress = options?.logProgress ?? true;
     let inserted = 0;
     for (let i = 0; i < parsed.length; i += this.insertBatchSize) {
       const batch = parsed.slice(i, i + this.insertBatchSize).map((entry) => ({
@@ -259,7 +295,10 @@ export class EbayMvlImportService {
         .execute();
 
       inserted += batch.length;
-      if (inserted % 20_000 === 0 || inserted === parsed.length) {
+      if (
+        logProgress &&
+        (inserted % 20_000 === 0 || inserted === parsed.length)
+      ) {
         this.logger.log(
           `MVL insert progress (${marketplace}): ${inserted}/${parsed.length}`,
         );
