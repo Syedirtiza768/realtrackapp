@@ -1,5 +1,7 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsIn,
   IsOptional,
@@ -7,6 +9,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { ROLE_SLUGS } from '../permission-registry.js';
 
@@ -78,7 +81,20 @@ export class SetRolePermissionsDto {
   permissionKeys: string[];
 }
 
+export class SidebarModuleConfigItemDto {
+  @IsString()
+  roleSlug: string;
+
+  @IsString()
+  moduleKey: string;
+
+  @IsBoolean()
+  visible: boolean;
+}
+
 export class SetSidebarConfigDto {
   @IsArray()
-  configs: Array<{ roleSlug: string; moduleKey: string; visible: boolean }>;
+  @ValidateNested({ each: true })
+  @Type(() => SidebarModuleConfigItemDto)
+  configs: SidebarModuleConfigItemDto[];
 }

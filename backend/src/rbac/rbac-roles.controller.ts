@@ -44,6 +44,29 @@ export class RbacRolesController {
     };
   }
 
+  // Static paths must be registered before :id routes (sidebar-config is not a UUID).
+  @Get('sidebar-config')
+  @RequirePermissions('roles.view')
+  @ApiOperation({ summary: 'Get all sidebar module visibility configs' })
+  async getSidebarConfigs() {
+    return this.rbac.getSidebarConfigs();
+  }
+
+  @Patch('sidebar-config')
+  @RequirePermissions('roles.manage')
+  @ApiOperation({ summary: 'Set sidebar module visibility for roles' })
+  async setSidebarConfigs(@Body() body: SetSidebarConfigDto) {
+    await this.rbac.setSidebarConfigs(body.configs);
+    return { ok: true };
+  }
+
+  @Get('sidebar-config/me')
+  @ApiOperation({ summary: 'Get visible sidebar modules for current user' })
+  async getMySidebarConfig(@CurrentUser() user: User) {
+    const visible = await this.rbac.getVisibleModulesForUser(user.id);
+    return { visibleModules: visible };
+  }
+
   @Patch(':id')
   @RequirePermissions('roles.update')
   @ApiOperation({ summary: 'Update role name/description' })
@@ -100,29 +123,5 @@ export class RbacRolesController {
   async resetToDefaults(@Param('id', ParseUUIDPipe) id: string) {
     const role = await this.rbac.resetRoleToDefaults(id);
     return { ok: true, isCustomized: role.isCustomized };
-  }
-
-  // ── Sidebar module visibility ──
-
-  @Get('sidebar-config')
-  @RequirePermissions('roles.view')
-  @ApiOperation({ summary: 'Get all sidebar module visibility configs' })
-  async getSidebarConfigs() {
-    return this.rbac.getSidebarConfigs();
-  }
-
-  @Patch('sidebar-config')
-  @RequirePermissions('roles.manage')
-  @ApiOperation({ summary: 'Set sidebar module visibility for roles' })
-  async setSidebarConfigs(@Body() body: SetSidebarConfigDto) {
-    await this.rbac.setSidebarConfigs(body.configs);
-    return { ok: true };
-  }
-
-  @Get('sidebar-config/me')
-  @ApiOperation({ summary: 'Get visible sidebar modules for current user' })
-  async getMySidebarConfig(@CurrentUser() user: User) {
-    const visible = await this.rbac.getVisibleModulesForUser(user.id);
-    return { visibleModules: visible };
   }
 }

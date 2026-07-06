@@ -7,6 +7,7 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Fixed
+- **Permissions sidebar save:** `PATCH /api/rbac/roles/sidebar-config` was matched by `@Patch(':id')` first, so the body was validated as `UpdateRoleDto` and rejected with "property configs should not exist". Static `sidebar-config` routes are now registered before parameterized `:id` routes.
 - **Add Part export template failure:** Parts added via "Add Part" (warehouse intake) only created a `ListingRecord` but no corresponding `CatalogProduct`, causing export templates to fail with "No catalog products found for given IDs". Now creates a catalog product on intake. Backfill script: `scripts/backfill-intake-catalog-products.sql`.
 - **Pipeline exit code 1 crash:** `categoryAiMinConfidence` variable was referenced in the AI category classifier setup but never declared, causing `ReferenceError` at line 643 and every pipeline job to exit with code 1. Added the missing `const categoryAiMinConfidence = Number(env.PIPELINE_CATEGORY_AI_MIN_CONFIDENCE)` declaration alongside `categoryAiModel` and `categoryAiBatchSize`.
 
