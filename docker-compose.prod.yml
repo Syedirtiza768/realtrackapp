@@ -35,6 +35,7 @@ services:
       DEFAULT_POOL_SIZE: 25
       AUTH_TYPE: md5
       LISTEN_PORT: 6432
+      IGNORE_STARTUP_PARAMETERS: statement_timeout
     ports:
       - "${PGBOUNCER_PORT_EXTERNAL:-6432}:6432"
     healthcheck:
