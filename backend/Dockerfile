@@ -28,7 +28,8 @@ ENV NODE_ENV=production
 
 # Healthcheck in docker-compose.yml uses wget
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends wget \
+  && apt-get install -y --no-install-recommends wget python3 python3-pip \
+  && pip3 install --no-cache-dir --break-system-packages msoffcrypto-tool \
   && rm -rf /var/lib/apt/lists/*
 
 # Reuse installed modules from deps and drop devDependencies (avoids a second npm install)

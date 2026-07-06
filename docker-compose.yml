@@ -146,9 +146,16 @@ services:
       PIPELINE_LOCALIZATION_BATCH_SIZE: ${PIPELINE_LOCALIZATION_BATCH_SIZE:-8}
       PIPELINE_SKIP_IMAGE_VALIDATION: ${PIPELINE_SKIP_IMAGE_VALIDATION:-true}
       PIPELINE_MIRROR_IMAGES: ${PIPELINE_MIRROR_IMAGES:-true}
-      PIPELINE_SKIP_MVL_ON_IMPORT: ${PIPELINE_SKIP_MVL_ON_IMPORT:-true}
+      PIPELINE_SKIP_MVL_ON_IMPORT: ${PIPELINE_SKIP_MVL_ON_IMPORT:-false}
       PIPELINE_EXPORT_MAX_FITMENT_ROWS: ${PIPELINE_EXPORT_MAX_FITMENT_ROWS:-80}
       PIPELINE_DESC_MAX_FITMENT_ROWS: ${PIPELINE_DESC_MAX_FITMENT_ROWS:-30}
+      # MVL reference data + fitment expansion
+      EBAY_MVL_DATA_DIR: ${EBAY_MVL_DATA_DIR:-/app/mvl-data}
+      EBAY_MVL_WORKBOOK_PASSWORD: ${EBAY_MVL_WORKBOOK_PASSWORD:-VehicleList}
+      FITMENT_EXPANSION_MODE: ${FITMENT_EXPANSION_MODE:-hybrid}
+      FITMENT_AI_INTERCHANGE: ${FITMENT_AI_INTERCHANGE:-auto}
+      FITMENT_SIBLING_EXPANSION: ${FITMENT_SIBLING_EXPANSION:-conservative}
+      FITMENT_MVL_REQUIRED: ${FITMENT_MVL_REQUIRED:-true}
       PIPELINE_CATEGORY_MODE: ${PIPELINE_CATEGORY_MODE:-auto}
       PIPELINE_CATEGORY_AI_MODEL: ${PIPELINE_CATEGORY_AI_MODEL:-openai/gpt-4o-mini}
       PIPELINE_CATEGORY_AI_BATCH_SIZE: ${PIPELINE_CATEGORY_AI_BATCH_SIZE:-12}
@@ -189,6 +196,7 @@ services:
       - ./eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:/app/eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx:ro
       - ./eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx:ro
       - ./eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:/app/eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx:ro
+      - ./drive-download-20260706T171856Z-3-001:/app/mvl-data:ro
     ports:
       - "${BACKEND_PORT_EXTERNAL:-4191}:4191"
     healthcheck:
