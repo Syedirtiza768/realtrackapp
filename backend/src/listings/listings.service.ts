@@ -408,7 +408,7 @@ export class ListingsService {
           listingId: savedExisting.id,
           version: savedExisting.version,
           statusBefore: oldStatus,
-          statusAfter: savedExisting.status,
+          statusAfter: savedExisting.status ?? oldStatus ?? 'draft',
           snapshot: { ...savedExisting } as unknown as Record<string, unknown>,
           changeReason: 'update_via_create',
           changedBy: null,
@@ -433,7 +433,7 @@ export class ListingsService {
         listingId: saved.id,
         version: saved.version,
         statusBefore: null,
-        statusAfter: saved.status,
+        statusAfter: saved.status ?? 'draft',
         snapshot: { ...saved } as unknown as Record<string, unknown>,
         changeReason: 'create',
         changedBy: null,
@@ -483,7 +483,12 @@ export class ListingsService {
 
       const oldStatus = listing.status;
       const beforeSnapshot = { ...listing } as Record<string, unknown>;
-      const { version: _v, ...changes } = dto;
+      const { version: _v, ...rawChanges } = dto;
+      // Strip undefined values so optional DTO fields don't overwrite
+      // existing entity values (e.g. status becoming undefined).
+      const changes = Object.fromEntries(
+        Object.entries(rawChanges).filter(([, v]) => v !== undefined),
+      );
       Object.assign(listing, changes);
       if (user) listing.updatedBy = user.id;
 
@@ -495,7 +500,7 @@ export class ListingsService {
         listingId: id,
         version: saved.version,
         statusBefore: oldStatus,
-        statusAfter: saved.status,
+        statusAfter: saved.status ?? oldStatus ?? 'draft',
         snapshot: afterSnapshot,
         changeReason: 'manual_edit',
         changedBy: user?.id ?? null,
@@ -564,7 +569,7 @@ export class ListingsService {
         listingId: id,
         version: saved.version,
         statusBefore: oldStatus,
-        statusAfter: dto.status,
+        statusAfter: dto.status ?? oldStatus ?? 'draft',
         snapshot: afterSnapshot,
         changeReason: dto.reason ?? 'status_change',
         changedBy: user?.id ?? null,
