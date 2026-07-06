@@ -21,8 +21,8 @@ INSERT INTO catalog_products (
   image_urls,
   source_file,
   source_row,
-  created_at,
-  updated_at
+  "createdAt",
+  "updatedAt"
 )
 SELECT
   lr.custom_label_sku,
