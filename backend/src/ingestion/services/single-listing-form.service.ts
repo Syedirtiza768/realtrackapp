@@ -289,6 +289,33 @@ export class SingleListingFormService {
       throw err;
     }
 
+    // Create corresponding catalog product so exports and templates work
+    try {
+      await this.catalogProductRepo.save(
+        this.catalogProductRepo.create({
+          sku,
+          title,
+          description: dto.description?.trim() || null,
+          brand,
+          brandNormalized: brand.toLowerCase().trim(),
+          mpn: partNumber,
+          mpnNormalized: partNumber.toLowerCase().replace(/[\s\-]/g, ''),
+          oemPartNumber: partNumber,
+          partType: dto.partType,
+          categoryId: null,
+          categoryName: dto.categoryName?.trim() || null,
+          conditionId: dto.conditionId,
+          price: priceNum,
+          quantity: qty,
+          imageUrls,
+          sourceFile: 'warehouse-intake',
+          sourceRow: sourceRowNumber,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to create catalog product for SKU ${sku}: ${err}`);
+    }
+
     if (dto.uploadedAssetIds?.length) {
       await this.imageAssetRepo.update(
         { id: In(dto.uploadedAssetIds) },
