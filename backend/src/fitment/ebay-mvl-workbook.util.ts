@@ -16,6 +16,18 @@ function isPasswordProtectedError(err: unknown): boolean {
   return message.toLowerCase().includes('password-protected');
 }
 
+function resolvePythonBinary(): string {
+  const fromEnv = process.env.EBAY_MVL_PYTHON?.trim();
+  if (fromEnv) return fromEnv;
+
+  for (const candidate of ['python3', 'python']) {
+    const check = spawnSync(candidate, ['--version'], { encoding: 'utf8' });
+    if (!check.error && check.status === 0) return candidate;
+  }
+
+  return 'python3';
+}
+
 /** Read an eBay MVL workbook, decrypting with Python when required. */
 export function readMvlWorkbook(
   filePath: string,
@@ -41,7 +53,7 @@ export function readMvlWorkbook(
     process.env.EBAY_MVL_WORKBOOK_PASSWORD ??
     'VehicleList';
 
-  const result = spawnSync('python', [scriptPath, filePath], {
+  const result = spawnSync(resolvePythonBinary(), [scriptPath, filePath], {
     env: {
       ...process.env,
       MVL_PASSWORD: pw,
