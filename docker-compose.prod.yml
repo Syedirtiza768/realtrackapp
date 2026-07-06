@@ -33,7 +33,7 @@ services:
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 500
       DEFAULT_POOL_SIZE: 25
-      AUTH_TYPE: md5
+      AUTH_TYPE: scram-sha-256
       LISTEN_PORT: 6432
       IGNORE_STARTUP_PARAMETERS: statement_timeout
     ports:
