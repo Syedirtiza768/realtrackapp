@@ -449,12 +449,12 @@ function applySourceImagesFromInput(part) {
     .filter((u) => u.startsWith('http'));
   if (urls.length === 0) return false;
 
-  part._images = urls.slice(0, 12);
+  part._images = urls.slice(0, 24);
   part._imageData = {
     primary_image_url: urls[0],
     additional_image_urls: urls.slice(1),
     diagram_image_urls: [],
-    enriched_image_urls: urls.slice(0, 12),
+    enriched_image_urls: urls.slice(0, 24),
     confidence: 1.0,
     sources: ['upload'],
     validation: null,
@@ -3697,7 +3697,7 @@ async function fetchImages(parts) {
       log.warn(`Removed ${removed.length} inaccessible image(s) for ${p.partNumber}: ${removed.join(', ')}`);
     }
 
-    p._images = validated.slice(0, 12);
+    p._images = validated.slice(0, 24);
 
     if (p._imageData) {
       p._imageData.enriched_image_urls = validated;
@@ -3941,10 +3941,15 @@ function generateUSMotorsOutput(parts, vinData) {
   const fullHeaders = refData[3]; // Row 3 has headers
 
   // Inject AdditionalPicURL columns right after PicURL (if not already present)
+  // Supports up to 24 images total (PicURL + AdditionalPicURL + AdditionalPicURL1-22)
   const picUrlIdx = fullHeaders.findIndex(h => h && /picurl|item photo url/i.test(h));
   const addPicCols = ['AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
     'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
-    'AdditionalPicURL6', 'AdditionalPicURL7'];
+    'AdditionalPicURL6', 'AdditionalPicURL7', 'AdditionalPicURL8', 'AdditionalPicURL9',
+    'AdditionalPicURL10', 'AdditionalPicURL11', 'AdditionalPicURL12', 'AdditionalPicURL13',
+    'AdditionalPicURL14', 'AdditionalPicURL15', 'AdditionalPicURL16', 'AdditionalPicURL17',
+    'AdditionalPicURL18', 'AdditionalPicURL19', 'AdditionalPicURL20', 'AdditionalPicURL21',
+    'AdditionalPicURL22'];
   if (picUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
     fullHeaders.splice(picUrlIdx + 1, 0, ...addPicCols);
   }
@@ -4045,9 +4050,9 @@ function buildUSRow(headers, part, enriched, vehicle, policies) {
   );
 
   // Images — eBay File Exchange requires separate columns per image (not pipe-separated)
-  // PicURL = primary, AdditionalPicURL = 2nd, AdditionalPicURL1-7 = 3rd-9th
+  // PicURL = primary, AdditionalPicURL = 2nd, AdditionalPicURL1-22 = 3rd-24th (up to 24 total)
   if (part._images && part._images.length > 0) {
-    const imgs = part._images.slice(0, 9);
+    const imgs = part._images.slice(0, 24);
     const imgCol = findImageColumn(headers);
     if (imgCol) set(imgCol, imgs[0]);
     if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);
@@ -4087,10 +4092,15 @@ function generateAUOutput(parts, vinData) {
   const fullHeaders = refData[3];
 
   // Inject AdditionalPicURL columns right after PicURL (if not already present)
+  // Supports up to 24 images total (PicURL + AdditionalPicURL + AdditionalPicURL1-22)
   const auPicUrlIdx = fullHeaders.findIndex(h => h && /item photo url|picurl|artikelfoto/i.test(h));
   const auAddPicCols = ['AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
     'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
-    'AdditionalPicURL6', 'AdditionalPicURL7'];
+    'AdditionalPicURL6', 'AdditionalPicURL7', 'AdditionalPicURL8', 'AdditionalPicURL9',
+    'AdditionalPicURL10', 'AdditionalPicURL11', 'AdditionalPicURL12', 'AdditionalPicURL13',
+    'AdditionalPicURL14', 'AdditionalPicURL15', 'AdditionalPicURL16', 'AdditionalPicURL17',
+    'AdditionalPicURL18', 'AdditionalPicURL19', 'AdditionalPicURL20', 'AdditionalPicURL21',
+    'AdditionalPicURL22'];
   if (auPicUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
     fullHeaders.splice(auPicUrlIdx + 1, 0, ...auAddPicCols);
   }
@@ -4159,7 +4169,7 @@ function generateAUOutput(parts, vinData) {
 
     // Images — eBay File Exchange requires separate columns per image
     if (part._images && part._images.length > 0) {
-      const imgs = part._images.slice(0, 9);
+      const imgs = part._images.slice(0, 24);
       const imgCol = findImageColumn(fullHeaders);
       if (imgCol) set(imgCol, imgs[0]);
       if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);
@@ -4213,10 +4223,15 @@ function generateDEOutput(parts, vinData) {
   const fullHeaders = refData[3];
 
   // Inject AdditionalPicURL columns right after PicURL (if not already present)
+  // Supports up to 24 images total (PicURL + AdditionalPicURL + AdditionalPicURL1-22)
   const dePicUrlIdx = fullHeaders.findIndex(h => h && /artikelfoto|item photo url|picurl/i.test(h));
   const deAddPicCols = ['AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
     'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
-    'AdditionalPicURL6', 'AdditionalPicURL7'];
+    'AdditionalPicURL6', 'AdditionalPicURL7', 'AdditionalPicURL8', 'AdditionalPicURL9',
+    'AdditionalPicURL10', 'AdditionalPicURL11', 'AdditionalPicURL12', 'AdditionalPicURL13',
+    'AdditionalPicURL14', 'AdditionalPicURL15', 'AdditionalPicURL16', 'AdditionalPicURL17',
+    'AdditionalPicURL18', 'AdditionalPicURL19', 'AdditionalPicURL20', 'AdditionalPicURL21',
+    'AdditionalPicURL22'];
   if (dePicUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
     fullHeaders.splice(dePicUrlIdx + 1, 0, ...deAddPicCols);
   }
@@ -4295,7 +4310,7 @@ function generateDEOutput(parts, vinData) {
 
     // Images — eBay File Exchange requires separate columns per image
     if (part._images && part._images.length > 0) {
-      const imgs = part._images.slice(0, 9);
+      const imgs = part._images.slice(0, 24);
       const imgCol = findImageColumn(fullHeaders);
       if (imgCol) set(imgCol, imgs[0]);
       if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);

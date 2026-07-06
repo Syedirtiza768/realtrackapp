@@ -83,6 +83,7 @@ export class RbacAdminController {
       name: r.name,
       description: r.description,
       isSystem: r.isSystem,
+      isCustomized: r.isCustomized,
       permissions: (r.rolePermissions ?? [])
         .map((rp) => rp.permission?.key)
         .filter(Boolean),

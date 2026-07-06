@@ -20,6 +20,14 @@ import { FitmentService } from './fitment.service.js';
 import { FitmentMatcherService } from './fitment-matcher.service.js';
 import { FitmentImportService, type AcesVehicleRow } from './fitment-import.service.js';
 import { EbayMvlService, type FitmentSelection } from './ebay-mvl.service.js';
+import { EbayMvlImportService } from './ebay-mvl-import.service.js';
+import { EbayMvlStoreService } from './ebay-mvl-store.service.js';
+import {
+  ImportEbayMvlDirectoryDto,
+  ImportEbayMvlFileDto,
+  ValidateEbayMvlBatchDto,
+} from './dto/ebay-mvl-import.dto.js';
+import { resolveMvlMarketplace, mvlMarketplaceToTreeId } from './ebay-mvl-marketplace.util.js';
 import { VinDecodeService } from './vin-decode.service.js';
 import { VinExportService } from './vin-export.service.js';
 import { VinDbExportService } from './vin-db-export.service.js';
@@ -38,6 +46,8 @@ export class FitmentController {
     private readonly matcherService: FitmentMatcherService,
     private readonly importService: FitmentImportService,
     private readonly mvlService: EbayMvlService,
+    private readonly mvlImportService: EbayMvlImportService,
+    private readonly mvlStoreService: EbayMvlStoreService,
     private readonly vinService: VinDecodeService,
     private readonly vinExport: VinExportService,
     private readonly vinDbExport: VinDbExportService,
@@ -228,6 +238,7 @@ export class FitmentController {
     @Query('q') q?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('treeId') treeId?: string,
   ) {
     return this.mvlService.getModels(
       categoryId,
@@ -235,7 +246,58 @@ export class FitmentController {
       q,
       limit ? parseInt(limit, 10) : undefined,
       offset ? parseInt(offset, 10) : undefined,
+      treeId,
     );
+  }
+
+  // ─── eBay MVL reference data (imported spreadsheets) ───
+
+  @Get('ebay-mvl/status')
+  @ApiOperation({ summary: 'Active eBay MVL releases per marketplace' })
+  getEbayMvlStatus() {
+    return this.mvlStoreService.getStatusSummary();
+  }
+
+  @Get('ebay-mvl/releases')
+  @ApiOperation({ summary: 'List imported eBay MVL releases' })
+  @ApiQuery({ name: 'marketplace', required: false, example: 'US' })
+  listEbayMvlReleases(@Query('marketplace') marketplace?: string) {
+    return this.mvlStoreService.listReleases(
+      marketplace ? resolveMvlMarketplace(marketplace) : undefined,
+    );
+  }
+
+  @Post('ebay-mvl/import')
+  @RequirePermissions('fitment.manage')
+  @ApiOperation({ summary: 'Import eBay MVL workbooks from a server directory' })
+  importEbayMvlDirectory(@Body() dto: ImportEbayMvlDirectoryDto) {
+    return this.mvlImportService.importDirectory(dto.directory, {
+      force: dto.force,
+    });
+  }
+
+  @Post('ebay-mvl/import-file')
+  @RequirePermissions('fitment.manage')
+  @ApiOperation({ summary: 'Import a single eBay MVL workbook by path' })
+  importEbayMvlFile(@Body() dto: ImportEbayMvlFileDto) {
+    return this.mvlImportService.importFile(
+      dto.filePath,
+      dto.marketplace
+        ? resolveMvlMarketplace(dto.marketplace)
+        : undefined,
+      { force: dto.force },
+    );
+  }
+
+  @Post('ebay-mvl/validate-batch')
+  @RequirePermissions('fitment.view')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Validate fitment rows against local eBay MVL (DB-first)' })
+  async validateEbayMvlBatch(@Body() dto: ValidateEbayMvlBatchDto) {
+    const marketplace = resolveMvlMarketplace(dto.marketplace);
+    return this.mvlService.validateFitmentData(dto.rows ?? [], '6000', {
+      treeId: mvlMarketplaceToTreeId(marketplace),
+    });
   }
 
   // ─── VIN Decode ───

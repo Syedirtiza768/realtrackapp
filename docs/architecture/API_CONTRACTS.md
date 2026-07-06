@@ -198,6 +198,11 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | GET | `/api/fitment/submodels` | List submodels | fitment.view |
 | POST | `/api/fitment/import` | Import fitment data | fitment.manage |
 | GET | `/api/fitment/vin/:vin` | Lookup VIN | fitment.view |
+| GET | `/api/fitment/ebay-mvl/status` | Active MVL releases per marketplace (US/AU/DE/GB) | fitment.view |
+| GET | `/api/fitment/ebay-mvl/releases` | List imported MVL releases | fitment.view |
+| POST | `/api/fitment/ebay-mvl/import` | Import MVL workbooks from server directory | fitment.manage |
+| POST | `/api/fitment/ebay-mvl/import-file` | Import single MVL workbook by path | fitment.manage |
+| POST | `/api/fitment/ebay-mvl/validate-batch` | Validate fitment rows (DB-first) | fitment.view |
 
 ---
 

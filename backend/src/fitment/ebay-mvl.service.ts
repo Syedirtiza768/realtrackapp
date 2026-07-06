@@ -5,6 +5,8 @@ import {
   serializeValidatedFitmentRow,
   type ParsedFitmentRow,
 } from './fitment-mvl.util.js';
+import { resolveMvlMarketplaceFromTreeId } from './ebay-mvl-marketplace.util.js';
+import { EbayMvlStoreService } from './ebay-mvl-store.service.js';
 
 /* ── Types ── */
 
@@ -126,13 +128,8 @@ class MvlValueCache {
 /**
  * EbayMvlService — eBay Master Vehicle List integration.
  *
- * Uses the eBay Taxonomy API compatibility endpoints to:
- * 1. Fetch the compatibility property tree for a category
- * 2. Cascade: Make → Model → Year → Trim → Engine values
- * 3. Build eBay-format compatibility arrays from user selections
- *
- * Designed for use with async SearchableSelect frontend components
- * that fetch each cascade level independently.
+ * Uses imported official MVL reference data (DB-first) with eBay Taxonomy API
+ * compatibility endpoints as fallback when no local release is active.
  */
 @Injectable()
 export class EbayMvlService {
@@ -144,7 +141,10 @@ export class EbayMvlService {
   /** eBay Motors Parts & Accessories root category */
   static readonly MOTORS_PARTS_CATEGORY = '6000';
 
-  constructor(private readonly taxonomyApi: EbayTaxonomyApiService) {}
+  constructor(
+    private readonly taxonomyApi: EbayTaxonomyApiService,
+    private readonly store: EbayMvlStoreService,
+  ) {}
 
   /* ─── Compatibility Tree ─── */
 
@@ -207,6 +207,38 @@ export class EbayMvlService {
       `Fetching ${propertyName} values for category ${categoryId} with filters: ${JSON.stringify(filters)}`,
     );
 
+    const marketplace = resolveMvlMarketplaceFromTreeId(treeId);
+    if (await this.store.hasActiveRelease(marketplace)) {
+      return this.store.getPropertyValues(
+        marketplace,
+        propertyName,
+        filters,
+        query,
+        limit,
+        offset,
+      );
+    }
+
+    return this.getPropertyValuesFromApi(
+      categoryId,
+      propertyName,
+      filters,
+      query,
+      limit,
+      offset,
+      treeId,
+    );
+  }
+
+  private async getPropertyValuesFromApi(
+    categoryId: string,
+    propertyName: string,
+    filters: Record<string, string> = {},
+    query?: string,
+    limit = 100,
+    offset = 0,
+    treeId = EbayMvlService.DEFAULT_TREE_ID,
+  ): Promise<{ options: PropertyValueOption[]; hasMore: boolean }> {
     const rawValues = await this.taxonomyApi.getCompatibilityPropertyValues(
       treeId,
       categoryId,
@@ -214,27 +246,23 @@ export class EbayMvlService {
       Object.keys(filters).length > 0 ? filters : undefined,
     );
 
-    // Map raw values to label/value pairs
     let options: PropertyValueOption[] = rawValues.map((v) => ({
       label: v.value,
       value: v.value,
     }));
 
-    // Apply text filter if provided (client-side filter over eBay results)
     if (query) {
       const q = query.toLowerCase();
       options = options.filter((o) => o.label.toLowerCase().includes(q));
     }
 
-    // Sort alphabetically, with numeric values (years) sorted descending
     options.sort((a, b) => {
       const aNum = Number(a.value);
       const bNum = Number(b.value);
-      if (!isNaN(aNum) && !isNaN(bNum)) return bNum - aNum; // Years descending
+      if (!isNaN(aNum) && !isNaN(bNum)) return bNum - aNum;
       return a.label.localeCompare(b.label);
     });
 
-    // Apply pagination
     const paginated = options.slice(offset, offset + limit);
 
     return {
@@ -362,7 +390,16 @@ export class EbayMvlService {
     const makeQuery = make.trim();
     if (!makeQuery) return { mvlMatched: false };
 
+    const marketplace = resolveMvlMarketplaceFromTreeId(treeId);
     try {
+      if (await this.store.hasActiveRelease(marketplace)) {
+        return this.store.resolveCanonicalMakeModel(
+          marketplace,
+          makeQuery,
+          model,
+        );
+      }
+
       const makes = await this.getMakes(categoryId, makeQuery, 100, 0, treeId);
       const canonicalMake = this.pickCanonical(makes.options, makeQuery);
       if (!canonicalMake) return { mvlMatched: false };
@@ -466,6 +503,17 @@ export class EbayMvlService {
   ): Promise<MvlValidatedRow[]> {
     if (rows.length === 0) return [];
 
+    const marketplace = resolveMvlMarketplaceFromTreeId(treeId);
+    if (await this.store.hasActiveRelease(marketplace)) {
+      const results: MvlValidatedRow[] = [];
+      for (const parsed of rows) {
+        results.push(
+          await this.validateSingleRowFromStore(parsed, marketplace),
+        );
+      }
+      return results;
+    }
+
     const cache = new MvlValueCache();
     const results: MvlValidatedRow[] = [];
     let consecutiveApiFailures = 0;
@@ -473,7 +521,6 @@ export class EbayMvlService {
     let apiDisabled = false;
 
     for (const parsed of rows) {
-      // Circuit breaker: if API keeps failing, skip remaining rows immediately
       if (apiDisabled) {
         results.push({
           row: parsed,
@@ -488,9 +535,9 @@ export class EbayMvlService {
 
       try {
         results.push(
-          await this.validateSingleRow(parsed, categoryId, cache, treeId),
+          await this.validateSingleRowFromApi(parsed, categoryId, cache, treeId),
         );
-        consecutiveApiFailures = 0; // Reset on success
+        consecutiveApiFailures = 0;
       } catch (err) {
         consecutiveApiFailures++;
         this.logger.warn(
@@ -518,7 +565,75 @@ export class EbayMvlService {
     return results;
   }
 
-  private async validateSingleRow(
+  private async validateSingleRowFromStore(
+    parsed: ParsedFitmentRow,
+    marketplace: ReturnType<typeof resolveMvlMarketplaceFromTreeId>,
+  ): Promise<MvlValidatedRow> {
+    let row = parsed;
+
+    if (!(await this.store.hasMake(marketplace, row.make))) {
+      const canonical = await this.store.resolveCanonicalMakeModel(
+        marketplace,
+        row.make,
+      );
+      if (canonical.make) row = { ...row, make: canonical.make };
+    }
+
+    if (!(await this.store.hasMake(marketplace, row.make))) {
+      return {
+        row,
+        status: 'rejected',
+        rejectedReason: `Make "${row.make}" not found in eBay MVL`,
+        serialized: serializeValidatedFitmentRow(row, 'rejected', {
+          MvlRejectedReason: `Make "${row.make}" not found in eBay MVL`,
+          MvlSource: 'database',
+        }),
+      };
+    }
+
+    if (!(await this.store.hasModel(marketplace, row.make, row.model))) {
+      const resolved = await this.store.resolveCanonicalMakeModel(
+        marketplace,
+        row.make,
+        row.model,
+      );
+      if (resolved.model) row = { ...row, model: resolved.model };
+    }
+
+    if (!(await this.store.hasModel(marketplace, row.make, row.model))) {
+      return {
+        row,
+        status: 'rejected',
+        rejectedReason: `Model "${row.model}" not valid for Make "${row.make}" on eBay MVL`,
+        serialized: serializeValidatedFitmentRow(row, 'rejected', {
+          MvlRejectedReason: `Model "${row.model}" not valid for Make "${row.make}" on eBay MVL`,
+          MvlSource: 'database',
+        }),
+      };
+    }
+
+    if (!(await this.store.hasYear(marketplace, row.make, row.model, row.year))) {
+      return {
+        row,
+        status: 'needs_review',
+        rejectedReason: `Year ${row.year} not listed for ${row.make} ${row.model} on eBay MVL`,
+        serialized: serializeValidatedFitmentRow(row, 'needs_review', {
+          MvlRejectedReason: `Year ${row.year} not listed for ${row.make} ${row.model} on eBay MVL`,
+          MvlSource: 'database',
+        }),
+      };
+    }
+
+    return {
+      row,
+      status: 'valid',
+      serialized: serializeValidatedFitmentRow(row, 'valid', {
+        MvlSource: 'database',
+      }),
+    };
+  }
+
+  private async validateSingleRowFromApi(
     parsed: ParsedFitmentRow,
     categoryId: string,
     cache: MvlValueCache,

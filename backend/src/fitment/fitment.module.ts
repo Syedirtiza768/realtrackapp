@@ -8,6 +8,8 @@ import { FitmentYear } from './entities/fitment-year.entity.js';
 import { FitmentEngine } from './entities/fitment-engine.entity.js';
 import { PartFitment } from './entities/part-fitment.entity.js';
 import { VinCache } from './entities/vin-cache.entity.js';
+import { EbayMvlRelease } from './entities/ebay-mvl-release.entity.js';
+import { EbayMvlEntry } from './entities/ebay-mvl-entry.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { FitmentService } from './fitment.service.js';
 import { FitmentMatcherService } from './fitment-matcher.service.js';
@@ -15,6 +17,8 @@ import { FitmentImportService } from './fitment-import.service.js';
 import { FitmentImportProcessor } from './processors/fitment-import.processor.js';
 import { FitmentController } from './fitment.controller.js';
 import { EbayMvlService } from './ebay-mvl.service.js';
+import { EbayMvlStoreService } from './ebay-mvl-store.service.js';
+import { EbayMvlImportService } from './ebay-mvl-import.service.js';
 import { VinDecodeService } from './vin-decode.service.js';
 import { VinExportService } from './vin-export.service.js';
 import { VinDbExportService } from './vin-db-export.service.js';
@@ -33,6 +37,8 @@ import { ChannelsModule } from '../channels/channels.module.js';
       PartFitment,
       VinCache,
       ListingRecord,
+      EbayMvlRelease,
+      EbayMvlEntry,
     ]),
     BullModule.registerQueue({ name: 'fitment' }),
     ChannelsModule,
@@ -44,12 +50,14 @@ import { ChannelsModule } from '../channels/channels.module.js';
     FitmentImportService,
     FitmentImportProcessor,
     EbayMvlService,
+    EbayMvlStoreService,
+    EbayMvlImportService,
     VinDecodeService,
     VinExportService,
     VinDbExportService,
     EbayVinSearchService,
     BrandVinDecoderRegistry,
   ],
-  exports: [FitmentService, FitmentMatcherService, EbayMvlService, VinDecodeService, VinExportService, VinDbExportService, EbayVinSearchService, BrandVinDecoderRegistry],
+  exports: [FitmentService, FitmentMatcherService, EbayMvlService, EbayMvlStoreService, EbayMvlImportService, VinDecodeService, VinExportService, VinDbExportService, EbayVinSearchService, BrandVinDecoderRegistry],
 })
 export class FitmentModule {}

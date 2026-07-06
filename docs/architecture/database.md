@@ -27,7 +27,7 @@ core listing tables. Grouped by module:
 | rbac | `Role`, `Permission`, `RolePermission`, `UserRoleAssignment` |
 | listings | `ListingRecord`, `ListingRevision`, `ListingCompliance`, `EbayOffer`, `EbayCategory`, `MasterProduct`, `CompetitorPrice`, `CrossReference`, `MarketSnapshot`, `ExportRule` |
 | catalog-import | `CatalogImport`, `CatalogImportRow`, `CatalogProduct`, `ComplianceAuditLog` |
-| fitment | `FitmentEngine`, `FitmentMake`, `FitmentModel`, `FitmentSubmodel`, `FitmentYear`, `PartFitment`, `VinCache` |
+| fitment | `FitmentEngine`, `FitmentMake`, `FitmentModel`, `FitmentSubmodel`, `FitmentYear`, `PartFitment`, `VinCache`, `EbayMvlRelease`, `EbayMvlEntry` |
 | ingestion | `IngestionJob`, `PipelineJob`, `AiResult` |
 | motors-intelligence | `MotorsProduct`, `ProductCandidate`, `ExtractedAttribute`, `ValidationResult`, `ReviewTask`, `ListingGeneration`, `CorrectionRule`, `EbayAspectRequirement`, `EbayCategoryMapping`, `MotorsFeedbackLog` |
 | channels | `ChannelConnection`, `ChannelListing`, `ChannelWebhookLog`, `ListingChannelInstance`, `Store`, `AiEnhancement`, `DemoSimulationLog` |

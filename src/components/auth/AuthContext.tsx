@@ -9,12 +9,12 @@ import {
   useCallback,
   useEffect,
   type ReactNode,
-} from 'react';
-import { fetchWithAuth } from '../../lib/authApi';
+} from "react";
+import { fetchWithAuth } from "../../lib/authApi";
 
-const API = '/api';
-const TOKEN_KEY = 'mk_auth_token';
-const USER_KEY = 'mk_auth_user';
+const API = "/api";
+const TOKEN_KEY = "mk_auth_token";
+const USER_KEY = "mk_auth_user";
 
 export interface AuthUser {
   id: string;
@@ -27,6 +27,7 @@ export interface AuthUser {
   permissions: string[];
   lastLoginAt?: string | null;
   createdAt?: string;
+  sidebarModules?: string[];
 }
 
 interface MeResponse {
@@ -43,6 +44,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   permissions: string[];
+  sidebarModules: string[];
   loading: boolean;
   initializing: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -57,7 +59,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
 
@@ -66,6 +68,21 @@ function persistUser(user: AuthUser | null) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   } else {
     localStorage.removeItem(USER_KEY);
+  }
+}
+
+const SIDEBAR_MODULES_KEY = "mk_sidebar_modules";
+
+function persistSidebarModules(modules: string[]) {
+  localStorage.setItem(SIDEBAR_MODULES_KEY, JSON.stringify(modules));
+}
+
+function loadSidebarModules(): string[] {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_MODULES_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -81,8 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() =>
     localStorage.getItem(TOKEN_KEY),
   );
+  const [sidebarModules, setSidebarModules] = useState<string[]>(() =>
+    loadSidebarModules(),
+  );
   const [loading, setLoading] = useState(false);
-  const [initializing, setInitializing] = useState(!!localStorage.getItem(TOKEN_KEY));
+  const [initializing, setInitializing] = useState(
+    !!localStorage.getItem(TOKEN_KEY),
+  );
 
   const permissions = user?.permissions ?? [];
 
@@ -113,6 +135,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       persistUser(data.user);
       setToken(currentToken);
+
+      // Fetch sidebar module visibility
+      try {
+        const sidebar = await fetchWithAuth<{ visibleModules: string[] }>(
+          `${API}/rbac/roles/sidebar-config/me`,
+        );
+        setSidebarModules(sidebar.visibleModules);
+        persistSidebarModules(sidebar.visibleModules);
+      } catch {
+        // Sidebar config fetch failed; use empty (all modules visible by default)
+        setSidebarModules([]);
+        persistSidebarModules([]);
+      }
     } catch {
       setUser(null);
       setToken(null);
@@ -132,8 +167,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         const res = await fetch(`${API}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
         if (!res.ok) {
@@ -156,13 +191,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         const res = await fetch(`${API}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password, name }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.message ?? `Registration failed (${res.status})`);
+          throw new Error(
+            body.message ?? `Registration failed (${res.status})`,
+          );
         }
         const data = await res.json();
         localStorage.setItem(TOKEN_KEY, data.accessToken);
@@ -178,26 +215,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       if (token) {
-        await fetchWithAuth(`${API}/auth/logout`, { method: 'POST' });
+        await fetchWithAuth(`${API}/auth/logout`, { method: "POST" });
       }
     } catch {
       // ignore — still clear local session
     }
     setToken(null);
     setUser(null);
+    setSidebarModules([]);
     persistUser(null);
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(SIDEBAR_MODULES_KEY);
   }, [token]);
 
   const requestPasswordReset = useCallback(async (email: string) => {
     const res = await fetch(`${API}/auth/password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.message ?? 'Password reset request failed');
+      throw new Error(body.message ?? "Password reset request failed");
     }
   }, []);
 
@@ -207,6 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         token,
         permissions,
+        sidebarModules,
         loading,
         initializing,
         login,

@@ -220,13 +220,13 @@ export class PipelineOutputImageService {
     return IMAGE_COLUMN_PATTERNS.some((p) => p.test(h));
   }
 
-  /** PicURL = first URL; AdditionalPicURL* = rest (max 9 images). */
+  /** PicURL = first URL; AdditionalPicURL* = rest (max 24 images). */
   private writeImageColumns(
     row: string[],
     imageColIdxs: number[],
     urls: string[],
   ): void {
-    const trimmed = urls.map((u) => u.trim()).filter(Boolean).slice(0, 9);
+    const trimmed = urls.map((u) => u.trim()).filter(Boolean).slice(0, 24);
     for (let i = 0; i < imageColIdxs.length; i++) {
       row[imageColIdxs[i]!] = trimmed[i] ?? '';
     }

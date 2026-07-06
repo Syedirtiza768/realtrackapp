@@ -102,6 +102,9 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
     ROLE_SLUGS.SUPER_ADMIN,
   ]),
   p('roles.assign', 'Assign roles to users', 'roles', ADMIN_UP),
+  p('roles.create', 'Create custom roles', 'roles', SUPER_ADMIN_ONLY),
+  p('roles.update', 'Update role details', 'roles', SUPER_ADMIN_ONLY),
+  p('roles.delete', 'Delete custom roles', 'roles', SUPER_ADMIN_ONLY),
 
   // ── Teams ──
   p('teams.view', 'View teams', 'teams', READ_ONLY),
@@ -345,3 +348,34 @@ export function permissionsForRole(slug: RoleSlug): string[] {
     perm.defaultRoles?.includes(slug),
   ).map((perm) => perm.key);
 }
+
+/** Map of sidebar module keys → the permission that gates them. Mirrors NAV_ITEMS in Shell.tsx. */
+export const SIDEBAR_MODULE_PERMISSIONS: Record<string, string> = {
+  '': 'dashboard.view',
+  ingestion: 'ingestion.view',
+  motors: 'motors.view',
+  'motors/review': 'motors.review',
+  'listings/new': 'listings.create',
+  fitment: 'fitment.view',
+  'fitment/vin': 'fitment.view',
+  catalog: 'catalog.view',
+  'catalog/import': 'catalog.import',
+  'catalog/motors-filters': 'catalog.view',
+  inventory: 'inventory.view',
+  'published-listings': 'published_listings.view',
+  pipeline: 'pipeline.view',
+  preview: 'listings.view',
+  'bulk-actions': 'listings.update',
+  orders: 'orders.view',
+  automation: 'automation.view',
+  templates: 'templates.view',
+  audit: 'audit.view',
+  notifications: 'notifications.view',
+  settings: 'settings.view',
+  'settings/users': 'users.view',
+  'settings/teams': 'teams.manage',
+  'settings/permissions': 'roles.view',
+  'settings/client': 'client_settings.view',
+  'settings/integrations/ebay': 'ebay.view',
+  'settings/ai-routing': 'ai.routing.view',
+};

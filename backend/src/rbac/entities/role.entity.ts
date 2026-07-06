@@ -28,6 +28,9 @@ export class Role {
   @Column({ type: 'boolean', default: true })
   isSystem: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isCustomized: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

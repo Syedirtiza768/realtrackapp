@@ -152,7 +152,9 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `PIPELINE_SKIP_IMAGE_VALIDATION` | `true` | Skip slow HTTP validation of image URLs after fetch |
 | `PIPELINE_SKIP_IMAGE_FETCH` | `0` | Use source/upload images only — no image API |
 | `PIPELINE_MIRROR_IMAGES` | `true` | Mirror listing images to S3 after pipeline (backend) |
-| `PIPELINE_SKIP_MVL_ON_IMPORT` | `true` | Skip per-row eBay MVL API re-validation when importing pipeline XLSX to catalog (large jobs) |
+| `PIPELINE_SKIP_MVL_ON_IMPORT` | auto | When unset: validate on import if local MVL is loaded (`npm run mvl:import`); set `true` to skip, `false` to force |
+| `EBAY_MVL_DATA_DIR` | `../drive-download-20260706T171856Z-3-001` | Allowed root for `POST /api/fitment/ebay-mvl/import` and `npm run mvl:import` |
+| `EBAY_MVL_WORKBOOK_PASSWORD` | — | Password for UK/US eBay MVL `.xlsx` files (requires Python `msoffcrypto-tool`) |
 | `PIPELINE_EXPORT_MAX_FITMENT_ROWS` | `80` | Max compatibility rows per listing in export templates |
 | `PIPELINE_DESC_MAX_FITMENT_ROWS` | `30` | Max fitment rows embedded in listing description HTML |
 | `MAX_CONCURRENT_PIPELINE_JOBS` | `2` | Max jobs **actively processing** (not queued `pending`); upload returns 503 when full |

@@ -1,4 +1,5 @@
 import type { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import type { EbayMvlStoreService } from './ebay-mvl-store.service.js';
 import { EbayMvlService } from './ebay-mvl.service.js';
 
 /* ── Tests ── */
@@ -8,6 +9,14 @@ describe('EbayMvlService', () => {
   let taxonomyApi: {
     getCompatibilityProperties: jest.Mock;
     getCompatibilityPropertyValues: jest.Mock;
+  };
+  let store: {
+    hasActiveRelease: jest.Mock;
+    getPropertyValues: jest.Mock;
+    resolveCanonicalMakeModel: jest.Mock;
+    hasMake: jest.Mock;
+    hasModel: jest.Mock;
+    hasYear: jest.Mock;
   };
 
   beforeEach(() => {
@@ -19,7 +28,18 @@ describe('EbayMvlService', () => {
       ]),
       getCompatibilityPropertyValues: jest.fn(),
     };
-    svc = new EbayMvlService(taxonomyApi as unknown as EbayTaxonomyApiService);
+    store = {
+      hasActiveRelease: jest.fn().mockResolvedValue(false),
+      getPropertyValues: jest.fn(),
+      resolveCanonicalMakeModel: jest.fn(),
+      hasMake: jest.fn(),
+      hasModel: jest.fn(),
+      hasYear: jest.fn(),
+    };
+    svc = new EbayMvlService(
+      taxonomyApi as unknown as EbayTaxonomyApiService,
+      store as unknown as EbayMvlStoreService,
+    );
   });
 
   describe('fetchCompatibilityTree', () => {
@@ -177,6 +197,22 @@ describe('EbayMvlService', () => {
 
       expect(result.apiUnavailable).toBe(true);
       expect(result.needsReviewCount).toBe(1);
+    });
+
+    it('validates against local MVL database when active', async () => {
+      store.hasActiveRelease.mockResolvedValue(true);
+      store.hasMake.mockResolvedValue(true);
+      store.hasModel.mockResolvedValue(true);
+      store.hasYear.mockResolvedValue(true);
+
+      const result = await svc.validateFitmentData(
+        [{ Make: 'Toyota', Model: 'Camry', Year: '2018' }],
+        '6000',
+      );
+
+      expect(result.validCount).toBe(1);
+      expect(result.apiUnavailable).toBe(false);
+      expect(taxonomyApi.getCompatibilityPropertyValues).not.toHaveBeenCalled();
     });
   });
 });

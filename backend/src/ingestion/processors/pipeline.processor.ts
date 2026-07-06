@@ -14,6 +14,7 @@ import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
+import { EbayMvlStoreService } from '../../fitment/ebay-mvl-store.service.js';
 import { resolveCategoryTreeId } from '../../channels/ebay/ebay-marketplace-tree.util.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
@@ -81,6 +82,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     private readonly optimizationQueue: Queue,
     private readonly pipelineOutputImages: PipelineOutputImageService,
     private readonly mvlService: EbayMvlService,
+    private readonly mvlStore: EbayMvlStoreService,
   ) {
     super();
   }
@@ -236,11 +238,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     return state;
   }
 
-  /** Pipeline script already validates fitment; re-validating every row via eBay MVL on import is slow. */
-  private shouldSkipMvlOnImport(): boolean {
+  /** Re-validate fitment on import using local MVL when imported; API fallback otherwise. */
+  private async shouldSkipMvlOnImport(): Promise<boolean> {
     const raw = process.env.PIPELINE_SKIP_MVL_ON_IMPORT;
-    if (raw == null || String(raw).trim() === '') return true;
-    return /^(1|true|yes|on)$/i.test(String(raw).trim());
+    if (raw != null && String(raw).trim() !== '') {
+      return /^(1|true|yes|on)$/i.test(String(raw).trim());
+    }
+    return !(await this.mvlStore.hasAnyActiveRelease());
   }
 
   private async touchSubStage(
@@ -745,7 +749,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       }
     }
 
-    const imageUrls = [...imageUrlSet].slice(0, 12);
+    const imageUrls = [...imageUrlSet].slice(0, 24);
     if (imageUrls.length === 0) {
       this.logger.log(`Job ${jobId}: No source/upload images to propagate`);
       return;
@@ -983,7 +987,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         const quantity = qtyStr ? parseInt(qtyStr, 10) : null;
         const picUrl = get(row, iPicUrl);
         const imageUrls = picUrl ? picUrl.split('|').filter(Boolean) : [];
-        for (let ai = 0; ai <= 7; ai++) {
+        for (let ai = 0; ai <= 22; ai++) {
           const colName =
             ai === 0 ? 'AdditionalPicURL' : `AdditionalPicURL${ai}`;
           const addIdx = headers.indexOf(colName);
@@ -1083,7 +1087,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       let mvlRejectedTotal = 0;
       let mvlValidatedTotal = 0;
-      if (!this.shouldSkipMvlOnImport()) {
+      if (!(await this.shouldSkipMvlOnImport())) {
         for (const product of products) {
           const rawFitment = product.fitmentData as
             | Record<string, unknown>[]

@@ -13,6 +13,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "import:listings": "ts-node -r tsconfig-paths/register src/scripts/import-listings.ts",
+    "mvl:import": "nest build && node dist/src/scripts/import-ebay-mvl.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
