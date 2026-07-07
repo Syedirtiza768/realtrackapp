@@ -20,6 +20,7 @@ logs/
 # Sensitive tokens
 sellerpundit-tokens.html
 sellerpundit-tokens.json
+*.pem
 
 # Ad-hoc scripts and patches
 check-*.sql
