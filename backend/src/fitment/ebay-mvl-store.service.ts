@@ -266,6 +266,134 @@ export class EbayMvlStoreService {
     return count > 0;
   }
 
+  /**
+   * Batch existence check for makes. Returns the set of lowercased makes that
+   * exist in the active MVL release. Semantically equivalent to calling
+   * hasMake() for each input but in a single query per chunk.
+   */
+  async batchExistingMakes(
+    marketplace: MvlMarketplace,
+    makes: string[],
+  ): Promise<Set<string>> {
+    const releaseId = await this.getActiveReleaseId(marketplace);
+    if (!releaseId) return new Set();
+
+    const normalized = [
+      ...new Set(
+        makes
+          .map((m) => m.trim().toLowerCase())
+          .filter((m) => m.length > 0),
+      ),
+    ];
+    if (normalized.length === 0) return new Set();
+
+    const existing = new Set<string>();
+    const CHUNK = 1000;
+    for (let i = 0; i < normalized.length; i += CHUNK) {
+      const batch = normalized.slice(i, i + CHUNK);
+      const rows = await this.entryRepo
+        .createQueryBuilder('e')
+        .select('DISTINCT LOWER(e.make)', 'make')
+        .where('e.release_id = :releaseId', { releaseId })
+        .andWhere('e.marketplace = :marketplace', { marketplace })
+        .andWhere('LOWER(e.make) IN (:...makes)', { makes: batch })
+        .getRawMany<{ make: string }>();
+      for (const row of rows) existing.add(row.make);
+    }
+    return existing;
+  }
+
+  /**
+   * Batch existence check for (make, model) pairs. Returns the set of
+   * "lower(make)|lower(model)" keys that exist in the active MVL release.
+   * Uses double-IN filtering then in-memory exact-pair matching to stay
+   * correct (avoids cross-product false positives).
+   */
+  async batchExistingModels(
+    marketplace: MvlMarketplace,
+    pairs: Array<{ make: string; model: string }>,
+  ): Promise<Set<string>> {
+    const releaseId = await this.getActiveReleaseId(marketplace);
+    if (!releaseId || pairs.length === 0) return new Set();
+
+    const deduped = new Map<string, { make: string; model: string }>();
+    for (const p of pairs) {
+      const make = p.make.trim();
+      const model = p.model.trim();
+      if (!make || !model) continue;
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+      if (!deduped.has(key)) deduped.set(key, { make, model });
+    }
+    if (deduped.size === 0) return new Set();
+
+    const existing = new Set<string>();
+    const unique = [...deduped.values()];
+    const CHUNK = 500;
+    for (let i = 0; i < unique.length; i += CHUNK) {
+      const batch = unique.slice(i, i + CHUNK);
+      const makes = [...new Set(batch.map((b) => b.make.toLowerCase()))];
+      const models = [...new Set(batch.map((b) => b.model.toLowerCase()))];
+      const rows = await this.entryRepo
+        .createQueryBuilder('e')
+        .select(['DISTINCT LOWER(e.make)', 'LOWER(e.model)'])
+        .where('e.release_id = :releaseId', { releaseId })
+        .andWhere('e.marketplace = :marketplace', { marketplace })
+        .andWhere('LOWER(e.make) IN (:...makes)', { makes })
+        .andWhere('LOWER(e.model) IN (:...models)', { models })
+        .getRawMany<{ make: string; model: string }>();
+      for (const row of rows) {
+        existing.add(`${row.make}|${row.model}`);
+      }
+    }
+    return existing;
+  }
+
+  /**
+   * Batch existence check for (make, model, year) triples. Returns the set of
+   * "lower(make)|lower(model)|yearNum" keys that exist in the active MVL release.
+   */
+  async batchExistingYears(
+    marketplace: MvlMarketplace,
+    triples: Array<{ make: string; model: string; year: string }>,
+  ): Promise<Set<string>> {
+    const releaseId = await this.getActiveReleaseId(marketplace);
+    if (!releaseId || triples.length === 0) return new Set();
+
+    const deduped = new Map<string, { make: string; model: string; year: number }>();
+    for (const t of triples) {
+      const make = t.make.trim();
+      const model = t.model.trim();
+      const yearNum = parseInt(t.year, 10);
+      if (!make || !model || !Number.isFinite(yearNum)) continue;
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}|${yearNum}`;
+      if (!deduped.has(key)) deduped.set(key, { make, model, year: yearNum });
+    }
+    if (deduped.size === 0) return new Set();
+
+    const existing = new Set<string>();
+    const unique = [...deduped.values()];
+    const CHUNK = 300;
+    for (let i = 0; i < unique.length; i += CHUNK) {
+      const batch = unique.slice(i, i + CHUNK);
+      const makes = [...new Set(batch.map((b) => b.make.toLowerCase()))];
+      const models = [...new Set(batch.map((b) => b.model.toLowerCase()))];
+      const years = [...new Set(batch.map((b) => b.year))];
+      const rows = await this.entryRepo
+        .createQueryBuilder('e')
+        .select(['DISTINCT LOWER(e.make)', 'LOWER(e.model)', 'e.year'])
+        .where('e.release_id = :releaseId', { releaseId })
+        .andWhere('e.marketplace = :marketplace', { marketplace })
+        .andWhere('LOWER(e.make) IN (:...makes)', { makes })
+        .andWhere('LOWER(e.model) IN (:...models)', { models })
+        .andWhere('e.year IN (:...years)', { years })
+        .getRawMany<{ make: string; model: string; year: number }>();
+      for (const row of rows) {
+        existing.add(`${row.make}|${row.model}|${row.year}`);
+      }
+    }
+    return existing;
+  }
+
   async resolveCanonicalMakeModel(
     marketplace: MvlMarketplace,
     make: string,

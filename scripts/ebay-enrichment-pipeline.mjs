@@ -51,6 +51,8 @@ import {
 } from './lib/ai-category-classifier.mjs';
 import {
   PIPELINE_MARKETPLACES,
+  getActivePipelineMarketplaces,
+  initActivePipelineMarketplaces,
   getMarketplaceConfig,
   getPartCategory,
   setPartCategory,
@@ -1701,7 +1703,7 @@ async function mapCategories(parts, vinData) {
   } else if (taxonomyAvailable) {
     const taxStats = taxonomyClient.getStats();
     log.info(
-      `eBay Taxonomy enabled for ${PIPELINE_MARKETPLACES.join('/')}. ` +
+      `eBay Taxonomy enabled for ${getActivePipelineMarketplaces().join('/')}. ` +
       `Suggestion cache: ${taxStats.suggestionCacheHits} warm, ` +
       `daily ${taxStats.dailyUsage}/${taxStats.dailyQuota}`,
     );
@@ -1719,9 +1721,10 @@ async function mapCategories(parts, vinData) {
     else uniqueLookups.push({ partKey, parts: [part] });
   }
 
-  log.info(`${uniqueLookups.length} unique category lookups for ${parts.length} parts × ${PIPELINE_MARKETPLACES.length} marketplaces`);
+  const activeMarketplaces = getActivePipelineMarketplaces();
+  log.info(`${uniqueLookups.length} unique category lookups for ${parts.length} parts × ${activeMarketplaces.length} marketplace(s)`);
 
-  for (const marketplace of PIPELINE_MARKETPLACES) {
+  for (const marketplace of activeMarketplaces) {
     await mapCategoriesForMarketplace(
       parts,
       vinData,
@@ -2687,22 +2690,31 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
 }
 
 async function localizeAllMarketplaceCopy(parts) {
-  log.step('Marketplace Copy Localization (UK · AU · DE)');
+  const targets = getActivePipelineMarketplaces().filter((m) => m !== 'US');
+  if (targets.length === 0) {
+    log.info('Skipping localization — target marketplace is US (master copy)');
+    return;
+  }
+
+  log.step(`Marketplace Copy Localization (${targets.join(' · ')})`);
   log.progress({
     stage: 'validation',
     sub_stage: localizationMode === 'rule' ? 'localization_rule' : 'localization',
   });
 
-  await Promise.all([
-    localizeMarketplaceCopy(parts, 'UK', 'en-GB'),
-    localizeMarketplaceCopy(parts, 'AU', 'en-AU'),
-    localizeMarketplaceCopy(parts, 'DE', 'de-DE'),
-  ]);
+  const localeByMarketplace = { UK: 'en-GB', AU: 'en-AU', DE: 'de-DE' };
+  await Promise.all(
+    targets.map((marketplace) =>
+      localizeMarketplaceCopy(parts, marketplace, localeByMarketplace[marketplace]),
+    ),
+  );
 
+  const loc = REPORT.localization;
   log.info(
-    `Localization: UK ${REPORT.localization.ukAiTranslated} AI / ${REPORT.localization.ukRuleOnly} rule-only; ` +
-    `AU ${REPORT.localization.auAiTranslated} AI / ${REPORT.localization.auRuleOnly} rule-only; ` +
-    `DE ${REPORT.localization.deAiTranslated} AI / ${REPORT.localization.deRuleOnly} rule-only`,
+    `Localization complete` +
+    (targets.includes('UK') ? `; UK ${loc.ukAiTranslated} AI / ${loc.ukRuleOnly} rule-only` : '') +
+    (targets.includes('AU') ? `; AU ${loc.auAiTranslated} AI / ${loc.auRuleOnly} rule-only` : '') +
+    (targets.includes('DE') ? `; DE ${loc.deAiTranslated} AI / ${loc.deRuleOnly} rule-only` : ''),
   );
 }
 
@@ -4657,7 +4669,7 @@ function saveCheckpoint(parts, step) {
         hasCategory: !!getPartCategory(p, 'US'),
         categories: p._categories
           ? Object.fromEntries(
-              PIPELINE_MARKETPLACES.map((m) => [m, getPartCategory(p, m)?.categoryId ?? null]),
+              getActivePipelineMarketplaces().map((m) => [m, getPartCategory(p, m)?.categoryId ?? null]),
             )
           : null,
       })),
@@ -4826,10 +4838,16 @@ function generateReport() {
 // ═══════════════════════════════════════════════════════════════════════
 
 async function main() {
+  const activeMarketplaces = initActivePipelineMarketplaces(process.env.PIPELINE_TARGET_MARKETPLACE);
+  const marketplaceBanner =
+    activeMarketplaces.length === PIPELINE_MARKETPLACES.length
+      ? 'US · UK · AU · DE'
+      : activeMarketplaces.join(' · ');
+
   console.log(`
 ╔══════════════════════════════════════════════════════════════╗
 ║  eBay Motors Enrichment Pipeline                             ║
-║  VIN → Enriched Listings (US · UK · AU · DE)                  ║
+║  VIN → Enriched Listings (${marketplaceBanner.padEnd(24)})║
 ╚══════════════════════════════════════════════════════════════╝
   `);
 
@@ -4874,16 +4892,24 @@ async function main() {
   log.progress({ stage: 'validation', total_parts: parts.length, processed: parts.filter(p => p._enriched).length });
 
   const enrichedParts = parts.filter(p => p._enriched);
-  log.info(`${enrichedParts.length} enriched parts ready for validation + image + localization`);
+  const needsLocalization = activeMarketplaces.some((m) => m !== 'US');
+  log.info(
+    `${enrichedParts.length} enriched parts ready for validation + images` +
+    (needsLocalization ? ' + localization' : ''),
+  );
 
   // Validation is sync and mutates _enriched — must finish before localization reads copy
   await validateAndFix(parts, vinData);
 
-  // Images and AU/DE localization are independent — run together (~2× vs sequential)
-  await Promise.all([
-    fetchImages(enrichedParts),
-    localizeAllMarketplaceCopy(parts),
-  ]);
+  // Images and non-US localization are independent — run together when needed
+  if (needsLocalization) {
+    await Promise.all([
+      fetchImages(enrichedParts),
+      localizeAllMarketplaceCopy(parts),
+    ]);
+  } else {
+    await fetchImages(enrichedParts);
+  }
 
   // ── Step 7: Generate Template Outputs (sequential — lower peak memory for large jobs) ──
   log.step('Generating Output Templates');
@@ -4895,44 +4921,48 @@ async function main() {
   });
 
   const dateSuffix = new Date().toISOString().slice(0, 10);
-  const usPath = path.join(CONFIG.outputDir, `US-Motors-Listings-${dateSuffix}.xlsx`);
-  const ukPath = path.join(CONFIG.outputDir, `UK-Category-Listings-${dateSuffix}.xlsx`);
-  const auPath = path.join(CONFIG.outputDir, `AU-Category-Listings-${dateSuffix}.xlsx`);
-  const dePath = path.join(CONFIG.outputDir, `DE-Category-Listings-${dateSuffix}.xlsx`);
+  const outputSpecs = {
+    US: {
+      path: path.join(CONFIG.outputDir, `US-Motors-Listings-${dateSuffix}.xlsx`),
+      subStage: 'writing_us',
+      label: 'US Motors',
+      generate: () => generateUSMotorsOutput(enrichedParts, vinData),
+    },
+    UK: {
+      path: path.join(CONFIG.outputDir, `UK-Category-Listings-${dateSuffix}.xlsx`),
+      subStage: 'writing_uk',
+      label: 'UK',
+      generate: () => generateUKOutput(enrichedParts, vinData),
+    },
+    AU: {
+      path: path.join(CONFIG.outputDir, `AU-Category-Listings-${dateSuffix}.xlsx`),
+      subStage: 'writing_au',
+      label: 'AU',
+      generate: () => generateAUOutput(enrichedParts, vinData),
+    },
+    DE: {
+      path: path.join(CONFIG.outputDir, `DE-Category-Listings-${dateSuffix}.xlsx`),
+      subStage: 'writing_de',
+      label: 'DE',
+      generate: () => generateDEOutput(enrichedParts, vinData),
+    },
+  };
 
-  const usWb = generateUSMotorsOutput(enrichedParts, vinData);
-  XLSX.writeFile(usWb, usPath);
-  log.info(`  ✓ US Motors: ${usPath}`);
-  log.progress({
-    stage: 'output_generation',
-    sub_stage: 'writing_uk',
-    total_parts: enrichedParts.length,
-    processed: Math.ceil(enrichedParts.length / 4),
-  });
-
-  const ukWb = generateUKOutput(enrichedParts, vinData);
-  XLSX.writeFile(ukWb, ukPath);
-  log.info(`  ✓ UK: ${ukPath}`);
-  log.progress({
-    stage: 'output_generation',
-    sub_stage: 'writing_au',
-    total_parts: enrichedParts.length,
-    processed: Math.ceil(enrichedParts.length / 2),
-  });
-
-  const auWb = generateAUOutput(enrichedParts, vinData);
-  XLSX.writeFile(auWb, auPath);
-  log.info(`  ✓ AU: ${auPath}`);
-  log.progress({
-    stage: 'output_generation',
-    sub_stage: 'writing_de',
-    total_parts: enrichedParts.length,
-    processed: Math.ceil((enrichedParts.length * 3) / 4),
-  });
-
-  const deWb = generateDEOutput(enrichedParts, vinData);
-  XLSX.writeFile(deWb, dePath);
-  log.info(`  ✓ DE: ${dePath}`);
+  let written = 0;
+  for (const marketplace of activeMarketplaces) {
+    const spec = outputSpecs[marketplace];
+    if (!spec) continue;
+    log.progress({
+      stage: 'output_generation',
+      sub_stage: spec.subStage,
+      total_parts: enrichedParts.length,
+      processed: Math.ceil((enrichedParts.length * written) / activeMarketplaces.length),
+    });
+    const wb = spec.generate();
+    XLSX.writeFile(wb, spec.path);
+    log.info(`  ✓ ${spec.label}: ${spec.path}`);
+    written += 1;
+  }
   log.progress({
     stage: 'output_generation',
     sub_stage: 'writing_done',
@@ -4968,7 +4998,7 @@ async function main() {
 
   console.log('\n' + JSON.stringify(report.summary, null, 2));
   console.log(`\nFull report: ${reportPath}`);
-  console.log(`\n✓ Pipeline complete. ${enrichedParts.length} listings generated across 3 templates.`);
+  console.log(`\n✓ Pipeline complete. ${enrichedParts.length} listings generated for ${marketplaceBanner}.`);
 
   // Clear checkpoint on success
   clearCheckpoint();

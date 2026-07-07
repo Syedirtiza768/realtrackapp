@@ -123,8 +123,12 @@ export function useUploadPipelineFile() {
       file: File,
       teamId: string,
       conditionLabel: string,
-      profiles: PipelineUploadProfileInput,
+      profiles?: PipelineUploadProfileInput,
     ) => {
+      if (!profiles) {
+        setError('Select an eBay store and business profiles before uploading.');
+        return null;
+      }
       setUploading(true);
       setProgress(0);
       setError(null);

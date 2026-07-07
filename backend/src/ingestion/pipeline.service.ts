@@ -6,6 +6,7 @@ import { Repository, In } from 'typeorm';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineJob } from './entities/pipeline-job.entity.js';
+import type { PipelineJobData } from './processors/pipeline.processor.js';
 import { FeatureFlagService } from '../common/feature-flags/feature-flag.service.js';
 import { EnterpriseListingIntelligenceService } from './enterprise-listing-intelligence.service.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
@@ -735,6 +736,80 @@ export class PipelineService {
     );
 
     this.logger.log(`Retrying pipeline job ${id}`);
+    return job;
+  }
+
+  /**
+   * Resume catalog import for a job that finished enrichment + output
+   * generation but got stuck during the import phase. Reuses on-disk output
+   * XLSX files and runs only the post-enrichment import with the current
+   * (batched/optimized) MVL validation. Does NOT re-run enrichment.
+   */
+  async resumeImport(
+    id: string,
+    actorId?: string,
+    viewAll = true,
+  ): Promise<PipelineJob> {
+    const job = await this.getJob(id, actorId, viewAll);
+
+    // Allow resume from any non-completed state — the typical case is a job
+    // stuck in output_generation/catalog_import, or marked failed after a
+    // worker restart. Guard against double-resume of an already-completed job.
+    if (job.status === 'completed') {
+      throw new BadRequestException(`Job ${id} is already completed`);
+    }
+
+    const projectRoot =
+      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const outputDir = path.resolve(
+      projectRoot,
+      'output',
+      `pipeline-${id.slice(0, 8)}`,
+    );
+    if (!fs.existsSync(outputDir)) {
+      throw new BadRequestException(
+        `Cannot resume — output directory not found: ${outputDir}. Enrichment output is required.`,
+      );
+    }
+
+    // Remove any leftover BullMQ job for this pipeline job so the worker
+    // doesn't double-process (the old job may still hold an active lock).
+    try {
+      const existing = await this.pipelineQueue.getJobs([
+        'wait',
+        'active',
+        'delayed',
+        'paused',
+      ]);
+      for (const entry of existing) {
+        if ((entry.data as PipelineJobData).jobId === id) {
+          await entry.remove();
+          this.logger.log(`Removed stale BullMQ job ${entry.id} for ${id} before resume`);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not clean stale BullMQ jobs for ${id}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    await this.pipelineQueue.add(
+      'resume-import',
+      {
+        jobId: id,
+        filePath: job.storedFilePath ?? '',
+        originalFilename: job.originalFilename,
+      } satisfies PipelineJobData,
+      {
+        attempts: 1,
+        removeOnComplete: 50,
+        removeOnFail: 100,
+      },
+    );
+
+    this.logger.log(
+      `Resuming catalog import for job ${id} (output: ${outputDir})`,
+    );
     return job;
   }
 

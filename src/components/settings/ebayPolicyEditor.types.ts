@@ -9,10 +9,10 @@ export type PolicyRow = {
 
 export type MarketplacePolicyDefaults = {
   marketplaceId: string;
-  defaultPaymentPolicyId: string | null;
-  defaultReturnPolicyId: string | null;
-  defaultFulfillmentPolicyId: string | null;
-  defaultInventoryLocationKey: string | null;
+  defaultPaymentPolicyId?: string | null;
+  defaultReturnPolicyId?: string | null;
+  defaultFulfillmentPolicyId?: string | null;
+  defaultInventoryLocationKey?: string | null;
 };
 
 export type AccountPolicyBundle = {

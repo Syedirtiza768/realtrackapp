@@ -505,13 +505,7 @@ export class EbayMvlService {
 
     const marketplace = resolveMvlMarketplaceFromTreeId(treeId);
     if (await this.store.hasActiveRelease(marketplace)) {
-      const results: MvlValidatedRow[] = [];
-      for (const parsed of rows) {
-        results.push(
-          await this.validateSingleRowFromStore(parsed, marketplace),
-        );
-      }
-      return results;
+      return this.validateParsedRowsFromStore(rows, marketplace);
     }
 
     const cache = new MvlValueCache();
@@ -631,6 +625,261 @@ export class EbayMvlService {
         MvlSource: 'database',
       }),
     };
+  }
+
+  /**
+   * Phased batched validation against the local MVL store.
+   *
+   * Semantically equivalent to calling validateSingleRowFromStore() per row,
+   * but reorganizes the make → model → year cascade into three batched
+   * phases so that ~16k per-row COUNT queries collapse to ~3-5 batched
+   * queries plus a small number of canonicalization lookups for non-matching
+   * makes/models. Result order is preserved.
+   *
+   * Phases:
+   *  1. Batch-check make existence → identify makes needing canonicalization
+   *  2. Canonicalize non-matching makes (concurrency-limited) → re-check
+   *  3. Batch-check (make, model) existence → identify models needing canonicalization
+   *  4. Canonicalize non-matching models (concurrency-limited) → re-check
+   *  5. Batch-check (make, model, year) existence → mark needs_review
+   */
+  private async validateParsedRowsFromStore(
+    rows: ParsedFitmentRow[],
+    marketplace: ReturnType<typeof resolveMvlMarketplaceFromTreeId>,
+  ): Promise<MvlValidatedRow[]> {
+    const concurrency = Math.max(
+      1,
+      Number(process.env.MVL_VALIDATION_CONCURRENCY ?? '6') || 6,
+    );
+
+    // Mutable per-row working state (make/model may be canonicalized)
+    const makes = rows.map((r) => r.make);
+    const models = rows.map((r) => r.model);
+    const years = rows.map((r) => r.year);
+    const statuses: MvlRowStatus[] = new Array(rows.length).fill('valid');
+    const reasons: string[] = new Array(rows.length).fill('');
+
+    // ── Phase 1: batch make existence ──
+    const uniqueMakes = [
+      ...new Set(makes.map((m) => m.trim()).filter((m) => m.length > 0)),
+    ];
+    const existingMakes = await this.store.batchExistingMakes(
+      marketplace,
+      uniqueMakes,
+    );
+
+    // ── Phase 2: canonicalize non-matching makes (parallel) ──
+    const makesNeedingCanonical = new Set<string>();
+    for (let i = 0; i < rows.length; i++) {
+      const mkLower = makes[i].trim().toLowerCase();
+      if (mkLower && !existingMakes.has(mkLower)) {
+        makesNeedingCanonical.add(makes[i].trim());
+      }
+    }
+    if (makesNeedingCanonical.size > 0) {
+      const canonicalResults = await this.mapWithConcurrency(
+        [...makesNeedingCanonical],
+        concurrency,
+        async (make) => {
+          const result = await this.store.resolveCanonicalMakeModel(
+            marketplace,
+            make,
+          );
+          return { original: make, canonical: result.make };
+        },
+      );
+      for (const { original, canonical } of canonicalResults) {
+        if (!canonical) continue;
+        for (let i = 0; i < rows.length; i++) {
+          if (makes[i].trim().toLowerCase() === original.toLowerCase()) {
+            makes[i] = canonical;
+          }
+        }
+      }
+      // Re-check existence for newly canonicalized makes
+      const recheckMakes = [
+        ...new Set(
+          makes
+            .map((m) => m.trim())
+            .filter((m) => m.length > 0 && !existingMakes.has(m.toLowerCase())),
+        ),
+      ];
+      if (recheckMakes.length > 0) {
+        const additional = await this.store.batchExistingMakes(
+          marketplace,
+          recheckMakes,
+        );
+        for (const m of additional) existingMakes.add(m);
+      }
+    }
+
+    // Mark make rejects
+    for (let i = 0; i < rows.length; i++) {
+      const mkLower = makes[i].trim().toLowerCase();
+      if (!mkLower || !existingMakes.has(mkLower)) {
+        statuses[i] = 'rejected';
+        reasons[i] = `Make "${makes[i]}" not found in eBay MVL`;
+      }
+    }
+
+    // ── Phase 3: batch (make, model) existence — only rows that passed make ──
+    const modelCheckIdx = rows
+      .map((_, i) => i)
+      .filter((i) => statuses[i] === 'valid');
+    const uniquePairs: Array<{ make: string; model: string }> = [];
+    const seenPairs = new Set<string>();
+    for (const i of modelCheckIdx) {
+      const make = makes[i].trim();
+      const model = models[i].trim();
+      if (!make || !model) continue;
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+      if (!seenPairs.has(key)) {
+        seenPairs.add(key);
+        uniquePairs.push({ make, model });
+      }
+    }
+    const existingModels = await this.store.batchExistingModels(
+      marketplace,
+      uniquePairs,
+    );
+
+    // ── Phase 4: canonicalize non-matching models (parallel) ──
+    const modelsNeedingCanonical = new Set<string>();
+    for (const i of modelCheckIdx) {
+      const make = makes[i].trim();
+      const model = models[i].trim();
+      if (!make || !model) continue;
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+      if (!existingModels.has(key)) {
+        modelsNeedingCanonical.add(`${make}|${model}`);
+      }
+    }
+    if (modelsNeedingCanonical.size > 0) {
+      const canonicalResults = await this.mapWithConcurrency(
+        [...modelsNeedingCanonical],
+        concurrency,
+        async (pair) => {
+          const [make, model] = pair.split('|');
+          const result = await this.store.resolveCanonicalMakeModel(
+            marketplace,
+            make,
+            model,
+          );
+          return { pair, canonicalModel: result.model, canonicalMake: result.make };
+        },
+      );
+      for (const { pair, canonicalModel, canonicalMake } of canonicalResults) {
+        if (!canonicalModel) continue;
+        const [origMake, origModel] = pair.split('|');
+        for (const i of modelCheckIdx) {
+          if (
+            makes[i].trim().toLowerCase() === origMake.toLowerCase() &&
+            models[i].trim().toLowerCase() === origModel.toLowerCase()
+          ) {
+            models[i] = canonicalModel;
+            if (canonicalMake) makes[i] = canonicalMake;
+          }
+        }
+      }
+      // Re-check existence for newly canonicalized pairs
+      const recheckPairs: Array<{ make: string; model: string }> = [];
+      const recheckSeen = new Set<string>();
+      for (const i of modelCheckIdx) {
+        const make = makes[i].trim();
+        const model = models[i].trim();
+        if (!make || !model) continue;
+        const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+        if (!existingModels.has(key) && !recheckSeen.has(key)) {
+          recheckSeen.add(key);
+          recheckPairs.push({ make, model });
+        }
+      }
+      if (recheckPairs.length > 0) {
+        const additional = await this.store.batchExistingModels(
+          marketplace,
+          recheckPairs,
+        );
+        for (const m of additional) existingModels.add(m);
+      }
+    }
+
+    // Mark model rejects
+    for (const i of modelCheckIdx) {
+      const make = makes[i].trim();
+      const model = models[i].trim();
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+      if (!make || !model || !existingModels.has(key)) {
+        statuses[i] = 'rejected';
+        reasons[i] = `Model "${models[i]}" not valid for Make "${makes[i]}" on eBay MVL`;
+      }
+    }
+
+    // ── Phase 5: batch (make, model, year) existence — only rows that passed model ──
+    const yearCheckIdx = modelCheckIdx.filter((i) => statuses[i] === 'valid');
+    const uniqueTriples: Array<{ make: string; model: string; year: string }> = [];
+    const seenTriples = new Set<string>();
+    for (const i of yearCheckIdx) {
+      const make = makes[i].trim();
+      const model = models[i].trim();
+      const year = years[i];
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}|${year}`;
+      if (!seenTriples.has(key)) {
+        seenTriples.add(key);
+        uniqueTriples.push({ make, model, year });
+      }
+    }
+    const existingYears = await this.store.batchExistingYears(
+      marketplace,
+      uniqueTriples,
+    );
+
+    for (const i of yearCheckIdx) {
+      const make = makes[i].trim();
+      const model = models[i].trim();
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}|${years[i]}`;
+      if (!existingYears.has(key)) {
+        statuses[i] = 'needs_review';
+        reasons[i] = `Year ${years[i]} not listed for ${makes[i]} ${models[i]} on eBay MVL`;
+      }
+    }
+
+    // Build results in original order
+    return rows.map((original, i) => {
+      const row: ParsedFitmentRow = {
+        ...original,
+        make: makes[i],
+        model: models[i],
+      };
+      const extra: Record<string, unknown> = { MvlSource: 'database' };
+      if (reasons[i]) extra.MvlRejectedReason = reasons[i];
+      return {
+        row,
+        status: statuses[i],
+        rejectedReason: reasons[i] || undefined,
+        serialized: serializeValidatedFitmentRow(row, statuses[i], extra),
+      };
+    });
+  }
+
+  /** Run an async mapper over items with bounded concurrency, preserving order. */
+  private async mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    fn: (item: T) => Promise<R>,
+  ): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= items.length) return;
+        results[i] = await fn(items[i]);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+    );
+    return results;
   }
 
   private async validateSingleRowFromApi(

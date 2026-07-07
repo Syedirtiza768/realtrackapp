@@ -12,6 +12,39 @@ export const PIPELINE_MARKETPLACES = /** @type {const} */ (['US', 'UK', 'AU', 'D
 /** Marketplaces with generated XLSX output */
 export const PIPELINE_OUTPUT_MARKETPLACES = /** @type {const} */ (['US', 'UK', 'AU', 'DE']);
 
+/** @type {MarketplaceCode[] | null} */
+let activePipelineMarketplaces = null;
+
+/**
+ * Resolve which marketplaces to process. When PIPELINE_TARGET_MARKETPLACE is set
+ * (from upload provisioning), only that marketplace is category-mapped, localized, and exported.
+ * @param {string | undefined | null} targetRaw
+ * @returns {MarketplaceCode[]}
+ */
+export function resolvePipelineTargetMarketplaces(targetRaw) {
+  const raw = String(targetRaw ?? '').trim().toUpperCase();
+  if (!raw) return [...PIPELINE_MARKETPLACES];
+  if (PIPELINE_MARKETPLACES.includes(/** @type {MarketplaceCode} */ (raw))) {
+    return [/** @type {MarketplaceCode} */ (raw)];
+  }
+  return [...PIPELINE_MARKETPLACES];
+}
+
+/**
+ * Initialize active marketplaces for this pipeline run (call once at startup).
+ * @param {string | undefined | null} targetRaw
+ * @returns {MarketplaceCode[]}
+ */
+export function initActivePipelineMarketplaces(targetRaw) {
+  activePipelineMarketplaces = resolvePipelineTargetMarketplaces(targetRaw);
+  return activePipelineMarketplaces;
+}
+
+/** Active marketplaces for the current run (defaults to all four before init). */
+export function getActivePipelineMarketplaces() {
+  return activePipelineMarketplaces ?? [...PIPELINE_MARKETPLACES];
+}
+
 /** Verified via eBay Taxonomy API + sync-ebay-store-categories.mjs */
 export const MARKETPLACE_CONFIG = /** @type {Record<MarketplaceCode, MarketplaceConfig>} */ ({
   US: {

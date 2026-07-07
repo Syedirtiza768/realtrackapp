@@ -243,11 +243,19 @@ function ProductRow({
   );
 }
 
+type MktTab = 'all' | 'US' | 'AU' | 'DE';
+
+function countJobOutputs(job: PipelineJob): number {
+  return [job.outputUsPath, job.outputUkPath, job.outputAuPath, job.outputDePath].filter(Boolean).length;
+}
+
+function jobHasOutputFiles(job: PipelineJob): boolean {
+  return countJobOutputs(job) > 0;
+}
+
 export function useOptimizationDownloadGate(job: PipelineJob | null | undefined) {
   const jobId = job?.id ?? null;
-  const hasOutputFiles = Boolean(
-    job?.outputUsPath || job?.outputAuPath || job?.outputDePath,
-  );
+  const hasOutputFiles = job ? jobHasOutputFiles(job) : false;
   const { data: optimization } = useJobOptimization(jobId, job?.status === 'completed');
   const optStatus = optimization?.optimizationStatus ?? job?.optimizationStatus ?? 'pending';
   // Downloads are available as soon as output files exist — never gate on optimization status.
@@ -255,10 +263,10 @@ export function useOptimizationDownloadGate(job: PipelineJob | null | undefined)
   return { canDownload, optimization, optStatus };
 }
 
-type MktTab = 'all' | 'US' | 'AU' | 'DE';
-
 export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
   const enabled = job.status === 'completed';
+  const outputCount = countJobOutputs(job);
+  const showMarketplaceTabs = outputCount > 1;
   const [activeTab, setActiveTab] = useState<MktTab>('all');
   const { data: optimizationAll, refetch, isLoading } = useJobOptimization(job.id, enabled);
   const { data: optimizationMkt } = useJobOptimization(job.id, enabled && activeTab !== 'all', activeTab !== 'all' ? activeTab : undefined);
@@ -269,7 +277,7 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
   const optimization = activeTab !== 'all' ? (optimizationMkt ?? optimizationAll) : optimizationAll;
 
   const optStatus = optimization?.optimizationStatus ?? job.optimizationStatus ?? 'pending';
-  const hasOutputFiles = Boolean(job.outputUsPath || job.outputAuPath || job.outputDePath);
+  const hasOutputFiles = jobHasOutputFiles(job);
   const canDownload = hasOutputFiles;
 
   const processed = optimization?.processed ?? job.optimizationProcessed ?? 0;
@@ -292,8 +300,8 @@ export default function OptimizationStatusPanel({ job }: { job: PipelineJob }) {
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Marketplace tabs */}
-        {Object.keys(byMkt).length > 0 && (
+        {/* Marketplace tabs — only when multiple output templates exist */}
+        {showMarketplaceTabs && Object.keys(byMkt).length > 0 && (
           <div className="flex gap-1 border-b border-slate-200 dark:border-slate-700/50 pb-1">
             {tabs.map((tab) => {
               const mktStatus = tab === 'all' ? null : byMkt[tab];

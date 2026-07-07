@@ -18,6 +18,7 @@ import { EbayMvlStoreService } from '../../fitment/ebay-mvl-store.service.js';
 import { resolveCategoryTreeId } from '../../channels/ebay/ebay-marketplace-tree.util.js';
 import {
   isPipelineMarketplaceCode,
+  resolveJobOutputMarketplaces,
   shouldApplyJobProfilesToCatalogMaster,
   shouldApplyJobProfilesToOutput,
   type PipelineMarketplaceCode,
@@ -62,6 +63,15 @@ interface JobProgressState {
   flushTimer: ReturnType<typeof setTimeout> | null;
 }
 
+type CatalogImportPhase = 'parsing' | 'mvl' | 'saving';
+
+interface CatalogImportProgress {
+  phase: CatalogImportPhase;
+  marketplace: string;
+  processed: number;
+  total: number;
+}
+
 @Processor('pipeline', {
   concurrency: PIPELINE_WORKER_CONCURRENCY,
   lockDuration: 120 * 60 * 1000,
@@ -71,7 +81,16 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
   // Per-job debounced progress writes (safe when concurrency > 1)
   private readonly progressByJob = new Map<string, JobProgressState>();
+  private readonly catalogImportByJob = new Map<
+    string,
+    CatalogImportProgress
+  >();
+  private readonly catalogImportFlushTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private static readonly FLUSH_INTERVAL_MS = 1500; // flush at most every 1.5s
+  private static readonly CATALOG_IMPORT_FLUSH_MS = 2000;
 
   constructor(
     @InjectRepository(PipelineJob)
@@ -130,7 +149,14 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   }
 
   async process(job: Job<PipelineJobData>): Promise<void> {
-    const { jobId, filePath } = job.data;
+    const { jobId } = job.data;
+
+    if (job.name === 'resume-import') {
+      await this.runResumeImport(jobId);
+      return;
+    }
+
+    const { filePath } = job.data;
     this.logger.log(
       `Starting pipeline job=${jobId} (worker concurrency=${PIPELINE_WORKER_CONCURRENCY})`,
     );
@@ -185,23 +211,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         throw new Error(`Pipeline exited with code ${exitCode}`);
       }
 
-      // Scan output directory for generated files
-      await this.collectOutputs(jobId, outputDir);
-      await this.touchSubStage(jobId, 'writing_done');
-
-      // Mirror remote listing images to S3 and rewrite output XLSX PicURL columns
-      await this.touchSubStage(jobId, 'mirror_images');
-      await this.pipelineOutputImages.mirrorImagesInOutputDir(jobId, outputDir);
-
-      // Import US/AU/DE XLSX rows into catalog (script already localized all marketplaces)
-      await this.touchSubStage(jobId, 'catalog_import');
-      await this.saveToCatalog(jobId, outputDir, job.data.originalFilename);
-
-      await this.touchSubStage(jobId, 'finalizing');
-      await this.linkUploadedImages(jobId);
-      await this.propagateSourceImages(jobId);
-
-      await this.updateStatus(jobId, 'completed');
+      await this.runPostEnrichmentImport(jobId, outputDir, job.data.originalFilename);
 
       this.logger.log(
         `Pipeline job=${jobId} enrichment completed`,
@@ -214,6 +224,83 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     } finally {
       this.clearJobProgress(jobId);
     }
+  }
+
+  /**
+   * Resume a job that completed enrichment + output generation but got stuck
+   * during catalog import (e.g. slow MVL validation on a worker without the
+   * batched lookup optimization). Reuses the on-disk output XLSX files and
+   * runs only the post-enrichment import phase with the current (optimized)
+   * validation code. Safe to call when output files already exist.
+   */
+  private async runResumeImport(jobId: string): Promise<void> {
+    this.logger.log(`Resuming catalog import for job=${jobId}`);
+
+    const projectRoot =
+      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const outputDir = path.resolve(
+      projectRoot,
+      'output',
+      `pipeline-${jobId.slice(0, 8)}`,
+    );
+
+    if (!fs.existsSync(outputDir)) {
+      await this.fail(jobId, `Cannot resume — output directory not found: ${outputDir}`);
+      throw new Error(`Cannot resume — output directory not found: ${outputDir}`);
+    }
+
+    const dbJob = await this.jobRepo.findOneBy({ id: jobId });
+    if (!dbJob) {
+      throw new Error(`Cannot resume — job not found: ${jobId}`);
+    }
+
+    // Clear any stale error from a prior interruption
+    await this.jobRepo.update(jobId, {
+      status: 'output_generation' as PipelineJobStatus,
+      lastError: null,
+      completedAt: null,
+    } as any);
+
+    try {
+      await this.runPostEnrichmentImport(jobId, outputDir, dbJob.originalFilename);
+      this.logger.log(`Resume import completed for job=${jobId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Resume import failed for job=${jobId}: ${message}`);
+      await this.fail(jobId, message);
+      throw err;
+    } finally {
+      this.clearJobProgress(jobId);
+    }
+  }
+
+  /**
+   * Post-enrichment import phase: collect outputs → mirror images →
+   * catalog import (MVL validation + upsert) → link/propagate images → completed.
+   * Shared by the full pipeline run and the resume-import path.
+   */
+  private async runPostEnrichmentImport(
+    jobId: string,
+    outputDir: string,
+    originalFilename?: string,
+  ): Promise<void> {
+    // Scan output directory for generated files
+    await this.collectOutputs(jobId, outputDir);
+    await this.touchSubStage(jobId, 'writing_done');
+
+    // Mirror remote listing images to S3 and rewrite output XLSX PicURL columns
+    await this.touchSubStage(jobId, 'mirror_images');
+    await this.pipelineOutputImages.mirrorImagesInOutputDir(jobId, outputDir);
+
+    // Import output XLSX rows into catalog (target marketplace only when job specified one)
+    await this.touchSubStage(jobId, 'catalog_import');
+    await this.saveToCatalog(jobId, outputDir, originalFilename);
+
+    await this.touchSubStage(jobId, 'finalizing');
+    await this.linkUploadedImages(jobId);
+    await this.propagateSourceImages(jobId);
+
+    await this.updateStatus(jobId, 'completed');
   }
 
   private getJobProgress(jobId: string): JobProgressState {
@@ -251,12 +338,76 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     } as any);
   }
 
+  private catalogImportSubStage(phase: CatalogImportPhase): string {
+    switch (phase) {
+      case 'parsing':
+        return 'catalog_parsing';
+      case 'mvl':
+        return 'mvl_validation';
+      case 'saving':
+        return 'catalog_saving';
+    }
+  }
+
+  /** Debounced DB + log updates during catalog import / MVL validation. */
+  private scheduleCatalogImportProgress(
+    jobId: string,
+    progress: CatalogImportProgress,
+    immediate = false,
+  ): void {
+    this.catalogImportByJob.set(jobId, progress);
+    if (immediate) {
+      this.flushCatalogImportProgress(jobId).catch(() => {});
+      return;
+    }
+    if (this.catalogImportFlushTimers.has(jobId)) return;
+    this.catalogImportFlushTimers.set(
+      jobId,
+      setTimeout(() => {
+        this.catalogImportFlushTimers.delete(jobId);
+        this.flushCatalogImportProgress(jobId).catch(() => {});
+      }, PipelineProcessor.CATALOG_IMPORT_FLUSH_MS),
+    );
+  }
+
+  private async flushCatalogImportProgress(jobId: string): Promise<void> {
+    const progress = this.catalogImportByJob.get(jobId);
+    if (!progress) return;
+
+    const timer = this.catalogImportFlushTimers.get(jobId);
+    if (timer) {
+      clearTimeout(timer);
+      this.catalogImportFlushTimers.delete(jobId);
+    }
+
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    await this.jobRepo.update(jobId, {
+      stageDetails: {
+        ...(job?.stageDetails ?? {}),
+        subStage: this.catalogImportSubStage(progress.phase),
+        catalogImport: progress,
+      },
+    } as any);
+
+    this.logger.log(
+      `Job ${jobId}: catalog import [${progress.marketplace}] ${progress.phase} ${progress.processed}/${progress.total}`,
+    );
+  }
+
+  private clearCatalogImportProgress(jobId: string): void {
+    const timer = this.catalogImportFlushTimers.get(jobId);
+    if (timer) clearTimeout(timer);
+    this.catalogImportFlushTimers.delete(jobId);
+    this.catalogImportByJob.delete(jobId);
+  }
+
   private clearJobProgress(jobId: string): void {
     const state = this.progressByJob.get(jobId);
     if (state?.flushTimer) {
       clearTimeout(state.flushTimer);
     }
     this.progressByJob.delete(jobId);
+    this.clearCatalogImportProgress(jobId);
   }
 
   private runPipeline(
@@ -799,16 +950,22 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   }
 
   /**
-   * Parse all marketplace output XLSX files and save each listing row to catalog_products + listing_records.
-   * Catalog master rows are upserted from US output only (AU/DE update listing_records per marketplace).
+   * Parse marketplace output XLSX files and save each listing row to catalog_products + listing_records.
+   * When the job has a target marketplace, only that file is imported.
    */
   private async saveToCatalog(
     jobId: string,
     outputDir: string,
     originalFilename?: string,
   ): Promise<void> {
+    const dbJob = await this.jobRepo.findOneBy({ id: jobId });
+    const jobMarketplace = isPipelineMarketplaceCode(dbJob?.marketplace ?? '')
+      ? (dbJob!.marketplace as PipelineMarketplaceCode)
+      : null;
+    const marketplaces = resolveJobOutputMarketplaces(jobMarketplace);
+
     let catalogUpserted = false;
-    for (const marketplace of ['US', 'UK', 'AU', 'DE'] as const) {
+    for (const marketplace of marketplaces) {
       const didUpsertCatalog = await this.saveMarketplaceToCatalog(
         jobId,
         outputDir,
@@ -844,7 +1001,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     };
     const applyToOutput = shouldApplyJobProfilesToOutput(marketplace, jobMarketplace);
     const applyToCatalogMaster =
-      upsertCatalogProducts && shouldApplyJobProfilesToCatalogMaster(jobMarketplace);
+      upsertCatalogProducts &&
+      shouldApplyJobProfilesToCatalogMaster(jobMarketplace, marketplace);
 
     const resolveProfile = (
       rowValue: string | null,
@@ -881,6 +1039,12 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
     const mktPath = path.join(outputDir, mktFile);
     try {
+      this.scheduleCatalogImportProgress(
+        jobId,
+        { phase: 'parsing', marketplace, processed: 0, total: 1 },
+        true,
+      );
+
       const wb = XLSX.readFile(mktPath);
       const ws = wb.Sheets['Listings'];
       if (!ws) {
@@ -1149,43 +1313,81 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         }
       }
 
+      const importTotal = Math.max(products.length, listingRecords.length);
+      this.scheduleCatalogImportProgress(
+        jobId,
+        {
+          phase: 'parsing',
+          marketplace,
+          processed: importTotal,
+          total: importTotal,
+        },
+        true,
+      );
+
       let mvlRejectedTotal = 0;
       let mvlValidatedTotal = 0;
-      if (!(await this.shouldSkipMvlOnImport())) {
+      const skipMvlOnImport = await this.shouldSkipMvlOnImport();
+      if (!skipMvlOnImport) {
+        let mvlProcessed = 0;
         for (const product of products) {
           const rawFitment = product.fitmentData as
             | Record<string, unknown>[]
             | undefined;
-          if (!Array.isArray(rawFitment) || rawFitment.length === 0) continue;
-
-          const categoryId =
-            product.categoryId?.trim() || EbayMvlService.MOTORS_PARTS_CATEGORY;
-          try {
-            const mvlResult = await this.mvlService.validateFitmentData(
-              rawFitment,
-              categoryId,
-              {
-                treeId: resolveCategoryTreeId(marketplace),
-              },
-            );
-            product.fitmentData = mvlResult.accepted;
-            mvlRejectedTotal += mvlResult.rejectedCount;
-            mvlValidatedTotal += mvlResult.validCount;
-            if (mvlResult.apiUnavailable) {
+          if (Array.isArray(rawFitment) && rawFitment.length > 0) {
+            const categoryId =
+              product.categoryId?.trim() || EbayMvlService.MOTORS_PARTS_CATEGORY;
+            try {
+              const mvlResult = await this.mvlService.validateFitmentData(
+                rawFitment,
+                categoryId,
+                {
+                  treeId: resolveCategoryTreeId(marketplace),
+                },
+              );
+              product.fitmentData = mvlResult.accepted;
+              mvlRejectedTotal += mvlResult.rejectedCount;
+              mvlValidatedTotal += mvlResult.validCount;
+              if (mvlResult.apiUnavailable) {
+                this.logger.warn(
+                  `Job ${jobId} [${marketplace}]: eBay MVL API unavailable — fitment kept as needs_review where possible`,
+                );
+              }
+            } catch (err) {
               this.logger.warn(
-                `Job ${jobId} [${marketplace}]: eBay MVL API unavailable — fitment kept as needs_review where possible`,
+                `Job ${jobId} [${marketplace}]: MVL validation failed for SKU ${product.sku ?? '?'}: ${err instanceof Error ? err.message : err}`,
               );
             }
-          } catch (err) {
-            this.logger.warn(
-              `Job ${jobId} [${marketplace}]: MVL validation failed for SKU ${product.sku ?? '?'}: ${err instanceof Error ? err.message : err}`,
-            );
+          }
+          mvlProcessed++;
+          if (
+            mvlProcessed % 10 === 0 ||
+            mvlProcessed === products.length
+          ) {
+            this.scheduleCatalogImportProgress(jobId, {
+              phase: 'mvl',
+              marketplace,
+              processed: mvlProcessed,
+              total: products.length,
+            });
           }
         }
       } else {
         this.logger.log(
           `Job ${jobId} [${marketplace}]: PIPELINE_SKIP_MVL_ON_IMPORT — using fitment from pipeline output as-is`,
         );
+        if (products.length > 0) {
+          this.scheduleCatalogImportProgress(
+            jobId,
+            {
+              phase: 'mvl',
+              marketplace,
+              processed: products.length,
+              total: products.length,
+            },
+            true,
+          );
+        }
       }
 
       if (mvlRejectedTotal > 0 || mvlValidatedTotal > 0) {
@@ -1304,6 +1506,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               .orIgnore()
               .execute();
           }
+
+          this.scheduleCatalogImportProgress(jobId, {
+            phase: 'saving',
+            marketplace,
+            processed: Math.min(i + batch.length, dedupedProducts.length),
+            total: importTotal,
+          });
         }
         this.logger.log(
           `Job ${jobId} [${marketplace}]: Saved ${dedupedProducts.length} products to catalog (${withFitment} with fitment rows)`,
@@ -1315,6 +1524,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       }
 
       if (listingRecords.length > 0) {
+        if (!(products.length > 0 && upsertCatalogProducts)) {
+          this.scheduleCatalogImportProgress(
+            jobId,
+            {
+              phase: 'saving',
+              marketplace,
+              processed: 0,
+              total: importTotal,
+            },
+            true,
+          );
+        }
         // Deduplicate listing records by customLabelSku (keep last occurrence) to prevent
         // "ON CONFLICT DO UPDATE command cannot affect row a second time"
         const dedupedLrMap = new Map<string, (typeof listingRecords)[0]>();
@@ -1409,6 +1630,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               `Job ${jobId} [${marketplace}]: Listing batch upsert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
             );
           }
+
+          this.scheduleCatalogImportProgress(jobId, {
+            phase: 'saving',
+            marketplace,
+            processed: Math.min(i + CHUNK, dedupedListingRecords.length),
+            total: importTotal,
+          });
         }
         this.logger.log(
           `Job ${jobId} [${marketplace}]: Attempted ${dedupedListingRecords.length} listing records, upserted ${totalInserted}`,
@@ -1416,6 +1644,19 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       } else {
         this.logger.warn(
           `Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`,
+        );
+      }
+
+      if (importTotal > 0) {
+        this.scheduleCatalogImportProgress(
+          jobId,
+          {
+            phase: 'saving',
+            marketplace,
+            processed: importTotal,
+            total: importTotal,
+          },
+          true,
         );
       }
 

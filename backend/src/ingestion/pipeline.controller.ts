@@ -312,6 +312,19 @@ export class PipelineController {
     return { job };
   }
 
+  @Post('jobs/:id/resume-import')
+  @RequirePermissions('pipeline.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Resume catalog import for a job that finished enrichment but got stuck during import (reuses on-disk output, does not re-run enrichment)',
+  })
+  async resumeImport(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    const job = await this.pipelineService.resumeImport(id, user.id, viewAll);
+    return { job };
+  }
+
   @Get('stats')
   @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get pipeline aggregate stats' })

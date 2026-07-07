@@ -86,9 +86,24 @@ export function shouldApplyJobProfilesToOutput(
   return outputMarketplace === jobMarketplace;
 }
 
-/** Whether job-level profile defaults should fill catalog master (US upsert) blanks. */
+/** Marketplaces to import when a job has no explicit marketplace (legacy paths). */
+export function allPipelineOutputMarketplaces(): PipelineOutputMarketplaceCode[] {
+  return [...PIPELINE_OUTPUT_MARKETPLACE_CODES];
+}
+
+/** Output marketplaces for a job — single marketplace when upload specified one. */
+export function resolveJobOutputMarketplaces(
+  jobMarketplace: PipelineMarketplaceCode | null | undefined,
+): PipelineOutputMarketplaceCode[] {
+  if (jobMarketplace) return [jobMarketplace];
+  return allPipelineOutputMarketplaces();
+}
+
+/** Whether job-level profile defaults should fill catalog master upsert blanks. */
 export function shouldApplyJobProfilesToCatalogMaster(
   jobMarketplace: PipelineMarketplaceCode | null | undefined,
+  catalogSourceMarketplace: PipelineOutputMarketplaceCode,
 ): boolean {
-  return jobMarketplace === 'US' || jobMarketplace === 'UK';
+  if (!jobMarketplace) return catalogSourceMarketplace === 'US';
+  return jobMarketplace === catalogSourceMarketplace;
 }

@@ -57,6 +57,8 @@ export interface PipelineEnrichmentSummary {
   categoryMapping?: PipelineCategoryMappingSummary;
   categoryTaxonomyBackoff?: boolean;
   localization?: {
+    ukAiTranslated?: number;
+    ukRuleOnly?: number;
     auAiTranslated?: number;
     deAiTranslated?: number;
     auRuleOnly?: number;

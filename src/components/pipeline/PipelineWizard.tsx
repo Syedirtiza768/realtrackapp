@@ -88,8 +88,8 @@ function stageProgress(status: PipelineJobStatus): number {
 }
 
 const SUB_STAGE_LABELS: Record<string, string> = {
-  localization: 'Localizing AU/DE listing copy',
-  localization_rule: 'Applying AU/DE marketplace rules',
+  localization: 'Localizing listing copy for target marketplace',
+  localization_rule: 'Applying marketplace listing rules',
   images: 'Fetching listing images',
   images_done: 'Images ready — writing templates next',
   writing_us: 'Writing US Motors template',
@@ -99,8 +99,35 @@ const SUB_STAGE_LABELS: Record<string, string> = {
   writing_done: 'Templates saved — importing to catalog',
   mirror_images: 'Mirroring listing images to storage',
   catalog_import: 'Saving listings to catalog',
+  catalog_parsing: 'Reading output spreadsheet',
+  mvl_validation: 'Validating fitment against eBay MVL',
+  catalog_saving: 'Writing listings to catalog',
   finalizing: 'Finalizing job',
 };
+
+const CATALOG_IMPORT_SUB_STAGES = new Set([
+  'catalog_import',
+  'catalog_parsing',
+  'mvl_validation',
+  'catalog_saving',
+]);
+
+function parseCatalogImportProgress(
+  stageDetails: Record<string, unknown> | null | undefined,
+): { phase: string; marketplace: string; processed: number; total: number } | null {
+  const raw = stageDetails?.catalogImport;
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as Record<string, unknown>;
+  const processed = typeof c.processed === 'number' ? c.processed : 0;
+  const total = typeof c.total === 'number' ? c.total : 0;
+  if (total <= 0) return null;
+  return {
+    phase: typeof c.phase === 'string' ? c.phase : 'saving',
+    marketplace: typeof c.marketplace === 'string' ? c.marketplace : '',
+    processed,
+    total,
+  };
+}
 
 /* -------------------------------------------------------------
  *  MAIN COMPONENT
@@ -395,11 +422,22 @@ export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () =>
   const terminal = isTerminal(job.status);
   const isQueued = job.status === 'pending';
   const hasPartCounts = job.totalParts > 0;
+  const subStage =
+    typeof job.stageDetails?.subStage === 'string'
+      ? job.stageDetails.subStage
+      : null;
+  const catalogImport = parseCatalogImportProgress(job.stageDetails);
+  const catalogImportActive =
+    Boolean(catalogImport) &&
+    (CATALOG_IMPORT_SUB_STAGES.has(subStage ?? '') ||
+      job.status === 'output_generation');
   const progressPct = isQueued
     ? 0
-    : hasPartCounts
-      ? Math.round((job.processedParts / job.totalParts) * 100)
-      : stageProgress(job.status);
+    : catalogImportActive && catalogImport
+      ? Math.round((catalogImport.processed / catalogImport.total) * 100)
+      : hasPartCounts
+        ? Math.round((job.processedParts / job.totalParts) * 100)
+        : stageProgress(job.status);
 
   const secondsSinceUpdate = job.updatedAt
     ? Math.floor((Date.now() - new Date(job.updatedAt).getTime()) / 1000)
@@ -408,20 +446,22 @@ export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () =>
 
   // Current stage description
   const currentStage = PIPELINE_STAGES.find((s) => s.key === job.status);
-  const subStage =
-    typeof job.stageDetails?.subStage === 'string'
-      ? job.stageDetails.subStage
-      : null;
   const subStageLabel = subStage ? SUB_STAGE_LABELS[subStage] : null;
+  const catalogImportLabel =
+    catalogImportActive && catalogImport
+      ? `${subStageLabel ?? 'Saving to catalog'} (${catalogImport.processed} / ${catalogImport.total}${catalogImport.marketplace ? ` · ${catalogImport.marketplace}` : ''})`
+      : null;
   const statusLabel = isQueued
     ? 'Queued — waiting for the pipeline worker (one job runs at a time)'
     : terminal && job.status === 'completed'
       ? 'Enrichment complete'
-      : subStageLabel
-        ? subStageLabel
-        : hasPartCounts
-          ? `${job.processedParts} / ${job.totalParts} parts`
-          : currentStage?.description ?? 'Processing...';
+      : catalogImportLabel
+        ? catalogImportLabel
+        : subStageLabel
+          ? subStageLabel
+          : hasPartCounts
+            ? `${job.processedParts} / ${job.totalParts} parts`
+            : currentStage?.description ?? 'Processing...';
 
   return (
     <div className="space-y-4">
@@ -473,7 +513,9 @@ export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () =>
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                 <div
                   className={`h-2 rounded-full transition-all duration-500 ${
-                    hasPartCounts ? 'bg-blue-500' : 'bg-blue-500/70 animate-pulse'
+                    hasPartCounts || catalogImportActive
+                      ? 'bg-blue-500'
+                      : 'bg-blue-500/70 animate-pulse'
                   }`}
                   style={{ width: `${Math.max(progressPct, 2)}%` }}
                 />
@@ -481,13 +523,15 @@ export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () =>
               {!isQueued && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Last update {formatElapsed(secondsSinceUpdate)} ago
-                  {progressLooksStale && ' — processing may pause briefly during large batches'}
+                  {progressLooksStale &&
+                    !catalogImportActive &&
+                    ' — processing may pause briefly during large batches'}
                 </p>
               )}
             </div>
           )}
 
-          {progressLooksStale && (
+          {progressLooksStale && !catalogImportActive && (
             <p className="text-sm text-amber-400/90 mb-3">
               No progress updates for a while. If this persists, cancel and retry from History, or check backend logs
               (`docker compose logs backend`).

@@ -17,6 +17,9 @@ describe('EbayMvlService', () => {
     hasMake: jest.Mock;
     hasModel: jest.Mock;
     hasYear: jest.Mock;
+    batchExistingMakes: jest.Mock;
+    batchExistingModels: jest.Mock;
+    batchExistingYears: jest.Mock;
   };
 
   beforeEach(() => {
@@ -35,6 +38,9 @@ describe('EbayMvlService', () => {
       hasMake: jest.fn(),
       hasModel: jest.fn(),
       hasYear: jest.fn(),
+      batchExistingMakes: jest.fn().mockResolvedValue(new Set()),
+      batchExistingModels: jest.fn().mockResolvedValue(new Set()),
+      batchExistingYears: jest.fn().mockResolvedValue(new Set()),
     };
     svc = new EbayMvlService(
       taxonomyApi as unknown as EbayTaxonomyApiService,
@@ -201,9 +207,9 @@ describe('EbayMvlService', () => {
 
     it('validates against local MVL database when active', async () => {
       store.hasActiveRelease.mockResolvedValue(true);
-      store.hasMake.mockResolvedValue(true);
-      store.hasModel.mockResolvedValue(true);
-      store.hasYear.mockResolvedValue(true);
+      store.batchExistingMakes.mockResolvedValue(new Set(['toyota']));
+      store.batchExistingModels.mockResolvedValue(new Set(['toyota|camry']));
+      store.batchExistingYears.mockResolvedValue(new Set(['toyota|camry|2018']));
 
       const result = await svc.validateFitmentData(
         [{ Make: 'Toyota', Model: 'Camry', Year: '2018' }],
@@ -213,6 +219,35 @@ describe('EbayMvlService', () => {
       expect(result.validCount).toBe(1);
       expect(result.apiUnavailable).toBe(false);
       expect(taxonomyApi.getCompatibilityPropertyValues).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown make via batched store path', async () => {
+      store.hasActiveRelease.mockResolvedValue(true);
+      store.batchExistingMakes.mockResolvedValue(new Set()); // no makes exist
+      store.resolveCanonicalMakeModel.mockResolvedValue({ mvlMatched: false });
+
+      const result = await svc.validateFitmentData(
+        [{ Make: 'InvalidMake', Model: 'Camry', Year: '2018' }],
+        '6000',
+      );
+
+      expect(result.rejectedCount).toBe(1);
+      expect(result.accepted).toHaveLength(0);
+    });
+
+    it('marks unknown year as needs_review via batched store path', async () => {
+      store.hasActiveRelease.mockResolvedValue(true);
+      store.batchExistingMakes.mockResolvedValue(new Set(['toyota']));
+      store.batchExistingModels.mockResolvedValue(new Set(['toyota|camry']));
+      store.batchExistingYears.mockResolvedValue(new Set(['toyota|camry|2020']));
+
+      const result = await svc.validateFitmentData(
+        [{ Make: 'Toyota', Model: 'Camry', Year: '2018' }],
+        '6000',
+      );
+
+      expect(result.needsReviewCount).toBe(1);
+      expect(result.rejectedCount).toBe(0);
     });
   });
 });

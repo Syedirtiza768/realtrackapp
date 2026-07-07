@@ -137,7 +137,50 @@ export default function EnrichmentStatusPanel({ job }: { job: PipelineJob }) {
             <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Fallback</p>
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{summary.totalFallbackEnrichment ?? 0}</p>
           </div>
-          {summary.localization && (
+          {summary.localization && job.marketplace && job.marketplace !== 'US' && (
+            <>
+              {job.marketplace === 'AU' && (
+                <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">AU localized</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {summary.localization.auAiTranslated ?? 0}
+                    {(summary.localization.auRuleOnly ?? 0) > 0 && (
+                      <span className="text-xs text-amber-400 ml-1">
+                        (+{summary.localization.auRuleOnly} rule-only)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+              {job.marketplace === 'DE' && (
+                <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">DE localized</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {summary.localization.deAiTranslated ?? 0}
+                    {(summary.localization.deRuleOnly ?? 0) > 0 && (
+                      <span className="text-xs text-amber-400 ml-1">
+                        (+{summary.localization.deRuleOnly} rule-only)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+              {job.marketplace === 'UK' && (
+                <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">UK localized</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {summary.localization.ukAiTranslated ?? 0}
+                    {(summary.localization.ukRuleOnly ?? 0) > 0 && (
+                      <span className="text-xs text-amber-400 ml-1">
+                        (+{summary.localization.ukRuleOnly} rule-only)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+          {summary.localization && !job.marketplace && (
             <>
               <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
                 <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">AU localized</p>

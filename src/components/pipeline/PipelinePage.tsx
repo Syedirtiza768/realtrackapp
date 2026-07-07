@@ -23,9 +23,8 @@ import { useUploadPipelineFile, type PipelineUploadProfileInput } from '../../li
 import { listTeams, PIPELINE_CONDITIONS, type PipelineConditionLabel } from '../../lib/teamsApi';
 import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
 import {
-  PIPELINE_MARKETPLACE_CODES,
+  ebayMarketplaceIdToPipelineCode,
   PIPELINE_MARKETPLACE_LABELS,
-  storeMatchesPipelineMarketplace,
   type PipelineMarketplaceCode,
 } from '../../lib/pipelineMarketplaces';
 import ProfileSelectors from '../catalog/ProfileSelectors';
@@ -144,7 +143,6 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
     const [dragOver, setDragOver] = useState(false);
     const [condition, setCondition] = useState<PipelineConditionLabel>('Used');
     const [teamId, setTeamId] = useState('');
-    const [marketplace, setMarketplace] = useState<PipelineMarketplaceCode>('US');
     const [storeId, setStoreId] = useState('');
     const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -162,13 +160,15 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
     });
 
     const activeStores = stores.filter((s) => s.status === 'active');
-    const marketplaceStores = activeStores.filter((s) =>
-      storeMatchesPipelineMarketplace(s.marketplaceLabel ?? s.ebayMarketplaceId, marketplace),
-    );
 
     const selectedTeamId = teamId || teams[0]?.id || '';
-    const selectedStoreId = storeId || marketplaceStores[0]?.id || '';
-    const selectedStore = marketplaceStores.find((s) => s.id === selectedStoreId) ?? null;
+    const selectedStoreId = storeId || activeStores[0]?.id || '';
+    const selectedStore = activeStores.find((s) => s.id === selectedStoreId) ?? null;
+    const marketplace: PipelineMarketplaceCode | null = selectedStore
+      ? ebayMarketplaceIdToPipelineCode(
+          selectedStore.marketplaceLabel ?? selectedStore.ebayMarketplaceId,
+        )
+      : null;
 
     const { data: storeProfiles, isLoading: profilesLoading } = useQuery({
       queryKey: ['pipeline-store-profiles', selectedStoreId],
@@ -186,7 +186,8 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
       profiles.shippingProfileName &&
       profiles.returnProfileName &&
       profiles.paymentProfileName &&
-      selectedStoreId
+      selectedStoreId &&
+      marketplace
         ? {
             marketplace,
             storeId: selectedStoreId,
@@ -203,13 +204,14 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
       !!selectedTeamId &&
       teams.length > 0 &&
       !!selectedStoreId &&
-      marketplaceStores.length > 0 &&
+      activeStores.length > 0 &&
+      !!marketplace &&
       !!profileInput;
 
     const submitUpload = useCallback(
       async (file: File) => {
         if (!canUpload || !profileInput) {
-          alert('Select team, marketplace, store, and all three business profiles before uploading.');
+          alert('Select team, eBay store, and all three business profiles before uploading.');
           return;
         }
         try {
@@ -260,44 +262,31 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="block text-sm">
-              <span className="font-medium text-slate-600 dark:text-slate-300">Marketplace</span>
-              <select
-                value={marketplace}
-                onChange={(e) => {
-                  setMarketplace(e.target.value as PipelineMarketplaceCode);
-                  setStoreId('');
-                  setProfiles(EMPTY_PROFILE_SELECTION);
-                }}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
-              >
-                {PIPELINE_MARKETPLACE_CODES.map((code) => (
-                  <option key={code} value={code}>
-                    {code} — {PIPELINE_MARKETPLACE_LABELS[code]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-slate-600 dark:text-slate-300">Store</span>
+              <span className="font-medium text-slate-600 dark:text-slate-300">eBay Store</span>
               <select
                 value={selectedStoreId}
                 onChange={(e) => {
                   setStoreId(e.target.value);
                   setProfiles(EMPTY_PROFILE_SELECTION);
                 }}
-                disabled={storesLoading || marketplaceStores.length === 0}
+                disabled={storesLoading || activeStores.length === 0}
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800"
               >
-                {marketplaceStores.length === 0 ? (
-                  <option value="">No stores for {marketplace}</option>
+                {activeStores.length === 0 ? (
+                  <option value="">No active eBay stores</option>
                 ) : (
-                  marketplaceStores.map((s: Store) => (
+                  activeStores.map((s: Store) => (
                     <option key={s.id} value={s.id}>
                       {s.storeName}
                     </option>
                   ))
                 )}
               </select>
+              {marketplace && (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Marketplace: {marketplace} — {PIPELINE_MARKETPLACE_LABELS[marketplace]}
+                </p>
+              )}
             </label>
             <label className="block text-sm">
               <span className="font-medium text-slate-600 dark:text-slate-300">Condition</span>
@@ -406,7 +395,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
             <span>
               The selected team, store, and business profiles apply to every part in this upload.
               Row-level profile values in the spreadsheet are kept when present; otherwise these defaults are used.
-              The store anchors cross-listing to other marketplaces later.
+              Listings are enriched only for the store&apos;s marketplace — no cross-list templates are generated.
             </span>
           </div>
 

@@ -142,6 +142,7 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `NODE_OPTIONS` | `--max-old-space-size=1536` (t3.medium) | V8 heap; raise on larger instances |
 | `IGNORE_ENV_FILE` | `true` (Docker) | Ignore host `.env` in container |
 | `PIPELINE_PROJECT_ROOT` | `/app` | Root for pipeline scripts/output |
+| `PIPELINE_TARGET_MARKETPLACE` | (from job) | Set by the pipeline worker from upload provisioning (`US` \| `UK` \| `AU` \| `DE`). When set, only that marketplace is category-mapped, localized, exported, and imported. Omit on legacy jobs to generate all four outputs. |
 | `PIPELINE_AI_CONCURRENCY` | `3` (t3.medium) | Max parallel OpenRouter enrichment batches |
 | `PIPELINE_AI_BATCH_SIZE` | `6` (t3.medium) | Parts per AI batch (structured JSON) |
 | `PIPELINE_LOCALIZATION_CONCURRENCY` | `3` (t3.medium) | Parallel AU/DE localization batches |
@@ -153,6 +154,7 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `PIPELINE_SKIP_IMAGE_FETCH` | `0` | Use source/upload images only — no image API |
 | `PIPELINE_MIRROR_IMAGES` | `true` | Mirror listing images to S3 after pipeline (backend) |
 | `PIPELINE_SKIP_MVL_ON_IMPORT` | auto | When unset: validate on import if local MVL is loaded (`npm run mvl:import`); set `true` to skip, `false` to force |
+| `MVL_VALIDATION_CONCURRENCY` | `6` | Max concurrent canonicalization lookups during batched MVL validation (store branch). Existence checks are batched into ~3–5 queries regardless; this caps parallel canonicalization for non-matching makes/models. Keep `× MAX_CONCURRENT_PIPELINE_JOBS ≤ DB_POOL_MAX − 2` |
 | `EBAY_MVL_DATA_DIR` | `../drive-download-20260706T171856Z-3-001` | Allowed root for `POST /api/fitment/ebay-mvl/import` and `npm run mvl:import` |
 | `EBAY_MVL_WORKBOOK_PASSWORD` | — | Password for UK/US eBay MVL `.xlsx` files (requires Python `msoffcrypto-tool`) |
 | `FITMENT_EXPANSION_MODE` | `hybrid` | `mvl` \| `hybrid` \| `ai` — deterministic MVL fitment vs legacy AI `compatibility[]` in enrichment prompt |

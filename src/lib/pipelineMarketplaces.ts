@@ -26,6 +26,32 @@ export function pipelineMarketplaceToEbayId(code: PipelineMarketplaceCode): stri
   }
 }
 
+const EBAY_ID_TO_PIPELINE: Record<string, PipelineMarketplaceCode> = {
+  EBAY_US: 'US',
+  EBAY_MOTORS_US: 'US',
+  EBAY_MOTORS: 'US',
+  EBAY_GB: 'UK',
+  EBAY_AU: 'AU',
+  EBAY_DE: 'DE',
+};
+
+export function ebayMarketplaceIdToPipelineCode(
+  ebayMarketplaceId: string | null | undefined,
+): PipelineMarketplaceCode | null {
+  if (!ebayMarketplaceId) return null;
+  const upper = ebayMarketplaceId.toUpperCase();
+  if (EBAY_ID_TO_PIPELINE[upper]) return EBAY_ID_TO_PIPELINE[upper];
+  if (upper.startsWith('EBAY_')) {
+    const suffix = upper.replace('EBAY_', '');
+    if (suffix === 'MOTORS_US' || suffix === 'MOTORS') return 'US';
+    if (suffix === 'GB') return 'UK';
+    if ((PIPELINE_MARKETPLACE_CODES as readonly string[]).includes(suffix)) {
+      return suffix as PipelineMarketplaceCode;
+    }
+  }
+  return null;
+}
+
 export function storeMatchesPipelineMarketplace(
   ebayMarketplaceId: string | null | undefined,
   code: PipelineMarketplaceCode,
