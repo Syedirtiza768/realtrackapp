@@ -159,6 +159,10 @@ const PUBLISHED_SQL = `(
     SELECT 1 FROM listing_channel_instances lci
     WHERE lci.listing_id = r.id AND lci.sync_status = 'synced'
   )
+  OR EXISTS (
+    SELECT 1 FROM ebay_published_listings epl
+    WHERE epl.sku = r."customLabelSku" AND epl.listing_status = 'active'
+  )
 )`;
 
 const HAS_IMAGE_SQL = `(r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != '')`;
@@ -176,13 +180,15 @@ function deriveCatalogStatus(row: {
   shopifyProductId?: string | null;
   itemPhotoUrl?: string | null;
   hasChannelInstance?: boolean;
+  hasEbayPublishedListing?: boolean;
 }): CatalogListingStatus {
   const isPublished =
     row.status === 'published' ||
     row.publishedAt != null ||
     (row.ebayListingId != null && String(row.ebayListingId).trim() !== '') ||
     (row.shopifyProductId != null && String(row.shopifyProductId).trim() !== '') ||
-    row.hasChannelInstance === true;
+    row.hasChannelInstance === true ||
+    row.hasEbayPublishedListing === true;
 
   if (isPublished) return 'published';
 
@@ -261,6 +267,10 @@ export class SearchService {
     qb.addSelect(
       `(SELECT EXISTS(SELECT 1 FROM listing_channel_instances lci WHERE lci.listing_id = r.id AND lci.sync_status = 'synced'))`,
       'hasChannelInstance',
+    );
+    qb.addSelect(
+      `(SELECT EXISTS(SELECT 1 FROM ebay_published_listings epl WHERE epl.sku = r."customLabelSku" AND epl.listing_status = 'active'))`,
+      'hasEbayPublishedListing',
     );
 
     /* -- Full-text search scoring ------------------------------ */
@@ -458,6 +468,7 @@ export class SearchService {
         shopifyProductId: row.r_shopifyProductId,
         itemPhotoUrl: row.r_itemPhotoUrl,
         hasChannelInstance: row.hasChannelInstance === true,
+        hasEbayPublishedListing: row.hasEbayPublishedListing === true,
       }),
       relevanceScore: hasQuery
         ? parseFloat(row.relevanceScore ?? '0')
