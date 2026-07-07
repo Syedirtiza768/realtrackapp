@@ -1591,7 +1591,11 @@ export class EbayPublishService {
         throw publishErr;
       }
 
+      // Fetch existing offer first — PUT replaces the entire offer, so we must
+      // include all existing fields (pricing, category, etc.) to avoid wiping them.
+      const existingOffer = await this.inventoryApi.getOffer(storeId, offerId);
       await this.inventoryApi.updateOffer(storeId, offerId, {
+        ...existingOffer,
         listingPolicies: {
           fulfillmentPolicyId: refreshed.fulfillmentPolicyId,
           paymentPolicyId: refreshed.paymentPolicyId,
