@@ -78,8 +78,6 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     private readonly imageAssetRepo: Repository<ImageAsset>,
     @InjectQueue('pipeline')
     private readonly pipelineQueue: Queue,
-    @InjectQueue('listing-optimization')
-    private readonly optimizationQueue: Queue,
     private readonly pipelineOutputImages: PipelineOutputImageService,
     private readonly mvlService: EbayMvlService,
     private readonly mvlStore: EbayMvlStoreService,
@@ -192,28 +190,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
       await this.updateStatus(jobId, 'completed');
 
-      await this.jobRepo.update(jobId, {
-        optimizationStatus: 'pending',
-        optimizationTotal: 0,
-        optimizationProcessed: 0,
-      } as any);
-
-      // Enqueue mandatory listing optimization for all three marketplaces
-      for (const marketplace of ['US', 'AU', 'DE'] as const) {
-        await this.optimizationQueue.add(
-          'optimize-job',
-          { jobId, marketplace },
-          {
-            attempts: 5,
-            backoff: { type: 'exponential', delay: 30_000 },
-            removeOnComplete: 50,
-            removeOnFail: 100,
-          },
-        );
-      }
-
       this.logger.log(
-        `Pipeline job=${jobId} enrichment completed; queued mandatory listing optimization for US/AU/DE`,
+        `Pipeline job=${jobId} enrichment completed`,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -5,6 +5,7 @@ import type {
   DynamicFacets,
   DateAddedPreset,
   StockLevelFilter,
+  CatalogListingStatus,
 } from '../../types/search';
 import { conditionLabel } from '../../types/search';
 
@@ -113,6 +114,12 @@ const STOCK_OPTIONS: { value: StockLevelFilter; label: string }[] = [
   { value: 'out_of_stock', label: 'Out of stock' },
 ];
 
+const STATUS_OPTIONS: { value: CatalogListingStatus; label: string }[] = [
+  { value: 'published', label: 'Published' },
+  { value: 'ready_to_publish', label: 'Ready to Publish' },
+  { value: 'need_images', label: 'Need Images' },
+];
+
 const DATE_OPTIONS: { value: DateAddedPreset; label: string }[] = [
   { value: 'all', label: 'All time' },
   { value: 'today', label: 'Today' },
@@ -165,6 +172,13 @@ export default function CatalogFilterBar({
       : filters.shippingProfiles.length === 1
         ? filters.shippingProfiles[0]
         : `${filters.shippingProfiles.length} selected`;
+
+  const statusSummary =
+    filters.catalogStatuses.length === 0
+      ? 'All'
+      : filters.catalogStatuses.length === 1
+        ? STATUS_OPTIONS.find((o) => o.value === filters.catalogStatuses[0])?.label ?? 'Selected'
+        : `${filters.catalogStatuses.length} selected`;
 
   const dateSummary =
     filters.dateAddedPreset === 'custom'
@@ -267,6 +281,22 @@ export default function CatalogFilterBar({
         {!loading && (facets?.shippingProfiles?.length ?? 0) === 0 && (
           <p className="px-3 py-2 text-xs text-slate-400">No shipping profiles</p>
         )}
+      </FilterDropdown>
+
+      <FilterDropdown label="Status" summary={statusSummary}>
+        {STATUS_OPTIONS.map((opt) => (
+          <CheckboxOption
+            key={opt.value}
+            checked={filters.catalogStatuses.includes(opt.value)}
+            label={opt.label}
+            onToggle={() =>
+              onChange({
+                ...filters,
+                catalogStatuses: toggleInList(filters.catalogStatuses, opt.value),
+              })
+            }
+          />
+        ))}
       </FilterDropdown>
 
       <FilterDropdown label="Date Added" summary={dateSummary}>

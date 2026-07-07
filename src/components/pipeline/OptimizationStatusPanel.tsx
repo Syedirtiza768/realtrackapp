@@ -245,14 +245,13 @@ function ProductRow({
 
 export function useOptimizationDownloadGate(job: PipelineJob | null | undefined) {
   const jobId = job?.id ?? null;
-  const jobCompleted = job?.status === 'completed';
   const hasOutputFiles = Boolean(
     job?.outputUsPath || job?.outputAuPath || job?.outputDePath,
   );
-  const { data: optimization } = useJobOptimization(jobId, jobCompleted);
+  const { data: optimization } = useJobOptimization(jobId, job?.status === 'completed');
   const optStatus = optimization?.optimizationStatus ?? job?.optimizationStatus ?? 'pending';
-  // Enrichment XLSX files are ready as soon as the pipeline completes; do not block on SEO optimization.
-  const canDownload = jobCompleted && hasOutputFiles;
+  // Downloads are available as soon as output files exist — never gate on optimization status.
+  const canDownload = hasOutputFiles;
   return { canDownload, optimization, optStatus };
 }
 

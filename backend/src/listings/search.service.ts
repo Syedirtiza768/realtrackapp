@@ -154,6 +154,11 @@ const PUBLISHED_SQL = `(
   r.status = 'published'
   OR r."publishedAt" IS NOT NULL
   OR (r."ebayListingId" IS NOT NULL AND r."ebayListingId" != '')
+  OR (r."shopifyProductId" IS NOT NULL AND r."shopifyProductId" != '')
+  OR EXISTS (
+    SELECT 1 FROM listing_channel_instances lci
+    WHERE lci.listing_id = r.id AND lci.sync_status = 'synced'
+  )
 )`;
 
 const HAS_IMAGE_SQL = `(r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != '')`;
@@ -168,12 +173,16 @@ function deriveCatalogStatus(row: {
   status?: string | null;
   publishedAt?: Date | string | null;
   ebayListingId?: string | null;
+  shopifyProductId?: string | null;
   itemPhotoUrl?: string | null;
+  hasChannelInstance?: boolean;
 }): CatalogListingStatus {
   const isPublished =
     row.status === 'published' ||
     row.publishedAt != null ||
-    (row.ebayListingId != null && String(row.ebayListingId).trim() !== '');
+    (row.ebayListingId != null && String(row.ebayListingId).trim() !== '') ||
+    (row.shopifyProductId != null && String(row.shopifyProductId).trim() !== '') ||
+    row.hasChannelInstance === true;
 
   if (isPublished) return 'published';
 
@@ -244,10 +253,15 @@ export class SearchService {
       'r.status',
       'r.publishedAt',
       'r.ebayListingId',
+      'r.shopifyProductId',
       'r.shippingProfileName',
     ]);
     qb.addSelect('tm.name', 'teamName');
     qb.addSelect('tm.color', 'teamColor');
+    qb.addSelect(
+      `(SELECT EXISTS(SELECT 1 FROM listing_channel_instances lci WHERE lci.listing_id = r.id AND lci.sync_status = 'synced'))`,
+      'hasChannelInstance',
+    );
 
     /* -- Full-text search scoring ------------------------------ */
     if (hasQuery) {
@@ -441,7 +455,9 @@ export class SearchService {
         status: row.r_status,
         publishedAt: row.r_publishedAt,
         ebayListingId: row.r_ebayListingId,
+        shopifyProductId: row.r_shopifyProductId,
         itemPhotoUrl: row.r_itemPhotoUrl,
+        hasChannelInstance: row.hasChannelInstance === true,
       }),
       relevanceScore: hasQuery
         ? parseFloat(row.relevanceScore ?? '0')
