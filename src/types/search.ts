@@ -42,7 +42,7 @@ export type CatalogListingStatus = 'published' | 'ready_to_publish' | 'need_imag
 
 export type StockLevelFilter = 'in_stock' | 'out_of_stock' | 'low_stock';
 
-export type DateAddedPreset = 'all' | 'last_7' | 'last_30' | 'last_90' | 'custom';
+export type DateAddedPreset = 'all' | 'today' | 'yesterday' | 'last_7' | 'last_30' | 'last_90' | 'custom';
 
 export type SortMode =
   | 'relevance'
@@ -354,6 +354,15 @@ export const CONDITION_MAP: Record<string, string> = {
   '2000': 'Certified Refurbished',
   '2500': 'Seller Refurbished',
   '3000': 'Used',
+  '3000-Used': 'Used',
+  '7000': 'For Parts',
+};
+
+export function conditionLabel(id: string | null): string {
+  if (!id) return 'Unknown';
+  return CONDITION_MAP[id] ?? id;
+}
+'3000': 'Used',
   '3000-Used': 'Used',
   '7000': 'For Parts',
 };

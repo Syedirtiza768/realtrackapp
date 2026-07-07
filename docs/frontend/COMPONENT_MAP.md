@@ -118,7 +118,10 @@ src/components/
 │   ├── PermissionsPage.tsx
 │   ├── EbayStoresSettingsPage.tsx
 │   ├── EbayStoreDetailPage.tsx
-│   └── EbayPolicyMappingPage.tsx
+│   ├── EbayPolicyMappingPage.tsx
+│   ├── StoreDefaultPoliciesTab.tsx
+│   ├── EbayAccountPolicyEditor.tsx
+│   └── ebayPolicyEditor.types.ts
 ├── templates/          # Templates
 │   └── TemplateManagerPage.tsx
 ├── automation/         # Automation

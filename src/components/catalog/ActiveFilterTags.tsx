@@ -200,11 +200,15 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     });
   } else if (filters.dateAddedPreset !== 'all' && filters.dateAddedPreset !== 'custom') {
     const presetLabel =
-      filters.dateAddedPreset === 'last_7'
-        ? 'Last 7 days'
-        : filters.dateAddedPreset === 'last_30'
-          ? 'Last 30 days'
-          : 'Last 90 days';
+      filters.dateAddedPreset === 'today'
+        ? 'Today'
+        : filters.dateAddedPreset === 'yesterday'
+          ? 'Yesterday'
+          : filters.dateAddedPreset === 'last_7'
+            ? 'Last 7 days'
+            : filters.dateAddedPreset === 'last_30'
+              ? 'Last 30 days'
+              : 'Last 90 days';
     tags.push({
       key: 'dateAdded',
       label: 'Date: ' + presetLabel,

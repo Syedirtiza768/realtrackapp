@@ -47,7 +47,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | `/templates` | `TemplateManagerPage` | `templates.view` | Listing templates |
 | `/notifications` | `NotificationsPage` | `notifications.view` | Notifications |
 | `/audit` | `AuditTrailPage` | `audit.view` | Audit trail |
-| `/settings` | `SettingsPage` | `settings.view` | General settings |
+| `/settings` | `SettingsPage` | `settings.view` | General settings; tabs include **Store policies** (`ebay.view` / `ebay.manage` for edit) |
 | `/settings/client` | `ClientSettingsPage` | (super_admin) | White-label settings |
 | `/settings/users` | `UsersAdminPage` | (implicit) | User management |
 | `/settings/permissions` | `PermissionsPage` | (implicit) | Permission management |

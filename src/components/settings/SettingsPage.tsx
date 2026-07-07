@@ -19,9 +19,11 @@ import {
     Wifi,
     WifiOff,
     KeyRound,
+    Store,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { startEbayOAuth } from '../../lib/ebayIntegrationsApi';
+import StoreDefaultPoliciesTab from './StoreDefaultPoliciesTab';
 import { authPost, fetchWithAuth } from '../../lib/authApi';
 import { changeOwnPassword } from '../../lib/rbacApi';
 
@@ -77,7 +79,9 @@ function Spinner() {
 /* ─── Component ─── */
 
 export default function SettingsPage() {
-    const [tab, setTab] = useState<'general' | 'shipping' | 'pricing' | 'channels' | 'account'>('general');
+    const [tab, setTab] = useState<
+        'general' | 'shipping' | 'pricing' | 'channels' | 'store-policies' | 'account'
+    >('general');
     const [settings, setSettings] = useState<Record<string, TenantSetting[]>>({});
     const [shipping, setShipping] = useState<ShippingProfile[]>([]);
     const [pricing, setPricing] = useState<PricingRule[]>([]);
@@ -161,6 +165,7 @@ export default function SettingsPage() {
     const tabs = [
         { key: 'general' as const, label: 'General', icon: Settings },
         { key: 'channels' as const, label: 'Channels', icon: Link2 },
+        { key: 'store-policies' as const, label: 'Store policies', icon: Store },
         { key: 'shipping' as const, label: 'Shipping', icon: Truck },
         { key: 'pricing' as const, label: 'Pricing', icon: DollarSign },
         { key: 'account' as const, label: 'Account', icon: KeyRound },
@@ -419,6 +424,10 @@ export default function SettingsPage() {
                     {/* ─── Channels ─── */}
                     {tab === 'channels' && (
                         <ChannelConnectionsTab />
+                    )}
+
+                    {tab === 'store-policies' && (
+                        <StoreDefaultPoliciesTab />
                     )}
 
                     {/* ─── Account ─── */}

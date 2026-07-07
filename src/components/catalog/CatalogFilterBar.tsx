@@ -115,6 +115,8 @@ const STOCK_OPTIONS: { value: StockLevelFilter; label: string }[] = [
 
 const DATE_OPTIONS: { value: DateAddedPreset; label: string }[] = [
   { value: 'all', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: 'last_7', label: 'Last 7 days' },
   { value: 'last_30', label: 'Last 30 days' },
   { value: 'last_90', label: 'Last 90 days' },
