@@ -17,6 +17,12 @@ import { SingleListingFormService } from './services/single-listing-form.service
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { TeamsService } from '../teams/teams.service.js';
 import { User } from '../auth/entities/user.entity.js';
+import { StoresService } from '../channels/stores.service.js';
+import {
+  isPipelineMarketplaceCode,
+  storeMatchesPipelineMarketplace,
+  type PipelineMarketplaceCode,
+} from '../common/marketplaces/pipeline-marketplaces.js';
 import {
   PIPELINE_CONDITION_OPTIONS,
   mapPipelineDisplayStatus,
@@ -36,10 +42,26 @@ export interface PipelineJobListItem {
   originalFilename: string;
   totalParts: number;
   conditionLabel: string | null;
+  marketplace: string | null;
+  store: { id: string; storeName: string } | null;
+  shippingProfileName: string | null;
+  returnProfileName: string | null;
+  paymentProfileName: string | null;
   team: { id: string; name: string; color: string } | null;
   uploadedBy: { id: string; name: string } | null;
   createdAt: Date;
   fileSizeBytes: number | null;
+}
+
+export interface PipelineUploadProfileOptions {
+  marketplace: PipelineMarketplaceCode;
+  storeId: string;
+  shippingProfileName: string;
+  returnProfileName: string;
+  paymentProfileName: string;
+  fulfillmentPolicyId?: string;
+  paymentPolicyId?: string;
+  returnPolicyId?: string;
 }
 
 export interface CreatePipelineJobDto {
@@ -110,6 +132,7 @@ export class PipelineService {
     private readonly teamsService: TeamsService,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly storesService: StoresService,
   ) {}
 
   private async nextUploadCode(): Promise<string> {
@@ -140,6 +163,8 @@ export class PipelineService {
     teamId?: string,
     conditionLabel?: string,
     manageAllTeams = false,
+    profileOptions?: PipelineUploadProfileOptions,
+    user?: User,
   ): Promise<PipelineJob> {
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
 
@@ -165,6 +190,49 @@ export class PipelineService {
       await this.teamsService.assertUserCanAccessTeam(userId, teamId, manageAllTeams);
     }
 
+    if (!profileOptions) {
+      throw new BadRequestException(
+        'marketplace, storeId, and shipping/return/payment profiles are required',
+      );
+    }
+    const {
+      marketplace,
+      storeId,
+      shippingProfileName,
+      returnProfileName,
+      paymentProfileName,
+      fulfillmentPolicyId,
+      paymentPolicyId,
+      returnPolicyId,
+    } = profileOptions;
+
+    if (!isPipelineMarketplaceCode(marketplace)) {
+      throw new BadRequestException(
+        `Invalid marketplace. Allowed: US, UK, AU, DE`,
+      );
+    }
+    if (!shippingProfileName?.trim() || !returnProfileName?.trim() || !paymentProfileName?.trim()) {
+      throw new BadRequestException(
+        'shippingProfileName, returnProfileName, and paymentProfileName are required',
+      );
+    }
+
+    const store = await this.storesService.getStore(storeId);
+    if (store.channel !== 'ebay' || store.status !== 'active') {
+      throw new BadRequestException('storeId must be an active eBay store');
+    }
+    if (!storeMatchesPipelineMarketplace(store.ebayMarketplaceId, marketplace)) {
+      throw new BadRequestException(
+        `Store "${store.storeName}" does not belong to marketplace ${marketplace}`,
+      );
+    }
+    if (user) {
+      const accessible = await this.storesService.getStoresByChannel('ebay', user);
+      if (!accessible.some((s) => s.id === storeId)) {
+        throw new ForbiddenException('You do not have access to the selected store');
+      }
+    }
+
     const uploadCode = await this.nextUploadCode();
 
     const placeholder = await this.jobRepo.save(
@@ -176,6 +244,14 @@ export class PipelineService {
         createdBy: userId ?? null,
         teamId,
         conditionLabel: conditionLabel.trim(),
+        marketplace,
+        storeId,
+        shippingProfileName: shippingProfileName.trim(),
+        returnProfileName: returnProfileName.trim(),
+        paymentProfileName: paymentProfileName.trim(),
+        fulfillmentPolicyId: fulfillmentPolicyId?.trim() || null,
+        paymentPolicyId: paymentPolicyId?.trim() || null,
+        returnPolicyId: returnPolicyId?.trim() || null,
         uploadCode,
       }),
     );
@@ -547,16 +623,24 @@ export class PipelineService {
 
     const teamIds = [...new Set(jobs.map((j) => j.teamId).filter(Boolean))] as string[];
     const userIds = [...new Set(jobs.map((j) => j.createdBy).filter(Boolean))] as string[];
+    const storeIds = [...new Set(jobs.map((j) => j.storeId).filter(Boolean))] as string[];
 
     const teamMap = await this.teamsService.findTeamsByIds(teamIds);
     const users = userIds.length
       ? await this.userRepo.find({ where: { id: In(userIds) }, select: ['id', 'name', 'email'] })
       : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
+    const stores = storeIds.length
+      ? await Promise.all(storeIds.map((id) => this.storesService.getStore(id).catch(() => null)))
+      : [];
+    const storeMap = new Map(
+      stores.filter(Boolean).map((s) => [s!.id, { id: s!.id, storeName: s!.storeName }]),
+    );
 
     return jobs.map((job) => {
       const team = job.teamId ? teamMap.get(job.teamId) : undefined;
       const user = job.createdBy ? userMap.get(job.createdBy) : undefined;
+      const store = job.storeId ? storeMap.get(job.storeId) : undefined;
       return {
         id: job.id,
         uploadCode: job.uploadCode,
@@ -565,6 +649,11 @@ export class PipelineService {
         originalFilename: job.originalFilename,
         totalParts: job.totalParts,
         conditionLabel: job.conditionLabel,
+        marketplace: job.marketplace,
+        store: store ?? null,
+        shippingProfileName: job.shippingProfileName,
+        returnProfileName: job.returnProfileName,
+        paymentProfileName: job.paymentProfileName,
         team: team
           ? { id: team.id, name: team.name, color: team.color }
           : null,

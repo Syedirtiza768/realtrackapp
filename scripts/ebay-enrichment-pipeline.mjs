@@ -170,6 +170,9 @@ const CONFIG = {
   templates: {
     us: path.resolve(ROOT, 'eBay-parts-and-accs-listing-template-Mar-28-2026-19-33-14.xlsx'),
     au: path.resolve(ROOT, 'eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx'),
+    uk: process.env.PIPELINE_UK_TEMPLATE
+      ? path.resolve(ROOT, process.env.PIPELINE_UK_TEMPLATE)
+      : path.resolve(ROOT, 'eBay-category-listing-template-Mar-28-2026-19-39-50.xlsx'),
     de: path.resolve(ROOT, 'eBay-category-listing-template-Mar-28-2026-19-43-18.xlsx'),
   },
   outputDir: process.env.PIPELINE_OUTPUT_DIR || path.resolve(ROOT, 'output'),
@@ -273,6 +276,7 @@ const REPORT = {
   categoryMappingFallback: 0,
   categoryByMarketplace: {
     US: { api: 0, ai: 0, fallback: 0, cross: 0 },
+    UK: { api: 0, ai: 0, fallback: 0, cross: 0 },
     AU: { api: 0, ai: 0, fallback: 0, cross: 0 },
     DE: { api: 0, ai: 0, fallback: 0, cross: 0 },
   },
@@ -332,8 +336,10 @@ const REPORT = {
     estimatedCostByLane: {},
   },
   localization: {
+    ukAiTranslated: 0,
     auAiTranslated: 0,
     deAiTranslated: 0,
+    ukRuleOnly: 0,
     auRuleOnly: 0,
     deRuleOnly: 0,
     errors: 0,
@@ -1741,6 +1747,7 @@ async function mapCategories(parts, vinData) {
     cat_ai: REPORT.categoryMappingAi,
     cat_fallback: REPORT.categoryMappingFallback,
     cat_us: REPORT.categoryByMarketplace.US.api + REPORT.categoryByMarketplace.US.ai,
+    cat_uk: REPORT.categoryByMarketplace.UK.api + REPORT.categoryByMarketplace.UK.ai,
     cat_au: REPORT.categoryByMarketplace.AU.api + REPORT.categoryByMarketplace.AU.ai,
     cat_de: REPORT.categoryByMarketplace.DE.api + REPORT.categoryByMarketplace.DE.ai,
     cat_taxonomy_backoff: REPORT.taxonomyApiSkippedReason ? 1 : 0,
@@ -2545,7 +2552,9 @@ async function localizeBatchForMarketplace(batchParts, marketplace, locale) {
 
   const localeGuide = marketplace === 'DE'
     ? `Schreibe natürliches Deutsch für eBay.de Gebrauchtteile. Keine wörtliche Übersetzung. Vermeide "gebraucht OE", "Genuine OEM", englische Positionswörter. Nutze z. B. Armlehne, hinten links, Original gebraucht, Teilenummer. Titel max. 80 Zeichen. Teilenummern unverändert lassen.`
-    : 'Australian English spelling (colour, metre, organise). Title max 80 chars. Keep part numbers unchanged.';
+    : marketplace === 'UK'
+      ? 'British English spelling (colour, metre, organise). Title max 80 chars. Keep part numbers unchanged.'
+      : 'Australian English spelling (colour, metre, organise). Title max 80 chars. Keep part numbers unchanged.';
 
   const fitmentNote =
     'Vehicle fitment/compatibility tables are added separately — do NOT include fitment tables or Year/Make/Model lists in the description.';
@@ -2602,6 +2611,16 @@ Return JSON: { "items": [{ "index": N, "title": "...", "description": "...", "ty
   }
 }
 
+function bumpLocalizationStat(marketplace, kind) {
+  const key =
+    marketplace === 'UK'
+      ? (kind === 'rule' ? 'ukRuleOnly' : 'ukAiTranslated')
+      : marketplace === 'AU'
+        ? (kind === 'rule' ? 'auRuleOnly' : 'auAiTranslated')
+        : (kind === 'rule' ? 'deRuleOnly' : 'deAiTranslated');
+  REPORT.localization[key]++;
+}
+
 async function localizeMarketplaceCopy(parts, marketplace, locale) {
   const enriched = parts.filter(p => p._enriched);
   if (!enriched.length) return;
@@ -2612,10 +2631,7 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
   }
 
   if (!openaiAvailable || localizationMode === 'rule') {
-    for (const part of enriched) {
-      if (marketplace === 'AU') REPORT.localization.auRuleOnly++;
-      if (marketplace === 'DE') REPORT.localization.deRuleOnly++;
-    }
+    for (const part of enriched) bumpLocalizationStat(marketplace, 'rule');
     return;
   }
 
@@ -2635,10 +2651,7 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
       locPool.run(async () => {
         const items = await localizeBatchForMarketplace(batch, marketplace, locale);
         if (!items) {
-          for (const part of batch) {
-            if (marketplace === 'AU') REPORT.localization.auRuleOnly++;
-            if (marketplace === 'DE') REPORT.localization.deRuleOnly++;
-          }
+          for (const part of batch) bumpLocalizationStat(marketplace, 'rule');
           return;
         }
 
@@ -2666,8 +2679,7 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
               : clean(item.bundleDescription || base.bundleDescription),
             aiTranslated: true,
           };
-          if (marketplace === 'AU') REPORT.localization.auAiTranslated++;
-          if (marketplace === 'DE') REPORT.localization.deAiTranslated++;
+          bumpLocalizationStat(marketplace, 'ai');
         }
       }),
     ),
@@ -2675,20 +2687,21 @@ async function localizeMarketplaceCopy(parts, marketplace, locale) {
 }
 
 async function localizeAllMarketplaceCopy(parts) {
-  log.step('Marketplace Copy Localization (AU · DE)');
+  log.step('Marketplace Copy Localization (UK · AU · DE)');
   log.progress({
     stage: 'validation',
     sub_stage: localizationMode === 'rule' ? 'localization_rule' : 'localization',
   });
 
-  // AU and DE are independent — run in parallel
   await Promise.all([
+    localizeMarketplaceCopy(parts, 'UK', 'en-GB'),
     localizeMarketplaceCopy(parts, 'AU', 'en-AU'),
     localizeMarketplaceCopy(parts, 'DE', 'de-DE'),
   ]);
 
   log.info(
-    `Localization: AU ${REPORT.localization.auAiTranslated} AI / ${REPORT.localization.auRuleOnly} rule-only; ` +
+    `Localization: UK ${REPORT.localization.ukAiTranslated} AI / ${REPORT.localization.ukRuleOnly} rule-only; ` +
+    `AU ${REPORT.localization.auAiTranslated} AI / ${REPORT.localization.auRuleOnly} rule-only; ` +
     `DE ${REPORT.localization.deAiTranslated} AI / ${REPORT.localization.deRuleOnly} rule-only`,
   );
 }
@@ -2760,7 +2773,7 @@ async function syncCategoryHintToMarketplaces(part, catHint, vinData) {
     partKey: `${part.partName}|${part.note}`.toLowerCase(),
     parts: [part],
   };
-  for (const marketplace of ['AU', 'DE']) {
+  for (const marketplace of ['UK', 'AU', 'DE']) {
     const resolved = await fallbackCategoryForMarketplace(
       lookup,
       vinData,
@@ -3977,9 +3990,18 @@ function readTemplate(filePath) {
 }
 
 /**
- * Extract business policies from a template.
+ * Extract business policies from upload job env or template fallback.
  */
 function getBusinessPolicies(wb) {
+  const fromJob = {
+    shipping: process.env.PIPELINE_SHIPPING_PROFILE || '',
+    returns: process.env.PIPELINE_RETURN_PROFILE || '',
+    payment: process.env.PIPELINE_PAYMENT_PROFILE || '',
+  };
+  if (fromJob.shipping || fromJob.returns || fromJob.payment) {
+    return fromJob;
+  }
+
   const ws = wb.Sheets['BusinessPolicy'];
   if (!ws) return { shipping: '', returns: '', payment: '' };
   const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
@@ -4315,6 +4337,127 @@ function generateAUOutput(parts, vinData) {
   return outWb;
 }
 
+// ────────── UK Template ──────────
+
+function generateUKOutput(parts, vinData) {
+  log.info('Generating UK (United Kingdom) template...');
+  const templateWb = readTemplate(CONFIG.templates.uk);
+  const policies = getBusinessPolicies(templateWb);
+
+  const refSheet = templateWb.Sheets['Listings'];
+  const refData = XLSX.utils.sheet_to_json(refSheet, { header: 1 });
+  const fullHeaders = refData[3];
+
+  const ukPicUrlIdx = fullHeaders.findIndex(h => h && /item photo url|picurl|artikelfoto/i.test(h));
+  const ukAddPicCols = ['AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
+    'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
+    'AdditionalPicURL6', 'AdditionalPicURL7', 'AdditionalPicURL8', 'AdditionalPicURL9',
+    'AdditionalPicURL10', 'AdditionalPicURL11', 'AdditionalPicURL12', 'AdditionalPicURL13',
+    'AdditionalPicURL14', 'AdditionalPicURL15', 'AdditionalPicURL16', 'AdditionalPicURL17',
+    'AdditionalPicURL18', 'AdditionalPicURL19', 'AdditionalPicURL20', 'AdditionalPicURL21',
+    'AdditionalPicURL22'];
+  if (ukPicUrlIdx >= 0 && !fullHeaders.includes('AdditionalPicURL')) {
+    fullHeaders.splice(ukPicUrlIdx + 1, 0, ...ukAddPicCols);
+  }
+  ensureFitmentExportColumns(fullHeaders);
+
+  const outWb = XLSX.utils.book_new();
+  const listingsData = [
+    ['#INFO', `Created=${Date.now()}`, null, null, null, null, ' Indicates missing required fields'],
+    ['#INFO', 'Version=1.0', null, 'Template=fx_category_template_EBAY_GB', null, null, ' Indicates missing recommended field'],
+    ['#INFO'],
+    fullHeaders,
+  ];
+
+  for (const part of parts) {
+    if (!part._enriched) continue;
+    const e = getMarketplaceListingCopy(part, 'UK');
+    const vehicle = getVehicleInfo(part, vinData);
+
+    const row = new Array(fullHeaders.length).fill(null);
+    const set = (colName, value) => {
+      const idx = fullHeaders.indexOf(colName);
+      if (idx >= 0) row[idx] = value;
+    };
+
+    set('*Action(SiteID=UK|Country=GB|Currency=GBP|Version=1193)', 'Add');
+    set('Custom label (SKU)', part.sku || part.category);
+    set('Category ID', getPartCategory(part, 'UK')?.categoryId || '262124');
+    set('Category name', getPartCategory(part, 'UK')?.categoryName || 'Car & Truck Parts & Accessories');
+    set('Title', e.title);
+    set('P:UPC', 'Does not apply');
+    set('Start price', Math.round(part.price * 0.79 * 100) / 100);
+    set('Quantity', part._gridx?.quantity || part._quantity || CONFIG.defaultQuantity);
+    set('Condition ID', CONFIG.defaultConditionId);
+    set('Description', wrapInTabbedDescriptionLocalized(e.description, part._fitments || [], 'en-GB'));
+    set('Format', CONFIG.defaultFormat);
+    set('Duration', CONFIG.defaultDuration);
+    set('Best Offer Enabled', 1);
+    set('Immediate pay required', 1);
+    set('Location', CONFIG.location);
+    set('Max dispatch time', 5);
+    set('Returns accepted option', 'ReturnsAccepted');
+    set('Returns within option', 'Days_30');
+    set('Refund option', 'MoneyBack');
+    set('Return shipping cost paid by', 'Buyer');
+    set('Shipping profile name', policies.shipping);
+    set('Return profile name', policies.returns);
+    set('Payment profile name', policies.payment);
+    set('C:Brand', e.brand);
+    set('C:Type', e.type);
+    set('C:Manufacturer Part Number', e.mpn || part.partNumber);
+    set('C:Reference OE/OEM Number', e.oemNumber || expandOemNumbers(part.partNumber));
+    set('C:Country/Region of Manufacture', e.countryOfManufacture || '');
+    set('C:Placement on Vehicle', e.placement);
+    set('C:Fitment Type', e.fitmentType || 'Direct Replacement');
+    set('C:Warranty', e.warranty || 'No Warranty');
+    set('C:Material', e.material);
+    set('C:Color', e.color);
+    set('C:Surface Finish', e.surfaceFinish);
+    set('C:Interchange Part Number', e.interchangeNumber);
+    applyDynamicItemSpecifics(
+      fullHeaders,
+      row,
+      mergeAiSpecificsOnly(buildFallbackItemSpecifics(part, vehicle), e.itemSpecifics),
+    );
+
+    if (part._images && part._images.length > 0) {
+      const imgs = part._images.slice(0, 24);
+      const imgCol = findImageColumn(fullHeaders);
+      if (imgCol) set(imgCol, imgs[0]);
+      if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);
+      for (let i = 2; i < imgs.length; i++) {
+        set(`AdditionalPicURL${i - 1}`, imgs[i]);
+      }
+    }
+
+    set('primary_image_url', part._imageData?.primary_image_url || '');
+    set('additional_image_urls', (part._imageData?.additional_image_urls || []).join('|'));
+    set('enriched_image_urls', (part._imageData?.enriched_image_urls || []).join('|'));
+    set('Compatibility', part._compatibilityMVL || '');
+    set('Description Note', part._descriptionNote || '');
+    set('fitment_json', part._fitmentJson || '[]');
+    set('fitment_flat', part._fitmentFlat || '');
+    set('fitment_year_range', part._fitmentYearRange || '');
+    set('fitment_notes', (part._fitments?.[0]?.notes) || '');
+    set('technical_notes', part._technicalNotes || part._enriched?.technicalNotes || '');
+
+    listingsData.push(row);
+
+    for (const fitRow of buildCompatibilityRows(fullHeaders, fitmentsForExport(part, vinData))) {
+      listingsData.push(fitRow);
+    }
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(listingsData);
+  XLSX.utils.book_append_sheet(outWb, ws, 'Listings');
+  copySheet(templateWb, outWb, 'Categories');
+  copySheet(templateWb, outWb, 'BusinessPolicy');
+  copySheet(templateWb, outWb, 'Aspects');
+
+  return outWb;
+}
+
 // ────────── DE Template ──────────
 
 function generateDEOutput(parts, vinData) {
@@ -4632,8 +4775,10 @@ function generateReport() {
     missingRequiredSpecifics: REPORT.missingSpecifics.slice(0, 100),
     errors: REPORT.errors.slice(0, 50),
     localization: {
+      ukAiTranslated: REPORT.localization.ukAiTranslated,
       auAiTranslated: REPORT.localization.auAiTranslated,
       deAiTranslated: REPORT.localization.deAiTranslated,
+      ukRuleOnly: REPORT.localization.ukRuleOnly,
       auRuleOnly: REPORT.localization.auRuleOnly,
       deRuleOnly: REPORT.localization.deRuleOnly,
       errors: REPORT.localization.errors,
@@ -4684,7 +4829,7 @@ async function main() {
   console.log(`
 ╔══════════════════════════════════════════════════════════════╗
 ║  eBay Motors Enrichment Pipeline                             ║
-║  VIN → Enriched Listings (US · AU · DE)                      ║
+║  VIN → Enriched Listings (US · UK · AU · DE)                  ║
 ╚══════════════════════════════════════════════════════════════╝
   `);
 
@@ -4751,6 +4896,7 @@ async function main() {
 
   const dateSuffix = new Date().toISOString().slice(0, 10);
   const usPath = path.join(CONFIG.outputDir, `US-Motors-Listings-${dateSuffix}.xlsx`);
+  const ukPath = path.join(CONFIG.outputDir, `UK-Category-Listings-${dateSuffix}.xlsx`);
   const auPath = path.join(CONFIG.outputDir, `AU-Category-Listings-${dateSuffix}.xlsx`);
   const dePath = path.join(CONFIG.outputDir, `DE-Category-Listings-${dateSuffix}.xlsx`);
 
@@ -4759,9 +4905,19 @@ async function main() {
   log.info(`  ✓ US Motors: ${usPath}`);
   log.progress({
     stage: 'output_generation',
+    sub_stage: 'writing_uk',
+    total_parts: enrichedParts.length,
+    processed: Math.ceil(enrichedParts.length / 4),
+  });
+
+  const ukWb = generateUKOutput(enrichedParts, vinData);
+  XLSX.writeFile(ukWb, ukPath);
+  log.info(`  ✓ UK: ${ukPath}`);
+  log.progress({
+    stage: 'output_generation',
     sub_stage: 'writing_au',
     total_parts: enrichedParts.length,
-    processed: Math.ceil(enrichedParts.length / 3),
+    processed: Math.ceil(enrichedParts.length / 2),
   });
 
   const auWb = generateAUOutput(enrichedParts, vinData);
@@ -4771,7 +4927,7 @@ async function main() {
     stage: 'output_generation',
     sub_stage: 'writing_de',
     total_parts: enrichedParts.length,
-    processed: Math.ceil((enrichedParts.length * 2) / 3),
+    processed: Math.ceil((enrichedParts.length * 3) / 4),
   });
 
   const deWb = generateDEOutput(enrichedParts, vinData);

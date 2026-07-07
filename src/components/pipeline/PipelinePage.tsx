@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -18,8 +19,22 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { useUploadPipelineFile } from '../../lib/pipelineApi';
+import { useUploadPipelineFile, type PipelineUploadProfileInput } from '../../lib/pipelineApi';
 import { listTeams, PIPELINE_CONDITIONS, type PipelineConditionLabel } from '../../lib/teamsApi';
+import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
+import {
+  PIPELINE_MARKETPLACE_CODES,
+  PIPELINE_MARKETPLACE_LABELS,
+  storeMatchesPipelineMarketplace,
+  type PipelineMarketplaceCode,
+} from '../../lib/pipelineMarketplaces';
+import ProfileSelectors from '../catalog/ProfileSelectors';
+import {
+  EMPTY_PROFILE_SELECTION,
+  defaultProfileSelection,
+  type ProfileSelection,
+} from '../catalog/profileUtils';
+import type { Store } from '../../types/multiStore';
 import { ProcessingStep } from './PipelineWizard';
 import PipelineQueue from './PipelineQueue';
 
@@ -129,6 +144,9 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
     const [dragOver, setDragOver] = useState(false);
     const [condition, setCondition] = useState<PipelineConditionLabel>('Used');
     const [teamId, setTeamId] = useState('');
+    const [marketplace, setMarketplace] = useState<PipelineMarketplaceCode>('US');
+    const [storeId, setStoreId] = useState('');
+    const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
     const { upload, uploading, progress, error } = useUploadPipelineFile();
 
@@ -137,22 +155,71 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
       queryFn: ({ signal }) => listTeams(signal),
     });
 
+    const { data: stores = [], isLoading: storesLoading } = useQuery({
+      queryKey: ['pipeline-ebay-stores'],
+      queryFn: () => getStoresByChannel('ebay'),
+      staleTime: 60_000,
+    });
+
+    const activeStores = stores.filter((s) => s.status === 'active');
+    const marketplaceStores = activeStores.filter((s) =>
+      storeMatchesPipelineMarketplace(s.marketplaceLabel ?? s.ebayMarketplaceId, marketplace),
+    );
+
     const selectedTeamId = teamId || teams[0]?.id || '';
+    const selectedStoreId = storeId || marketplaceStores[0]?.id || '';
+    const selectedStore = marketplaceStores.find((s) => s.id === selectedStoreId) ?? null;
+
+    const { data: storeProfiles, isLoading: profilesLoading } = useQuery({
+      queryKey: ['pipeline-store-profiles', selectedStoreId],
+      queryFn: () => getStoreProfiles(selectedStoreId),
+      enabled: !!selectedStoreId,
+      staleTime: 60_000,
+    });
+
+    useEffect(() => {
+      if (!storeProfiles || !selectedStore) return;
+      setProfiles(defaultProfileSelection(storeProfiles, selectedStore));
+    }, [storeProfiles, selectedStore]);
+
+    const profileInput: PipelineUploadProfileInput | null =
+      profiles.shippingProfileName &&
+      profiles.returnProfileName &&
+      profiles.paymentProfileName &&
+      selectedStoreId
+        ? {
+            marketplace,
+            storeId: selectedStoreId,
+            shippingProfileName: profiles.shippingProfileName,
+            returnProfileName: profiles.returnProfileName,
+            paymentProfileName: profiles.paymentProfileName,
+            fulfillmentPolicyId: profiles.fulfillmentPolicyId,
+            paymentPolicyId: profiles.paymentPolicyId,
+            returnPolicyId: profiles.returnPolicyId,
+          }
+        : null;
+
+    const canUpload =
+      !!selectedTeamId &&
+      teams.length > 0 &&
+      !!selectedStoreId &&
+      marketplaceStores.length > 0 &&
+      !!profileInput;
 
     const submitUpload = useCallback(
       async (file: File) => {
-        if (!selectedTeamId) {
-          alert('Select a team before uploading.');
+        if (!canUpload || !profileInput) {
+          alert('Select team, marketplace, store, and all three business profiles before uploading.');
           return;
         }
         try {
-          const result = await upload(file, selectedTeamId, condition);
+          const result = await upload(file, selectedTeamId, condition, profileInput);
           if (result?.job?.id) onJobCreated(result.job.id);
         } catch {
           // hook sets error
         }
       },
-      [upload, selectedTeamId, condition, onJobCreated],
+      [upload, selectedTeamId, condition, profileInput, canUpload, onJobCreated],
     );
 
     const handleFile = useCallback((file: File) => {
@@ -191,7 +258,47 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:max-w-xl">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block text-sm">
+              <span className="font-medium text-slate-600 dark:text-slate-300">Marketplace</span>
+              <select
+                value={marketplace}
+                onChange={(e) => {
+                  setMarketplace(e.target.value as PipelineMarketplaceCode);
+                  setStoreId('');
+                  setProfiles(EMPTY_PROFILE_SELECTION);
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+              >
+                {PIPELINE_MARKETPLACE_CODES.map((code) => (
+                  <option key={code} value={code}>
+                    {code} — {PIPELINE_MARKETPLACE_LABELS[code]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-slate-600 dark:text-slate-300">Store</span>
+              <select
+                value={selectedStoreId}
+                onChange={(e) => {
+                  setStoreId(e.target.value);
+                  setProfiles(EMPTY_PROFILE_SELECTION);
+                }}
+                disabled={storesLoading || marketplaceStores.length === 0}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800"
+              >
+                {marketplaceStores.length === 0 ? (
+                  <option value="">No stores for {marketplace}</option>
+                ) : (
+                  marketplaceStores.map((s: Store) => (
+                    <option key={s.id} value={s.id}>
+                      {s.storeName}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
             <label className="block text-sm">
               <span className="font-medium text-slate-600 dark:text-slate-300">Condition</span>
               <select
@@ -206,13 +313,13 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
                 ))}
               </select>
             </label>
-            <label className="block text-sm">
+            <label className="block text-sm sm:col-span-2 lg:col-span-3">
               <span className="font-medium text-slate-600 dark:text-slate-300">Team</span>
               <select
                 value={selectedTeamId}
                 onChange={(e) => setTeamId(e.target.value)}
                 disabled={teamsLoading || teams.length === 0}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 sm:max-w-xs"
               >
                 {teams.length === 0 ? (
                   <option value="">No teams available</option>
@@ -226,6 +333,22 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
               </select>
             </label>
           </div>
+
+          {selectedStore && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+              <p className="mb-3 text-xs font-medium text-slate-600 dark:text-slate-300">
+                Business profiles (required) — applied to every listing in this upload unless a row already specifies different values
+              </p>
+              <ProfileSelectors
+                profiles={storeProfiles}
+                loading={profilesLoading}
+                storeLabel={selectedStore.storeName}
+                value={profiles}
+                onChange={setProfiles}
+                disabled={!selectedStoreId}
+              />
+            </div>
+          )}
 
           <div
             onDragOver={(e) => {
@@ -280,7 +403,11 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
 
           <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>The selected team will be assigned to every part in this upload.</span>
+            <span>
+              The selected team, store, and business profiles apply to every part in this upload.
+              Row-level profile values in the spreadsheet are kept when present; otherwise these defaults are used.
+              The store anchors cross-listing to other marketplaces later.
+            </span>
           </div>
 
           {error && (
@@ -294,7 +421,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
             <button
               type="button"
               onClick={() => void submitUpload(pendingFile)}
-              disabled={!selectedTeamId || teams.length === 0}
+              disabled={!canUpload}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 sm:w-auto sm:px-6"
             >
               <Plus className="h-4 w-4" />

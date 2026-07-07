@@ -272,15 +272,37 @@ export const EMPTY_FILTERS: ActiveFilters = {
   catalogStatuses: [],
 };
 
+/** Format a Date as YYYY-MM-DD in the user's local timezone (not UTC). */
+function localDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function datePresetToRange(preset: DateAddedPreset): { from?: string; to?: string } {
   if (preset === 'all' || preset === 'custom') return {};
+
   const now = new Date();
-  const to = now.toISOString().slice(0, 10);
+
+  if (preset === 'today') {
+    const d = localDateString(now);
+    return { from: d, to: d };
+  }
+
+  if (preset === 'yesterday') {
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    const d = localDateString(y);
+    return { from: d, to: d };
+  }
+
+  const to = localDateString(now);
   const fromDate = new Date(now);
   if (preset === 'last_7') fromDate.setDate(fromDate.getDate() - 7);
   else if (preset === 'last_30') fromDate.setDate(fromDate.getDate() - 30);
   else if (preset === 'last_90') fromDate.setDate(fromDate.getDate() - 90);
-  return { from: fromDate.toISOString().slice(0, 10), to };
+  return { from: localDateString(fromDate), to };
 }
 
 export function datePresetToQuery(preset: DateAddedPreset): { importedFrom?: string; importedTo?: string } {

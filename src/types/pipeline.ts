@@ -84,6 +84,7 @@ export interface PipelineJob {
   outputUsPath: string | null;
   outputAuPath: string | null;
   outputDePath: string | null;
+  outputUkPath: string | null;
   reportPath: string | null;
   optimizationStatus?: OptimizationStatus;
   optimizationProcessed?: number;
@@ -93,6 +94,14 @@ export interface PipelineJob {
   optimizationBlockCount?: number;
   stageDetails: Record<string, unknown> | null;
   lastError: string | null;
+  marketplace?: string | null;
+  storeId?: string | null;
+  shippingProfileName?: string | null;
+  returnProfileName?: string | null;
+  paymentProfileName?: string | null;
+  fulfillmentPolicyId?: string | null;
+  paymentPolicyId?: string | null;
+  returnPolicyId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

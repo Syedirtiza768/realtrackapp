@@ -287,12 +287,14 @@ export default function PipelineQueue({ onViewJob }: Props) {
         ) : (
           <>
             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[1100px] text-sm">
                 <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
                   <tr>
                     <th className="px-4 py-3">Upload ID</th>
                     <th className="px-4 py-3">File Name</th>
                     <th className="px-4 py-3 text-right">Records</th>
+                    <th className="px-4 py-3">Marketplace</th>
+                    <th className="px-4 py-3">Store</th>
                     <th className="px-4 py-3">Condition</th>
                     <th className="px-4 py-3">Team</th>
                     <th className="px-4 py-3">Uploaded By</th>
@@ -316,6 +318,12 @@ export default function PipelineQueue({ onViewJob }: Props) {
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200">
                         {job.totalParts > 0 ? job.totalParts.toLocaleString() : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                        {job.marketplace ?? '—'}
+                      </td>
+                      <td className="max-w-[9rem] truncate px-4 py-3 text-slate-600 dark:text-slate-300" title={job.store?.storeName}>
+                        {job.store?.storeName ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                         {job.conditionLabel ?? '—'}

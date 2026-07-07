@@ -93,6 +93,7 @@ const SUB_STAGE_LABELS: Record<string, string> = {
   images: 'Fetching listing images',
   images_done: 'Images ready — writing templates next',
   writing_us: 'Writing US Motors template',
+  writing_uk: 'Writing UK template',
   writing_au: 'Writing AU template',
   writing_de: 'Writing DE template',
   writing_done: 'Templates saved — importing to catalog',
@@ -541,6 +542,16 @@ export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () =>
             </div>
           )}
 
+          {(job.marketplace || job.shippingProfileName) && (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+              <p className="font-medium text-slate-700 dark:text-slate-200 mb-1">Upload provisioning</p>
+              {job.marketplace && <p>Marketplace: {job.marketplace}</p>}
+              {job.shippingProfileName && <p>Shipping: {job.shippingProfileName}</p>}
+              {job.returnProfileName && <p>Returns: {job.returnProfileName}</p>}
+              {job.paymentProfileName && <p>Payment: {job.paymentProfileName}</p>}
+            </div>
+          )}
+
           {/* Input file download � always available */}
           {job.storedFilePath && (
             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
@@ -595,9 +606,12 @@ export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () =>
                 Templates are ready. SEO optimization continues in the background and does not block download.
               </p>
             )}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
               {job.outputUsPath && optimizationAllowsDownload && (
                 <DownloadButton label="US Motors Template" template="us" jobId={job.id} />
+              )}
+              {job.outputUkPath && optimizationAllowsDownload && (
+                <DownloadButton label="UK Category Template" template="uk" jobId={job.id} />
               )}
               {job.outputAuPath && optimizationAllowsDownload && (
                 <DownloadButton label="AU Category Template" template="au" jobId={job.id} />
@@ -663,7 +677,7 @@ function StatCard({
   );
 }
 
-function DownloadButton({ label, template, jobId, variant = 'default' }: { label: string; template: 'us' | 'au' | 'de' | 'report' | 'input'; jobId: string; variant?: 'default' | 'subtle' }) {
+function DownloadButton({ label, template, jobId, variant = 'default' }: { label: string; template: 'us' | 'uk' | 'au' | 'de' | 'report' | 'input'; jobId: string; variant?: 'default' | 'subtle' }) {
   return (
     <button
       onClick={() => downloadPipelineFile(jobId, template)}

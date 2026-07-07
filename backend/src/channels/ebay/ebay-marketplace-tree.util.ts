@@ -21,6 +21,7 @@ export const MARKETPLACE_CATEGORY_TREE_IDS: Record<string, string> = {
 /** Short marketplace codes used internally (listing_records.marketplace). */
 const SHORT_CODE_TO_EBAY: Record<string, string> = {
   US: 'EBAY_US',
+  UK: 'EBAY_GB',
   AU: 'EBAY_AU',
   DE: 'EBAY_DE',
   GB: 'EBAY_GB',

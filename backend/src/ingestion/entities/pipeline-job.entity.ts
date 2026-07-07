@@ -91,6 +91,9 @@ export class PipelineJob {
   @Column({ name: 'output_de_path', type: 'varchar', length: 1000, nullable: true })
   outputDePath!: string | null;
 
+  @Column({ name: 'output_uk_path', type: 'varchar', length: 1000, nullable: true })
+  outputUkPath!: string | null;
+
   @Column({ name: 'report_path', type: 'varchar', length: 1000, nullable: true })
   reportPath!: string | null;
 
@@ -142,6 +145,32 @@ export class PipelineJob {
 
   @Column({ name: 'condition_label', type: 'varchar', length: 50, nullable: true })
   conditionLabel!: string | null;
+
+  /** Target marketplace for this upload (US, UK, AU, DE). */
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  marketplace!: string | null;
+
+  /** Provisioning store — source of business policies and cross-list anchor. */
+  @Column({ name: 'store_id', type: 'uuid', nullable: true })
+  storeId!: string | null;
+
+  @Column({ name: 'shipping_profile_name', type: 'varchar', length: 255, nullable: true })
+  shippingProfileName!: string | null;
+
+  @Column({ name: 'return_profile_name', type: 'varchar', length: 255, nullable: true })
+  returnProfileName!: string | null;
+
+  @Column({ name: 'payment_profile_name', type: 'varchar', length: 255, nullable: true })
+  paymentProfileName!: string | null;
+
+  @Column({ name: 'fulfillment_policy_id', type: 'varchar', length: 64, nullable: true })
+  fulfillmentPolicyId!: string | null;
+
+  @Column({ name: 'payment_policy_id', type: 'varchar', length: 64, nullable: true })
+  paymentPolicyId!: string | null;
+
+  @Column({ name: 'return_policy_id', type: 'varchar', length: 64, nullable: true })
+  returnPolicyId!: string | null;
 
   @Column({ name: 'upload_code', type: 'varchar', length: 30, nullable: true })
   uploadCode!: string | null;

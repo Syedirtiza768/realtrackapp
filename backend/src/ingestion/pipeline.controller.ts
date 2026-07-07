@@ -28,6 +28,7 @@ import type { CombinedOptimizationResult } from './pipeline.service.js';
 import type { EnterpriseOptimizationResult } from './pipeline.service.js';
 import { RequirePermissions, RequireAnyPermission } from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { isPipelineMarketplaceCode, type PipelineMarketplaceCode } from '../common/marketplaces/pipeline-marketplaces.js';
 import { User } from '../auth/entities/user.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { TeamsService } from '../teams/teams.service.js';
@@ -158,11 +159,23 @@ export class PipelineController {
     @UploadedFile() file: Express.Multer.File,
     @Body('teamId') teamId: string,
     @Body('conditionLabel') conditionLabel: string,
+    @Body('marketplace') marketplace: string,
+    @Body('storeId') storeId: string,
+    @Body('shippingProfileName') shippingProfileName: string,
+    @Body('returnProfileName') returnProfileName: string,
+    @Body('paymentProfileName') paymentProfileName: string,
+    @Body('fulfillmentPolicyId') fulfillmentPolicyId: string | undefined,
+    @Body('paymentPolicyId') paymentPolicyId: string | undefined,
+    @Body('returnPolicyId') returnPolicyId: string | undefined,
     @CurrentUser() user: User,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
+    if (!isPipelineMarketplaceCode(marketplace?.trim())) {
+      throw new BadRequestException('marketplace must be US, UK, AU, or DE');
+    }
+    const marketplaceCode = marketplace.trim() as PipelineMarketplaceCode;
 
     const manageAllTeams = await this.rbac.userHasPermission(user.id, 'teams.manage');
     const job = await this.pipelineService.createJobFromUpload(
@@ -172,6 +185,17 @@ export class PipelineController {
       teamId,
       conditionLabel,
       manageAllTeams,
+      {
+        marketplace: marketplaceCode,
+        storeId: storeId?.trim(),
+        shippingProfileName: shippingProfileName?.trim(),
+        returnProfileName: returnProfileName?.trim(),
+        paymentProfileName: paymentProfileName?.trim(),
+        fulfillmentPolicyId: fulfillmentPolicyId?.trim(),
+        paymentPolicyId: paymentPolicyId?.trim(),
+        returnPolicyId: returnPolicyId?.trim(),
+      },
+      user,
     );
 
     return { job };
@@ -297,7 +321,7 @@ export class PipelineController {
 
   @Get('jobs/:id/download/:template')
   @RequirePermissions('pipeline.export')
-  @ApiOperation({ summary: 'Download pipeline output file (us, au, de, report)' })
+  @ApiOperation({ summary: 'Download pipeline output file (us, uk, au, de, report)' })
   async downloadOutput(
     @Param('id') id: string,
     @Param('template') template: string,
@@ -321,6 +345,10 @@ export class PipelineController {
         filePath = job.outputDePath;
         filename = `DE-Category-Listings-${job.id.slice(0, 8)}.xlsx`;
         break;
+      case 'uk':
+        filePath = job.outputUkPath;
+        filename = `UK-Category-Listings-${job.id.slice(0, 8)}.xlsx`;
+        break;
       case 'report':
         filePath = job.reportPath;
         filename = `Enrichment-Report-${job.id.slice(0, 8)}.json`;
@@ -330,7 +358,7 @@ export class PipelineController {
         filename = job.originalFilename;
         break;
       default:
-        throw new Error(`Unknown template: ${template}. Use: us, au, de, report, input`);
+        throw new Error(`Unknown template: ${template}. Use: us, uk, au, de, report, input`);
     }
 
     if (!filePath || !fs.existsSync(filePath)) {

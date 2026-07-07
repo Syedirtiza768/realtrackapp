@@ -222,6 +222,14 @@ export default function CatalogTable({
 
       <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
         <p>
+          {(selectedIds?.size ?? 0) > 0 && (
+            <>
+              <span className="font-medium text-blue-700 dark:text-blue-300">
+                {(selectedIds?.size ?? 0).toLocaleString()} selected
+              </span>
+              <span className="mx-2 text-slate-300 dark:text-slate-600">·</span>
+            </>
+          )}
           Showing{' '}
           <span className="font-medium text-slate-700 dark:text-slate-200">{from}</span> to{' '}
           <span className="font-medium text-slate-700 dark:text-slate-200">{to}</span> of{' '}

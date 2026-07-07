@@ -16,6 +16,12 @@ import { PipelineOutputImageService } from '../services/pipeline-output-image.se
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 import { EbayMvlStoreService } from '../../fitment/ebay-mvl-store.service.js';
 import { resolveCategoryTreeId } from '../../channels/ebay/ebay-marketplace-tree.util.js';
+import {
+  isPipelineMarketplaceCode,
+  shouldApplyJobProfilesToCatalogMaster,
+  shouldApplyJobProfilesToOutput,
+  type PipelineMarketplaceCode,
+} from '../../common/marketplaces/pipeline-marketplaces.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -164,7 +170,14 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         filePath,
         outputDir,
         projectRoot,
-        { forceVision },
+        {
+          forceVision,
+          shippingProfile: dbJob?.shippingProfileName ?? undefined,
+          returnProfile: dbJob?.returnProfileName ?? undefined,
+          paymentProfile: dbJob?.paymentProfileName ?? undefined,
+          marketplace: dbJob?.marketplace ?? undefined,
+          storeId: dbJob?.storeId ?? undefined,
+        },
       );
 
       if (exitCode !== 0) {
@@ -252,7 +265,14 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     inputPath: string,
     outputDir: string,
     cwd: string,
-    options: { forceVision?: boolean } = {},
+    options: {
+      forceVision?: boolean;
+      shippingProfile?: string;
+      returnProfile?: string;
+      paymentProfile?: string;
+      marketplace?: string;
+      storeId?: string;
+    } = {},
   ): Promise<number> {
     return new Promise((resolve, reject) => {
       const child = spawn('node', [scriptPath], {
@@ -263,6 +283,19 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           PIPELINE_OUTPUT_DIR: outputDir,
           PIPELINE_JOB_ID: jobId,
           ...(options.forceVision ? { PIPELINE_FORCE_VISION: '1' } : {}),
+          ...(options.shippingProfile
+            ? { PIPELINE_SHIPPING_PROFILE: options.shippingProfile }
+            : {}),
+          ...(options.returnProfile
+            ? { PIPELINE_RETURN_PROFILE: options.returnProfile }
+            : {}),
+          ...(options.paymentProfile
+            ? { PIPELINE_PAYMENT_PROFILE: options.paymentProfile }
+            : {}),
+          ...(options.marketplace
+            ? { PIPELINE_TARGET_MARKETPLACE: options.marketplace }
+            : {}),
+          ...(options.storeId ? { PIPELINE_STORE_ID: options.storeId } : {}),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -461,6 +494,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         update.outputAuPath = fullPath;
       } else if (lower.startsWith('de-') || lower.startsWith('de_')) {
         update.outputDePath = fullPath;
+      } else if (lower.startsWith('uk-') || lower.startsWith('uk_')) {
+        update.outputUkPath = fullPath;
       } else if (lower.includes('report') && lower.endsWith('.json')) {
         update.reportPath = fullPath;
 
@@ -568,6 +603,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           update.outputAuPath = fullPath;
         if (lower.startsWith('de-') && !update.outputDePath)
           update.outputDePath = fullPath;
+        if (lower.startsWith('uk-') && !update.outputUkPath)
+          update.outputUkPath = fullPath;
         if (
           lower.includes('report') &&
           lower.endsWith('.json') &&
@@ -771,7 +808,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     originalFilename?: string,
   ): Promise<void> {
     let catalogUpserted = false;
-    for (const marketplace of ['US', 'AU', 'DE'] as const) {
+    for (const marketplace of ['US', 'UK', 'AU', 'DE'] as const) {
       const didUpsertCatalog = await this.saveMarketplaceToCatalog(
         jobId,
         outputDir,
@@ -790,13 +827,36 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   private async saveMarketplaceToCatalog(
     jobId: string,
     outputDir: string,
-    marketplace: 'US' | 'AU' | 'DE',
+    marketplace: 'US' | 'UK' | 'AU' | 'DE',
     originalFilename?: string,
     upsertCatalogProducts = false,
   ): Promise<boolean> {
     const dbJob = await this.jobRepo.findOneBy({ id: jobId });
     const jobTeamId = dbJob?.teamId ?? null;
     const uploadConditionLabel = dbJob?.conditionLabel ?? null;
+    const jobMarketplace = isPipelineMarketplaceCode(dbJob?.marketplace ?? '')
+      ? (dbJob!.marketplace as PipelineMarketplaceCode)
+      : null;
+    const jobProfiles = {
+      shipping: dbJob?.shippingProfileName?.trim() || null,
+      return: dbJob?.returnProfileName?.trim() || null,
+      payment: dbJob?.paymentProfileName?.trim() || null,
+    };
+    const applyToOutput = shouldApplyJobProfilesToOutput(marketplace, jobMarketplace);
+    const applyToCatalogMaster =
+      upsertCatalogProducts && shouldApplyJobProfilesToCatalogMaster(jobMarketplace);
+
+    const resolveProfile = (
+      rowValue: string | null,
+      jobDefault: string | null,
+      applyDefault: boolean,
+    ): string | null => {
+      const trimmed = rowValue?.trim();
+      if (trimmed) return trimmed;
+      if (applyDefault && jobDefault) return jobDefault;
+      return null;
+    };
+
     const uploadConditionId = uploadConditionLabel
       ? ({ Used: '3000', New: '1000', Refurbished: '2500' } as Record<string, string>)[uploadConditionLabel] ?? null
       : null;
@@ -806,6 +866,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const lower = f.toLowerCase();
       if (marketplace === 'US')
         return lower.includes('us-motors') || lower.includes('us_motors');
+      if (marketplace === 'UK')
+        return lower.startsWith('uk-') || lower.startsWith('uk_');
       if (marketplace === 'AU')
         return lower.startsWith('au-') || lower.startsWith('au_');
       return lower.startsWith('de-') || lower.startsWith('de_');
@@ -1007,9 +1069,21 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           location: get(row, iLocation) || null,
           format: get(row, iFormat) || null,
           duration: get(row, iDuration) || null,
-          shippingProfile: get(row, iShipping) || null,
-          returnProfile: get(row, iReturn) || null,
-          paymentProfile: get(row, iPayment) || null,
+          shippingProfile: resolveProfile(
+            get(row, iShipping),
+            jobProfiles.shipping,
+            applyToOutput || applyToCatalogMaster,
+          ),
+          returnProfile: resolveProfile(
+            get(row, iReturn),
+            jobProfiles.return,
+            applyToOutput || applyToCatalogMaster,
+          ),
+          paymentProfile: resolveProfile(
+            get(row, iPayment),
+            jobProfiles.payment,
+            applyToOutput || applyToCatalogMaster,
+          ),
           sourceFile: originalFilename ?? mktFile,
           sourceRow: i,
           pipelineJobId: jobId,
@@ -1036,9 +1110,21 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           format: get(row, iFormat) || null,
           duration: get(row, iDuration) || null,
           location: get(row, iLocation) || null,
-          shippingProfileName: get(row, iShipping) || null,
-          returnProfileName: get(row, iReturn) || null,
-          paymentProfileName: get(row, iPayment) || null,
+          shippingProfileName: resolveProfile(
+            get(row, iShipping),
+            jobProfiles.shipping,
+            applyToOutput || applyToCatalogMaster,
+          ),
+          returnProfileName: resolveProfile(
+            get(row, iReturn),
+            jobProfiles.return,
+            applyToOutput || applyToCatalogMaster,
+          ),
+          paymentProfileName: resolveProfile(
+            get(row, iPayment),
+            jobProfiles.payment,
+            applyToOutput || applyToCatalogMaster,
+          ),
           cBrand: brand || null,
           cType: get(row, iType) || null,
           cFeatures: get(row, iFeatures) || null,

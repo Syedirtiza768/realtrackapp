@@ -119,7 +119,12 @@ export function useUploadPipelineFile() {
   const qc = useQueryClient();
 
   const upload = useCallback(
-    async (file: File, teamId: string, conditionLabel: string) => {
+    async (
+      file: File,
+      teamId: string,
+      conditionLabel: string,
+      profiles: PipelineUploadProfileInput,
+    ) => {
       setUploading(true);
       setProgress(0);
       setError(null);
@@ -130,6 +135,20 @@ export function useUploadPipelineFile() {
         formData.append('file', file);
         formData.append('teamId', teamId);
         formData.append('conditionLabel', conditionLabel);
+        formData.append('marketplace', profiles.marketplace);
+        formData.append('storeId', profiles.storeId);
+        formData.append('shippingProfileName', profiles.shippingProfileName);
+        formData.append('returnProfileName', profiles.returnProfileName);
+        formData.append('paymentProfileName', profiles.paymentProfileName);
+        if (profiles.fulfillmentPolicyId) {
+          formData.append('fulfillmentPolicyId', profiles.fulfillmentPolicyId);
+        }
+        if (profiles.paymentPolicyId) {
+          formData.append('paymentPolicyId', profiles.paymentPolicyId);
+        }
+        if (profiles.returnPolicyId) {
+          formData.append('returnPolicyId', profiles.returnPolicyId);
+        }
 
         const response = await new Promise<{ job: PipelineJob }>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
@@ -330,10 +349,26 @@ export interface PipelineJobListItem {
   originalFilename: string;
   totalParts: number;
   conditionLabel: string | null;
+  marketplace: string | null;
+  store: { id: string; storeName: string } | null;
+  shippingProfileName: string | null;
+  returnProfileName: string | null;
+  paymentProfileName: string | null;
   team: { id: string; name: string; color: string } | null;
   uploadedBy: { id: string; name: string } | null;
   createdAt: string;
   fileSizeBytes: number;
+}
+
+export interface PipelineUploadProfileInput {
+  marketplace: string;
+  storeId: string;
+  shippingProfileName: string;
+  returnProfileName: string;
+  paymentProfileName: string;
+  fulfillmentPolicyId?: string;
+  paymentPolicyId?: string;
+  returnPolicyId?: string;
 }
 
 export interface PipelineJobsQuery {
@@ -440,11 +475,11 @@ export function useCancelPipelineJob() {
  *  DOWNLOADS
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-export function getDownloadUrl(jobId: string, template: 'us' | 'au' | 'de' | 'report' | 'input'): string {
+export function getDownloadUrl(jobId: string, template: 'us' | 'uk' | 'au' | 'de' | 'report' | 'input'): string {
   return `${API}/pipeline/jobs/${jobId}/download/${template}`;
 }
 
-export async function downloadPipelineFile(jobId: string, template: 'us' | 'au' | 'de' | 'report' | 'input'): Promise<void> {
+export async function downloadPipelineFile(jobId: string, template: 'us' | 'uk' | 'au' | 'de' | 'report' | 'input'): Promise<void> {
   const url = getDownloadUrl(jobId, template);
   const res = await fetchDownloadResponse(url);
   const blob = await res.blob();

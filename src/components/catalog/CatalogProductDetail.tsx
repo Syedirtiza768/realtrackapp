@@ -38,8 +38,9 @@ async function fetchCategorySuggestions(q: string): Promise<CategorySuggestion[]
 
 function marketplaceIdToTab(mkt: string | null | undefined): string {
   if (!mkt) return 'US';
-  if (mkt.includes('_AU')) return 'AU';
-  if (mkt.includes('_DE')) return 'DE';
+  if (mkt.includes('_AU') || mkt === 'AU') return 'AU';
+  if (mkt.includes('_DE') || mkt === 'DE') return 'DE';
+  if (mkt.includes('_GB') || mkt === 'UK' || mkt === 'GB') return 'UK';
   return 'US';
 }
 

@@ -3,11 +3,14 @@
  * Category IDs are marketplace-specific — never reuse a US ID on AU/DE listings.
  */
 
-/** @typedef {'US' | 'AU' | 'DE'} MarketplaceCode */
+/** @typedef {'US' | 'UK' | 'AU' | 'DE'} MarketplaceCode */
 
 /** @typedef {{ code: MarketplaceCode; ebayMarketplaceId: string; treeId: string; label: string; fallbackQuery: string }} MarketplaceConfig */
 
-export const PIPELINE_MARKETPLACES = /** @type {const} */ (['US', 'AU', 'DE']);
+export const PIPELINE_MARKETPLACES = /** @type {const} */ (['US', 'UK', 'AU', 'DE']);
+
+/** Marketplaces with generated XLSX output */
+export const PIPELINE_OUTPUT_MARKETPLACES = /** @type {const} */ (['US', 'UK', 'AU', 'DE']);
 
 /** Verified via eBay Taxonomy API + sync-ebay-store-categories.mjs */
 export const MARKETPLACE_CONFIG = /** @type {Record<MarketplaceCode, MarketplaceConfig>} */ ({
@@ -31,6 +34,13 @@ export const MARKETPLACE_CONFIG = /** @type {Record<MarketplaceCode, Marketplace
     treeId: '77',
     label: 'eBay DE Auto & Motorrad',
     fallbackQuery: 'auto ersatzteile',
+  },
+  UK: {
+    code: 'UK',
+    ebayMarketplaceId: 'EBAY_GB',
+    treeId: '3',
+    label: 'eBay UK Motors',
+    fallbackQuery: 'car parts accessories',
   },
 });
 
