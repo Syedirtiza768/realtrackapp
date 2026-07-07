@@ -362,12 +362,3 @@ export function conditionLabel(id: string | null): string {
   if (!id) return 'Unknown';
   return CONDITION_MAP[id] ?? id;
 }
-'3000': 'Used',
-  '3000-Used': 'Used',
-  '7000': 'For Parts',
-};
-
-export function conditionLabel(id: string | null): string {
-  if (!id) return 'Unknown';
-  return CONDITION_MAP[id] ?? id;
-}
