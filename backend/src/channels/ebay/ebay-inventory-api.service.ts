@@ -307,14 +307,7 @@ export class EbayInventoryApiService {
     return data;
   }
 
-  /**
-   * Withdraw an offer (remove from eBay marketplace).
-   */
-  async withdrawOffer(storeId: string, offerId: string): Promise<void> {
-    const cfg = await this.authHeaders(storeId);
-    await this.http.post(`/offer/${offerId}/withdraw`, {}, cfg);
-    this.logger.log(`Withdrew offer ${offerId} for store ${storeId}`);
-  }
+
 
   // ──────────────────────────── Product Compatibility ──────────────
 
