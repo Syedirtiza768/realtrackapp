@@ -244,7 +244,7 @@ export default function CatalogManager() {
     setSelectedIds(ids.length === 0 ? new Set() : new Set(ids));
   }, []);
 
-  const handleFilterChange = useCallback((f: ActiveFilters) => {
+  const handleFilterChange = useCallback((f: ActiveFilters | ((prev: ActiveFilters) => ActiveFilters)) => {
     setFilters(f);
   }, []);
 

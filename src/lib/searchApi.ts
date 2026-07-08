@@ -132,7 +132,7 @@ export function useDynamicFacets(query: SearchQuery) {
   const queryKey = stableKey(query as Record<string, unknown>);
 
   useEffect(() => {
-    // Debounce facet requests by 300ms to prevent rapid-fire calls
+    // Debounce facet requests by 100ms to prevent rapid-fire calls
     if (timerRef.current) clearTimeout(timerRef.current);
 
     timerRef.current = setTimeout(() => {
@@ -146,7 +146,7 @@ export function useDynamicFacets(query: SearchQuery) {
         .then((json) => { if (!ac.signal.aborted) setData(json); })
         .catch(() => {})
         .finally(() => { if (!ac.signal.aborted) setLoading(false); });
-    }, 300);
+    }, 100);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);

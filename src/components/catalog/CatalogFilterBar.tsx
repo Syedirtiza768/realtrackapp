@@ -12,7 +12,7 @@ import { conditionLabel } from '../../types/search';
 interface Props {
   facets: DynamicFacets | null;
   filters: ActiveFilters;
-  onChange: (filters: ActiveFilters) => void;
+  onChange: (updater: ActiveFilters | ((prev: ActiveFilters) => ActiveFilters)) => void;
   onAdvancedClick: () => void;
   advancedFilterCount: number;
   loading?: boolean;
@@ -199,10 +199,10 @@ export default function CatalogFilterBar({
             checked={filters.stockLevels.includes(opt.value)}
             label={opt.label}
             onToggle={() =>
-              onChange({
-                ...filters,
-                stockLevels: toggleInList(filters.stockLevels, opt.value),
-              })
+              onChange((prev) => ({
+                ...prev,
+                stockLevels: toggleInList(prev.stockLevels, opt.value),
+              }))
             }
           />
         ))}
@@ -216,7 +216,7 @@ export default function CatalogFilterBar({
             label={b.value}
             count={b.count}
             onToggle={() =>
-              onChange({ ...filters, brands: toggleInList(filters.brands, b.value) })
+              onChange((prev) => ({ ...prev, brands: toggleInList(prev.brands, b.value) }))
             }
           />
         ))}
@@ -233,10 +233,10 @@ export default function CatalogFilterBar({
             label={conditionLabel(c.value)}
             count={c.count}
             onToggle={() =>
-              onChange({
-                ...filters,
-                conditions: toggleInList(filters.conditions, c.value),
-              })
+              onChange((prev) => ({
+                ...prev,
+                conditions: toggleInList(prev.conditions, c.value),
+              }))
             }
           />
         ))}
@@ -251,10 +251,10 @@ export default function CatalogFilterBar({
             count={t.count}
             dotColor={t.color}
             onToggle={() =>
-              onChange({
-                ...filters,
-                teamIds: toggleInList(filters.teamIds, t.value),
-              })
+              onChange((prev) => ({
+                ...prev,
+                teamIds: toggleInList(prev.teamIds, t.value),
+              }))
             }
           />
         ))}
@@ -271,10 +271,10 @@ export default function CatalogFilterBar({
             label={s.value}
             count={s.count}
             onToggle={() =>
-              onChange({
-                ...filters,
-                shippingProfiles: toggleInList(filters.shippingProfiles, s.value),
-              })
+              onChange((prev) => ({
+                ...prev,
+                shippingProfiles: toggleInList(prev.shippingProfiles, s.value),
+              }))
             }
           />
         ))}
@@ -290,10 +290,10 @@ export default function CatalogFilterBar({
             checked={filters.catalogStatuses.includes(opt.value)}
             label={opt.label}
             onToggle={() =>
-              onChange({
-                ...filters,
-                catalogStatuses: toggleInList(filters.catalogStatuses, opt.value),
-              })
+              onChange((prev) => ({
+                ...prev,
+                catalogStatuses: toggleInList(prev.catalogStatuses, opt.value),
+              }))
             }
           />
         ))}
@@ -305,7 +305,7 @@ export default function CatalogFilterBar({
             key={opt.value}
             checked={filters.dateAddedPreset === opt.value}
             label={opt.label}
-            onToggle={() => onChange({ ...filters, dateAddedPreset: opt.value })}
+            onToggle={() => onChange((prev) => ({ ...prev, dateAddedPreset: opt.value }))}
           />
         ))}
         {filters.dateAddedPreset === 'custom' && (
@@ -315,7 +315,7 @@ export default function CatalogFilterBar({
               <input
                 type="date"
                 value={filters.dateAddedFrom}
-                onChange={(e) => onChange({ ...filters, dateAddedFrom: e.target.value })}
+                onChange={(e) => onChange((prev) => ({ ...prev, dateAddedFrom: e.target.value }))}
                 className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-700 dark:text-slate-200"
               />
             </div>
@@ -324,7 +324,7 @@ export default function CatalogFilterBar({
               <input
                 type="date"
                 value={filters.dateAddedTo}
-                onChange={(e) => onChange({ ...filters, dateAddedTo: e.target.value })}
+                onChange={(e) => onChange((prev) => ({ ...prev, dateAddedTo: e.target.value }))}
                 className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-700 dark:text-slate-200"
               />
             </div>

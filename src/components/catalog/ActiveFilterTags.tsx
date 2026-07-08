@@ -9,7 +9,7 @@ import { conditionLabel, countActiveFilters, EMPTY_FILTERS } from '../../types/s
 interface Props {
   filters: ActiveFilters;
   searchQuery: string;
-  onChange: (filters: ActiveFilters) => void;
+  onChange: (updater: ActiveFilters | ((prev: ActiveFilters) => ActiveFilters)) => void;
   onClearSearch: () => void;
   teamLabels?: Map<string, string>;
 }
@@ -36,7 +36,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: `brand:${brand}`,
       label: `Brand: ${brand}`,
-      onRemove: () => onChange({ ...filters, brands: filters.brands.filter((b) => b !== brand) }),
+      onRemove: () => onChange((prev) => ({ ...prev, brands: prev.brands.filter((b) => b !== brand) })),
     });
   }
 
@@ -48,11 +48,13 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
       key: `make:${makeId}`,
       label: `Make: ${makeName}`,
       onRemove: () => {
-        const idx = filters.makes.indexOf(makeId);
-        onChange({
-          ...filters,
-          makes: filters.makes.filter((_, j) => j !== idx),
-          makeNames: filters.makeNames.filter((_, j) => j !== idx),
+        onChange((prev) => {
+          const idx = prev.makes.indexOf(makeId);
+          return {
+            ...prev,
+            makes: prev.makes.filter((_, j) => j !== idx),
+            makeNames: prev.makeNames.filter((_, j) => j !== idx),
+          };
         });
       },
     });
@@ -66,11 +68,13 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
       key: `model:${modelId}`,
       label: `Model: ${modelName}`,
       onRemove: () => {
-        const idx = filters.models.indexOf(modelId);
-        onChange({
-          ...filters,
-          models: filters.models.filter((_, j) => j !== idx),
-          modelNames: filters.modelNames.filter((_, j) => j !== idx),
+        onChange((prev) => {
+          const idx = prev.models.indexOf(modelId);
+          return {
+            ...prev,
+            models: prev.models.filter((_, j) => j !== idx),
+            modelNames: prev.modelNames.filter((_, j) => j !== idx),
+          };
         });
       },
     });
@@ -87,11 +91,13 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
       key: `cat:${catId}`,
       label: `Category: ${shortName}`,
       onRemove: () => {
-        const idx = filters.categories.indexOf(catId);
-        onChange({
-          ...filters,
-          categories: filters.categories.filter((_, j) => j !== idx),
-          categoryNames: filters.categoryNames.filter((_, j) => j !== idx),
+        onChange((prev) => {
+          const idx = prev.categories.indexOf(catId);
+          return {
+            ...prev,
+            categories: prev.categories.filter((_, j) => j !== idx),
+            categoryNames: prev.categoryNames.filter((_, j) => j !== idx),
+          };
         });
       },
     });
@@ -102,7 +108,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: `cond:${cond}`,
       label: `Condition: ${conditionLabel(cond)}`,
-      onRemove: () => onChange({ ...filters, conditions: filters.conditions.filter((c) => c !== cond) }),
+      onRemove: () => onChange((prev) => ({ ...prev, conditions: prev.conditions.filter((c) => c !== cond) })),
     });
   }
 
@@ -111,7 +117,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: `type:${type}`,
       label: `Type: ${type}`,
-      onRemove: () => onChange({ ...filters, types: filters.types.filter((t) => t !== type) }),
+      onRemove: () => onChange((prev) => ({ ...prev, types: prev.types.filter((t) => t !== type) })),
     });
   }
 
@@ -120,7 +126,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: `fmt:${fmt}`,
       label: `Format: ${fmt}`,
-      onRemove: () => onChange({ ...filters, formats: filters.formats.filter((f) => f !== fmt) }),
+      onRemove: () => onChange((prev) => ({ ...prev, formats: prev.formats.filter((f) => f !== fmt) })),
     });
   }
 
@@ -129,7 +135,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: `loc:${loc}`,
       label: `Location: ${loc}`,
-      onRemove: () => onChange({ ...filters, locations: filters.locations.filter((l) => l !== loc) }),
+      onRemove: () => onChange((prev) => ({ ...prev, locations: prev.locations.filter((l) => l !== loc) })),
     });
   }
 
@@ -138,7 +144,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: `mpn:${mpn}`,
       label: `MPN: ${mpn}`,
-      onRemove: () => onChange({ ...filters, mpns: filters.mpns.filter((m) => m !== mpn) }),
+      onRemove: () => onChange((prev) => ({ ...prev, mpns: prev.mpns.filter((m) => m !== mpn) })),
     });
   }
 
@@ -147,7 +153,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: `src:${sf}`,
       label: sf.replace('.xlsx', ''),
-      onRemove: () => onChange({ ...filters, sourceFiles: filters.sourceFiles.filter((s) => s !== sf) }),
+      onRemove: () => onChange((prev) => ({ ...prev, sourceFiles: prev.sourceFiles.filter((s) => s !== sf) })),
     });
   }
 
@@ -156,7 +162,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: "mkt:"+mkt,
       label: "Marketplace: "+mkt,
-      onRemove: () => onChange({ ...filters, marketplaces: filters.marketplaces.filter((m) => m !== mkt) }),
+      onRemove: () => onChange((prev) => ({ ...prev, marketplaces: prev.marketplaces.filter((m) => m !== mkt) })),
     });
   }
 
@@ -165,7 +171,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: 'team:' + teamId,
       label: 'Team: ' + (teamLabels?.get(teamId) ?? teamId.slice(0, 8)),
-      onRemove: () => onChange({ ...filters, teamIds: filters.teamIds.filter((t) => t !== teamId) }),
+      onRemove: () => onChange((prev) => ({ ...prev, teamIds: prev.teamIds.filter((t) => t !== teamId) })),
     });
   }
 
@@ -176,7 +182,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
       key: 'stock:' + level,
       label: 'Stock: ' + label,
       onRemove: () =>
-        onChange({ ...filters, stockLevels: filters.stockLevels.filter((s) => s !== level) }),
+        onChange((prev) => ({ ...prev, stockLevels: prev.stockLevels.filter((s) => s !== level) })),
     });
   }
 
@@ -185,10 +191,10 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
       key: 'ship:' + ship,
       label: 'Shipping: ' + ship,
       onRemove: () =>
-        onChange({
-          ...filters,
-          shippingProfiles: filters.shippingProfiles.filter((s) => s !== ship),
-        }),
+        onChange((prev) => ({
+          ...prev,
+          shippingProfiles: prev.shippingProfiles.filter((s) => s !== ship),
+        })),
     });
   }
 
@@ -196,7 +202,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: 'dateAdded',
       label: `Date: ${filters.dateAddedFrom || '…'} – ${filters.dateAddedTo || '…'}`,
-      onRemove: () => onChange({ ...filters, dateAddedPreset: 'all', dateAddedFrom: '', dateAddedTo: '' }),
+      onRemove: () => onChange((prev) => ({ ...prev, dateAddedPreset: 'all', dateAddedFrom: '', dateAddedTo: '' })),
     });
   } else if (filters.dateAddedPreset !== 'all' && filters.dateAddedPreset !== 'custom') {
     const presetLabel =
@@ -212,7 +218,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: 'dateAdded',
       label: 'Date: ' + presetLabel,
-      onRemove: () => onChange({ ...filters, dateAddedPreset: 'all' }),
+      onRemove: () => onChange((prev) => ({ ...prev, dateAddedPreset: 'all' })),
     });
   }
 
@@ -221,7 +227,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: "pj:"+pj,
       label: "Job: "+pj.slice(0,8),
-      onRemove: () => onChange({ ...filters, pipelineJobIds: filters.pipelineJobIds.filter((p) => p !== pj) }),
+      onRemove: () => onChange((prev) => ({ ...prev, pipelineJobIds: prev.pipelineJobIds.filter((p) => p !== pj) })),
     });
   }
 
@@ -231,7 +237,7 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: 'price',
       label,
-      onRemove: () => onChange({ ...filters, minPrice: null, maxPrice: null }),
+      onRemove: () => onChange((prev) => ({ ...prev, minPrice: null, maxPrice: null })),
     });
   }
 
@@ -240,14 +246,14 @@ export default function ActiveFilterTags({ filters, searchQuery, onChange, onCle
     tags.push({
       key: 'hasImage',
       label: 'Has Image',
-      onRemove: () => onChange({ ...filters, hasImage: false }),
+      onRemove: () => onChange((prev) => ({ ...prev, hasImage: false })),
     });
   }
   if (filters.hasPrice) {
     tags.push({
       key: 'hasPrice',
       label: 'Has Price',
-      onRemove: () => onChange({ ...filters, hasPrice: false }),
+      onRemove: () => onChange((prev) => ({ ...prev, hasPrice: false })),
     });
   }
 
