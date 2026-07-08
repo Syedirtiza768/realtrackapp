@@ -510,13 +510,34 @@ export class EbayPublishService {
       await this.applyListingProfileNames(listingIds, options);
     }
 
-    const allResults: Array<{ listingId: string; results: PublishResult[] }> =
-      [];
-    for (const listingId of listingIds) {
-      const results = await this.publish(
-        this.stubPublishRequest(listingId, storeIds, options),
+    const CONCURRENCY = 5;
+    const allResults: Array<{ listingId: string; results: PublishResult[] }> = [];
+
+    for (let i = 0; i < listingIds.length; i += CONCURRENCY) {
+      const chunk = listingIds.slice(i, i + CONCURRENCY);
+      const chunkResults = await Promise.allSettled(
+        chunk.map((id) =>
+          this.publish(this.stubPublishRequest(id, storeIds, options)),
+        ),
       );
-      allResults.push({ listingId, results });
+      for (let j = 0; j < chunk.length; j++) {
+        const settled = chunkResults[j];
+        allResults.push({
+          listingId: chunk[j],
+          results:
+            settled.status === 'fulfilled'
+              ? settled.value
+              : storeIds.map((storeId) => ({
+                  storeId,
+                  storeName: storeId,
+                  success: false as const,
+                  error:
+                    settled.reason instanceof Error
+                      ? settled.reason.message
+                      : 'Unknown error',
+                })),
+        });
+      }
     }
     return allResults;
   }
