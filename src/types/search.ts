@@ -272,12 +272,14 @@ export const EMPTY_FILTERS: ActiveFilters = {
   catalogStatuses: [],
 };
 
-/** Format a Date as YYYY-MM-DD in the user's local timezone (not UTC). */
-function localDateString(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/** Return ISO-8601 UTC string for local midnight of the given Date. */
+function localMidnight(d: Date): string {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+}
+
+/** Return ISO-8601 UTC string for local midnight of the *next* day. */
+function localMidnightNext(d: Date): string {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString();
 }
 
 function datePresetToRange(preset: DateAddedPreset): { from?: string; to?: string } {
@@ -286,23 +288,35 @@ function datePresetToRange(preset: DateAddedPreset): { from?: string; to?: strin
   const now = new Date();
 
   if (preset === 'today') {
-    const d = localDateString(now);
-    return { from: d, to: d };
+    return { from: localMidnight(now), to: localMidnightNext(now) };
   }
 
   if (preset === 'yesterday') {
     const y = new Date(now);
     y.setDate(y.getDate() - 1);
-    const d = localDateString(y);
-    return { from: d, to: d };
+    return { from: localMidnight(y), to: localMidnight(now) };
   }
 
-  const to = localDateString(now);
+  // last_N: today's local midnight is the exclusive upper bound,
+  // so subtract N days for the inclusive lower bound → N full days.
+  const days = preset === 'last_7' ? 7 : preset === 'last_30' ? 30 : 90;
   const fromDate = new Date(now);
-  if (preset === 'last_7') fromDate.setDate(fromDate.getDate() - 7);
-  else if (preset === 'last_30') fromDate.setDate(fromDate.getDate() - 30);
-  else if (preset === 'last_90') fromDate.setDate(fromDate.getDate() - 90);
-  return { from: localDateString(fromDate), to };
+  fromDate.setDate(fromDate.getDate() - days);
+  return { from: localMidnight(fromDate), to: localMidnightNext(now) };
+}
+
+/** Convert a YYYY-MM-DD date string (from <input type="date">, local TZ) to
+ *  an ISO-8601 UTC timestamp at local midnight. */
+function dateStrToIso(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toISOString();
+}
+
+/** Same as dateStrToIso but returns the *next* day's local midnight (exclusive
+ *  upper bound for the "to" side). */
+function dateStrToIsoEnd(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d + 1).toISOString();
 }
 
 export function datePresetToQuery(preset: DateAddedPreset): { importedFrom?: string; importedTo?: string } {
@@ -336,7 +350,10 @@ export function filtersToQuery(f: ActiveFilters): Partial<SearchQuery> {
     shippingProfiles: f.shippingProfiles.length ? f.shippingProfiles.join(',') : undefined,
     catalogStatus: f.catalogStatuses.length ? f.catalogStatuses.join(',') : undefined,
     ...(f.dateAddedPreset === 'custom'
-      ? { importedFrom: f.dateAddedFrom || undefined, importedTo: f.dateAddedTo || undefined }
+      ? {
+          importedFrom: f.dateAddedFrom ? dateStrToIso(f.dateAddedFrom) : undefined,
+          importedTo: f.dateAddedTo ? dateStrToIsoEnd(f.dateAddedTo) : undefined,
+        }
       : datePresetToQuery(f.dateAddedPreset)),
   };
 }

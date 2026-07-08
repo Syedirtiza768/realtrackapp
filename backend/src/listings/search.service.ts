@@ -824,12 +824,12 @@ export class SearchService {
       }
       if (excludeDimension !== 'dateAdded') {
         if (dto.importedFrom?.trim()) {
-          fb.andWhere(`r."importedAt"::date >= :facetImportedFrom::date`, {
+          fb.andWhere(`r."importedAt" >= :facetImportedFrom::timestamptz`, {
             facetImportedFrom: dto.importedFrom.trim(),
           });
         }
         if (dto.importedTo?.trim()) {
-          fb.andWhere(`r."importedAt"::date <= :facetImportedTo::date`, {
+          fb.andWhere(`r."importedAt" < :facetImportedTo::timestamptz`, {
             facetImportedTo: dto.importedTo.trim(),
           });
         }
@@ -1213,12 +1213,12 @@ export class SearchService {
     }
 
     if (dto.importedFrom?.trim()) {
-      qb.andWhere(`r."importedAt"::date >= :importedFrom::date`, {
+      qb.andWhere(`r."importedAt" >= :importedFrom::timestamptz`, {
         importedFrom: dto.importedFrom.trim(),
       });
     }
     if (dto.importedTo?.trim()) {
-      qb.andWhere(`r."importedAt"::date <= :importedTo::date`, {
+      qb.andWhere(`r."importedAt" < :importedTo::timestamptz`, {
         importedTo: dto.importedTo.trim(),
       });
     }
