@@ -32,7 +32,7 @@ import type { SearchItem } from '../../types/search';
 import { authHeaders } from '../../lib/authApi';
 import { showCatalogDestructiveUi } from '../../lib/catalogDestructiveUi';
 import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
-import { EMPTY_FILTERS, filtersToQuery } from '../../types/search';
+import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
 
 const DEFAULT_PAGE_SIZE = 25;
 const RECENT_KEY = 'lp_recent_searches';
@@ -208,6 +208,7 @@ export default function CatalogManager() {
 
   const total = data?.total ?? 0;
   const advancedFilterCount = countAdvancedFilters(filters);
+  const hasActiveFilters = !!searchQuery?.trim() || countActiveFilters(filters) > 0;
 
   /* ── Reset page on filter/search change ─────────────────── */
   useEffect(() => { setPage(0); }, [searchQuery, filters, sortMode, pageSize]);
@@ -505,6 +506,21 @@ export default function CatalogManager() {
         onClearSearch={handleClearSearch}
         teamLabels={teamLabelById}
       />
+
+      {/* Filter summary bar */}
+      {hasActiveFilters && summary && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs dark:border-blue-800 dark:bg-blue-950/30">
+          <span className="font-medium text-blue-700 dark:text-blue-300">
+            {total.toLocaleString()}
+          </span>
+          <span className="text-blue-600 dark:text-blue-400">
+            of {summary.totalRecords.toLocaleString()} listings match your filters
+          </span>
+          <span className="ml-auto text-[10px] text-blue-500 dark:text-blue-500">
+            {data?.queryTimeMs != null && `${data.queryTimeMs}ms`}
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
