@@ -68,7 +68,6 @@ import {
   isUsedEbayCondition,
   localizeAspectsForMarketplace,
 } from './ebay-listing-aspects.util.js';
-import { fitmentDataToCompatibilityPayload } from '../../fitment/fitment-mvl.util.js';
 
 /**
  * Publishing request payload from the frontend / caller.
@@ -271,15 +270,10 @@ export class EbayPublishService {
 
     const skuLooksLikeListingId =
       !req.sku?.trim() || req.sku === req.listingId || req.sku === listing.id;
-    const sku = skuLooksLikeListingId
-      ? listing.customLabelSku?.trim() || req.sku
-      : req.sku.trim();
-
-    const compatibility = req.compatibility?.compatibleProducts?.length
-      ? req.compatibility
-      : await this.resolveCompatibilityFromCatalog(
-          listing.customLabelSku?.trim() || req.sku,
-        );
+    const sku =
+      (skuLooksLikeListingId
+        ? listing.customLabelSku?.trim() || req.sku
+        : req.sku.trim()) + 'IGBC';
 
     const parsedPrice = parseFloat(listing.startPrice ?? '');
     const parsedQty = parseInt(listing.quantity ?? '', 10);
@@ -327,7 +321,6 @@ export class EbayPublishService {
       conditionDescription,
       listingDuration,
       aspects,
-      compatibility,
       price:
         req.price > 0
           ? req.price
@@ -353,22 +346,6 @@ export class EbayPublishService {
         listing.paymentProfileName?.trim() ||
         undefined,
     };
-  }
-
-  /**
-   * Resolve structured vehicle compatibility from a catalog product.
-   * Used by legacy publish-by-listing-id paths that only receive a listing record.
-   */
-  private async resolveCompatibilityFromCatalog(
-    sku: string,
-  ): Promise<EbayCompatibilityPayload | undefined> {
-    const catalog = await this.catalogRepo.findOne({
-      where: [{ sku }, { id: sku }],
-    });
-    if (!catalog) return undefined;
-
-    const source = catalog.fitmentData ?? catalog.fitmentRows ?? undefined;
-    return fitmentDataToCompatibilityPayload(source);
   }
 
   /** Extract and log policy details for debugging shipping cost discrepancies. */
