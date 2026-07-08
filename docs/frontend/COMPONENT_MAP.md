@@ -89,7 +89,8 @@ src/components/
 │   ├── TeamBadge.tsx
 │   ├── ListingStatusCell.tsx
 │   ├── BulkActionsPage.tsx
-│   └── EbayPublishWizardPage.tsx
+│   ├── EbayPublishWizardPage.tsx
+│   └── PublishProgressPanel.tsx  # Inline publish progress + results (replaces modal publishing steps)
 ├── catalog-import/     # Catalog import
 │   ├── CatalogImportDashboard.tsx
 │   └── CatalogMotorsFiltersPage.tsx
@@ -135,6 +136,7 @@ src/components/
 ├── preview/            # Preview
 │   └── EbayPreviewPage.tsx
 └── channels/           # Channels
+    ├── PublishModal.tsx        # eBay multi-store publish — store selection only, hands off to PublishProgressPanel
     └── EbayOAuthCallback.tsx
 ```
 

@@ -18,7 +18,8 @@ import SearchBar from './SearchBar';
 import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
 import ActiveFilterTags from './ActiveFilterTags';
 import CatalogInventoryDetailModal from './CatalogInventoryDetailModal';
-import PublishModal from '../channels/PublishModal';
+import PublishModal, { type PublishStartParams } from '../channels/PublishModal';
+import PublishProgressPanel, { type PublishJob } from './PublishProgressPanel';
 import ExportTemplatesModal from './ExportTemplatesModal';
 import BulkPolicyEditModal from './BulkPolicyEditModal';
 import CatalogFilterBar from './CatalogFilterBar';
@@ -90,6 +91,7 @@ export default function CatalogManager() {
   const [deleting, setDeleting] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishTargetId, setPublishTargetId] = useState<string | null>(null);
+  const [publishJob, setPublishJob] = useState<PublishJob | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Hydrate filters from URL params on mount
@@ -347,6 +349,25 @@ export default function CatalogManager() {
     refetch();
   }, [refetch]);
 
+  const handlePublishStart = useCallback((params: PublishStartParams) => {
+    setPublishModalOpen(false);
+    setBulkPublishOpen(false);
+    setPublishJob({
+      id: `pub-${Date.now()}`,
+      mode: params.mode,
+      listing: params.listing,
+      listingIds: params.listingIds,
+      stores: params.stores,
+      overrides: params.overrides,
+      profiles: params.profiles,
+    });
+  }, []);
+
+  const handlePublishDismiss = useCallback(() => {
+    setPublishJob(null);
+    refetch();
+  }, [refetch]);
+
   const confirmDelete = useCallback(async () => {
     if (!deleteConfirmId) return;
     setDeleting(true);
@@ -492,6 +513,16 @@ export default function CatalogManager() {
       )}
 
       <div className="relative">
+        {/* Inline publish progress panel */}
+        {publishJob && (
+          <div className="mb-3">
+            <PublishProgressPanel
+              job={publishJob}
+              onDismiss={handlePublishDismiss}
+            />
+          </div>
+        )}
+
         <CatalogBulkBar
           count={selectedIds.size}
           onPublish={handleBulkPublish}
@@ -629,7 +660,7 @@ export default function CatalogManager() {
           }
           open={publishModalOpen && (!publishListingLoading || !!publishListing)}
           onClose={() => { setPublishModalOpen(false); setPublishTargetId(null); }}
-          onComplete={handlePublishComplete}
+          onPublishStart={handlePublishStart}
         />
       )}
 
@@ -639,7 +670,7 @@ export default function CatalogManager() {
         listingIds={Array.from(selectedIds)}
         open={bulkPublishOpen}
         onClose={() => setBulkPublishOpen(false)}
-        onComplete={handlePublishComplete}
+        onPublishStart={handlePublishStart}
       />
 
       {/* Export templates modal */}
