@@ -1,11 +1,18 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
 import { In, LessThan, Repository } from 'typeorm';
 import { CatalogImport } from '../../catalog-import/entities/catalog-import.entity.js';
-import { PipelineJob, type PipelineJobStatus } from '../../ingestion/entities/pipeline-job.entity.js';
+import {
+  PipelineJob,
+  type PipelineJobStatus,
+} from '../../ingestion/entities/pipeline-job.entity.js';
 
 /** Jobs actively consuming a worker — excludes `pending` (queued, not yet started). */
 const PIPELINE_SLOT_STATUSES: PipelineJobStatus[] = [
@@ -34,7 +41,9 @@ export class HeavyJobLimiterService {
   ) {}
 
   async assertPipelineSlotAvailable(): Promise<void> {
-    const max = Number(this.config.get<string>('MAX_CONCURRENT_PIPELINE_JOBS', '2'));
+    const max = Number(
+      this.config.get<string>('MAX_CONCURRENT_PIPELINE_JOBS', '2'),
+    );
     if (max <= 0) return;
 
     await this.recoverStalePipelineJobs();
@@ -103,7 +112,9 @@ export class HeavyJobLimiterService {
   }
 
   async assertCatalogImportSlotAvailable(): Promise<void> {
-    const max = Number(this.config.get<string>('MAX_CONCURRENT_CATALOG_IMPORTS', '2'));
+    const max = Number(
+      this.config.get<string>('MAX_CONCURRENT_CATALOG_IMPORTS', '2'),
+    );
     if (max <= 0) return;
 
     const active = await this.importRepo.count({

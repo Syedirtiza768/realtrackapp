@@ -64,7 +64,9 @@ const US_PA_RETURN_MARKETPLACES = new Set([
   'EBAY_MOTORS',
 ]);
 
-export function geoSitePreferenceForMarketplace(marketplaceId: string): string[] {
+export function geoSitePreferenceForMarketplace(
+  marketplaceId: string,
+): string[] {
   const mp = marketplaceId.trim().toUpperCase();
   if (mp === 'EBAY_MOTORS_US' || mp === 'EBAY_MOTORS') {
     return ['EBAY_MOTORS_US', 'EBAY_MOTORS', 'EBAY_US'];
@@ -218,14 +220,20 @@ export function listingRequiresPartsAccessoriesReturnPolicy(
   condition?: string | null,
 ): boolean {
   return (
-    marketplaceRequiresPartsAccessoriesReturnPolicy(marketplaceId, categoryId) &&
-    conditionRequiresMandatoryPaFreeReturn(condition)
+    marketplaceRequiresPartsAccessoriesReturnPolicy(
+      marketplaceId,
+      categoryId,
+    ) && conditionRequiresMandatoryPaFreeReturn(condition)
   );
 }
 
-function policyDetails(raw: Record<string, unknown>): Record<string, unknown> | undefined {
+function policyDetails(
+  raw: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const details = raw.policy_details ?? raw.policyDetails;
-  return details != null && typeof details === 'object' && !Array.isArray(details)
+  return details != null &&
+    typeof details === 'object' &&
+    !Array.isArray(details)
     ? (details as Record<string, unknown>)
     : undefined;
 }
@@ -269,7 +277,9 @@ function readReturnPeriodDays(raw: Record<string, unknown>): number | null {
   return null;
 }
 
-function readReturnShippingCostPayer(raw: Record<string, unknown>): string | null {
+function readReturnShippingCostPayer(
+  raw: Record<string, unknown>,
+): string | null {
   const payer =
     raw.returnShippingCostPayer ??
     raw.return_shipping_cost_payer ??
@@ -304,7 +314,10 @@ export function canEvaluateReturnPolicyCompliance(
   raw: Record<string, unknown> | null | undefined,
 ): boolean {
   if (!raw || typeof raw !== 'object') return false;
-  return readReturnPeriodDays(raw) != null && readReturnShippingCostPayer(raw) != null;
+  return (
+    readReturnPeriodDays(raw) != null &&
+    readReturnShippingCostPayer(raw) != null
+  );
 }
 
 /** eBay P&A: returns accepted, >= 30 days, seller pays return shipping (domestic). */
@@ -353,7 +366,9 @@ export function pickReturnPolicyUpgradeCandidate(
   if (!upgradeable.length) return null;
 
   if (preferredPolicyId) {
-    const preferred = upgradeable.find((x) => x.ebayPolicyId === preferredPolicyId);
+    const preferred = upgradeable.find(
+      (x) => x.ebayPolicyId === preferredPolicyId,
+    );
     if (preferred) return preferred;
   }
 
@@ -372,10 +387,10 @@ export function buildPaCompliantReturnPolicyRequest(
   template?: Record<string, unknown> | null,
 ): Record<string, unknown> {
   const raw = template ?? {};
-  const categoryTypes =
-    raw.categoryTypes ??
-    policyDetails(raw)?.categoryTypes ??
-    [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }];
+  const categoryTypes = raw.categoryTypes ??
+    policyDetails(raw)?.categoryTypes ?? [
+      { name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true },
+    ];
   const days = Math.max(30, readReturnPeriodDays(raw) ?? 30);
   return {
     name: String(raw.name ?? 'P&A Compliant Return (RealTrack)'),
@@ -466,11 +481,16 @@ export function coalesceValidPolicyId(
   return undefined;
 }
 
-export function hasValidDefaultPolicyIds(row: {
-  defaultFulfillmentPolicyId?: string | null;
-  defaultPaymentPolicyId?: string | null;
-  defaultReturnPolicyId?: string | null;
-} | null | undefined): boolean {
+export function hasValidDefaultPolicyIds(
+  row:
+    | {
+        defaultFulfillmentPolicyId?: string | null;
+        defaultPaymentPolicyId?: string | null;
+        defaultReturnPolicyId?: string | null;
+      }
+    | null
+    | undefined,
+): boolean {
   if (!row) return false;
   return (
     isLikelyEbayRestPolicyId(row.defaultFulfillmentPolicyId) &&

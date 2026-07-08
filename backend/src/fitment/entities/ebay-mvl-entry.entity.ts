@@ -59,7 +59,12 @@ export class EbayMvlEntry {
   @Column({ type: 'varchar', length: 32, nullable: true })
   ktype!: string | null;
 
-  @Column({ name: 'display_name', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'display_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   displayName!: string | null;
 
   @Column({ type: 'jsonb', nullable: true })

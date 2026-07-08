@@ -5,9 +5,15 @@ export const PIPELINE_CONDITION_OPTIONS: Record<string, string> = {
   Refurbished: '2500',
 };
 
-export type PipelineDisplayStatus = 'queued' | 'processing' | 'uploaded' | 'failed';
+export type PipelineDisplayStatus =
+  | 'queued'
+  | 'processing'
+  | 'uploaded'
+  | 'failed';
 
-export function mapPipelineDisplayStatus(status: string): PipelineDisplayStatus {
+export function mapPipelineDisplayStatus(
+  status: string,
+): PipelineDisplayStatus {
   if (status === 'pending') return 'queued';
   if (status === 'completed') return 'uploaded';
   if (status === 'failed' || status === 'cancelled') return 'failed';

@@ -48,16 +48,28 @@ export class PriceMonitorService {
     errors: number;
   }> {
     if (!(await this.featureFlags.isEnabled('pricing_intelligence'))) {
-      this.logger.debug('pricing_intelligence feature flag disabled — skipping');
+      this.logger.debug(
+        'pricing_intelligence feature flag disabled — skipping',
+      );
       return { processed: 0, collected: 0, errors: 0 };
     }
 
     const products = await this.productRepo.find({
       where: { status: 'published', mpn: Not(IsNull()) },
-      select: ['id', 'title', 'brand', 'mpn', 'costPrice', 'retailPrice', 'condition'],
+      select: [
+        'id',
+        'title',
+        'brand',
+        'mpn',
+        'costPrice',
+        'retailPrice',
+        'condition',
+      ],
     });
 
-    this.logger.log(`Starting competitor price collection for ${products.length} products`);
+    this.logger.log(
+      `Starting competitor price collection for ${products.length} products`,
+    );
 
     let collected = 0;
     let errors = 0;
@@ -68,7 +80,9 @@ export class PriceMonitorService {
         collected += result.pricesCollected;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        this.logger.warn(`Failed to collect prices for product ${product.id}: ${msg}`);
+        this.logger.warn(
+          `Failed to collect prices for product ${product.id}: ${msg}`,
+        );
         errors++;
       }
     }
@@ -156,7 +170,9 @@ export class PriceMonitorService {
 
     // Emit price change event if market price shifted significantly
     if (snapshot && product.retailPrice && snapshot.avgPrice) {
-      const diff = Math.abs(Number(product.retailPrice) - Number(snapshot.avgPrice));
+      const diff = Math.abs(
+        Number(product.retailPrice) - Number(snapshot.avgPrice),
+      );
       const pctChange = diff / Number(product.retailPrice);
       if (pctChange > 0.15) {
         this.eventEmitter.emit('pricing.significant_change', {
@@ -215,7 +231,10 @@ export class PriceMonitorService {
         medianPrice: analysis.marketSummary.medianPrice,
         minPrice: analysis.marketSummary.minPrice,
         maxPrice: analysis.marketSummary.maxPrice,
-        recommendedPricing: analysis.recommendedPricing as unknown as Record<string, unknown>,
+        recommendedPricing: analysis.recommendedPricing as unknown as Record<
+          string,
+          unknown
+        >,
         marketInsights: analysis.marketInsights,
         confidence: analysis.confidence,
         aiCostUsd: analysis.rawResponse.estimatedCostUsd,

@@ -18,6 +18,7 @@ import {
   PublishedListingsQueryDto,
   RevisePublishedListingDto,
   SyncPublishedListingsDto,
+  UpdatePoliciesDto,
 } from './dto/published-listings.dto.js';
 import { PublishedListingsService } from './services/published-listings.service.js';
 import { PublishedListingsSyncService } from './services/published-listings-sync.service.js';
@@ -42,8 +43,13 @@ export class PublishedListingsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'List published eBay listings across connected stores' })
-  async list(@Query() query: PublishedListingsQueryDto, @CurrentUser() user: User) {
+  @ApiOperation({
+    summary: 'List published eBay listings across connected stores',
+  })
+  async list(
+    @Query() query: PublishedListingsQueryDto,
+    @CurrentUser() user: User,
+  ) {
     const { organizationId } = await this.permissions.resolveOrganization(
       user.id,
       query.organizationId,
@@ -58,10 +64,8 @@ export class PublishedListingsController {
     @Query('ebayAccountId') ebayAccountId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.listings.getSummary(orgId, user, ebayAccountId);
   }
 
@@ -73,10 +77,8 @@ export class PublishedListingsController {
     @Query('limit') limit = '20',
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     const items = await this.sync.getSyncLogs(
       orgId,
       ebayAccountId,
@@ -124,7 +126,10 @@ export class PublishedListingsController {
   @Post('bulk')
   @RequirePermissions('published_listings.bulk')
   @ApiOperation({ summary: 'Enqueue bulk action on selected listings' })
-  async bulkAction(@Body() dto: BulkPublishedListingsDto, @CurrentUser() user: User) {
+  async bulkAction(
+    @Body() dto: BulkPublishedListingsDto,
+    @CurrentUser() user: User,
+  ) {
     const { organizationId } = await this.permissions.resolveOrganization(
       user.id,
       dto.organizationId,
@@ -140,10 +145,8 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.bulk.getJob(jobId, orgId);
   }
 
@@ -154,10 +157,8 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.listings.getById(id, orgId, user);
   }
 
@@ -168,10 +169,8 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     await this.listings.getById(id, orgId, user);
     const items = await this.audit.listRevisions(id, orgId);
     return { items };
@@ -186,11 +185,26 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.actions.revise(id, orgId, user, dto);
+  }
+
+  @Patch(':id/policies')
+  @RequirePermissions('published_listings.manage')
+  @ApiOperation({
+    summary:
+      'Update business policies (shipping/return/payment) on a published eBay listing',
+  })
+  async updatePolicies(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePoliciesDto,
+    @Query('organizationId') organizationId: string | undefined,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
+    return this.actions.updatePolicies(id, orgId, user, dto);
   }
 
   @Post(':id/competitor-pricing')
@@ -201,10 +215,8 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.pricing.refreshCompetitorPricing(id, orgId);
   }
 
@@ -216,10 +228,8 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.actions.endListing(id, orgId, user);
   }
 
@@ -231,10 +241,8 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.actions.relist(id, orgId, user);
   }
 
@@ -246,10 +254,8 @@ export class PublishedListingsController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.actions.refreshListing(id, orgId, user);
   }
 }

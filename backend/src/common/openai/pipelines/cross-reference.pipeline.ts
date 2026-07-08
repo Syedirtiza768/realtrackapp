@@ -57,10 +57,9 @@ export class CrossReferencePipeline {
       `Processing cross-reference data (${rawText.length} chars)${masterProductId ? ` for product ${masterProductId}` : ''}`,
     );
 
-    const { systemPrompt, userPrompt } = renderPrompt(
-      CROSS_REFERENCE_PROMPT,
-      { rawData: rawText },
-    );
+    const { systemPrompt, userPrompt } = renderPrompt(CROSS_REFERENCE_PROMPT, {
+      rawData: rawText,
+    });
 
     const response = await this.openai.chat({
       systemPrompt,
@@ -93,13 +92,7 @@ export class CrossReferencePipeline {
     for (const part of parts) {
       for (const oem of part.oemNumbers) {
         // OEM reference
-        await this.upsertRef(
-          masterProductId,
-          'oem',
-          oem,
-          part.brand,
-          'openai',
-        );
+        await this.upsertRef(masterProductId, 'oem', oem, part.brand, 'openai');
         upsertedCount++;
 
         // Cross-reference: each aftermarket ↔ this OEM

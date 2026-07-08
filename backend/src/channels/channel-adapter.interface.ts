@@ -76,7 +76,11 @@ export interface ChannelAdapter {
   ): Promise<ExternalListingResult>;
 
   /** End / deactivate a listing */
-  endListing(tokens: TokenSet, externalId: string, storeContext?: StoreContext): Promise<void>;
+  endListing(
+    tokens: TokenSet,
+    externalId: string,
+    storeContext?: StoreContext,
+  ): Promise<void>;
 
   /** Sync inventory quantities in bulk */
   syncInventory(

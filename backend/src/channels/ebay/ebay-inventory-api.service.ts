@@ -71,7 +71,9 @@ export class EbayInventoryApiService {
     const token = await this.auth.getAccessToken(storeId);
     const baseUrl = await this.auth.getApiBaseUrlForStore(storeId);
     const store = await this.storeRepo.findOneBy({ id: storeId });
-    const marketplaceId = store ? resolveMarketplaceId(store) : 'EBAY_MOTORS_US';
+    const marketplaceId = store
+      ? resolveMarketplaceId(store)
+      : 'EBAY_MOTORS_US';
     const mpHeaders = marketplaceRequestHeaders(
       marketplaceId,
       this.marketplaceConfig.get(marketplaceId),
@@ -98,7 +100,11 @@ export class EbayInventoryApiService {
     item: EbayInventoryItem,
   ): Promise<void> {
     const cfg = await this.authHeaders(storeId);
-    await this.http.put(`/inventory_item/${encodeURIComponent(sku)}`, item, cfg);
+    await this.http.put(
+      `/inventory_item/${encodeURIComponent(sku)}`,
+      item,
+      cfg,
+    );
     this.logger.debug(`Upserted inventory item ${sku} for store ${storeId}`);
   }
 
@@ -131,14 +137,29 @@ export class EbayInventoryApiService {
   }
 
   /**
+   * Withdraw an offer (remove from eBay marketplace).
+   */
+  async withdrawOffer(storeId: string, offerId: string): Promise<void> {
+    const cfg = await this.authHeaders(storeId);
+    await this.http.post(`/offer/${offerId}/withdraw`, {}, cfg);
+    this.logger.log(`Withdrew offer ${offerId} for store ${storeId}`);
+  }
+
+  /**
+   * Delete an offer by ID.
+   */
+  async deleteOffer(storeId: string, offerId: string): Promise<void> {
+    const cfg = await this.authHeaders(storeId);
+    await this.http.delete(`/offer/${offerId}`, cfg);
+    this.logger.log(`Deleted offer ${offerId} for store ${storeId}`);
+  }
+
+  /**
    * Delete an inventory item by SKU.
    */
   async deleteItem(storeId: string, sku: string): Promise<void> {
     const cfg = await this.authHeaders(storeId);
-    await this.http.delete(
-      `/inventory_item/${encodeURIComponent(sku)}`,
-      cfg,
-    );
+    await this.http.delete(`/inventory_item/${encodeURIComponent(sku)}`, cfg);
     this.logger.log(`Deleted inventory item ${sku} for store ${storeId}`);
   }
 
@@ -205,9 +226,7 @@ export class EbayInventoryApiService {
           }
         : offer;
     await this.http.put(`/offer/${offerId}`, payload, cfg);
-    this.logger.debug(
-      `Updated offer ${offerId} for store ${storeId}`,
-    );
+    this.logger.debug(`Updated offer ${offerId} for store ${storeId}`);
   }
 
   /**
@@ -215,10 +234,7 @@ export class EbayInventoryApiService {
    */
   async getOffer(storeId: string, offerId: string): Promise<EbayOffer> {
     const cfg = await this.authHeaders(storeId);
-    const { data } = await this.http.get<EbayOffer>(
-      `/offer/${offerId}`,
-      cfg,
-    );
+    const { data } = await this.http.get<EbayOffer>(`/offer/${offerId}`, cfg);
     return data;
   }
 
@@ -255,7 +271,11 @@ export class EbayInventoryApiService {
           offset: params.offset ?? 0,
           ...(params.sku ? { sku: params.sku } : {}),
           ...(params.marketplaceId
-            ? { marketplace_id: toEbayInventoryApiMarketplaceId(params.marketplaceId) }
+            ? {
+                marketplace_id: toEbayInventoryApiMarketplaceId(
+                  params.marketplaceId,
+                ),
+              }
             : {}),
         },
       });
@@ -293,9 +313,7 @@ export class EbayInventoryApiService {
   async withdrawOffer(storeId: string, offerId: string): Promise<void> {
     const cfg = await this.authHeaders(storeId);
     await this.http.post(`/offer/${offerId}/withdraw`, {}, cfg);
-    this.logger.log(
-      `Withdrew offer ${offerId} for store ${storeId}`,
-    );
+    this.logger.log(`Withdrew offer ${offerId} for store ${storeId}`);
   }
 
   // ──────────────────────────── Product Compatibility ──────────────
@@ -362,7 +380,9 @@ export class EbayInventoryApiService {
       location,
       cfg,
     );
-    this.logger.log(`Created inventory location ${merchantLocationKey} for store ${storeId}`);
+    this.logger.log(
+      `Created inventory location ${merchantLocationKey} for store ${storeId}`,
+    );
   }
 
   /**
@@ -430,7 +450,10 @@ export class EbayInventoryApiService {
         return (match ?? locations[0]).merchantLocationKey;
       }
 
-      const payload = buildDefaultInventoryLocationPayload(this.configService, store);
+      const payload = buildDefaultInventoryLocationPayload(
+        this.configService,
+        store,
+      );
       await this.createLocation(storeId, keyHint, payload);
 
       if (store && !store.locationKey) {

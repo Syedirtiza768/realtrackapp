@@ -13,7 +13,10 @@ import { Repository } from 'typeorm';
 import { CurrentUser } from '../../../auth/decorators/current-user.decorator.js';
 import { RequirePermissions } from '../../../rbac/decorators/require-permissions.decorator.js';
 import { User } from '../../../auth/entities/user.entity.js';
-import { EbayPublishJobDto, EbayValidateDto } from '../dto/ebay-integrations.dto.js';
+import {
+  EbayPublishJobDto,
+  EbayValidateDto,
+} from '../dto/ebay-integrations.dto.js';
 import { EbayMultiStoreListingService } from '../services/ebay-multi-store-listing.service.js';
 import { EbayIntegrationPermissionsService } from '../services/ebay-integration-permissions.service.js';
 import { EbayListingChannel } from '../entities/ebay-listing-channel.entity.js';
@@ -38,7 +41,9 @@ export class EbayMultiStoreController {
 
   @Post('listings/validate')
   @RequirePermissions('ebay.publish')
-  @ApiOperation({ summary: 'Validate catalog product for one or more eBay targets' })
+  @ApiOperation({
+    summary: 'Validate catalog product for one or more eBay targets',
+  })
   async validate(@Body() dto: EbayValidateDto, @CurrentUser() user: User) {
     const { organizationId } = await this.permissions.resolveOrganization(
       user.id,
@@ -49,12 +54,12 @@ export class EbayMultiStoreController {
 
   @Post('listings/publish')
   @RequirePermissions('ebay.publish')
-  @ApiOperation({ summary: 'Enqueue multi-store publish job (one worker per target)' })
+  @ApiOperation({
+    summary: 'Enqueue multi-store publish job (one worker per target)',
+  })
   async publish(@Body() dto: EbayPublishJobDto, @CurrentUser() user: User) {
-    const { organizationId, member } = await this.permissions.resolveOrganization(
-      user.id,
-      dto.organizationId,
-    );
+    const { organizationId, member } =
+      await this.permissions.resolveOrganization(user.id, dto.organizationId);
     this.permissions.assertCanPublish(member.role);
     const { job, skipped } = await this.listings.createPublishJob({
       organizationId,
@@ -73,10 +78,8 @@ export class EbayMultiStoreController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.listings.getJob(id, orgId);
   }
 
@@ -87,10 +90,8 @@ export class EbayMultiStoreController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.listings.getJobTargets(id, orgId);
   }
 
@@ -104,10 +105,8 @@ export class EbayMultiStoreController {
     @Query('status') status?: string,
     @Query('limit') limit = '50',
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     const qb = this.channelRepo
       .createQueryBuilder('c')
       .where('c.organizationId = :organizationId', { organizationId: orgId })
@@ -133,10 +132,8 @@ export class EbayMultiStoreController {
     @CurrentUser() user: User,
     @Query('limit') limit = '50',
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     const items = await this.errorRepo.find({
       where: { organizationId: orgId },
       order: { createdAt: 'DESC' },
@@ -152,10 +149,8 @@ export class EbayMultiStoreController {
     @CurrentUser() user: User,
     @Query('limit') limit = '100',
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     const items = await this.logRepo.find({
       where: { organizationId: orgId },
       order: { createdAt: 'DESC' },

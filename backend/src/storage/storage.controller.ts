@@ -17,7 +17,10 @@ import type { Queue } from 'bullmq';
 import { IsNull, Not, Repository } from 'typeorm';
 import { ImageAsset } from './entities/image-asset.entity.js';
 import { StorageService } from './storage.service.js';
-import { BulkRequestUploadDto, RequestUploadDto } from './dto/request-upload.dto.js';
+import {
+  BulkRequestUploadDto,
+  RequestUploadDto,
+} from './dto/request-upload.dto.js';
 import { UpdateAssetDto } from './dto/image-transform.dto.js';
 import type { ThumbnailJobData } from './processors/thumbnail.processor.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
@@ -41,11 +44,12 @@ export class StorageController {
   @RequirePermissions('storage.upload')
   @ApiOperation({ summary: 'Get pre-signed S3 upload URL' })
   async getUploadUrl(@Body() dto: RequestUploadDto) {
-    const { uploadUrl, s3Key, assetId } = await this.storageService.generateUploadUrl(
-      dto.filename,
-      dto.mimeType,
-      dto.listingId,
-    );
+    const { uploadUrl, s3Key, assetId } =
+      await this.storageService.generateUploadUrl(
+        dto.filename,
+        dto.mimeType,
+        dto.listingId,
+      );
 
     // Pre-create the asset record (status: awaiting upload)
     const asset = this.assetRepo.create({
@@ -164,9 +168,7 @@ export class StorageController {
   @Post('bulk-upload-urls')
   @RequirePermissions('storage.upload')
   @ApiOperation({ summary: 'Generate multiple pre-signed upload URLs' })
-  async getBulkUploadUrls(
-    @Body() body: BulkRequestUploadDto,
-  ) {
+  async getBulkUploadUrls(@Body() body: BulkRequestUploadDto) {
     const results = await this.storageService.generateBulkUploadUrls(
       body.files,
       body.listingId,
@@ -179,7 +181,9 @@ export class StorageController {
         listingId: body.listingId ?? null,
         s3Bucket: this.storageService.getBucket(),
         s3Key: r.s3Key,
-        mimeType: body.files.find((f) => r.s3Key.includes(f.filename.split('.')[0]))?.mimeType ?? 'image/webp',
+        mimeType:
+          body.files.find((f) => r.s3Key.includes(f.filename.split('.')[0]))
+            ?.mimeType ?? 'image/webp',
         fileSizeBytes: 0,
       }),
     );

@@ -26,37 +26,66 @@ const MULTI_WORD_MAKES: string[] = [
 
 /* ──────────────────  Single-word make aliases  ────────────────── */
 const MAKE_ALIASES: Record<string, string> = {
-  'MERCEDES':       'Mercedes-Benz',
-  'MERCEDES-BENZ':  'Mercedes-Benz',
-  'MERCEDES BENZ':  'Mercedes-Benz',
-  'MERC':           'Mercedes-Benz',
-  'BENZ':           'Mercedes-Benz',
-  'VW':             'Volkswagen',
-  'VOLKSWAGON':     'Volkswagen',
-  'LAND ROVER':     'Land Rover',
-  'LANDROVER':      'Land Rover',
-  'ROLLS ROYCE':    'Rolls-Royce',
-  'ROLLS-ROYCE':    'Rolls-Royce',
-  'ALFA ROMEO':     'Alfa Romeo',
-  'ASTON MARTIN':   'Aston Martin',
-  'MINI':           'MINI',
-  'BMW':            'BMW',
-  'CADILLAC':       'Cadillac',
+  MERCEDES: 'Mercedes-Benz',
+  'MERCEDES-BENZ': 'Mercedes-Benz',
+  'MERCEDES BENZ': 'Mercedes-Benz',
+  MERC: 'Mercedes-Benz',
+  BENZ: 'Mercedes-Benz',
+  VW: 'Volkswagen',
+  VOLKSWAGON: 'Volkswagen',
+  'LAND ROVER': 'Land Rover',
+  LANDROVER: 'Land Rover',
+  'ROLLS ROYCE': 'Rolls-Royce',
+  'ROLLS-ROYCE': 'Rolls-Royce',
+  'ALFA ROMEO': 'Alfa Romeo',
+  'ASTON MARTIN': 'Aston Martin',
+  MINI: 'MINI',
+  BMW: 'BMW',
+  CADILLAC: 'Cadillac',
 };
 
 /* ──────────────────  Skip words (not model names)  ────────────────── */
 const SKIP_WORDS = new Set([
   // common part-description lead-ins
-  'FRONT', 'REAR', 'LEFT', 'RIGHT', 'UPPER', 'LOWER', 'INNER',
-  'OUTER', 'CENTER', 'INTERIOR', 'EXTERIOR', 'BODY', 'RADIO',
-  'STEREO', 'AUDIO', 'HEADLIGHT', 'TAILLIGHT', 'DOOR', 'WINDOW',
-  'SEAT', 'ENGINE', 'TURBO', 'ABS', 'A/C', 'AC', 'AIR', 'BRAKE',
-  'POWER', 'ELECTRIC', 'ELECTRONIC', 'CENTRAL', 'CONTROL', 'MODULE',
-  'CONTINENTAL', 'SIEMENS',
+  'FRONT',
+  'REAR',
+  'LEFT',
+  'RIGHT',
+  'UPPER',
+  'LOWER',
+  'INNER',
+  'OUTER',
+  'CENTER',
+  'INTERIOR',
+  'EXTERIOR',
+  'BODY',
+  'RADIO',
+  'STEREO',
+  'AUDIO',
+  'HEADLIGHT',
+  'TAILLIGHT',
+  'DOOR',
+  'WINDOW',
+  'SEAT',
+  'ENGINE',
+  'TURBO',
+  'ABS',
+  'A/C',
+  'AC',
+  'AIR',
+  'BRAKE',
+  'POWER',
+  'ELECTRIC',
+  'ELECTRONIC',
+  'CENTRAL',
+  'CONTROL',
+  'MODULE',
+  'CONTINENTAL',
+  'SIEMENS',
 ]);
 
 /* ──────────────────  Known chassis / platform codes  ────────────────── */
-const CHASSIS_RE = /^[A-Z]{0,2}\d{2,4}[A-Z]?$/i;  // e.g. W209, E90, R50, L320, L405
+const CHASSIS_RE = /^[A-Z]{0,2}\d{2,4}[A-Z]?$/i; // e.g. W209, E90, R50, L320, L405
 function isChassis(w: string): boolean {
   if (w.length < 2 || w.length > 6) return false;
   return CHASSIS_RE.test(w);
@@ -64,23 +93,66 @@ function isChassis(w: string): boolean {
 
 /* ──────────────────  Known automotive makes (whitelist)  ────────────────── */
 const KNOWN_MAKES = new Set([
-  'Acura', 'Alfa Romeo', 'Aston Martin', 'Audi', 'BMW', 'Bentley', 'Buick',
-  'Cadillac', 'Chevrolet', 'Chrysler', 'Citroen', 'DS', 'Dodge',
-  'Ferrari', 'Fiat', 'Ford', 'GMC', 'Genesis', 'Honda', 'Hyundai',
-  'Infiniti', 'Jaguar', 'Jeep', 'Jetour', 'Kia',
-  'Lamborghini', 'Land Rover', 'Lexus', 'Lincoln',
-  'MINI', 'Maserati', 'Maybach', 'Mazda', 'Mercedes-Benz', 'Mitsubishi',
-  'Nissan', 'Opel', 'Peugeot', 'Pontiac', 'Porsche',
-  'Ram', 'Renault', 'Rolls-Royce',
-  'Saab', 'Skoda', 'Soueast', 'Subaru', 'Suzuki',
-  'Tesla', 'Toyota', 'Volkswagen', 'Volvo',
+  'Acura',
+  'Alfa Romeo',
+  'Aston Martin',
+  'Audi',
+  'BMW',
+  'Bentley',
+  'Buick',
+  'Cadillac',
+  'Chevrolet',
+  'Chrysler',
+  'Citroen',
+  'DS',
+  'Dodge',
+  'Ferrari',
+  'Fiat',
+  'Ford',
+  'GMC',
+  'Genesis',
+  'Honda',
+  'Hyundai',
+  'Infiniti',
+  'Jaguar',
+  'Jeep',
+  'Jetour',
+  'Kia',
+  'Lamborghini',
+  'Land Rover',
+  'Lexus',
+  'Lincoln',
+  'MINI',
+  'Maserati',
+  'Maybach',
+  'Mazda',
+  'Mercedes-Benz',
+  'Mitsubishi',
+  'Nissan',
+  'Opel',
+  'Peugeot',
+  'Pontiac',
+  'Porsche',
+  'Ram',
+  'Renault',
+  'Rolls-Royce',
+  'Saab',
+  'Skoda',
+  'Soueast',
+  'Subaru',
+  'Suzuki',
+  'Tesla',
+  'Toyota',
+  'Volkswagen',
+  'Volvo',
 ]);
 const KNOWN_MAKES_UPPER = new Map<string, string>();
 for (const m of KNOWN_MAKES) KNOWN_MAKES_UPPER.set(m.toUpperCase(), m);
 
 /* ──────────────────  Year-range regex  ────────────────── */
 // Handles: YYYY-YYYY, YY-YY, YYYY+, YYYY-Present, #, just YYYY
-const YEAR_RANGE_RE = /^#?\s*(\d{2,4})\s*(?:[-–]\s*(\d{2,4}|present|current))?\+?\s+/i;
+const YEAR_RANGE_RE =
+  /^#?\s*(\d{2,4})\s*(?:[-–]\s*(\d{2,4}|present|current))?\+?\s+/i;
 
 interface ParsedFitment {
   make: string;
@@ -194,8 +266,11 @@ function parseTitleFitment(title: string): ParsedFitment | null {
         // Known multi-word models
         const combined = w + ' ' + nextW;
         const knownCompounds = [
-          'Range Rover', 'Flying Spur', 'Grand Cherokee',
-          'X-Trail', 'X Trail',
+          'Range Rover',
+          'Flying Spur',
+          'Grand Cherokee',
+          'X-Trail',
+          'X Trail',
         ];
         const combinedUp = combined.toUpperCase();
         for (const kc of knownCompounds) {
@@ -204,8 +279,11 @@ function parseTitleFitment(title: string): ParsedFitment | null {
             modelWords = [w, nextW];
             // Check for "Range Rover Sport"
             const thirdW = words[i + 2];
-            if (thirdW && combined.toUpperCase() === 'RANGE ROVER' &&
-                thirdW.toUpperCase() === 'SPORT') {
+            if (
+              thirdW &&
+              combined.toUpperCase() === 'RANGE ROVER' &&
+              thirdW.toUpperCase() === 'SPORT'
+            ) {
               model = combined + ' ' + thirdW;
               modelWords.push(thirdW);
             }
@@ -235,7 +313,10 @@ function parseTitleFitment(title: string): ParsedFitment | null {
 }
 
 function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 /* ──────────────────  Main  ────────────────── */
@@ -259,7 +340,13 @@ async function main() {
   console.log(`Loaded ${listings.length} listings`);
 
   // Parse all titles
-  const parsedRows: { listingId: string; make: string; model: string; yearStart: number; yearEnd: number }[] = [];
+  const parsedRows: {
+    listingId: string;
+    make: string;
+    model: string;
+    yearStart: number;
+    yearEnd: number;
+  }[] = [];
   // Canonical model name map: slug → first-seen display name
   const canonicalModel = new Map<string, string>(); // key: "make|||modelSlug" → display name
 
@@ -289,12 +376,12 @@ async function main() {
   console.log(`Parsed: ${parsed}, Skipped: ${skipped}`);
 
   // Collect unique makes
-  const uniqueMakes = [...new Set(parsedRows.map(r => r.make))].sort();
+  const uniqueMakes = [...new Set(parsedRows.map((r) => r.make))].sort();
   console.log(`Unique makes (${uniqueMakes.length}):`, uniqueMakes.join(', '));
 
   // Collect unique (make, model) combos — using canonical names so slugs are unique per make
   const uniqueModels = [
-    ...new Set(parsedRows.map(r => r.make + '|||' + r.model)),
+    ...new Set(parsedRows.map((r) => r.make + '|||' + r.model)),
   ].sort();
   console.log(`Unique models: ${uniqueModels.length}`);
 

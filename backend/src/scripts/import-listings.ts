@@ -12,7 +12,7 @@ async function run() {
       '../files/_same_structure_as_B20_eBay_Verified_2-Oct';
 
     const result = await listingsService.importFromFolder(folder);
-    // eslint-disable-next-line no-console
+
     console.log('Import completed:', result);
   } finally {
     await app.close();

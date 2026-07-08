@@ -36,7 +36,11 @@ export class InventoryService {
     if (!ledger) {
       // Auto-create ledger on first access
       ledger = await this.ledgerRepo.save(
-        this.ledgerRepo.create({ listingId, quantityTotal: 0, quantityReserved: 0 }),
+        this.ledgerRepo.create({
+          listingId,
+          quantityTotal: 0,
+          quantityReserved: 0,
+        }),
       );
     }
 
@@ -168,11 +172,14 @@ export class InventoryService {
     quantity: number,
     orderId: string,
   ): Promise<{ ledger: InventoryLedger; event: InventoryEvent }> {
-    if (quantity <= 0) throw new BadRequestException('Reserve quantity must be positive');
+    if (quantity <= 0)
+      throw new BadRequestException('Reserve quantity must be positive');
 
     return this.dataSource.transaction('SERIALIZABLE', async (em) => {
       const idempotencyKey = `reserve:${orderId}:${listingId}`;
-      const existing = await em.findOne(InventoryEvent, { where: { idempotencyKey } });
+      const existing = await em.findOne(InventoryEvent, {
+        where: { idempotencyKey },
+      });
       if (existing) {
         const ledger = await em.findOneByOrFail(InventoryLedger, { listingId });
         return { ledger, event: existing };
@@ -216,11 +223,14 @@ export class InventoryService {
     quantity: number,
     orderId: string,
   ): Promise<{ ledger: InventoryLedger; event: InventoryEvent }> {
-    if (quantity <= 0) throw new BadRequestException('Release quantity must be positive');
+    if (quantity <= 0)
+      throw new BadRequestException('Release quantity must be positive');
 
     return this.dataSource.transaction('SERIALIZABLE', async (em) => {
       const idempotencyKey = `release:${orderId}:${listingId}`;
-      const existing = await em.findOne(InventoryEvent, { where: { idempotencyKey } });
+      const existing = await em.findOne(InventoryEvent, {
+        where: { idempotencyKey },
+      });
       if (existing) {
         const ledger = await em.findOneByOrFail(InventoryLedger, { listingId });
         return { ledger, event: existing };
@@ -233,7 +243,9 @@ export class InventoryService {
         .getOneOrFail();
 
       if (quantity > ledger.quantityReserved) {
-        throw new BadRequestException('Release quantity exceeds reserved amount');
+        throw new BadRequestException(
+          'Release quantity exceeds reserved amount',
+        );
       }
 
       const event = em.create(InventoryEvent, {
@@ -241,7 +253,8 @@ export class InventoryService {
         eventType: 'release_reserve',
         quantityChange: quantity,
         quantityBefore: ledger.quantityTotal - ledger.quantityReserved,
-        quantityAfter: ledger.quantityTotal - (ledger.quantityReserved - quantity),
+        quantityAfter:
+          ledger.quantityTotal - (ledger.quantityReserved - quantity),
         sourceOrderId: orderId,
         sourceChannel: 'system',
         idempotencyKey,
@@ -258,10 +271,11 @@ export class InventoryService {
 
   // ─── Reconciliation ───
 
-  async reconcile(
-    listingIds: string[],
-  ): Promise<{ results: Array<{ listingId: string; status: string; diff?: number }> }> {
-    const results: Array<{ listingId: string; status: string; diff?: number }> = [];
+  async reconcile(listingIds: string[]): Promise<{
+    results: Array<{ listingId: string; status: string; diff?: number }>;
+  }> {
+    const results: Array<{ listingId: string; status: string; diff?: number }> =
+      [];
 
     for (const listingId of listingIds) {
       try {
@@ -308,12 +322,14 @@ export class InventoryService {
 
   // ─── Duplicate detection ───
 
-  async findDuplicates(confidence = 0.8): Promise<Array<{
-    idA: string;
-    idB: string;
-    matchType: string;
-    score: number;
-  }>> {
+  async findDuplicates(confidence = 0.8): Promise<
+    Array<{
+      idA: string;
+      idB: string;
+      matchType: string;
+      score: number;
+    }>
+  > {
     const query = `
       SELECT a.id AS "idA", b.id AS "idB",
              similarity(a.title, b.title) AS title_sim,
@@ -376,11 +392,14 @@ export class InventoryService {
     storeId: string,
     quantity: number,
   ): Promise<StoreInventoryAllocation> {
-    const perStoreEnabled = await this.featureFlags.isEnabled('per_store_inventory');
+    const perStoreEnabled = await this.featureFlags.isEnabled(
+      'per_store_inventory',
+    );
     if (!perStoreEnabled) {
       throw new BadRequestException('Per-store inventory is not enabled');
     }
-    if (quantity < 0) throw new BadRequestException('Allocation quantity must be >= 0');
+    if (quantity < 0)
+      throw new BadRequestException('Allocation quantity must be >= 0');
 
     return this.dataSource.transaction('SERIALIZABLE', async (em) => {
       // Verify total pool has enough unallocated
@@ -391,18 +410,20 @@ export class InventoryService {
         .getOne();
 
       if (!ledger) {
-        throw new NotFoundException(`No inventory ledger for listing ${listingId}`);
+        throw new NotFoundException(
+          `No inventory ledger for listing ${listingId}`,
+        );
       }
 
       // Sum current allocations
-      const { total: currentAllocated } = await em
+      const { total: currentAllocated } = (await em
         .createQueryBuilder(StoreInventoryAllocation, 'a')
         .select('COALESCE(SUM(a.allocated_qty), 0)', 'total')
         .where('a.listing_id = :listingId', { listingId })
         .andWhere('a.store_id != :storeId', { storeId })
-        .getRawOne() as { total: string };
+        .getRawOne()) as { total: string };
 
-      let existing = await em.findOne(StoreInventoryAllocation, {
+      const existing = await em.findOne(StoreInventoryAllocation, {
         where: { listingId, storeId },
       });
 
@@ -439,21 +460,29 @@ export class InventoryService {
     quantity: number,
     orderId: string,
   ): Promise<StoreInventoryAllocation> {
-    const perStoreEnabled = await this.featureFlags.isEnabled('per_store_inventory');
+    const perStoreEnabled = await this.featureFlags.isEnabled(
+      'per_store_inventory',
+    );
     if (!perStoreEnabled) {
       throw new BadRequestException('Per-store inventory is not enabled');
     }
-    if (quantity <= 0) throw new BadRequestException('Reserve quantity must be positive');
+    if (quantity <= 0)
+      throw new BadRequestException('Reserve quantity must be positive');
 
     return this.dataSource.transaction('SERIALIZABLE', async (em) => {
       const allocation = await em
         .createQueryBuilder(StoreInventoryAllocation, 'a')
         .setLock('pessimistic_write')
-        .where('a.listing_id = :listingId AND a.store_id = :storeId', { listingId, storeId })
+        .where('a.listing_id = :listingId AND a.store_id = :storeId', {
+          listingId,
+          storeId,
+        })
         .getOne();
 
       if (!allocation) {
-        throw new NotFoundException(`No allocation for listing ${listingId} at store ${storeId}`);
+        throw new NotFoundException(
+          `No allocation for listing ${listingId} at store ${storeId}`,
+        );
       }
 
       const available = allocation.allocatedQty - allocation.reservedQty;

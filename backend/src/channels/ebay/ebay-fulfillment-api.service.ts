@@ -94,10 +94,7 @@ export class EbayFulfillmentApiService {
    */
   async getOrder(storeId: string, orderId: string): Promise<EbayOrder> {
     const cfg = await this.authHeaders(storeId);
-    const { data } = await this.http.get<EbayOrder>(
-      `/order/${orderId}`,
-      cfg,
-    );
+    const { data } = await this.http.get<EbayOrder>(`/order/${orderId}`, cfg);
     return data;
   }
 

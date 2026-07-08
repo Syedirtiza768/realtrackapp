@@ -82,7 +82,13 @@ export class AiEnhancement {
   @Column({ name: 'latency_ms', type: 'integer', nullable: true })
   latencyMs!: number | null;
 
-  @Column({ name: 'cost_usd', type: 'numeric', precision: 8, scale: 6, nullable: true })
+  @Column({
+    name: 'cost_usd',
+    type: 'numeric',
+    precision: 8,
+    scale: 6,
+    nullable: true,
+  })
   costUsd!: number | null;
 
   // ─── Versioning ───

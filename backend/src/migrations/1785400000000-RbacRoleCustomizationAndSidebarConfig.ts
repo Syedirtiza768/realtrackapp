@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RbacRoleCustomizationAndSidebarConfig1785400000000
-  implements MigrationInterface
-{
+export class RbacRoleCustomizationAndSidebarConfig1785400000000 implements MigrationInterface {
   name = 'RbacRoleCustomizationAndSidebarConfig1785400000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

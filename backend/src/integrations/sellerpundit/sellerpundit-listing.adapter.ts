@@ -57,7 +57,8 @@ export class SellerpunditListingAdapter {
     if (!images.imageUrls.length) {
       return {
         success: false,
-        error: 'At least one valid image URL (http/https) is required to publish',
+        error:
+          'At least one valid image URL (http/https) is required to publish',
         errors: [
           'Catalog product requires at least one valid image URL before SellerPundit publish',
         ],
@@ -67,8 +68,10 @@ export class SellerpunditListingAdapter {
       where: { ebayAccountId: account.id, marketplaceId },
     });
 
-    const fulfillmentPolicyId = req.fulfillmentPolicyId ?? mpRow?.defaultFulfillmentPolicyId;
-    const paymentPolicyId = req.paymentPolicyId ?? mpRow?.defaultPaymentPolicyId;
+    const fulfillmentPolicyId =
+      req.fulfillmentPolicyId ?? mpRow?.defaultFulfillmentPolicyId;
+    const paymentPolicyId =
+      req.paymentPolicyId ?? mpRow?.defaultPaymentPolicyId;
     let returnPolicyId = req.returnPolicyId ?? mpRow?.defaultReturnPolicyId;
     const compliantReturnId = await this.resolveCompliantReturnPolicyId(
       account.id,
@@ -108,7 +111,8 @@ export class SellerpunditListingAdapter {
         const blocked = paReturnPolicyBlockedMessage({
           returnPolicyId,
           raw: returnRow?.rawPayload,
-          storeName: account.accountDisplayName ?? account.ebayUsername ?? undefined,
+          storeName:
+            account.accountDisplayName ?? account.ebayUsername ?? undefined,
           marketplaceId,
           condition: req.condition,
         });
@@ -143,14 +147,18 @@ export class SellerpunditListingAdapter {
     ) {
       return {
         success: false,
-        error: 'Invalid business policy IDs — re-sync policies from Settings → eBay Integrations',
+        error:
+          'Invalid business policy IDs — re-sync policies from Settings → eBay Integrations',
         errors: [
           'Stored policy IDs are not valid eBay REST policy identifiers. Sync policies again so defaults use eBay fulfillment/payment/return policy IDs.',
         ],
       };
     }
 
-    if (!account.sellerpunditAccountName || account.sellerpunditMarketplaceId == null) {
+    if (
+      !account.sellerpunditAccountName ||
+      account.sellerpunditMarketplaceId == null
+    ) {
       return {
         success: false,
         error: 'SellerPundit account metadata missing',
@@ -160,12 +168,15 @@ export class SellerpunditListingAdapter {
 
     const siteId = this.registry.siteIdFor(marketplaceId);
     const country = this.registry.countryForSite(siteId);
-    const currency = req.currency ?? this.registry.currencyForMarketplace(marketplaceId);
+    const currency =
+      req.currency ?? this.registry.currencyForMarketplace(marketplaceId);
 
-    const itemSpecifics = Object.entries(req.aspects ?? {}).map(([name, values]) => ({
-      name: localizeAspectName(name, marketplaceId),
-      value: Array.isArray(values) ? values.join(', ') : String(values),
-    }));
+    const itemSpecifics = Object.entries(req.aspects ?? {}).map(
+      ([name, values]) => ({
+        name: localizeAspectName(name, marketplaceId),
+        value: Array.isArray(values) ? values.join(', ') : String(values),
+      }),
+    );
 
     const csku = {
       title: listingText.title,
@@ -175,7 +186,9 @@ export class SellerpunditListingAdapter {
       currency,
       images: images.imageUrls,
       country,
-      conditionId: this.conditionIdFromEnum(mapToEbayConditionEnum(req.condition)),
+      conditionId: this.conditionIdFromEnum(
+        mapToEbayConditionEnum(req.condition),
+      ),
       location: country,
       sellerProfile: {
         fulfillmentPolicyId,
@@ -217,7 +230,7 @@ export class SellerpunditListingAdapter {
         if (typeof resp === 'object' && resp !== null) {
           const r = resp as Record<string, unknown>;
           message = (r.message as string) ?? e.message;
-          errors = Array.isArray(r.errors) ? r.errors as string[] : [message];
+          errors = Array.isArray(r.errors) ? (r.errors as string[]) : [message];
           details = r.details as Record<string, unknown> | undefined;
         } else {
           message = e.message;
@@ -246,7 +259,10 @@ export class SellerpunditListingAdapter {
       : undefined;
   }
 
-  private parseBulkCreateResponse(raw: unknown, sku: string): SellerpunditPublishResult {
+  private parseBulkCreateResponse(
+    raw: unknown,
+    sku: string,
+  ): SellerpunditPublishResult {
     if (raw && typeof raw === 'object') {
       const o = raw as Record<string, unknown>;
       const successFlag = o.success;
@@ -274,8 +290,7 @@ export class SellerpunditListingAdapter {
           };
           return { ...failure, ...tagSellerpunditPlatformError(failure) };
         }
-        const listingId =
-          d.listingId ?? d.ebayListingId ?? d.itemId ?? d.id;
+        const listingId = d.listingId ?? d.ebayListingId ?? d.itemId ?? d.id;
         const offerId = d.offerId ?? d.offer_id;
         if (listingId != null || offerId != null) {
           return {

@@ -50,19 +50,41 @@ export interface ListingGenerationOutput {
 // Product family templates for common Motors categories
 const PRODUCT_TEMPLATES: Record<string, ProductTemplate> = {
   'Brake Pad': {
-    titlePattern: '{brand} {position} {productType} {material} {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Type', 'Placement on Vehicle', 'Material', 'Pad Material'],
+    titlePattern:
+      '{brand} {position} {productType} {material} {mpn} for {fitment}',
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Type',
+      'Placement on Vehicle',
+      'Material',
+      'Pad Material',
+    ],
     bulletTemplate: [
       'Direct fit replacement for {fitment}',
       '{material} compound for optimal stopping power',
       'Includes {includes}',
       'Brand: {brand} | MPN: {mpn}',
     ],
-    descriptionSections: ['overview', 'features', 'fitment', 'specs', 'warranty'],
+    descriptionSections: [
+      'overview',
+      'features',
+      'fitment',
+      'specs',
+      'warranty',
+    ],
   },
   'Brake Caliper': {
-    titlePattern: '{brand} {position} Brake Caliper {bracketInfo} {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Type', 'Placement on Vehicle', 'Bracket Included', 'Material'],
+    titlePattern:
+      '{brand} {position} Brake Caliper {bracketInfo} {mpn} for {fitment}',
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Type',
+      'Placement on Vehicle',
+      'Bracket Included',
+      'Material',
+    ],
     bulletTemplate: [
       'Premium replacement brake caliper for {fitment}',
       '{material} construction for durability',
@@ -70,22 +92,46 @@ const PRODUCT_TEMPLATES: Record<string, ProductTemplate> = {
       'Position: {position}',
       'Brand: {brand} | MPN: {mpn}',
     ],
-    descriptionSections: ['overview', 'features', 'fitment', 'specs', 'installation'],
+    descriptionSections: [
+      'overview',
+      'features',
+      'fitment',
+      'specs',
+      'installation',
+    ],
   },
-  'Alternator': {
+  Alternator: {
     titlePattern: '{brand} Alternator {amperage} {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Amperage', 'Voltage', 'Type'],
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Amperage',
+      'Voltage',
+      'Type',
+    ],
     bulletTemplate: [
       'Direct fit alternator for {fitment}',
       'Output: {amperage}',
       'Premium quality {condition} unit',
       'Brand: {brand} | MPN: {mpn}',
     ],
-    descriptionSections: ['overview', 'features', 'fitment', 'specs', 'warranty'],
+    descriptionSections: [
+      'overview',
+      'features',
+      'fitment',
+      'specs',
+      'warranty',
+    ],
   },
-  'Headlight': {
+  Headlight: {
     titlePattern: '{brand} {position} Headlight Assembly {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Placement on Vehicle', 'Bulb Type', 'Lens Color'],
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Placement on Vehicle',
+      'Bulb Type',
+      'Lens Color',
+    ],
     bulletTemplate: [
       'OE-style replacement headlight assembly',
       'Position: {position}',
@@ -93,11 +139,23 @@ const PRODUCT_TEMPLATES: Record<string, ProductTemplate> = {
       'DOT/SAE compliant',
       'Brand: {brand} | MPN: {mpn}',
     ],
-    descriptionSections: ['overview', 'features', 'fitment', 'compliance', 'installation'],
+    descriptionSections: [
+      'overview',
+      'features',
+      'fitment',
+      'compliance',
+      'installation',
+    ],
   },
-  'Mirror': {
+  Mirror: {
     titlePattern: '{brand} {position} {mirrorType} Mirror {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Placement on Vehicle', 'Power/Manual', 'Heated'],
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Placement on Vehicle',
+      'Power/Manual',
+      'Heated',
+    ],
     bulletTemplate: [
       'Replacement side mirror for {fitment}',
       '{mirrorType} operation',
@@ -107,8 +165,15 @@ const PRODUCT_TEMPLATES: Record<string, ProductTemplate> = {
     descriptionSections: ['overview', 'features', 'fitment', 'specs'],
   },
   'Control Arm': {
-    titlePattern: '{brand} {position} Control Arm {bushingInfo} {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Placement on Vehicle', 'Ball Joint Included', 'Bushing Included'],
+    titlePattern:
+      '{brand} {position} Control Arm {bushingInfo} {mpn} for {fitment}',
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Placement on Vehicle',
+      'Ball Joint Included',
+      'Bushing Included',
+    ],
     bulletTemplate: [
       'Premium control arm assembly for {fitment}',
       'Position: {position}',
@@ -116,11 +181,24 @@ const PRODUCT_TEMPLATES: Record<string, ProductTemplate> = {
       '{bushingInfo}',
       'Brand: {brand} | MPN: {mpn}',
     ],
-    descriptionSections: ['overview', 'features', 'fitment', 'specs', 'installation'],
+    descriptionSections: [
+      'overview',
+      'features',
+      'fitment',
+      'specs',
+      'installation',
+    ],
   },
   'Wheel Hub': {
-    titlePattern: '{brand} {position} Wheel Hub Bearing Assembly {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Placement on Vehicle', 'ABS Sensor Included', 'Number of Bolts'],
+    titlePattern:
+      '{brand} {position} Wheel Hub Bearing Assembly {mpn} for {fitment}',
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Placement on Vehicle',
+      'ABS Sensor Included',
+      'Number of Bolts',
+    ],
     bulletTemplate: [
       'Complete wheel hub and bearing assembly for {fitment}',
       'Position: {position}',
@@ -128,11 +206,23 @@ const PRODUCT_TEMPLATES: Record<string, ProductTemplate> = {
       'Pre-assembled for easy installation',
       'Brand: {brand} | MPN: {mpn}',
     ],
-    descriptionSections: ['overview', 'features', 'fitment', 'specs', 'installation'],
+    descriptionSections: [
+      'overview',
+      'features',
+      'fitment',
+      'specs',
+      'installation',
+    ],
   },
-  'Radiator': {
+  Radiator: {
     titlePattern: '{brand} Radiator {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Material', 'Core Style', 'Transmission Oil Cooler'],
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Material',
+      'Core Style',
+      'Transmission Oil Cooler',
+    ],
     bulletTemplate: [
       'Replacement radiator for {fitment}',
       '{material} core construction',
@@ -141,9 +231,15 @@ const PRODUCT_TEMPLATES: Record<string, ProductTemplate> = {
     ],
     descriptionSections: ['overview', 'features', 'fitment', 'specs'],
   },
-  'Sensor': {
+  Sensor: {
     titlePattern: '{brand} {sensorType} Sensor {mpn} for {fitment}',
-    keyAspects: ['Brand', 'Manufacturer Part Number', 'Sensor Type', 'Placement on Vehicle', 'Connector Type'],
+    keyAspects: [
+      'Brand',
+      'Manufacturer Part Number',
+      'Sensor Type',
+      'Placement on Vehicle',
+      'Connector Type',
+    ],
     bulletTemplate: [
       'OE-spec {sensorType} sensor for {fitment}',
       'Direct plug-and-play installation',
@@ -226,7 +322,10 @@ export class ListingGeneratorService {
     private readonly configService: ConfigService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    const baseURL = this.configService.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1');
+    const baseURL = this.configService.get<string>(
+      'OPENAI_BASE_URL',
+      'https://openrouter.ai/api/v1',
+    );
     if (apiKey) {
       this.openai = new OpenAI({
         apiKey,
@@ -244,7 +343,9 @@ export class ListingGeneratorService {
     input: ListingGenerationInput,
   ): Promise<ListingGeneration> {
     const startTime = Date.now();
-    const model = this.configService.get<string>('OPENAI_LISTING_MODEL') || 'minimax/minimax-m3';
+    const model =
+      this.configService.get<string>('OPENAI_LISTING_MODEL') ||
+      'minimax/minimax-m3';
 
     // Get category aspects
     const aspects = await this.aspectRequirementRepo.find({
@@ -252,10 +353,10 @@ export class ListingGeneratorService {
     });
 
     const requiredAspects = aspects.filter(
-      a => a.requirementLevel === AspectRequirementLevel.REQUIRED,
+      (a) => a.requirementLevel === AspectRequirementLevel.REQUIRED,
     );
     const recommendedAspects = aspects.filter(
-      a => a.requirementLevel === AspectRequirementLevel.RECOMMENDED,
+      (a) => a.requirementLevel === AspectRequirementLevel.RECOMMENDED,
     );
 
     // Try template-based generation first
@@ -284,7 +385,10 @@ export class ListingGeneratorService {
     return this.listingGenRepo.save(generation);
   }
 
-  private canUseTemplate(input: ListingGenerationInput, template: ProductTemplate): boolean {
+  private canUseTemplate(
+    input: ListingGenerationInput,
+    template: ProductTemplate,
+  ): boolean {
     // Template can be used if we have all the key data points
     return !!(input.brand && input.mpn && input.productType);
   }
@@ -334,8 +438,10 @@ export class ListingGeneratorService {
     if (input.material) itemSpecifics['Material'] = input.material;
     if (input.finish) itemSpecifics['Finish'] = input.finish;
     if (input.condition) itemSpecifics['Condition'] = input.condition;
-    if (input.oemPartNumber) itemSpecifics['OE/OEM Part Number'] = input.oemPartNumber;
-    if (input.quantityPerPack) itemSpecifics['Quantity'] = input.quantityPerPack;
+    if (input.oemPartNumber)
+      itemSpecifics['OE/OEM Part Number'] = input.oemPartNumber;
+    if (input.quantityPerPack)
+      itemSpecifics['Quantity'] = input.quantityPerPack;
     if (bracketInfo) itemSpecifics['Bracket Included'] = 'Yes';
 
     // Build bullets
@@ -379,16 +485,21 @@ export class ListingGeneratorService {
       throw new Error('AI API key not configured');
     }
 
-    const prompt = LISTING_GENERATION_PROMPT
-      .replace('{productData}', JSON.stringify(input))
-      .replace('{requiredAspects}', JSON.stringify(
-        requiredAspects.map(a => ({
-          name: a.aspectName,
-          required: true,
-          allowedValues: a.allowedValues,
-          maxLength: a.maxLength,
-        })),
-      ))
+    const prompt = LISTING_GENERATION_PROMPT.replace(
+      '{productData}',
+      JSON.stringify(input),
+    )
+      .replace(
+        '{requiredAspects}',
+        JSON.stringify(
+          requiredAspects.map((a) => ({
+            name: a.aspectName,
+            required: true,
+            allowedValues: a.allowedValues,
+            maxLength: a.maxLength,
+          })),
+        ),
+      )
       .replace(/\{titleCharLimit\}/g, String(input.titleCharLimit))
       .replace('{forbiddenClaims}', JSON.stringify(input.forbiddenClaims));
 
@@ -398,7 +509,8 @@ export class ListingGeneratorService {
         messages: [
           {
             role: 'system',
-            content: 'You are a professional eBay Motors listing copywriter. Always respond with valid JSON only.',
+            content:
+              'You are a professional eBay Motors listing copywriter. Always respond with valid JSON only.',
           },
           { role: 'user', content: prompt },
         ],
@@ -439,11 +551,13 @@ export class ListingGeneratorService {
         latencyMs,
         costUsd: estimateCost(model, promptTokens, completionTokens),
         titleQualityScore: parsed.quality_assessment?.title_score || null,
-        descriptionQualityScore: parsed.quality_assessment?.description_score || null,
-        overallQualityScore:
-          parsed.quality_assessment
-            ? (parsed.quality_assessment.title_score + parsed.quality_assessment.description_score) / 2
-            : null,
+        descriptionQualityScore:
+          parsed.quality_assessment?.description_score || null,
+        overallQualityScore: parsed.quality_assessment
+          ? (parsed.quality_assessment.title_score +
+              parsed.quality_assessment.description_score) /
+            2
+          : null,
       });
     } catch (error) {
       this.logger.error(`AI listing generation failed: ${error.message}`);
@@ -461,31 +575,48 @@ export class ListingGeneratorService {
     return parts.join(' ');
   }
 
-  private buildBullets(input: ListingGenerationInput, template: ProductTemplate): string[] {
+  private buildBullets(
+    input: ListingGenerationInput,
+    template: ProductTemplate,
+  ): string[] {
     const fitment = input.compatibleVehicleSummary || 'See compatibility';
-    return template.bulletTemplate.map(bullet =>
-      bullet
-        .replace('{brand}', input.brand || '')
-        .replace('{mpn}', input.mpn || '')
-        .replace('{fitment}', fitment)
-        .replace('{material}', input.material || 'premium')
-        .replace('{position}', this.buildPositionString(input) || 'N/A')
-        .replace('{includes}', (input.includes || []).join(', ') || 'mounting hardware')
-        .replace('{bracketInfo}', input.includes?.includes('Bracket') ? 'Includes mounting bracket' : '')
-        .replace('{condition}', input.condition || 'New')
-        .replace('{amperage}', input.dimensions?.amperage || '')
-        .replace('{sensorType}', '')
-        .replace('{mirrorType}', '')
-        .replace('{bulbType}', '')
-        .replace('{bushingInfo}', '')
-        .replace('{absInfo}', '')
-        .replace('{coolerInfo}', '')
-        .replace('{connectorInfo}', '')
-        .trim(),
-    ).filter(b => b.length > 0 && !b.includes('{'));
+    return template.bulletTemplate
+      .map((bullet) =>
+        bullet
+          .replace('{brand}', input.brand || '')
+          .replace('{mpn}', input.mpn || '')
+          .replace('{fitment}', fitment)
+          .replace('{material}', input.material || 'premium')
+          .replace('{position}', this.buildPositionString(input) || 'N/A')
+          .replace(
+            '{includes}',
+            (input.includes || []).join(', ') || 'mounting hardware',
+          )
+          .replace(
+            '{bracketInfo}',
+            input.includes?.includes('Bracket')
+              ? 'Includes mounting bracket'
+              : '',
+          )
+          .replace('{condition}', input.condition || 'New')
+          .replace('{amperage}', input.dimensions?.amperage || '')
+          .replace('{sensorType}', '')
+          .replace('{mirrorType}', '')
+          .replace('{bulbType}', '')
+          .replace('{bushingInfo}', '')
+          .replace('{absInfo}', '')
+          .replace('{coolerInfo}', '')
+          .replace('{connectorInfo}', '')
+          .trim(),
+      )
+      .filter((b) => b.length > 0 && !b.includes('{'));
   }
 
-  private buildHtmlDescription(input: ListingGenerationInput, bullets: string[], title: string): string {
+  private buildHtmlDescription(
+    input: ListingGenerationInput,
+    bullets: string[],
+    title: string,
+  ): string {
     const position = this.buildPositionString(input);
     const fitment = input.compatibleVehicleSummary || '';
 
@@ -507,22 +638,30 @@ export class ListingGeneratorService {
   <div style="margin: 20px 0;">
     <h2 style="font-size: 18px; color: #333;">Key Features</h2>
     <ul style="padding-left: 20px;">
-      ${bullets.map(b => `<li style="margin-bottom: 6px;">${this.escapeHtml(b)}</li>`).join('\n      ')}
+      ${bullets.map((b) => `<li style="margin-bottom: 6px;">${this.escapeHtml(b)}</li>`).join('\n      ')}
     </ul>
   </div>
 
-  ${fitment ? `<div style="margin: 20px 0; background: #f0f7ff; padding: 15px; border-radius: 4px;">
+  ${
+    fitment
+      ? `<div style="margin: 20px 0; background: #f0f7ff; padding: 15px; border-radius: 4px;">
     <h2 style="font-size: 18px; color: #0654ba;">Vehicle Compatibility</h2>
     <p>${this.escapeHtml(fitment)}</p>
     <p style="font-size: 12px; color: #666;"><em>Please verify compatibility with your specific vehicle before purchasing. Check the compatibility table above for detailed fitment information.</em></p>
-  </div>` : ''}
+  </div>`
+      : ''
+  }
 
-  ${input.includes && input.includes.length > 0 ? `<div style="margin: 20px 0;">
+  ${
+    input.includes && input.includes.length > 0
+      ? `<div style="margin: 20px 0;">
     <h2 style="font-size: 18px; color: #333;">What's Included</h2>
     <ul style="padding-left: 20px;">
-      ${input.includes.map(i => `<li>${this.escapeHtml(i)}</li>`).join('\n      ')}
+      ${input.includes.map((i) => `<li>${this.escapeHtml(i)}</li>`).join('\n      ')}
     </ul>
-  </div>` : ''}
+  </div>`
+      : ''
+  }
 
   <div style="margin: 20px 0; padding: 15px; background: #fff3cd; border-radius: 4px; font-size: 13px;">
     <strong>Important:</strong> Please verify fitment with your vehicle's year, make, model, and engine before purchasing. 

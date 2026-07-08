@@ -22,7 +22,12 @@ export class PublishedListingsService {
     organizationId: string,
     user: User,
     query: PublishedListingsQueryDto,
-  ): Promise<{ items: EbayPublishedListing[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    items: EbayPublishedListing[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const accessibleStores = await this.storeAccess.getAccessibleStoreIds(user);
     const page = query.page ?? 1;
     const limit = Math.min(query.limit ?? 50, 200);
@@ -63,7 +68,9 @@ export class PublishedListingsService {
       });
     }
     if (query.categoryId) {
-      qb.andWhere('l.categoryId = :categoryId', { categoryId: query.categoryId });
+      qb.andWhere('l.categoryId = :categoryId', {
+        categoryId: query.categoryId,
+      });
     }
     if (query.priceMin != null) {
       qb.andWhere('l.price >= :priceMin', { priceMin: query.priceMin });
@@ -109,7 +116,7 @@ export class PublishedListingsService {
             .orWhere('l.ebayItemId ILIKE :term', { term })
             .orWhere('l.categoryName ILIKE :term', { term })
             .orWhere('l.accountDisplayName ILIKE :term', { term })
-            .orWhere("l.item_specifics::text ILIKE :term", { term });
+            .orWhere('l.item_specifics::text ILIKE :term', { term });
         }),
       );
     }
@@ -195,7 +202,7 @@ export class PublishedListingsService {
       .getCount();
     const withWarnings = await qb
       .clone()
-      .andWhere("jsonb_array_length(l.health_flags) > 0")
+      .andWhere('jsonb_array_length(l.health_flags) > 0')
       .getCount();
 
     const lastRow = await this.listingRepo
@@ -214,7 +221,10 @@ export class PublishedListingsService {
     };
   }
 
-  private async assertListingAccess(user: User, storeId: string): Promise<void> {
+  private async assertListingAccess(
+    user: User,
+    storeId: string,
+  ): Promise<void> {
     if (user.storeAccessAll) return;
     const stores = await this.storeAccess.getAccessibleStoreIds(user);
     if (!stores.has(storeId)) {

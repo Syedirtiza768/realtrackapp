@@ -13,7 +13,10 @@ import type { MvlMarketplace } from './ebay-mvl-marketplace.util.js';
 @Injectable()
 export class EbayMvlStoreService {
   private readonly logger = new Logger(EbayMvlStoreService.name);
-  private readonly activeReleaseCache = new Map<MvlMarketplace, string | null>();
+  private readonly activeReleaseCache = new Map<
+    MvlMarketplace,
+    string | null
+  >();
 
   constructor(
     @InjectRepository(EbayMvlRelease)
@@ -41,7 +44,9 @@ export class EbayMvlStoreService {
     return count > 0;
   }
 
-  async getActiveReleaseId(marketplace: MvlMarketplace): Promise<string | null> {
+  async getActiveReleaseId(
+    marketplace: MvlMarketplace,
+  ): Promise<string | null> {
     if (this.activeReleaseCache.has(marketplace)) {
       return this.activeReleaseCache.get(marketplace) ?? null;
     }
@@ -280,9 +285,7 @@ export class EbayMvlStoreService {
 
     const normalized = [
       ...new Set(
-        makes
-          .map((m) => m.trim().toLowerCase())
-          .filter((m) => m.length > 0),
+        makes.map((m) => m.trim().toLowerCase()).filter((m) => m.length > 0),
       ),
     ];
     if (normalized.length === 0) return new Set();
@@ -359,7 +362,10 @@ export class EbayMvlStoreService {
     const releaseId = await this.getActiveReleaseId(marketplace);
     if (!releaseId || triples.length === 0) return new Set();
 
-    const deduped = new Map<string, { make: string; model: string; year: number }>();
+    const deduped = new Map<
+      string,
+      { make: string; model: string; year: number }
+    >();
     for (const t of triples) {
       const make = t.make.trim();
       const model = t.model.trim();
@@ -442,7 +448,10 @@ export class EbayMvlStoreService {
       .andWhere('e.marketplace = :marketplace', { marketplace })
       .andWhere('LOWER(e.make) = LOWER(:make)', { make })
       .andWhere('LOWER(e.model) = LOWER(:model)', { model })
-      .andWhere('e.year BETWEEN :yearStart AND :yearEnd', { yearStart, yearEnd })
+      .andWhere('e.year BETWEEN :yearStart AND :yearEnd', {
+        yearStart,
+        yearEnd,
+      })
       .orderBy('e.year', 'ASC')
       .getRawMany<{ year: number }>();
 
@@ -466,7 +475,10 @@ export class EbayMvlStoreService {
       .where('e.release_id = :releaseId', { releaseId })
       .andWhere('e.marketplace = :marketplace', { marketplace })
       .andWhere('LOWER(e.make) = LOWER(:make)', { make })
-      .andWhere('e.year BETWEEN :yearStart AND :yearEnd', { yearStart, yearEnd })
+      .andWhere('e.year BETWEEN :yearStart AND :yearEnd', {
+        yearStart,
+        yearEnd,
+      })
       .groupBy('e.model')
       .orderBy('e.model', 'ASC')
       .getRawMany<{ model: string; minYear: string; maxYear: string }>();
@@ -566,7 +578,9 @@ export class EbayMvlStoreService {
   async markReleaseStatus(
     releaseId: string,
     status: EbayMvlReleaseStatus,
-    patch?: Partial<Pick<EbayMvlRelease, 'entryCount' | 'errorMessage' | 'importedAt'>>,
+    patch?: Partial<
+      Pick<EbayMvlRelease, 'entryCount' | 'errorMessage' | 'importedAt'>
+    >,
   ): Promise<void> {
     await this.releaseRepo.update(releaseId, {
       status,
@@ -595,7 +609,6 @@ export class EbayMvlStoreService {
         `Superseded ${superseded.affected} active MVL release(s) for ${marketplace}`,
       );
     }
-
   }
 
   async deleteEntriesForRelease(releaseId: string): Promise<void> {

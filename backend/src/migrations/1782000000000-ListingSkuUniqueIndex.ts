@@ -34,6 +34,8 @@ export class ListingSkuUniqueIndex1782000000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_listing_sku_unique_active"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_listing_sku_unique_active"`,
+    );
   }
 }

@@ -1,4 +1,10 @@
-import { IsHexColor, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsHexColor,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateTeamDto {
   @IsString()

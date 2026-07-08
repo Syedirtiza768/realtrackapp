@@ -31,7 +31,10 @@ export class AuthAuditService {
       this.auditRepo.create({
         action,
         entityType: opts.entityType ?? 'auth',
-        entityId: opts.entityId ?? opts.actorId ?? '00000000-0000-0000-0000-000000000000',
+        entityId:
+          opts.entityId ??
+          opts.actorId ??
+          '00000000-0000-0000-0000-000000000000',
         actorId: opts.actorId ?? null,
         actorType: opts.actorId ? 'user' : 'system',
         metadata: {

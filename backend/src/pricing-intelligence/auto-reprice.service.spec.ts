@@ -17,8 +17,8 @@ function createRepo<T extends Record<string, unknown>>() {
     findOne: jest.fn().mockResolvedValue(null),
     findOneBy: jest.fn().mockResolvedValue(null),
     findOneByOrFail: jest.fn(),
-    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d } as T)),
-    save: jest.fn((d: T) => Promise.resolve(d as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d }) as T),
+    save: jest.fn((d: T) => Promise.resolve(d)),
     update: jest.fn().mockResolvedValue(undefined),
     createQueryBuilder: jest.fn(() => ({
       where: jest.fn().mockReturnThis(),
@@ -39,7 +39,10 @@ describe('AutoRepriceService', () => {
   let competitorRepo: ReturnType<typeof createRepo<CompetitorPrice>>;
   let snapshotRepo: ReturnType<typeof createRepo<MarketSnapshot>>;
   let storeRepo: ReturnType<typeof createRepo<Store>>;
-  let inventoryApi: { updateOffer: jest.Mock; bulkUpdatePriceQuantity: jest.Mock };
+  let inventoryApi: {
+    updateOffer: jest.Mock;
+    bulkUpdatePriceQuantity: jest.Mock;
+  };
   let pricingPipeline: { suggestPrice: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
 
@@ -49,7 +52,10 @@ describe('AutoRepriceService', () => {
     competitorRepo = createRepo<CompetitorPrice>();
     snapshotRepo = createRepo<MarketSnapshot>();
     storeRepo = createRepo<Store>();
-    inventoryApi = { updateOffer: jest.fn().mockResolvedValue(undefined), bulkUpdatePriceQuantity: jest.fn() };
+    inventoryApi = {
+      updateOffer: jest.fn().mockResolvedValue(undefined),
+      bulkUpdatePriceQuantity: jest.fn(),
+    };
     pricingPipeline = { suggestPrice: jest.fn() };
     eventEmitter = { emit: jest.fn() };
 
@@ -121,7 +127,10 @@ describe('AutoRepriceService', () => {
       }));
       snapshotRepo.findOne = jest.fn().mockResolvedValue(null);
 
-      pricingPipeline.suggestPrice.mockResolvedValue({ suggestedPrice: 35, confidence: 0.8 });
+      pricingPipeline.suggestPrice.mockResolvedValue({
+        suggestedPrice: 35,
+        confidence: 0.8,
+      });
       await svc.getSuggestion('prod-1');
 
       expect(pricingPipeline.suggestPrice).toHaveBeenCalledWith(
@@ -152,7 +161,10 @@ describe('AutoRepriceService', () => {
         maxPrice: 80,
       });
 
-      pricingPipeline.suggestPrice.mockResolvedValue({ suggestedPrice: 40, confidence: 0.9 });
+      pricingPipeline.suggestPrice.mockResolvedValue({
+        suggestedPrice: 40,
+        confidence: 0.9,
+      });
       await svc.getSuggestion('prod-1');
 
       expect(pricingPipeline.suggestPrice).toHaveBeenCalledWith(
@@ -196,7 +208,10 @@ describe('AutoRepriceService', () => {
 
       const { suggestion, results } = await svc.repriceProduct('prod-1');
       expect(results).toHaveLength(0);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('pricing.review_needed', expect.any(Object));
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'pricing.review_needed',
+        expect.any(Object),
+      );
     });
 
     it('applies price when confidence >= 0.7', async () => {
@@ -207,15 +222,29 @@ describe('AutoRepriceService', () => {
       });
 
       offerRepo.find = jest.fn().mockResolvedValue([
-        { id: 'offer-1', storeId: 'store-1', ebayOfferId: 'ebay-offer-1', price: 49.99 },
+        {
+          id: 'offer-1',
+          storeId: 'store-1',
+          ebayOfferId: 'ebay-offer-1',
+          price: 49.99,
+        },
       ]);
-      storeRepo.findOneBy = jest.fn().mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
+      storeRepo.findOneBy = jest
+        .fn()
+        .mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
 
       const { results } = await svc.repriceProduct('prod-1');
       expect(results).toHaveLength(1);
       expect(results[0].action).toBe('repriced');
-      expect(inventoryApi.updateOffer).toHaveBeenCalledWith('store-1', 'ebay-offer-1', expect.any(Object));
-      expect(offerRepo.update).toHaveBeenCalledWith('offer-1', expect.objectContaining({ price: 39.99 }));
+      expect(inventoryApi.updateOffer).toHaveBeenCalledWith(
+        'store-1',
+        'ebay-offer-1',
+        expect.any(Object),
+      );
+      expect(offerRepo.update).toHaveBeenCalledWith(
+        'offer-1',
+        expect.objectContaining({ price: 39.99 }),
+      );
     });
 
     it('skips unchanged prices (< $0.01 diff)', async () => {
@@ -226,9 +255,16 @@ describe('AutoRepriceService', () => {
       });
 
       offerRepo.find = jest.fn().mockResolvedValue([
-        { id: 'offer-1', storeId: 'store-1', ebayOfferId: 'ebay-offer-1', price: 49.99 },
+        {
+          id: 'offer-1',
+          storeId: 'store-1',
+          ebayOfferId: 'ebay-offer-1',
+          price: 49.99,
+        },
       ]);
-      storeRepo.findOneBy = jest.fn().mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
+      storeRepo.findOneBy = jest
+        .fn()
+        .mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
 
       const { results } = await svc.repriceProduct('prod-1');
       expect(results).toHaveLength(1);
@@ -244,15 +280,25 @@ describe('AutoRepriceService', () => {
       });
 
       offerRepo.find = jest.fn().mockResolvedValue([
-        { id: 'offer-1', storeId: 'store-1', ebayOfferId: 'ebay-offer-1', price: 49.99 },
+        {
+          id: 'offer-1',
+          storeId: 'store-1',
+          ebayOfferId: 'ebay-offer-1',
+          price: 49.99,
+        },
       ]);
-      storeRepo.findOneBy = jest.fn().mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
+      storeRepo.findOneBy = jest
+        .fn()
+        .mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
 
       await svc.repriceProduct('prod-1');
-      expect(eventEmitter.emit).toHaveBeenCalledWith('pricing.repriced', expect.objectContaining({
-        productId: 'prod-1',
-        results: expect.any(Array),
-      }));
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'pricing.repriced',
+        expect.objectContaining({
+          productId: 'prod-1',
+          results: expect.any(Array),
+        }),
+      );
     });
 
     it('forces apply with forceApply flag even below threshold', async () => {
@@ -263,11 +309,20 @@ describe('AutoRepriceService', () => {
       });
 
       offerRepo.find = jest.fn().mockResolvedValue([
-        { id: 'offer-1', storeId: 'store-1', ebayOfferId: 'ebay-offer-1', price: 49.99 },
+        {
+          id: 'offer-1',
+          storeId: 'store-1',
+          ebayOfferId: 'ebay-offer-1',
+          price: 49.99,
+        },
       ]);
-      storeRepo.findOneBy = jest.fn().mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
+      storeRepo.findOneBy = jest
+        .fn()
+        .mockResolvedValue({ id: 'store-1', storeName: 'My Store' });
 
-      const { results } = await svc.repriceProduct('prod-1', { forceApply: true });
+      const { results } = await svc.repriceProduct('prod-1', {
+        forceApply: true,
+      });
       expect(results).toHaveLength(1);
       expect(results[0].action).toBe('repriced');
     });
@@ -280,13 +335,25 @@ describe('AutoRepriceService', () => {
       });
 
       offerRepo.find = jest.fn().mockResolvedValue([
-        { id: 'offer-1', storeId: 'store-1', ebayOfferId: 'ebay-offer-1', price: 49.99 },
-        { id: 'offer-2', storeId: 'store-2', ebayOfferId: 'ebay-offer-2', price: 55.00 },
+        {
+          id: 'offer-1',
+          storeId: 'store-1',
+          ebayOfferId: 'ebay-offer-1',
+          price: 49.99,
+        },
+        {
+          id: 'offer-2',
+          storeId: 'store-2',
+          ebayOfferId: 'ebay-offer-2',
+          price: 55.0,
+        },
       ]);
-      storeRepo.findOneBy = jest.fn()
+      storeRepo.findOneBy = jest
+        .fn()
         .mockResolvedValueOnce({ id: 'store-1', storeName: 'Store A' })
         .mockResolvedValueOnce({ id: 'store-2', storeName: 'Store B' });
-      inventoryApi.updateOffer = jest.fn()
+      inventoryApi.updateOffer = jest
+        .fn()
         .mockResolvedValueOnce(undefined) // first succeeds
         .mockRejectedValueOnce(new Error('API timeout')); // second fails
 

@@ -120,7 +120,7 @@ export class FitmentDiscoveryService {
                     year: hint.year || '',
                     make: hint.make,
                     model: hint.model,
-                    confidence: 0.70,
+                    confidence: 0.7,
                     source: 'ebay_catalog_lookup',
                     validationStatus: 'needs_review',
                     notes: `Fitment from eBay listing ${item.itemId} — verify compatibility`,
@@ -148,7 +148,7 @@ export class FitmentDiscoveryService {
             if (candidates.length > 0) {
               this.logger.log(
                 `eBay catalog lookup for "${searchMpn}": found ${catalogResult.items.length} items, ` +
-                `${candidates.length} fitment hint(s), category=${ebayCatalogCategoryId ?? 'n/a'}`,
+                  `${candidates.length} fitment hint(s), category=${ebayCatalogCategoryId ?? 'n/a'}`,
               );
             } else {
               this.logger.debug(
@@ -191,7 +191,10 @@ export class FitmentDiscoveryService {
             'Fitment includes donor vehicle only from VIN decode',
           );
 
-          if (candidates.length <= 1 && this.mvlExpander.getExpansionMode() !== 'ai') {
+          if (
+            candidates.length <= 1 &&
+            this.mvlExpander.getExpansionMode() !== 'ai'
+          ) {
             const mvlResult = await this.mvlExpander.expand({
               donor: {
                 year: decoded.year,
@@ -221,9 +224,7 @@ export class FitmentDiscoveryService {
                 notes: row.notes,
               });
             }
-            manualReviewReasons.push(
-              ...mvlResult.manualReviewReasons,
-            );
+            manualReviewReasons.push(...mvlResult.manualReviewReasons);
             if (mvlResult.needsAiInterchange) {
               manualReviewReasons.push(
                 'MVL expansion thin — AI interchange micro-lane recommended',

@@ -24,7 +24,10 @@ import { EbayListingJobTarget } from './entities/ebay-listing-job-target.entity.
 import { EbayApiError } from './entities/ebay-api-error.entity.js';
 import { ListingActionLog } from './entities/listing-action-log.entity.js';
 import { InventoryMovement } from './entities/inventory-movement.entity.js';
-import { EbayIntegrationsRedisConnection, EBAY_INTEGRATIONS_REDIS } from './ebay-integrations-redis.connection.js';
+import {
+  EbayIntegrationsRedisConnection,
+  EBAY_INTEGRATIONS_REDIS,
+} from './ebay-integrations-redis.connection.js';
 import { EbayOAuthStateStore } from './services/ebay-oauth-state.store.js';
 import { EbayAccountTokenService } from './services/ebay-account-token.service.js';
 import { EbayIntegrationsOAuthService } from './services/ebay-integrations-oauth.service.js';

@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { ListingRecord } from '../listings/listing-record.entity.js';
@@ -54,14 +59,18 @@ export class InventoryPublishService {
     targets: PublishTarget[],
   ): Promise<PublishResult> {
     // 1. Load the listing
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
 
     const organizationId = listing.organizationId;
     if (!organizationId) {
-      throw new BadRequestException('Listing has no organization — cannot publish');
+      throw new BadRequestException(
+        'Listing has no organization — cannot publish',
+      );
     }
 
     const sku = listing.customLabelSku;
@@ -86,7 +95,8 @@ export class InventoryPublishService {
     }
 
     // 4. Build publish targets (eBay account ID + marketplace ID)
-    const publishTargets: { ebayAccountId: string; marketplaceId: string }[] = [];
+    const publishTargets: { ebayAccountId: string; marketplaceId: string }[] =
+      [];
     const resultTargets: PublishResult['targets'] = [];
 
     for (const target of targets) {
@@ -183,7 +193,9 @@ export class InventoryPublishService {
    * Ensure a CatalogProduct exists for this listing's SKU.
    * Creates one from the listing data if it doesn't exist.
    */
-  private async ensureCatalogProduct(listing: ListingRecord): Promise<CatalogProduct> {
+  private async ensureCatalogProduct(
+    listing: ListingRecord,
+  ): Promise<CatalogProduct> {
     const sku = listing.customLabelSku!;
 
     // Try to find existing catalog product
@@ -198,9 +210,9 @@ export class InventoryPublishService {
       brand: listing.cBrand ?? null,
       brandNormalized: listing.cBrand?.toLowerCase().trim() ?? null,
       mpn: listing.cManufacturerPartNumber ?? null,
-      mpnNormalized: listing.cManufacturerPartNumber
-        ?.toLowerCase()
-        .replace(/[\s\-]/g, '') ?? null,
+      mpnNormalized:
+        listing.cManufacturerPartNumber?.toLowerCase().replace(/[\s\-]/g, '') ??
+        null,
       oemPartNumber: listing.cOeOemPartNumber ?? null,
       partType: listing.cType ?? null,
       features: listing.cFeatures ?? null,

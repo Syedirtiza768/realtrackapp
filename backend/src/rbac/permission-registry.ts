@@ -111,11 +111,36 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('teams.manage', 'Manage teams and member assignments', 'teams', ADMIN_UP),
 
   // ── Client settings / white-label ──
-  p('client_settings.view', 'View client settings', 'client_settings', SUPER_ADMIN_ONLY),
-  p('client_settings.manage', 'Manage client settings', 'client_settings', SUPER_ADMIN_ONLY),
-  p('client_settings.branding', 'Update branding assets', 'client_settings', SUPER_ADMIN_ONLY),
-  p('client_settings.theme', 'Update theme settings', 'client_settings', SUPER_ADMIN_ONLY),
-  p('client_settings.whitelabel', 'Update white-label options', 'client_settings', SUPER_ADMIN_ONLY),
+  p(
+    'client_settings.view',
+    'View client settings',
+    'client_settings',
+    SUPER_ADMIN_ONLY,
+  ),
+  p(
+    'client_settings.manage',
+    'Manage client settings',
+    'client_settings',
+    SUPER_ADMIN_ONLY,
+  ),
+  p(
+    'client_settings.branding',
+    'Update branding assets',
+    'client_settings',
+    SUPER_ADMIN_ONLY,
+  ),
+  p(
+    'client_settings.theme',
+    'Update theme settings',
+    'client_settings',
+    SUPER_ADMIN_ONLY,
+  ),
+  p(
+    'client_settings.whitelabel',
+    'Update white-label options',
+    'client_settings',
+    SUPER_ADMIN_ONLY,
+  ),
 
   // ── Dashboard ──
   p('dashboard.view', 'View dashboard', 'dashboard', READ_ONLY),
@@ -179,7 +204,12 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('pipeline.view', 'View pipeline jobs', 'pipeline', READ_ONLY),
   p('pipeline.run', 'Run pipeline jobs', 'pipeline', READ_WRITE),
   p('pipeline.manage', 'Manage pipeline jobs', 'pipeline', MANAGER_UP),
-  p('pipeline.review', 'Approve/reject pipeline review', 'pipeline', MANAGER_UP),
+  p(
+    'pipeline.review',
+    'Approve/reject pipeline review',
+    'pipeline',
+    MANAGER_UP,
+  ),
   p('pipeline.export', 'Download pipeline outputs', 'pipeline', READ_ONLY),
 
   // ── Catalog ──
@@ -192,13 +222,18 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
 
   // ── Inventory ──
   p('inventory.view', 'View inventory', 'inventory', READ_ONLY),
-  p('inventory.enrich', 'Fetch details and run enrichment on inventory parts', 'inventory', [
-    ROLE_SLUGS.SUPER_ADMIN,
-    ROLE_SLUGS.ADMIN,
-    ROLE_SLUGS.MANAGER,
-    ROLE_SLUGS.LISTING_MANAGER,
-    ROLE_SLUGS.OPS_USER,
-  ]),
+  p(
+    'inventory.enrich',
+    'Fetch details and run enrichment on inventory parts',
+    'inventory',
+    [
+      ROLE_SLUGS.SUPER_ADMIN,
+      ROLE_SLUGS.ADMIN,
+      ROLE_SLUGS.MANAGER,
+      ROLE_SLUGS.LISTING_MANAGER,
+      ROLE_SLUGS.OPS_USER,
+    ],
+  ),
   p('inventory.adjust', 'Adjust inventory', 'inventory', MANAGER_UP),
   p('inventory.allocate', 'Allocate inventory', 'inventory', MANAGER_UP),
   p('inventory.reconcile', 'Reconcile inventory', 'inventory', ADMIN_UP),
@@ -219,7 +254,12 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('stores.view', 'View stores', 'stores', READ_ONLY),
   p('stores.manage', 'Manage stores', 'stores', MANAGER_UP),
   p('stores.assign', 'Assign users to stores', 'stores', MANAGER_UP),
-  p('stores.access_all_manage', 'Toggle store access_all for users', 'stores', ADMIN_UP),
+  p(
+    'stores.access_all_manage',
+    'Toggle store access_all for users',
+    'stores',
+    ADMIN_UP,
+  ),
 
   // ── eBay integrations ──
   p('ebay.view', 'View eBay accounts', 'ebay', READ_ONLY),
@@ -230,10 +270,30 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('ebay.audit', 'View eBay API audit logs', 'ebay', MANAGER_UP),
 
   // ── Published listings (live eBay mirror) ──
-  p('published_listings.view', 'View published eBay listings', 'published_listings', READ_ONLY),
-  p('published_listings.sync', 'Sync published listings from eBay', 'published_listings', READ_WRITE),
-  p('published_listings.manage', 'Revise/end published listings', 'published_listings', READ_WRITE),
-  p('published_listings.bulk', 'Bulk actions on published listings', 'published_listings', MANAGER_UP),
+  p(
+    'published_listings.view',
+    'View published eBay listings',
+    'published_listings',
+    READ_ONLY,
+  ),
+  p(
+    'published_listings.sync',
+    'Sync published listings from eBay',
+    'published_listings',
+    READ_WRITE,
+  ),
+  p(
+    'published_listings.manage',
+    'Revise/end published listings',
+    'published_listings',
+    READ_WRITE,
+  ),
+  p(
+    'published_listings.bulk',
+    'Bulk actions on published listings',
+    'published_listings',
+    MANAGER_UP,
+  ),
 
   // ── Settings (tenant operational) ──
   p('settings.view', 'View settings', 'settings', READ_ONLY),
@@ -247,7 +307,12 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
 
   // ── Notifications & audit ──
   p('notifications.view', 'View notifications', 'notifications', READ_ONLY),
-  p('notifications.manage', 'Manage notifications', 'notifications', READ_WRITE),
+  p(
+    'notifications.manage',
+    'Manage notifications',
+    'notifications',
+    READ_WRITE,
+  ),
   p('audit.view', 'View audit trail', 'audit', MANAGER_UP),
 
   // ── Motors intelligence ──
@@ -332,13 +397,15 @@ export const ROLE_DEFINITIONS: {
   {
     slug: ROLE_SLUGS.LISTING_USER,
     name: 'Listing User',
-    description: 'Upload sheets, verify data, and edit draft listings. Cannot publish, revise, or delete.',
+    description:
+      'Upload sheets, verify data, and edit draft listings. Cannot publish, revise, or delete.',
     isSystem: true,
   },
   {
     slug: ROLE_SLUGS.SUPERVISOR,
     name: 'Supervisor',
-    description: 'Approve and publish listings, revise live listings. Cannot delete or change price on live listings without manager approval.',
+    description:
+      'Approve and publish listings, revise live listings. Cannot delete or change price on live listings without manager approval.',
     isSystem: true,
   },
 ];

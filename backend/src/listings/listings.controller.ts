@@ -65,13 +65,21 @@ export class ListingsController {
 
   @Put(':id')
   @RequirePermissions('listings.update')
-  update(@Param('id') id: string, @Body() dto: UpdateListingDto, @CurrentUser() user: User) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateListingDto,
+    @CurrentUser() user: User,
+  ) {
     return this.listingsService.update(id, dto, user);
   }
 
   @Patch(':id/status')
   @RequirePermissions('listings.update')
-  patchStatus(@Param('id') id: string, @Body() dto: PatchStatusDto, @CurrentUser() user: User) {
+  patchStatus(
+    @Param('id') id: string,
+    @Body() dto: PatchStatusDto,
+    @CurrentUser() user: User,
+  ) {
     return this.listingsService.patchStatus(id, dto, user);
   }
 
@@ -107,7 +115,11 @@ export class ListingsController {
 
   @Get('export')
   @RequirePermissions('listings.export')
-  async exportCsv(@Query() query: SearchQueryDto, @Res() res: Response, @CurrentUser() user: User) {
+  async exportCsv(
+    @Query() query: SearchQueryDto,
+    @Res() res: Response,
+    @CurrentUser() user: User,
+  ) {
     const csv = await this.listingsService.exportCsv(query, user);
     const dateStr = new Date().toISOString().slice(0, 10);
     res.set({

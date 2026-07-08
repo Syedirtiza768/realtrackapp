@@ -2,42 +2,60 @@ import { IsOptional, IsInt, IsString, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListingsQueryDto {
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
   limit?: number;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   offset?: number;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   search?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   sku?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   categoryId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   categoryName?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   brand?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   cType?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   conditionId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   sourceFile?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   hasImage?: string; // '1' = only with images
 
-  @IsOptional() @IsString()
-  makes?: string;   // fitment make IDs (comma-separated)
+  @IsOptional()
+  @IsString()
+  makes?: string; // fitment make IDs (comma-separated)
 
-  @IsOptional() @IsString()
-  models?: string;  // fitment model IDs (comma-separated)
+  @IsOptional()
+  @IsString()
+  models?: string; // fitment model IDs (comma-separated)
 }

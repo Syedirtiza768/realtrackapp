@@ -35,7 +35,12 @@ export class EbayCategory {
   treeId!: string;
 
   /** Parent category ID (null for root) */
-  @Column({ name: 'parent_category_id', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'parent_category_id',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   parentCategoryId!: string | null;
 
   /** Category name */

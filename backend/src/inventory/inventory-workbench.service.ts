@@ -138,7 +138,12 @@ export class InventoryWorkbenchService {
   /** In-memory cache for eBay category suggestions (reduces 429s). */
   private readonly categorySuggestionCache = new Map<
     string,
-    { at: number; suggestions: Awaited<ReturnType<EbayTaxonomyApiService['getCategorySuggestions']>> }
+    {
+      at: number;
+      suggestions: Awaited<
+        ReturnType<EbayTaxonomyApiService['getCategorySuggestions']>
+      >;
+    }
   >();
   private static readonly CATEGORY_CACHE_TTL_MS = 60 * 60 * 1000;
   private static readonly CATEGORY_API_DELAY_MS = 2500;
@@ -1037,7 +1042,9 @@ export class InventoryWorkbenchService {
   private async getCategorySuggestionsCached(
     query: string,
     treeId: string,
-  ): Promise<Awaited<ReturnType<EbayTaxonomyApiService['getCategorySuggestions']>>> {
+  ): Promise<
+    Awaited<ReturnType<EbayTaxonomyApiService['getCategorySuggestions']>>
+  > {
     const key = `${treeId}::${query.toLowerCase().trim()}`;
     const cached = this.categorySuggestionCache.get(key);
     if (
@@ -1046,7 +1053,10 @@ export class InventoryWorkbenchService {
     ) {
       return cached.suggestions;
     }
-    const suggestions = await this.taxonomy.getCategorySuggestions(query, treeId);
+    const suggestions = await this.taxonomy.getCategorySuggestions(
+      query,
+      treeId,
+    );
     this.categorySuggestionCache.set(key, { at: Date.now(), suggestions });
     return suggestions;
   }
@@ -1059,7 +1069,10 @@ export class InventoryWorkbenchService {
     if (!trimmed) return null;
     const treeId = resolveCategoryTreeId(mkt);
     try {
-      const suggestions = await this.getCategorySuggestionsCached(trimmed, treeId);
+      const suggestions = await this.getCategorySuggestionsCached(
+        trimmed,
+        treeId,
+      );
       const best = suggestions[0]?.category;
       if (best?.categoryId) {
         return {
@@ -1100,7 +1113,7 @@ export class InventoryWorkbenchService {
   ): Promise<number> {
     if (!listing.customLabelSku) return 0;
     try {
-      let product = await this.productRepo.findOne({
+      const product = await this.productRepo.findOne({
         where: { sku: listing.customLabelSku },
       });
       if (!product) return 0;
@@ -1123,7 +1136,7 @@ export class InventoryWorkbenchService {
       }
 
       const seededFitment = Array.isArray(product.fitmentData)
-        ? (product.fitmentData as Record<string, unknown>[])
+        ? product.fitmentData
         : [];
 
       const fitmentResult = await this.fitmentDiscovery.discover(product, {

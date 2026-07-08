@@ -29,7 +29,9 @@ const createMockRepo = () => ({
     take: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
     getRawMany: jest.fn().mockResolvedValue([]),
-    getRawOne: jest.fn().mockResolvedValue({ count: '0', revenue: '0', avgPrice: '0' }),
+    getRawOne: jest
+      .fn()
+      .mockResolvedValue({ count: '0', revenue: '0', avgPrice: '0' }),
     getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
   })),
   manager: {
@@ -51,7 +53,9 @@ describe('DashboardService (regression)', () => {
     listingRepo = createMockRepo();
 
     // Sales repo needs manager.query for some dashboard methods
-    salesRepo.manager = { query: jest.fn().mockResolvedValue([{ avgDays: '3.5' }]) };
+    salesRepo.manager = {
+      query: jest.fn().mockResolvedValue([{ avgDays: '3.5' }]),
+    };
     listingRepo.manager = { query: jest.fn().mockResolvedValue([]) };
 
     const module: TestingModule = await Test.createTestingModule({

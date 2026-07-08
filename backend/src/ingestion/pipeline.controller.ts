@@ -26,9 +26,15 @@ import { AddIntakePartDto } from './dto/add-intake-part.dto.js';
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import type { CombinedOptimizationResult } from './pipeline.service.js';
 import type { EnterpriseOptimizationResult } from './pipeline.service.js';
-import { RequirePermissions, RequireAnyPermission } from '../rbac/decorators/require-permissions.decorator.js';
+import {
+  RequirePermissions,
+  RequireAnyPermission,
+} from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
-import { isPipelineMarketplaceCode, type PipelineMarketplaceCode } from '../common/marketplaces/pipeline-marketplaces.js';
+import {
+  isPipelineMarketplaceCode,
+  type PipelineMarketplaceCode,
+} from '../common/marketplaces/pipeline-marketplaces.js';
 import { User } from '../auth/entities/user.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { TeamsService } from '../teams/teams.service.js';
@@ -72,7 +78,9 @@ export class PipelineController {
 
   @Get('jobs/:id/optimization')
   @RequirePermissions('pipeline.view')
-  @ApiOperation({ summary: 'Get mandatory listing optimization status for a pipeline job' })
+  @ApiOperation({
+    summary: 'Get mandatory listing optimization status for a pipeline job',
+  })
   async getOptimizationStatus(
     @Param('id') id: string,
     @Query('marketplace') marketplace?: string,
@@ -82,7 +90,9 @@ export class PipelineController {
 
   @Get('jobs/:id/products/:productId/optimization')
   @RequirePermissions('pipeline.view')
-  @ApiOperation({ summary: 'Get optimization details for a single catalog product' })
+  @ApiOperation({
+    summary: 'Get optimization details for a single catalog product',
+  })
   async getProductOptimization(
     @Param('id') _jobId: string,
     @Param('productId') productId: string,
@@ -93,7 +103,9 @@ export class PipelineController {
   @Post('jobs/:id/products/:productId/rerun-optimization')
   @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Admin/debug: force re-run optimization for one product' })
+  @ApiOperation({
+    summary: 'Admin/debug: force re-run optimization for one product',
+  })
   async rerunProductOptimization(
     @Param('productId') productId: string,
     @Body() body?: { marketplace?: 'US' | 'DE' | 'AU' },
@@ -123,7 +135,10 @@ export class PipelineController {
   @Post('jobs/:id/bypass-optimization')
   @RequirePermissions('pipeline.manage')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Bypass mandatory optimization — mark all products as completed so downloads unlock' })
+  @ApiOperation({
+    summary:
+      'Bypass mandatory optimization — mark all products as completed so downloads unlock',
+  })
   async bypassOptimization(@Param('id') id: string) {
     return this.pipelineService.bypassJobOptimization(id);
   }
@@ -133,7 +148,8 @@ export class PipelineController {
   @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Re-run mandatory listing optimization for entire job (admin/debug)',
+    summary:
+      'Re-run mandatory listing optimization for entire job (admin/debug)',
   })
   async runCombinedOptimization(
     @Param('id') id: string,
@@ -154,7 +170,9 @@ export class PipelineController {
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload an Excel/CSV file and start enrichment pipeline' })
+  @ApiOperation({
+    summary: 'Upload an Excel/CSV file and start enrichment pipeline',
+  })
   async uploadAndStart(
     @UploadedFile() file: Express.Multer.File,
     @Body('teamId') teamId: string,
@@ -177,7 +195,10 @@ export class PipelineController {
     }
     const marketplaceCode = marketplace.trim() as PipelineMarketplaceCode;
 
-    const manageAllTeams = await this.rbac.userHasPermission(user.id, 'teams.manage');
+    const manageAllTeams = await this.rbac.userHasPermission(
+      user.id,
+      'teams.manage',
+    );
     const job = await this.pipelineService.createJobFromUpload(
       file.originalname,
       file.buffer,
@@ -203,14 +224,20 @@ export class PipelineController {
 
   @Get('single-listing/brands')
   @RequirePermissions('listings.create')
-  @ApiOperation({ summary: 'List brand/make options (catalog + static OEM list) for new listing form' })
+  @ApiOperation({
+    summary:
+      'List brand/make options (catalog + static OEM list) for new listing form',
+  })
   async singleListingBrands(@Query('q') q?: string) {
     return this.singleListingForm.listBrands(q);
   }
 
   @Get('single-listing/lookup-pricing')
   @RequirePermissions('listings.create')
-  @ApiOperation({ summary: 'Estimated OpenRouter cost for single-listing part lookup at scale' })
+  @ApiOperation({
+    summary:
+      'Estimated OpenRouter cost for single-listing part lookup at scale',
+  })
   async singleListingLookupPricing() {
     return this.singleListingForm.getLookupPricing();
   }
@@ -231,7 +258,10 @@ export class PipelineController {
   @Throttle({ medium: { limit: 20, ttl: 60_000 } })
   @RequirePermissions('listings.create')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Warehouse intake — save part type, condition, price, and identity as draft inventory' })
+  @ApiOperation({
+    summary:
+      'Warehouse intake — save part type, condition, price, and identity as draft inventory',
+  })
   async addIntakePart(@Body() body: AddIntakePartDto) {
     return this.singleListingForm.createIntakePart(body);
   }
@@ -240,7 +270,10 @@ export class PipelineController {
   @Throttle({ medium: { limit: 5, ttl: 60_000 } })
   @RequirePermissions('pipeline.run')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Submit a single listing for pipeline enrichment (generates a single-row CSV internally)' })
+  @ApiOperation({
+    summary:
+      'Submit a single listing for pipeline enrichment (generates a single-row CSV internally)',
+  })
   async createSingleListing(
     @Body() body: CreateSingleListingDto,
     @CurrentUser() user: User,
@@ -261,9 +294,15 @@ export class PipelineController {
     @Query('offset') offset?: number,
   ) {
     const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
-    const manageAllTeams = await this.rbac.userHasPermission(user.id, 'teams.manage');
+    const manageAllTeams = await this.rbac.userHasPermission(
+      user.id,
+      'teams.manage',
+    );
     const parsedTeamIds = teamIds
-      ? teamIds.split(',').map((s) => s.trim()).filter(Boolean)
+      ? teamIds
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : undefined;
     if (parsedTeamIds?.length) {
       await this.teamsService.assertUserCanAccessTeams(
@@ -334,7 +373,9 @@ export class PipelineController {
 
   @Get('jobs/:id/download/:template')
   @RequirePermissions('pipeline.export')
-  @ApiOperation({ summary: 'Download pipeline output file (us, uk, au, de, report)' })
+  @ApiOperation({
+    summary: 'Download pipeline output file (us, uk, au, de, report)',
+  })
   async downloadOutput(
     @Param('id') id: string,
     @Param('template') template: string,
@@ -371,11 +412,15 @@ export class PipelineController {
         filename = job.originalFilename;
         break;
       default:
-        throw new Error(`Unknown template: ${template}. Use: us, uk, au, de, report, input`);
+        throw new Error(
+          `Unknown template: ${template}. Use: us, uk, au, de, report, input`,
+        );
     }
 
     if (!filePath || !fs.existsSync(filePath)) {
-      res.status(404).json({ message: `Output file not yet available for template: ${template}` });
+      res.status(404).json({
+        message: `Output file not yet available for template: ${template}`,
+      });
       return;
     }
 
@@ -388,7 +433,8 @@ export class PipelineController {
     } else if (ext === '.xls') {
       mimeType = 'application/vnd.ms-excel';
     } else {
-      mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      mimeType =
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     }
 
     res.setHeader('Content-Type', mimeType);

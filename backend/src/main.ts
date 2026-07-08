@@ -31,7 +31,9 @@ async function bootstrap() {
     'http://mhn.realtrackapp.com',
   ];
   const corsOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    ? process.env.CORS_ORIGIN.split(',')
+        .map((o) => o.trim())
+        .filter(Boolean)
     : defaultCorsOrigins;
   app.enableCors({ origin: corsOrigins });
 

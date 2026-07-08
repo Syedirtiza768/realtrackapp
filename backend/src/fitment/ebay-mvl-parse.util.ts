@@ -31,7 +31,10 @@ const FILE_MARKETPLACE_PATTERNS: Array<{
   test: RegExp;
 }> = [
   { marketplace: 'US', test: /(?:^|[_\-\s])US[_\-\s]?MVL/i },
-  { marketplace: 'AU', test: /(?:^|[_\-\s])AU[_\-\s]?MVL|eBay[-_]AU|AU_Master_Vehicle/i },
+  {
+    marketplace: 'AU',
+    test: /(?:^|[_\-\s])AU[_\-\s]?MVL|eBay[-_]AU|AU_Master_Vehicle/i,
+  },
   { marketplace: 'DE', test: /(?:^|[_\-\s])DE[_\-\s]?MVL/i },
   { marketplace: 'GB', test: /(?:^|[_\-\s])UK[_\-\s]?MVL/i },
 ];
@@ -119,10 +122,7 @@ export function expandYearsFromDePeriod(period: unknown): number[] {
   return years;
 }
 
-function rowToMap(
-  headers: string[],
-  row: unknown[],
-): Record<string, string> {
+function rowToMap(headers: string[], row: unknown[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (let i = 0; i < headers.length; i++) {
     const key = clean(headers[i]);
@@ -158,7 +158,9 @@ export function parseUsMvlRow(row: Record<string, string>): ParsedMvlEntry[] {
       engine,
       submodel,
       body: !isBlank(row.Body) ? clean(row.Body) : undefined,
-      displayName: !isBlank(row.DisplayName) ? clean(row.DisplayName) : undefined,
+      displayName: !isBlank(row.DisplayName)
+        ? clean(row.DisplayName)
+        : undefined,
       extras: {
         aspiration: row.Aspiration || undefined,
         driveType: row['Drive Type'] || undefined,
@@ -237,7 +239,9 @@ export function parseDeMvlRow(row: Record<string, string>): ParsedMvlEntry[] {
       platform: !isBlank(row.Plattform_Platform_EN)
         ? clean(row.Plattform_Platform_EN)
         : undefined,
-      engine: !isBlank(row.Motor_Engine_EN) ? clean(row.Motor_Engine_EN) : undefined,
+      engine: !isBlank(row.Motor_Engine_EN)
+        ? clean(row.Motor_Engine_EN)
+        : undefined,
       ktype: !isBlank(row['K-Type']) ? clean(row['K-Type']) : undefined,
       extras: {
         hsnTsn: row.HSN_TSN_nur_zur_Hilfe || undefined,

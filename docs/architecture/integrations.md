@@ -21,6 +21,13 @@
 - Multi-store: `ebay-multi-store-listing.service.ts`, `InternalStore`,
   `ListingStoreOverride`, `EbayAccountMarketplace`.
 - API audit/error logging: `EbayApiAuditLog`, `EbayApiError`.
+- Vehicle fitment / compatibility is published as structured data via the
+  eBay Inventory API `PUT /inventory_item/{sku}/product_compatibility` after
+  the inventory item is created/updated. Source of truth is
+  `catalog_products.fitment_data`; `fitment_rows` is used as a fallback, and
+  rows tagged `rejected` (via `MvlStatus` or `validationStatus`) are skipped.
+  `fitment-mvl.util.ts` normalizes both field naming conventions and expands
+  `yearStart`/`yearEnd` ranges into per-year compatibility rows.
 - Reference docs: `docs/EBAY_MULTI_STORE_DEVELOPER_HANDOFF.md`,
   `docs/ebay-multi-store-architecture.md`, `docs/ebay-api-integration-notes.md`,
   `docs/ebay-client-onboarding.md`.

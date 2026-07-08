@@ -35,7 +35,10 @@ export class SellerpunditHttpClient {
         (data as { accessToken?: string }).accessToken ??
         (data as { data?: { token?: string } }).data?.token;
       if (!token || typeof token !== 'string') {
-        throw this.toError(502, 'SellerPundit login did not return a JWT token');
+        throw this.toError(
+          502,
+          'SellerPundit login did not return a JWT token',
+        );
       }
       return token;
     } catch (e) {
@@ -44,8 +47,14 @@ export class SellerpunditHttpClient {
     }
   }
 
-  async get<T>(jwt: string, path: string, query?: Record<string, string>): Promise<T> {
-    const url = new URL(`${this.marketplacesBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`);
+  async get<T>(
+    jwt: string,
+    path: string,
+    query?: Record<string, string>,
+  ): Promise<T> {
+    const url = new URL(
+      `${this.marketplacesBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`,
+    );
     if (query) {
       for (const [k, v] of Object.entries(query)) {
         url.searchParams.set(k, v);
@@ -89,7 +98,11 @@ export class SellerpunditHttpClient {
         return data;
       } catch (e) {
         lastErr = e;
-        if (!axios.isAxiosError(e) || e.response?.status !== 504 || i === attempts - 1) {
+        if (
+          !axios.isAxiosError(e) ||
+          e.response?.status !== 504 ||
+          i === attempts - 1
+        ) {
           throw this.fromAxios(e);
         }
       }
@@ -102,10 +115,7 @@ export class SellerpunditHttpClient {
       throw this.fromAxiosError(err);
     }
     const msg = err instanceof Error ? err.message : String(err);
-    throw new HttpException(
-      { message: msg, errors: [msg] },
-      502,
-    );
+    throw new HttpException({ message: msg, errors: [msg] }, 502);
   }
 
   private fromAxiosError(err: AxiosError): never {
@@ -132,7 +142,11 @@ export class SellerpunditHttpClient {
         }
       }
       const data = b.data;
-      if (data && typeof data === 'object' && Array.isArray((data as { errors?: unknown }).errors)) {
+      if (
+        data &&
+        typeof data === 'object' &&
+        Array.isArray((data as { errors?: unknown }).errors)
+      ) {
         for (const item of (data as { errors: unknown[] }).errors) {
           if (typeof item === 'string') errors.push(item);
         }
@@ -149,16 +163,10 @@ export class SellerpunditHttpClient {
       body != null && typeof body === 'object' && !Array.isArray(body)
         ? (body as Record<string, unknown>)
         : undefined;
-    throw new HttpException(
-      { message, errors, details },
-      status,
-    );
+    throw new HttpException({ message, errors, details }, status);
   }
 
   toError(httpStatus: number, message: string): HttpException {
-    return new HttpException(
-      { message, errors: [message] },
-      httpStatus,
-    );
+    return new HttpException({ message, errors: [message] }, httpStatus);
   }
 }

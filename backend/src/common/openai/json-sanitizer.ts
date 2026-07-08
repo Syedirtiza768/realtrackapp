@@ -170,7 +170,7 @@ export function sanitizeJson(raw: string): unknown {
     return JSON.parse(collapsed);
   } catch (finalError: any) {
     throw new Error(
-      `sanitizeJson: unable to parse JSON after all fixes. Last error: ${finalError.message}`
+      `sanitizeJson: unable to parse JSON after all fixes. Last error: ${finalError.message}`,
     );
   }
 }

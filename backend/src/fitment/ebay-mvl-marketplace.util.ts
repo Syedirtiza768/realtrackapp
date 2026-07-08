@@ -55,6 +55,6 @@ export function mvlMarketplaceToTreeId(marketplace: MvlMarketplace): string {
       ? 'EBAY_US'
       : marketplace === 'GB'
         ? 'EBAY_GB'
-        : (`EBAY_${marketplace}` as keyof typeof MARKETPLACE_CATEGORY_TREE_IDS);
+        : `EBAY_${marketplace}`;
   return MARKETPLACE_CATEGORY_TREE_IDS[ebayId] ?? '0';
 }

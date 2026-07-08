@@ -51,7 +51,7 @@ export class UserOrganizationService {
    */
   async ensureDefaultForUser(userId: string): Promise<UserOrganizationSummary> {
     const existing = await this.listForUser(userId);
-    if (existing.length > 0) return existing[0]!;
+    if (existing.length > 0) return existing[0];
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     const label =
@@ -101,9 +101,9 @@ export class UserOrganizationService {
     const orgs = await this.listForUser(userId);
     if (orgs.length === 1) {
       const member = await this.memberRepo.findOneOrFail({
-        where: { userId, organizationId: orgs[0]!.organizationId },
+        where: { userId, organizationId: orgs[0].organizationId },
       });
-      return { organizationId: orgs[0]!.organizationId, member };
+      return { organizationId: orgs[0].organizationId, member };
     }
     if (orgs.length === 0) {
       const created = await this.ensureDefaultForUser(userId);
@@ -130,7 +130,7 @@ export class UserOrganizationService {
       const created = await this.ensureDefaultForUser(userId);
       organizations = [created];
     }
-    const active = organizations[0]!;
+    const active = organizations[0];
     return {
       organizationId: active.organizationId,
       organizationName: active.name,

@@ -77,7 +77,9 @@ describe('ebay-mvl-parse.util', () => {
     expect(detectMvlMarketplaceFromFileName('US_MVL_2026_05.xlsx')).toBe('US');
     expect(detectMvlMarketplaceFromFileName('UK_MVL_2026_04.xlsx')).toBe('GB');
     expect(
-      detectMvlMarketplaceFromFileName('eBay-AU_Master_Vehicle_List_202604.xlsx'),
+      detectMvlMarketplaceFromFileName(
+        'eBay-AU_Master_Vehicle_List_202604.xlsx',
+      ),
     ).toBe('AU');
   });
 });

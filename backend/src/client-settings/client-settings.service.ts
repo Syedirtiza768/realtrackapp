@@ -28,9 +28,7 @@ export class ClientSettingsService {
 
   async getEffective(organizationId?: string | null): Promise<ClientSettings> {
     let row = await this.repo.findOne({
-      where: organizationId
-        ? { organizationId }
-        : { organizationId: IsNull() },
+      where: organizationId ? { organizationId } : { organizationId: IsNull() },
     });
     if (!row && organizationId) {
       row = await this.repo.findOne({ where: { organizationId: IsNull() } });
@@ -52,11 +50,11 @@ export class ClientSettingsService {
   }
 
   /** Idempotent seed — does not overwrite customized rows. */
-  async seedDefaults(organizationId: string | null = null): Promise<ClientSettings> {
+  async seedDefaults(
+    organizationId: string | null = null,
+  ): Promise<ClientSettings> {
     const existing = await this.repo.findOne({
-      where: organizationId
-        ? { organizationId }
-        : { organizationId: IsNull() },
+      where: organizationId ? { organizationId } : { organizationId: IsNull() },
     });
     if (existing) return existing;
 
@@ -68,21 +66,23 @@ export class ClientSettingsService {
     );
   }
 
-  async getPublicBranding(): Promise<Pick<
-    ClientSettings,
-    | 'appName'
-    | 'clientName'
-    | 'shortName'
-    | 'logoUrl'
-    | 'faviconUrl'
-    | 'loginLogoUrl'
-    | 'primaryColor'
-    | 'secondaryColor'
-    | 'accentColor'
-    | 'themeMode'
-    | 'footerText'
-    | 'poweredByVisible'
-  >> {
+  async getPublicBranding(): Promise<
+    Pick<
+      ClientSettings,
+      | 'appName'
+      | 'clientName'
+      | 'shortName'
+      | 'logoUrl'
+      | 'faviconUrl'
+      | 'loginLogoUrl'
+      | 'primaryColor'
+      | 'secondaryColor'
+      | 'accentColor'
+      | 'themeMode'
+      | 'footerText'
+      | 'poweredByVisible'
+    >
+  > {
     const row = await this.getEffective(null);
     return {
       appName: row.appName,

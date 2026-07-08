@@ -42,9 +42,15 @@ export class Phase3PriceTypesMigration1709251200000 implements MigrationInterfac
     `);
 
     // ─── Step 3: Create indexes on new numeric columns ───
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_listing_start_price_num ON listing_records("startPriceNum")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_listing_quantity_num ON listing_records("quantityNum")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_listing_bin_price_num ON listing_records("buyItNowPriceNum")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_listing_start_price_num ON listing_records("startPriceNum")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_listing_quantity_num ON listing_records("quantityNum")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_listing_bin_price_num ON listing_records("buyItNowPriceNum")`,
+    );
 
     // ─── Step 4: Create a trigger to auto-sync TEXT → NUMERIC on INSERT/UPDATE ───
     await queryRunner.query(`
@@ -78,8 +84,12 @@ export class Phase3PriceTypesMigration1709251200000 implements MigrationInterfac
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TRIGGER IF EXISTS trg_sync_listing_prices ON listing_records`);
-    await queryRunner.query(`DROP FUNCTION IF EXISTS sync_listing_numeric_prices()`);
+    await queryRunner.query(
+      `DROP TRIGGER IF EXISTS trg_sync_listing_prices ON listing_records`,
+    );
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS sync_listing_numeric_prices()`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS idx_listing_bin_price_num`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_listing_quantity_num`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_listing_start_price_num`);

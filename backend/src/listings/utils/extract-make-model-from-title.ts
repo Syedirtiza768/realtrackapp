@@ -40,9 +40,10 @@ const MULTI_WORD_MAKES: [RegExp, string][] = [
   [/^BMW\s+MINI\b/i, 'MINI'],
 ];
 
-export function extractMakeModelFromTitle(
-  title: string | null | undefined,
-): { make: string | null; model: string | null } {
+export function extractMakeModelFromTitle(title: string | null | undefined): {
+  make: string | null;
+  model: string | null;
+} {
   if (!title?.trim()) return { make: null, model: null };
   const t = title.trim();
 
@@ -83,8 +84,7 @@ export function extractMakeModelFromTitle(
 
   const modelToken = restForModel.split(/\s+/)[0] ?? '';
   const cleaned = modelToken.replace(/[^\w.-]/g, '');
-  const model =
-    cleaned.length > 0 ? cleaned.slice(0, 100) : null;
+  const model = cleaned.length > 0 ? cleaned.slice(0, 100) : null;
 
   return { make, model };
 }

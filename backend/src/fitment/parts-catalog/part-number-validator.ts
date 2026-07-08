@@ -52,19 +52,40 @@ const BRAND_PART_FORMATS: BrandPartFormat[] = [
     format: /^\d{7,8}$/,
     description: 'GM/Chevrolet/GMC/Cadillac: 7-8 digit number',
     examples: ['84127658', '12663410', '13598505'],
-    aliases: ['chevrolet', 'chevy', 'gmc', 'cadillac', 'buick', 'pontiac', 'oldsmobile', 'saturn', 'gm', 'general motors'],
+    aliases: [
+      'chevrolet',
+      'chevy',
+      'gmc',
+      'cadillac',
+      'buick',
+      'pontiac',
+      'oldsmobile',
+      'saturn',
+      'gm',
+      'general motors',
+    ],
   },
   {
     brand: 'Volkswagen',
     format: /^[A-Z0-9]{3}\s?\d{3}\s?\d{3}[A-Z]?$/,
-    description: 'VW/Audi/Porsche: 3 alphanumeric, 3 digits, 3 digits, optional letter',
+    description:
+      'VW/Audi/Porsche: 3 alphanumeric, 3 digits, 3 digits, optional letter',
     examples: ['5Q0 698 151', '5Q0698151A'],
-    aliases: ['volkswagen', 'vw', 'audi', 'porsche', 'bentley', 'lamborghini', 'bugatti'],
+    aliases: [
+      'volkswagen',
+      'vw',
+      'audi',
+      'porsche',
+      'bentley',
+      'lamborghini',
+      'bugatti',
+    ],
   },
   {
     brand: 'Honda',
     format: /^\d{5}[-]?\w{5}$/,
-    description: 'Honda/Acura: 5 digits, dash, 5 alphanumeric (e.g., 06431-S9A-000)',
+    description:
+      'Honda/Acura: 5 digits, dash, 5 alphanumeric (e.g., 06431-S9A-000)',
     examples: ['06431-S9A-000', '15400-PLM-A02'],
     aliases: ['honda', 'acura'],
   },
@@ -110,9 +131,12 @@ function normalizeBrand(brand: string): string {
  */
 function findBrandFormat(brand: string): BrandPartFormat | null {
   const normalized = normalizeBrand(brand);
-  return BRAND_PART_FORMATS.find(
-    f => f.aliases.includes(normalized) || f.brand.toLowerCase() === normalized
-  ) || null;
+  return (
+    BRAND_PART_FORMATS.find(
+      (f) =>
+        f.aliases.includes(normalized) || f.brand.toLowerCase() === normalized,
+    ) || null
+  );
 }
 
 export interface PartNumberValidationResult {
@@ -207,11 +231,12 @@ export function detectHallucinatedPartNumbers(
     const result = validatePartNumber(part.oem_part_number, brand);
 
     if (!result.valid && result.confidence < 0.3) {
-      const matchInfo = result.matchedBrands.length > 0
-        ? ` (matches ${result.matchedBrands.join(', ')} format instead)`
-        : '';
+      const matchInfo =
+        result.matchedBrands.length > 0
+          ? ` (matches ${result.matchedBrands.join(', ')} format instead)`
+          : '';
       warnings.push(
-        `"${part.part_name || 'Unknown'}": OEM# "${part.oem_part_number}" does not match ${brand} format${matchInfo}`
+        `"${part.part_name || 'Unknown'}": OEM# "${part.oem_part_number}" does not match ${brand} format${matchInfo}`,
       );
     }
   }

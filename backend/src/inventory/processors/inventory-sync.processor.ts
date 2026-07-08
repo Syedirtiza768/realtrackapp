@@ -40,19 +40,30 @@ export class InventorySyncProcessor extends WorkerHost {
     }
   }
 
-  private async handleReconcile(job: Job<{ listingIds: string[] }>): Promise<void> {
-    this.logger.log(`Running reconciliation for ${job.data.listingIds.length} listings`);
-    const { results } = await this.inventoryService.reconcile(job.data.listingIds);
+  private async handleReconcile(
+    job: Job<{ listingIds: string[] }>,
+  ): Promise<void> {
+    this.logger.log(
+      `Running reconciliation for ${job.data.listingIds.length} listings`,
+    );
+    const { results } = await this.inventoryService.reconcile(
+      job.data.listingIds,
+    );
     const corrected = results.filter((r) => r.status === 'corrected').length;
-    this.logger.log(`Reconciliation complete: ${corrected} corrections applied`);
+    this.logger.log(
+      `Reconciliation complete: ${corrected} corrections applied`,
+    );
   }
 
   private async handleLowStockAlert(_job: Job): Promise<void> {
     const items = await this.inventoryService.getLowStock(5, 100);
     if (items.length > 0) {
-      this.logger.warn(`Low stock alert: ${items.length} items below threshold`);
+      this.logger.warn(
+        `Low stock alert: ${items.length} items below threshold`,
+      );
       for (const item of items) {
-        const available = (item.quantityTotal ?? 0) - (item.quantityReserved ?? 0);
+        const available =
+          (item.quantityTotal ?? 0) - (item.quantityReserved ?? 0);
         if (available <= 0) {
           this.eventEmitter.emit('inventory.out_of_stock', {
             listingId: item.listingId,
@@ -72,23 +83,33 @@ export class InventorySyncProcessor extends WorkerHost {
 
   private async handleDuplicateScan(_job: Job): Promise<void> {
     const duplicates = await this.inventoryService.findDuplicates(0.7);
-    this.logger.log(`Duplicate scan found ${duplicates.length} potential pairs`);
+    this.logger.log(
+      `Duplicate scan found ${duplicates.length} potential pairs`,
+    );
   }
 
   /**
    * Auto-enrich a single listing: vision lookup → AI marketplace content (US/AU/DE) inline.
    * No pipeline job — all done synchronously right in the modal.
    */
-  private async handleAutoEnrich(job: Job<{ listingId: string; force?: boolean }>): Promise<void> {
+  private async handleAutoEnrich(
+    job: Job<{ listingId: string; force?: boolean }>,
+  ): Promise<void> {
     const { listingId } = job.data;
-    this.logger.log(`Auto-enrich: starting inline enrichment for listing ${listingId}`);
+    this.logger.log(
+      `Auto-enrich: starting inline enrichment for listing ${listingId}`,
+    );
 
     try {
       await this.workbench.inlineEnrichListing(listingId);
-      this.logger.log(`Auto-enrich: inline enrichment completed for listing ${listingId}`);
+      this.logger.log(
+        `Auto-enrich: inline enrichment completed for listing ${listingId}`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Auto-enrich failed for listing ${listingId}: ${message}`);
+      this.logger.error(
+        `Auto-enrich failed for listing ${listingId}: ${message}`,
+      );
       throw err;
     }
   }

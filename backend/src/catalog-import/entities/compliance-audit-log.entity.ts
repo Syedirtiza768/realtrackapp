@@ -54,7 +54,13 @@ export class ComplianceAuditLog {
   @Column({ type: 'varchar', length: 10, default: 'info' })
   severity!: string;
 
-  @Column({ name: 'compliance_score', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  @Column({
+    name: 'compliance_score',
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
   complianceScore!: number | null;
 
   @Column({ name: 'auto_fixed', type: 'boolean', default: false })

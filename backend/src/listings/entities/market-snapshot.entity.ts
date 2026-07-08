@@ -31,16 +31,40 @@ export class MarketSnapshot {
   @Column({ name: 'total_listings', type: 'integer', default: 0 })
   totalListings!: number;
 
-  @Column({ name: 'avg_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'avg_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   avgPrice!: number | null;
 
-  @Column({ name: 'median_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'median_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   medianPrice!: number | null;
 
-  @Column({ name: 'min_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'min_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   minPrice!: number | null;
 
-  @Column({ name: 'max_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'max_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   maxPrice!: number | null;
 
   // ──────────────────────────── AI Analysis ───────────────────────
@@ -58,7 +82,13 @@ export class MarketSnapshot {
   confidence!: number | null;
 
   /** Cost of the AI analysis (USD) */
-  @Column({ name: 'ai_cost_usd', type: 'numeric', precision: 8, scale: 4, nullable: true })
+  @Column({
+    name: 'ai_cost_usd',
+    type: 'numeric',
+    precision: 8,
+    scale: 4,
+    nullable: true,
+  })
   aiCostUsd!: number | null;
 
   // ──────────────────────────── Metadata ──────────────────────────

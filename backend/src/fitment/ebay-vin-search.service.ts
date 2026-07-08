@@ -53,7 +53,9 @@ export class EbayVinSearchService {
     // Build search query from decoded vehicle data
     const query = this.buildSearchQuery(decoded);
     if (!query) {
-      this.logger.warn(`Cannot build eBay search query for VIN ${vin} — missing make/model`);
+      this.logger.warn(
+        `Cannot build eBay search query for VIN ${vin} — missing make/model`,
+      );
       return [];
     }
 
@@ -73,7 +75,9 @@ export class EbayVinSearchService {
         return [];
       }
 
-      this.logger.log(`Found ${items.length} eBay listings for VIN ${vin}, persisting...`);
+      this.logger.log(
+        `Found ${items.length} eBay listings for VIN ${vin}, persisting...`,
+      );
 
       // Map to listing records and upsert
       const records: Partial<ListingRecord>[] = items.map((item, idx) => ({
@@ -101,9 +105,7 @@ export class EbayVinSearchService {
       // Upsert using the unique constraint on (sourceFileName, sheetName, sourceRowNumber)
       const saved = await this.upsertListings(records);
 
-      this.logger.log(
-        `Persisted ${saved.length} eBay listings for VIN ${vin}`,
-      );
+      this.logger.log(`Persisted ${saved.length} eBay listings for VIN ${vin}`);
 
       return saved;
     } catch (err: any) {
@@ -154,10 +156,14 @@ export class EbayVinSearchService {
           });
           saved.push(await this.listingRepo.save(existing));
         } else {
-          saved.push(await this.listingRepo.save(this.listingRepo.create(record)));
+          saved.push(
+            await this.listingRepo.save(this.listingRepo.create(record)),
+          );
         }
       } catch (err: any) {
-        this.logger.warn(`Failed to upsert listing ${record.customLabelSku}: ${err.message}`);
+        this.logger.warn(
+          `Failed to upsert listing ${record.customLabelSku}: ${err.message}`,
+        );
       }
     }
 

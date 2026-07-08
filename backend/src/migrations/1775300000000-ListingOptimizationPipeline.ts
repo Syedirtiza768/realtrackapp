@@ -81,7 +81,9 @@ export class ListingOptimizationPipeline1775300000000 implements MigrationInterf
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_catalog_optimization_status"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_catalog_optimization_status"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "catalog_products"

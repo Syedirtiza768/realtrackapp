@@ -7,15 +7,15 @@ import {
 } from 'typeorm';
 
 export enum CorrectionType {
-  CHAR_SUBSTITUTION = 'char_substitution',    // O vs 0, I vs 1
+  CHAR_SUBSTITUTION = 'char_substitution', // O vs 0, I vs 1
   HYPHEN_NORMALIZATION = 'hyphen_normalization',
-  SUPERSESSION = 'supersession',               // Part number superseded by new one
-  BRAND_ALIAS = 'brand_alias',                 // Brand name variations
-  BRAND_FORMAT = 'brand_format',               // Brand-specific MPN formatting
-  PAIR_SINGLE = 'pair_single',                 // Pair vs single confusion
-  SIDE_ORIENTATION = 'side_orientation',        // Left vs Right corrections
-  FRONT_REAR = 'front_rear',                   // Front vs Rear corrections
-  PRODUCT_TYPE_ALIAS = 'product_type_alias',   // e.g., "Brake Pad" = "Disc Brake Pad"
+  SUPERSESSION = 'supersession', // Part number superseded by new one
+  BRAND_ALIAS = 'brand_alias', // Brand name variations
+  BRAND_FORMAT = 'brand_format', // Brand-specific MPN formatting
+  PAIR_SINGLE = 'pair_single', // Pair vs single confusion
+  SIDE_ORIENTATION = 'side_orientation', // Left vs Right corrections
+  FRONT_REAR = 'front_rear', // Front vs Rear corrections
+  PRODUCT_TYPE_ALIAS = 'product_type_alias', // e.g., "Brake Pad" = "Disc Brake Pad"
   FITMENT_NORMALIZATION = 'fitment_normalization',
   TITLE_PATTERN = 'title_pattern',
 }

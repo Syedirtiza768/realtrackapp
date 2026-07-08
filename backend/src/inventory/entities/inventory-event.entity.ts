@@ -45,16 +45,32 @@ export class InventoryEvent {
   @Column({ name: 'store_id', type: 'uuid', nullable: true })
   storeId!: string | null;
 
-  @Column({ name: 'source_channel', type: 'varchar', length: 30, nullable: true })
+  @Column({
+    name: 'source_channel',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+  })
   sourceChannel!: string | null;
 
-  @Column({ name: 'source_order_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'source_order_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   sourceOrderId!: string | null;
 
   @Column({ name: 'source_reference', type: 'text', nullable: true })
   sourceReference!: string | null;
 
-  @Column({ name: 'idempotency_key', type: 'varchar', length: 200, unique: true, nullable: true })
+  @Column({
+    name: 'idempotency_key',
+    type: 'varchar',
+    length: 200,
+    unique: true,
+    nullable: true,
+  })
   idempotencyKey!: string | null;
 
   @Column({ type: 'text', nullable: true })

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddFitmentSourceToAiRunLogs1785600000000
-  implements MigrationInterface
-{
+export class AddFitmentSourceToAiRunLogs1785600000000 implements MigrationInterface {
   name = 'AddFitmentSourceToAiRunLogs1785600000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

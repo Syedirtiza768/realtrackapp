@@ -29,7 +29,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     config: ConfigService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {
-    const secret = config.get<string>('JWT_SECRET', 'dev-secret-change-in-production');
+    const secret = config.get<string>(
+      'JWT_SECRET',
+      'dev-secret-change-in-production',
+    );
     super({
       jwtFromRequest: fromAuthHeaderOrQueryParam,
       ignoreExpiration: false,

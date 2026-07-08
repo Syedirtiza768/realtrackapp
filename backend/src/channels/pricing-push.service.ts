@@ -38,11 +38,15 @@ export class PricingPushService {
   }): Promise<void> {
     const enabled = await this.featureFlags.isEnabled('pricing_auto_push');
     if (!enabled) {
-      this.logger.debug('pricing_auto_push flag is disabled — skipping price push');
+      this.logger.debug(
+        'pricing_auto_push flag is disabled — skipping price push',
+      );
       return;
     }
 
-    this.logger.log(`Pricing rule changed (${payload.ruleId}), enqueuing price sync`);
+    this.logger.log(
+      `Pricing rule changed (${payload.ruleId}), enqueuing price sync`,
+    );
 
     await this.channelsQueue.add(
       'sync-inventory',
@@ -103,7 +107,7 @@ export class PricingPushService {
         }
         case 'round': {
           const to = params.roundTo ?? 99;
-          price = Math.floor(price) + (to / 100);
+          price = Math.floor(price) + to / 100;
           appliedRules.push(`${rule.name}: round to .${to}`);
           break;
         }
@@ -113,13 +117,17 @@ export class PricingPushService {
           const minPrice = cost * (1 + minPct / 100);
           if (price < minPrice) {
             price = minPrice;
-            appliedRules.push(`${rule.name}: min margin floor $${minPrice.toFixed(2)}`);
+            appliedRules.push(
+              `${rule.name}: min margin floor $${minPrice.toFixed(2)}`,
+            );
           }
           break;
         }
         case 'competitive': {
           // Placeholder for future competitive pricing integration
-          this.logger.debug(`Competitive pricing rule ${rule.name} — requires external data (skipped)`);
+          this.logger.debug(
+            `Competitive pricing rule ${rule.name} — requires external data (skipped)`,
+          );
           break;
         }
       }

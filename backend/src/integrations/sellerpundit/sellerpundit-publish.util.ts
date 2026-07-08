@@ -1,4 +1,7 @@
-export type SellerpunditPublishFallbackMode = 'auto' | 'sellerpundit' | 'direct_ebay';
+export type SellerpunditPublishFallbackMode =
+  | 'auto'
+  | 'sellerpundit'
+  | 'direct_ebay';
 
 /**
  * SellerPundit production defect: bulk-create SQL references `tokens.marketplaceId`
@@ -60,14 +63,12 @@ export function isSellerpunditRecoverableEbayPublishError(
   );
 }
 
-export function tagSellerpunditPlatformError(
-  result: {
-    success: boolean;
-    error?: string;
-    errors?: string[];
-    platformError?: boolean;
-  },
-): { platformError?: boolean } {
+export function tagSellerpunditPlatformError(result: {
+  success: boolean;
+  error?: string;
+  errors?: string[];
+  platformError?: boolean;
+}): { platformError?: boolean } {
   if (result.success) return {};
   if (
     result.platformError ||

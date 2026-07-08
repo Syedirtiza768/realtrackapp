@@ -56,8 +56,14 @@ export class EbayPaReturnPolicyService {
     condition?: string;
     currentReturnPolicyId?: string | null;
   }): Promise<PaReturnPolicyEnsureResult> {
-    const { store, account, marketplaceId, categoryId, condition, currentReturnPolicyId } =
-      params;
+    const {
+      store,
+      account,
+      marketplaceId,
+      categoryId,
+      condition,
+      currentReturnPolicyId,
+    } = params;
 
     if (
       !listingRequiresPartsAccessoriesReturnPolicy(
@@ -82,7 +88,9 @@ export class EbayPaReturnPolicyService {
           },
         })
       : null;
-    if (isPartsAccessoriesCompliantReturnPolicy(cachedCurrent?.rawPayload ?? {})) {
+    if (
+      isPartsAccessoriesCompliantReturnPolicy(cachedCurrent?.rawPayload ?? {})
+    ) {
       return { returnPolicyId: currentReturnPolicyId!, action: 'picked' };
     }
 
@@ -146,7 +154,12 @@ export class EbayPaReturnPolicyService {
       condition,
     );
     if (picked) {
-      await this.persistReturnPolicy(account.id, marketplaceId, policies, picked);
+      await this.persistReturnPolicy(
+        account.id,
+        marketplaceId,
+        policies,
+        picked,
+      );
       await this.updateMarketplaceDefault(account.id, marketplaceId, picked);
       return { returnPolicyId: picked, action: 'picked' };
     }
@@ -303,7 +316,12 @@ export class EbayPaReturnPolicyService {
     if (!match || !isLikelyEbayRestPolicyId(returnPolicyId)) return;
 
     const existing = await this.policyRepo.findOne({
-      where: { ebayAccountId, marketplaceId, policyType: 'return', ebayPolicyId: returnPolicyId },
+      where: {
+        ebayAccountId,
+        marketplaceId,
+        policyType: 'return',
+        ebayPolicyId: returnPolicyId,
+      },
     });
     if (existing) {
       existing.name = match.name;
@@ -331,7 +349,9 @@ export class EbayPaReturnPolicyService {
     marketplaceId: string,
     returnPolicyId: string,
   ): Promise<void> {
-    const mp = await this.mpRepo.findOne({ where: { ebayAccountId, marketplaceId } });
+    const mp = await this.mpRepo.findOne({
+      where: { ebayAccountId, marketplaceId },
+    });
     if (!mp) return;
     mp.defaultReturnPolicyId = returnPolicyId;
     await this.mpRepo.save(mp);

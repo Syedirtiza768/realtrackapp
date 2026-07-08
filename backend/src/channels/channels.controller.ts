@@ -42,7 +42,9 @@ export class ChannelsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'List connected channels for the authenticated user' })
+  @ApiOperation({
+    summary: 'List connected channels for the authenticated user',
+  })
   getConnections(@CurrentUser() user: User) {
     return this.channelsService.getConnections(user.id);
   }
@@ -50,10 +52,7 @@ export class ChannelsController {
   @Public()
   @Get(':channel/auth-url')
   @ApiOperation({ summary: 'Get OAuth authorization URL for a channel' })
-  getAuthUrl(
-    @Param('channel') channel: string,
-    @Query('state') state: string,
-  ) {
+  getAuthUrl(@Param('channel') channel: string, @Query('state') state: string) {
     if (channel === 'ebay') {
       throw new BadRequestException({
         message:
@@ -118,14 +117,18 @@ export class ChannelsController {
 
   @Post('publish')
   @RequirePermissions('channels.publish')
-  @ApiOperation({ summary: 'Publish a listing to a marketplace (async via queue)' })
+  @ApiOperation({
+    summary: 'Publish a listing to a marketplace (async via queue)',
+  })
   publish(@Body() dto: PublishListingDto) {
     return this.channelsService.enqueuePublish(dto.connectionId, dto.listingId);
   }
 
   @Post('sync')
   @RequirePermissions('channels.sync')
-  @ApiOperation({ summary: 'Sync inventory to a marketplace (async via queue)' })
+  @ApiOperation({
+    summary: 'Sync inventory to a marketplace (async via queue)',
+  })
   syncInventory(@Body() dto: SyncInventoryDto) {
     return this.channelsService.enqueueSync(dto.connectionId);
   }
@@ -150,7 +153,11 @@ export class ChannelsController {
   @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Publish a listing to multiple channels at once' })
   publishMulti(@Body() dto: PublishMultiDto) {
-    return this.channelsService.publishMulti(dto.listingId, dto.channels, dto.overrides);
+    return this.channelsService.publishMulti(
+      dto.listingId,
+      dto.channels,
+      dto.overrides,
+    );
   }
 
   @Post('listings/:listingId/channel/:channel/update')
@@ -191,7 +198,10 @@ export class ChannelsController {
 
   @Post('ebay/connect-legacy-token')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Connect eBay using a pre-generated sandbox Auth\'n\'Auth legacy token' })
+  @ApiOperation({
+    summary:
+      "Connect eBay using a pre-generated sandbox Auth'n'Auth legacy token",
+  })
   async connectEbayLegacyToken(
     @Body() body: { token: string },
     @CurrentUser() user: User,
@@ -231,7 +241,10 @@ export class ChannelsController {
     const sellerUsername =
       (body['notification'] as any)?.sellerUsername ??
       (body['notification'] as any)?.userId;
-    const storeId = await this.channelsService.resolveStoreFromWebhook('ebay', sellerUsername);
+    const storeId = await this.channelsService.resolveStoreFromWebhook(
+      'ebay',
+      sellerUsername,
+    );
 
     await this.channelsService.logWebhook(
       'ebay',
@@ -257,7 +270,10 @@ export class ChannelsController {
     @Body() body: Record<string, unknown>,
   ) {
     // Resolve storeId from Shopify shop domain → external_store_id
-    const storeId = await this.channelsService.resolveStoreFromWebhook('shopify', shopDomain);
+    const storeId = await this.channelsService.resolveStoreFromWebhook(
+      'shopify',
+      shopDomain,
+    );
 
     await this.channelsService.logWebhook(
       'shopify',
@@ -275,12 +291,14 @@ export class ChannelsController {
   @Post('webhooks/amazon')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Amazon EventBridge webhook endpoint' })
-  async amazonWebhook(
-    @Body() body: Record<string, unknown>,
-  ) {
+  async amazonWebhook(@Body() body: Record<string, unknown>) {
     // Resolve storeId from Amazon seller ID or merchant ID
-    const sellerId = (body['detail'] as any)?.SellerId ?? (body['detail'] as any)?.MerchantId;
-    const storeId = await this.channelsService.resolveStoreFromWebhook('amazon', sellerId);
+    const sellerId =
+      (body['detail'] as any)?.SellerId ?? (body['detail'] as any)?.MerchantId;
+    const storeId = await this.channelsService.resolveStoreFromWebhook(
+      'amazon',
+      sellerId,
+    );
 
     await this.channelsService.logWebhook(
       'amazon',

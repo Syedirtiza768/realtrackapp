@@ -13,7 +13,7 @@ function createRepo<T extends Record<string, unknown>>() {
   return {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
-    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d } as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d }) as T),
     save: jest.fn((d: T) => Promise.resolve({ id: 'saved-id', ...d } as T)),
   } as unknown as Repository<T>;
 }
@@ -23,22 +23,33 @@ function createRepo<T extends Record<string, unknown>>() {
 describe('EbayPaReturnPolicyService', () => {
   let svc: EbayPaReturnPolicyService;
   let ebayAuth: { getAccessToken: jest.Mock; getApiBaseUrlForStore: jest.Mock };
-  let sellAccount: { listReturnPolicies: jest.Mock; updateReturnPolicy: jest.Mock; createReturnPolicy: jest.Mock };
+  let sellAccount: {
+    listReturnPolicies: jest.Mock;
+    updateReturnPolicy: jest.Mock;
+    createReturnPolicy: jest.Mock;
+  };
   let policyRepo: ReturnType<typeof createRepo<EbayBusinessPolicy>>;
   let mpRepo: ReturnType<typeof createRepo<EbayAccountMarketplace>>;
 
   const mockStore = { id: 'store-1', storeName: 'Test Store' } as Store;
-  const mockAccount = { id: 'acct-1', connectionSource: 'ebay' } as ConnectedEbayAccount;
+  const mockAccount = {
+    id: 'acct-1',
+    connectionSource: 'ebay',
+  } as ConnectedEbayAccount;
 
   beforeEach(() => {
     ebayAuth = {
       getAccessToken: jest.fn().mockResolvedValue('token'),
-      getApiBaseUrlForStore: jest.fn().mockResolvedValue('https://api.ebay.com'),
+      getApiBaseUrlForStore: jest
+        .fn()
+        .mockResolvedValue('https://api.ebay.com'),
     };
     sellAccount = {
       listReturnPolicies: jest.fn().mockResolvedValue([]),
       updateReturnPolicy: jest.fn().mockResolvedValue(undefined),
-      createReturnPolicy: jest.fn().mockResolvedValue({ returnPolicyId: 'new-policy' }),
+      createReturnPolicy: jest
+        .fn()
+        .mockResolvedValue({ returnPolicyId: 'new-policy' }),
     };
     policyRepo = createRepo<EbayBusinessPolicy>();
     mpRepo = createRepo<EbayAccountMarketplace>();

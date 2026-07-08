@@ -54,12 +54,11 @@ export function truncateEbayTitle(
 }
 
 /** Build a publish-safe eBay title from catalog fields and optional overrides. */
-export function buildEbayListingTitle(source: EbayTitleSource): EbayTitleResult {
+export function buildEbayListingTitle(
+  source: EbayTitleSource,
+): EbayTitleResult {
   const warnings: string[] = [];
-  const raw =
-    source.titleOverride?.trim() ||
-    source.title?.trim() ||
-    '';
+  const raw = source.titleOverride?.trim() || source.title?.trim() || '';
 
   let title = raw ? truncateEbayTitle(raw) : '';
 
@@ -102,7 +101,10 @@ export function stripListingHtmlBoilerplate(html: string): string {
 }
 
 function hasVisibleText(html: string): boolean {
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const text = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   return text.length > 0;
 }
 

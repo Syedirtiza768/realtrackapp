@@ -12,7 +12,9 @@ import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UploadCsvDto {
-  @ApiPropertyOptional({ description: 'User-defined column mapping (csvHeader → catalogField)' })
+  @ApiPropertyOptional({
+    description: 'User-defined column mapping (csvHeader → catalogField)',
+  })
   @IsOptional()
   @IsObject()
   columnMapping?: Record<string, string>;
@@ -75,7 +77,9 @@ export class ImportRowQueryDto {
 }
 
 export class BackfillListingsDto {
-  @ApiPropertyOptional({ description: 'Optional import ID to backfill only one import' })
+  @ApiPropertyOptional({
+    description: 'Optional import ID to backfill only one import',
+  })
   @IsOptional()
   @IsString()
   importId?: string;

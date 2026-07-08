@@ -85,7 +85,10 @@ export interface SearchItem {
   titleHighlight: string | null;
 }
 
-export type CatalogListingStatus = 'published' | 'ready_to_publish' | 'need_images';
+export type CatalogListingStatus =
+  | 'published'
+  | 'ready_to_publish'
+  | 'need_images';
 
 export interface SuggestionResult {
   suggestions: Suggestion[];
@@ -139,7 +142,10 @@ export interface CategoryFacetBucket extends FacetBucket {
 /* ── Helper: split comma-separated filter into trimmed array ── */
 function splitFilter(val: string | undefined): string[] {
   if (!val?.trim()) return [];
-  return val.split(',').map((v) => v.trim().replace(/^[\s.]+|[\s.]+$/g, '')).filter(Boolean);
+  return val
+    .split(',')
+    .map((v) => v.trim().replace(/^[\s.]+|[\s.]+$/g, ''))
+    .filter(Boolean);
 }
 
 /** Safely cast startPrice to numeric, handling European comma format ("139,99" → 139.99) */
@@ -186,7 +192,8 @@ function deriveCatalogStatus(row: {
     row.status === 'published' ||
     row.publishedAt != null ||
     (row.ebayListingId != null && String(row.ebayListingId).trim() !== '') ||
-    (row.shopifyProductId != null && String(row.shopifyProductId).trim() !== '') ||
+    (row.shopifyProductId != null &&
+      String(row.shopifyProductId).trim() !== '') ||
     row.hasChannelInstance === true ||
     row.hasEbayPublishedListing === true;
 
@@ -352,16 +359,10 @@ export class SearchService {
 
     /* -- Range filters ----------------------------------------- */
     if (dto.minPrice != null) {
-      qb.andWhere(
-        `${SAFE_PRICE} >= :minPrice`,
-        { minPrice: dto.minPrice },
-      );
+      qb.andWhere(`${SAFE_PRICE} >= :minPrice`, { minPrice: dto.minPrice });
     }
     if (dto.maxPrice != null) {
-      qb.andWhere(
-        `${SAFE_PRICE} <= :maxPrice`,
-        { maxPrice: dto.maxPrice },
-      );
+      qb.andWhere(`${SAFE_PRICE} <= :maxPrice`, { maxPrice: dto.maxPrice });
     }
 
     /* -- Boolean filters --------------------------------------- */
@@ -392,10 +393,7 @@ export class SearchService {
         if (hasQuery) {
           qb.orderBy('"skuBoost"', 'DESC');
           qb.addOrderBy('"relevanceScore"', 'DESC');
-          qb.addOrderBy(
-            `similarity(r.title, :q)`,
-            'DESC',
-          );
+          qb.addOrderBy(`similarity(r.title, :q)`, 'DESC');
         } else {
           qb.orderBy('r.importedAt', 'DESC');
         }
@@ -470,16 +468,12 @@ export class SearchService {
         hasChannelInstance: row.hasChannelInstance === true,
         hasEbayPublishedListing: row.hasEbayPublishedListing === true,
       }),
-      relevanceScore: hasQuery
-        ? parseFloat(row.relevanceScore ?? '0')
-        : null,
+      relevanceScore: hasQuery ? parseFloat(row.relevanceScore ?? '0') : null,
       titleHighlight: hasQuery ? (row.titleHighlight ?? null) : null,
     }));
 
     // Next cursor for infinite scroll
-    const nextCursor = items.length === limit
-      ? String(offset + limit)
-      : null;
+    const nextCursor = items.length === limit ? String(offset + limit) : null;
 
     return {
       total,
@@ -496,7 +490,11 @@ export class SearchService {
    * Returns ranked suggestions from SKUs, titles, brands,
    * categories, and MPNs.
    * ──────────────────────────────────────────────────────── */
-  async suggest(q: string, limitNum = 10, user?: User): Promise<SuggestionResult> {
+  async suggest(
+    q: string,
+    limitNum = 10,
+    user?: User,
+  ): Promise<SuggestionResult> {
     const start = Date.now();
     const term = q.trim();
     if (!term) return { suggestions: [], queryTimeMs: 0 };
@@ -506,7 +504,9 @@ export class SearchService {
     // Pre-compute store filter for suggest queries
     const sf = await this.buildStoreFilterSql(user);
 
-    const applyStoreFilter = (qb: SelectQueryBuilder<ListingRecord>): SelectQueryBuilder<ListingRecord> => {
+    const applyStoreFilter = (
+      qb: SelectQueryBuilder<ListingRecord>,
+    ): SelectQueryBuilder<ListingRecord> => {
       if (sf) qb.andWhere(sf.sql, sf.params);
       return qb;
     };
@@ -521,11 +521,13 @@ export class SearchService {
         .select('r."customLabelSku"', 'value')
         .addSelect('COUNT(*)', 'count')
         .addSelect(`similarity(r."customLabelSku", :q)`, 'score')
-        .where(`(
+        .where(
+          `(
           LOWER(r."customLabelSku") = LOWER(:q)
           OR LOWER(r."customLabelSku") LIKE LOWER(:prefix)
           OR similarity(r."customLabelSku", :q) > 0.25
-        )`)
+        )`,
+        )
         .andWhere(`r."customLabelSku" IS NOT NULL AND r."customLabelSku" != ''`)
         .groupBy('r."customLabelSku"')
         .orderBy('score', 'DESC')
@@ -554,10 +556,12 @@ export class SearchService {
         .select('r."cBrand"', 'value')
         .addSelect('COUNT(*)', 'count')
         .addSelect(`similarity(r."cBrand", :q)`, 'score')
-        .where(`(
+        .where(
+          `(
           LOWER(r."cBrand") LIKE LOWER(:prefix)
           OR similarity(r."cBrand", :q) > 0.2
-        )`)
+        )`,
+        )
         .andWhere(`r."cBrand" IS NOT NULL AND r."cBrand" != ''`)
         .groupBy('r."cBrand"')
         .orderBy('score', 'DESC')
@@ -571,28 +575,39 @@ export class SearchService {
         .addSelect('r."categoryId"', 'id')
         .addSelect('COUNT(*)', 'count')
         .addSelect(`similarity(r."categoryName", :q)`, 'score')
-        .where(`(
+        .where(
+          `(
           LOWER(r."categoryName") LIKE LOWER(:anywhere)
           OR similarity(r."categoryName", :q) > 0.15
-        )`)
+        )`,
+        )
         .andWhere(`r."categoryName" IS NOT NULL AND r."categoryName" != ''`)
         .groupBy('r."categoryName"')
         .addGroupBy('r."categoryId"')
         .orderBy('score', 'DESC')
         .limit(maxPerType)
         .setParameters({ q: term, anywhere: `%${term}%` })
-        .getRawMany<{ value: string; id: string; count: string; score: string }>(),
+        .getRawMany<{
+          value: string;
+          id: string;
+          count: string;
+          score: string;
+        }>(),
 
       // MPN matches
       suggestQb()
         .select('r."cManufacturerPartNumber"', 'value')
         .addSelect('COUNT(*)', 'count')
         .addSelect(`similarity(r."cManufacturerPartNumber", :q)`, 'score')
-        .where(`(
+        .where(
+          `(
           LOWER(r."cManufacturerPartNumber") LIKE LOWER(:prefix)
           OR similarity(r."cManufacturerPartNumber", :q) > 0.3
-        )`)
-        .andWhere(`r."cManufacturerPartNumber" IS NOT NULL AND r."cManufacturerPartNumber" != ''`)
+        )`,
+        )
+        .andWhere(
+          `r."cManufacturerPartNumber" IS NOT NULL AND r."cManufacturerPartNumber" != ''`,
+        )
         .groupBy('r."cManufacturerPartNumber"')
         .orderBy('score', 'DESC')
         .limit(maxPerType)
@@ -651,7 +666,10 @@ export class SearchService {
    * DYNAMIC FACETS — counts that reflect current filters/query
    * Cached for 30s per unique query to avoid repeated heavy queries
    * ──────────────────────────────────────────────────────── */
-  async dynamicFacets(dto: SearchQueryDto, user?: User): Promise<DynamicFacets> {
+  async dynamicFacets(
+    dto: SearchQueryDto,
+    user?: User,
+  ): Promise<DynamicFacets> {
     // Check facet cache first (30s TTL)
     const cacheKey = `facets:${JSON.stringify(dto)}`;
     const cached = this.facetCache.get<DynamicFacets>(cacheKey);
@@ -702,7 +720,9 @@ export class SearchService {
         });
       }
       if (dto.hasImage === '1') {
-        base.andWhere(`r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != ''`);
+        base.andWhere(
+          `r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != ''`,
+        );
       }
       if (dto.hasPrice === '1') {
         base.andWhere(`r."startPrice" IS NOT NULL AND r."startPrice" != ''`);
@@ -734,19 +754,25 @@ export class SearchService {
       const srcArr = splitFilter(dto.sourceFiles);
 
       if (excludeDimension !== 'brand' && brandArr.length) {
-        fb.andWhere(`r."cBrand" IN (:...facetBrands)`, { facetBrands: brandArr });
+        fb.andWhere(`r."cBrand" IN (:...facetBrands)`, {
+          facetBrands: brandArr,
+        });
       }
       if (excludeDimension !== 'category' && catArr.length) {
         fb.andWhere(`r."categoryId" IN (:...facetCats)`, { facetCats: catArr });
       }
       if (excludeDimension !== 'condition' && condArr.length) {
-        fb.andWhere(`r."conditionId" IN (:...facetConds)`, { facetConds: condArr });
+        fb.andWhere(`r."conditionId" IN (:...facetConds)`, {
+          facetConds: condArr,
+        });
       }
       if (excludeDimension !== 'type' && typeArr.length) {
         fb.andWhere(`r."cType" IN (:...facetTypes)`, { facetTypes: typeArr });
       }
       if (excludeDimension !== 'sourceFile' && srcArr.length) {
-        fb.andWhere(`r."sourceFileName" IN (:...facetSrc)`, { facetSrc: srcArr });
+        fb.andWhere(`r."sourceFileName" IN (:...facetSrc)`, {
+          facetSrc: srcArr,
+        });
       }
       const fmtArr = splitFilter(dto.formats);
       if (excludeDimension !== 'format' && fmtArr.length) {
@@ -758,16 +784,22 @@ export class SearchService {
       }
       const mpnArr = splitFilter(dto.mpns);
       if (excludeDimension !== 'mpn' && mpnArr.length) {
-        fb.andWhere(`r."cManufacturerPartNumber" IN (:...facetMpns)`, { facetMpns: mpnArr });
+        fb.andWhere(`r."cManufacturerPartNumber" IN (:...facetMpns)`, {
+          facetMpns: mpnArr,
+        });
       }
       // Make/Model cross-filters (direct columns on listing_records)
       const makeArr = splitFilter(dto.makes);
       const modelArr = splitFilter(dto.models);
       if (excludeDimension !== 'make' && makeArr.length) {
-        fb.andWhere(`r."extractedMake" IN (:...facetMakes)`, { facetMakes: makeArr });
+        fb.andWhere(`r."extractedMake" IN (:...facetMakes)`, {
+          facetMakes: makeArr,
+        });
       }
       if (excludeDimension !== 'model' && modelArr.length) {
-        fb.andWhere(`r."extractedModel" IN (:...facetModels)`, { facetModels: modelArr });
+        fb.andWhere(`r."extractedModel" IN (:...facetModels)`, {
+          facetModels: modelArr,
+        });
       }
       // Pipeline / marketplace cross-filters
       const pjArr = splitFilter(dto.pipelineJobIds);
@@ -780,11 +812,15 @@ export class SearchService {
       }
       const teamArr = splitFilter(dto.teamIds);
       if (excludeDimension !== 'team' && teamArr.length) {
-        fb.andWhere(`r.team_id IN (:...facetTeamIds)`, { facetTeamIds: teamArr });
+        fb.andWhere(`r.team_id IN (:...facetTeamIds)`, {
+          facetTeamIds: teamArr,
+        });
       }
       const shipArr = splitFilter(dto.shippingProfiles);
       if (excludeDimension !== 'shippingProfile' && shipArr.length) {
-        fb.andWhere(`r."shippingProfileName" IN (:...facetShip)`, { facetShip: shipArr });
+        fb.andWhere(`r."shippingProfileName" IN (:...facetShip)`, {
+          facetShip: shipArr,
+        });
       }
       if (excludeDimension !== 'dateAdded') {
         if (dto.importedFrom?.trim()) {
@@ -825,187 +861,235 @@ export class SearchService {
 
     // Run all facet queries in parallel
     const [
-      brandsRaw, catsRaw, condsRaw, typesRaw, srcRaw,
-      formatsRaw, locationsRaw, mpnsRaw,
-      makesRaw, modelsRaw,
-      pipelineJobsRaw, marketplacesRaw, teamsRaw, shippingProfilesRaw,
-      priceRaw, totalFiltered,
+      brandsRaw,
+      catsRaw,
+      condsRaw,
+      typesRaw,
+      srcRaw,
+      formatsRaw,
+      locationsRaw,
+      mpnsRaw,
+      makesRaw,
+      modelsRaw,
+      pipelineJobsRaw,
+      marketplacesRaw,
+      teamsRaw,
+      shippingProfilesRaw,
+      priceRaw,
+      totalFiltered,
     ] = await Promise.all([
-        // Brands facet
-        buildFacetQb('brand')
-          .select('r."cBrand"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."cBrand" IS NOT NULL AND r."cBrand" != ''`)
-          .groupBy('r."cBrand"')
-          .orderBy('count', 'DESC')
-          .limit(100)
-          .getRawMany<{ value: string; count: string }>(),
+      // Brands facet
+      buildFacetQb('brand')
+        .select('r."cBrand"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r."cBrand" IS NOT NULL AND r."cBrand" != ''`)
+        .groupBy('r."cBrand"')
+        .orderBy('count', 'DESC')
+        .limit(100)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Categories facet
-        buildFacetQb('category')
-          .select('r."categoryName"', 'value')
-          .addSelect('r."categoryId"', 'id')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."categoryName" IS NOT NULL AND r."categoryName" != ''`)
-          .groupBy('r."categoryName"')
-          .addGroupBy('r."categoryId"')
-          .orderBy('count', 'DESC')
-          .limit(100)
-          .getRawMany<{ value: string; id: string; count: string }>(),
+      // Categories facet
+      buildFacetQb('category')
+        .select('r."categoryName"', 'value')
+        .addSelect('r."categoryId"', 'id')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r."categoryName" IS NOT NULL AND r."categoryName" != ''`)
+        .groupBy('r."categoryName"')
+        .addGroupBy('r."categoryId"')
+        .orderBy('count', 'DESC')
+        .limit(100)
+        .getRawMany<{ value: string; id: string; count: string }>(),
 
-        // Conditions facet
-        buildFacetQb('condition')
-          .select('r."conditionId"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."conditionId" IS NOT NULL AND r."conditionId" != ''`)
-          .groupBy('r."conditionId"')
-          .orderBy('count', 'DESC')
-          .getRawMany<{ value: string; count: string }>(),
+      // Conditions facet
+      buildFacetQb('condition')
+        .select('r."conditionId"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r."conditionId" IS NOT NULL AND r."conditionId" != ''`)
+        .groupBy('r."conditionId"')
+        .orderBy('count', 'DESC')
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Types facet
-        buildFacetQb('type')
-          .select('r."cType"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."cType" IS NOT NULL AND r."cType" != ''`)
-          .groupBy('r."cType"')
-          .orderBy('count', 'DESC')
-          .limit(100)
-          .getRawMany<{ value: string; count: string }>(),
+      // Types facet
+      buildFacetQb('type')
+        .select('r."cType"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r."cType" IS NOT NULL AND r."cType" != ''`)
+        .groupBy('r."cType"')
+        .orderBy('count', 'DESC')
+        .limit(100)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Source files facet
-        buildFacetQb('sourceFile')
-          .select('r."sourceFileName"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .groupBy('r."sourceFileName"')
-          .orderBy('count', 'DESC')
-          .getRawMany<{ value: string; count: string }>(),
+      // Source files facet
+      buildFacetQb('sourceFile')
+        .select('r."sourceFileName"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('r."sourceFileName"')
+        .orderBy('count', 'DESC')
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Formats facet
-        buildFacetQb('format')
-          .select('r.format', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r.format IS NOT NULL AND r.format != ''`)
-          .groupBy('r.format')
-          .orderBy('count', 'DESC')
-          .getRawMany<{ value: string; count: string }>(),
+      // Formats facet
+      buildFacetQb('format')
+        .select('r.format', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r.format IS NOT NULL AND r.format != ''`)
+        .groupBy('r.format')
+        .orderBy('count', 'DESC')
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Locations facet
-        buildFacetQb('location')
-          .select('r.location', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r.location IS NOT NULL AND r.location != ''`)
-          .groupBy('r.location')
-          .orderBy('count', 'DESC')
-          .limit(50)
-          .getRawMany<{ value: string; count: string }>(),
+      // Locations facet
+      buildFacetQb('location')
+        .select('r.location', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r.location IS NOT NULL AND r.location != ''`)
+        .groupBy('r.location')
+        .orderBy('count', 'DESC')
+        .limit(50)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // MPN facet (top values only, typically searched)
-        buildFacetQb('mpn')
-          .select('r."cManufacturerPartNumber"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."cManufacturerPartNumber" IS NOT NULL AND r."cManufacturerPartNumber" != ''`)
-          .groupBy('r."cManufacturerPartNumber"')
-          .orderBy('count', 'DESC')
-          .limit(50)
-          .getRawMany<{ value: string; count: string }>(),
+      // MPN facet (top values only, typically searched)
+      buildFacetQb('mpn')
+        .select('r."cManufacturerPartNumber"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(
+          `r."cManufacturerPartNumber" IS NOT NULL AND r."cManufacturerPartNumber" != ''`,
+        )
+        .groupBy('r."cManufacturerPartNumber"')
+        .orderBy('count', 'DESC')
+        .limit(50)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Makes facet (extracted directly from listing titles)
-        buildFacetQb('make')
-          .select('r."extractedMake"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."extractedMake" IS NOT NULL AND r."extractedMake" != ''`)
-          .groupBy('r."extractedMake"')
-          .orderBy('count', 'DESC')
-          .limit(100)
-          .getRawMany<{ value: string; count: string }>(),
+      // Makes facet (extracted directly from listing titles)
+      buildFacetQb('make')
+        .select('r."extractedMake"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r."extractedMake" IS NOT NULL AND r."extractedMake" != ''`)
+        .groupBy('r."extractedMake"')
+        .orderBy('count', 'DESC')
+        .limit(100)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Models facet (extracted from titles, filtered by selected makes)
-        buildFacetQb('model')
-          .select('r."extractedModel"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."extractedModel" IS NOT NULL AND r."extractedModel" != ''`)
-          .groupBy('r."extractedModel"')
-          .orderBy('count', 'DESC')
-          .limit(100)
-          .getRawMany<{ value: string; count: string }>(),
+      // Models facet (extracted from titles, filtered by selected makes)
+      buildFacetQb('model')
+        .select('r."extractedModel"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r."extractedModel" IS NOT NULL AND r."extractedModel" != ''`)
+        .groupBy('r."extractedModel"')
+        .orderBy('count', 'DESC')
+        .limit(100)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Pipeline Jobs facet
-        buildFacetQb('pipelineJob')
-          .select('r."pipeline_job_id"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."pipeline_job_id" IS NOT NULL`)
-          .groupBy('r."pipeline_job_id"')
-          .orderBy('count', 'DESC')
-          .limit(50)
-          .getRawMany<{ value: string; count: string }>(),
+      // Pipeline Jobs facet
+      buildFacetQb('pipelineJob')
+        .select('r."pipeline_job_id"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r."pipeline_job_id" IS NOT NULL`)
+        .groupBy('r."pipeline_job_id"')
+        .orderBy('count', 'DESC')
+        .limit(50)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Marketplaces facet
-        buildFacetQb('marketplace')
-          .select('r.marketplace', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r.marketplace IS NOT NULL AND r.marketplace != ''`)
-          .groupBy('r.marketplace')
-          .orderBy('count', 'DESC')
-          .getRawMany<{ value: string; count: string }>(),
+      // Marketplaces facet
+      buildFacetQb('marketplace')
+        .select('r.marketplace', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r.marketplace IS NOT NULL AND r.marketplace != ''`)
+        .groupBy('r.marketplace')
+        .orderBy('count', 'DESC')
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Teams facet
-        buildFacetQb('team')
-          .innerJoin('teams', 'tm', 'tm.id = r.team_id')
-          .select('r.team_id', 'value')
-          .addSelect('tm.name', 'label')
-          .addSelect('tm.color', 'color')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r.team_id IS NOT NULL`)
-          .groupBy('r.team_id')
-          .addGroupBy('tm.name')
-          .addGroupBy('tm.color')
-          .orderBy('count', 'DESC')
-          .limit(50)
-          .getRawMany<{ value: string; label: string; color: string; count: string }>(),
+      // Teams facet
+      buildFacetQb('team')
+        .innerJoin('teams', 'tm', 'tm.id = r.team_id')
+        .select('r.team_id', 'value')
+        .addSelect('tm.name', 'label')
+        .addSelect('tm.color', 'color')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(`r.team_id IS NOT NULL`)
+        .groupBy('r.team_id')
+        .addGroupBy('tm.name')
+        .addGroupBy('tm.color')
+        .orderBy('count', 'DESC')
+        .limit(50)
+        .getRawMany<{
+          value: string;
+          label: string;
+          color: string;
+          count: string;
+        }>(),
 
-        // Shipping profiles facet
-        buildFacetQb('shippingProfile')
-          .select('r."shippingProfileName"', 'value')
-          .addSelect('COUNT(*)', 'count')
-          .andWhere(`r."shippingProfileName" IS NOT NULL AND r."shippingProfileName" != ''`)
-          .groupBy('r."shippingProfileName"')
-          .orderBy('count', 'DESC')
-          .limit(50)
-          .getRawMany<{ value: string; count: string }>(),
+      // Shipping profiles facet
+      buildFacetQb('shippingProfile')
+        .select('r."shippingProfileName"', 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(
+          `r."shippingProfileName" IS NOT NULL AND r."shippingProfileName" != ''`,
+        )
+        .groupBy('r."shippingProfileName"')
+        .orderBy('count', 'DESC')
+        .limit(50)
+        .getRawMany<{ value: string; count: string }>(),
 
-        // Price range (within filtered set)
-        (() => {
-          const pqb = buildBaseQb();
-          this.applyMultiFilters(pqb, dto);
-          this.applyExtendedFilters(pqb, dto);
-          return pqb
-            .select(`MIN(${SAFE_PRICE})`, 'min')
-            .addSelect(`MAX(${SAFE_PRICE})`, 'max')
-            .getRawOne<{ min: string | null; max: string | null }>();
-        })(),
+      // Price range (within filtered set)
+      (() => {
+        const pqb = buildBaseQb();
+        this.applyMultiFilters(pqb, dto);
+        this.applyExtendedFilters(pqb, dto);
+        return pqb
+          .select(`MIN(${SAFE_PRICE})`, 'min')
+          .addSelect(`MAX(${SAFE_PRICE})`, 'max')
+          .getRawOne<{ min: string | null; max: string | null }>();
+      })(),
 
-        // Total count for filtered set
-        (() => {
-          const cqb = buildBaseQb();
-          this.applyMultiFilters(cqb, dto);
-          this.applyExtendedFilters(cqb, dto);
-          return cqb.getCount();
-        })(),
-      ]);
+      // Total count for filtered set
+      (() => {
+        const cqb = buildBaseQb();
+        this.applyMultiFilters(cqb, dto);
+        this.applyExtendedFilters(cqb, dto);
+        return cqb.getCount();
+      })(),
+    ]);
 
     const result: DynamicFacets = {
-      brands: brandsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      categories: catsRaw.map((r) => ({ value: r.value, id: r.id, count: Number(r.count) })),
-      conditions: condsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      brands: brandsRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
+      categories: catsRaw.map((r) => ({
+        value: r.value,
+        id: r.id,
+        count: Number(r.count),
+      })),
+      conditions: condsRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
       types: typesRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      sourceFiles: srcRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      formats: formatsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      locations: locationsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      sourceFiles: srcRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
+      formats: formatsRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
+      locations: locationsRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
       mpns: mpnsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
       makes: makesRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      models: modelsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      pipelineJobs: pipelineJobsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
-      marketplaces: marketplacesRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      models: modelsRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
+      pipelineJobs: pipelineJobsRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
+      marketplaces: marketplacesRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
       teams: teamsRaw.map((r) => ({
         value: r.value,
         label: r.label,
@@ -1030,9 +1114,11 @@ export class SearchService {
   }
 
   /* ── Private: apply multi-select filters to any QueryBuilder ── */
-  
+
   /** Build store filter SQL + params, or null if no filtering needed */
-  private async buildStoreFilterSql(user?: User): Promise<{ sql: string; params: Record<string, string[]> } | null> {
+  private async buildStoreFilterSql(
+    user?: User,
+  ): Promise<{ sql: string; params: Record<string, string[]> } | null> {
     const storeIds = await this.storeAccess.resolveStoreFilter(user);
     if (storeIds === undefined) return null; // accessAll or no user
     if (storeIds.length === 0) {
@@ -1065,7 +1151,9 @@ export class SearchService {
       qb.andWhere(`r."categoryId" IN (:...cats)`, { cats: catArr });
     }
     if (catNameArr.length) {
-      qb.andWhere(`r."categoryName" IN (:...catNames)`, { catNames: catNameArr });
+      qb.andWhere(`r."categoryName" IN (:...catNames)`, {
+        catNames: catNameArr,
+      });
     }
     if (condArr.length) {
       qb.andWhere(`r."conditionId" IN (:...conds)`, { conds: condArr });
@@ -1083,17 +1171,23 @@ export class SearchService {
       qb.andWhere(`r.location IN (:...locs)`, { locs: locArr });
     }
     if (mpnArr.length) {
-      qb.andWhere(`r."cManufacturerPartNumber" IN (:...mpns)`, { mpns: mpnArr });
+      qb.andWhere(`r."cManufacturerPartNumber" IN (:...mpns)`, {
+        mpns: mpnArr,
+      });
     }
 
     // Pipeline job / marketplace filters
     const pjArr = splitFilter(dto.pipelineJobIds);
     const mktArr = splitFilter(dto.marketplaces);
     if (pjArr.length) {
-      qb.andWhere(`r."pipeline_job_id" IN (:...pipelineJobIds)`, { pipelineJobIds: pjArr });
+      qb.andWhere(`r."pipeline_job_id" IN (:...pipelineJobIds)`, {
+        pipelineJobIds: pjArr,
+      });
     }
     if (mktArr.length) {
-      qb.andWhere(`r.marketplace IN (:...marketplaces)`, { marketplaces: mktArr });
+      qb.andWhere(`r.marketplace IN (:...marketplaces)`, {
+        marketplaces: mktArr,
+      });
     }
 
     // Make/Model filters (direct columns on listing_records)
@@ -1169,7 +1263,10 @@ export class SearchService {
     user?: User,
   ): Promise<string[] | null> {
     if (!user) return null;
-    const manageAll = await this.rbac.userHasPermission(user.id, 'teams.manage');
+    const manageAll = await this.rbac.userHasPermission(
+      user.id,
+      'teams.manage',
+    );
     const requested = splitFilter(dto.teamIds);
     if (manageAll) {
       return requested.length ? requested : null;

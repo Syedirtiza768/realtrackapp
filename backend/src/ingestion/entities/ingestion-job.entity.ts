@@ -50,7 +50,12 @@ export class IngestionJob {
   mode!: IngestionMode;
 
   // ─── Source tracking ───
-  @Column({ name: 'source_type', type: 'varchar', length: 20, default: 'upload' })
+  @Column({
+    name: 'source_type',
+    type: 'varchar',
+    length: 20,
+    default: 'upload',
+  })
   sourceType!: SourceType;
 
   @Column({ name: 'image_count', type: 'integer', default: 0 })
@@ -69,7 +74,13 @@ export class IngestionJob {
   @Column({ name: 'ai_completed_at', type: 'timestamptz', nullable: true })
   aiCompletedAt!: Date | null;
 
-  @Column({ name: 'ai_cost_usd', type: 'numeric', precision: 8, scale: 4, nullable: true })
+  @Column({
+    name: 'ai_cost_usd',
+    type: 'numeric',
+    precision: 8,
+    scale: 4,
+    nullable: true,
+  })
   aiCostUsd!: number | null;
 
   // ─── Review ───

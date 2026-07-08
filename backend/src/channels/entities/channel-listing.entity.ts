@@ -13,7 +13,9 @@ import { ChannelConnection } from './channel-connection.entity.js';
 @Entity('channel_listings')
 @Index('idx_channel_listing_conn', ['connectionId'])
 @Index('idx_channel_listing_listing', ['listingId'])
-@Index('idx_channel_listing_external', ['connectionId', 'externalId'], { unique: true })
+@Index('idx_channel_listing_external', ['connectionId', 'externalId'], {
+  unique: true,
+})
 export class ChannelListing {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -31,7 +33,12 @@ export class ChannelListing {
   @Column({ name: 'external_id', type: 'varchar', length: 200 })
   externalId!: string;
 
-  @Column({ name: 'external_url', type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 'external_url',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   externalUrl!: string | null;
 
   @Column({

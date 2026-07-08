@@ -18,7 +18,9 @@ export class RequestTimingInterceptor implements NestInterceptor {
   private readonly slowThresholdMs: number;
 
   constructor(config: ConfigService) {
-    this.slowThresholdMs = Number(config.get<string>('SLOW_REQUEST_MS', '2000'));
+    this.slowThresholdMs = Number(
+      config.get<string>('SLOW_REQUEST_MS', '2000'),
+    );
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {

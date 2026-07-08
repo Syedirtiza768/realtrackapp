@@ -32,8 +32,13 @@ export class DashboardService {
     return row.metricValue as T;
   }
 
-  private async setCache(key: string, value: Record<string, unknown>): Promise<void> {
-    const existing = await this.cacheRepo.findOne({ where: { metricKey: key } });
+  private async setCache(
+    key: string,
+    value: Record<string, unknown>,
+  ): Promise<void> {
+    const existing = await this.cacheRepo.findOne({
+      where: { metricKey: key },
+    });
     if (existing) {
       existing.metricValue = value;
       await this.cacheRepo.save(existing);
@@ -46,34 +51,39 @@ export class DashboardService {
   /* ─── Dashboard Summary ─── */
 
   async getSummary(storeId?: string) {
-    const cacheKey = storeId ? `dashboard:summary:${storeId}` : 'dashboard:summary';
+    const cacheKey = storeId
+      ? `dashboard:summary:${storeId}`
+      : 'dashboard:summary';
     const cached = await this.getCache<Record<string, unknown>>(cacheKey);
     if (cached) return cached;
 
     const salesQb = this.salesRepo
-        .createQueryBuilder('s')
-        .select('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
-        .addSelect('COALESCE(AVG(s.salePrice), 0)', 'avgPrice')
-        .where('s.soldAt >= :since', {
-          since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-        });
+      .createQueryBuilder('s')
+      .select('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
+      .addSelect('COALESCE(AVG(s.salePrice), 0)', 'avgPrice')
+      .where('s.soldAt >= :since', {
+        since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      });
     if (storeId) salesQb.andWhere('s.store_id = :storeId', { storeId });
 
     const channelQb = this.salesRepo
-        .createQueryBuilder('s')
-        .select('s.channel', 'channel')
-        .addSelect('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
-        .groupBy('s.channel');
+      .createQueryBuilder('s')
+      .select('s.channel', 'channel')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
+      .groupBy('s.channel');
     if (storeId) channelQb.andWhere('s.store_id = :storeId', { storeId });
 
-    const [totalListings, activeListings, salesData, channelData] = await Promise.all([
-      this.listingRepo.count({ where: { deletedAt: IsNull() } }),
-      this.listingRepo.count({ where: { status: 'published', deletedAt: IsNull() } }),
-      salesQb.getRawOne(),
-      channelQb.getRawMany(),
-    ]);
+    const [totalListings, activeListings, salesData, channelData] =
+      await Promise.all([
+        this.listingRepo.count({ where: { deletedAt: IsNull() } }),
+        this.listingRepo.count({
+          where: { status: 'published', deletedAt: IsNull() },
+        }),
+        salesQb.getRawOne(),
+        channelQb.getRawMany(),
+      ]);
 
     const result = {
       totalListings,
@@ -99,33 +109,33 @@ export class DashboardService {
     const storeId = dto.storeId;
 
     const dayQb = this.salesRepo
-        .createQueryBuilder('s')
-        .select("DATE_TRUNC('day', s.soldAt)", 'day')
-        .addSelect('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
-        .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
-        .groupBy("DATE_TRUNC('day', s.soldAt)")
-        .orderBy("DATE_TRUNC('day', s.soldAt)", 'ASC');
+      .createQueryBuilder('s')
+      .select("DATE_TRUNC('day', s.soldAt)", 'day')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
+      .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
+      .groupBy("DATE_TRUNC('day', s.soldAt)")
+      .orderBy("DATE_TRUNC('day', s.soldAt)", 'ASC');
     if (storeId) dayQb.andWhere('s.store_id = :storeId', { storeId });
 
     const channelQb = this.salesRepo
-        .createQueryBuilder('s')
-        .select('s.channel', 'channel')
-        .addSelect('COUNT(*)', 'count')
-        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
-        .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
-        .groupBy('s.channel');
+      .createQueryBuilder('s')
+      .select('s.channel', 'channel')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(s.salePrice), 0)', 'revenue')
+      .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
+      .groupBy('s.channel');
     if (storeId) channelQb.andWhere('s.store_id = :storeId', { storeId });
 
     const topQb = this.salesRepo
-        .createQueryBuilder('s')
-        .select('s.listingId', 'listingId')
-        .addSelect('COUNT(*)', 'salesCount')
-        .addSelect('COALESCE(SUM(s.salePrice), 0)', 'totalRevenue')
-        .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
-        .groupBy('s.listingId')
-        .orderBy('COALESCE(SUM(s.salePrice), 0)', 'DESC')
-        .limit(dto.topN ?? 10);
+      .createQueryBuilder('s')
+      .select('s.listingId', 'listingId')
+      .addSelect('COUNT(*)', 'salesCount')
+      .addSelect('COALESCE(SUM(s.salePrice), 0)', 'totalRevenue')
+      .where('s.soldAt >= :since AND s.soldAt <= :until', { since, until })
+      .groupBy('s.listingId')
+      .orderBy('COALESCE(SUM(s.salePrice), 0)', 'DESC')
+      .limit(dto.topN ?? 10);
     if (storeId) topQb.andWhere('s.store_id = :storeId', { storeId });
 
     const [salesByDay, salesByChannel, topItems] = await Promise.all([
@@ -142,11 +152,13 @@ export class DashboardService {
   async getActivity(dto: AuditLogQueryDto) {
     const qb = this.auditRepo.createQueryBuilder('a');
 
-    if (dto.entityType) qb.andWhere('a.entityType = :et', { et: dto.entityType });
+    if (dto.entityType)
+      qb.andWhere('a.entityType = :et', { et: dto.entityType });
     if (dto.entityId) qb.andWhere('a.entityId = :eid', { eid: dto.entityId });
     if (dto.action) qb.andWhere('a.action = :act', { act: dto.action });
     if (dto.actorId) qb.andWhere('a.actorId = :aid', { aid: dto.actorId });
-    if (dto.since) qb.andWhere('a.createdAt >= :since', { since: new Date(dto.since) });
+    if (dto.since)
+      qb.andWhere('a.createdAt >= :since', { since: new Date(dto.since) });
 
     const limit = dto.limit ?? 50;
     const offset = dto.offset ?? 0;
@@ -234,22 +246,30 @@ export class DashboardService {
   /* ─── KPIs ─── */
 
   async getKpis() {
-    const cached = await this.getCache<Record<string, unknown>>('dashboard:kpis', 300_000);
+    const cached = await this.getCache<Record<string, unknown>>(
+      'dashboard:kpis',
+      300_000,
+    );
     if (cached) return cached;
 
-    const [catalogSize, publishedCount, soldCount, avgDaysToSell] = await Promise.all([
-      this.listingRepo.count({ where: { deletedAt: IsNull() } }),
-      this.listingRepo.count({ where: { status: 'published', deletedAt: IsNull() } }),
-      this.salesRepo.count(),
-      this.salesRepo.manager
-        .query(`
+    const [catalogSize, publishedCount, soldCount, avgDaysToSell] =
+      await Promise.all([
+        this.listingRepo.count({ where: { deletedAt: IsNull() } }),
+        this.listingRepo.count({
+          where: { status: 'published', deletedAt: IsNull() },
+        }),
+        this.salesRepo.count(),
+        this.salesRepo.manager
+          .query(
+            `
           SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (sr."soldAt" - lr."updatedAt")) / 86400), 0) AS "avgDays"
           FROM sales_records sr
           JOIN listing_records lr ON lr.id = sr."listingId"
           WHERE sr."soldAt" >= NOW() - INTERVAL '90 days'
-        `)
-        .then((r: Array<{ avgDays: string }>) => Number(r[0]?.avgDays ?? 0)),
-    ]);
+        `,
+          )
+          .then((r: Array<{ avgDays: string }>) => Number(r[0]?.avgDays ?? 0)),
+      ]);
 
     const result = {
       catalogSize,
@@ -320,12 +340,17 @@ export class DashboardService {
   /* ─── Multi-Store & AI Metrics ─── */
 
   async getMultiStoreMetrics() {
-    const cached = await this.getCache<Record<string, unknown>>('dashboard:multi-store', 120_000);
+    const cached = await this.getCache<Record<string, unknown>>(
+      'dashboard:multi-store',
+      120_000,
+    );
     if (cached) return cached;
 
     const [storeData, instanceData, aiData, demoData] = await Promise.all([
       // Stores by channel
-      this.listingRepo.manager.query(`
+      this.listingRepo.manager
+        .query(
+          `
         SELECT
           s.channel,
           COUNT(DISTINCT s.id) AS "storeCount",
@@ -335,10 +360,14 @@ export class DashboardService {
         WHERE s.status = 'active'
         GROUP BY s.channel
         ORDER BY s.channel
-      `).catch(() => []),
+      `,
+        )
+        .catch(() => []),
 
       // Instance sync statuses
-      this.listingRepo.manager.query(`
+      this.listingRepo.manager
+        .query(
+          `
         SELECT
           lci.channel,
           lci.sync_status AS "syncStatus",
@@ -348,10 +377,14 @@ export class DashboardService {
         FROM listing_channel_instances lci
         GROUP BY lci.channel, lci.sync_status
         ORDER BY lci.channel, lci.sync_status
-      `).catch(() => []),
+      `,
+        )
+        .catch(() => []),
 
       // AI enhancement stats
-      this.listingRepo.manager.query(`
+      this.listingRepo.manager
+        .query(
+          `
         SELECT
           ae.enhancement_type AS "type",
           ae.status,
@@ -361,10 +394,14 @@ export class DashboardService {
         FROM ai_enhancements ae
         GROUP BY ae.enhancement_type, ae.status
         ORDER BY ae.enhancement_type, ae.status
-      `).catch(() => []),
+      `,
+        )
+        .catch(() => []),
 
       // Demo simulation summary
-      this.listingRepo.manager.query(`
+      this.listingRepo.manager
+        .query(
+          `
         SELECT
           d.operation_type AS "operationType",
           d.channel,
@@ -374,7 +411,9 @@ export class DashboardService {
         FROM demo_simulation_logs d
         GROUP BY d.operation_type, d.channel
         ORDER BY d.operation_type, d.channel
-      `).catch(() => []),
+      `,
+        )
+        .catch(() => []),
     ]);
 
     const result = {

@@ -8,7 +8,7 @@ import {
 
 /**
  * Feature flag entity for controlling feature rollouts.
- * 
+ *
  * Usage:
  *   const enabled = await featureFlagService.isEnabled('automation_rules');
  *   if (enabled) { ... }

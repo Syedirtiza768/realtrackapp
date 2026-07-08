@@ -12,7 +12,11 @@ export type FitmentStatus =
   | 'failed'
   | 'needs_review';
 
-export type EbayValidationStatus = 'valid' | 'invalid' | 'unsupported' | 'needs_review';
+export type EbayValidationStatus =
+  | 'valid'
+  | 'invalid'
+  | 'unsupported'
+  | 'needs_review';
 
 export interface FitmentRow {
   year: string;
@@ -67,13 +71,16 @@ export interface JobOptimizationStatus {
   passCount: number;
   reviewCount: number;
   blockCount: number;
-  byMarketplace?: Record<string, {
-    status: string;
-    passCount: number;
-    reviewCount: number;
-    blockCount: number;
-    processed?: number;
-    total?: number;
-  }>;
+  byMarketplace?: Record<
+    string,
+    {
+      status: string;
+      passCount: number;
+      reviewCount: number;
+      blockCount: number;
+      processed?: number;
+      total?: number;
+    }
+  >;
   products: ProductOptimizationSummary[];
 }

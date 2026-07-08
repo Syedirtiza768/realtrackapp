@@ -49,7 +49,9 @@ export class ComplianceController {
 
   @Post('validate-import/:importId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Validate all products from a specific import for eBay compliance' })
+  @ApiOperation({
+    summary: 'Validate all products from a specific import for eBay compliance',
+  })
   async validateImport(
     @Param('importId') importId: string,
     @Query('autoFix') autoFix?: string,
@@ -57,7 +59,11 @@ export class ComplianceController {
   ) {
     const shouldAutoFix = autoFix !== 'false';
     const maxRecords = Math.min(limit || 500, 500);
-    return this.complianceService.validateImportProducts(importId, shouldAutoFix, maxRecords);
+    return this.complianceService.validateImportProducts(
+      importId,
+      shouldAutoFix,
+      maxRecords,
+    );
   }
 
   @Get('audit/:importId')

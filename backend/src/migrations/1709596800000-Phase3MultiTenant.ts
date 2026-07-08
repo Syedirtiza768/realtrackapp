@@ -106,11 +106,15 @@ export class Phase3MultiTenant1709596800000 implements MigrationInterface {
 
     for (const table of tables) {
       await queryRunner.query(`DROP INDEX IF EXISTS idx_${table}_org;`);
-      await queryRunner.query(`ALTER TABLE ${table} DROP COLUMN IF EXISTS organization_id;`);
+      await queryRunner.query(
+        `ALTER TABLE ${table} DROP COLUMN IF EXISTS organization_id;`,
+      );
     }
 
     await queryRunner.query(`DROP TABLE IF EXISTS organization_members;`);
     await queryRunner.query(`DROP TABLE IF EXISTS organizations;`);
-    await queryRunner.query(`DELETE FROM feature_flags WHERE key = 'multi_tenant';`);
+    await queryRunner.query(
+      `DELETE FROM feature_flags WHERE key = 'multi_tenant';`,
+    );
   }
 }

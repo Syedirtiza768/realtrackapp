@@ -119,11 +119,9 @@ export class StoresService {
       // SellerPundit API which handles policies on its side.
       if (
         account.connectionSource === 'native_oauth' &&
-        (
-          !mkt.defaultFulfillmentPolicyId ||
+        (!mkt.defaultFulfillmentPolicyId ||
           !mkt.defaultPaymentPolicyId ||
-          !mkt.defaultReturnPolicyId
-        )
+          !mkt.defaultReturnPolicyId)
       )
         continue;
 
@@ -163,14 +161,30 @@ export class StoresService {
    * for the store's connected eBay account + marketplace.
    */
   async getStoreProfiles(storeId: string): Promise<{
-    shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string; shippingCost?: number; currency?: string }>;
+    shippingProfiles: Array<{
+      id: string;
+      name: string;
+      carrier: string;
+      service: string;
+      costType: string;
+      ebayPolicyId?: string;
+      shippingCost?: number;
+      currency?: string;
+    }>;
     returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
     paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }>;
   }> {
     const store = await this.getStore(storeId);
 
     // Shipping profiles: first from local table, then fall back to eBay fulfillment policies
-    let shippingProfiles: Array<{ id: string; name: string; carrier: string; service: string; costType: string; ebayPolicyId?: string }> = [];
+    let shippingProfiles: Array<{
+      id: string;
+      name: string;
+      carrier: string;
+      service: string;
+      costType: string;
+      ebayPolicyId?: string;
+    }> = [];
     const localShipping = await this.shippingProfileRepo.find({
       where: { active: true },
       order: { isDefault: 'DESC', name: 'ASC' },
@@ -180,8 +194,16 @@ export class StoresService {
     }
 
     // For eBay stores, also fetch fulfillment/return/payment policies
-    let returnProfiles: Array<{ id: string; name: string; ebayPolicyId: string }> = [];
-    let paymentProfiles: Array<{ id: string; name: string; ebayPolicyId: string }> = [];
+    let returnProfiles: Array<{
+      id: string;
+      name: string;
+      ebayPolicyId: string;
+    }> = [];
+    let paymentProfiles: Array<{
+      id: string;
+      name: string;
+      ebayPolicyId: string;
+    }> = [];
 
     if (store.channel === 'ebay' && store.connectionId) {
       const account = await this.connectedAccountRepo.findOne({
@@ -197,20 +219,31 @@ export class StoresService {
         });
 
         // Fulfillment policies as shipping profiles (fallback if no local shipping profiles)
-        const fulfillPolicies = policies.filter((p) => p.policyType === 'fulfillment');
+        const fulfillPolicies = policies.filter(
+          (p) => p.policyType === 'fulfillment',
+        );
         if (shippingProfiles.length === 0 && fulfillPolicies.length > 0) {
           shippingProfiles = fulfillPolicies.map((p) => {
             // Extract shipping cost from raw_payload
             let shippingCost: number | undefined;
             let currency: string | undefined;
             try {
-              const raw = p.rawPayload as Record<string, unknown>;
-              const shippingOptions = raw?.shippingOptions as Array<Record<string, unknown>> | undefined;
+              const raw = p.rawPayload;
+              const shippingOptions = raw?.shippingOptions as
+                | Array<Record<string, unknown>>
+                | undefined;
               if (shippingOptions?.[0]?.shippingServices) {
-                const services = shippingOptions[0].shippingServices as Array<Record<string, unknown>>;
+                const services = shippingOptions[0].shippingServices as Array<
+                  Record<string, unknown>
+                >;
                 if (services[0]?.shippingCost) {
-                  const cost = services[0].shippingCost as { value?: string; currency?: string };
-                  shippingCost = cost.value ? parseFloat(cost.value) : undefined;
+                  const cost = services[0].shippingCost as {
+                    value?: string;
+                    currency?: string;
+                  };
+                  shippingCost = cost.value
+                    ? parseFloat(cost.value)
+                    : undefined;
                   currency = cost.currency;
                 }
               }
@@ -232,11 +265,19 @@ export class StoresService {
 
         returnProfiles = policies
           .filter((p) => p.policyType === 'return')
-          .map((p) => ({ id: p.id, name: p.name, ebayPolicyId: p.ebayPolicyId }));
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            ebayPolicyId: p.ebayPolicyId,
+          }));
 
         paymentProfiles = policies
           .filter((p) => p.policyType === 'payment')
-          .map((p) => ({ id: p.id, name: p.name, ebayPolicyId: p.ebayPolicyId }));
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            ebayPolicyId: p.ebayPolicyId,
+          }));
       }
     }
 

@@ -58,7 +58,9 @@ describe('ebay-business-policy.util', () => {
         'USED_EXCELLENT',
       ),
     ).toBeNull();
-    expect(policyMatchesMarketplaceGeo('EBAY_DE', 'EBAY_MOTORS_US')).toBe(false);
+    expect(policyMatchesMarketplaceGeo('EBAY_DE', 'EBAY_MOTORS_US')).toBe(
+      false,
+    );
     expect(policyMatchesMarketplaceGeo('EBAY_DE', 'EBAY_DE')).toBe(true);
   });
 
@@ -67,11 +69,7 @@ describe('ebay-business-policy.util', () => {
       marketplaceRequiresPartsAccessoriesReturnPolicy('EBAY_DE', '33684'),
     ).toBe(false);
     expect(
-      listingRequiresPartsAccessoriesReturnPolicy(
-        'EBAY_DE',
-        '33684',
-        'NEW',
-      ),
+      listingRequiresPartsAccessoriesReturnPolicy('EBAY_DE', '33684', 'NEW'),
     ).toBe(false);
   });
 
@@ -95,9 +93,9 @@ describe('ebay-business-policy.util', () => {
   });
 
   it('coalesceValidPolicyId skips stale short ids', () => {
-    expect(
-      coalesceValidPolicyId('2770043', '410665908022', undefined),
-    ).toBe('410665908022');
+    expect(coalesceValidPolicyId('2770043', '410665908022', undefined)).toBe(
+      '410665908022',
+    );
   });
 
   it('detects P&A compliant return policies', () => {
@@ -202,9 +200,9 @@ describe('ebay-business-policy.util', () => {
     expect(
       pickReturnPolicyIdForListing(items, 'EBAY_MOTORS_US', '33684', 'NEW'),
     ).toBe('510665876022');
-    expect(marketplaceRequiresPartsAccessoriesReturnPolicy('EBAY_MOTORS_US')).toBe(
-      true,
-    );
+    expect(
+      marketplaceRequiresPartsAccessoriesReturnPolicy('EBAY_MOTORS_US'),
+    ).toBe(true);
   });
 
   it('picks return policy upgrade candidate (30+ days, buyer-paid)', () => {
@@ -235,7 +233,10 @@ describe('ebay-business-policy.util', () => {
         ?.ebayPolicyId,
     ).toBe('410665876022');
     expect(
-      buildPaCompliantReturnPolicyRequest('EBAY_MOTORS_US', items[0].rawPayload),
+      buildPaCompliantReturnPolicyRequest(
+        'EBAY_MOTORS_US',
+        items[0].rawPayload,
+      ),
     ).toMatchObject({
       returnsAccepted: true,
       returnPeriod: { value: 30, unit: 'DAY' },

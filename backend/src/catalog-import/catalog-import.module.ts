@@ -41,7 +41,11 @@ import { ListingsModule } from '../listings/listings.module.js';
     ChannelsModule,
     ListingsModule,
   ],
-  controllers: [CatalogImportController, ComplianceController, CatalogProductController],
+  controllers: [
+    CatalogImportController,
+    ComplianceController,
+    CatalogProductController,
+  ],
   providers: [
     CatalogImportService,
     CsvImportProcessor,
@@ -52,6 +56,13 @@ import { ListingsModule } from '../listings/listings.module.js';
     TemplateGeneratorService,
     CategoryLookupService,
   ],
-  exports: [CatalogImportService, DuplicateDetectionService, EbayComplianceService, ComplianceAuditService, CatalogProductService, TemplateGeneratorService],
+  exports: [
+    CatalogImportService,
+    DuplicateDetectionService,
+    EbayComplianceService,
+    ComplianceAuditService,
+    CatalogProductService,
+    TemplateGeneratorService,
+  ],
 })
 export class CatalogImportModule {}

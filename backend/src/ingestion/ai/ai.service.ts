@@ -61,7 +61,7 @@ export class AiService {
    * Normalize an AI raw response into standardized fields.
    */
   normalizeResponse(response: AiRawResponse): NormalizedAiFields {
-    const raw = response.raw as Record<string, unknown>;
+    const raw = response.raw;
 
     // Safely extract confidence sub-object
     const conf = (raw['confidence'] ?? {}) as Record<string, number>;

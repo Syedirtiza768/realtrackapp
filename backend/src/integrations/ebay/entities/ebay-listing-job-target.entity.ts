@@ -12,7 +12,12 @@ import { CatalogProduct } from '../../../catalog-import/entities/catalog-product
 import { ConnectedEbayAccount } from './connected-ebay-account.entity.js';
 import { EbayListingJob } from './ebay-listing-job.entity.js';
 
-export type EbayListingJobTargetStatus = 'pending' | 'processing' | 'success' | 'failed' | 'skipped';
+export type EbayListingJobTargetStatus =
+  | 'pending'
+  | 'processing'
+  | 'success'
+  | 'failed'
+  | 'skipped';
 
 @Entity('ebay_listing_job_targets')
 @Index('idx_ebay_job_targets_job', ['listingJobId'])

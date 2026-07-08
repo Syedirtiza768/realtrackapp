@@ -45,7 +45,12 @@ export class SellerpunditAccountSyncService {
   async syncStores(
     organizationId: string,
     userId: string | null,
-  ): Promise<{ imported: number; updated: number; skipped: number; accounts: string[] }> {
+  ): Promise<{
+    imported: number;
+    updated: number;
+    skipped: number;
+    accounts: string[];
+  }> {
     const jwt = await this.auth.getJwt(organizationId);
     const raw = await this.http.get<unknown>(jwt, '/token/get-all-tokens');
     const tokens = this.tokenSync.unwrapTokenList(raw);
@@ -56,13 +61,16 @@ export class SellerpunditAccountSyncService {
     const accountIds: string[] = [];
 
     const environment =
-      (this.config.get<string>('SELLERPUNDIT_ENVIRONMENT', 'production') === 'sandbox'
+      this.config.get<string>('SELLERPUNDIT_ENVIRONMENT', 'production') ===
+      'sandbox'
         ? 'sandbox'
-        : 'production') as 'sandbox' | 'production';
+        : 'production';
 
     const configDefaultMp =
-      this.config.get<string>('SELLERPUNDIT_DEFAULT_MARKETPLACE_ID', 'EBAY_MOTORS_US') ||
-      'EBAY_MOTORS_US';
+      this.config.get<string>(
+        'SELLERPUNDIT_DEFAULT_MARKETPLACE_ID',
+        'EBAY_MOTORS_US',
+      ) || 'EBAY_MOTORS_US';
 
     for (const row of tokens) {
       if (row.status && row.status !== 'active') {
@@ -97,9 +105,7 @@ export class SellerpunditAccountSyncService {
         continue;
       }
 
-      const ebayUserId = row.sellerId
-        ? String(row.sellerId)
-        : `sp-${row.id}`;
+      const ebayUserId = row.sellerId ? String(row.sellerId) : `sp-${row.id}`;
 
       const dup = await this.accountRepo.findOne({
         where: { organizationId, ebayUserId },
@@ -308,7 +314,9 @@ export class SellerpunditAccountSyncService {
     }
   }
 
-  async testConnection(organizationId: string): Promise<{ ok: boolean; storeCount: number }> {
+  async testConnection(
+    organizationId: string,
+  ): Promise<{ ok: boolean; storeCount: number }> {
     const jwt = await this.auth.getJwt(organizationId);
     const raw = await this.http.get<unknown>(jwt, '/token/get-all-tokens');
     const tokens = this.tokenSync.unwrapTokenList(raw);

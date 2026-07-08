@@ -57,10 +57,18 @@ export class ReviewTask {
   @Column({ type: 'uuid', nullable: true })
   organizationId: string | null;
 
-  @Column({ type: 'enum', enum: ReviewTaskStatus, default: ReviewTaskStatus.OPEN })
+  @Column({
+    type: 'enum',
+    enum: ReviewTaskStatus,
+    default: ReviewTaskStatus.OPEN,
+  })
   status: ReviewTaskStatus;
 
-  @Column({ type: 'enum', enum: ReviewTaskPriority, default: ReviewTaskPriority.MEDIUM })
+  @Column({
+    type: 'enum',
+    enum: ReviewTaskPriority,
+    default: ReviewTaskPriority.MEDIUM,
+  })
   priority: ReviewTaskPriority;
 
   @Column({ type: 'enum', enum: ReviewTaskReason })

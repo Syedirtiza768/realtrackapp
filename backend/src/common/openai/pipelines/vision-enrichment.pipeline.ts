@@ -112,7 +112,8 @@ export class VisionEnrichmentPipeline {
     // Auto-detect ECU / electronic modules and use the specialised prompt
     // unless the caller explicitly supplied a custom prompt.
     const useEcuPrompt = !prompt && isEcuPartType(partContext.partType);
-    const effectivePrompt = prompt ?? (useEcuPrompt ? ECU_IDENTIFICATION_PROMPT : MOTOR_PARTS_PROMPT);
+    const effectivePrompt =
+      prompt ?? (useEcuPrompt ? ECU_IDENTIFICATION_PROMPT : MOTOR_PARTS_PROMPT);
     const systemPrompt = useEcuPrompt
       ? 'You are an expert at identifying automotive electronic control modules (ECUs, TCMs, BCMs) from their labels and physical appearance.'
       : 'You are an expert automotive parts vision analyst for eBay Motors listings.';
@@ -149,7 +150,10 @@ export class VisionEnrichmentPipeline {
       }
     }
 
-    const validation = await this.validator.validateWithTaxonomy(parsed, srcPart);
+    const validation = await this.validator.validateWithTaxonomy(
+      parsed,
+      srcPart,
+    );
 
     await this.runLogService.logRun({
       sku: partContext.sku ?? null,
@@ -193,21 +197,31 @@ export class VisionEnrichmentPipeline {
 
     // Extract ECU identifiers when the ECU prompt was used
     if (useEcuPrompt && parsed && typeof parsed === 'object') {
-      const partNums = (parsed as Record<string, unknown>).partNumbers as Record<string, unknown> | undefined;
-      const vehicleApp = (parsed as Record<string, unknown>).vehicleApplication as Record<string, unknown> | undefined;
-      const ecuConfidence = (parsed as Record<string, unknown>).confidence as Record<string, unknown> | undefined;
+      const partNums = parsed.partNumbers as
+        | Record<string, unknown>
+        | undefined;
+      const vehicleApp = parsed.vehicleApplication as
+        | Record<string, unknown>
+        | undefined;
+      const ecuConfidence = parsed.confidence as
+        | Record<string, unknown>
+        | undefined;
       result.ecuIdentifiers = {
-        partType: (parsed as Record<string, unknown>).partType as string ?? null,
-        brand: (parsed as Record<string, unknown>).brand as string ?? null,
-        mpn: partNums?.mpn as string ?? null,
-        oemNumber: partNums?.oemNumber as string ?? null,
-        hardwareNumber: partNums?.hardwareNumber as string ?? null,
-        softwareNumber: partNums?.softwareNumber as string ?? null,
-        otherNumbers: Array.isArray(partNums?.otherNumbers) ? partNums.otherNumbers as string[] : [],
-        visibleText: Array.isArray((parsed as Record<string, unknown>).visibleText) ? (parsed as Record<string, unknown>).visibleText as string[] : [],
-        vehicleMake: vehicleApp?.make as string ?? null,
-        vehicleModel: vehicleApp?.model as string ?? null,
-        vehicleYearRange: vehicleApp?.yearRange as string ?? null,
+        partType: (parsed.partType as string) ?? null,
+        brand: (parsed.brand as string) ?? null,
+        mpn: (partNums?.mpn as string) ?? null,
+        oemNumber: (partNums?.oemNumber as string) ?? null,
+        hardwareNumber: (partNums?.hardwareNumber as string) ?? null,
+        softwareNumber: (partNums?.softwareNumber as string) ?? null,
+        otherNumbers: Array.isArray(partNums?.otherNumbers)
+          ? (partNums.otherNumbers as string[])
+          : [],
+        visibleText: Array.isArray(parsed.visibleText)
+          ? (parsed.visibleText as string[])
+          : [],
+        vehicleMake: (vehicleApp?.make as string) ?? null,
+        vehicleModel: (vehicleApp?.model as string) ?? null,
+        vehicleYearRange: (vehicleApp?.yearRange as string) ?? null,
         confidence: {
           brand: Number(ecuConfidence?.brand) || 0,
           partNumbers: Number(ecuConfidence?.partNumbers) || 0,
@@ -217,8 +231,8 @@ export class VisionEnrichmentPipeline {
       };
       this.logger.log(
         `ECU identification: partType=${result.ecuIdentifiers.partType}, ` +
-        `brand=${result.ecuIdentifiers.brand}, mpn=${result.ecuIdentifiers.mpn}, ` +
-        `oem=${result.ecuIdentifiers.oemNumber}, hw=${result.ecuIdentifiers.hardwareNumber}`,
+          `brand=${result.ecuIdentifiers.brand}, mpn=${result.ecuIdentifiers.mpn}, ` +
+          `oem=${result.ecuIdentifiers.oemNumber}, hw=${result.ecuIdentifiers.hardwareNumber}`,
       );
     }
 

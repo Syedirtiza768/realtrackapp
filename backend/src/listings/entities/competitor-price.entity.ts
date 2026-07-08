@@ -31,7 +31,12 @@ export class CompetitorPrice {
   partNumber!: string;
 
   /** eBay item ID of the competitor listing */
-  @Column({ name: 'ebay_item_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'ebay_item_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   ebayItemId!: string | null;
 
   /** Competitor listing title */

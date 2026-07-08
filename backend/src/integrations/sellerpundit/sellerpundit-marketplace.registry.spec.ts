@@ -10,13 +10,15 @@ describe('SellerpunditMarketplaceRegistry', () => {
     expect(
       inferMarketplaceFromAccountName('(SVG-DE) German Salvage Dismantlers'),
     ).toBe('EBAY_DE');
-    expect(inferMarketplaceFromAccountName('Blackline Autos De')).toBe('EBAY_DE');
+    expect(inferMarketplaceFromAccountName('Blackline Autos De')).toBe(
+      'EBAY_DE',
+    );
   });
 
   it('infers EBAY_GB and EBAY_AU from SVG account names', () => {
-    expect(
-      inferMarketplaceFromAccountName('(SVG-UK) Brit Salvage Depot'),
-    ).toBe('EBAY_GB');
+    expect(inferMarketplaceFromAccountName('(SVG-UK) Brit Salvage Depot')).toBe(
+      'EBAY_GB',
+    );
     expect(
       inferMarketplaceFromAccountName('(SVG-AU) Southern Cross Autoparts'),
     ).toBe('EBAY_AU');

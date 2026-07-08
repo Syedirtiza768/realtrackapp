@@ -32,7 +32,10 @@ export class ClientSettingsController {
   @ApiBearerAuth()
   @RequirePermissions('client_settings.manage')
   @ApiOperation({ summary: 'Update client settings (Super Admin)' })
-  updateSettings(@CurrentUser() user: User, @Body() dto: UpdateClientSettingsDto) {
+  updateSettings(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateClientSettingsDto,
+  ) {
     return this.clientSettings.update(dto, user.id, null);
   }
 }

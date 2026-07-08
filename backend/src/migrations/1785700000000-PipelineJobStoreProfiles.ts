@@ -26,7 +26,9 @@ export class PipelineJobStoreProfiles1785700000000 implements MigrationInterface
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_pipeline_job_marketplace"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_pipeline_job_marketplace"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_pipeline_job_store"`);
     await queryRunner.query(`
       ALTER TABLE "pipeline_jobs"

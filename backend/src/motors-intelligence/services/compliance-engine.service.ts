@@ -34,7 +34,16 @@ const TITLE_FORBIDDEN_PATTERNS = [
   /\b([A-Z]{10,})\b/g, // Long sequences of ALL CAPS (allow short abbreviations)
 ];
 
-const FORBIDDEN_HTML_TAGS = ['script', 'iframe', 'embed', 'object', 'form', 'input', 'style', 'link'];
+const FORBIDDEN_HTML_TAGS = [
+  'script',
+  'iframe',
+  'embed',
+  'object',
+  'form',
+  'input',
+  'style',
+  'link',
+];
 
 const PROHIBITED_CLAIMS = [
   'lifetime warranty',
@@ -147,7 +156,8 @@ export class ComplianceEngineService {
         field: 'ebayCategoryId',
         message: 'eBay category ID is required',
         severity: ValidationSeverity.ERROR,
-        suggestion: 'Resolve the product type to determine appropriate eBay Motors category',
+        suggestion:
+          'Resolve the product type to determine appropriate eBay Motors category',
       });
       return;
     }
@@ -167,9 +177,11 @@ export class ComplianceEngineService {
       warnings.push({
         code: 'MISSING_COMPATIBILITY',
         field: 'fitmentRows',
-        message: 'This category supports vehicle compatibility but no fitment data provided',
+        message:
+          'This category supports vehicle compatibility but no fitment data provided',
         severity: ValidationSeverity.WARNING,
-        suggestion: 'Add fitment/compatibility data for better listing visibility',
+        suggestion:
+          'Add fitment/compatibility data for better listing visibility',
       });
     }
   }
@@ -197,9 +209,14 @@ export class ComplianceEngineService {
           field: req.aspectName,
           message: `Required item specific "${req.aspectName}" is missing`,
           severity: ValidationSeverity.ERROR,
-          suggestion: req.defaultValue ? `Default value: ${req.defaultValue}` : undefined,
+          suggestion: req.defaultValue
+            ? `Default value: ${req.defaultValue}`
+            : undefined,
         });
-      } else if (req.requirementLevel === AspectRequirementLevel.RECOMMENDED && !value) {
+      } else if (
+        req.requirementLevel === AspectRequirementLevel.RECOMMENDED &&
+        !value
+      ) {
         warnings.push({
           code: 'MISSING_RECOMMENDED_ASPECT',
           field: req.aspectName,
@@ -417,7 +434,10 @@ export class ComplianceEngineService {
       product.generatedTitle,
       product.generatedHtmlDescription,
       ...(product.generatedBulletFeatures || []),
-    ].filter(Boolean).join(' ').toLowerCase();
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
 
     for (const claim of PROHIBITED_CLAIMS) {
       if (textToCheck.includes(claim.toLowerCase())) {
@@ -426,7 +446,8 @@ export class ComplianceEngineService {
           field: 'content',
           message: `Content contains prohibited claim: "${claim}"`,
           severity: ValidationSeverity.WARNING,
-          suggestion: 'Remove or rephrase this claim to comply with eBay policies',
+          suggestion:
+            'Remove or rephrase this claim to comply with eBay policies',
         });
       }
     }
@@ -472,7 +493,10 @@ export class ComplianceEngineService {
     errors: ValidationIssue[],
     warnings: ValidationIssue[],
   ): void {
-    if (product.identityConfidence !== null && Number(product.identityConfidence) < 0.6) {
+    if (
+      product.identityConfidence !== null &&
+      Number(product.identityConfidence) < 0.6
+    ) {
       errors.push({
         code: 'LOW_IDENTITY_CONFIDENCE',
         field: 'identityConfidence',
@@ -481,7 +505,10 @@ export class ComplianceEngineService {
       });
     }
 
-    if (product.fitmentConfidence !== null && Number(product.fitmentConfidence) < 0.5) {
+    if (
+      product.fitmentConfidence !== null &&
+      Number(product.fitmentConfidence) < 0.5
+    ) {
       warnings.push({
         code: 'LOW_FITMENT_CONFIDENCE',
         field: 'fitmentConfidence',
@@ -504,7 +531,11 @@ export class ComplianceEngineService {
         },
       });
       if (existing && existing.id !== product.id) {
-        return { detected: true, duplicateId: existing.id, matchType: 'brand_mpn' };
+        return {
+          detected: true,
+          duplicateId: existing.id,
+          matchType: 'brand_mpn',
+        };
       }
     }
 
@@ -521,7 +552,11 @@ export class ComplianceEngineService {
         .getOne();
 
       if (similar) {
-        return { detected: true, duplicateId: similar.id, matchType: 'title_similarity' };
+        return {
+          detected: true,
+          duplicateId: similar.id,
+          matchType: 'title_similarity',
+        };
       }
     }
 
@@ -539,7 +574,9 @@ export class ComplianceEngineService {
     return Math.max(0, Math.min(1, score));
   }
 
-  private async getAspectCoverage(product: MotorsProduct): Promise<Record<string, any>> {
+  private async getAspectCoverage(
+    product: MotorsProduct,
+  ): Promise<Record<string, any>> {
     if (!product.ebayCategoryId) return {};
 
     const requirements = await this.aspectRequirementRepo.find({
@@ -547,19 +584,29 @@ export class ComplianceEngineService {
     });
 
     const specifics = product.generatedItemSpecifics || {};
-    const required = requirements.filter(r => r.requirementLevel === AspectRequirementLevel.REQUIRED);
-    const recommended = requirements.filter(r => r.requirementLevel === AspectRequirementLevel.RECOMMENDED);
+    const required = requirements.filter(
+      (r) => r.requirementLevel === AspectRequirementLevel.REQUIRED,
+    );
+    const recommended = requirements.filter(
+      (r) => r.requirementLevel === AspectRequirementLevel.RECOMMENDED,
+    );
 
-    const requiredCovered = required.filter(r => specifics[r.aspectName]).length;
-    const recommendedCovered = recommended.filter(r => specifics[r.aspectName]).length;
+    const requiredCovered = required.filter(
+      (r) => specifics[r.aspectName],
+    ).length;
+    const recommendedCovered = recommended.filter(
+      (r) => specifics[r.aspectName],
+    ).length;
 
     return {
       requiredTotal: required.length,
       requiredCovered,
-      requiredCoverage: required.length > 0 ? requiredCovered / required.length : 1,
+      requiredCoverage:
+        required.length > 0 ? requiredCovered / required.length : 1,
       recommendedTotal: recommended.length,
       recommendedCovered,
-      recommendedCoverage: recommended.length > 0 ? recommendedCovered / recommended.length : 1,
+      recommendedCoverage:
+        recommended.length > 0 ? recommendedCovered / recommended.length : 1,
     };
   }
 

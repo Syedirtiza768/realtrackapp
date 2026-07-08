@@ -43,9 +43,16 @@ export class AiEnhancementService {
   }): Promise<{ items: AiEnhancement[]; total: number }> {
     const qb = this.enhancementRepo.createQueryBuilder('e');
 
-    if (filters.listingId) qb.andWhere('e.listing_id = :listingId', { listingId: filters.listingId });
-    if (filters.enhancementType) qb.andWhere('e.enhancement_type = :type', { type: filters.enhancementType });
-    if (filters.status) qb.andWhere('e.status = :status', { status: filters.status });
+    if (filters.listingId)
+      qb.andWhere('e.listing_id = :listingId', {
+        listingId: filters.listingId,
+      });
+    if (filters.enhancementType)
+      qb.andWhere('e.enhancement_type = :type', {
+        type: filters.enhancementType,
+      });
+    if (filters.status)
+      qb.andWhere('e.status = :status', { status: filters.status });
 
     const [items, total] = await qb
       .orderBy('e.created_at', 'DESC')
@@ -77,7 +84,8 @@ export class AiEnhancementService {
     inputData?: Record<string, unknown>;
   }): Promise<AiEnhancement> {
     const listing = await this.listingRepo.findOneBy({ id: data.listingId });
-    if (!listing) throw new NotFoundException(`Listing ${data.listingId} not found`);
+    if (!listing)
+      throw new NotFoundException(`Listing ${data.listingId} not found`);
 
     // Find existing version count
     const latestVersion = await this.enhancementRepo
@@ -91,7 +99,8 @@ export class AiEnhancementService {
 
     const nextVersion = (latestVersion?.maxVer ?? 0) + 1;
 
-    const inputData = data.inputData ?? this.buildInputData(listing, data.enhancementType);
+    const inputData =
+      data.inputData ?? this.buildInputData(listing, data.enhancementType);
 
     const enhancement = this.enhancementRepo.create({
       listingId: data.listingId,
@@ -114,12 +123,27 @@ export class AiEnhancementService {
   async bulkRequestEnhancements(
     listingIds: string[],
     enhancementType: AiEnhancement['enhancementType'],
-  ): Promise<{ results: Array<{ listingId: string; enhancementId?: string; status: string; error?: string }> }> {
-    const results: Array<{ listingId: string; enhancementId?: string; status: string; error?: string }> = [];
+  ): Promise<{
+    results: Array<{
+      listingId: string;
+      enhancementId?: string;
+      status: string;
+      error?: string;
+    }>;
+  }> {
+    const results: Array<{
+      listingId: string;
+      enhancementId?: string;
+      status: string;
+      error?: string;
+    }> = [];
 
     for (const listingId of listingIds) {
       try {
-        const enh = await this.requestEnhancement({ listingId, enhancementType });
+        const enh = await this.requestEnhancement({
+          listingId,
+          enhancementType,
+        });
         results.push({ listingId, enhancementId: enh.id, status: 'generated' });
       } catch (error: any) {
         results.push({ listingId, status: 'error', error: error.message });
@@ -131,7 +155,9 @@ export class AiEnhancementService {
 
   // ─── Process (generate AI enhancement) ───
 
-  private async processEnhancement(enhancementId: string): Promise<AiEnhancement> {
+  private async processEnhancement(
+    enhancementId: string,
+  ): Promise<AiEnhancement> {
     const enh = await this.getEnhancement(enhancementId);
     enh.status = 'processing';
     await this.enhancementRepo.save(enh);
@@ -164,11 +190,16 @@ export class AiEnhancementService {
 
   // ─── Approval workflow ───
 
-  async approveEnhancement(enhancementId: string, approvedBy?: string): Promise<AiEnhancement> {
+  async approveEnhancement(
+    enhancementId: string,
+    approvedBy?: string,
+  ): Promise<AiEnhancement> {
     const enh = await this.getEnhancement(enhancementId);
 
     if (enh.status !== 'generated') {
-      throw new BadRequestException(`Cannot approve enhancement in "${enh.status}" status`);
+      throw new BadRequestException(
+        `Cannot approve enhancement in "${enh.status}" status`,
+      );
     }
 
     enh.status = 'approved';
@@ -182,15 +213,20 @@ export class AiEnhancementService {
     return saved;
   }
 
-  async applyEnhancement(enhancementId: string): Promise<{ enhancement: AiEnhancement; listing: ListingRecord }> {
+  async applyEnhancement(
+    enhancementId: string,
+  ): Promise<{ enhancement: AiEnhancement; listing: ListingRecord }> {
     const enh = await this.getEnhancement(enhancementId);
 
     if (enh.status !== 'approved') {
-      throw new BadRequestException(`Cannot apply enhancement in "${enh.status}" status — must be approved first`);
+      throw new BadRequestException(
+        `Cannot apply enhancement in "${enh.status}" status — must be approved first`,
+      );
     }
 
     const listing = await this.listingRepo.findOneBy({ id: enh.listingId });
-    if (!listing) throw new NotFoundException(`Listing ${enh.listingId} not found`);
+    if (!listing)
+      throw new NotFoundException(`Listing ${enh.listingId} not found`);
 
     // Apply the enhancement to the listing
     this.applyToListing(listing, enh);
@@ -199,15 +235,22 @@ export class AiEnhancementService {
     enh.appliedAt = new Date();
     const savedEnh = await this.enhancementRepo.save(enh);
 
-    this.logger.log(`Applied ${enh.enhancementType} v${enh.enhancementVersion} to listing ${enh.listingId}`);
+    this.logger.log(
+      `Applied ${enh.enhancementType} v${enh.enhancementVersion} to listing ${enh.listingId}`,
+    );
     return { enhancement: savedEnh, listing: savedListing };
   }
 
-  async rejectEnhancement(enhancementId: string, reason: string): Promise<AiEnhancement> {
+  async rejectEnhancement(
+    enhancementId: string,
+    reason: string,
+  ): Promise<AiEnhancement> {
     const enh = await this.getEnhancement(enhancementId);
 
     if (enh.status !== 'generated') {
-      throw new BadRequestException(`Cannot reject enhancement in "${enh.status}" status`);
+      throw new BadRequestException(
+        `Cannot reject enhancement in "${enh.status}" status`,
+      );
     }
 
     enh.status = 'rejected';
@@ -221,12 +264,7 @@ export class AiEnhancementService {
   // ─── Summary stats ───
 
   async getStats(): Promise<Record<string, unknown>> {
-    const [
-      totalCount,
-      byType,
-      byStatus,
-      avgConfidence,
-    ] = await Promise.all([
+    const [totalCount, byType, byStatus, avgConfidence] = await Promise.all([
       this.enhancementRepo.count(),
       this.enhancementRepo
         .createQueryBuilder('e')
@@ -273,7 +311,11 @@ export class AiEnhancementService {
     switch (enh.enhancementType) {
       case 'title_optimization':
       case 'description_generation':
-        return this.generateListingContent(enh.enhancementType, original, input);
+        return this.generateListingContent(
+          enh.enhancementType,
+          original,
+          input,
+        );
       case 'item_specifics':
         return this.generateItemSpecificsAI(input, enh.id);
       case 'fitment_detection':
@@ -281,7 +323,9 @@ export class AiEnhancementService {
       case 'image_enhancement':
         return this.generateImageEnhancement(input);
       default:
-        throw new BadRequestException(`Unknown enhancement type: ${enh.enhancementType}`);
+        throw new BadRequestException(
+          `Unknown enhancement type: ${enh.enhancementType}`,
+        );
     }
   }
 
@@ -300,13 +344,21 @@ export class AiEnhancementService {
         String(input['condition'] ?? 'Used'),
       );
 
-      const enhancedValue = type === 'title_optimization'
-        ? result.title
-        : result.description;
+      const enhancedValue =
+        type === 'title_optimization' ? result.title : result.description;
 
-      const changes = type === 'title_optimization'
-        ? ['AI-optimized for eBay search ranking', 'Keyword prominence improved', 'Limited to 80 chars']
-        : ['Generated structured HTML description', 'Added product specs & compatibility', 'SEO-optimized content'];
+      const changes =
+        type === 'title_optimization'
+          ? [
+              'AI-optimized for eBay search ranking',
+              'Keyword prominence improved',
+              'Limited to 80 chars',
+            ]
+          : [
+              'Generated structured HTML description',
+              'Added product specs & compatibility',
+              'SEO-optimized content',
+            ];
 
       return {
         enhancedValue,
@@ -318,7 +370,11 @@ export class AiEnhancementService {
           searchTerms: result.searchTerms,
           pricePositioning: result.pricePositioning,
         },
-        diff: { original: original?.slice(0, 200) ?? '(empty)', enhanced: enhancedValue.slice(0, 200), changes },
+        diff: {
+          original: original?.slice(0, 200) ?? '(empty)',
+          enhanced: enhancedValue.slice(0, 200),
+          changes,
+        },
         confidenceScore: 0.88,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
@@ -326,7 +382,9 @@ export class AiEnhancementService {
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
-      this.logger.warn(`OpenAI listing generation failed, using fallback: ${err.message}`);
+      this.logger.warn(
+        `OpenAI listing generation failed, using fallback: ${err.message}`,
+      );
       return this.fallbackListingContent(type, original, input);
     }
   }
@@ -348,8 +406,10 @@ export class AiEnhancementService {
 
       const specifics: Record<string, string> = {
         Brand: result.brand ?? String(input['brand'] ?? 'Unbranded'),
-        'Manufacturer Part Number': result.mpn ?? String(input['mpn'] ?? 'Does Not Apply'),
-        Type: result.partType ?? String(input['partType'] ?? 'Replacement Part'),
+        'Manufacturer Part Number':
+          result.mpn ?? String(input['mpn'] ?? 'Does Not Apply'),
+        Type:
+          result.partType ?? String(input['partType'] ?? 'Replacement Part'),
         ...result.itemSpecifics,
       };
 
@@ -357,16 +417,26 @@ export class AiEnhancementService {
 
       return {
         enhancedValue: JSON.stringify(specifics),
-        enhancedData: { specifics, fieldCount: Object.keys(specifics).length, searchKeywords: result.searchKeywords },
-        diff: { added: Object.keys(specifics), fieldCount: Object.keys(specifics).length },
+        enhancedData: {
+          specifics,
+          fieldCount: Object.keys(specifics).length,
+          searchKeywords: result.searchKeywords,
+        },
+        diff: {
+          added: Object.keys(specifics),
+          fieldCount: Object.keys(specifics).length,
+        },
         confidenceScore: result.confidence?.overall ?? 0.85,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.model ?? result.rawResponse?.model ?? 'openai/gpt-4.1-mini',
+        model:
+          result.model ?? result.rawResponse?.model ?? 'openai/gpt-4.1-mini',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
-      this.logger.warn(`OpenAI enrichment failed, using fallback: ${err.message}`);
+      this.logger.warn(
+        `OpenAI enrichment failed, using fallback: ${err.message}`,
+      );
       return this.fallbackItemSpecifics(input);
     }
   }
@@ -403,11 +473,14 @@ export class AiEnhancementService {
         confidenceScore: result.confidence?.overall ?? 0.75,
         tokensUsed: result.rawResponse?.usage?.totalTokens ?? 0,
         provider: 'openai',
-        model: result.model ?? result.rawResponse?.model ?? 'openai/gpt-4.1-mini',
+        model:
+          result.model ?? result.rawResponse?.model ?? 'openai/gpt-4.1-mini',
         costUsd: result.rawResponse?.estimatedCostUsd ?? 0,
       };
     } catch (err: any) {
-      this.logger.warn(`OpenAI fitment detection failed, using fallback: ${err.message}`);
+      this.logger.warn(
+        `OpenAI fitment detection failed, using fallback: ${err.message}`,
+      );
       return this.fallbackFitmentDetection(input);
     }
   }
@@ -428,7 +501,11 @@ export class AiEnhancementService {
       const enhanced = pieces.join(' ').slice(0, 80).trim();
       return {
         enhancedValue: enhanced,
-        diff: { original, enhanced, changes: ['Fallback: keyword concatenation'] },
+        diff: {
+          original,
+          enhanced,
+          changes: ['Fallback: keyword concatenation'],
+        },
         confidenceScore: 0.5,
         tokensUsed: 0,
         provider: 'fallback',
@@ -441,7 +518,11 @@ export class AiEnhancementService {
     const enhanced = `<h3>${title}</h3><p><strong>Brand:</strong> ${brand} | <strong>MPN:</strong> ${mpn}</p><p>OEM-quality direct replacement part. Please verify fitment before purchasing.</p>`;
     return {
       enhancedValue: enhanced,
-      diff: { original: original?.slice(0, 200) ?? '(empty)', enhanced: enhanced.slice(0, 200), changes: ['Fallback: template-based'] },
+      diff: {
+        original: original?.slice(0, 200) ?? '(empty)',
+        enhanced: enhanced.slice(0, 200),
+        changes: ['Fallback: template-based'],
+      },
       confidenceScore: 0.5,
       tokensUsed: 0,
       provider: 'fallback',
@@ -458,12 +539,16 @@ export class AiEnhancementService {
       'Fitment Type': 'Direct Replacement',
       Warranty: 'No Warranty',
     };
-    if (input['oemNumber']) specifics['OE/OEM Part Number'] = String(input['oemNumber']);
+    if (input['oemNumber'])
+      specifics['OE/OEM Part Number'] = String(input['oemNumber']);
 
     return {
       enhancedValue: JSON.stringify(specifics),
       enhancedData: { specifics, fieldCount: Object.keys(specifics).length },
-      diff: { added: Object.keys(specifics), fieldCount: Object.keys(specifics).length },
+      diff: {
+        added: Object.keys(specifics),
+        fieldCount: Object.keys(specifics).length,
+      },
       confidenceScore: 0.5,
       tokensUsed: 0,
       provider: 'fallback',
@@ -476,12 +561,27 @@ export class AiEnhancementService {
     const title = String(input['title'] ?? '');
     const yearPattern = /\b(19|20)\d{2}\b/g;
     const years = Array.from(title.matchAll(yearPattern)).map((m) => m[0]);
-    const makes = ['Ford', 'Chevrolet', 'Toyota', 'Honda', 'BMW', 'Mercedes-Benz', 'Dodge', 'Audi', 'Volkswagen', 'Jaguar', 'Land Rover'];
-    const detectedMake = makes.find((m) => title.toLowerCase().includes(m.toLowerCase())) ?? 'Universal';
+    const makes = [
+      'Ford',
+      'Chevrolet',
+      'Toyota',
+      'Honda',
+      'BMW',
+      'Mercedes-Benz',
+      'Dodge',
+      'Audi',
+      'Volkswagen',
+      'Jaguar',
+      'Land Rover',
+    ];
+    const detectedMake =
+      makes.find((m) => title.toLowerCase().includes(m.toLowerCase())) ??
+      'Universal';
 
-    const fitments = years.length > 0
-      ? years.map((y) => ({ year: y, make: detectedMake, model: 'Various' }))
-      : [];
+    const fitments =
+      years.length > 0
+        ? years.map((y) => ({ year: y, make: detectedMake, model: 'Various' }))
+        : [];
 
     return {
       enhancedValue: JSON.stringify(fitments),
@@ -501,7 +601,12 @@ export class AiEnhancementService {
       enhancedValue: `${imageCount} image(s) queued for enhancement`,
       enhancedData: {
         processedImages: imageCount,
-        enhancements: ['Background removal', 'Auto-crop', 'Brightness optimization', 'Resize to 1600x1600'],
+        enhancements: [
+          'Background removal',
+          'Auto-crop',
+          'Brightness optimization',
+          'Resize to 1600x1600',
+        ],
       },
       diff: { imageCount, enhancementsApplied: 4 },
       confidenceScore: 0.9,
@@ -555,10 +660,7 @@ export class AiEnhancementService {
     }
   }
 
-  private applyToListing(
-    listing: ListingRecord,
-    enh: AiEnhancement,
-  ): void {
+  private applyToListing(listing: ListingRecord, enh: AiEnhancement): void {
     switch (enh.enhancementType) {
       case 'title_optimization':
         if (enh.enhancedValue) listing.title = enh.enhancedValue;
@@ -571,7 +673,8 @@ export class AiEnhancementService {
           const specs = enh.enhancedData.specifics as Record<string, string>;
           if (specs['Brand']) (listing as any).cBrand = specs['Brand'];
           if (specs['Manufacturer Part Number']) {
-            (listing as any).cManufacturerPartNumber = specs['Manufacturer Part Number'];
+            (listing as any).cManufacturerPartNumber =
+              specs['Manufacturer Part Number'];
           }
         }
         break;
@@ -580,6 +683,8 @@ export class AiEnhancementService {
   }
 
   private str(val: unknown): string | undefined {
-    return typeof val === 'string' && val.trim().length > 0 ? val.trim() : undefined;
+    return typeof val === 'string' && val.trim().length > 0
+      ? val.trim()
+      : undefined;
   }
 }

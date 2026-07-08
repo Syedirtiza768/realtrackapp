@@ -23,10 +23,20 @@ export class ChannelConnection {
   @Column({ name: 'organization_id', type: 'uuid', nullable: true })
   organizationId!: string | null;
 
-  @Column({ name: 'account_name', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'account_name',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   accountName!: string | null;
 
-  @Column({ name: 'external_account_id', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'external_account_id',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   externalAccountId!: string | null;
 
   /** AES-256-GCM encrypted JSON blob containing {accessToken, refreshToken, expiresAt} */

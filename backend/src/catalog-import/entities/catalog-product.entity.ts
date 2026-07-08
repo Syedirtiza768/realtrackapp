@@ -15,7 +15,10 @@ import {
 @Index('idx_catalog_sku', ['sku'], { unique: true })
 @Index('idx_catalog_mpn', ['mpn'])
 @Index('idx_catalog_upc', ['upc'], { unique: true, where: '"upc" IS NOT NULL' })
-@Index('idx_catalog_ebay_item_id', ['ebayItemId'], { unique: true, where: '"ebay_item_id" IS NOT NULL' })
+@Index('idx_catalog_ebay_item_id', ['ebayItemId'], {
+  unique: true,
+  where: '"ebay_item_id" IS NOT NULL',
+})
 @Index('idx_catalog_brand_mpn', ['brandNormalized', 'mpnNormalized'])
 @Index('idx_catalog_title_normalized', ['titleNormalized'])
 @Index('idx_catalog_brand', ['brandNormalized'])
@@ -135,7 +138,12 @@ export class CatalogProduct {
 
   /* ── Mandatory listing optimization ───────────────────── */
 
-  @Column({ name: 'optimization_status', type: 'varchar', length: 32, default: 'pending' })
+  @Column({
+    name: 'optimization_status',
+    type: 'varchar',
+    length: 32,
+    default: 'pending',
+  })
   optimizationStatus!: string;
 
   @Column({ name: 'optimization_version', type: 'int', default: 0 })
@@ -147,19 +155,39 @@ export class CatalogProduct {
   @Column({ name: 'source_data_hash', type: 'text', nullable: true })
   sourceDataHash!: string | null;
 
-  @Column({ name: 'fitment_status', type: 'varchar', length: 32, default: 'pending' })
+  @Column({
+    name: 'fitment_status',
+    type: 'varchar',
+    length: 32,
+    default: 'pending',
+  })
   fitmentStatus!: string;
 
-  @Column({ name: 'fitment_confidence', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  @Column({
+    name: 'fitment_confidence',
+    type: 'numeric',
+    precision: 5,
+    scale: 4,
+    nullable: true,
+  })
   fitmentConfidence!: number | null;
 
-  @Column({ name: 'ebay_validation_status', type: 'varchar', length: 32, nullable: true })
+  @Column({
+    name: 'ebay_validation_status',
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+  })
   ebayValidationStatus!: string | null;
 
   @Column({ name: 'optimization_errors', type: 'jsonb', default: () => "'[]'" })
   optimizationErrors!: Record<string, unknown>[];
 
-  @Column({ name: 'optimization_warnings', type: 'jsonb', default: () => "'[]'" })
+  @Column({
+    name: 'optimization_warnings',
+    type: 'jsonb',
+    default: () => "'[]'",
+  })
   optimizationWarnings!: Record<string, unknown>[];
 
   @Column({ name: 'optimized_title', type: 'text', nullable: true })
@@ -180,10 +208,22 @@ export class CatalogProduct {
   @Column({ name: 'donor_vin', type: 'text', nullable: true })
   donorVin!: string | null;
 
-  @Column({ name: 'seo_score', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  @Column({
+    name: 'seo_score',
+    type: 'numeric',
+    precision: 5,
+    scale: 4,
+    nullable: true,
+  })
   seoScore!: number | null;
 
-  @Column({ name: 'readiness_score', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  @Column({
+    name: 'readiness_score',
+    type: 'numeric',
+    precision: 5,
+    scale: 4,
+    nullable: true,
+  })
   readinessScore!: number | null;
 
   @Column({ name: 'manual_review', type: 'boolean', default: false })

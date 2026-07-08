@@ -16,18 +16,11 @@ import { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.
 import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
 
 import {
-
   buildEbayListingTitle,
-
   buildEbayListingDescription,
-
 } from '../../../channels/ebay/ebay-listing-text.util.js';
 
-import {
-
-  applyImageOrderOverride,
-
-} from '../../../channels/ebay/ebay-listing-images.util.js';
+import { applyImageOrderOverride } from '../../../channels/ebay/ebay-listing-images.util.js';
 
 import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
 
@@ -46,40 +39,27 @@ import {
 import { fitmentDataToCompatibilityPayload } from '../../../fitment/fitment-mvl.util.js';
 import type { EbayCompatibilityPayload } from '../../../channels/ebay/ebay-api.types.js';
 
-
-
 export interface ListingBuilderResult {
-
   publishRequest: PublishRequest;
 
   warnings: string[];
 
   blockingErrors: string[];
-
 }
 
-
-
 @Injectable()
-
 export class ListingBuilderService {
-
   constructor(
-
     @InjectRepository(ListingStoreOverride)
-
     private readonly overrideRepo: Repository<ListingStoreOverride>,
 
     @InjectRepository(EbayAccountMarketplace)
-
     private readonly mpRepo: Repository<EbayAccountMarketplace>,
 
     @InjectRepository(EbayBusinessPolicy)
-
     private readonly policyRepo: Repository<EbayBusinessPolicy>,
 
     @InjectRepository(ConnectedEbayAccount)
-
     private readonly accountRepo: Repository<ConnectedEbayAccount>,
 
     private readonly marketplaceConfig: EbayMarketplaceConfigService,
@@ -87,13 +67,9 @@ export class ListingBuilderService {
     private readonly publishResolver: CatalogPublishResolverService,
 
     private readonly inventoryApi: EbayInventoryApiService,
-
   ) {}
 
-
-
   async build(params: {
-
     catalogProductId: string;
 
     ebayAccountId: string;
@@ -103,53 +79,38 @@ export class ListingBuilderService {
     listingRecordId: string;
 
     storeId: string;
-
   }): Promise<ListingBuilderResult> {
-
     const warnings: string[] = [];
 
     const blockingErrors: string[] = [];
 
-
-
-    const resolved = await this.publishResolver.resolve(params.catalogProductId);
+    const resolved = await this.publishResolver.resolve(
+      params.catalogProductId,
+    );
 
     if (!resolved) {
-
       blockingErrors.push('Catalog product or listing record not found');
 
       return this.emptyResult(blockingErrors, warnings, params);
-
     }
-
-
 
     const { snapshot } = resolved;
 
     warnings.push(...resolved.warnings);
 
-
-
     const ov = await this.overrideRepo.findOne({
-
       where: {
-
         catalogProductId: snapshot.catalogProductId,
 
         ebayAccountId: params.ebayAccountId,
 
         marketplaceId: params.marketplaceId,
-
       },
-
     });
-
-
 
     const sku = snapshot.sku;
 
     const titleResult = buildEbayListingTitle({
-
       title: snapshot.title,
 
       titleOverride: ov?.titleOverride,
@@ -161,7 +122,6 @@ export class ListingBuilderService {
       mpn: snapshot.mpn,
 
       sku,
-
     });
 
     warnings.push(...titleResult.warnings);
@@ -169,7 +129,6 @@ export class ListingBuilderService {
     const title = titleResult.title;
 
     const descResult = buildEbayListingDescription({
-
       description: ov?.descriptionOverride?.trim() || snapshot.description,
 
       title,
@@ -181,7 +140,6 @@ export class ListingBuilderService {
       sku,
 
       partType: snapshot.partType,
-
     });
 
     warnings.push(...descResult.warnings);
@@ -189,50 +147,34 @@ export class ListingBuilderService {
     const description = descResult.description;
 
     const price =
-
       ov?.priceOverride != null
-
         ? Number(ov.priceOverride)
-
         : Number(snapshot.price ?? 0);
 
     const quantity = ov?.quantityOverride ?? snapshot.quantity ?? 0;
 
     const categoryId =
-
       ov?.categoryIdOverride?.trim() || snapshot.categoryId || '';
 
     const condition = mapToEbayConditionEnum(
-
       ov?.conditionOverride ?? snapshot.conditionId,
 
       'USED_GOOD',
-
     );
 
-
-
     if (!categoryId) {
-
-      warnings.push('Using empty category — publish will likely fail until taxonomy is set');
-
+      warnings.push(
+        'Using empty category — publish will likely fail until taxonomy is set',
+      );
     }
 
-
-
     const mpRow = await this.mpRepo.findOne({
-
       where: {
-
         ebayAccountId: params.ebayAccountId,
 
         marketplaceId: params.marketplaceId,
-
       },
-
     });
-
-
 
     let fulfillmentPolicyId = mpRow?.defaultFulfillmentPolicyId ?? undefined;
 
@@ -242,38 +184,32 @@ export class ListingBuilderService {
 
     let merchantLocationKey = mpRow?.defaultInventoryLocationKey ?? undefined;
 
-
-
     const po = ov?.policyOverrides;
 
     if (po && typeof po === 'object') {
+      const o = po;
 
-      const o = po as Record<string, unknown>;
-
-      if (typeof o.fulfillmentPolicyId === 'string' && o.fulfillmentPolicyId.trim()) {
-
+      if (
+        typeof o.fulfillmentPolicyId === 'string' &&
+        o.fulfillmentPolicyId.trim()
+      ) {
         fulfillmentPolicyId = o.fulfillmentPolicyId.trim();
-
       }
 
       if (typeof o.paymentPolicyId === 'string' && o.paymentPolicyId.trim()) {
-
         paymentPolicyId = o.paymentPolicyId.trim();
-
       }
 
       if (typeof o.returnPolicyId === 'string' && o.returnPolicyId.trim()) {
-
         returnPolicyId = o.returnPolicyId.trim();
-
       }
 
-      if (typeof o.merchantLocationKey === 'string' && o.merchantLocationKey.trim()) {
-
+      if (
+        typeof o.merchantLocationKey === 'string' &&
+        o.merchantLocationKey.trim()
+      ) {
         merchantLocationKey = o.merchantLocationKey.trim();
-
       }
-
     }
 
     const returnRows = await this.policyRepo.find({
@@ -308,85 +244,53 @@ export class ListingBuilderService {
       }
     }
 
-
-
     let currency: string | undefined;
 
     try {
-
       currency = this.marketplaceConfig.require(params.marketplaceId).currency;
-
     } catch {
-
-      warnings.push(`Unknown marketplace ${params.marketplaceId} — defaulting currency in offer may be wrong`);
-
+      warnings.push(
+        `Unknown marketplace ${params.marketplaceId} — defaulting currency in offer may be wrong`,
+      );
     }
 
-
-
     const account = await this.accountRepo.findOne({
-
       where: { id: params.ebayAccountId },
-
     });
 
     const isSellerpundit = account?.connectionSource === 'sellerpundit';
 
-
-
     if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
-
       blockingErrors.push(
-
         isSellerpundit
-
           ? 'Missing fulfillment, payment, or return policy IDs — sync SellerPundit policies.'
-
           : 'Missing fulfillment, payment, or return policy IDs — sync policies and map defaults.',
-
       );
-
     }
 
     if (!merchantLocationKey) {
-
       const ensured = await this.inventoryApi.ensureMerchantLocation(
-
         params.storeId,
 
         merchantLocationKey,
-
       );
 
       if (ensured) {
-
         merchantLocationKey = ensured;
 
         if (mpRow) {
-
           mpRow.defaultInventoryLocationKey = ensured;
 
           await this.mpRepo.save(mpRow);
-
         }
-
       } else {
-
         blockingErrors.push(
-
           isSellerpundit
-
             ? 'Missing merchant location — required when SellerPundit falls back to direct eBay publish. Sync policies from eBay or set a default ship-from address.'
-
             : 'Missing merchant location — sync policies from eBay or set a default ship-from address.',
-
         );
-
       }
-
     }
-
-
 
     const aspects = buildListingAspects({
       brand: snapshot.brand,
@@ -401,49 +305,40 @@ export class ListingBuilderService {
       );
     }
 
-
-
     const imageUrls = applyImageOrderOverride(
-
       snapshot.imageUrls,
 
       ov?.imageOrderOverride,
-
     );
 
     if (!imageUrls.length) {
-
       blockingErrors.push(
-
         'At least one valid image URL (http/https) is required — add images to the catalog listing or linked image assets',
-
       );
-
     }
 
-
-
     const listingRecordId =
-
-      snapshot.listingRecordId ?? params.listingRecordId ?? snapshot.catalogProductId;
-
-
+      snapshot.listingRecordId ??
+      params.listingRecordId ??
+      snapshot.catalogProductId;
 
     let compatibility: EbayCompatibilityPayload | undefined;
     const fitmentOverride = ov?.fitmentOverride;
     const fitmentSource =
       Array.isArray(fitmentOverride) && fitmentOverride.length > 0
         ? (fitmentOverride as Record<string, unknown>[])
-        : resolved.catalogProduct?.fitmentData;
+        : (resolved.catalogProduct?.fitmentData ??
+          resolved.catalogProduct?.fitmentRows ??
+          undefined);
 
     compatibility = fitmentDataToCompatibilityPayload(fitmentSource);
 
     if (compatibility) {
       let supportsMotorsFitment = true;
       try {
-        supportsMotorsFitment = this.marketplaceConfig
-          .require(params.marketplaceId)
-          .supportsMotorsFitment;
+        supportsMotorsFitment = this.marketplaceConfig.require(
+          params.marketplaceId,
+        ).supportsMotorsFitment;
       } catch {
         supportsMotorsFitment = false;
       }
@@ -460,10 +355,7 @@ export class ListingBuilderService {
       }
     }
 
-
-
     const publishRequest: PublishRequest = {
-
       listingId: listingRecordId,
 
       storeIds: [params.storeId],
@@ -504,35 +396,24 @@ export class ListingBuilderService {
       returnPolicyId,
 
       merchantLocationKey,
-
     };
 
-
-
     return { publishRequest, warnings, blockingErrors };
-
   }
 
-
-
   private emptyResult(
-
     blockingErrors: string[],
 
     warnings: string[],
 
     params: { listingRecordId: string; storeId: string },
-
   ): ListingBuilderResult {
-
     return {
-
       blockingErrors,
 
       warnings,
 
       publishRequest: {
-
         listingId: params.listingRecordId,
 
         storeIds: [params.storeId],
@@ -554,13 +435,7 @@ export class ListingBuilderService {
         imageUrls: [],
 
         aspects: {},
-
       },
-
     };
-
   }
-
 }
-
-

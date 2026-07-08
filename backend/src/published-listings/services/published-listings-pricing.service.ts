@@ -70,8 +70,9 @@ export class PublishedListingsPricingService {
       return listing;
     }
 
-    const condition =
-      listing.condition?.toUpperCase().includes('NEW') ? 'NEW' : undefined;
+    const condition = listing.condition?.toUpperCase().includes('NEW')
+      ? 'NEW'
+      : undefined;
     const pricing = await this.browseApi.getCompetitorPricing(
       searchQuery,
       condition,

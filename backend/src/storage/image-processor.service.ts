@@ -79,10 +79,7 @@ export class ImageProcessorService {
           .webp({ quality: 80 })
           .toBuffer();
 
-        const variantKey = s3Key.replace(
-          /\.\w+$/,
-          `${variant.suffix}.webp`,
-        );
+        const variantKey = s3Key.replace(/\.\w+$/, `${variant.suffix}.webp`);
         await this.storage.putObject(variantKey, processed, 'image/webp');
 
         if (variant.suffix === '_thumb') thumbnailKey = variantKey;

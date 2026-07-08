@@ -60,11 +60,14 @@ export function formatEbayApiError(
 
   if (!parts.length) {
     const message = (err as { message?: unknown }).message;
-    return typeof message === 'string' && message.trim() ? message.trim() : fallback;
+    return typeof message === 'string' && message.trim()
+      ? message.trim()
+      : fallback;
   }
 
   // Drop generic wrapper when specific errors exist
-  const generic = 'The request has errors. For help, see the documentation for this API.';
+  const generic =
+    'The request has errors. For help, see the documentation for this API.';
   const specific = parts.filter((p) => p !== generic);
   return specific.length ? specific.join('; ') : parts.join('; ');
 }
@@ -209,7 +212,8 @@ export function isEbaySellingLimitError(err: unknown): boolean {
     if (!Array.isArray(errors)) continue;
     for (const e of errors) {
       const id = String(e.errorId);
-      if (id === '21919024' || id === '21919023' || id === '21919144') return true;
+      if (id === '21919024' || id === '21919023' || id === '21919144')
+        return true;
       const msg = e.longMessage ?? e.message ?? '';
       if (/selling limit/i.test(msg)) return true;
       if (/Höchstbetrag/i.test(msg)) return true;

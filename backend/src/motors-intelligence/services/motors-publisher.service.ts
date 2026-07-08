@@ -63,7 +63,7 @@ export class MotorsPublisherService {
       }
 
       // Use existing channel publish flow
-      await this.channelsService.enqueuePublish(connectionId, listingId!);
+      await this.channelsService.enqueuePublish(connectionId, listingId);
 
       // Mark as published (the actual publish happens async via queue)
       product.status = MotorsProductStatus.PUBLISHED;
@@ -72,7 +72,9 @@ export class MotorsPublisherService {
 
       return { success: true };
     } catch (error) {
-      this.logger.error(`Publish failed for ${motorsProductId}: ${error.message}`);
+      this.logger.error(
+        `Publish failed for ${motorsProductId}: ${error.message}`,
+      );
 
       product.status = MotorsProductStatus.FAILED;
       product.publishError = error.message;
@@ -110,9 +112,11 @@ export class MotorsPublisherService {
       duration: 'GTC',
       customLabelSku: product.mpn || '',
       cBrand: specifics['Brand'] || product.brand || '',
-      cManufacturerPartNumber: specifics['Manufacturer Part Number'] || product.mpn || '',
+      cManufacturerPartNumber:
+        specifics['Manufacturer Part Number'] || product.mpn || '',
       cType: specifics['Type'] || product.productType || '',
-      cOeOemPartNumber: specifics['OE/OEM Part Number'] || product.oemPartNumber || '',
+      cOeOemPartNumber:
+        specifics['OE/OEM Part Number'] || product.oemPartNumber || '',
       pUpc: product.upc || '',
       pEpid: product.epid || '',
       status: 'ready',

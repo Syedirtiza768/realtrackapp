@@ -17,9 +17,10 @@ export function resolveInventoryLocationAddress(
   config: ConfigService,
   store?: Pick<Store, 'storeName' | 'config'> | null,
 ): InventoryLocationAddress {
-  const storeConfig = (store?.config ?? {}) as Record<string, unknown>;
+  const storeConfig = store?.config ?? {};
   const shipFrom =
-    storeConfig.shipFromAddress && typeof storeConfig.shipFromAddress === 'object'
+    storeConfig.shipFromAddress &&
+    typeof storeConfig.shipFromAddress === 'object'
       ? (storeConfig.shipFromAddress as Record<string, unknown>)
       : null;
 
@@ -43,7 +44,11 @@ export function resolveInventoryLocationAddress(
       'EBAY_DEFAULT_INVENTORY_STATE',
       'TX',
     ),
-    postalCode: pick('postalCode', 'EBAY_DEFAULT_INVENTORY_POSTAL_CODE', '77001'),
+    postalCode: pick(
+      'postalCode',
+      'EBAY_DEFAULT_INVENTORY_POSTAL_CODE',
+      '77001',
+    ),
     country: pick('country', 'EBAY_DEFAULT_INVENTORY_COUNTRY', 'US'),
   };
 }
@@ -55,14 +60,21 @@ export function resolvePreferredMerchantLocationKey(
 ): string {
   if (explicit?.trim()) return explicit.trim();
   if (store?.locationKey?.trim()) return store.locationKey.trim();
-  const storeConfig = (store?.config ?? {}) as Record<string, unknown>;
-  if (typeof storeConfig.locationKey === 'string' && storeConfig.locationKey.trim()) {
+  const storeConfig = store?.config ?? {};
+  if (
+    typeof storeConfig.locationKey === 'string' &&
+    storeConfig.locationKey.trim()
+  ) {
     return storeConfig.locationKey.trim();
   }
-  return config.get<string>(
-    'EBAY_DEFAULT_MERCHANT_LOCATION_KEY',
-    DEFAULT_MERCHANT_LOCATION_KEY,
-  ).trim() || DEFAULT_MERCHANT_LOCATION_KEY;
+  return (
+    config
+      .get<string>(
+        'EBAY_DEFAULT_MERCHANT_LOCATION_KEY',
+        DEFAULT_MERCHANT_LOCATION_KEY,
+      )
+      .trim() || DEFAULT_MERCHANT_LOCATION_KEY
+  );
 }
 
 /** Payload for POST /sell/inventory/v1/location/{merchantLocationKey} */

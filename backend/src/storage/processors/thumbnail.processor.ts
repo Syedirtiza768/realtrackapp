@@ -42,7 +42,10 @@ export class ThumbnailProcessor extends WorkerHost {
 
       this.logger.log(`Thumbnails generated for asset=${assetId}`);
     } catch (err) {
-      this.logger.error(`Thumbnail generation failed for asset=${assetId}`, err);
+      this.logger.error(
+        `Thumbnail generation failed for asset=${assetId}`,
+        err,
+      );
       throw err; // triggers BullMQ retry
     }
   }

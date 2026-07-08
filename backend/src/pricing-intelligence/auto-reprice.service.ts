@@ -8,7 +8,10 @@ import { CompetitorPrice } from '../listings/entities/competitor-price.entity.js
 import { MarketSnapshot } from '../listings/entities/market-snapshot.entity.js';
 import { Store } from '../channels/entities/store.entity.js';
 import { EbayInventoryApiService } from '../channels/ebay/ebay-inventory-api.service.js';
-import { PricingAnalysisPipeline, type PricingSuggestion } from '../common/openai/pipelines/pricing-analysis.pipeline.js';
+import {
+  PricingAnalysisPipeline,
+  type PricingSuggestion,
+} from '../common/openai/pipelines/pricing-analysis.pipeline.js';
 
 /**
  * Reprice result for a single offer.
@@ -90,22 +93,28 @@ export class AutoRepriceService {
       ? {
           totalListings: snapshot.totalListings,
           avgPrice: snapshot.avgPrice ? Number(snapshot.avgPrice) : null,
-          medianPrice: snapshot.medianPrice ? Number(snapshot.medianPrice) : null,
+          medianPrice: snapshot.medianPrice
+            ? Number(snapshot.medianPrice)
+            : null,
           minPrice: snapshot.minPrice ? Number(snapshot.minPrice) : null,
           maxPrice: snapshot.maxPrice ? Number(snapshot.maxPrice) : null,
         }
       : {
           totalListings: competitors.length,
-          avgPrice: competitors.length > 0
-            ? competitors.reduce((s, c) => s + Number(c.price), 0) / competitors.length
-            : null,
+          avgPrice:
+            competitors.length > 0
+              ? competitors.reduce((s, c) => s + Number(c.price), 0) /
+                competitors.length
+              : null,
           medianPrice: null,
-          minPrice: competitors.length > 0
-            ? Math.min(...competitors.map((c) => Number(c.price)))
-            : null,
-          maxPrice: competitors.length > 0
-            ? Math.max(...competitors.map((c) => Number(c.price)))
-            : null,
+          minPrice:
+            competitors.length > 0
+              ? Math.min(...competitors.map((c) => Number(c.price)))
+              : null,
+          maxPrice:
+            competitors.length > 0
+              ? Math.max(...competitors.map((c) => Number(c.price)))
+              : null,
         };
 
     return this.pricingPipeline.suggestPrice({
@@ -134,7 +143,10 @@ export class AutoRepriceService {
   }> {
     const suggestion = await this.getSuggestion(productId);
 
-    if (suggestion.confidence < this.AUTO_APPLY_THRESHOLD && !options?.forceApply) {
+    if (
+      suggestion.confidence < this.AUTO_APPLY_THRESHOLD &&
+      !options?.forceApply
+    ) {
       this.logger.log(
         `Product ${productId}: confidence ${suggestion.confidence} below threshold — queued for review`,
       );
@@ -180,15 +192,11 @@ export class AutoRepriceService {
 
       try {
         // Push new price to eBay via Inventory API
-        await this.inventoryApi.updateOffer(
-          offer.storeId,
-          offer.ebayOfferId!,
-          {
-            pricingSummary: {
-              price: { value: newPrice.toFixed(2), currency: 'USD' },
-            },
-          } as Record<string, unknown>,
-        );
+        await this.inventoryApi.updateOffer(offer.storeId, offer.ebayOfferId!, {
+          pricingSummary: {
+            price: { value: newPrice.toFixed(2), currency: 'USD' },
+          },
+        } as Record<string, unknown>);
 
         // Update local offer record
         await this.offerRepo.update(offer.id, {

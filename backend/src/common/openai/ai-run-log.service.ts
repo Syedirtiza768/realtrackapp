@@ -123,7 +123,9 @@ export class AiRunLogService {
       order: { createdAt: 'DESC' },
     });
     if (!latest) {
-      this.logger.debug(`No ai_run_log for SKU ${sku} — skipping publish outcome`);
+      this.logger.debug(
+        `No ai_run_log for SKU ${sku} — skipping publish outcome`,
+      );
       return;
     }
     latest.published = published;
@@ -161,7 +163,10 @@ export class AiRunLogService {
         'AVG(CASE WHEN l.passed_gate AND NOT l.escalated THEN 1.0 ELSE 0.0 END)',
         'firstPassRate',
       )
-      .addSelect('AVG(CASE WHEN l.escalated THEN 1.0 ELSE 0.0 END)', 'escalationRate')
+      .addSelect(
+        'AVG(CASE WHEN l.escalated THEN 1.0 ELSE 0.0 END)',
+        'escalationRate',
+      )
       .addSelect('AVG(l.cost_usd)', 'avgCost')
       .addSelect('AVG(l.validation_score)', 'avgValidationScore')
       .addSelect(

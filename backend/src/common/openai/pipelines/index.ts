@@ -5,6 +5,9 @@ export type { ListingGenerationResult } from './listing-generation.pipeline.js';
 export { CompetitiveAnalysisPipeline } from './competitive-analysis.pipeline.js';
 export type { CompetitiveAnalysisResult } from './competitive-analysis.pipeline.js';
 export { CrossReferencePipeline } from './cross-reference.pipeline.js';
-export type { CrossReferenceResult, CrossReferencePart } from './cross-reference.pipeline.js';
+export type {
+  CrossReferenceResult,
+  CrossReferencePart,
+} from './cross-reference.pipeline.js';
 export { PricingAnalysisPipeline } from './pricing-analysis.pipeline.js';
 export type { PricingSuggestion } from './pricing-analysis.pipeline.js';

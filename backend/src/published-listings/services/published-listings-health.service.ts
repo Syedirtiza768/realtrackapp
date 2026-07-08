@@ -4,7 +4,10 @@ import type {
   PublishedListingHealthFlag,
   PublishedListingStatus,
 } from '../entities/ebay-published-listing.entity.js';
-import type { EbayInventoryItem, EbayOffer } from '../../channels/ebay/ebay-api.types.js';
+import type {
+  EbayInventoryItem,
+  EbayOffer,
+} from '../../channels/ebay/ebay-api.types.js';
 
 const LOW_STOCK_THRESHOLD = 3;
 
@@ -17,16 +20,16 @@ export class PublishedListingsHealthService {
     compatibility: Record<string, unknown> | null;
     quantityAvailable: number;
     quantitySold: number;
-  performanceMetrics: Record<string, unknown>;
-  categoryId: string | null;
-  price?: string | null;
-  competitorPricing?: {
-    medianPrice?: number | null;
-    avgPrice?: number | null;
-    minPrice?: number | null;
-    maxPrice?: number | null;
-  } | null;
-}): PublishedListingHealthFlag[] {
+    performanceMetrics: Record<string, unknown>;
+    categoryId: string | null;
+    price?: string | null;
+    competitorPricing?: {
+      medianPrice?: number | null;
+      avgPrice?: number | null;
+      minPrice?: number | null;
+      maxPrice?: number | null;
+    } | null;
+  }): PublishedListingHealthFlag[] {
     const flags: PublishedListingHealthFlag[] = [];
 
     if (!input.imageUrls.length) {

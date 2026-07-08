@@ -25,8 +25,9 @@ export function resolveMarketplaceId(store: {
   const fromColumn = store.ebayMarketplaceId?.trim();
   if (fromColumn) return fromColumn;
 
-  const config = (store.config ?? {}) as Record<string, unknown>;
-  const fromConfig = typeof config.marketplace === 'string' ? config.marketplace.trim() : '';
+  const config = store.config ?? {};
+  const fromConfig =
+    typeof config.marketplace === 'string' ? config.marketplace.trim() : '';
   if (fromConfig) return fromConfig;
 
   return 'EBAY_MOTORS_US';

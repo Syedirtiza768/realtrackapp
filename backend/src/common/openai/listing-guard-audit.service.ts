@@ -47,7 +47,9 @@ export class ListingGuardAuditService {
         action: 'auto_correction',
         field,
         originalValue:
-          beforeVal != null ? String(beforeVal).slice(0, 2000) : context.sku ?? null,
+          beforeVal != null
+            ? String(beforeVal).slice(0, 2000)
+            : (context.sku ?? null),
         newValue: afterVal != null ? String(afterVal).slice(0, 2000) : fix,
         reason: `AI listing guard: ${fix}`,
         severity: 'info',

@@ -66,7 +66,12 @@ export class FitmentMatcherService {
         yearStart,
         yearEnd,
         engineCode,
-        confidence: this.calculateConfidence(makeMatch.name, makeName, modelMatch.name, modelName),
+        confidence: this.calculateConfidence(
+          makeMatch.name,
+          makeName,
+          modelMatch.name,
+          modelName,
+        ),
       });
     }
 
@@ -97,7 +102,13 @@ export class FitmentMatcherService {
         submodel,
         yearStart: year,
         yearEnd: year,
-        confidence: this.calculateConfidence(makeMatch.name, makeName, modelMatch.name, modelName) * 0.9,
+        confidence:
+          this.calculateConfidence(
+            makeMatch.name,
+            makeName,
+            modelMatch.name,
+            modelName,
+          ) * 0.9,
       });
     }
 

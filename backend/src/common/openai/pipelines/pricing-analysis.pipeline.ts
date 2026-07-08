@@ -68,24 +68,21 @@ export class PricingAnalysisPipeline {
       )
       .join('\n');
 
-    const { systemPrompt, userPrompt } = renderPrompt(
-      PRICING_ANALYSIS_PROMPT,
-      {
-        productTitle: input.productTitle,
-        partNumber: input.partNumber,
-        brand: input.brand,
-        condition: input.condition,
-        costPrice: input.costPrice?.toFixed(2) ?? 'N/A',
-        retailPrice: input.retailPrice?.toFixed(2) ?? 'N/A',
-        mapPrice: input.mapPrice?.toFixed(2) ?? 'N/A',
-        competitorData: competitorData || 'No competitor data available',
-        totalListings: String(input.marketSummary.totalListings),
-        avgPrice: input.marketSummary.avgPrice?.toFixed(2) ?? 'N/A',
-        medianPrice: input.marketSummary.medianPrice?.toFixed(2) ?? 'N/A',
-        minPrice: input.marketSummary.minPrice?.toFixed(2) ?? 'N/A',
-        maxPrice: input.marketSummary.maxPrice?.toFixed(2) ?? 'N/A',
-      },
-    );
+    const { systemPrompt, userPrompt } = renderPrompt(PRICING_ANALYSIS_PROMPT, {
+      productTitle: input.productTitle,
+      partNumber: input.partNumber,
+      brand: input.brand,
+      condition: input.condition,
+      costPrice: input.costPrice?.toFixed(2) ?? 'N/A',
+      retailPrice: input.retailPrice?.toFixed(2) ?? 'N/A',
+      mapPrice: input.mapPrice?.toFixed(2) ?? 'N/A',
+      competitorData: competitorData || 'No competitor data available',
+      totalListings: String(input.marketSummary.totalListings),
+      avgPrice: input.marketSummary.avgPrice?.toFixed(2) ?? 'N/A',
+      medianPrice: input.marketSummary.medianPrice?.toFixed(2) ?? 'N/A',
+      minPrice: input.marketSummary.minPrice?.toFixed(2) ?? 'N/A',
+      maxPrice: input.marketSummary.maxPrice?.toFixed(2) ?? 'N/A',
+    });
 
     const response = await this.openai.chat({
       systemPrompt,
@@ -142,7 +139,8 @@ export class PricingAnalysisPipeline {
     val: unknown,
   ): 'below_average' | 'average' | 'above_average' {
     const s = String(val);
-    if (s === 'below_average' || s === 'average' || s === 'above_average') return s;
+    if (s === 'below_average' || s === 'average' || s === 'above_average')
+      return s;
     return 'average';
   }
 
@@ -150,7 +148,8 @@ export class PricingAnalysisPipeline {
     val: unknown,
   ): 'undercut' | 'match' | 'premium' | 'value' {
     const s = String(val);
-    if (s === 'undercut' || s === 'match' || s === 'premium' || s === 'value') return s;
+    if (s === 'undercut' || s === 'match' || s === 'premium' || s === 'value')
+      return s;
     return 'match';
   }
 }

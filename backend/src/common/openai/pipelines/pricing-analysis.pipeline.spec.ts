@@ -34,8 +34,18 @@ function baseInput(overrides: Record<string, unknown> = {}) {
     retailPrice: 50,
     mapPrice: 25,
     competitors: [
-      { seller: 'SellerA', price: 35, condition: 'Used', title: 'TRW Brake Pad' },
-      { seller: 'SellerB', price: 42, condition: 'New', title: 'TRW Brake Pad New' },
+      {
+        seller: 'SellerA',
+        price: 35,
+        condition: 'Used',
+        title: 'TRW Brake Pad',
+      },
+      {
+        seller: 'SellerB',
+        price: 42,
+        condition: 'New',
+        title: 'TRW Brake Pad New',
+      },
     ],
     marketSummary: {
       totalListings: 10,
@@ -70,7 +80,11 @@ describe('PricingAnalysisPipeline', () => {
 
   it('enforces MAP price floor', async () => {
     openai.chat.mockResolvedValue({
-      content: { suggestedPrice: 15, confidence: 0.9, pricingStrategy: 'undercut' },
+      content: {
+        suggestedPrice: 15,
+        confidence: 0.9,
+        pricingStrategy: 'undercut',
+      },
       estimatedCostUsd: 0.001,
     });
 
@@ -81,18 +95,28 @@ describe('PricingAnalysisPipeline', () => {
 
   it('enforces cost price floor', async () => {
     openai.chat.mockResolvedValue({
-      content: { suggestedPrice: 5, confidence: 0.9, pricingStrategy: 'undercut' },
+      content: {
+        suggestedPrice: 5,
+        confidence: 0.9,
+        pricingStrategy: 'undercut',
+      },
       estimatedCostUsd: 0.001,
     });
 
-    const result = await svc.suggestPrice(baseInput({ costPrice: 10, mapPrice: null }));
+    const result = await svc.suggestPrice(
+      baseInput({ costPrice: 10, mapPrice: null }),
+    );
     expect(result.suggestedPrice).toBe(10);
     expect(result.reasoning).toContain('cost floor');
   });
 
   it('validates marketPosition enum', async () => {
     openai.chat.mockResolvedValue({
-      content: { suggestedPrice: 39, confidence: 0.8, marketPosition: 'invalid_value' },
+      content: {
+        suggestedPrice: 39,
+        confidence: 0.8,
+        marketPosition: 'invalid_value',
+      },
       estimatedCostUsd: 0.001,
     });
 
@@ -102,7 +126,11 @@ describe('PricingAnalysisPipeline', () => {
 
   it('validates pricingStrategy enum', async () => {
     openai.chat.mockResolvedValue({
-      content: { suggestedPrice: 39, confidence: 0.8, pricingStrategy: 'unknown' },
+      content: {
+        suggestedPrice: 39,
+        confidence: 0.8,
+        pricingStrategy: 'unknown',
+      },
       estimatedCostUsd: 0.001,
     });
 
@@ -112,7 +140,11 @@ describe('PricingAnalysisPipeline', () => {
 
   it('handles NaN values from AI response', async () => {
     openai.chat.mockResolvedValue({
-      content: { suggestedPrice: 'not-a-number', confidence: null, pricingStrategy: 'match' },
+      content: {
+        suggestedPrice: 'not-a-number',
+        confidence: null,
+        pricingStrategy: 'match',
+      },
       estimatedCostUsd: 0.001,
     });
 
@@ -123,7 +155,12 @@ describe('PricingAnalysisPipeline', () => {
 
   it('handles missing competitors gracefully', async () => {
     openai.chat.mockResolvedValue({
-      content: { suggestedPrice: 39, confidence: 0.8, pricingStrategy: 'match', competitorCount: 0 },
+      content: {
+        suggestedPrice: 39,
+        confidence: 0.8,
+        pricingStrategy: 'match',
+        competitorCount: 0,
+      },
       estimatedCostUsd: 0.001,
     });
 

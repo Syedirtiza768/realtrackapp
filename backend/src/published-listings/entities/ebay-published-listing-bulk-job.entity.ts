@@ -18,12 +18,18 @@ export type BulkJobAction =
   | 'update_quantity'
   | 'update_title'
   | 'update_description'
+  | 'update_policies'
   | 'end_listing'
   | 'sync'
   | 'health_check'
   | 'competitor_pricing';
 
-export type BulkJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'partial';
+export type BulkJobStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'partial';
 
 @Entity('ebay_published_listing_bulk_jobs')
 @Index('idx_epl_bulk_org', ['organizationId'])

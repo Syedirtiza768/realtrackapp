@@ -54,17 +54,16 @@ export class ListingGenerationPipeline {
   ): Promise<ListingGenerationResult> {
     const marketplace = options?.marketplace ?? 'US';
     const promptTemplate =
-      marketplace === 'DE' ? LISTING_GENERATION_DE_PROMPT : LISTING_GENERATION_PROMPT;
+      marketplace === 'DE'
+        ? LISTING_GENERATION_DE_PROMPT
+        : LISTING_GENERATION_PROMPT;
 
-    const { systemPrompt, userPrompt } = renderPrompt(
-      promptTemplate,
-      {
-        productData: JSON.stringify(productData),
-        categoryName,
-        condition,
-        sellerCountry: options?.sellerCountry ?? 'US',
-      },
-    );
+    const { systemPrompt, userPrompt } = renderPrompt(promptTemplate, {
+      productData: JSON.stringify(productData),
+      categoryName,
+      condition,
+      sellerCountry: options?.sellerCountry ?? 'US',
+    });
 
     const response = await this.openai.chat({
       systemPrompt,

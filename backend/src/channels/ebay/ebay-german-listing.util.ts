@@ -21,7 +21,12 @@ export interface GermanListingInput {
   color?: string | null;
   donorVehicle?: string | null;
   wearNotes?: string | null;
-  fitmentRows?: Array<{ year?: string; make?: string; model?: string; trim?: string }>;
+  fitmentRows?: Array<{
+    year?: string;
+    make?: string;
+    model?: string;
+    trim?: string;
+  }>;
   fitmentConfirmed?: boolean;
   sellerCountry?: string | null;
   categoryId?: string | null;
@@ -92,60 +97,89 @@ const AWKWARD_GERMAN_PATTERNS = [
 ];
 
 /** Motors category keyword rows — interior before exterior; first match wins. */
-const CATEGORY_KEYWORD_ROWS: Array<{ kw: string[]; id: string; name: string }> = [
-  {
-    kw: ['dashboard', 'dash panel', 'instrument panel', 'dash trim', 'dash bezel', 'armaturenbrett'],
-    id: '33717',
-    name: 'Dashboards & Dashboard Parts',
-  },
-  {
-    kw: ['armrest', 'armlehne', 'türverkleidung', 'door armrest', 'inner panel', 'door finisher'],
-    id: '33695',
-    name: 'Interior Door Panels & Parts',
-  },
-  {
-    kw: ['interior door', 'door moulding', 'door molding', 'door trim', 'innen'],
-    id: '33695',
-    name: 'Interior Door Panels & Parts',
-  },
-  {
-    kw: ['exterior door panel', 'door skin', 'door shell', 'exterior door'],
-    id: '33697',
-    name: 'Exterior Door Panels & Frames',
-  },
-  {
-    kw: ['complete door', 'door assembly', 'driver door', "driver's door", 'door body-in-white'],
-    id: '174105',
-    name: 'Doors & Door Parts',
-  },
-  {
-    kw: ['door handle', 'handle strip'],
-    id: '174106',
-    name: 'Door Handles',
-  },
-  {
-    kw: ['window regulator', 'window lifter', 'window motor'],
-    id: '174085',
-    name: 'Window Motors, Parts & Accessories',
-  },
-  {
-    kw: ['mirror', 'side mirror', 'rearview'],
-    id: '33726',
-    name: 'Exterior Mirrors',
-  },
-  {
-    kw: ['headlight', 'headlamp'],
-    id: '33710',
-    name: 'Headlights',
-  },
-  {
-    kw: ['center console', 'armrest console'],
-    id: '174090',
-    name: 'Center Consoles',
-  },
-];
+const CATEGORY_KEYWORD_ROWS: Array<{ kw: string[]; id: string; name: string }> =
+  [
+    {
+      kw: [
+        'dashboard',
+        'dash panel',
+        'instrument panel',
+        'dash trim',
+        'dash bezel',
+        'armaturenbrett',
+      ],
+      id: '33717',
+      name: 'Dashboards & Dashboard Parts',
+    },
+    {
+      kw: [
+        'armrest',
+        'armlehne',
+        'türverkleidung',
+        'door armrest',
+        'inner panel',
+        'door finisher',
+      ],
+      id: '33695',
+      name: 'Interior Door Panels & Parts',
+    },
+    {
+      kw: [
+        'interior door',
+        'door moulding',
+        'door molding',
+        'door trim',
+        'innen',
+      ],
+      id: '33695',
+      name: 'Interior Door Panels & Parts',
+    },
+    {
+      kw: ['exterior door panel', 'door skin', 'door shell', 'exterior door'],
+      id: '33697',
+      name: 'Exterior Door Panels & Frames',
+    },
+    {
+      kw: [
+        'complete door',
+        'door assembly',
+        'driver door',
+        "driver's door",
+        'door body-in-white',
+      ],
+      id: '174105',
+      name: 'Doors & Door Parts',
+    },
+    {
+      kw: ['door handle', 'handle strip'],
+      id: '174106',
+      name: 'Door Handles',
+    },
+    {
+      kw: ['window regulator', 'window lifter', 'window motor'],
+      id: '174085',
+      name: 'Window Motors, Parts & Accessories',
+    },
+    {
+      kw: ['mirror', 'side mirror', 'rearview'],
+      id: '33726',
+      name: 'Exterior Mirrors',
+    },
+    {
+      kw: ['headlight', 'headlamp'],
+      id: '33710',
+      name: 'Headlights',
+    },
+    {
+      kw: ['center console', 'armrest console'],
+      id: '174090',
+      name: 'Center Consoles',
+    },
+  ];
 
-export function translatePartNameToGerman(partType: string | null | undefined): string {
+export function translatePartNameToGerman(
+  partType: string | null | undefined,
+): string {
   const raw = (partType ?? '').trim();
   if (!raw) return 'Autoteil';
   const lower = raw.toLowerCase();
@@ -155,7 +189,9 @@ export function translatePartNameToGerman(partType: string | null | undefined): 
   return raw;
 }
 
-export function formatGermanPlacement(placement: string | null | undefined): string {
+export function formatGermanPlacement(
+  placement: string | null | undefined,
+): string {
   if (!placement?.trim()) return '';
   const lower = placement.toLowerCase();
   const hasFront = /\b(front|vorne)\b/.test(lower);
@@ -177,12 +213,17 @@ export function formatGermanPlacement(placement: string | null | undefined): str
 
   let out = placement;
   for (const [en, de] of Object.entries(PLACEMENT_TOKEN_DE)) {
-    out = out.replace(new RegExp(`\\b${en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), de);
+    out = out.replace(
+      new RegExp(`\\b${en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'),
+      de,
+    );
   }
   return out.replace(/\s+/g, ' ').trim();
 }
 
-export function formatGermanCondition(condition: string | null | undefined): string {
+export function formatGermanCondition(
+  condition: string | null | undefined,
+): string {
   const c = (condition ?? '').trim().toLowerCase();
   if (!c || c.includes('used') || c.includes('gebraucht')) return 'gebraucht';
   if (c.includes('new') || c.includes('neu')) return 'neu';
@@ -190,7 +231,12 @@ export function formatGermanCondition(condition: string | null | undefined): str
 }
 
 export function isLikelyGermanText(text: string): boolean {
-  return /[äöüßÄÖÜ]/.test(text) || /\b(OEM|Original|gebraucht|hinten|vorne|Teilenummer|Armlehne|Tür|Einbauposition|Hersteller)\b/i.test(text);
+  return (
+    /[äöüßÄÖÜ]/.test(text) ||
+    /\b(OEM|Original|gebraucht|hinten|vorne|Teilenummer|Armlehne|Tür|Einbauposition|Hersteller)\b/i.test(
+      text,
+    )
+  );
 }
 
 export function hasAwkwardGermanPhrasing(text: string): boolean {
@@ -204,9 +250,19 @@ export function resolveMotorsCategoryFromPart(
   const text = `${partType ?? ''} ${note ?? ''}`.toLowerCase();
   if (!text.trim()) return null;
 
-  const interiorHint = /\b(interior|innen|armrest|armlehne|trim|verkleidung|finisher)\b/i.test(text);
-  if (interiorHint && /\bdoor panel\b/i.test(text) && !/\bexterior\b/i.test(text)) {
-    return { categoryId: '33695', categoryName: 'Interior Door Panels & Parts' };
+  const interiorHint =
+    /\b(interior|innen|armrest|armlehne|trim|verkleidung|finisher)\b/i.test(
+      text,
+    );
+  if (
+    interiorHint &&
+    /\bdoor panel\b/i.test(text) &&
+    !/\bexterior\b/i.test(text)
+  ) {
+    return {
+      categoryId: '33695',
+      categoryName: 'Interior Door Panels & Parts',
+    };
   }
 
   for (const row of CATEGORY_KEYWORD_ROWS) {
@@ -217,7 +273,10 @@ export function resolveMotorsCategoryFromPart(
   return null;
 }
 
-function truncateGermanTitle(title: string, max = EBAY_TITLE_MAX_LENGTH): string {
+function truncateGermanTitle(
+  title: string,
+  max = EBAY_TITLE_MAX_LENGTH,
+): string {
   const normalized = title.replace(/\s+/g, ' ').trim();
   if (normalized.length <= max) return normalized;
   const cut = normalized.slice(0, max);
@@ -281,7 +340,10 @@ export function buildGermanListingTitle(input: GermanListingInput): string {
   const color = input.color?.trim();
   if (color && title.length + color.length + 1 <= EBAY_TITLE_MAX_LENGTH - 12) {
     title += ` ${color}`;
-  } else if (material && title.length + material.length + 1 <= EBAY_TITLE_MAX_LENGTH - 12) {
+  } else if (
+    material &&
+    title.length + material.length + 1 <= EBAY_TITLE_MAX_LENGTH - 12
+  ) {
     title += ` ${material}`;
   }
 
@@ -291,14 +353,19 @@ export function buildGermanListingTitle(input: GermanListingInput): string {
     title += ' gebraucht';
   }
 
-  if (!title.toLowerCase().includes('gebraucht') && !title.toLowerCase().includes('neu')) {
+  if (
+    !title.toLowerCase().includes('gebraucht') &&
+    !title.toLowerCase().includes('neu')
+  ) {
     title += conditionDe === 'neu' ? ' neu' : ' gebraucht';
   }
 
   return truncateGermanTitle(title.replace(/\s+/g, ' ').trim());
 }
 
-export function buildGermanListingSubtitle(input: GermanListingInput): string | null {
+export function buildGermanListingSubtitle(
+  input: GermanListingInput,
+): string | null {
   const pn = (input.oemPartNumber ?? input.mpn ?? '').trim();
   if (!pn) return null;
   const sub = `Teilenummer ${pn} — bitte vor Kauf vergleichen`;
@@ -320,7 +387,10 @@ function buildFitmentSection(input: GermanListingInput): string {
 
   const list = rows
     .slice(0, 8)
-    .map((r) => `<li>${escapeHtml([r.year, r.make, r.model, r.trim].filter(Boolean).join(' '))}</li>`)
+    .map(
+      (r) =>
+        `<li>${escapeHtml([r.year, r.make, r.model, r.trim].filter(Boolean).join(' '))}</li>`,
+    )
     .join('');
 
   const confirmed = input.fitmentConfirmed
@@ -333,7 +403,9 @@ function buildFitmentSection(input: GermanListingInput): string {
 <p>Bitte prüfen Sie vor dem Kauf die Teilenummer und vergleichen Sie die Bilder mit Ihrem Altteil. Die Fahrzeugverwendung dient nur als Orientierung.</p>`;
 }
 
-function buildShippingSection(sellerCountry: string | null | undefined): string {
+function buildShippingSection(
+  sellerCountry: string | null | undefined,
+): string {
   const country = (sellerCountry ?? 'US').trim().toUpperCase();
   if (country === 'DE') {
     return `<h3>Versand &amp; Rückgabe</h3>
@@ -351,7 +423,9 @@ function buildShippingSection(sellerCountry: string | null | undefined): string 
 }
 
 /** Structured German HTML description for eBay.de */
-export function buildGermanListingDescription(input: GermanListingInput): string {
+export function buildGermanListingDescription(
+  input: GermanListingInput,
+): string {
   const partDe = translatePartNameToGerman(input.partType);
   const placementDe = formatGermanPlacement(input.placement);
   const pn = (input.oemPartNumber ?? input.mpn ?? '').trim();
@@ -383,7 +457,9 @@ ${buildShippingSection(input.sellerCountry)}`;
 }
 
 /** German eBay Motors item specifics (omit unknown fields). */
-export function buildGermanItemSpecifics(input: GermanListingInput): Record<string, string> {
+export function buildGermanItemSpecifics(
+  input: GermanListingInput,
+): Record<string, string> {
   const specifics: Record<string, string> = {};
   const set = (key: string, value: string | null | undefined) => {
     const v = value?.trim();
@@ -424,22 +500,44 @@ export function validateGermanListing(params: {
   const description = params.description?.trim() ?? '';
 
   if (!title) {
-    issues.push({ code: 'DE_TITLE_MISSING', severity: 'error', field: 'title', message: 'German title is missing' });
+    issues.push({
+      code: 'DE_TITLE_MISSING',
+      severity: 'error',
+      field: 'title',
+      message: 'German title is missing',
+    });
   } else if (title.length > EBAY_TITLE_MAX_LENGTH) {
-    issues.push({ code: 'DE_TITLE_TOO_LONG', severity: 'error', field: 'title', message: 'Title exceeds 80 characters' });
+    issues.push({
+      code: 'DE_TITLE_TOO_LONG',
+      severity: 'error',
+      field: 'title',
+      message: 'Title exceeds 80 characters',
+    });
   }
   if (title && !isLikelyGermanText(title)) {
-    issues.push({ code: 'DE_TITLE_NOT_GERMAN', severity: 'warning', field: 'title', message: 'Title does not appear to be native German' });
+    issues.push({
+      code: 'DE_TITLE_NOT_GERMAN',
+      severity: 'warning',
+      field: 'title',
+      message: 'Title does not appear to be native German',
+    });
   }
   if (title && hasAwkwardGermanPhrasing(title)) {
-    issues.push({ code: 'DE_TITLE_AWKWARD', severity: 'warning', field: 'title', message: 'Title contains awkward translated phrasing' });
+    issues.push({
+      code: 'DE_TITLE_AWKWARD',
+      severity: 'warning',
+      field: 'title',
+      message: 'Title contains awkward translated phrasing',
+    });
   }
 
   const anchorYear = params.itemSpecifics['Baujahrbereich']?.slice(0, 4);
   const generationCheck = validateGenerationYearAlignment({
     generation: params.itemSpecifics['Plattform/Generation'],
     yearRange: params.itemSpecifics['Baujahrbereich'],
-    make: params.itemSpecifics['Fahrzeugmarke'] ?? params.itemSpecifics['Hersteller'],
+    make:
+      params.itemSpecifics['Fahrzeugmarke'] ??
+      params.itemSpecifics['Hersteller'],
     model: params.itemSpecifics['Modell'],
     anchorYear,
   });
@@ -468,21 +566,51 @@ export function validateGermanListing(params: {
   }
 
   if (!description || description.replace(/<[^>]+>/g, '').trim().length < 120) {
-    issues.push({ code: 'DE_DESCRIPTION_THIN', severity: 'error', field: 'description', message: 'German description is empty or too short' });
+    issues.push({
+      code: 'DE_DESCRIPTION_THIN',
+      severity: 'error',
+      field: 'description',
+      message: 'German description is empty or too short',
+    });
   } else if (!isLikelyGermanText(description)) {
-    issues.push({ code: 'DE_DESCRIPTION_NOT_GERMAN', severity: 'warning', field: 'description', message: 'Description may not be in German' });
+    issues.push({
+      code: 'DE_DESCRIPTION_NOT_GERMAN',
+      severity: 'warning',
+      field: 'description',
+      message: 'Description may not be in German',
+    });
   }
 
   const pn = params.oemPartNumber ?? params.mpn;
-  if (pn?.trim() && !params.itemSpecifics['Herstellernummer'] && !params.itemSpecifics['OE/OEM Referenznummer(n)']) {
-    issues.push({ code: 'DE_OEM_SPECIFIC_MISSING', severity: 'warning', field: 'itemSpecifics', message: 'OEM/MPN not reflected in German item specifics' });
+  if (
+    pn?.trim() &&
+    !params.itemSpecifics['Herstellernummer'] &&
+    !params.itemSpecifics['OE/OEM Referenznummer(n)']
+  ) {
+    issues.push({
+      code: 'DE_OEM_SPECIFIC_MISSING',
+      severity: 'warning',
+      field: 'itemSpecifics',
+      message: 'OEM/MPN not reflected in German item specifics',
+    });
   }
 
   const placementDe = formatGermanPlacement(params.placement);
-  const titlePlacement = placementDe && title.toLowerCase().includes(placementDe.toLowerCase());
+  const titlePlacement =
+    placementDe && title.toLowerCase().includes(placementDe.toLowerCase());
   const specPlacement = params.itemSpecifics['Einbauposition'];
-  if (placementDe && specPlacement && !titlePlacement && !specPlacement.toLowerCase().includes(placementDe.split(' ')[0])) {
-    issues.push({ code: 'DE_PLACEMENT_INCONSISTENT', severity: 'warning', field: 'placement', message: 'Placement differs between title and item specifics' });
+  if (
+    placementDe &&
+    specPlacement &&
+    !titlePlacement &&
+    !specPlacement.toLowerCase().includes(placementDe.split(' ')[0])
+  ) {
+    issues.push({
+      code: 'DE_PLACEMENT_INCONSISTENT',
+      severity: 'warning',
+      field: 'placement',
+      message: 'Placement differs between title and item specifics',
+    });
   }
 
   const hint = resolveMotorsCategoryFromPart(params.partType, params.placement);

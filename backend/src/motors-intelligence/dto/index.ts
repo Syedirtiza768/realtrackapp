@@ -345,7 +345,9 @@ export class ImageUploadRequestDto {
   @Min(0)
   quantity?: number;
 
-  @ApiPropertyOptional({ description: 'Auto-run pipeline after upload confirmation' })
+  @ApiPropertyOptional({
+    description: 'Auto-run pipeline after upload confirmation',
+  })
   @IsOptional()
   autoRunPipeline?: boolean;
 }

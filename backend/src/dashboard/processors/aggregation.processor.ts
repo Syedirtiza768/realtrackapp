@@ -88,12 +88,16 @@ export class AggregationProcessor extends WorkerHost {
 
     // Upsert into dashboard_cache
     const cacheKey = `daily-rollup:${dateKey}`;
-    const existing = await this.cacheRepo.findOne({ where: { metricKey: cacheKey } });
+    const existing = await this.cacheRepo.findOne({
+      where: { metricKey: cacheKey },
+    });
     if (existing) {
       existing.metricValue = rollup;
       await this.cacheRepo.save(existing);
     } else {
-      await this.cacheRepo.save(this.cacheRepo.create({ metricKey: cacheKey, metricValue: rollup }));
+      await this.cacheRepo.save(
+        this.cacheRepo.create({ metricKey: cacheKey, metricValue: rollup }),
+      );
     }
 
     this.logger.log(

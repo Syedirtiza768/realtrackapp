@@ -92,12 +92,24 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "PK_motors_products" PRIMARY KEY ("id")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_motors_product_status" ON "motors_products" ("status")`);
-    await queryRunner.query(`CREATE INDEX "idx_motors_product_brand_mpn" ON "motors_products" ("brand", "mpn")`);
-    await queryRunner.query(`CREATE INDEX "idx_motors_product_source_type" ON "motors_products" ("sourceType")`);
-    await queryRunner.query(`CREATE INDEX "idx_motors_product_org" ON "motors_products" ("organizationId")`);
-    await queryRunner.query(`CREATE INDEX "idx_motors_product_listing" ON "motors_products" ("listingId")`);
-    await queryRunner.query(`CREATE INDEX "idx_motors_product_catalog" ON "motors_products" ("catalogProductId")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_motors_product_status" ON "motors_products" ("status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_motors_product_brand_mpn" ON "motors_products" ("brand", "mpn")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_motors_product_source_type" ON "motors_products" ("sourceType")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_motors_product_org" ON "motors_products" ("organizationId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_motors_product_listing" ON "motors_products" ("listingId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_motors_product_catalog" ON "motors_products" ("catalogProductId")`,
+    );
 
     // ─── product_candidates ────────────────────────────────────────
     await queryRunner.query(`
@@ -135,9 +147,15 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "FK_product_candidates_motors" FOREIGN KEY ("motorsProductId") REFERENCES "motors_products"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_product_candidate_motors" ON "product_candidates" ("motorsProductId")`);
-    await queryRunner.query(`CREATE INDEX "idx_product_candidate_status" ON "product_candidates" ("status")`);
-    await queryRunner.query(`CREATE INDEX "idx_product_candidate_mpn" ON "product_candidates" ("mpnNormalized")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_product_candidate_motors" ON "product_candidates" ("motorsProductId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_product_candidate_status" ON "product_candidates" ("status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_product_candidate_mpn" ON "product_candidates" ("mpnNormalized")`,
+    );
 
     // ─── extracted_attributes ──────────────────────────────────────
     await queryRunner.query(`
@@ -183,8 +201,12 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "FK_extracted_attributes_motors" FOREIGN KEY ("motorsProductId") REFERENCES "motors_products"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_extracted_attr_motors" ON "extracted_attributes" ("motorsProductId")`);
-    await queryRunner.query(`CREATE INDEX "idx_extracted_attr_source" ON "extracted_attributes" ("extractionSource")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_extracted_attr_motors" ON "extracted_attributes" ("motorsProductId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_extracted_attr_source" ON "extracted_attributes" ("extractionSource")`,
+    );
 
     // ─── ebay_category_mappings ────────────────────────────────────
     await queryRunner.query(`
@@ -208,8 +230,12 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "UQ_ebay_cat_map_id" UNIQUE ("ebayCategoryId")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_ebay_cat_map_category_id" ON "ebay_category_mappings" ("ebayCategoryId")`);
-    await queryRunner.query(`CREATE INDEX "idx_ebay_cat_map_product_type" ON "ebay_category_mappings" ("productType")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_ebay_cat_map_category_id" ON "ebay_category_mappings" ("ebayCategoryId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_ebay_cat_map_product_type" ON "ebay_category_mappings" ("productType")`,
+    );
 
     // ─── ebay_aspect_requirements ──────────────────────────────────
     await queryRunner.query(`
@@ -233,8 +259,12 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "PK_ebay_aspect_requirements" PRIMARY KEY ("id")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_ebay_aspect_category" ON "ebay_aspect_requirements" ("ebayCategoryId")`);
-    await queryRunner.query(`CREATE INDEX "idx_ebay_aspect_name" ON "ebay_aspect_requirements" ("aspectName")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_ebay_aspect_category" ON "ebay_aspect_requirements" ("ebayCategoryId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_ebay_aspect_name" ON "ebay_aspect_requirements" ("aspectName")`,
+    );
 
     // ─── validation_results ────────────────────────────────────────
     await queryRunner.query(`
@@ -257,8 +287,12 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "FK_validation_results_motors" FOREIGN KEY ("motorsProductId") REFERENCES "motors_products"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_validation_motors_product" ON "validation_results" ("motorsProductId")`);
-    await queryRunner.query(`CREATE INDEX "idx_validation_publishable" ON "validation_results" ("publishable")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_validation_motors_product" ON "validation_results" ("motorsProductId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_validation_publishable" ON "validation_results" ("publishable")`,
+    );
 
     // ─── review_tasks ──────────────────────────────────────────────
     await queryRunner.query(`
@@ -305,11 +339,21 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "FK_review_tasks_motors" FOREIGN KEY ("motorsProductId") REFERENCES "motors_products"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_review_task_status" ON "review_tasks" ("status")`);
-    await queryRunner.query(`CREATE INDEX "idx_review_task_priority" ON "review_tasks" ("priority")`);
-    await queryRunner.query(`CREATE INDEX "idx_review_task_motors_product" ON "review_tasks" ("motorsProductId")`);
-    await queryRunner.query(`CREATE INDEX "idx_review_task_assigned" ON "review_tasks" ("assignedTo")`);
-    await queryRunner.query(`CREATE INDEX "idx_review_task_org" ON "review_tasks" ("organizationId")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_review_task_status" ON "review_tasks" ("status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_review_task_priority" ON "review_tasks" ("priority")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_review_task_motors_product" ON "review_tasks" ("motorsProductId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_review_task_assigned" ON "review_tasks" ("assignedTo")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_review_task_org" ON "review_tasks" ("organizationId")`,
+    );
 
     // ─── correction_rules ──────────────────────────────────────────
     await queryRunner.query(`
@@ -338,9 +382,15 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "PK_correction_rules" PRIMARY KEY ("id")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_correction_type" ON "correction_rules" ("correctionType")`);
-    await queryRunner.query(`CREATE INDEX "idx_correction_brand" ON "correction_rules" ("brand")`);
-    await queryRunner.query(`CREATE INDEX "idx_correction_active" ON "correction_rules" ("active")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_correction_type" ON "correction_rules" ("correctionType")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_correction_brand" ON "correction_rules" ("brand")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_correction_active" ON "correction_rules" ("active")`,
+    );
 
     // ─── listing_generations ───────────────────────────────────────
     await queryRunner.query(`
@@ -377,8 +427,12 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "FK_listing_generations_motors" FOREIGN KEY ("motorsProductId") REFERENCES "motors_products"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_listing_gen_motors" ON "listing_generations" ("motorsProductId")`);
-    await queryRunner.query(`CREATE INDEX "idx_listing_gen_status" ON "listing_generations" ("status")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_listing_gen_motors" ON "listing_generations" ("motorsProductId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_listing_gen_status" ON "listing_generations" ("status")`,
+    );
 
     // ─── motors_feedback_logs ──────────────────────────────────────
     await queryRunner.query(`
@@ -405,9 +459,15 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
         CONSTRAINT "PK_motors_feedback_logs" PRIMARY KEY ("id")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_feedback_motors_product" ON "motors_feedback_logs" ("motorsProductId")`);
-    await queryRunner.query(`CREATE INDEX "idx_feedback_type" ON "motors_feedback_logs" ("feedbackType")`);
-    await queryRunner.query(`CREATE INDEX "idx_feedback_created" ON "motors_feedback_logs" ("createdAt")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_feedback_motors_product" ON "motors_feedback_logs" ("motorsProductId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_feedback_type" ON "motors_feedback_logs" ("feedbackType")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_feedback_created" ON "motors_feedback_logs" ("createdAt")`,
+    );
 
     // ─── Seed initial eBay Motors category mappings ────────────────
     await queryRunner.query(`
@@ -466,7 +526,9 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Remove feature flags
-    await queryRunner.query(`DELETE FROM "feature_flags" WHERE "key" LIKE 'motors_%'`);
+    await queryRunner.query(
+      `DELETE FROM "feature_flags" WHERE "key" LIKE 'motors_%'`,
+    );
 
     // Drop tables in reverse dependency order
     await queryRunner.query(`DROP TABLE IF EXISTS "motors_feedback_logs"`);
@@ -482,12 +544,16 @@ export class MotorsIntelligenceSystem1709769600000 implements MigrationInterface
 
     // Drop enum types
     await queryRunner.query(`DROP TYPE IF EXISTS "feedback_type_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "listing_generation_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "listing_generation_status_enum"`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "correction_type_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "review_task_reason_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "review_task_priority_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "review_task_status_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "aspect_requirement_level_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "aspect_requirement_level_enum"`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "extraction_source_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "candidate_status_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "motors_source_type_enum"`);

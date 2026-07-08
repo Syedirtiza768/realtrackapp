@@ -48,7 +48,9 @@ export class DashboardController {
   }
 
   @Get('multi-store')
-  @ApiOperation({ summary: 'Get multi-store, AI enhancement, and demo simulation metrics' })
+  @ApiOperation({
+    summary: 'Get multi-store, AI enhancement, and demo simulation metrics',
+  })
   getMultiStoreMetrics() {
     return this.dashboardService.getMultiStoreMetrics();
   }

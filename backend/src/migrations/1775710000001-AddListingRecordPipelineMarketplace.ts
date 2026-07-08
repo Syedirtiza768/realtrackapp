@@ -28,7 +28,11 @@ export class AddListingRecordPipelineMarketplace1775710000001 implements Migrati
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_listing_pipeline_job"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_listing_marketplace"`);
-    await queryRunner.query(`ALTER TABLE "listing_records" DROP COLUMN IF EXISTS "pipeline_job_id"`);
-    await queryRunner.query(`ALTER TABLE "listing_records" DROP COLUMN IF EXISTS "marketplace"`);
+    await queryRunner.query(
+      `ALTER TABLE "listing_records" DROP COLUMN IF EXISTS "pipeline_job_id"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "listing_records" DROP COLUMN IF EXISTS "marketplace"`,
+    );
   }
 }

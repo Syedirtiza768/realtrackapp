@@ -44,7 +44,12 @@ export class DemoSimulationLog {
   instanceId!: string | null;
 
   /** Simulated external ID that would come from the marketplace */
-  @Column({ name: 'simulated_external_id', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'simulated_external_id',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   simulatedExternalId!: string | null;
 
   /** Simulated request payload */

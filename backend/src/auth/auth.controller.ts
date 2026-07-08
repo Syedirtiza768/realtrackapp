@@ -61,7 +61,11 @@ export class AuthController {
   @Public()
   @Post('register')
   async register(@Body() body: RegisterDto, @Req() req: Request) {
-    const result = await this.auth.register(body.email, body.password, body.name);
+    const result = await this.auth.register(
+      body.email,
+      body.password,
+      body.name,
+    );
     await this.authAudit.log('auth.register', {
       actorId: result.user.id,
       entityId: result.user.id,

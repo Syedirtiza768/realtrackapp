@@ -68,14 +68,18 @@ export class CatalogImportController {
         if (
           file.mimetype === 'text/csv' ||
           name.endsWith('.csv') ||
-          file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+          file.mimetype ===
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
           name.endsWith('.xlsx') ||
           file.mimetype === 'application/vnd.ms-excel' ||
           name.endsWith('.xls')
         ) {
           cb(null, true);
         } else {
-          cb(new Error('Only CSV and Excel (.xlsx, .xls) files are accepted'), false);
+          cb(
+            new Error('Only CSV and Excel (.xlsx, .xls) files are accepted'),
+            false,
+          );
         }
       },
     }),
@@ -134,7 +138,9 @@ export class CatalogImportController {
   @Post('backfill-listings')
   @RequirePermissions('catalog.import')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Backfill listing_records from existing catalog imports' })
+  @ApiOperation({
+    summary: 'Backfill listing_records from existing catalog imports',
+  })
   async backfillListings(@Body() dto: BackfillListingsDto) {
     const result = await this.importService.backfillListings(dto.importId);
     return { result };
@@ -156,10 +162,7 @@ export class CatalogImportController {
 
   @Get()
   @ApiOperation({ summary: 'List catalog imports' })
-  async listImports(
-    @CurrentUser() user: User,
-    @Query() query: ImportQueryDto,
-  ) {
+  async listImports(@CurrentUser() user: User, @Query() query: ImportQueryDto) {
     const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
     return this.importService.listImports(
       query.status,
@@ -215,7 +218,11 @@ export class CatalogImportController {
   @ApiOperation({ summary: 'Cancel a pending or processing import' })
   async cancelImport(@Param('id') id: string, @CurrentUser() user: User) {
     const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
-    const importRecord = await this.importService.cancelImport(id, user.id, viewAll);
+    const importRecord = await this.importService.cancelImport(
+      id,
+      user.id,
+      viewAll,
+    );
     return { import: importRecord };
   }
 
@@ -227,7 +234,11 @@ export class CatalogImportController {
   @ApiOperation({ summary: 'Retry a failed import (resumes from last row)' })
   async retryImport(@Param('id') id: string, @CurrentUser() user: User) {
     const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
-    const importRecord = await this.importService.retryImport(id, user.id, viewAll);
+    const importRecord = await this.importService.retryImport(
+      id,
+      user.id,
+      viewAll,
+    );
     return { import: importRecord };
   }
 }

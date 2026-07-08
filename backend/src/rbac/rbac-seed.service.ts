@@ -18,7 +18,8 @@ export class RbacSeedService {
 
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
-    @InjectRepository(Organization) private readonly orgRepo: Repository<Organization>,
+    @InjectRepository(Organization)
+    private readonly orgRepo: Repository<Organization>,
     @InjectRepository(OrganizationMember)
     private readonly memberRepo: Repository<OrganizationMember>,
     private readonly rbac: RbacService,
@@ -32,7 +33,9 @@ export class RbacSeedService {
   async seedDemoUsers(): Promise<void> {
     const enabled = this.shouldSeedDemoUsers();
     if (!enabled) {
-      this.logger.log('Demo user seeding skipped (SEED_DEMO_USERS=false or production)');
+      this.logger.log(
+        'Demo user seeding skipped (SEED_DEMO_USERS=false or production)',
+      );
       return;
     }
 
@@ -110,8 +113,7 @@ export class RbacSeedService {
         );
         continue;
       }
-      const name =
-        this.config.get<string>(spec.nameEnv) ?? spec.defaultName;
+      const name = this.config.get<string>(spec.nameEnv) ?? spec.defaultName;
 
       let user = await this.userRepo.findOne({ where: { email } });
       const storeAccessAll =

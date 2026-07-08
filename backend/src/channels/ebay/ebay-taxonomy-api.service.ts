@@ -45,7 +45,10 @@ class TokenBucketRateLimiter {
   private refill(): void {
     const now = Date.now();
     const elapsed = now - this.lastRefill;
-    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
+    this.tokens = Math.min(
+      this.maxTokens,
+      this.tokens + elapsed * this.refillRate,
+    );
     this.lastRefill = now;
   }
 }
@@ -116,8 +119,11 @@ export class EbayTaxonomyApiService {
         return await fn();
       } catch (err: unknown) {
         lastErr = err;
-        const response = (err as { response?: { status?: number; headers?: Record<string, string> } })
-          ?.response;
+        const response = (
+          err as {
+            response?: { status?: number; headers?: Record<string, string> };
+          }
+        )?.response;
         const status = response?.status;
         if (status !== 429 || attempt >= maxAttempts - 1) throw err;
 
@@ -305,7 +311,9 @@ export class EbayTaxonomyApiService {
     categoryId: string,
     compatibilityPropertyName: string,
     filter?: Record<string, string>,
-  ): Promise<{ value: string; applicableProperties?: Record<string, string> }[]> {
+  ): Promise<
+    { value: string; applicableProperties?: Record<string, string> }[]
+  > {
     await this.rateLimiter.acquire();
     const cfg = await this.appHeaders();
     const params: Record<string, string> = {

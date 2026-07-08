@@ -75,7 +75,9 @@ const ELECTRICAL_RE = /ecu|module|sensor|computer|wiring|harness|control unit/i;
 export function resolveFitmentExpansionMode(
   raw?: string | null,
 ): FitmentExpansionMode {
-  const v = String(raw ?? 'hybrid').trim().toLowerCase();
+  const v = String(raw ?? 'hybrid')
+    .trim()
+    .toLowerCase();
   if (v === 'ai' || v === 'mvl' || v === 'hybrid') return v;
   return 'hybrid';
 }
@@ -83,7 +85,9 @@ export function resolveFitmentExpansionMode(
 export function resolveFitmentAiInterchange(
   raw?: string | null,
 ): FitmentAiInterchange {
-  const v = String(raw ?? 'auto').trim().toLowerCase();
+  const v = String(raw ?? 'auto')
+    .trim()
+    .toLowerCase();
   if (v === 'off' || v === 'auto' || v === 'always') return v;
   return 'auto';
 }
@@ -96,7 +100,9 @@ export function getFitmentMinMvlRows(raw?: string | null): number {
 export function getSiblingExpansionMode(
   raw?: string | null,
 ): SiblingExpansionMode {
-  const v = String(raw ?? 'conservative').trim().toLowerCase();
+  const v = String(raw ?? 'conservative')
+    .trim()
+    .toLowerCase();
   if (v === 'off' || v === 'conservative' || v === 'aggressive') return v;
   return 'conservative';
 }

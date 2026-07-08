@@ -70,7 +70,12 @@ export class AiResult {
   @Column({ name: 'extracted_description', type: 'text', nullable: true })
   extractedDescription!: string | null;
 
-  @Column({ name: 'extracted_features', type: 'text', array: true, nullable: true })
+  @Column({
+    name: 'extracted_features',
+    type: 'text',
+    array: true,
+    nullable: true,
+  })
   extractedFeatures!: string[] | null;
 
   @Column({ name: 'extracted_fitment_raw', type: 'jsonb', nullable: true })

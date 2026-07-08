@@ -49,8 +49,7 @@ export class EbayTaxonomyCacheService {
         'config/.ebay-taxonomy-suggestions-cache.json',
     );
     const sandbox =
-      String(this.config.get('EBAY_SANDBOX', 'false')).toLowerCase() ===
-      'true';
+      String(this.config.get('EBAY_SANDBOX', 'false')).toLowerCase() === 'true';
     const marketplace =
       this.config.get<string>('EBAY_MARKETPLACE_ID') || 'EBAY_MOTORS_US';
     this.scopeKey = `${marketplace}:${sandbox ? 'sandbox' : 'production'}`;
@@ -78,7 +77,9 @@ export class EbayTaxonomyCacheService {
       fs.mkdirSync(path.dirname(this.cachePath), { recursive: true });
       fs.writeFileSync(this.cachePath, JSON.stringify(this.disk, null, 2));
     } catch (err) {
-      this.logger.warn(`Taxonomy cache persist failed: ${(err as Error).message}`);
+      this.logger.warn(
+        `Taxonomy cache persist failed: ${(err as Error).message}`,
+      );
     }
   }
 

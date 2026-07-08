@@ -128,7 +128,8 @@ export class NotificationsService {
 
   async dismiss(id: string): Promise<void> {
     const result = await this.notifRepo.update(id, { dismissed: true });
-    if (result.affected === 0) throw new NotFoundException('Notification not found');
+    if (result.affected === 0)
+      throw new NotFoundException('Notification not found');
   }
 
   /* ─── Cleanup old notifications ─── */

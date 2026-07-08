@@ -88,7 +88,9 @@ export class OrderImportProcessor extends WorkerHost {
     }
 
     if (completed > 0) {
-      this.logger.log(`Auto-completed ${completed} orders delivered > 14 days ago`);
+      this.logger.log(
+        `Auto-completed ${completed} orders delivered > 14 days ago`,
+      );
     }
   }
 }

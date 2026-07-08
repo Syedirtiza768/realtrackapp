@@ -30,7 +30,9 @@ describe('platform-generation.util', () => {
       anchorYear: 2018,
     });
     expect(result.valid).toBe(false);
-    expect(result.message).toMatch(/outside AL20|conflicts with expected AL10/i);
+    expect(result.message).toMatch(
+      /outside AL20|conflicts with expected AL10/i,
+    );
   });
 
   it('aligns generation and year range from donor year', () => {

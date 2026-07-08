@@ -23,8 +23,12 @@ export class ListingOptimizationProcessor extends WorkerHost {
 
   async process(job: Job<ListingOptimizationJobData>): Promise<void> {
     const { jobId, marketplace = 'US' } = job.data;
-    this.logger.log(`Starting mandatory listing optimization for pipeline job ${jobId} [${marketplace}]`);
+    this.logger.log(
+      `Starting mandatory listing optimization for pipeline job ${jobId} [${marketplace}]`,
+    );
     await this.optimization.enqueueJobOptimization(jobId, marketplace, job);
-    this.logger.log(`Completed listing optimization for pipeline job ${jobId} [${marketplace}]`);
+    this.logger.log(
+      `Completed listing optimization for pipeline job ${jobId} [${marketplace}]`,
+    );
   }
 }

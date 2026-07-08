@@ -4,10 +4,16 @@
  */
 export const PIPELINE_MARKETPLACE_CODES = ['US', 'UK', 'AU', 'DE'] as const;
 
-export type PipelineMarketplaceCode = (typeof PIPELINE_MARKETPLACE_CODES)[number];
+export type PipelineMarketplaceCode =
+  (typeof PIPELINE_MARKETPLACE_CODES)[number];
 
 /** Output XLSX files the enrichment pipeline generates. */
-export const PIPELINE_OUTPUT_MARKETPLACE_CODES = ['US', 'UK', 'AU', 'DE'] as const;
+export const PIPELINE_OUTPUT_MARKETPLACE_CODES = [
+  'US',
+  'UK',
+  'AU',
+  'DE',
+] as const;
 
 export type PipelineOutputMarketplaceCode =
   (typeof PIPELINE_OUTPUT_MARKETPLACE_CODES)[number];

@@ -5,7 +5,7 @@ import { FeatureFlag } from './feature-flag.entity.js';
 
 /**
  * Service for managing feature flags.
- * 
+ *
  * Provides a simple get/set/toggle interface with a local cache
  * to avoid hitting the DB on every check. Cache refreshes every 60s.
  */
@@ -69,7 +69,11 @@ export class FeatureFlagService {
   /**
    * Create a new feature flag (idempotent — skips if key already exists).
    */
-  async ensureFlag(key: string, description?: string, defaultEnabled = false): Promise<FeatureFlag> {
+  async ensureFlag(
+    key: string,
+    description?: string,
+    defaultEnabled = false,
+  ): Promise<FeatureFlag> {
     const existing = await this.flagRepo.findOne({ where: { key } });
     if (existing) return existing;
 
@@ -85,7 +89,10 @@ export class FeatureFlagService {
    * Refresh cache from DB if older than CACHE_TTL_MS.
    */
   private async refreshCacheIfStale(): Promise<void> {
-    if (Date.now() - this.cacheAge < FeatureFlagService.CACHE_TTL_MS && this.cache.size > 0) {
+    if (
+      Date.now() - this.cacheAge < FeatureFlagService.CACHE_TTL_MS &&
+      this.cache.size > 0
+    ) {
       return;
     }
     try {

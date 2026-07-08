@@ -64,7 +64,12 @@ export class AuthService {
 
     return {
       accessToken,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
     };
   }
 
@@ -102,7 +107,12 @@ export class AuthService {
 
     return {
       accessToken,
-      user: { id: saved.id, email: saved.email, name: saved.name, role: saved.role },
+      user: {
+        id: saved.id,
+        email: saved.email,
+        name: saved.name,
+        role: saved.role,
+      },
     };
   }
 

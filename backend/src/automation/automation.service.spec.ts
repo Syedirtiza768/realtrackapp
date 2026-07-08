@@ -144,7 +144,12 @@ describe('AutomationService (regression)', () => {
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([mockRule({ storeId: 'store-1' as any }), mockRule()]),
+      getMany: jest
+        .fn()
+        .mockResolvedValue([
+          mockRule({ storeId: 'store-1' as any }),
+          mockRule(),
+        ]),
     };
     ruleRepo.createQueryBuilder.mockReturnValue(mockQb);
 
@@ -203,7 +208,10 @@ describe('AutomationService (regression)', () => {
     ruleRepo.findOneBy.mockResolvedValue(mockRule());
     ruleRepo.save.mockImplementation((d) => Promise.resolve(d));
 
-    await service.evaluateByTrigger('event', { storeId: 'store-7', channel: 'shopify' });
+    await service.evaluateByTrigger('event', {
+      storeId: 'store-7',
+      channel: 'shopify',
+    });
 
     expect(triggerQb.andWhere).toHaveBeenCalledWith(
       '(r.storeId = :storeId OR r.storeId IS NULL)',

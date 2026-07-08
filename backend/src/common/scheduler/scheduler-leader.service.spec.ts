@@ -25,7 +25,8 @@ async function createService(
       {
         provide: ConfigService,
         useValue: {
-          get: (key: string) => (key === 'SCHEDULER_LEADER_ENABLED' ? leaderEnabled : undefined),
+          get: (key: string) =>
+            key === 'SCHEDULER_LEADER_ENABLED' ? leaderEnabled : undefined,
         },
       },
     ],
@@ -89,6 +90,11 @@ describe('SchedulerLeaderService', () => {
 
     await service.runIfLeader('test-job', 60, fn);
 
-    expect(redis.eval).toHaveBeenCalledWith(expect.any(String), 1, 'scheduler:lock:test-job', expect.any(String));
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'scheduler:lock:test-job',
+      expect.any(String),
+    );
   });
 });

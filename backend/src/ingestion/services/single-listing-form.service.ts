@@ -183,7 +183,8 @@ export class SingleListingFormService {
       this.config.get<string>('OPENAI_MODEL_TEXT') ||
       this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4o-mini');
     const visionModel =
-      this.config.get<string>('OPENAI_VISION_MODEL') || 'google/gemini-2.5-flash';
+      this.config.get<string>('OPENAI_VISION_MODEL') ||
+      'google/gemini-2.5-flash';
 
     const assumptions = {
       oemPromptTokens: 650,
@@ -195,7 +196,11 @@ export class SingleListingFormService {
 
     const oemTextOnly =
       MEASURED_OEM_LOOKUP_USD[oemModel] ??
-      estimateCost(oemModel, assumptions.oemPromptTokens, assumptions.oemCompletionTokens);
+      estimateCost(
+        oemModel,
+        assumptions.oemPromptTokens,
+        assumptions.oemCompletionTokens,
+      );
 
     const visionFallback = estimateCost(
       visionModel,
@@ -244,7 +249,9 @@ export class SingleListingFormService {
       throw new BadRequestException('brand is required');
     }
 
-    const imageUrls = (dto.imageUrls ?? []).map((u) => u.trim()).filter(Boolean);
+    const imageUrls = (dto.imageUrls ?? [])
+      .map((u) => u.trim())
+      .filter(Boolean);
 
     const sku = dto.sku?.trim() || (await this.allocateSku());
     const qty = dto.quantity ?? 1;
@@ -281,7 +288,11 @@ export class SingleListingFormService {
         }),
       );
     } catch (err) {
-      if (err instanceof QueryFailedError && (err as { driverError?: { code?: string } }).driverError?.code === '23505') {
+      if (
+        err instanceof QueryFailedError &&
+        (err as { driverError?: { code?: string } }).driverError?.code ===
+          '23505'
+      ) {
         throw new ConflictException(
           'This part could not be saved — duplicate intake row or SKU. Refresh the page to get a new SKU and try again.',
         );
@@ -313,7 +324,9 @@ export class SingleListingFormService {
         }),
       );
     } catch (err) {
-      this.logger.warn(`Failed to create catalog product for SKU ${sku}: ${err}`);
+      this.logger.warn(
+        `Failed to create catalog product for SKU ${sku}: ${err}`,
+      );
     }
 
     if (dto.uploadedAssetIds?.length) {
@@ -329,13 +342,16 @@ export class SingleListingFormService {
   async lookupAndApplyToListing(
     listingId: string,
   ): Promise<{ listing: ListingRecord; lookup: PartLookupResult }> {
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
 
     const partNumber =
-      listing.cOeOemPartNumber?.trim() || listing.cManufacturerPartNumber?.trim();
+      listing.cOeOemPartNumber?.trim() ||
+      listing.cManufacturerPartNumber?.trim();
     if (!partNumber) {
       throw new BadRequestException('Listing has no OEM/part number');
     }
@@ -395,8 +411,13 @@ export class SingleListingFormService {
       .map((row) => row.brand?.trim())
       .filter((b): b is string => Boolean(b));
 
-    const merged = new Set<string>([...AUTOMOTIVE_OEM_BRANDS, ...catalogBrands]);
-    let brands = [...merged].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    const merged = new Set<string>([
+      ...AUTOMOTIVE_OEM_BRANDS,
+      ...catalogBrands,
+    ]);
+    let brands = [...merged].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' }),
+    );
 
     const q = query?.trim();
     if (q) {
@@ -415,7 +436,9 @@ export class SingleListingFormService {
 
     this.assertAiConfigured();
 
-    const imageUrls = (dto.imageUrls ?? []).map((u) => u.trim()).filter(Boolean);
+    const imageUrls = (dto.imageUrls ?? [])
+      .map((u) => u.trim())
+      .filter(Boolean);
 
     // Vision-first when photos are available: OEM + brand + images together
     if (imageUrls.length >= PART_LOOKUP_MIN_VISION_IMAGES) {
@@ -427,7 +450,11 @@ export class SingleListingFormService {
       );
 
       return {
-        ...(await this.finalizeLookupFields(visionAttempt.result, partNumber, true)),
+        ...(await this.finalizeLookupFields(
+          visionAttempt.result,
+          partNumber,
+          true,
+        )),
         source: 'vision',
         aiModel: visionAttempt.visionModel,
         visionModel: visionAttempt.visionModel,
@@ -448,7 +475,10 @@ export class SingleListingFormService {
       );
     }
 
-    const finalized = await this.finalizeLookupFields(oemAttempt.result, partNumber);
+    const finalized = await this.finalizeLookupFields(
+      oemAttempt.result,
+      partNumber,
+    );
     return {
       ...finalized,
       source: 'oem_text',
@@ -489,8 +519,10 @@ export class SingleListingFormService {
     chatModel: string,
   ): Promise<{ result: Partial<PartLookupResult>; costUsd: number }> {
     const contextLines = [`Part number / OEM: ${partNumber}`];
-    if (dto.brand?.trim()) contextLines.push(`Known brand hint: ${dto.brand.trim()}`);
-    if (dto.vin?.trim()) contextLines.push(`Donor VIN (if relevant): ${dto.vin.trim()}`);
+    if (dto.brand?.trim())
+      contextLines.push(`Known brand hint: ${dto.brand.trim()}`);
+    if (dto.vin?.trim())
+      contextLines.push(`Donor VIN (if relevant): ${dto.vin.trim()}`);
 
     const response = await this.openAi.chat({
       model: chatModel,
@@ -526,7 +558,11 @@ export class SingleListingFormService {
     imageUrls: string[],
     brandHint?: string,
     partType?: string,
-  ): Promise<{ result: Partial<PartLookupResult>; costUsd: number; visionModel: string }> {
+  ): Promise<{
+    result: Partial<PartLookupResult>;
+    costUsd: number;
+    visionModel: string;
+  }> {
     const brandLine = brandHint?.trim()
       ? `Brand / OEM manufacturer hint: ${brandHint.trim()}`
       : 'Brand hint: not provided — infer from labels when visible';
@@ -538,11 +574,14 @@ export class SingleListingFormService {
     let prompt: string;
     if (useEcuPrompt) {
       prompt = ECU_IDENTIFICATION_PROMPT;
-      this.logger.log(`Using ECU identification prompt for partType="${partType}"`);
+      this.logger.log(
+        `Using ECU identification prompt for partType="${partType}"`,
+      );
     } else {
-      prompt = SINGLE_LISTING_VISION_PROMPT
-        .replace('{partNumberHint}', partNumberHint)
-        .replace('{brandHint}', brandLine);
+      prompt = SINGLE_LISTING_VISION_PROMPT.replace(
+        '{partNumberHint}',
+        partNumberHint,
+      ).replace('{brandHint}', brandLine);
     }
     const visionResult = await this.visionPipeline.analyze(
       imageUrls,
@@ -554,24 +593,28 @@ export class SingleListingFormService {
       prompt,
     );
 
-    const parsed = visionResult.raw as Record<string, unknown>;
+    const parsed = visionResult.raw;
 
     // For ECU prompts, the output schema is different (partNumbers, visibleText, vehicleApplication)
     if (useEcuPrompt && visionResult.ecuIdentifiers) {
       const ecu = visionResult.ecuIdentifiers;
       const visibleText = ecu.visibleText ?? [];
-      const bestPartNumber = ecu.mpn || ecu.oemNumber || ecu.hardwareNumber || partNumberHint;
+      const bestPartNumber =
+        ecu.mpn || ecu.oemNumber || ecu.hardwareNumber || partNumberHint;
       let note = '';
       if (ecu.hardwareNumber) note += `HW: ${ecu.hardwareNumber}. `;
       if (ecu.softwareNumber) note += `SW: ${ecu.softwareNumber}. `;
-      if (ecu.otherNumbers?.length) note += `Other: ${ecu.otherNumbers.join(', ')}. `;
+      if (ecu.otherNumbers?.length)
+        note += `Other: ${ecu.otherNumbers.join(', ')}. `;
       if (visibleText.length > 0) {
         note += `Visible text: ${visibleText.slice(0, 8).join('; ')}`;
       }
 
       return {
         result: {
-          partName: ecu.partType ? `${ecu.brand ?? ''} ${ecu.partType} ${bestPartNumber}`.trim() : undefined,
+          partName: ecu.partType
+            ? `${ecu.brand ?? ''} ${ecu.partType} ${bestPartNumber}`.trim()
+            : undefined,
           brand: ecu.brand ?? undefined,
           model: ecu.vehicleModel ?? undefined,
           category: ecu.partType ?? 'Engine Control Units (ECUs)',
@@ -585,7 +628,9 @@ export class SingleListingFormService {
     }
 
     // Standard (non-ECU) result extraction
-    const coverage = parsed.imageCoverage as Record<string, unknown> | undefined;
+    const coverage = parsed.imageCoverage as
+      | Record<string, unknown>
+      | undefined;
     const hasLabelShot = coverage?.hasLabelShot === true;
     const hasOverallShot = coverage?.hasOverallShot === true;
 
@@ -601,14 +646,16 @@ export class SingleListingFormService {
     let note = this.str(parsed.note);
     if (visibleText.length > 0) {
       const ocrSnippet = visibleText.slice(0, 8).join('; ');
-      note = note ? `${note} Visible text: ${ocrSnippet}` : `Visible text: ${ocrSnippet}`;
+      note = note
+        ? `${note} Visible text: ${ocrSnippet}`
+        : `Visible text: ${ocrSnippet}`;
     }
 
     const fitment = parsed.fitment as Record<string, unknown> | undefined;
     const confidenceRaw = parsed.confidence;
     const confidenceLevel =
       typeof confidenceRaw === 'object' && confidenceRaw !== null
-        ? (confidenceRaw as Record<string, unknown>).overall ?? confidenceRaw
+        ? ((confidenceRaw as Record<string, unknown>).overall ?? confidenceRaw)
         : confidenceRaw;
 
     return {
@@ -619,7 +666,9 @@ export class SingleListingFormService {
         category: this.str(parsed.category) ?? this.str(parsed.partType),
         note,
         partNumber:
-          this.str(parsed.partNumber) ?? this.str(parsed.mpn) ?? this.str(parsed.oemNumber),
+          this.str(parsed.partNumber) ??
+          this.str(parsed.mpn) ??
+          this.str(parsed.oemNumber),
         confidence: this.normalizeConfidence(confidenceLevel),
       },
       costUsd: visionResult.estimatedCostUsd,
@@ -631,7 +680,12 @@ export class SingleListingFormService {
     partial: Partial<PartLookupResult>,
     fallbackPartNumber: string,
     replacePartNumber = false,
-  ): Promise<Omit<PartLookupResult, 'source' | 'aiModel' | 'estimatedCostUsd' | 'fallbackUsed' | 'visionModel'>> {
+  ): Promise<
+    Omit<
+      PartLookupResult,
+      'source' | 'aiModel' | 'estimatedCostUsd' | 'fallbackUsed' | 'visionModel'
+    >
+  > {
     let brand = partial.brand;
     let model = partial.model;
     let mvlMatched = false;
@@ -653,7 +707,10 @@ export class SingleListingFormService {
       model,
       category: partial.category,
       note: partial.note,
-      partNumber: replacePartNumber && partial.partNumber ? partial.partNumber : fallbackPartNumber,
+      partNumber:
+        replacePartNumber && partial.partNumber
+          ? partial.partNumber
+          : fallbackPartNumber,
       confidence: partial.confidence ?? 'medium',
       mvlMatched,
     };

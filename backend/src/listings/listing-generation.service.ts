@@ -7,7 +7,10 @@ import { ExportRuleService } from './export-rule.service.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import { TemplateService } from '../templates/template.service.js';
 import { EbayPublishService } from '../channels/ebay/ebay-publish.service.js';
-import type { PublishRequest, PublishResult } from '../channels/ebay/ebay-publish.service.js';
+import type {
+  PublishRequest,
+  PublishResult,
+} from '../channels/ebay/ebay-publish.service.js';
 import type { ListingGenerationResult } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import type { Store } from '../channels/entities/store.entity.js';
 import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
@@ -77,10 +80,16 @@ export class ListingGenerationService {
    * Generate optimized listing content for a master product.
    * Optionally uses a template for context-aware generation.
    */
-  async generate(input: GenerateListingInput): Promise<GeneratedListingWithMeta> {
-    const product = await this.productRepo.findOneBy({ id: input.masterProductId });
+  async generate(
+    input: GenerateListingInput,
+  ): Promise<GeneratedListingWithMeta> {
+    const product = await this.productRepo.findOneBy({
+      id: input.masterProductId,
+    });
     if (!product) {
-      throw new NotFoundException(`MasterProduct ${input.masterProductId} not found`);
+      throw new NotFoundException(
+        `MasterProduct ${input.masterProductId} not found`,
+      );
     }
 
     // Build product data payload for OpenAI
@@ -102,18 +111,24 @@ export class ListingGenerationService {
     // If a template is provided, render it as additional context
     if (input.templateId) {
       try {
-        const { html } = await this.templateService.renderPreview(input.templateId, {
-          variables: productData as Record<string, unknown>,
-        });
+        const { html } = await this.templateService.renderPreview(
+          input.templateId,
+          {
+            variables: productData,
+          },
+        );
         productData.template_context = html;
       } catch (err) {
-        this.logger.warn(`Template ${input.templateId} render failed, proceeding without: ${err}`);
+        this.logger.warn(
+          `Template ${input.templateId} render failed, proceeding without: ${err}`,
+        );
       }
     }
 
-    const categoryName = input.categoryName
-      ?? product.ebayCategoryName
-      ?? 'Auto Parts & Accessories';
+    const categoryName =
+      input.categoryName ??
+      product.ebayCategoryName ??
+      'Auto Parts & Accessories';
 
     const generation = await this.listingPipeline.generate(
       productData,
@@ -138,9 +153,11 @@ export class ListingGenerationService {
    * Generate listing content and create draft EbayOffer records
    * for the specified stores (or stores matching export rules).
    */
-  async generateAndCreateOffers(
-    input: GenerateAndPublishInput,
-  ): Promise<{ generation: ListingGenerationResult; offers: EbayOffer[]; publishResults?: PublishResult[] }> {
+  async generateAndCreateOffers(input: GenerateAndPublishInput): Promise<{
+    generation: ListingGenerationResult;
+    offers: EbayOffer[];
+    publishResults?: PublishResult[];
+  }> {
     const { generation, product } = await this.generate(input);
     const offers: EbayOffer[] = [];
 
@@ -152,7 +169,11 @@ export class ListingGenerationService {
 
       // Compute per-store overrides from export rules
       const rulePrice = await this.findBestRulePrice(product, storeId);
-      const finalPrice = rulePrice ?? generation.pricePositioning.suggestedPrice ?? Number(product.retailPrice) ?? 0;
+      const finalPrice =
+        rulePrice ??
+        generation.pricePositioning.suggestedPrice ??
+        Number(product.retailPrice) ??
+        0;
       const finalTitle = truncateEbayTitle(generation.title);
 
       if (offer) {

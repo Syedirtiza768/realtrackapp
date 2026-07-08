@@ -39,7 +39,9 @@ export class EbayPolicySyncService {
   ) {}
 
   private baseUrl(env: ConnectedEbayAccount['environment']): string {
-    return env === 'production' ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com';
+    return env === 'production'
+      ? 'https://api.ebay.com'
+      : 'https://api.sandbox.ebay.com';
   }
 
   /**
@@ -54,11 +56,19 @@ export class EbayPolicySyncService {
   ): Promise<{ ok: boolean; synced: number; message: string }> {
     this.logger.log(`syncPolicies START account=${ebayAccountId}`);
     try {
-      const result = await this._syncPoliciesInner(ebayAccountId, organizationId, userId);
-      this.logger.log(`syncPolicies DONE account=${ebayAccountId} ok=${result.ok} synced=${result.synced}`);
+      const result = await this._syncPoliciesInner(
+        ebayAccountId,
+        organizationId,
+        userId,
+      );
+      this.logger.log(
+        `syncPolicies DONE account=${ebayAccountId} ok=${result.ok} synced=${result.synced}`,
+      );
       return result;
     } catch (err: unknown) {
-      this.logger.error(`syncPolicies FAILED account=${ebayAccountId}: ${err instanceof Error ? err.message : err}`);
+      this.logger.error(
+        `syncPolicies FAILED account=${ebayAccountId}: ${err instanceof Error ? err.message : err}`,
+      );
       throw err;
     }
   }
@@ -81,9 +91,8 @@ export class EbayPolicySyncService {
         organizationId,
         userId,
       );
-      const overlaySynced = await this.overlaySellerpunditPoliciesFromEbayApi(
-        account,
-      );
+      const overlaySynced =
+        await this.overlaySellerpunditPoliciesFromEbayApi(account);
       await this.hydrateInventoryLocationsFromStore(account);
       return {
         ...spResult,
@@ -105,7 +114,8 @@ export class EbayPolicySyncService {
       return {
         ok: false,
         synced: 0,
-        message: 'No enabled marketplace rows for this account — connect OAuth with a marketplace first.',
+        message:
+          'No enabled marketplace rows for this account — connect OAuth with a marketplace first.',
       };
     }
 
@@ -120,8 +130,16 @@ export class EbayPolicySyncService {
       let ret: EbayPolicyListItem[] = [];
       try {
         [fulfill, payment, ret] = await Promise.all([
-          this.sellAccount.listFulfillmentPolicies(token, baseUrl, mp.marketplaceId),
-          this.sellAccount.listPaymentPolicies(token, baseUrl, mp.marketplaceId),
+          this.sellAccount.listFulfillmentPolicies(
+            token,
+            baseUrl,
+            mp.marketplaceId,
+          ),
+          this.sellAccount.listPaymentPolicies(
+            token,
+            baseUrl,
+            mp.marketplaceId,
+          ),
           this.sellAccount.listReturnPolicies(token, baseUrl, mp.marketplaceId),
         ]);
       } catch (err: unknown) {
@@ -186,9 +204,17 @@ export class EbayPolicySyncService {
       let locations: { merchantLocationKey: string; name: string }[] = [];
       try {
         locations = await Promise.race([
-          this.sellAccount.listInventoryLocations(token, baseUrl, mp.marketplaceId),
+          this.sellAccount.listInventoryLocations(
+            token,
+            baseUrl,
+            mp.marketplaceId,
+          ),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Inventory locations fetch timed out (30s)')), 30_000),
+            setTimeout(
+              () =>
+                reject(new Error('Inventory locations fetch timed out (30s)')),
+              30_000,
+            ),
           ),
         ]);
       } catch (err: unknown) {
@@ -199,7 +225,9 @@ export class EbayPolicySyncService {
       }
 
       const pick = (items: EbayPolicyListItem[]) =>
-        items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId ?? null;
+        items.find((x) => x.isDefault)?.ebayPolicyId ??
+        items[0]?.ebayPolicyId ??
+        null;
 
       if (!mp.defaultFulfillmentPolicyId) {
         mp.defaultFulfillmentPolicyId = pick(fulfill);
@@ -340,7 +368,8 @@ export class EbayPolicySyncService {
         });
 
         const pick = (items: EbayPolicyListItem[]) =>
-          items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId;
+          items.find((x) => x.isDefault)?.ebayPolicyId ??
+          items[0]?.ebayPolicyId;
         const fulfillmentPolicyId = coalesceValidPolicyId(pick(fulfill));
         const paymentPolicyId = coalesceValidPolicyId(pick(payment));
         const returnPolicyId = coalesceValidPolicyId(

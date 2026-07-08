@@ -10,8 +10,7 @@ describe('CatalogPublishResolverService', () => {
     id: listingId,
     customLabelSku: 'BLA-17856',
     title: 'Test Part',
-    itemPhotoUrl:
-      'https://cdn.example.com/a.jpg|https://cdn.example.com/b.jpg',
+    itemPhotoUrl: 'https://cdn.example.com/a.jpg|https://cdn.example.com/b.jpg',
     startPriceNum: 99.99,
     quantityNum: 1,
     categoryId: '33696',
@@ -37,7 +36,10 @@ describe('CatalogPublishResolverService', () => {
         }
         return null;
       }),
-      create: jest.fn((data: Partial<CatalogProduct>) => ({ id: catalogId, ...data })),
+      create: jest.fn((data: Partial<CatalogProduct>) => ({
+        id: catalogId,
+        ...data,
+      })),
       save: jest.fn(async (p: CatalogProduct) => overrides?.savedProduct ?? p),
     };
     const listingRepo = {

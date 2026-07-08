@@ -2,7 +2,10 @@ import { Module, Global } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OpenAiService } from './openai.service.js';
-import { OpenAiQueueService, OpenAiQueueProcessor } from './openai-queue.service.js';
+import {
+  OpenAiQueueService,
+  OpenAiQueueProcessor,
+} from './openai-queue.service.js';
 import { EnrichmentPipeline } from './pipelines/enrichment.pipeline.js';
 import { VisionEnrichmentPipeline } from './pipelines/vision-enrichment.pipeline.js';
 import { ListingGenerationPipeline } from './pipelines/listing-generation.pipeline.js';

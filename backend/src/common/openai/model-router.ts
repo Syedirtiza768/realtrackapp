@@ -102,12 +102,16 @@ export class ModelRouter implements OnModuleInit {
 
     if (runMode === 'bulk') return 'bulk';
     if (price >= thresholds.flagshipMinPrice) return 'flagship';
-    if (FLAGSHIP_PART_TYPES.some((t) => partType.includes(t))) return 'flagship';
+    if (FLAGSHIP_PART_TYPES.some((t) => partType.includes(t)))
+      return 'flagship';
     return 'default';
   }
 
   /** Low-cost text-only tasks (image URL suggestion, ranking metadata). */
-  selectTextRoute(part: PartContext, runMode: RunMode = 'default'): RouteSelection {
+  selectTextRoute(
+    part: PartContext,
+    runMode: RunMode = 'default',
+  ): RouteSelection {
     const partType = part.partType ?? inferPartType(part);
     return this.buildSelection(
       'text',
@@ -117,7 +121,10 @@ export class ModelRouter implements OnModuleInit {
   }
 
   /** Vision-capable model; avoids bulk/text-only models without image support. */
-  selectVisionRoute(part: PartContext, runMode: RunMode = 'default'): RouteSelection {
+  selectVisionRoute(
+    part: PartContext,
+    runMode: RunMode = 'default',
+  ): RouteSelection {
     const base = this.selectRoute(part, runMode);
     const explicit = this.config.get<string>('OPENAI_VISION_MODEL');
     const nonVisionModels = new Set([
@@ -135,10 +142,7 @@ export class ModelRouter implements OnModuleInit {
     return this.buildSelection('flagship', model, `vision|${base.segmentKey}`);
   }
 
-  selectRoute(
-    part: PartContext,
-    runMode: RunMode = 'default',
-  ): RouteSelection {
+  selectRoute(part: PartContext, runMode: RunMode = 'default'): RouteSelection {
     const partType = part.partType ?? inferPartType(part);
     const band = priceBand(part.price);
     const marketplace = part.marketplace ?? 'US';
@@ -167,39 +171,30 @@ export class ModelRouter implements OnModuleInit {
       for (const key of segmentKeys) {
         const seg = policy.segments[key];
         if (seg) {
-          return this.buildSelection(
-            seg.lane,
-            seg.model,
-            key,
-            policy.version,
-          );
+          return this.buildSelection(seg.lane, seg.model, key, policy.version);
         }
       }
     } else if (policy) {
       for (const key of segmentKeys) {
         const seg = policy.segments[key];
         if (seg && seg.lane === lane) {
-          return this.buildSelection(
-            seg.lane,
-            seg.model,
-            key,
-            policy.version,
-          );
+          return this.buildSelection(seg.lane, seg.model, key, policy.version);
         }
       }
     }
 
-    return this.buildSelection(lane, this.modelForLane(lane), `${partType}|${band}`);
+    return this.buildSelection(
+      lane,
+      this.modelForLane(lane),
+      `${partType}|${band}`,
+    );
   }
 
   getEscalationModel(currentModel: string, lane: AiLane): string | null {
     if (lane === 'flagship') return null;
     const chain = this.policy?.escalationChain ?? [
       this.config.get('OPENAI_MODEL_DEFAULT', 'openai/gpt-4.1-mini'),
-      this.config.get(
-        'OPENAI_MODEL_ESCALATION',
-        'google/gemini-2.5-flash',
-      ),
+      this.config.get('OPENAI_MODEL_ESCALATION', 'google/gemini-2.5-flash'),
     ];
     const idx = chain.indexOf(currentModel);
     if (idx >= 0 && idx < chain.length - 1) {
@@ -264,9 +259,7 @@ export class ModelRouter implements OnModuleInit {
       flagshipMinPrice: Number(
         this.config.get('OPENAI_MODEL_FLAGSHIP_MIN_PRICE', '200'),
       ),
-      lowValueMaxPrice: Number(
-        this.config.get('AI_LOW_VALUE_MAX_PRICE', '50'),
-      ),
+      lowValueMaxPrice: Number(this.config.get('AI_LOW_VALUE_MAX_PRICE', '50')),
       fitmentMinRows: Number(this.config.get('AI_FITMENT_MIN_ROWS', '5')),
       autoApproveMinScore: Number(
         this.config.get('AI_AUTO_APPROVE_MIN_SCORE', '85'),

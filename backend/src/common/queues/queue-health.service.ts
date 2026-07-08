@@ -51,13 +51,15 @@ export class QueueHealthService implements OnModuleDestroy {
     const snapshot: QueueHealthSnapshot = {};
     await Promise.all(
       this.queues.map(async (queue) => {
-        const [waiting, active, delayed, failed, completed] = await Promise.all([
-          queue.getWaitingCount(),
-          queue.getActiveCount(),
-          queue.getDelayedCount(),
-          queue.getFailedCount(),
-          queue.getCompletedCount(),
-        ]);
+        const [waiting, active, delayed, failed, completed] = await Promise.all(
+          [
+            queue.getWaitingCount(),
+            queue.getActiveCount(),
+            queue.getDelayedCount(),
+            queue.getFailedCount(),
+            queue.getCompletedCount(),
+          ],
+        );
         snapshot[queue.name] = { waiting, active, delayed, failed, completed };
       }),
     );

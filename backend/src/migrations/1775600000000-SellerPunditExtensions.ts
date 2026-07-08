@@ -40,8 +40,12 @@ export class SellerPunditExtensions1775600000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "organization_sellerpundit_config"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "uq_connected_ebay_org_sp_token"`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "organization_sellerpundit_config"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "uq_connected_ebay_org_sp_token"`,
+    );
     await queryRunner.query(`
       ALTER TABLE "connected_ebay_accounts"
       DROP COLUMN IF EXISTS "sellerpundit_last_policy_sync_at",

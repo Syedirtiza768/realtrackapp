@@ -1,4 +1,9 @@
-import { HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -45,7 +50,9 @@ export class SellerpunditPolicySyncService {
   ) {}
 
   policyMaxAgeMs(): number {
-    const hours = Number(this.config.get('SELLERPUNDIT_POLICY_SYNC_MAX_AGE_HOURS', 24));
+    const hours = Number(
+      this.config.get('SELLERPUNDIT_POLICY_SYNC_MAX_AGE_HOURS', 24),
+    );
     return (Number.isFinite(hours) && hours > 0 ? hours : 24) * 60 * 60 * 1000;
   }
 
@@ -55,7 +62,11 @@ export class SellerpunditPolicySyncService {
     marketplaceId: string,
   ): Promise<{ ok: boolean; synced: number; message: string }> {
     const account = await this.accountRepo.findOne({
-      where: { id: ebayAccountId, organizationId, connectionSource: 'sellerpundit' },
+      where: {
+        id: ebayAccountId,
+        organizationId,
+        connectionSource: 'sellerpundit',
+      },
     });
     if (!account) {
       throw new NotFoundException('SellerPundit eBay account not found');
@@ -81,10 +92,19 @@ export class SellerpunditPolicySyncService {
     const invalidDefaults = !hasValidDefaultPolicyIds(mpRow);
 
     if (policyCount === 0 || stale || missingDefaults || invalidDefaults) {
-      return this.syncPolicies(ebayAccountId, organizationId, null, marketplaceId);
+      return this.syncPolicies(
+        ebayAccountId,
+        organizationId,
+        null,
+        marketplaceId,
+      );
     }
 
-    return { ok: true, synced: policyCount, message: 'Policies are up to date' };
+    return {
+      ok: true,
+      synced: policyCount,
+      message: 'Policies are up to date',
+    };
   }
 
   async syncPolicies(
@@ -102,7 +122,11 @@ export class SellerpunditPolicySyncService {
       throw new NotFoundException('Account is not a SellerPundit connection');
     }
     if (!account.sellerpunditAccountName) {
-      return { ok: false, synced: 0, message: 'Missing SellerPundit account name' };
+      return {
+        ok: false,
+        synced: 0,
+        message: 'Missing SellerPundit account name',
+      };
     }
 
     let marketplaces = account.marketplaces ?? [];
@@ -110,7 +134,9 @@ export class SellerpunditPolicySyncService {
       marketplaces = await this.mpRepo.find({ where: { ebayAccountId } });
     }
     if (onlyMarketplaceId) {
-      marketplaces = marketplaces.filter((m) => m.marketplaceId === onlyMarketplaceId);
+      marketplaces = marketplaces.filter(
+        (m) => m.marketplaceId === onlyMarketplaceId,
+      );
     }
     marketplaces = marketplaces.filter((m) => m.enabled);
     if (!marketplaces.length) {
@@ -135,7 +161,10 @@ export class SellerpunditPolicySyncService {
 
       // Atomic replace: delete old + insert new in a single transaction
       await this.policyRepo.manager.transaction(async (trx) => {
-        await trx.delete(EbayBusinessPolicy, { ebayAccountId, marketplaceId: mp.marketplaceId });
+        await trx.delete(EbayBusinessPolicy, {
+          ebayAccountId,
+          marketplaceId: mp.marketplaceId,
+        });
 
         for (const p of fulfill) {
           await trx.save(
@@ -243,9 +272,10 @@ export class SellerpunditPolicySyncService {
             : 'return';
       return this.parsePolicies(raw, kind);
     } catch (e) {
-      const msg = e instanceof HttpException
-        ? (e.getResponse() as Record<string, unknown>)?.message ?? e.message
-        : (e as Error).message;
+      const msg =
+        e instanceof HttpException
+          ? ((e.getResponse() as Record<string, unknown>)?.message ?? e.message)
+          : (e as Error).message;
       this.logger.error(`SP policies ${policyType} failed: ${msg}`);
       throw e;
     }

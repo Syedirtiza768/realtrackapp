@@ -57,11 +57,15 @@ export class SellerpunditTokenSyncService {
     }
 
     await this.refreshTokenFromSellerpundit(account);
-    const updated = await this.tokenRepo.findOneOrFail({ where: { ebayAccountId } });
+    const updated = await this.tokenRepo.findOneOrFail({
+      where: { ebayAccountId },
+    });
     return this.encryption.decrypt(updated.accessTokenEncrypted);
   }
 
-  async refreshTokenFromSellerpundit(account: ConnectedEbayAccount): Promise<void> {
+  async refreshTokenFromSellerpundit(
+    account: ConnectedEbayAccount,
+  ): Promise<void> {
     if (!account.sellerpunditTokenId) {
       throw new HttpException('Missing SellerPundit token id on account', 502);
     }
@@ -73,9 +77,13 @@ export class SellerpunditTokenSyncService {
     if (!match) {
       await this.accountRepo.update(account.id, {
         connectionStatus: 'reconnect_required',
-        lastErrorMessage: 'SellerPundit token no longer returned for this store',
+        lastErrorMessage:
+          'SellerPundit token no longer returned for this store',
       });
-      throw new HttpException('SellerPundit store not found — re-import stores', 502);
+      throw new HttpException(
+        'SellerPundit store not found — re-import stores',
+        502,
+      );
     }
 
     await this.persistTokenRow(account, match);
@@ -93,7 +101,9 @@ export class SellerpunditTokenSyncService {
     const expiresAt = computeSellerpunditAccessTokenExpiry(row);
     const refreshToken = row.refreshToken?.trim() ?? '';
 
-    let oauth = await this.tokenRepo.findOne({ where: { ebayAccountId: account.id } });
+    let oauth = await this.tokenRepo.findOne({
+      where: { ebayAccountId: account.id },
+    });
     if (!oauth) {
       oauth = this.tokenRepo.create({
         ebayAccountId: account.id,
@@ -111,7 +121,9 @@ export class SellerpunditTokenSyncService {
     const refreshedAt = row.lastTokenRefreshDate
       ? new Date(row.lastTokenRefreshDate)
       : new Date();
-    oauth.lastRefreshedAt = Number.isNaN(refreshedAt.getTime()) ? new Date() : refreshedAt;
+    oauth.lastRefreshedAt = Number.isNaN(refreshedAt.getTime())
+      ? new Date()
+      : refreshedAt;
 
     if (expiresAt.getTime() <= Date.now()) {
       this.logger.warn(
@@ -134,7 +146,9 @@ export class SellerpunditTokenSyncService {
       );
     }
 
-    const conn = await this.connectionRepo.findOneBy({ id: account.channelConnectionId });
+    const conn = await this.connectionRepo.findOneBy({
+      id: account.channelConnectionId,
+    });
     if (conn) {
       conn.encryptedTokens = this.encryption.encrypt(
         JSON.stringify({
@@ -151,7 +165,9 @@ export class SellerpunditTokenSyncService {
       await this.connectionRepo.save(conn);
     }
 
-    const newConnectionStatus = ebayTokenValid ? 'active' as const : 'reconnect_required' as const;
+    const newConnectionStatus = ebayTokenValid
+      ? ('active' as const)
+      : ('reconnect_required' as const);
     const newErrorMessage = ebayTokenValid
       ? null
       : 'eBay rejected SellerPundit OAuth token — reconnect eBay in SellerPundit, then Re-sync stores';
@@ -195,7 +211,9 @@ export class SellerpunditTokenSyncService {
     account: ConnectedEbayAccount,
   ): Promise<string> {
     if (account.primaryStoreId) {
-      const store = await this.storeRepo.findOneBy({ id: account.primaryStoreId });
+      const store = await this.storeRepo.findOneBy({
+        id: account.primaryStoreId,
+      });
       if (store?.ebayMarketplaceId?.trim()) {
         return store.ebayMarketplaceId.trim();
       }
@@ -230,7 +248,10 @@ export class SellerpunditTokenSyncService {
         },
       );
       if (status === 200) return true;
-      if (status === 401 && isEbayInvalidAccessTokenError({ response: { status, data } })) {
+      if (
+        status === 401 &&
+        isEbayInvalidAccessTokenError({ response: { status, data } })
+      ) {
         return false;
       }
       return status >= 200 && status < 500;
@@ -246,7 +267,11 @@ export class SellerpunditTokenSyncService {
     if (raw && typeof raw === 'object') {
       const o = raw as Record<string, unknown>;
       if (Array.isArray(o.data)) return o.data as SellerpunditTokenRow[];
-      if (o.data && typeof o.data === 'object' && Array.isArray((o.data as { data?: unknown }).data)) {
+      if (
+        o.data &&
+        typeof o.data === 'object' &&
+        Array.isArray((o.data as { data?: unknown }).data)
+      ) {
         return (o.data as { data: SellerpunditTokenRow[] }).data;
       }
     }

@@ -111,7 +111,8 @@ export class IngestionProcessor extends WorkerHost {
       // 6. Determine review status based on confidence
       const passedQualityGate = aiResponse.passedGate !== false;
       const reviewStatus =
-        passedQualityGate && normalized.confidenceOverall >= AUTO_APPROVE_THRESHOLD
+        passedQualityGate &&
+        normalized.confidenceOverall >= AUTO_APPROVE_THRESHOLD
           ? 'auto_approved'
           : 'needs_review';
 
@@ -152,8 +153,9 @@ export class IngestionProcessor extends WorkerHost {
 
       // Calculate next retry time with exponential backoff
       const job_record = await this.jobRepo.findOneBy({ id: jobId });
-      const attemptCount = (job_record?.attemptCount ?? 0);
-      const backoffMs = [30_000, 120_000, 600_000][Math.min(attemptCount - 1, 2)] ?? 600_000;
+      const attemptCount = job_record?.attemptCount ?? 0;
+      const backoffMs =
+        [30_000, 120_000, 600_000][Math.min(attemptCount - 1, 2)] ?? 600_000;
       const nextRetryAt = new Date(Date.now() + backoffMs);
 
       await this.jobRepo.update(jobId, {

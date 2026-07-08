@@ -53,7 +53,9 @@ export class IngestionController {
 
   @Get('jobs/:id')
   @RequirePermissions('ingestion.view')
-  @ApiOperation({ summary: 'Get ingestion job details with AI result and images' })
+  @ApiOperation({
+    summary: 'Get ingestion job details with AI result and images',
+  })
   async getJob(@Param('id') id: string, @CurrentUser() user: User) {
     const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
     return this.ingestionService.getJob(id, user.id, viewAll);

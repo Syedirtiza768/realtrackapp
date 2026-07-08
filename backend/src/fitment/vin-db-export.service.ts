@@ -1,6 +1,9 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { FitmentService } from './fitment.service.js';
-import { VinDecodeService, type VinDecodeResult } from './vin-decode.service.js';
+import {
+  VinDecodeService,
+  type VinDecodeResult,
+} from './vin-decode.service.js';
 import { parseImageUrlField } from '../channels/ebay/ebay-listing-images.util.js';
 
 interface ExportRow {
@@ -52,29 +55,34 @@ export class VinDbExportService {
     }
 
     const vehicle = result.vehicle;
-    const rows: ExportRow[] = result.listings.map((listing: any, idx: number) => {
-      const images = parseImageUrlField(listing.itemPhotoUrl);
-      return {
-        sku: listing.customLabelSku || `ROW-${idx + 1}`,
-        title: listing.title || '',
-        brand: listing.cBrand || vehicle.make || '',
-        type: listing.cType || '',
-        category: listing.categoryName || '',
-        price: listing.startPrice || listing.startPriceNum?.toString() || '',
-        quantity: listing.quantity || listing.quantityNum?.toString() || '1',
-        condition: listing.conditionId || '',
-        mpn: listing.cManufacturerPartNumber || '',
-        oemPart: listing.cOeOemPartNumber || '',
-        imageUrls: images.join(' | '),
-        description: listing.description || '',
-        location: listing.location || '',
-        format: listing.format || 'FIXED_PRICE',
-      };
-    });
+    const rows: ExportRow[] = result.listings.map(
+      (listing: any, idx: number) => {
+        const images = parseImageUrlField(listing.itemPhotoUrl);
+        return {
+          sku: listing.customLabelSku || `ROW-${idx + 1}`,
+          title: listing.title || '',
+          brand: listing.cBrand || vehicle.make || '',
+          type: listing.cType || '',
+          category: listing.categoryName || '',
+          price: listing.startPrice || listing.startPriceNum?.toString() || '',
+          quantity: listing.quantity || listing.quantityNum?.toString() || '1',
+          condition: listing.conditionId || '',
+          mpn: listing.cManufacturerPartNumber || '',
+          oemPart: listing.cOeOemPartNumber || '',
+          imageUrls: images.join(' | '),
+          description: listing.description || '',
+          location: listing.location || '',
+          format: listing.format || 'FIXED_PRICE',
+        };
+      },
+    );
 
     const buffer = this.buildXlsx(vehicle, rows, vin);
 
-    const safeModel = (vehicle.model || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+    const safeModel = (vehicle.model || 'unknown').replace(
+      /[^a-zA-Z0-9]/g,
+      '_',
+    );
     const filename = `${vehicle.year}_${vehicle.make}_${safeModel}_VIN_${vin.slice(-6)}_listings.xlsx`;
 
     this.logger.log(
@@ -90,7 +98,11 @@ export class VinDbExportService {
     };
   }
 
-  private buildXlsx(vehicle: VinDecodeResult, rows: ExportRow[], vin: string): Buffer {
+  private buildXlsx(
+    vehicle: VinDecodeResult,
+    rows: ExportRow[],
+    vin: string,
+  ): Buffer {
     const XLSX = require('xlsx');
     const wb = XLSX.utils.book_new();
 
@@ -99,26 +111,52 @@ export class VinDbExportService {
     const sheetData: any[][] = [];
 
     // Row 0: Info header (must contain "GridX" for pipeline detection)
-    sheetData.push(['#INFO', `GridX Connect — DB listings for ${vehicle.year} ${vehicle.make} ${vehicle.model} (VIN: ${vin})`, '', '', '', '', '', '', '', '', '', '']);
+    sheetData.push([
+      '#INFO',
+      `GridX Connect — DB listings for ${vehicle.year} ${vehicle.make} ${vehicle.model} (VIN: ${vin})`,
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ]);
 
     // Row 1: GridX column headers (pipeline's buildGridxColumnMap matches these)
-    sheetData.push(['Part Number', 'Price', 'Quantity', 'Vehicle Make', 'Description', 'Image URLs', 'SKU', 'Weight Major', 'Weight Minor', 'Package Length', 'Package Width', 'Package Depth']);
+    sheetData.push([
+      'Part Number',
+      'Price',
+      'Quantity',
+      'Vehicle Make',
+      'Description',
+      'Image URLs',
+      'SKU',
+      'Weight Major',
+      'Weight Minor',
+      'Package Length',
+      'Package Width',
+      'Package Depth',
+    ]);
 
     // Row 2+: Data rows — map DB listing fields to GridX columns
     for (const row of rows) {
       sheetData.push([
-        row.mpn || row.oemPart || '',  // Part Number
-        row.price,                      // Price
-        row.quantity,                   // Quantity
-        row.brand,                      // Vehicle Make
-        row.title || row.description,   // Description
-        row.imageUrls,                  // Image URLs
-        row.sku,                        // SKU
-        '',                             // Weight Major
-        '',                             // Weight Minor
-        '',                             // Package Length
-        '',                             // Package Width
-        '',                             // Package Depth
+        row.mpn || row.oemPart || '', // Part Number
+        row.price, // Price
+        row.quantity, // Quantity
+        row.brand, // Vehicle Make
+        row.title || row.description, // Description
+        row.imageUrls, // Image URLs
+        row.sku, // SKU
+        '', // Weight Major
+        '', // Weight Minor
+        '', // Package Length
+        '', // Package Width
+        '', // Package Depth
       ]);
     }
 

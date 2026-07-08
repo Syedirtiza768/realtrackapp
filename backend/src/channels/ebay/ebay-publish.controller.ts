@@ -210,9 +210,12 @@ export class EbayPublishController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Batch publish multiple listings to eBay stores' })
   async publishBatch(@Body() dto: BulkPublishDto) {
-    const allResults: Array<{ listingId: string; results: PublishResult[] }> = [];
+    const allResults: Array<{ listingId: string; results: PublishResult[] }> =
+      [];
     for (const item of dto.items) {
-      const results = await this.publishService.publish(item as unknown as PublishRequest);
+      const results = await this.publishService.publish(
+        item as unknown as PublishRequest,
+      );
       allResults.push({ listingId: item.listingId, results });
     }
     return allResults;
@@ -225,18 +228,24 @@ export class EbayPublishController {
       'Publish listing records by ID; backend enriches SKU, images, condition, and policies',
   })
   async publishByListingIds(@Body() dto: PublishByListingIdsDto) {
-    return this.publishService.publishByListingIds(dto.listingIds, dto.storeIds, {
-      fulfillmentPolicyId: dto.fulfillmentPolicyId,
-      paymentPolicyId: dto.paymentPolicyId,
-      returnPolicyId: dto.returnPolicyId,
-      shippingProfileName: dto.shippingProfileName,
-      returnProfileName: dto.returnProfileName,
-      paymentProfileName: dto.paymentProfileName,
-    });
+    return this.publishService.publishByListingIds(
+      dto.listingIds,
+      dto.storeIds,
+      {
+        fulfillmentPolicyId: dto.fulfillmentPolicyId,
+        paymentPolicyId: dto.paymentPolicyId,
+        returnPolicyId: dto.returnPolicyId,
+        shippingProfileName: dto.shippingProfileName,
+        returnProfileName: dto.returnProfileName,
+        paymentProfileName: dto.paymentProfileName,
+      },
+    );
   }
 
   @Patch('offers/price-quantity')
-  @ApiOperation({ summary: 'Update price and quantity for existing eBay offers' })
+  @ApiOperation({
+    summary: 'Update price and quantity for existing eBay offers',
+  })
   async updatePriceQuantity(@Body() dto: UpdatePriceQuantityDto) {
     return this.publishService.updatePriceQuantity(dto.storeId, dto.offers);
   }

@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, IsArray, IsObject, ArrayMinSize } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUrl,
+  IsArray,
+  IsObject,
+  ArrayMinSize,
+} from 'class-validator';
 
 export class ConnectChannelDto {
   @IsString()
@@ -42,7 +50,10 @@ export class PublishMultiDto {
 
   @IsOptional()
   @IsObject()
-  overrides?: Record<string, { price?: number; title?: string; quantity?: number }>;
+  overrides?: Record<
+    string,
+    { price?: number; title?: string; quantity?: number }
+  >;
 }
 
 export class BulkPublishDto {

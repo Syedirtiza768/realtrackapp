@@ -148,6 +148,21 @@ export class PublishedListingsBulkProcessor extends WorkerHost {
           description: String(payload.description ?? ''),
         });
         break;
+      case 'update_policies': {
+        await this.actions.updatePolicies(listing.id, organizationId, user, {
+          fulfillmentPolicyId: payload.fulfillmentPolicyId as
+            | string
+            | undefined,
+          paymentPolicyId: payload.paymentPolicyId as string | undefined,
+          returnPolicyId: payload.returnPolicyId as string | undefined,
+          shippingProfileName: payload.shippingProfileName as
+            | string
+            | undefined,
+          returnProfileName: payload.returnProfileName as string | undefined,
+          paymentProfileName: payload.paymentProfileName as string | undefined,
+        });
+        break;
+      }
       case 'end_listing':
         await this.actions.endListing(listing.id, organizationId, user);
         break;
@@ -169,9 +184,10 @@ export class PublishedListingsBulkProcessor extends WorkerHost {
           performanceMetrics: refreshed.performanceMetrics,
           categoryId: refreshed.categoryId,
           price: refreshed.price,
-          competitorPricing: (refreshed.performanceMetrics?.competitorPricing as {
-            medianPrice?: number | null;
-          }) ?? null,
+          competitorPricing:
+            (refreshed.performanceMetrics?.competitorPricing as {
+              medianPrice?: number | null;
+            }) ?? null,
         });
         await this.listingRepo.save(refreshed);
         break;

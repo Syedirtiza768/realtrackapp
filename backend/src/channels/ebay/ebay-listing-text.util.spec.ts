@@ -37,7 +37,9 @@ describe('ebay-listing-text.util', () => {
       sku: 'BLA-00644',
     });
     expect(description.length).toBeGreaterThanOrEqual(1);
-    expect(description.length).toBeLessThanOrEqual(EBAY_OFFER_DESCRIPTION_MAX_LENGTH);
+    expect(description.length).toBeLessThanOrEqual(
+      EBAY_OFFER_DESCRIPTION_MAX_LENGTH,
+    );
     expect(description).toContain('Mercedes Headlight');
     expect(warnings.some((w) => w.includes('empty'))).toBe(true);
   });
@@ -54,21 +56,28 @@ describe('ebay-listing-text.util', () => {
     });
 
     expect(stripListingHtmlBoilerplate(raw).startsWith('<p>')).toBe(true);
-    expect(description.length).toBeLessThanOrEqual(EBAY_OFFER_DESCRIPTION_MAX_LENGTH);
-    expect(description.length).toBeGreaterThanOrEqual(1);
-    expect(warnings.some((w) => w.includes('truncated') || w.includes('style'))).toBe(
-      true,
+    expect(description.length).toBeLessThanOrEqual(
+      EBAY_OFFER_DESCRIPTION_MAX_LENGTH,
     );
+    expect(description.length).toBeGreaterThanOrEqual(1);
+    expect(
+      warnings.some((w) => w.includes('truncated') || w.includes('style')),
+    ).toBe(true);
   });
 
   it('truncateEbayDescription respects max length', () => {
     const long = 'A'.repeat(5000);
     const result = truncateEbayDescription(long);
-    expect(result.length).toBeLessThanOrEqual(EBAY_OFFER_DESCRIPTION_MAX_LENGTH);
+    expect(result.length).toBeLessThanOrEqual(
+      EBAY_OFFER_DESCRIPTION_MAX_LENGTH,
+    );
   });
 
   it('sanitizeEbayDescription delegates to builder', () => {
-    const result = sanitizeEbayDescription('', { title: 'Brake Pad', sku: 'BP-1' });
+    const result = sanitizeEbayDescription('', {
+      title: 'Brake Pad',
+      sku: 'BP-1',
+    });
     expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result).toContain('Brake Pad');
   });

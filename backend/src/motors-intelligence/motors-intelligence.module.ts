@@ -77,10 +77,7 @@ import { StorageModule } from '../storage/storage.module';
     FitmentModule,
     StorageModule,
   ],
-  controllers: [
-    MotorsIntelligenceController,
-    ReviewQueueController,
-  ],
+  controllers: [MotorsIntelligenceController, ReviewQueueController],
   providers: [
     VisionExtractionService,
     ProductIdentityService,

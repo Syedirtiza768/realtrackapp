@@ -264,7 +264,9 @@ export class EbayTradingApiService {
     );
     if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
       const err = tagValue(xml, 'LongMessage') ?? 'GetSellerList failed';
-      this.logger.warn(`Trading API GetSellerList failed for store ${storeId}: ${err}`);
+      this.logger.warn(
+        `Trading API GetSellerList failed for store ${storeId}: ${err}`,
+      );
       throw new Error(err);
     }
 

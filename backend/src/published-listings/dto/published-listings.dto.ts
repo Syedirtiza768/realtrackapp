@@ -146,6 +146,32 @@ export class RevisePublishedListingDto {
   itemSpecifics?: Record<string, string[]>;
 }
 
+export class UpdatePoliciesDto {
+  @IsOptional()
+  @IsString()
+  fulfillmentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  returnPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  shippingProfileName?: string;
+
+  @IsOptional()
+  @IsString()
+  returnProfileName?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentProfileName?: string;
+}
+
 export class BulkPublishedListingsDto {
   @IsOptional()
   @IsUUID()
@@ -164,8 +190,19 @@ export class BulkPublishedListingsDto {
 
 export class BulkPriceUpdatePayload {
   @IsOptional()
-  @IsEnum(['set', 'increase_percent', 'decrease_percent', 'increase_amount', 'decrease_amount'])
-  mode?: 'set' | 'increase_percent' | 'decrease_percent' | 'increase_amount' | 'decrease_amount';
+  @IsEnum([
+    'set',
+    'increase_percent',
+    'decrease_percent',
+    'increase_amount',
+    'decrease_amount',
+  ])
+  mode?:
+    | 'set'
+    | 'increase_percent'
+    | 'decrease_percent'
+    | 'increase_amount'
+    | 'decrease_amount';
 
   @Type(() => Number)
   @IsNumber()

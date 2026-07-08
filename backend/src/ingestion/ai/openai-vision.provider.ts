@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { AiRawResponse, AiVisionProvider } from './ai-provider.interface.js';
+import type {
+  AiRawResponse,
+  AiVisionProvider,
+} from './ai-provider.interface.js';
 import { VisionEnrichmentPipeline } from '../../common/openai/pipelines/vision-enrichment.pipeline.js';
 import type { PartContext } from '../../common/openai/ai-routing-policy.types.js';
 

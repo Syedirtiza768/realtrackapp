@@ -79,11 +79,15 @@ export class Phase3DeprecateChannelListings1709510400000 implements MigrationInt
     `);
 
     // ─── Step 3: Rename old table (preserve for rollback) ───
-    await queryRunner.query(`ALTER TABLE IF EXISTS channel_listings RENAME TO channel_listings_deprecated`);
+    await queryRunner.query(
+      `ALTER TABLE IF EXISTS channel_listings RENAME TO channel_listings_deprecated`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE IF EXISTS channel_listings_deprecated RENAME TO channel_listings`);
+    await queryRunner.query(
+      `ALTER TABLE IF EXISTS channel_listings_deprecated RENAME TO channel_listings`,
+    );
     await queryRunner.query(`DROP VIEW IF EXISTS channel_listings_v`);
   }
 }

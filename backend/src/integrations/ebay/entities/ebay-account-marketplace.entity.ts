@@ -22,7 +22,9 @@ export class EbayAccountMarketplace {
   @Column({ name: 'ebay_account_id', type: 'uuid' })
   ebayAccountId!: string;
 
-  @ManyToOne(() => ConnectedEbayAccount, (a) => a.marketplaces, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ConnectedEbayAccount, (a) => a.marketplaces, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'ebay_account_id' })
   ebayAccount!: ConnectedEbayAccount;
 
@@ -38,16 +40,36 @@ export class EbayAccountMarketplace {
   @Column({ type: 'boolean', default: true })
   enabled!: boolean;
 
-  @Column({ name: 'default_inventory_location_key', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'default_inventory_location_key',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   defaultInventoryLocationKey!: string | null;
 
-  @Column({ name: 'default_payment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'default_payment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   defaultPaymentPolicyId!: string | null;
 
-  @Column({ name: 'default_return_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'default_return_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   defaultReturnPolicyId!: string | null;
 
-  @Column({ name: 'default_fulfillment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'default_fulfillment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   defaultFulfillmentPolicyId!: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

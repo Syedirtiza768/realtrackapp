@@ -63,7 +63,13 @@ export class ListingChannelInstance {
   externalUrl!: string | null;
 
   // ─── Per-store overrides ───
-  @Column({ name: 'override_price', type: 'numeric', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'override_price',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   overridePrice!: number | null;
 
   @Column({ name: 'override_quantity', type: 'integer', nullable: true })
@@ -77,8 +83,19 @@ export class ListingChannelInstance {
   channelSpecificData!: Record<string, unknown>;
 
   // ─── Sync state ───
-  @Column({ name: 'sync_status', type: 'varchar', length: 20, default: 'pending' })
-  syncStatus!: 'synced' | 'pending' | 'publishing' | 'error' | 'ended' | 'draft';
+  @Column({
+    name: 'sync_status',
+    type: 'varchar',
+    length: 20,
+    default: 'pending',
+  })
+  syncStatus!:
+    | 'synced'
+    | 'pending'
+    | 'publishing'
+    | 'error'
+    | 'ended'
+    | 'draft';
 
   @Column({ name: 'last_pushed_version', type: 'integer', nullable: true })
   lastPushedVersion!: number | null;

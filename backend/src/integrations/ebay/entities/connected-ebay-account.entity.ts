@@ -68,7 +68,12 @@ export class ConnectedEbayAccount {
   @Column({ name: 'ebay_user_id', type: 'varchar', length: 200 })
   ebayUserId!: string;
 
-  @Column({ name: 'ebay_username', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'ebay_username',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   ebayUsername!: string | null;
 
   @Column({ name: 'account_display_name', type: 'varchar', length: 200 })
@@ -77,7 +82,12 @@ export class ConnectedEbayAccount {
   @Column({ type: 'varchar', length: 20, default: 'sandbox' })
   environment!: EbayConnectionEnvironment;
 
-  @Column({ name: 'connection_status', type: 'varchar', length: 30, default: 'active' })
+  @Column({
+    name: 'connection_status',
+    type: 'varchar',
+    length: 30,
+    default: 'active',
+  })
   connectionStatus!: EbayConnectionStatus;
 
   @Column({ name: 'connected_by_user_id', type: 'uuid', nullable: true })
@@ -87,16 +97,28 @@ export class ConnectedEbayAccount {
   @JoinColumn({ name: 'connected_by_user_id' })
   connectedByUser!: User | null;
 
-  @Column({ name: 'connected_at', type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'connected_at',
+    type: 'timestamptz',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   connectedAt!: Date;
 
   @Column({ name: 'last_verified_at', type: 'timestamptz', nullable: true })
   lastVerifiedAt!: Date | null;
 
-  @Column({ name: 'last_successful_sync_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'last_successful_sync_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   lastSuccessfulSyncAt!: Date | null;
 
-  @Column({ name: 'last_token_refresh_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'last_token_refresh_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   lastTokenRefreshAt!: Date | null;
 
   @Column({ name: 'last_error_message', type: 'text', nullable: true })
@@ -108,22 +130,40 @@ export class ConnectedEbayAccount {
   @Column({ name: 'last_policies_fetched_count', type: 'int', default: 0 })
   lastPoliciesFetchedCount!: number;
 
-  @Column({ name: 'connection_source', type: 'varchar', length: 30, default: 'native_oauth' })
+  @Column({
+    name: 'connection_source',
+    type: 'varchar',
+    length: 30,
+    default: 'native_oauth',
+  })
   connectionSource!: 'native_oauth' | 'sellerpundit';
 
   @Column({ name: 'sellerpundit_token_id', type: 'int', nullable: true })
   sellerpunditTokenId!: number | null;
 
-  @Column({ name: 'sellerpundit_account_name', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'sellerpundit_account_name',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   sellerpunditAccountName!: string | null;
 
   @Column({ name: 'sellerpundit_marketplace_id', type: 'int', nullable: true })
   sellerpunditMarketplaceId!: number | null;
 
-  @Column({ name: 'sellerpundit_last_sync_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'sellerpundit_last_sync_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   sellerpunditLastSyncAt!: Date | null;
 
-  @Column({ name: 'sellerpundit_last_policy_sync_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'sellerpundit_last_policy_sync_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   sellerpunditLastPolicySyncAt!: Date | null;
 
   @OneToOne(() => EbayOAuthToken, (t) => t.ebayAccount)

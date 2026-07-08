@@ -13,7 +13,11 @@ import { CatalogProduct } from '../../../catalog-import/entities/catalog-product
 import { ConnectedEbayAccount } from './connected-ebay-account.entity.js';
 
 @Entity('listing_store_overrides')
-@Unique('uq_listing_store_override', ['catalogProductId', 'ebayAccountId', 'marketplaceId'])
+@Unique('uq_listing_store_override', [
+  'catalogProductId',
+  'ebayAccountId',
+  'marketplaceId',
+])
 @Index('idx_lso_product', ['catalogProductId'])
 @Index('idx_lso_account', ['ebayAccountId'])
 export class ListingStoreOverride {
@@ -40,7 +44,13 @@ export class ListingStoreOverride {
   @Column({ name: 'title_override', type: 'text', nullable: true })
   titleOverride!: string | null;
 
-  @Column({ name: 'price_override', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'price_override',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   priceOverride!: string | null;
 
   @Column({ name: 'quantity_override', type: 'int', nullable: true })

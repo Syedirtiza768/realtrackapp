@@ -9,18 +9,30 @@ import {
 } from '../entities';
 import { MotorsPipelineResultDto } from '../dto';
 import { VisionExtractionService } from './vision-extraction.service';
-import { ProductIdentityService, IdentityResolutionResult } from './product-identity.service';
-import { FitmentResolverService, FitmentResolutionResult } from './fitment-resolver.service';
-import { ListingGeneratorService, ListingGenerationInput } from './listing-generator.service';
-import { ComplianceEngineService, ComplianceCheckResult } from './compliance-engine.service';
+import {
+  ProductIdentityService,
+  IdentityResolutionResult,
+} from './product-identity.service';
+import {
+  FitmentResolverService,
+  FitmentResolutionResult,
+} from './fitment-resolver.service';
+import {
+  ListingGeneratorService,
+  ListingGenerationInput,
+} from './listing-generator.service';
+import {
+  ComplianceEngineService,
+  ComplianceCheckResult,
+} from './compliance-engine.service';
 import { ReviewQueueService } from './review-queue.service';
 import { MotorsPublisherService } from './motors-publisher.service';
 import { FeatureFlagService } from '../../common/feature-flags/feature-flag.service';
 
 const AUTO_PUBLISH_THRESHOLDS = {
   identityConfidence: 0.85,
-  fitmentConfidence: 0.70,
-  complianceScore: 0.80,
+  fitmentConfidence: 0.7,
+  complianceScore: 0.8,
   contentQuality: 0.75,
 };
 
@@ -65,7 +77,10 @@ export class MotorsIntelligenceService {
 
     try {
       // ──── Stage 1: Vision/OCR Extraction ────────────────────────
-      if (product.imageUrls?.length && await this.featureFlagService.isEnabled('motors_vision_extraction')) {
+      if (
+        product.imageUrls?.length &&
+        (await this.featureFlagService.isEnabled('motors_vision_extraction'))
+      ) {
         this.logger.log(`[${motorsProductId}] Starting vision extraction...`);
         product.status = MotorsProductStatus.EXTRACTING;
         await this.motorsProductRepo.save(product);
@@ -77,7 +92,10 @@ export class MotorsIntelligenceService {
           );
         } catch (err) {
           this.logger.warn(`Vision extraction failed: ${err.message}`);
-          result.warnings.push({ code: 'VISION_EXTRACTION_FAILED', message: err.message });
+          result.warnings.push({
+            code: 'VISION_EXTRACTION_FAILED',
+            message: err.message,
+          });
         }
       }
 
@@ -112,7 +130,7 @@ export class MotorsIntelligenceService {
               reviewReason,
               `Identity resolution: ${reason}`,
               {
-                candidatesSnapshot: identityResult.candidates.map(c => ({
+                candidatesSnapshot: identityResult.candidates.map((c) => ({
                   id: c.id,
                   brand: c.brand,
                   mpn: c.mpn,
@@ -139,7 +157,9 @@ export class MotorsIntelligenceService {
       });
 
       // ──── Stage 3: Fitment Resolution ───────────────────────────
-      if (await this.featureFlagService.isEnabled('motors_fitment_resolution')) {
+      if (
+        await this.featureFlagService.isEnabled('motors_fitment_resolution')
+      ) {
         this.logger.log(`[${motorsProductId}] Resolving fitment...`);
         updatedProduct.status = MotorsProductStatus.RESOLVING_FITMENT;
         await this.motorsProductRepo.save(updatedProduct);
@@ -160,12 +180,19 @@ export class MotorsIntelligenceService {
         }
 
         if (fitmentResult.errors.length > 0) {
-          result.errors.push(...fitmentResult.errors.map(e => ({ code: 'FITMENT_ERROR', message: e })));
+          result.errors.push(
+            ...fitmentResult.errors.map((e) => ({
+              code: 'FITMENT_ERROR',
+              message: e,
+            })),
+          );
         }
       }
 
       // ──── Stage 4: Listing Generation ───────────────────────────
-      if (await this.featureFlagService.isEnabled('motors_listing_generation')) {
+      if (
+        await this.featureFlagService.isEnabled('motors_listing_generation')
+      ) {
         this.logger.log(`[${motorsProductId}] Generating listing content...`);
         const reloaded = await this.motorsProductRepo.findOneOrFail({
           where: { id: motorsProductId },
@@ -183,7 +210,8 @@ export class MotorsIntelligenceService {
           includes: reloaded.includes || undefined,
           features: reloaded.features || undefined,
           condition: reloaded.condition || 'New',
-          compatibleVehicleSummary: reloaded.compatibleVehicleSummary || undefined,
+          compatibleVehicleSummary:
+            reloaded.compatibleVehicleSummary || undefined,
           categoryId: reloaded.ebayCategoryId || '',
           requiredAspects: {},
           forbiddenClaims: [],
@@ -205,27 +233,34 @@ export class MotorsIntelligenceService {
           reloaded.generatedTitle = generation.generatedTitle;
           reloaded.generatedItemSpecifics = generation.generatedItemSpecifics;
           reloaded.generatedBulletFeatures = generation.generatedBulletFeatures;
-          reloaded.generatedHtmlDescription = generation.generatedHtmlDescription;
+          reloaded.generatedHtmlDescription =
+            generation.generatedHtmlDescription;
           reloaded.generatedKeywordRationale = generation.keywordRationale;
           reloaded.generatedSearchTags = generation.searchTags;
           reloaded.contentQualityScore = generation.overallQualityScore;
           await this.motorsProductRepo.save(reloaded);
         } catch (err) {
           this.logger.error(`Listing generation failed: ${err.message}`);
-          result.errors.push({ code: 'GENERATION_FAILED', message: err.message });
+          result.errors.push({
+            code: 'GENERATION_FAILED',
+            message: err.message,
+          });
         }
       }
 
       // ──── Stage 5: Compliance Validation ────────────────────────
       if (await this.featureFlagService.isEnabled('motors_compliance_engine')) {
-        this.logger.log(`[${motorsProductId}] Running compliance validation...`);
+        this.logger.log(
+          `[${motorsProductId}] Running compliance validation...`,
+        );
         const reloaded = await this.motorsProductRepo.findOneOrFail({
           where: { id: motorsProductId },
         });
         reloaded.status = MotorsProductStatus.VALIDATING;
         await this.motorsProductRepo.save(reloaded);
 
-        const validationResult = await this.complianceEngineService.validateProduct(motorsProductId);
+        const validationResult =
+          await this.complianceEngineService.validateProduct(motorsProductId);
 
         result.complianceConfidence = validationResult.overallComplianceScore;
         result.publishable = validationResult.publishable;
@@ -256,14 +291,16 @@ export class MotorsIntelligenceService {
       if (
         result.publishable &&
         !result.reviewRequired &&
-        await this.featureFlagService.isEnabled('motors_auto_publish')
+        (await this.featureFlagService.isEnabled('motors_auto_publish'))
       ) {
         const final = await this.motorsProductRepo.findOneOrFail({
           where: { id: motorsProductId },
         });
 
         if (this.meetsAutoPublishThresholds(final)) {
-          this.logger.log(`[${motorsProductId}] All thresholds met - marking for auto-publish`);
+          this.logger.log(
+            `[${motorsProductId}] All thresholds met - marking for auto-publish`,
+          );
           final.status = MotorsProductStatus.APPROVED;
           final.approvedAt = new Date();
           final.approvedBy = 'system:auto_publish';
@@ -271,14 +308,20 @@ export class MotorsIntelligenceService {
         }
       }
 
-      result.status = (await this.motorsProductRepo.findOneOrFail({
-        where: { id: motorsProductId },
-      })).status;
-
+      result.status = (
+        await this.motorsProductRepo.findOneOrFail({
+          where: { id: motorsProductId },
+        })
+      ).status;
     } catch (error) {
-      this.logger.error(`Pipeline failed for ${motorsProductId}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Pipeline failed for ${motorsProductId}: ${error.message}`,
+        error.stack,
+      );
 
-      const product = await this.motorsProductRepo.findOne({ where: { id: motorsProductId } });
+      const product = await this.motorsProductRepo.findOne({
+        where: { id: motorsProductId },
+      });
       if (product) {
         product.status = MotorsProductStatus.FAILED;
         product.publishError = error.message;
@@ -296,20 +339,26 @@ export class MotorsIntelligenceService {
     return this.motorsProductRepo.findOneOrFail({ where: { id } });
   }
 
-  async getProducts(query: any): Promise<{ products: MotorsProduct[]; total: number }> {
+  async getProducts(
+    query: any,
+  ): Promise<{ products: MotorsProduct[]; total: number }> {
     const qb = this.motorsProductRepo.createQueryBuilder('mp');
 
     if (query.status) {
       qb.andWhere('mp.status = :status', { status: query.status });
     }
     if (query.sourceType) {
-      qb.andWhere('mp."sourceType" = :sourceType', { sourceType: query.sourceType });
+      qb.andWhere('mp."sourceType" = :sourceType', {
+        sourceType: query.sourceType,
+      });
     }
     if (query.brand) {
       qb.andWhere('mp.brand ILIKE :brand', { brand: `%${query.brand}%` });
     }
     if (query.productType) {
-      qb.andWhere('mp."productType" ILIKE :productType', { productType: `%${query.productType}%` });
+      qb.andWhere('mp."productType" ILIKE :productType', {
+        productType: `%${query.productType}%`,
+      });
     }
     if (query.search) {
       qb.andWhere(
@@ -318,7 +367,10 @@ export class MotorsIntelligenceService {
       );
     }
 
-    qb.orderBy(`mp."${query.sortBy || 'createdAt'}"`, query.sortOrder || 'DESC');
+    qb.orderBy(
+      `mp."${query.sortBy || 'createdAt'}"`,
+      query.sortOrder || 'DESC',
+    );
 
     const total = await qb.getCount();
     const products = await qb
@@ -330,7 +382,9 @@ export class MotorsIntelligenceService {
   }
 
   /** Alias for controller compatibility */
-  async listProducts(query: any): Promise<{ items: MotorsProduct[]; total: number }> {
+  async listProducts(
+    query: any,
+  ): Promise<{ items: MotorsProduct[]; total: number }> {
     const page = Number(query.page || 1);
     const limit = Number(query.limit || 25);
     const result = await this.getProducts({
@@ -353,7 +407,9 @@ export class MotorsIntelligenceService {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    const product = await this.motorsProductRepo.findOneOrFail({ where: { id } });
+    const product = await this.motorsProductRepo.findOneOrFail({
+      where: { id },
+    });
     await this.motorsProductRepo.softRemove(product);
   }
 
@@ -361,7 +417,10 @@ export class MotorsIntelligenceService {
     motorsProductId: string,
     connectionId: string,
   ): Promise<{ success: boolean; ebayListingId?: string; error?: string }> {
-    return this.motorsPublisherService.publishToEbay(motorsProductId, connectionId);
+    return this.motorsPublisherService.publishToEbay(
+      motorsProductId,
+      connectionId,
+    );
   }
 
   async createProduct(
@@ -377,9 +436,7 @@ export class MotorsIntelligenceService {
         .trim();
     }
     if (rest.brand) {
-      rest.brandNormalized = rest.brand
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '');
+      rest.brandNormalized = rest.brand.toLowerCase().replace(/[^a-z0-9]/g, '');
     }
 
     const product = this.motorsProductRepo.create({
@@ -389,12 +446,20 @@ export class MotorsIntelligenceService {
     return this.motorsProductRepo.save(product);
   }
 
-  async updateProduct(id: string, data: Partial<MotorsProduct>): Promise<MotorsProduct> {
-    const product = await this.motorsProductRepo.findOneOrFail({ where: { id } });
+  async updateProduct(
+    id: string,
+    data: Partial<MotorsProduct>,
+  ): Promise<MotorsProduct> {
+    const product = await this.motorsProductRepo.findOneOrFail({
+      where: { id },
+    });
 
     // Normalize if updated
     if (data.mpn) {
-      data.mpnNormalized = data.mpn.toUpperCase().replace(/[-–—.\s]/g, '').trim();
+      data.mpnNormalized = data.mpn
+        .toUpperCase()
+        .replace(/[-–—.\s]/g, '')
+        .trim();
     }
     if (data.brand) {
       data.brandNormalized = data.brand.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -440,10 +505,14 @@ export class MotorsIntelligenceService {
 
   private meetsAutoPublishThresholds(product: MotorsProduct): boolean {
     return (
-      Number(product.identityConfidence || 0) >= AUTO_PUBLISH_THRESHOLDS.identityConfidence &&
-      Number(product.fitmentConfidence || 0) >= AUTO_PUBLISH_THRESHOLDS.fitmentConfidence &&
-      Number(product.complianceConfidence || 0) >= AUTO_PUBLISH_THRESHOLDS.complianceScore &&
-      Number(product.contentQualityScore || 0) >= AUTO_PUBLISH_THRESHOLDS.contentQuality
+      Number(product.identityConfidence || 0) >=
+        AUTO_PUBLISH_THRESHOLDS.identityConfidence &&
+      Number(product.fitmentConfidence || 0) >=
+        AUTO_PUBLISH_THRESHOLDS.fitmentConfidence &&
+      Number(product.complianceConfidence || 0) >=
+        AUTO_PUBLISH_THRESHOLDS.complianceScore &&
+      Number(product.contentQualityScore || 0) >=
+        AUTO_PUBLISH_THRESHOLDS.contentQuality
     );
   }
 

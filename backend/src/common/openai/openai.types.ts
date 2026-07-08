@@ -125,23 +125,24 @@ export interface PromptTemplate {
  *  Input: $0.15 / 1M tokens
  *  Output: $0.60 / 1M tokens
  */
-export const OPENAI_PRICING: Record<string, { input: number; output: number }> = {
-  // Production enrichment lanes (OpenRouter catalog pricing)
-  'openai/gpt-4.1-mini': { input: 0.4, output: 1.6 },
-  'google/gemini-2.5-flash': { input: 0.3, output: 2.5 },
-  'deepseek/deepseek-chat-v3-0324': { input: 0.27, output: 1.1 },
-  'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
-  // MiniMax M3 via OpenRouter (legacy default; vision is ~2x)
-  'minimax/minimax-m3': { input: 0.30, output: 1.2 },
+export const OPENAI_PRICING: Record<string, { input: number; output: number }> =
+  {
+    // Production enrichment lanes (OpenRouter catalog pricing)
+    'openai/gpt-4.1-mini': { input: 0.4, output: 1.6 },
+    'google/gemini-2.5-flash': { input: 0.3, output: 2.5 },
+    'deepseek/deepseek-chat-v3-0324': { input: 0.27, output: 1.1 },
+    'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
+    // MiniMax M3 via OpenRouter (legacy default; vision is ~2x)
+    'minimax/minimax-m3': { input: 0.3, output: 1.2 },
 
-  // Legacy OpenAI models
-  'gpt-5.4': { input: 2.5, output: 10.0 },
-  'gpt-4o': { input: 2.5, output: 10.0 },
-  'gpt-4o-mini': { input: 0.15, output: 0.6 },
-  'gpt-4-turbo': { input: 10.0, output: 30.0 },
-  'text-embedding-3-small': { input: 0.02, output: 0 },
-  'text-embedding-3-large': { input: 0.13, output: 0 },
-};
+    // Legacy OpenAI models
+    'gpt-5.4': { input: 2.5, output: 10.0 },
+    'gpt-4o': { input: 2.5, output: 10.0 },
+    'gpt-4o-mini': { input: 0.15, output: 0.6 },
+    'gpt-4-turbo': { input: 10.0, output: 30.0 },
+    'text-embedding-3-small': { input: 0.02, output: 0 },
+    'text-embedding-3-large': { input: 0.13, output: 0 },
+  };
 
 export function estimateCost(
   model: string,

@@ -102,7 +102,10 @@ export class VisionExtractionService {
     private readonly configService: ConfigService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    const baseURL = this.configService.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1');
+    const baseURL = this.configService.get<string>(
+      'OPENAI_BASE_URL',
+      'https://openrouter.ai/api/v1',
+    );
     if (apiKey) {
       this.openai = new OpenAI({
         apiKey,
@@ -120,16 +123,19 @@ export class VisionExtractionService {
     imageUrls: string[],
   ): Promise<ExtractedAttribute> {
     const startTime = Date.now();
-    const model = this.configService.get<string>('OPENAI_VISION_MODEL') || 'minimax/minimax-m3';
+    const model =
+      this.configService.get<string>('OPENAI_VISION_MODEL') ||
+      'minimax/minimax-m3';
 
     if (!this.openai) {
       throw new Error('AI API key not configured');
     }
 
-    const imageContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = imageUrls.map((url) => ({
-      type: 'image_url' as const,
-      image_url: { url, detail: 'high' as const },
-    }));
+    const imageContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] =
+      imageUrls.map((url) => ({
+        type: 'image_url' as const,
+        image_url: { url, detail: 'high' as const },
+      }));
 
     try {
       const response = await this.openai.chat.completions.create({
@@ -137,7 +143,8 @@ export class VisionExtractionService {
         messages: [
           {
             role: 'system',
-            content: 'You are a precise automotive parts identification system. Always respond with valid JSON only.',
+            content:
+              'You are a precise automotive parts identification system. Always respond with valid JSON only.',
           },
           {
             role: 'user',
@@ -159,8 +166,9 @@ export class VisionExtractionService {
       const promptTokens = usage?.prompt_tokens ?? 0;
       const completionTokens = usage?.completion_tokens ?? 0;
       const tokensUsed = promptTokens + completionTokens;
-      const costUsd = estimateCost(model, promptTokens, completionTokens)
-        + (imageUrls.length * 0.025);
+      const costUsd =
+        estimateCost(model, promptTokens, completionTokens) +
+        imageUrls.length * 0.025;
 
       const result = this.mapVisionResponse(parsed);
 
@@ -200,7 +208,9 @@ export class VisionExtractionService {
 
       return this.extractedAttrRepo.save(extracted);
     } catch (error) {
-      this.logger.error(`Vision extraction failed for ${motorsProductId}: ${error.message}`);
+      this.logger.error(
+        `Vision extraction failed for ${motorsProductId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -278,7 +288,8 @@ export class VisionExtractionService {
     const confidenceScores: Record<string, number> = {};
 
     for (const [sourceKey, targetField] of Object.entries(fieldMap)) {
-      const value = supplierData[sourceKey] || supplierData[sourceKey.toUpperCase()];
+      const value =
+        supplierData[sourceKey] || supplierData[sourceKey.toUpperCase()];
       if (value) {
         (extracted as any)[targetField] = String(value).trim();
         const fieldName = targetField.replace('extracted', '').toLowerCase();
@@ -290,13 +301,24 @@ export class VisionExtractionService {
     if (supplierData.features) {
       extracted.extractedFeatures = Array.isArray(supplierData.features)
         ? supplierData.features
-        : String(supplierData.features).split(',').map(f => f.trim());
+        : String(supplierData.features)
+            .split(',')
+            .map((f) => f.trim());
     }
 
     // Handle fitment
-    if (supplierData.fitment || supplierData.applications || supplierData.compatibility) {
-      const fitmentData = supplierData.fitment || supplierData.applications || supplierData.compatibility;
-      extracted.extractedFitmentRaw = Array.isArray(fitmentData) ? fitmentData : [fitmentData];
+    if (
+      supplierData.fitment ||
+      supplierData.applications ||
+      supplierData.compatibility
+    ) {
+      const fitmentData =
+        supplierData.fitment ||
+        supplierData.applications ||
+        supplierData.compatibility;
+      extracted.extractedFitmentRaw = Array.isArray(fitmentData)
+        ? fitmentData
+        : [fitmentData];
     }
 
     extracted.confidenceScores = confidenceScores;
@@ -354,7 +376,7 @@ export class VisionExtractionService {
     if (result.extractedBrand) {
       output.brand = this.applyRulesToField(
         result.extractedBrand,
-        rules.filter(r => r.correctionType === CorrectionType.BRAND_ALIAS),
+        rules.filter((r) => r.correctionType === CorrectionType.BRAND_ALIAS),
       );
     }
 
@@ -362,7 +384,9 @@ export class VisionExtractionService {
     if (result.extractedProductType) {
       output.productType = this.applyRulesToField(
         result.extractedProductType,
-        rules.filter(r => r.correctionType === CorrectionType.PRODUCT_TYPE_ALIAS),
+        rules.filter(
+          (r) => r.correctionType === CorrectionType.PRODUCT_TYPE_ALIAS,
+        ),
       );
     }
 
@@ -370,18 +394,31 @@ export class VisionExtractionService {
     if (result.extractedMpn) {
       let mpn = result.extractedMpn;
       // Hyphen normalization
-      for (const rule of rules.filter(r => r.correctionType === CorrectionType.HYPHEN_NORMALIZATION)) {
-        mpn = mpn.replace(new RegExp(this.escapeRegex(rule.inputPattern), 'g'), rule.correctedValue);
+      for (const rule of rules.filter(
+        (r) => r.correctionType === CorrectionType.HYPHEN_NORMALIZATION,
+      )) {
+        mpn = mpn.replace(
+          new RegExp(this.escapeRegex(rule.inputPattern), 'g'),
+          rule.correctedValue,
+        );
       }
       output.mpn = mpn;
     }
 
     // Copy remaining fields
     const copyFields = [
-      'extractedOemNumber', 'extractedProductFamily', 'extractedPlacement',
-      'extractedMaterial', 'extractedFinish', 'extractedCondition',
-      'extractedQuantity', 'extractedSideOrientation', 'extractedFrontRear',
-      'extractedDimensions', 'extractedFeatures', 'extractedFitmentRaw',
+      'extractedOemNumber',
+      'extractedProductFamily',
+      'extractedPlacement',
+      'extractedMaterial',
+      'extractedFinish',
+      'extractedCondition',
+      'extractedQuantity',
+      'extractedSideOrientation',
+      'extractedFrontRear',
+      'extractedDimensions',
+      'extractedFeatures',
+      'extractedFitmentRaw',
     ];
 
     for (const field of copyFields) {

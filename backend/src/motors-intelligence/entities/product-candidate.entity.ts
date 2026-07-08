@@ -26,7 +26,11 @@ export class ProductCandidate {
   @Column({ type: 'uuid' })
   motorsProductId: string;
 
-  @Column({ type: 'enum', enum: CandidateStatus, default: CandidateStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: CandidateStatus,
+    default: CandidateStatus.PENDING,
+  })
   status: CandidateStatus;
 
   @Column({ type: 'int', default: 0 })

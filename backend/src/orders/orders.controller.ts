@@ -66,7 +66,9 @@ export class OrdersController {
 
   @Patch(':id/shipping')
   @RequirePermissions('orders.ship')
-  @ApiOperation({ summary: 'Add/update tracking number (auto-ships if processing)' })
+  @ApiOperation({
+    summary: 'Add/update tracking number (auto-ships if processing)',
+  })
   updateShipping(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateShippingDto,
@@ -77,10 +79,7 @@ export class OrdersController {
   @Post(':id/refund')
   @RequirePermissions('orders.refund')
   @ApiOperation({ summary: 'Process refund' })
-  refund(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: RefundDto,
-  ) {
+  refund(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RefundDto) {
     return this.ordersService.processRefund(id, dto);
   }
 
@@ -88,7 +87,9 @@ export class OrdersController {
 
   @Post(':id/ship')
   @RequirePermissions('orders.ship')
-  @ApiOperation({ summary: 'Mark single order as shipped (pushes tracking to eBay)' })
+  @ApiOperation({
+    summary: 'Mark single order as shipped (pushes tracking to eBay)',
+  })
   shipOrder(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateShippingDto,
@@ -122,7 +123,9 @@ export class OrdersController {
 
   @Post('import/ebay')
   @RequirePermissions('orders.import')
-  @ApiOperation({ summary: 'Manually trigger eBay order import (all stores or one store)' })
+  @ApiOperation({
+    summary: 'Manually trigger eBay order import (all stores or one store)',
+  })
   importEbayOrders(@Body() dto: ManualImportDto) {
     if (dto.storeId) {
       return this.ebayImportService.importFromStore(dto.storeId);

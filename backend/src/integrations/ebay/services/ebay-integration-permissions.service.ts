@@ -35,7 +35,10 @@ export class EbayIntegrationPermissionsService {
     return this.userOrgs.resolveOrganizationId(userId, organizationId);
   }
 
-  async assertOrgMember(userId: string, organizationId: string): Promise<OrganizationMember> {
+  async assertOrgMember(
+    userId: string,
+    organizationId: string,
+  ): Promise<OrganizationMember> {
     const m = await this.members.findOne({
       where: { userId, organizationId },
     });
@@ -72,7 +75,9 @@ export class EbayIntegrationPermissionsService {
 
   assertCanManageStorePolicies(role: string): void {
     if (!this.canManageStorePolicies(role)) {
-      throw new ForbiddenException('Insufficient permissions to manage eBay store policies');
+      throw new ForbiddenException(
+        'Insufficient permissions to manage eBay store policies',
+      );
     }
   }
 

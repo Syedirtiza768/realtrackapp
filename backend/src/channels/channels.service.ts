@@ -87,7 +87,9 @@ export class ChannelsService {
     });
 
     const saved = await this.connectionRepo.save(connection);
-    this.logger.log(`Created ${channel} connection ${saved.id} for user ${userId}`);
+    this.logger.log(
+      `Created ${channel} connection ${saved.id} for user ${userId}`,
+    );
     this.eventEmitter.emit('channel.connected', {
       connectionId: saved.id,
       channel,
@@ -106,7 +108,11 @@ export class ChannelsService {
     legacyToken: string,
     storesService: any,
     userId: string,
-  ): Promise<{ connection: ChannelConnection; storeId: string; message: string }> {
+  ): Promise<{
+    connection: ChannelConnection;
+    storeId: string;
+    message: string;
+  }> {
     // Remove any existing eBay connection for this user first
     const existing = await this.connectionRepo.find({
       where: { channel: 'ebay', userId },
@@ -114,7 +120,9 @@ export class ChannelsService {
     for (const conn of existing) {
       // Cascade will remove stores; if not, delete them manually
       await this.connectionRepo.delete(conn.id);
-      this.logger.log(`Removed previous eBay connection ${conn.id} before re-linking`);
+      this.logger.log(
+        `Removed previous eBay connection ${conn.id} before re-linking`,
+      );
     }
 
     // Wrap the legacy token into a TokenSet (no real API call needed)
@@ -168,12 +176,16 @@ export class ChannelsService {
     return {
       connection: savedConn,
       storeId: store.id,
-      message: 'eBay sandbox connected successfully. Demo mode active — publish operations are simulated locally.',
+      message:
+        'eBay sandbox connected successfully. Demo mode active — publish operations are simulated locally.',
     };
   }
 
   async disconnectChannel(connectionId: string, userId: string): Promise<void> {
-    const result = await this.connectionRepo.delete({ id: connectionId, userId });
+    const result = await this.connectionRepo.delete({
+      id: connectionId,
+      userId,
+    });
     if (result.affected === 0) {
       throw new NotFoundException(`Connection ${connectionId} not found`);
     }
@@ -183,8 +195,12 @@ export class ChannelsService {
     connectionId: string,
     userId: string,
   ): Promise<{ ok: boolean; error?: string }> {
-    const conn = await this.connectionRepo.findOneBy({ id: connectionId, userId });
-    if (!conn) throw new NotFoundException(`Connection ${connectionId} not found`);
+    const conn = await this.connectionRepo.findOneBy({
+      id: connectionId,
+      userId,
+    });
+    if (!conn)
+      throw new NotFoundException(`Connection ${connectionId} not found`);
 
     try {
       const tokens = this.decryptTokens(conn);
@@ -232,18 +248,23 @@ export class ChannelsService {
     // ── Demo mode: simulate publish without calling real marketplace API ──
     if (this.isDemoMode) {
       const demoId = `DEMO-${conn.channel.toUpperCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-      const demoUrl = conn.channel === 'ebay'
-        ? `https://www.sandbox.ebay.com/itm/${demoId}`
-        : `https://demo.example.com/${conn.channel}/${demoId}`;
+      const demoUrl =
+        conn.channel === 'ebay'
+          ? `https://www.sandbox.ebay.com/itm/${demoId}`
+          : `https://demo.example.com/${conn.channel}/${demoId}`;
 
-      const existing = await this.instanceRepo.findOne({ where: { connectionId, listingId } });
+      const existing = await this.instanceRepo.findOne({
+        where: { connectionId, listingId },
+      });
       if (existing) {
         existing.externalId = demoId;
         existing.externalUrl = demoUrl;
         existing.syncStatus = 'synced';
         existing.lastSyncedAt = new Date();
         existing.lastError = null;
-        this.logger.log(`[DEMO] Updated channel instance for listing ${listingId} on ${conn.channel}`);
+        this.logger.log(
+          `[DEMO] Updated channel instance for listing ${listingId} on ${conn.channel}`,
+        );
         return this.instanceRepo.save(existing);
       }
 
@@ -253,11 +274,16 @@ export class ChannelsService {
           where: { connectionId },
           order: { isPrimary: 'DESC', createdAt: 'ASC' },
         });
-        if (!store) throw new BadRequestException(`No store found for connection ${connectionId}.`);
+        if (!store)
+          throw new BadRequestException(
+            `No store found for connection ${connectionId}.`,
+          );
         storeId = store.id;
       }
 
-      this.logger.log(`[DEMO] Simulated publish of listing ${listingId} to ${conn.channel} → ${demoUrl}`);
+      this.logger.log(
+        `[DEMO] Simulated publish of listing ${listingId} to ${conn.channel} → ${demoUrl}`,
+      );
       const instance = this.instanceRepo.create({
         connectionId,
         listingId,
@@ -301,7 +327,9 @@ export class ChannelsService {
         order: { isPrimary: 'DESC', createdAt: 'ASC' },
       });
       if (!store) {
-        throw new BadRequestException(`No store found for connection ${connectionId}. Create a store first.`);
+        throw new BadRequestException(
+          `No store found for connection ${connectionId}. Create a store first.`,
+        );
       }
       storeId = store.id;
     }
@@ -373,7 +401,9 @@ export class ChannelsService {
     return { jobId: job.id! };
   }
 
-  async getChannelListings(connectionId: string): Promise<ListingChannelInstance[]> {
+  async getChannelListings(
+    connectionId: string,
+  ): Promise<ListingChannelInstance[]> {
     return this.instanceRepo.find({
       where: { connectionId },
       order: { createdAt: 'DESC' },
@@ -414,9 +444,15 @@ export class ChannelsService {
   async publishMulti(
     listingId: string,
     channels: string[],
-    overrides?: Record<string, { price?: number; title?: string; quantity?: number }>,
-  ): Promise<{ results: Array<{ channel: string; jobId?: string; error?: string }> }> {
-    const results: Array<{ channel: string; jobId?: string; error?: string }> = [];
+    overrides?: Record<
+      string,
+      { price?: number; title?: string; quantity?: number }
+    >,
+  ): Promise<{
+    results: Array<{ channel: string; jobId?: string; error?: string }>;
+  }> {
+    const results: Array<{ channel: string; jobId?: string; error?: string }> =
+      [];
 
     for (const channel of channels) {
       try {
@@ -427,13 +463,20 @@ export class ChannelsService {
         });
 
         if (!connection) {
-          results.push({ channel, error: `No active ${channel} connection found` });
+          results.push({
+            channel,
+            error: `No active ${channel} connection found`,
+          });
           continue;
         }
 
         const job = await this.channelsQueue.add(
           'publish',
-          { connectionId: connection.id, listingId, overrides: overrides?.[channel] },
+          {
+            connectionId: connection.id,
+            listingId,
+            overrides: overrides?.[channel],
+          },
           {
             attempts: 3,
             backoff: { type: 'exponential', delay: 10_000 },
@@ -448,7 +491,10 @@ export class ChannelsService {
           order: { isPrimary: 'DESC', createdAt: 'ASC' },
         });
         if (!store) {
-          results.push({ channel, error: `No store found for ${channel} connection. Create a store first.` });
+          results.push({
+            channel,
+            error: `No store found for ${channel} connection. Create a store first.`,
+          });
           continue;
         }
 
@@ -499,7 +545,11 @@ export class ChannelsService {
 
     const job = await this.channelsQueue.add(
       'update',
-      { connectionId: instance.connectionId, listingId, channelListingId: instance.id },
+      {
+        connectionId: instance.connectionId,
+        listingId,
+        channelListingId: instance.id,
+      },
       {
         attempts: 3,
         backoff: { type: 'exponential', delay: 10_000 },
@@ -622,7 +672,8 @@ export class ChannelsService {
       accessToken: `DEMO_SANDBOX_TOKEN_${Date.now()}`,
       refreshToken: `DEMO_SANDBOX_REFRESH_${Date.now()}`,
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account',
+      scope:
+        'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account',
       tokenType: 'User Access Token',
     };
 
@@ -674,7 +725,10 @@ export class ChannelsService {
     let tokens = this.decryptTokens(conn);
 
     // Refresh if expired (with 5-minute buffer)
-    if (tokens.expiresAt && new Date(tokens.expiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+    if (
+      tokens.expiresAt &&
+      new Date(tokens.expiresAt).getTime() < Date.now() + 5 * 60 * 1000
+    ) {
       if (tokens.refreshToken) {
         const adapter = this.getAdapter(conn.channel);
         tokens = await adapter.refreshTokens(tokens.refreshToken);
@@ -694,9 +748,12 @@ export class ChannelsService {
    * Sync inventory for a single connection.
    * Queries all channel listings for this connection and pushes updated quantities.
    */
-  async syncConnectionInventory(connectionId: string): Promise<{ succeeded: number; failed: number }> {
+  async syncConnectionInventory(
+    connectionId: string,
+  ): Promise<{ succeeded: number; failed: number }> {
     const conn = await this.connectionRepo.findOneBy({ id: connectionId });
-    if (!conn) throw new NotFoundException(`Connection ${connectionId} not found`);
+    if (!conn)
+      throw new NotFoundException(`Connection ${connectionId} not found`);
 
     const adapter = this.getAdapter(conn.channel);
     const tokens = await this.getValidTokens(conn);
@@ -728,14 +785,20 @@ export class ChannelsService {
     if (channel) where['channel'] = channel;
 
     const connections = await this.connectionRepo.find({ where });
-    this.logger.log(`Syncing inventory for ${connections.length} connections (channel=${channel ?? 'all'})`);
+    this.logger.log(
+      `Syncing inventory for ${connections.length} connections (channel=${channel ?? 'all'})`,
+    );
 
     for (const conn of connections) {
       try {
         const result = await this.syncConnectionInventory(conn.id);
-        this.logger.log(`Inventory sync for ${conn.channel}:${conn.id}: ${result.succeeded} OK, ${result.failed} failed`);
+        this.logger.log(
+          `Inventory sync for ${conn.channel}:${conn.id}: ${result.succeeded} OK, ${result.failed} failed`,
+        );
       } catch (error: any) {
-        this.logger.error(`Inventory sync failed for ${conn.channel}:${conn.id}: ${error.message}`);
+        this.logger.error(
+          `Inventory sync failed for ${conn.channel}:${conn.id}: ${error.message}`,
+        );
       }
     }
   }

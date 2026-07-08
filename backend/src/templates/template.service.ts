@@ -27,16 +27,23 @@ export class TemplateService {
     const qb = this.templateRepo.createQueryBuilder('t');
 
     if (query?.channel) {
-      qb.andWhere('(t.channel = :channel OR t.channel IS NULL)', { channel: query.channel });
+      qb.andWhere('(t.channel = :channel OR t.channel IS NULL)', {
+        channel: query.channel,
+      });
     }
     if (query?.templateType) {
-      qb.andWhere('t.templateType = :templateType', { templateType: query.templateType });
+      qb.andWhere('t.templateType = :templateType', {
+        templateType: query.templateType,
+      });
     }
     if (query?.active === 'true' || query?.active === 'false') {
       qb.andWhere('t.active = :active', { active: query.active === 'true' });
     }
 
-    return qb.orderBy('t.isDefault', 'DESC').addOrderBy('t.name', 'ASC').getMany();
+    return qb
+      .orderBy('t.isDefault', 'DESC')
+      .addOrderBy('t.name', 'ASC')
+      .getMany();
   }
 
   async findOne(id: string): Promise<ListingTemplate> {
@@ -49,7 +56,11 @@ export class TemplateService {
     if (dto.isDefault) {
       // Unset other defaults for same channel/type
       await this.templateRepo.update(
-        { channel: dto.channel ?? undefined, templateType: dto.templateType ?? 'description' as any, isDefault: true },
+        {
+          channel: dto.channel ?? undefined,
+          templateType: dto.templateType ?? ('description' as any),
+          isDefault: true,
+        },
         { isDefault: false },
       );
     }
@@ -64,7 +75,11 @@ export class TemplateService {
 
     if (dto.isDefault && !template.isDefault) {
       await this.templateRepo.update(
-        { channel: template.channel ?? undefined, templateType: template.templateType as any, isDefault: true },
+        {
+          channel: template.channel ?? undefined,
+          templateType: template.templateType as any,
+          isDefault: true,
+        },
         { isDefault: false },
       );
     }
@@ -85,7 +100,10 @@ export class TemplateService {
    * Render a template with provided variables using simple Handlebars-like substitution.
    * Uses {{variable}} syntax for now. Can be upgraded to full Handlebars in the future.
    */
-  async renderPreview(id: string, dto: RenderPreviewDto): Promise<{ html: string; css: string | null }> {
+  async renderPreview(
+    id: string,
+    dto: RenderPreviewDto,
+  ): Promise<{ html: string; css: string | null }> {
     const template = await this.findOne(id);
     const html = this.renderContent(template.content, dto.variables);
     return { html, css: template.css };
@@ -96,19 +114,23 @@ export class TemplateService {
    * Public so other services can use it (e.g., channel publish).
    */
   renderContent(content: string, variables: Record<string, unknown>): string {
-    return content.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_match, key: string) => {
-      const value = this.resolveNestedKey(variables, key);
-      return value != null ? String(value) : '';
-    });
+    return content.replace(
+      /\{\{(\w+(?:\.\w+)*)\}\}/g,
+      (_match, key: string) => {
+        const value = this.resolveNestedKey(variables, key);
+        return value != null ? String(value) : '';
+      },
+    );
   }
 
   /**
    * Get the default template for a given channel and type.
    */
-  async getDefault(channel: string | null, templateType = 'description'): Promise<ListingTemplate | null> {
-    const where: any[] = [
-      { templateType, isDefault: true, active: true },
-    ];
+  async getDefault(
+    channel: string | null,
+    templateType = 'description',
+  ): Promise<ListingTemplate | null> {
+    const where: any[] = [{ templateType, isDefault: true, active: true }];
     if (channel) {
       where.unshift({ channel, templateType, isDefault: true, active: true });
     }
@@ -159,7 +181,8 @@ export class TemplateService {
 
   private resolveNestedKey(obj: Record<string, unknown>, key: string): unknown {
     return key.split('.').reduce<unknown>((acc, part) => {
-      if (acc != null && typeof acc === 'object') return (acc as Record<string, unknown>)[part];
+      if (acc != null && typeof acc === 'object')
+        return (acc as Record<string, unknown>)[part];
       return undefined;
     }, obj);
   }

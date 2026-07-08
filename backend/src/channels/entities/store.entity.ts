@@ -43,7 +43,12 @@ export class Store {
   @Column({ name: 'store_url', type: 'text', nullable: true })
   storeUrl!: string | null;
 
-  @Column({ name: 'external_store_id', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'external_store_id',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   externalStoreId!: string | null;
 
   @Column({ type: 'varchar', length: 20, default: 'active' })
@@ -65,25 +70,55 @@ export class Store {
 
   /* ── eBay-specific columns (Phase 1 upgrade) ── */
 
-  @Column({ name: 'ebay_user_id', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'ebay_user_id',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   ebayUserId!: string | null;
 
   @Column({ name: 'ebay_site_id', type: 'varchar', length: 10, nullable: true })
   ebaySiteId!: string | null;
 
-  @Column({ name: 'ebay_marketplace_id', type: 'varchar', length: 30, nullable: true })
+  @Column({
+    name: 'ebay_marketplace_id',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+  })
   ebayMarketplaceId!: string | null;
 
-  @Column({ name: 'fulfillment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'fulfillment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   fulfillmentPolicyId!: string | null;
 
-  @Column({ name: 'payment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'payment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   paymentPolicyId!: string | null;
 
-  @Column({ name: 'return_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'return_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   returnPolicyId!: string | null;
 
-  @Column({ name: 'location_key', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'location_key',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   locationKey!: string | null;
 
   @Column({ name: 'token_expires_at', type: 'timestamptz', nullable: true })

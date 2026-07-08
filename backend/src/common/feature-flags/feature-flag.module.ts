@@ -6,7 +6,7 @@ import { FeatureFlagController } from './feature-flag.controller.js';
 
 /**
  * FeatureFlagModule — Simple DB-backed feature flag system.
- * 
+ *
  * On startup, ensures all expected flags exist with sensible defaults.
  * Flags are cached in-memory for 60s to avoid DB hits on every check.
  */
@@ -26,13 +26,29 @@ export class FeatureFlagModule implements OnModuleInit {
       ['template_system', 'Enable listing templates', false],
       ['amazon_integration', 'Enable Amazon SP-API integration', false],
       ['walmart_integration', 'Enable Walmart API integration', false],
-      ['inventory_real_time_sync', 'Enable real-time inventory sync from channels', false],
-      ['order_auto_import', 'Enable scheduled order import from channels', true],
-      ['pricing_auto_push', 'Enable automatic price pushing to channels', false],
+      [
+        'inventory_real_time_sync',
+        'Enable real-time inventory sync from channels',
+        false,
+      ],
+      [
+        'order_auto_import',
+        'Enable scheduled order import from channels',
+        true,
+      ],
+      [
+        'pricing_auto_push',
+        'Enable automatic price pushing to channels',
+        false,
+      ],
       ['dashboard_aggregation', 'Enable scheduled dashboard aggregation', true],
       ['storage_cleanup', 'Enable scheduled storage cleanup', true],
       ['low_stock_alerts', 'Enable low stock alert notifications', true],
-      ['pipeline_enrichment', 'Enable VIN-to-listing enrichment pipeline', true],
+      [
+        'pipeline_enrichment',
+        'Enable VIN-to-listing enrichment pipeline',
+        true,
+      ],
     ];
 
     try {

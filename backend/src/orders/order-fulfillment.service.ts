@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -73,7 +78,9 @@ export class OrderFulfillmentService {
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to push tracking to eBay for order ${orderId}: ${msg}`);
+      this.logger.error(
+        `Failed to push tracking to eBay for order ${orderId}: ${msg}`,
+      );
       // Still update locally — eBay sync can retry later
     }
 
@@ -153,9 +160,7 @@ export class OrderFulfillmentService {
    * Parse a CSV tracking file and mark orders as shipped.
    * Expected columns: orderId (or externalOrderId), trackingNumber, carrier
    */
-  async processTrackingCsv(
-    csvContent: string,
-  ): Promise<{
+  async processTrackingCsv(csvContent: string): Promise<{
     processed: number;
     succeeded: number;
     failed: number;
@@ -167,7 +172,9 @@ export class OrderFulfillmentService {
       .filter((l) => l.length > 0);
 
     if (lines.length < 2) {
-      throw new BadRequestException('CSV must have a header row and at least one data row');
+      throw new BadRequestException(
+        'CSV must have a header row and at least one data row',
+      );
     }
 
     // Parse header
@@ -175,13 +182,21 @@ export class OrderFulfillmentService {
     const headers = headerLine.split(',').map((h) => h.trim());
 
     const orderIdIdx = headers.findIndex(
-      (h) => h === 'orderid' || h === 'order_id' || h === 'externalorderid' || h === 'external_order_id',
+      (h) =>
+        h === 'orderid' ||
+        h === 'order_id' ||
+        h === 'externalorderid' ||
+        h === 'external_order_id',
     );
     const trackingIdx = headers.findIndex(
-      (h) => h === 'trackingnumber' || h === 'tracking_number' || h === 'tracking',
+      (h) =>
+        h === 'trackingnumber' || h === 'tracking_number' || h === 'tracking',
     );
     const carrierIdx = headers.findIndex(
-      (h) => h === 'carrier' || h === 'shippingcarriercode' || h === 'shipping_carrier',
+      (h) =>
+        h === 'carrier' ||
+        h === 'shippingcarriercode' ||
+        h === 'shipping_carrier',
     );
 
     if (orderIdIdx < 0 || trackingIdx < 0) {
@@ -200,7 +215,11 @@ export class OrderFulfillmentService {
       const carrier = carrierIdx >= 0 ? (cols[carrierIdx] ?? 'OTHER') : 'OTHER';
 
       if (!orderIdValue || !trackingNumber) {
-        errors.push({ row: i + 1, orderId: orderIdValue, error: 'Missing orderId or trackingNumber' });
+        errors.push({
+          row: i + 1,
+          orderId: orderIdValue,
+          error: 'Missing orderId or trackingNumber',
+        });
         continue;
       }
 
@@ -208,10 +227,16 @@ export class OrderFulfillmentService {
         // Try by UUID first, then by external order ID
         let order = await this.orderRepo.findOneBy({ id: orderIdValue });
         if (!order) {
-          order = await this.orderRepo.findOneBy({ externalOrderId: orderIdValue });
+          order = await this.orderRepo.findOneBy({
+            externalOrderId: orderIdValue,
+          });
         }
         if (!order) {
-          errors.push({ row: i + 1, orderId: orderIdValue, error: 'Order not found' });
+          errors.push({
+            row: i + 1,
+            orderId: orderIdValue,
+            error: 'Order not found',
+          });
           continue;
         }
 

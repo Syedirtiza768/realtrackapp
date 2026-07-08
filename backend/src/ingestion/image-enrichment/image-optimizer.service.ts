@@ -34,7 +34,8 @@ export class ImageOptimizerService {
   private readonly maxDownloadBytes: number;
 
   constructor(private readonly config: ConfigService) {
-    const root = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const root =
+      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
     this.storageDir = path.resolve(root, 'uploads', 'enriched-images');
     this.maxDownloadBytes = 20 * 1024 * 1024; // 20 MB max per image
 
@@ -49,7 +50,11 @@ export class ImageOptimizerService {
    */
   async downloadAndOptimize(
     url: string,
-    options: { targetFormat?: 'webp' | 'jpg'; maxWidth?: number; quality?: number } = {},
+    options: {
+      targetFormat?: 'webp' | 'jpg';
+      maxWidth?: number;
+      quality?: number;
+    } = {},
   ): Promise<OptimizedImage | null> {
     const targetFormat = options.targetFormat ?? 'webp';
     const maxWidth = options.maxWidth ?? 1600;
@@ -69,7 +74,9 @@ export class ImageOptimizerService {
 
       // Reject images smaller than 300px
       if (metadata.width < 300 || metadata.height < 300) {
-        this.logger.debug(`Image too small (${metadata.width}x${metadata.height}): ${url}`);
+        this.logger.debug(
+          `Image too small (${metadata.width}x${metadata.height}): ${url}`,
+        );
         return null;
       }
 
@@ -80,14 +87,18 @@ export class ImageOptimizerService {
       let pipeline = sharp(buffer);
 
       if (metadata.width > maxWidth) {
-        pipeline = pipeline.resize(maxWidth, null, { withoutEnlargement: true });
+        pipeline = pipeline.resize(maxWidth, null, {
+          withoutEnlargement: true,
+        });
       }
 
       let outputBuffer: Buffer;
       if (targetFormat === 'webp') {
         outputBuffer = await pipeline.webp({ quality, effort: 4 }).toBuffer();
       } else {
-        outputBuffer = await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer();
+        outputBuffer = await pipeline
+          .jpeg({ quality, mozjpeg: true })
+          .toBuffer();
       }
 
       // Get final metadata
@@ -123,7 +134,9 @@ export class ImageOptimizerService {
    * Check if an image likely has watermarks by analyzing border regions.
    * Uses edge detection on the image borders.
    */
-  async detectWatermark(imageBuffer: Buffer): Promise<{ hasWatermark: boolean; confidence: number }> {
+  async detectWatermark(
+    imageBuffer: Buffer,
+  ): Promise<{ hasWatermark: boolean; confidence: number }> {
     try {
       const metadata = await sharp(imageBuffer).metadata();
       if (!metadata.width || !metadata.height) {
@@ -199,9 +212,7 @@ export class ImageOptimizerService {
   /**
    * Validate image dimensions and aspect ratio for eBay compliance.
    */
-  async validateForEbay(
-    imageBuffer: Buffer,
-  ): Promise<{
+  async validateForEbay(imageBuffer: Buffer): Promise<{
     valid: boolean;
     width: number;
     height: number;
@@ -214,7 +225,8 @@ export class ImageOptimizerService {
       const metadata = await sharp(imageBuffer).metadata();
       const width = metadata.width ?? 0;
       const height = metadata.height ?? 0;
-      const aspectRatio = height > 0 ? Math.round((width / height) * 100) / 100 : 0;
+      const aspectRatio =
+        height > 0 ? Math.round((width / height) * 100) / 100 : 0;
 
       if (width < 500 || height < 500) {
         issues.push(`Image too small: ${width}x${height} (min 500x500)`);
@@ -222,12 +234,20 @@ export class ImageOptimizerService {
 
       // eBay prefers square or near-square images
       if (aspectRatio < 0.5 || aspectRatio > 2.0) {
-        issues.push(`Aspect ratio ${aspectRatio} outside recommended range (0.5-2.0)`);
+        issues.push(
+          `Aspect ratio ${aspectRatio} outside recommended range (0.5-2.0)`,
+        );
       }
 
       return { valid: issues.length === 0, width, height, aspectRatio, issues };
     } catch {
-      return { valid: false, width: 0, height: 0, aspectRatio: 0, issues: ['Unable to read image metadata'] };
+      return {
+        valid: false,
+        width: 0,
+        height: 0,
+        aspectRatio: 0,
+        issues: ['Unable to read image metadata'],
+      };
     }
   }
 
@@ -263,7 +283,9 @@ export class ImageOptimizerService {
         // Expected for unavailable images
         return null;
       }
-      this.logger.debug(`Image download failed for ${url}: ${err.message ?? err}`);
+      this.logger.debug(
+        `Image download failed for ${url}: ${err.message ?? err}`,
+      );
       return null;
     }
   }

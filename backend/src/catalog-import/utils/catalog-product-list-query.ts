@@ -1,6 +1,9 @@
 import type { SelectQueryBuilder } from 'typeorm';
 import type { CatalogProduct } from '../entities/catalog-product.entity.js';
-import { MOTORS_CATEGORY_BUCKETS, type MotorsCategoryBucket } from '../config/motors-category-buckets.js';
+import {
+  MOTORS_CATEGORY_BUCKETS,
+  type MotorsCategoryBucket,
+} from '../config/motors-category-buckets.js';
 
 function parseBool(v: string | undefined): boolean | undefined {
   if (v === undefined || v === '') return undefined;
@@ -86,7 +89,9 @@ export interface CatalogProductListParams {
   gtcDuration?: boolean;
 }
 
-export function parseCatalogProductListQuery(q: Record<string, string | undefined>): CatalogProductListParams {
+export function parseCatalogProductListQuery(
+  q: Record<string, string | undefined>,
+): CatalogProductListParams {
   const priceBands = splitList(q.priceBands ?? q.priceBand);
   const inc = parseBool(q.includeDerived);
   return {
@@ -195,7 +200,9 @@ export function applyCatalogProductListFilters(
   const a = 'p';
 
   if (p.pipelineJobId) {
-    qb.andWhere(`${a}.pipeline_job_id = :pipelineJobId`, { pipelineJobId: p.pipelineJobId });
+    qb.andWhere(`${a}.pipeline_job_id = :pipelineJobId`, {
+      pipelineJobId: p.pipelineJobId,
+    });
   }
   if (p.importId) {
     qb.andWhere(`${a}.import_id = :importId`, { importId: p.importId });
@@ -210,10 +217,14 @@ export function applyCatalogProductListFilters(
     qb.andWhere(`${a}.sku ILIKE :sku`, { sku: `%${p.sku}%` });
   }
   if (p.priceMin != null) {
-    qb.andWhere(`${a}.price IS NOT NULL AND ${a}.price >= :priceMin`, { priceMin: p.priceMin });
+    qb.andWhere(`${a}.price IS NOT NULL AND ${a}.price >= :priceMin`, {
+      priceMin: p.priceMin,
+    });
   }
   if (p.priceMax != null) {
-    qb.andWhere(`${a}.price IS NOT NULL AND ${a}.price <= :priceMax`, { priceMax: p.priceMax });
+    qb.andWhere(`${a}.price IS NOT NULL AND ${a}.price <= :priceMax`, {
+      priceMax: p.priceMax,
+    });
   }
   if (p.priceBands?.length) {
     const parts: string[] = [];
@@ -226,10 +237,14 @@ export function applyCatalogProductListFilters(
     }
   }
   if (p.quantityMin != null) {
-    qb.andWhere(`${a}.quantity IS NOT NULL AND ${a}.quantity >= :qmin`, { qmin: p.quantityMin });
+    qb.andWhere(`${a}.quantity IS NOT NULL AND ${a}.quantity >= :qmin`, {
+      qmin: p.quantityMin,
+    });
   }
   if (p.quantityMax != null) {
-    qb.andWhere(`${a}.quantity IS NOT NULL AND ${a}.quantity <= :qmax`, { qmax: p.quantityMax });
+    qb.andWhere(`${a}.quantity IS NOT NULL AND ${a}.quantity <= :qmax`, {
+      qmax: p.quantityMax,
+    });
   }
   if (p.singleQty === true) {
     qb.andWhere(`${a}.quantity = 1`);
@@ -254,7 +269,9 @@ export function applyCatalogProductListFilters(
     qb.andWhere(`COALESCE(array_length(${a}.image_urls, 1), 0) >= 1`);
   }
   if (p.missingOem === true) {
-    qb.andWhere(`(${a}.oem_part_number IS NULL OR trim(${a}.oem_part_number) = '')`);
+    qb.andWhere(
+      `(${a}.oem_part_number IS NULL OR trim(${a}.oem_part_number) = '')`,
+    );
   }
   if (p.missingPlacement === true) {
     qb.andWhere(`(${a}.placement IS NULL OR trim(${a}.placement) = '')`);
@@ -277,7 +294,9 @@ export function applyCatalogProductListFilters(
     ]
       .map((t) => `lower(coalesce(${a}.part_type,'')) LIKE '%${t}%'`)
       .join(' OR ');
-    qb.andWhere(`((${orPart}) AND (${a}.placement IS NULL OR trim(${a}.placement) = ''))`);
+    qb.andWhere(
+      `((${orPart}) AND (${a}.placement IS NULL OR trim(${a}.placement) = ''))`,
+    );
   }
   if (p.missingMaterial === true) {
     qb.andWhere(`(${a}.material IS NULL OR trim(${a}.material) = '')`);
@@ -286,7 +305,9 @@ export function applyCatalogProductListFilters(
     qb.andWhere(`(${a}.features IS NULL OR trim(${a}.features) = '')`);
   }
   if (p.missingCountry === true) {
-    qb.andWhere(`(${a}.country_of_origin IS NULL OR trim(${a}.country_of_origin) = '')`);
+    qb.andWhere(
+      `(${a}.country_of_origin IS NULL OR trim(${a}.country_of_origin) = '')`,
+    );
   }
   if (p.missingFitment === true) {
     qb.andWhere(
@@ -313,26 +334,41 @@ export function applyCatalogProductListFilters(
 
   if (p.brands?.length) {
     const clauses = p.brands.map(
-      (_, i) => `(${a}.brand_normalized ILIKE :brand${i} OR ${a}.brand ILIKE :brand${i})`,
+      (_, i) =>
+        `(${a}.brand_normalized ILIKE :brand${i} OR ${a}.brand ILIKE :brand${i})`,
     );
-    qb.andWhere(`(${clauses.join(' OR ')})`, Object.fromEntries(p.brands.map((b, i) => [`brand${i}`, `%${b}%`])));
+    qb.andWhere(
+      `(${clauses.join(' OR ')})`,
+      Object.fromEntries(p.brands.map((b, i) => [`brand${i}`, `%${b}%`])),
+    );
   }
   if (p.partTypes?.length) {
     const clauses = p.partTypes.map((_, i) => `${a}.part_type ILIKE :pt${i}`);
-    qb.andWhere(`(${clauses.join(' OR ')})`, Object.fromEntries(p.partTypes.map((b, i) => [`pt${i}`, `%${b}%`])));
+    qb.andWhere(
+      `(${clauses.join(' OR ')})`,
+      Object.fromEntries(p.partTypes.map((b, i) => [`pt${i}`, `%${b}%`])),
+    );
   }
   if (p.conditionIds?.length) {
-    qb.andWhere(`${a}.condition_id IN (:...condIds)`, { condIds: p.conditionIds });
+    qb.andWhere(`${a}.condition_id IN (:...condIds)`, {
+      condIds: p.conditionIds,
+    });
   }
 
   if (p.shippingProfile) {
-    qb.andWhere(`${a}.shipping_profile ILIKE :ship`, { ship: `%${p.shippingProfile}%` });
+    qb.andWhere(`${a}.shipping_profile ILIKE :ship`, {
+      ship: `%${p.shippingProfile}%`,
+    });
   }
   if (p.returnProfile) {
-    qb.andWhere(`${a}.return_profile ILIKE :ret`, { ret: `%${p.returnProfile}%` });
+    qb.andWhere(`${a}.return_profile ILIKE :ret`, {
+      ret: `%${p.returnProfile}%`,
+    });
   }
   if (p.paymentProfile) {
-    qb.andWhere(`${a}.payment_profile ILIKE :pay`, { pay: `%${p.paymentProfile}%` });
+    qb.andWhere(`${a}.payment_profile ILIKE :pay`, {
+      pay: `%${p.paymentProfile}%`,
+    });
   }
   if (p.location) {
     qb.andWhere(`${a}.location ILIKE :loc`, { loc: `%${p.location}%` });
@@ -397,14 +433,20 @@ export function applyCatalogProductListFilters(
   }
 
   if (p.fitmentCountMin != null) {
-    qb.andWhere(`COALESCE(jsonb_array_length(${a}.fitment_data), 0) >= :fcmin`, {
-      fcmin: p.fitmentCountMin,
-    });
+    qb.andWhere(
+      `COALESCE(jsonb_array_length(${a}.fitment_data), 0) >= :fcmin`,
+      {
+        fcmin: p.fitmentCountMin,
+      },
+    );
   }
   if (p.fitmentCountMax != null) {
-    qb.andWhere(`COALESCE(jsonb_array_length(${a}.fitment_data), 0) <= :fcmax`, {
-      fcmax: p.fitmentCountMax,
-    });
+    qb.andWhere(
+      `COALESCE(jsonb_array_length(${a}.fitment_data), 0) <= :fcmax`,
+      {
+        fcmax: p.fitmentCountMax,
+      },
+    );
   }
 
   if (p.titleLenMin != null) {
@@ -414,10 +456,14 @@ export function applyCatalogProductListFilters(
     qb.andWhere(`char_length(${a}.title) <= :tmax`, { tmax: p.titleLenMax });
   }
   if (p.imageCountMin != null) {
-    qb.andWhere(`COALESCE(array_length(${a}.image_urls, 1), 0) >= :icmin`, { icmin: p.imageCountMin });
+    qb.andWhere(`COALESCE(array_length(${a}.image_urls, 1), 0) >= :icmin`, {
+      icmin: p.imageCountMin,
+    });
   }
   if (p.imageCountMax != null) {
-    qb.andWhere(`COALESCE(array_length(${a}.image_urls, 1), 0) <= :icmax`, { icmax: p.imageCountMax });
+    qb.andWhere(`COALESCE(array_length(${a}.image_urls, 1), 0) <= :icmax`, {
+      icmax: p.imageCountMax,
+    });
   }
 
   if (p.duplicateFitment === true) {

@@ -79,7 +79,12 @@ describe('EbayMvlService', () => {
         { value: 'Honda Civic' },
       ]);
 
-      const { options } = await svc.getPropertyValues('6000', 'Model', { Make: 'Toyota' }, 'cam');
+      const { options } = await svc.getPropertyValues(
+        '6000',
+        'Model',
+        { Make: 'Toyota' },
+        'cam',
+      );
       expect(options).toHaveLength(1);
       expect(options[0].value).toBe('Toyota Camry');
     });
@@ -91,7 +96,10 @@ describe('EbayMvlService', () => {
         { value: '2015' },
       ]);
 
-      const { options } = await svc.getPropertyValues('6000', 'Year', { Make: 'Toyota', Model: 'Camry' });
+      const { options } = await svc.getPropertyValues('6000', 'Year', {
+        Make: 'Toyota',
+        Model: 'Camry',
+      });
       expect(options[0].value).toBe('2020');
       expect(options[1].value).toBe('2018');
       expect(options[2].value).toBe('2015');
@@ -99,10 +107,19 @@ describe('EbayMvlService', () => {
 
     it('paginates correctly', async () => {
       taxonomyApi.getCompatibilityPropertyValues.mockResolvedValue(
-        Array.from({ length: 50 }, (_, i) => ({ value: `Make${String(i).padStart(2, '0')}` })),
+        Array.from({ length: 50 }, (_, i) => ({
+          value: `Make${String(i).padStart(2, '0')}`,
+        })),
       );
 
-      const { options, hasMore } = await svc.getPropertyValues('6000', 'Make', {}, undefined, 10, 0);
+      const { options, hasMore } = await svc.getPropertyValues(
+        '6000',
+        'Make',
+        {},
+        undefined,
+        10,
+        0,
+      );
       expect(options).toHaveLength(10);
       expect(hasMore).toBe(true);
     });
@@ -124,17 +141,34 @@ describe('EbayMvlService', () => {
 
     it('includes trim and engine when present', () => {
       const result = svc.buildCompatibilityArray([
-        { make: 'Toyota', model: 'Camry', year: '2018', trim: 'LE', engine: '2.5L' },
+        {
+          make: 'Toyota',
+          model: 'Camry',
+          year: '2018',
+          trim: 'LE',
+          engine: '2.5L',
+        },
       ]);
 
       expect(result[0].compatibilityProperties).toHaveLength(5);
-      expect(result[0].compatibilityProperties).toContainEqual({ name: 'Trim', value: 'LE' });
-      expect(result[0].compatibilityProperties).toContainEqual({ name: 'Engine', value: '2.5L' });
+      expect(result[0].compatibilityProperties).toContainEqual({
+        name: 'Trim',
+        value: 'LE',
+      });
+      expect(result[0].compatibilityProperties).toContainEqual({
+        name: 'Engine',
+        value: '2.5L',
+      });
     });
 
     it('includes notes when present', () => {
       const result = svc.buildCompatibilityArray([
-        { make: 'Toyota', model: 'Camry', year: '2018', notes: 'Front brake pads' },
+        {
+          make: 'Toyota',
+          model: 'Camry',
+          year: '2018',
+          notes: 'Front brake pads',
+        },
       ]);
 
       expect(result[0].notes).toBe('Front brake pads');
@@ -194,7 +228,9 @@ describe('EbayMvlService', () => {
     });
 
     it('handles API unavailable gracefully', async () => {
-      taxonomyApi.getCompatibilityPropertyValues.mockRejectedValue(new Error('API down'));
+      taxonomyApi.getCompatibilityPropertyValues.mockRejectedValue(
+        new Error('API down'),
+      );
 
       const result = await svc.validateFitmentData(
         [{ Make: 'Toyota', Model: 'Camry', Year: '2018' }],
@@ -209,7 +245,9 @@ describe('EbayMvlService', () => {
       store.hasActiveRelease.mockResolvedValue(true);
       store.batchExistingMakes.mockResolvedValue(new Set(['toyota']));
       store.batchExistingModels.mockResolvedValue(new Set(['toyota|camry']));
-      store.batchExistingYears.mockResolvedValue(new Set(['toyota|camry|2018']));
+      store.batchExistingYears.mockResolvedValue(
+        new Set(['toyota|camry|2018']),
+      );
 
       const result = await svc.validateFitmentData(
         [{ Make: 'Toyota', Model: 'Camry', Year: '2018' }],
@@ -239,7 +277,9 @@ describe('EbayMvlService', () => {
       store.hasActiveRelease.mockResolvedValue(true);
       store.batchExistingMakes.mockResolvedValue(new Set(['toyota']));
       store.batchExistingModels.mockResolvedValue(new Set(['toyota|camry']));
-      store.batchExistingYears.mockResolvedValue(new Set(['toyota|camry|2020']));
+      store.batchExistingYears.mockResolvedValue(
+        new Set(['toyota|camry|2020']),
+      );
 
       const result = await svc.validateFitmentData(
         [{ Make: 'Toyota', Model: 'Camry', Year: '2018' }],

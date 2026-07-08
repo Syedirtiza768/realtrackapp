@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -96,7 +92,10 @@ export class EbayIntegrationsOAuthService {
       });
       tokens = result.tokens;
     } catch (e: unknown) {
-      this.logger.warn({ errMsg: (e as Error)?.message }, 'eBay token exchange failed');
+      this.logger.warn(
+        { errMsg: (e as Error)?.message },
+        'eBay token exchange failed',
+      );
       throw e;
     }
 
@@ -108,16 +107,23 @@ export class EbayIntegrationsOAuthService {
     let ebayUserId = `unknown_${Date.now()}`;
     let ebayUsername: string | null = null;
     try {
-      const identity = await axios.get(`${oauthBase}/commerce/identity/v1/user/`, {
-        headers: { Authorization: `Bearer ${tokens.accessToken}` },
-        timeout: 15_000,
-      });
+      const identity = await axios.get(
+        `${oauthBase}/commerce/identity/v1/user/`,
+        {
+          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+          timeout: 15_000,
+        },
+      );
       if (identity.data?.userId) ebayUserId = identity.data.userId;
       ebayUsername = identity.data?.username ?? null;
     } catch (e: unknown) {
-      const status = (e as { response?: { status?: number } })?.response?.status ?? '?';
+      const status =
+        (e as { response?: { status?: number } })?.response?.status ?? '?';
       const msg = (e as Error)?.message ?? String(e);
-      this.logger.warn({ status, errMsg: msg }, `eBay identity API failed (${status}) — using ${ebayUserId}`);
+      this.logger.warn(
+        { status, errMsg: msg },
+        `eBay identity API failed (${status}) — using ${ebayUserId}`,
+      );
     }
 
     const tokenBlob: TokenBlob = {
@@ -196,7 +202,9 @@ export class EbayIntegrationsOAuthService {
         accessTokenExpiresAt: new Date(tokenBlob.expiresAt),
         refreshTokenEncrypted: this.encryption.encrypt(tokens.refreshToken),
         refreshTokenExpiresAt: null,
-        grantedScopes: scopeList.length ? scopeList : ['https://api.ebay.com/oauth/api_scope'],
+        grantedScopes: scopeList.length
+          ? scopeList
+          : ['https://api.ebay.com/oauth/api_scope'],
         lastRefreshedAt: new Date(),
         reconnectRequired: false,
       });
@@ -256,7 +264,10 @@ export class EbayIntegrationsOAuthService {
       return { connectedEbayAccountId: savedAcct.id };
     } catch (e: unknown) {
       await qr.rollbackTransaction();
-      this.logger.warn({ errMsg: (e as Error)?.message }, 'eBay OAuth DB transaction failed');
+      this.logger.warn(
+        { errMsg: (e as Error)?.message },
+        'eBay OAuth DB transaction failed',
+      );
       throw e;
     } finally {
       await qr.release();

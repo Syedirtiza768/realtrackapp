@@ -14,7 +14,10 @@ interface SpCredentials {
 @Injectable()
 export class SellerpunditAuthService {
   private readonly logger = new Logger(SellerpunditAuthService.name);
-  private readonly jwtByOrg = new Map<string, { token: string; expiresAt: number }>();
+  private readonly jwtByOrg = new Map<
+    string,
+    { token: string; expiresAt: number }
+  >();
 
   constructor(
     private readonly config: ConfigService,
@@ -32,10 +35,14 @@ export class SellerpunditAuthService {
 
     const creds = await this.resolveCredentials(organizationId);
     const token = await this.http.login(creds.email, creds.password);
-    const expiresAt = this.decodeJwtExpiry(token) ?? Date.now() + 23 * 60 * 60 * 1000;
+    const expiresAt =
+      this.decodeJwtExpiry(token) ?? Date.now() + 23 * 60 * 60 * 1000;
     this.jwtByOrg.set(organizationId, { token, expiresAt });
 
-    await this.upsertConfig(organizationId, { lastJwtRefreshAt: new Date(), lastError: null });
+    await this.upsertConfig(organizationId, {
+      lastJwtRefreshAt: new Date(),
+      lastError: null,
+    });
     return token;
   }
 
@@ -43,7 +50,9 @@ export class SellerpunditAuthService {
     this.jwtByOrg.delete(organizationId);
   }
 
-  private async resolveCredentials(organizationId: string): Promise<SpCredentials> {
+  private async resolveCredentials(
+    organizationId: string,
+  ): Promise<SpCredentials> {
     const row = await this.configRepo.findOne({ where: { organizationId } });
     if (row?.credentialsEncrypted) {
       try {
@@ -52,12 +61,17 @@ export class SellerpunditAuthService {
         ) as SpCredentials;
         if (parsed.email && parsed.password) return parsed;
       } catch (e) {
-        this.logger.warn(`Org ${organizationId} SellerPundit credentials decrypt failed`, e);
+        this.logger.warn(
+          `Org ${organizationId} SellerPundit credentials decrypt failed`,
+          e,
+        );
       }
     }
 
     const email = this.config.get<string>('SELLERPUNDIT_EMAIL', '').trim();
-    const password = this.config.get<string>('SELLERPUNDIT_PASSWORD', '').trim();
+    const password = this.config
+      .get<string>('SELLERPUNDIT_PASSWORD', '')
+      .trim();
     if (!email || !password) {
       throw new BadRequestException(
         'SellerPundit credentials not configured. Set SELLERPUNDIT_EMAIL and SELLERPUNDIT_PASSWORD in the project root .env (for Docker) or save org credentials in Settings.',
@@ -107,7 +121,10 @@ export class SellerpunditAuthService {
     const credentialsEncrypted = this.encryption.encrypt(
       JSON.stringify({ email, password }),
     );
-    await this.upsertConfig(organizationId, { credentialsEncrypted, enabled: true });
+    await this.upsertConfig(organizationId, {
+      credentialsEncrypted,
+      enabled: true,
+    });
     this.invalidateJwt(organizationId);
   }
 
@@ -115,7 +132,9 @@ export class SellerpunditAuthService {
     try {
       const part = token.split('.')[1];
       if (!part) return null;
-      const payload = JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) as {
+      const payload = JSON.parse(
+        Buffer.from(part, 'base64url').toString('utf8'),
+      ) as {
         exp?: number;
       };
       if (payload.exp) return payload.exp * 1000;

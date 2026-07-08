@@ -10,7 +10,9 @@ export class PublishedListingsAuditService {
     private readonly revisionRepo: Repository<EbayPublishedListingRevision>,
   ) {}
 
-  async writeRevision(entry: Partial<EbayPublishedListingRevision>): Promise<void> {
+  async writeRevision(
+    entry: Partial<EbayPublishedListingRevision>,
+  ): Promise<void> {
     const row = this.revisionRepo.create(entry as EbayPublishedListingRevision);
     await this.revisionRepo.save(row);
   }

@@ -89,10 +89,7 @@ export class EbayBrowseApiService {
    */
   async getItem(itemId: string): Promise<EbayItem> {
     const cfg = await this.appHeaders();
-    const { data } = await this.http.get<EbayItem>(
-      `/item/${itemId}`,
-      cfg,
-    );
+    const { data } = await this.http.get<EbayItem>(`/item/${itemId}`, cfg);
     return data;
   }
 
@@ -145,12 +142,12 @@ export class EbayBrowseApiService {
 
     const avgPrice =
       prices.length > 0
-        ? Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100
+        ? Math.round(
+            (prices.reduce((a, b) => a + b, 0) / prices.length) * 100,
+          ) / 100
         : null;
     const medianPrice =
-      prices.length > 0
-        ? prices[Math.floor(prices.length / 2)]
-        : null;
+      prices.length > 0 ? prices[Math.floor(prices.length / 2)] : null;
     const minPrice = prices.length > 0 ? prices[0] : null;
     const maxPrice = prices.length > 0 ? prices[prices.length - 1] : null;
 
@@ -210,9 +207,9 @@ export class EbayBrowseApiService {
 
       // Fetch full item details for the top results to get EPID + aspects
       const detailResults = await Promise.allSettled(
-        summaries.slice(0, Math.min(3, summaries.length)).map((s) =>
-          this.getItem(s.itemId).catch(() => null),
-        ),
+        summaries
+          .slice(0, Math.min(3, summaries.length))
+          .map((s) => this.getItem(s.itemId).catch(() => null)),
       );
 
       const items: EbayCatalogLookupResult['items'] = [];
@@ -261,7 +258,12 @@ export class EbayBrowseApiService {
 
       this.logger.log(
         `eBay catalog lookup: found ${items.length} items for "${query}" — ` +
-        `EPIDs: ${items.filter((i) => i.epid).map((i) => i.epid).join(', ') || 'none'}`,
+          `EPIDs: ${
+            items
+              .filter((i) => i.epid)
+              .map((i) => i.epid)
+              .join(', ') || 'none'
+          }`,
       );
 
       return { found: items.length > 0, items };
@@ -288,9 +290,17 @@ export class EbayBrowseApiService {
     const makeValues = aspects['Make'] ?? aspects['Manufacturer'] ?? [];
     const modelValues = aspects['Model'] ?? aspects['Vehicle Model'] ?? [];
 
-    if (yearValues.length > 0 || makeValues.length > 0 || modelValues.length > 0) {
+    if (
+      yearValues.length > 0 ||
+      makeValues.length > 0 ||
+      modelValues.length > 0
+    ) {
       // Pair up Year/Make/Model values
-      const maxLen = Math.max(yearValues.length, makeValues.length, modelValues.length);
+      const maxLen = Math.max(
+        yearValues.length,
+        makeValues.length,
+        modelValues.length,
+      );
       for (let i = 0; i < maxLen; i++) {
         const hint: { year?: string; make?: string; model?: string } = {};
         if (yearValues[i]) hint.year = yearValues[i];
@@ -301,7 +311,8 @@ export class EbayBrowseApiService {
     }
 
     // Also check "Compatible Vehicles" or "Vehicle Type" aspects
-    const compatVehicles = aspects['Compatible Vehicles'] ?? aspects['Vehicle Type'] ?? [];
+    const compatVehicles =
+      aspects['Compatible Vehicles'] ?? aspects['Vehicle Type'] ?? [];
     for (const cv of compatVehicles) {
       // Try to parse "2018 Toyota Camry" or "Toyota Camry 2018" format
       const parsed = this.parseVehicleString(cv);
@@ -312,20 +323,30 @@ export class EbayBrowseApiService {
   }
 
   /** Parse a vehicle string like "2018 Toyota Camry" into year/make/model */
-  private parseVehicleString(text: string): { year?: string; make?: string; model?: string } | null {
+  private parseVehicleString(
+    text: string,
+  ): { year?: string; make?: string; model?: string } | null {
     if (!text?.trim()) return null;
     const trimmed = text.trim();
 
     // Try "YEAR MAKE MODEL" format
     const yearFirst = trimmed.match(/^(\d{4})\s+([A-Za-z-]+)\s+(.+)$/);
     if (yearFirst) {
-      return { year: yearFirst[1], make: yearFirst[2], model: yearFirst[3].trim() };
+      return {
+        year: yearFirst[1],
+        make: yearFirst[2],
+        model: yearFirst[3].trim(),
+      };
     }
 
     // Try "MAKE MODEL YEAR" format
     const yearLast = trimmed.match(/^([A-Za-z-]+)\s+(.+)\s+(\d{4})$/);
     if (yearLast) {
-      return { year: yearLast[3], make: yearLast[1], model: yearLast[2].trim() };
+      return {
+        year: yearLast[3],
+        make: yearLast[1],
+        model: yearLast[2].trim(),
+      };
     }
 
     // Try "MAKE MODEL" format (no year)

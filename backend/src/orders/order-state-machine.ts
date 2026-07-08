@@ -3,16 +3,16 @@
  */
 
 const ORDER_TRANSITIONS: Record<string, string[]> = {
-  pending:          ['confirmed', 'cancelled'],
-  confirmed:        ['processing', 'cancelled'],
-  processing:       ['shipped', 'cancelled'],
-  shipped:          ['delivered', 'disputed'],
-  delivered:        ['completed', 'refund_requested', 'disputed'],
-  completed:        ['refund_requested'],
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['processing', 'cancelled'],
+  processing: ['shipped', 'cancelled'],
+  shipped: ['delivered', 'disputed'],
+  delivered: ['completed', 'refund_requested', 'disputed'],
+  completed: ['refund_requested'],
   refund_requested: ['refunded', 'completed'], // refund denied → back to completed
-  cancelled:        [],                        // terminal
-  refunded:         [],                        // terminal
-  disputed:         ['refunded', 'completed'],
+  cancelled: [], // terminal
+  refunded: [], // terminal
+  disputed: ['refunded', 'completed'],
 };
 
 export function canTransition(from: string, to: string): boolean {

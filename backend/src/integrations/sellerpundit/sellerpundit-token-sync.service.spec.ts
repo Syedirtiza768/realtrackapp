@@ -19,7 +19,7 @@ function createRepo<T extends Record<string, unknown>>() {
     findOneBy: jest.fn().mockResolvedValue(null),
     findOneByOrFail: jest.fn(),
     findOneOrFail: jest.fn(),
-    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d } as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d }) as T),
     save: jest.fn((d: T) => Promise.resolve({ id: 'saved-id', ...d } as T)),
     update: jest.fn().mockResolvedValue(undefined),
   } as unknown as Repository<T>;
@@ -53,7 +53,9 @@ describe('SellerpunditTokenSyncService', () => {
       encrypt: jest.fn((v: string) => `enc:${v}`),
       decrypt: jest.fn((v: string) => v.replace('enc:', '')),
     };
-    registry = { resolveMarketplaceForAccount: jest.fn().mockReturnValue('EBAY_MOTORS_US') };
+    registry = {
+      resolveMarketplaceForAccount: jest.fn().mockReturnValue('EBAY_MOTORS_US'),
+    };
 
     svc = new SellerpunditTokenSyncService(
       auth as unknown as SellerpunditAuthService,
@@ -93,7 +95,9 @@ describe('SellerpunditTokenSyncService', () => {
   describe('ensureFreshAccessToken', () => {
     it('throws for missing account', async () => {
       accountRepo.findOne = jest.fn().mockResolvedValue(null);
-      await expect(svc.ensureFreshAccessToken('missing')).rejects.toThrow(HttpException);
+      await expect(svc.ensureFreshAccessToken('missing')).rejects.toThrow(
+        HttpException,
+      );
     });
 
     it('throws for disabled account', async () => {
@@ -104,7 +108,9 @@ describe('SellerpunditTokenSyncService', () => {
         oauthToken: { accessTokenExpiresAt: futureDate(120) },
       });
 
-      await expect(svc.ensureFreshAccessToken('acct-1')).rejects.toThrow(/disabled/);
+      await expect(svc.ensureFreshAccessToken('acct-1')).rejects.toThrow(
+        /disabled/,
+      );
     });
   });
 

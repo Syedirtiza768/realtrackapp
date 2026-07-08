@@ -21,7 +21,9 @@ export class EbayInventorySyncProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<EbayInventorySyncJobPayload & { syncLogId?: string }>) {
+  async process(
+    job: Job<EbayInventorySyncJobPayload & { syncLogId?: string }>,
+  ) {
     const { ebayAccountId, organizationId } = job.data;
     let syncLogId = job.data.syncLogId;
 

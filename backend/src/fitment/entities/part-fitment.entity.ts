@@ -14,7 +14,11 @@ import { FitmentModel } from './fitment-model.entity.js';
 import { FitmentSubmodel } from './fitment-submodel.entity.js';
 import { FitmentEngine } from './fitment-engine.entity.js';
 
-export type FitmentSource = 'manual' | 'aces_import' | 'ai_detected' | 'bulk_import';
+export type FitmentSource =
+  | 'manual'
+  | 'aces_import'
+  | 'ai_detected'
+  | 'bulk_import';
 
 @Entity('part_fitments')
 @Unique(['listingId', 'makeId', 'modelId', 'yearStart', 'yearEnd', 'engineId'])

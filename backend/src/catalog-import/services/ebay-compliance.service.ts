@@ -110,10 +110,7 @@ export interface BatchComplianceResult {
 
 /* ── eBay Required Item Specifics for Motors ───────────────── */
 
-const REQUIRED_ITEM_SPECIFICS = [
-  'Brand',
-  'Manufacturer Part Number',
-] as const;
+const REQUIRED_ITEM_SPECIFICS = ['Brand', 'Manufacturer Part Number'] as const;
 
 const RECOMMENDED_ITEM_SPECIFICS = [
   'Interchange Part Number',
@@ -197,7 +194,9 @@ export class EbayComplianceService {
     }
 
     const compliantCount = results.filter((r) => r.compliant).length;
-    const autoFixedCount = results.filter((r) => r.autoCorrections.length > 0).length;
+    const autoFixedCount = results.filter(
+      (r) => r.autoCorrections.length > 0,
+    ).length;
     const allIssues = results.flatMap((r) => r.issues);
 
     // Count top issue codes
@@ -215,15 +214,23 @@ export class EbayComplianceService {
       compliantRecords: compliantCount,
       nonCompliantRecords: results.length - compliantCount,
       autoFixedRecords: autoFixedCount,
-      averageComplianceScore: results.length > 0
-        ? Math.round((results.reduce((sum, r) => sum + r.complianceScore, 0) / results.length) * 100) / 100
-        : 0,
+      averageComplianceScore:
+        results.length > 0
+          ? Math.round(
+              (results.reduce((sum, r) => sum + r.complianceScore, 0) /
+                results.length) *
+                100,
+            ) / 100
+          : 0,
       results,
       summary: {
         errorCount: allIssues.filter((i) => i.severity === 'error').length,
         warningCount: allIssues.filter((i) => i.severity === 'warning').length,
         infoCount: allIssues.filter((i) => i.severity === 'info').length,
-        totalAutoCorrections: results.reduce((sum, r) => sum + r.autoCorrections.length, 0),
+        totalAutoCorrections: results.reduce(
+          (sum, r) => sum + r.autoCorrections.length,
+          0,
+        ),
         topIssues,
       },
     };
@@ -232,7 +239,10 @@ export class EbayComplianceService {
   /**
    * Validate a single product for eBay Motors compliance.
    */
-  async validateProduct(productId: string, autoFix = true): Promise<ComplianceResult> {
+  async validateProduct(
+    productId: string,
+    autoFix = true,
+  ): Promise<ComplianceResult> {
     const product = await this.productRepo.findOneBy({ id: productId });
     if (!product) {
       return this.createErrorResult(productId, 'Product not found');
@@ -262,9 +272,15 @@ export class EbayComplianceService {
     }
 
     // 3. Title optimization
-    const titleOptimization = await this.validateAndOptimizeTitle(product, autoFix);
+    const titleOptimization = await this.validateAndOptimizeTitle(
+      product,
+      autoFix,
+    );
     issues.push(...titleOptimization.issues);
-    if (titleOptimization.applied && titleOptimization.optimizedTitle !== titleOptimization.originalTitle) {
+    if (
+      titleOptimization.applied &&
+      titleOptimization.optimizedTitle !== titleOptimization.originalTitle
+    ) {
       autoCorrections.push({
         code: 'TITLE_OPTIMIZED',
         field: 'title',
@@ -304,16 +320,31 @@ export class EbayComplianceService {
     // Calculate compliance score
     const errors = issues.filter((i) => i.severity === 'error');
     const warnings = issues.filter((i) => i.severity === 'warning');
-    const complianceScore = this.calculateComplianceScore(errors.length, warnings.length);
-    const compliant = errors.length === 0 && complianceScore >= 0.70;
+    const complianceScore = this.calculateComplianceScore(
+      errors.length,
+      warnings.length,
+    );
+    const compliant = errors.length === 0 && complianceScore >= 0.7;
 
     // Persist auto-corrections
     if (autoFix && autoCorrections.length > 0) {
-      await this.applyAutoCorrections(product, autoCorrections, titleOptimization, descriptionResult, itemSpecifics);
+      await this.applyAutoCorrections(
+        product,
+        autoCorrections,
+        titleOptimization,
+        descriptionResult,
+        itemSpecifics,
+      );
     }
 
     // Log to compliance audit trail
-    await this.logComplianceAudit(productId, product.importId, complianceScore, issues, autoCorrections);
+    await this.logComplianceAudit(
+      productId,
+      product.importId,
+      complianceScore,
+      issues,
+      autoCorrections,
+    );
 
     if (product.sku) {
       await this.aiRunLogService.recordComplianceOutcome(
@@ -362,11 +393,20 @@ export class EbayComplianceService {
         autoFixedRecords: 0,
         averageComplianceScore: 0,
         results: [],
-        summary: { errorCount: 0, warningCount: 0, infoCount: 0, totalAutoCorrections: 0, topIssues: [] },
+        summary: {
+          errorCount: 0,
+          warningCount: 0,
+          infoCount: 0,
+          totalAutoCorrections: 0,
+          topIssues: [],
+        },
       };
     }
 
-    return this.validateBatch(products.map((p) => p.id), autoFix);
+    return this.validateBatch(
+      products.map((p) => p.id),
+      autoFix,
+    );
   }
 
   /**
@@ -377,11 +417,19 @@ export class EbayComplianceService {
     compliant: boolean;
     errors: string[];
     warnings: string[];
-    autoCorrections: Array<{ field: string; original: string; corrected: string }>;
+    autoCorrections: Array<{
+      field: string;
+      original: string;
+      corrected: string;
+    }>;
   } {
     const errors: string[] = [];
     const warnings: string[] = [];
-    const autoCorrections: Array<{ field: string; original: string; corrected: string }> = [];
+    const autoCorrections: Array<{
+      field: string;
+      original: string;
+      corrected: string;
+    }> = [];
 
     // Title validation
     const title = data['title'] || '';
@@ -390,13 +438,24 @@ export class EbayComplianceService {
     } else {
       if (title.length > 80) {
         const trimmed = title.slice(0, 80);
-        autoCorrections.push({ field: 'title', original: title, corrected: trimmed });
+        autoCorrections.push({
+          field: 'title',
+          original: title,
+          corrected: trimmed,
+        });
         data['title'] = trimmed;
       }
       for (const pattern of TITLE_FORBIDDEN_PATTERNS) {
         if (pattern.test(title)) {
-          const cleaned = title.replace(pattern, '').replace(/\s{2,}/g, ' ').trim();
-          autoCorrections.push({ field: 'title', original: title, corrected: cleaned });
+          const cleaned = title
+            .replace(pattern, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+          autoCorrections.push({
+            field: 'title',
+            original: title,
+            corrected: cleaned,
+          });
           data['title'] = cleaned;
           break;
         }
@@ -408,7 +467,11 @@ export class EbayComplianceService {
       const inferred = this.inferBrandFromTitle(data['title'] || '');
       if (inferred) {
         data['brand'] = inferred;
-        autoCorrections.push({ field: 'brand', original: '(empty)', corrected: inferred });
+        autoCorrections.push({
+          field: 'brand',
+          original: '(empty)',
+          corrected: inferred,
+        });
       }
     }
     if (!data['brand'] || !data['brand'].trim()) {
@@ -440,10 +503,20 @@ export class EbayComplianceService {
 
     // Condition validation
     if (data['conditionId']) {
-      const validConditions = ['1000', '1500', '1750', '2000', '2500', '3000', '7000'];
+      const validConditions = [
+        '1000',
+        '1500',
+        '1750',
+        '2000',
+        '2500',
+        '3000',
+        '7000',
+      ];
       const cleanCondition = data['conditionId'].replace(/-.*/, '');
       if (!validConditions.includes(cleanCondition)) {
-        warnings.push(`Condition ID "${data['conditionId']}" is not a standard eBay condition`);
+        warnings.push(
+          `Condition ID "${data['conditionId']}" is not a standard eBay condition`,
+        );
       }
     }
 
@@ -586,11 +659,15 @@ export class EbayComplianceService {
       ...corrections.map((c) => ({
         productId,
         importId,
-        action: c.code.includes('TITLE') ? ('title_optimization' as const)
-          : c.code.includes('DESCRIPTION') ? ('description_enhancement' as const)
-          : c.code.includes('CATEGORY') ? ('category_mapping' as const)
-          : c.code.includes('SPECIFIC') ? ('item_specifics_fill' as const)
-          : ('auto_correction' as const),
+        action: c.code.includes('TITLE')
+          ? ('title_optimization' as const)
+          : c.code.includes('DESCRIPTION')
+            ? ('description_enhancement' as const)
+            : c.code.includes('CATEGORY')
+              ? ('category_mapping' as const)
+              : c.code.includes('SPECIFIC')
+                ? ('item_specifics_fill' as const)
+                : ('auto_correction' as const),
         field: c.field,
         originalValue: c.originalValue ?? null,
         newValue: c.fixedValue ?? null,
@@ -606,7 +683,9 @@ export class EbayComplianceService {
 
   /* ── 1. Category Validation ──────────────────────────────── */
 
-  private async validateCategory(product: CatalogProduct): Promise<CategoryValidationResult> {
+  private async validateCategory(
+    product: CatalogProduct,
+  ): Promise<CategoryValidationResult> {
     const issues: ComplianceIssue[] = [];
 
     if (!product.categoryId) {
@@ -618,13 +697,15 @@ export class EbayComplianceService {
           suggestedCategoryId: suggested.id,
           suggestedCategoryName: suggested.name,
           confidence: suggested.confidence,
-          issues: [{
-            code: 'MISSING_CATEGORY',
-            field: 'categoryId',
-            message: 'eBay category is missing',
-            severity: 'error',
-            suggestion: `Suggested: ${suggested.name} (${suggested.id})`,
-          }],
+          issues: [
+            {
+              code: 'MISSING_CATEGORY',
+              field: 'categoryId',
+              message: 'eBay category is missing',
+              severity: 'error',
+              suggestion: `Suggested: ${suggested.name} (${suggested.id})`,
+            },
+          ],
         };
       }
 
@@ -674,7 +755,10 @@ Return ONLY JSON.`,
         temperature: 0.1,
       });
 
-      const text = (response.content as string).replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+      const text = (response.content as string)
+        .replace(/```json?\n?/g, '')
+        .replace(/```/g, '')
+        .trim();
       return JSON.parse(text);
     } catch {
       return null;
@@ -693,7 +777,7 @@ Return ONLY JSON.`,
 
     // Check required specifics
     const specificsMap: Record<string, string | null> = {
-      'Brand': product.brand,
+      Brand: product.brand,
       'Manufacturer Part Number': product.mpn,
     };
 
@@ -714,10 +798,10 @@ Return ONLY JSON.`,
     // Check recommended specifics
     const recommendedMap: Record<string, string | null> = {
       'Interchange Part Number': product.oemPartNumber,
-      'UPC': product.upc,
+      UPC: product.upc,
       'Placement on Vehicle': product.placement,
-      'Type': product.partType,
-      'Material': product.material,
+      Type: product.partType,
+      Material: product.material,
     };
 
     for (const specific of RECOMMENDED_ITEM_SPECIFICS) {
@@ -739,7 +823,8 @@ Return ONLY JSON.`,
     }
 
     const totalRequired = REQUIRED_ITEM_SPECIFICS.length;
-    const totalPresent = totalRequired - missingRequired.length + autoFilled.length;
+    const totalPresent =
+      totalRequired - missingRequired.length + autoFilled.length;
 
     return {
       totalRequired,
@@ -769,9 +854,14 @@ Missing fields: ${missingFields.join(', ')}`,
         temperature: 0.1,
       });
 
-      const text = (response.content as string).replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+      const text = (response.content as string)
+        .replace(/```json?\n?/g, '')
+        .replace(/```/g, '')
+        .trim();
       const fills = JSON.parse(text) as Array<{ field: string; value: string }>;
-      return fills.filter((f) => f.field && f.value && missingFields.includes(f.field));
+      return fills.filter(
+        (f) => f.field && f.value && missingFields.includes(f.field),
+      );
     } catch {
       return [];
     }
@@ -831,7 +921,9 @@ Missing fields: ${missingFields.join(', ')}`,
 
     // Duplicate words check
     const words = originalTitle.toLowerCase().split(/\s+/);
-    const duplicates = words.filter((w, i) => words.indexOf(w) !== i && w.length > 3);
+    const duplicates = words.filter(
+      (w, i) => words.indexOf(w) !== i && w.length > 3,
+    );
     if (duplicates.length > 0) {
       issues.push({
         code: 'TITLE_DUPLICATE_WORDS',
@@ -868,13 +960,21 @@ Missing fields: ${missingFields.join(', ')}`,
     };
   }
 
-  private calculateTitleSeoScore(title: string, product: CatalogProduct): number {
+  private calculateTitleSeoScore(
+    title: string,
+    product: CatalogProduct,
+  ): number {
     let score = 0.5;
 
     // Has brand
-    if (product.brand && title.toLowerCase().includes(product.brand.toLowerCase())) score += 0.15;
+    if (
+      product.brand &&
+      title.toLowerCase().includes(product.brand.toLowerCase())
+    )
+      score += 0.15;
     // Has part number
-    if (product.mpn && title.toLowerCase().includes(product.mpn.toLowerCase())) score += 0.15;
+    if (product.mpn && title.toLowerCase().includes(product.mpn.toLowerCase()))
+      score += 0.15;
     // Good length (50-80 chars)
     if (title.length >= 50 && title.length <= 80) score += 0.1;
     else if (title.length >= 30 && title.length < 50) score += 0.05;
@@ -886,7 +986,9 @@ Missing fields: ${missingFields.join(', ')}`,
     return Math.min(1, Math.round(score * 100) / 100);
   }
 
-  private async generateOptimizedTitle(product: CatalogProduct): Promise<string> {
+  private async generateOptimizedTitle(
+    product: CatalogProduct,
+  ): Promise<string> {
     try {
       const response = await this.openai.chat({
         systemPrompt: `You are an eBay SEO specialist for automotive parts. Generate an optimized listing title following these rules:
@@ -906,8 +1008,12 @@ Condition: ${product.conditionLabel || product.conditionId || 'N/A'}`,
         temperature: 0.3,
       });
 
-      const title = (response.content as string).replace(/^["']|["']$/g, '').trim();
-      return title.length <= TITLE_MAX_LENGTH ? title : title.slice(0, TITLE_MAX_LENGTH);
+      const title = (response.content as string)
+        .replace(/^["']|["']$/g, '')
+        .trim();
+      return title.length <= TITLE_MAX_LENGTH
+        ? title
+        : title.slice(0, TITLE_MAX_LENGTH);
     } catch {
       return product.title;
     }
@@ -930,7 +1036,8 @@ Condition: ${product.conditionLabel || product.conditionId || 'N/A'}`,
         field: 'description',
         message: 'Product description is missing or too short',
         severity: 'warning',
-        suggestion: 'Add a detailed description with features, compatibility, and condition',
+        suggestion:
+          'Add a detailed description with features, compatibility, and condition',
       });
 
       if (autoFix) {
@@ -945,7 +1052,8 @@ Condition: ${product.conditionLabel || product.conditionId || 'N/A'}`,
         issues.push({
           code: 'DESCRIPTION_PROHIBITED_HTML',
           field: 'description',
-          message: 'Description contains prohibited HTML elements (script/iframe)',
+          message:
+            'Description contains prohibited HTML elements (script/iframe)',
           severity: 'error',
         });
       }
@@ -966,10 +1074,17 @@ Condition: ${product.conditionLabel || product.conditionId || 'N/A'}`,
       }
     }
 
-    return { hasDescription: !!description, enhanced, enhancedDescription, issues };
+    return {
+      hasDescription: !!description,
+      enhanced,
+      enhancedDescription,
+      issues,
+    };
   }
 
-  private async generateDescription(product: CatalogProduct): Promise<string | null> {
+  private async generateDescription(
+    product: CatalogProduct,
+  ): Promise<string | null> {
     try {
       const response = await this.openai.chat({
         systemPrompt: `You are an eBay listing specialist. Generate a professional, structured product description for an automotive part. Include:
@@ -1008,7 +1123,8 @@ Current Description: ${(product.description || '').slice(0, 120)}`,
   private validateFitment(product: CatalogProduct): FitmentValidationResult {
     const issues: ComplianceIssue[] = [];
     const fitmentData = product.fitmentData;
-    const hasFitment = !!fitmentData && Array.isArray(fitmentData) && fitmentData.length > 0;
+    const hasFitment =
+      !!fitmentData && Array.isArray(fitmentData) && fitmentData.length > 0;
 
     if (!hasFitment) {
       issues.push({
@@ -1016,10 +1132,17 @@ Current Description: ${(product.description || '').slice(0, 120)}`,
         field: 'fitmentData',
         message: 'No vehicle compatibility / fitment data provided',
         severity: 'warning',
-        suggestion: 'Add Year/Make/Model compatibility for better search visibility',
+        suggestion:
+          'Add Year/Make/Model compatibility for better search visibility',
       });
 
-      return { hasFitment: false, valid: false, normalized: false, vehicleCount: 0, issues };
+      return {
+        hasFitment: false,
+        valid: false,
+        normalized: false,
+        vehicleCount: 0,
+        issues,
+      };
     }
 
     let valid = true;
@@ -1044,7 +1167,11 @@ Current Description: ${(product.description || '').slice(0, 120)}`,
 
       // Validate year range
       const yearNum = Number(year);
-      if (isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear() + 2) {
+      if (
+        isNaN(yearNum) ||
+        yearNum < 1900 ||
+        yearNum > new Date().getFullYear() + 2
+      ) {
         issues.push({
           code: 'INVALID_FITMENT_YEAR',
           field: 'fitmentData',
@@ -1092,7 +1219,8 @@ Current Description: ${(product.description || '').slice(0, 120)}`,
         issues.push({
           code: 'PLACEHOLDER_IMAGE',
           field: 'imageUrls',
-          message: 'Image appears to be a placeholder, not a real product photo',
+          message:
+            'Image appears to be a placeholder, not a real product photo',
           severity: 'warning',
         });
       }
@@ -1167,7 +1295,9 @@ Current Description: ${(product.description || '').slice(0, 120)}`,
         field: 'conditionId',
         message: `Condition ID "${conditionId}" is not a valid eBay condition code`,
         severity: 'warning',
-        suggestion: `Valid values: ${Object.entries(CONDITION_MAP).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+        suggestion: `Valid values: ${Object.entries(CONDITION_MAP)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ')}`,
       });
     }
 
@@ -1211,7 +1341,10 @@ Current Description: ${(product.description || '').slice(0, 120)}`,
 
   /* ── Helpers ─────────────────────────────────────────────── */
 
-  private calculateComplianceScore(errorCount: number, warningCount: number): number {
+  private calculateComplianceScore(
+    errorCount: number,
+    warningCount: number,
+  ): number {
     let score = 1.0;
     score -= errorCount * 0.15;
     score -= warningCount * 0.03;
@@ -1265,33 +1398,78 @@ Current Description: ${(product.description || '').slice(0, 120)}`,
 
       if (Object.keys(updates).length > 0) {
         await this.productRepo.update(product.id, updates as any);
-        this.logger.log(`Applied ${Object.keys(updates).length} auto-corrections to product ${product.id}`);
+        this.logger.log(
+          `Applied ${Object.keys(updates).length} auto-corrections to product ${product.id}`,
+        );
       }
     } catch (err) {
-      this.logger.warn(`Failed to apply auto-corrections to ${product.id}: ${err}`);
+      this.logger.warn(
+        `Failed to apply auto-corrections to ${product.id}: ${err}`,
+      );
     }
   }
 
-  private createErrorResult(productId: string, errorMsg: string): ComplianceResult {
+  private createErrorResult(
+    productId: string,
+    errorMsg: string,
+  ): ComplianceResult {
     return {
       productId,
       sku: null,
       compliant: false,
       complianceScore: 0,
-      issues: [{
-        code: 'SYSTEM_ERROR',
-        field: '_system',
-        message: errorMsg,
-        severity: 'error',
-      }],
+      issues: [
+        {
+          code: 'SYSTEM_ERROR',
+          field: '_system',
+          message: errorMsg,
+          severity: 'error',
+        },
+      ],
       autoCorrections: [],
-      categoryValidation: { valid: false, suggestedCategoryId: null, suggestedCategoryName: null, confidence: 0, issues: [] },
-      titleOptimization: { originalTitle: '', optimizedTitle: '', applied: false, lengthOk: false, seoScore: 0, issues: [] },
-      descriptionEnhancement: { hasDescription: false, enhanced: false, enhancedDescription: null, issues: [] },
-      fitmentValidation: { hasFitment: false, valid: false, normalized: false, vehicleCount: 0, issues: [] },
-      imageCompliance: { hasImages: false, imageCount: 0, valid: false, issues: [] },
+      categoryValidation: {
+        valid: false,
+        suggestedCategoryId: null,
+        suggestedCategoryName: null,
+        confidence: 0,
+        issues: [],
+      },
+      titleOptimization: {
+        originalTitle: '',
+        optimizedTitle: '',
+        applied: false,
+        lengthOk: false,
+        seoScore: 0,
+        issues: [],
+      },
+      descriptionEnhancement: {
+        hasDescription: false,
+        enhanced: false,
+        enhancedDescription: null,
+        issues: [],
+      },
+      fitmentValidation: {
+        hasFitment: false,
+        valid: false,
+        normalized: false,
+        vehicleCount: 0,
+        issues: [],
+      },
+      imageCompliance: {
+        hasImages: false,
+        imageCount: 0,
+        valid: false,
+        issues: [],
+      },
       pricingValidation: { hasPrice: false, valid: false, issues: [] },
-      itemSpecifics: { totalRequired: 0, totalPresent: 0, coveragePercent: 0, missingRequired: [], autoFilled: [], issues: [] },
+      itemSpecifics: {
+        totalRequired: 0,
+        totalPresent: 0,
+        coveragePercent: 0,
+        missingRequired: [],
+        autoFilled: [],
+        issues: [],
+      },
     };
   }
 }

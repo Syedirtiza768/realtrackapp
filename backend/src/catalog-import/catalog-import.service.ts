@@ -1,4 +1,10 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
@@ -12,7 +18,12 @@ import { CatalogImportRow } from './entities/catalog-import-row.entity.js';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import type { CsvImportJobData } from './processors/csv-import.processor.js';
-import { applyCreatedByVisibility, assertCanAccessJob, canViewJob, withCreatedByBackfill } from '../common/utils/job-visibility.js';
+import {
+  applyCreatedByVisibility,
+  assertCanAccessJob,
+  canViewJob,
+  withCreatedByBackfill,
+} from '../common/utils/job-visibility.js';
 import { HeavyJobLimiterService } from '../common/jobs/heavy-job-limiter.service.js';
 
 export interface ImportVerificationSummary {
@@ -41,34 +52,34 @@ export interface BackfillListingsResult {
 /** Well-known CSV headers → catalog product field mapping */
 const DEFAULT_COLUMN_MAP: Record<string, string> = {
   // eBay File Exchange format
-  'customlabel': 'sku',
+  customlabel: 'sku',
   'custom label (sku)': 'sku',
   '*customlabel': 'sku',
-  'customlabelsku': 'sku',
+  customlabelsku: 'sku',
   '*title': 'title',
-  'title': 'title',
+  title: 'title',
   '*startprice': 'price',
-  'startprice': 'price',
+  startprice: 'price',
   '*quantity': 'quantity',
-  'quantity': 'quantity',
-  'picurl': 'imageUrls',
+  quantity: 'quantity',
+  picurl: 'imageUrls',
   '*conditionid': 'conditionId',
-  'conditionid': 'conditionId',
+  conditionid: 'conditionId',
   '*description': 'description',
-  'description': 'description',
+  description: 'description',
   '*format': 'format',
-  'format': 'format',
+  format: 'format',
   '*duration': 'duration',
-  'duration': 'duration',
+  duration: 'duration',
   '*location': 'location',
-  'location': 'location',
-  'buyitnowprice': 'buyItNowPrice',
+  location: 'location',
+  buyitnowprice: 'buyItNowPrice',
   '*category': 'categoryId',
-  'category': 'categoryId',
-  'categoryname': 'categoryName',
-  'shippingprofilename': 'shippingProfile',
-  'returnprofilename': 'returnProfile',
-  'paymentprofilename': 'paymentProfile',
+  category: 'categoryId',
+  categoryname: 'categoryName',
+  shippingprofilename: 'shippingProfile',
+  returnprofilename: 'returnProfile',
+  paymentprofilename: 'paymentProfile',
   // C: prefixed custom fields (eBay specifics)
   '*c:brand': 'brand',
   'c:brand': 'brand',
@@ -84,25 +95,25 @@ const DEFAULT_COLUMN_MAP: Record<string, string> = {
   'c:fueltype': 'fuelType',
   'c:drivetype': 'driveType',
   // Direct field names
-  'sku': 'sku',
-  'mpn': 'mpn',
+  sku: 'sku',
+  mpn: 'mpn',
   'manufacturer part number': 'mpn',
-  'upc': 'upc',
-  'ean': 'ean',
-  'epid': 'epid',
+  upc: 'upc',
+  ean: 'ean',
+  epid: 'epid',
   'p:upc': 'upc',
   'p:epid': 'epid',
-  'brand': 'brand',
-  'price': 'price',
-  'ebayitemid': 'ebayItemId',
+  brand: 'brand',
+  price: 'price',
+  ebayitemid: 'ebayItemId',
   'ebay item id': 'ebayItemId',
   'item id': 'ebayItemId',
   'part type': 'partType',
   'oem part number': 'oemPartNumber',
   'image url': 'imageUrls',
-  'imageurl': 'imageUrls',
-  'imageurls': 'imageUrls',
-  'images': 'imageUrls',
+  imageurl: 'imageUrls',
+  imageurls: 'imageUrls',
+  images: 'imageUrls',
 };
 
 @Injectable()
@@ -124,7 +135,8 @@ export class CatalogImportService {
     private readonly dataSource: DataSource,
     private readonly heavyJobLimiter: HeavyJobLimiterService,
   ) {
-    this.uploadDir = process.env.CATALOG_UPLOAD_DIR || path.resolve('uploads', 'catalog');
+    this.uploadDir =
+      process.env.CATALOG_UPLOAD_DIR || path.resolve('uploads', 'catalog');
     // Ensure upload directory exists
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
@@ -237,12 +249,14 @@ export class CatalogImportService {
     const isExcel = ext === '.xlsx' || ext === '.xls';
 
     if (!isCsv && !isExcel) {
-      throw new BadRequestException('Only CSV and Excel (.xlsx, .xls) files are supported');
+      throw new BadRequestException(
+        'Only CSV and Excel (.xlsx, .xls) files are supported',
+      );
     }
 
     let filePath = file.path;
-    let fileName = file.originalname;
-    let mimeType = file.mimetype;
+    const fileName = file.originalname;
+    const mimeType = file.mimetype;
 
     // Convert Excel to CSV on disk so the streaming CSV pipeline works unchanged
     if (isExcel) {
@@ -253,10 +267,12 @@ export class CatalogImportService {
     }
 
     // Stream the file for header detection / row counting so large files do not OOM the process (nginx 502).
-    const { detectedHeaders, totalRows } = await this.scanUploadedCsvForMetadata(filePath);
+    const { detectedHeaders, totalRows } =
+      await this.scanUploadedCsvForMetadata(filePath);
 
     // Auto-generate column mapping if not provided
-    const resolvedMapping = columnMapping || this.autoMapColumns(detectedHeaders);
+    const resolvedMapping =
+      columnMapping || this.autoMapColumns(detectedHeaders);
 
     // Create import record
     const catalogImport = this.importRepo.create({
@@ -333,7 +349,10 @@ export class CatalogImportService {
       importRecord.columnMapping = columnMapping;
     }
 
-    importRecord.createdBy = withCreatedByBackfill(importRecord.createdBy, actorId);
+    importRecord.createdBy = withCreatedByBackfill(
+      importRecord.createdBy,
+      actorId,
+    );
     importRecord.status = 'validating';
     importRecord.startedAt = new Date();
     await this.importRepo.save(importRecord);
@@ -369,7 +388,9 @@ export class CatalogImportService {
     viewerId?: string,
     viewAll = true,
   ): Promise<{ imports: CatalogImport[]; total: number }> {
-    const qb = this.importRepo.createQueryBuilder('i').orderBy('i.createdAt', 'DESC');
+    const qb = this.importRepo
+      .createQueryBuilder('i')
+      .orderBy('i.createdAt', 'DESC');
     if (status) qb.andWhere('i.status = :status', { status });
     if (viewerId) {
       applyCreatedByVisibility(qb, 'i', viewerId, viewAll);
@@ -386,11 +407,16 @@ export class CatalogImportService {
     id: string,
     viewerId?: string,
     viewAll = true,
-  ): Promise<{ import: CatalogImport; verification: ImportVerificationSummary | null }> {
+  ): Promise<{
+    import: CatalogImport;
+    verification: ImportVerificationSummary | null;
+  }> {
     const record = await this.importRepo.findOneBy({ id });
     if (!record) throw new NotFoundException(`Import ${id} not found`);
     if (viewerId && !canViewJob(record.createdBy, viewerId, viewAll)) {
-      throw new ForbiddenException('You do not have access to this catalog import');
+      throw new ForbiddenException(
+        'You do not have access to this catalog import',
+      );
     }
 
     let verification: ImportVerificationSummary | null = null;
@@ -433,7 +459,11 @@ export class CatalogImportService {
   /**
    * Cancel a pending or processing import.
    */
-  async cancelImport(id: string, actorId?: string, viewAll = true): Promise<CatalogImport> {
+  async cancelImport(
+    id: string,
+    actorId?: string,
+    viewAll = true,
+  ): Promise<CatalogImport> {
     const record = await this.importRepo.findOneBy({ id });
     if (!record) throw new NotFoundException(`Import ${id} not found`);
     if (actorId) {
@@ -455,7 +485,11 @@ export class CatalogImportService {
   /**
    * Retry a failed import (resume from last processed row).
    */
-  async retryImport(id: string, actorId?: string, viewAll = true): Promise<CatalogImport> {
+  async retryImport(
+    id: string,
+    actorId?: string,
+    viewAll = true,
+  ): Promise<CatalogImport> {
     const record = await this.importRepo.findOneBy({ id });
     if (!record) throw new NotFoundException(`Import ${id} not found`);
     if (actorId) {
@@ -633,8 +667,8 @@ export class CatalogImportService {
 
     const processTextChunk = function* (text: string): Generator<string> {
       for (let i = 0; i < text.length; i++) {
-        const char = text[i]!;
-        const next = i + 1 < text.length ? text[i + 1]! : '';
+        const char = text[i];
+        const next = i + 1 < text.length ? text[i + 1] : '';
 
         if (char === '"') {
           if (insideQuotes && next === '"') {
@@ -790,7 +824,11 @@ export class CatalogImportService {
   /**
    * Get list of available catalog fields for column mapping UI.
    */
-  getCatalogFields(): Array<{ field: string; label: string; required: boolean }> {
+  getCatalogFields(): Array<{
+    field: string;
+    label: string;
+    required: boolean;
+  }> {
     return [
       { field: 'sku', label: 'SKU / Custom Label', required: false },
       { field: 'title', label: 'Product Title', required: true },
@@ -827,20 +865,21 @@ export class CatalogImportService {
   ): Promise<ImportVerificationSummary> {
     const listingSheetName = `Catalog Import ${record.id}`;
 
-    const [catalogProductsByImport, listingRecordsByImport, insertedRows] = await Promise.all([
-      this.productRepo.count({ where: { importId: record.id } }),
-      this.listingRepo.count({
-        where: {
-          sourceFileName: record.fileName,
-          sheetName: listingSheetName,
-        },
-      }),
-      this.rowRepo.find({
-        where: { importId: record.id, status: 'inserted' },
-        order: { rowNumber: 'ASC' },
-        take: 10,
-      }),
-    ]);
+    const [catalogProductsByImport, listingRecordsByImport, insertedRows] =
+      await Promise.all([
+        this.productRepo.count({ where: { importId: record.id } }),
+        this.listingRepo.count({
+          where: {
+            sourceFileName: record.fileName,
+            sheetName: listingSheetName,
+          },
+        }),
+        this.rowRepo.find({
+          where: { importId: record.id, status: 'inserted' },
+          order: { rowNumber: 'ASC' },
+          take: 10,
+        }),
+      ]);
 
     const sampleSkus = insertedRows
       .map((row) => row.rawData?.['sku']?.trim())
@@ -849,12 +888,13 @@ export class CatalogImportService {
     const dbInfoRaw = await this.importRepo.query(
       'SELECT current_database() AS database, current_schema() AS schema',
     );
-    const dbInfo = Array.isArray(dbInfoRaw) && dbInfoRaw.length > 0
-      ? {
-          database: String(dbInfoRaw[0].database ?? ''),
-          schema: String(dbInfoRaw[0].schema ?? ''),
-        }
-      : null;
+    const dbInfo =
+      Array.isArray(dbInfoRaw) && dbInfoRaw.length > 0
+        ? {
+            database: String(dbInfoRaw[0].database ?? ''),
+            schema: String(dbInfoRaw[0].schema ?? ''),
+          }
+        : null;
 
     return {
       importId: record.id,
@@ -873,7 +913,7 @@ export class CatalogImportService {
     sheetName: string,
     fallbackIndex: number,
   ): Partial<ListingRecord> {
-    const rowNumber = product.sourceRow ?? (1_000_000 + fallbackIndex + 1);
+    const rowNumber = product.sourceRow ?? 1_000_000 + fallbackIndex + 1;
 
     return {
       organizationId: null,
@@ -890,7 +930,9 @@ export class CatalogImportService {
       pEpid: product.epid,
       startPrice: product.price != null ? String(product.price) : null,
       quantity: product.quantity != null ? String(product.quantity) : null,
-      itemPhotoUrl: product.imageUrls?.length ? product.imageUrls.join('|') : null,
+      itemPhotoUrl: product.imageUrls?.length
+        ? product.imageUrls.join('|')
+        : null,
       conditionId: product.conditionId,
       description: product.description,
       format: product.format,

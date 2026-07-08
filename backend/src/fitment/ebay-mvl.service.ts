@@ -529,7 +529,12 @@ export class EbayMvlService {
 
       try {
         results.push(
-          await this.validateSingleRowFromApi(parsed, categoryId, cache, treeId),
+          await this.validateSingleRowFromApi(
+            parsed,
+            categoryId,
+            cache,
+            treeId,
+          ),
         );
         consecutiveApiFailures = 0;
       } catch (err) {
@@ -606,7 +611,9 @@ export class EbayMvlService {
       };
     }
 
-    if (!(await this.store.hasYear(marketplace, row.make, row.model, row.year))) {
+    if (
+      !(await this.store.hasYear(marketplace, row.make, row.model, row.year))
+    ) {
       return {
         row,
         status: 'needs_review',
@@ -765,7 +772,11 @@ export class EbayMvlService {
             make,
             model,
           );
-          return { pair, canonicalModel: result.model, canonicalMake: result.make };
+          return {
+            pair,
+            canonicalModel: result.model,
+            canonicalMake: result.make,
+          };
         },
       );
       for (const { pair, canonicalModel, canonicalMake } of canonicalResults) {
@@ -810,13 +821,15 @@ export class EbayMvlService {
       const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
       if (!make || !model || !existingModels.has(key)) {
         statuses[i] = 'rejected';
-        reasons[i] = `Model "${models[i]}" not valid for Make "${makes[i]}" on eBay MVL`;
+        reasons[i] =
+          `Model "${models[i]}" not valid for Make "${makes[i]}" on eBay MVL`;
       }
     }
 
     // ── Phase 5: batch (make, model, year) existence — only rows that passed model ──
     const yearCheckIdx = modelCheckIdx.filter((i) => statuses[i] === 'valid');
-    const uniqueTriples: Array<{ make: string; model: string; year: string }> = [];
+    const uniqueTriples: Array<{ make: string; model: string; year: string }> =
+      [];
     const seenTriples = new Set<string>();
     for (const i of yearCheckIdx) {
       const make = makes[i].trim();
@@ -839,7 +852,8 @@ export class EbayMvlService {
       const key = `${make.toLowerCase()}|${model.toLowerCase()}|${years[i]}`;
       if (!existingYears.has(key)) {
         statuses[i] = 'needs_review';
-        reasons[i] = `Year ${years[i]} not listed for ${makes[i]} ${models[i]} on eBay MVL`;
+        reasons[i] =
+          `Year ${years[i]} not listed for ${makes[i]} ${models[i]} on eBay MVL`;
       }
     }
 
@@ -877,7 +891,9 @@ export class EbayMvlService {
       }
     };
     await Promise.all(
-      Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+      Array.from({ length: Math.min(concurrency, items.length) }, () =>
+        worker(),
+      ),
     );
     return results;
   }

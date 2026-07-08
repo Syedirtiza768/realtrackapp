@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsBoolean, IsArray, IsObject, IsEnum, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  IsObject,
+  IsEnum,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTemplateDto {
@@ -22,7 +30,10 @@ export class CreateTemplateDto {
   @IsString()
   category?: string;
 
-  @ApiProperty({ enum: ['description', 'title', 'full'], default: 'description' })
+  @ApiProperty({
+    enum: ['description', 'title', 'full'],
+    default: 'description',
+  })
   @IsOptional()
   @IsEnum(['description', 'title', 'full'])
   templateType?: 'description' | 'title' | 'full';

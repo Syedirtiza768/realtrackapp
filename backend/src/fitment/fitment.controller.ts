@@ -18,7 +18,10 @@ import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { FitmentService } from './fitment.service.js';
 import { FitmentMatcherService } from './fitment-matcher.service.js';
-import { FitmentImportService, type AcesVehicleRow } from './fitment-import.service.js';
+import {
+  FitmentImportService,
+  type AcesVehicleRow,
+} from './fitment-import.service.js';
 import { EbayMvlService, type FitmentSelection } from './ebay-mvl.service.js';
 import { EbayMvlImportService } from './ebay-mvl-import.service.js';
 import { EbayMvlStoreService } from './ebay-mvl-store.service.js';
@@ -27,11 +30,18 @@ import {
   ImportEbayMvlFileDto,
   ValidateEbayMvlBatchDto,
 } from './dto/ebay-mvl-import.dto.js';
-import { resolveMvlMarketplace, mvlMarketplaceToTreeId } from './ebay-mvl-marketplace.util.js';
+import {
+  resolveMvlMarketplace,
+  mvlMarketplaceToTreeId,
+} from './ebay-mvl-marketplace.util.js';
 import { VinDecodeService } from './vin-decode.service.js';
 import { VinExportService } from './vin-export.service.js';
 import { VinDbExportService } from './vin-db-export.service.js';
-import { CreateFitmentDto, VerifyFitmentDto, FitmentDetectionDto } from './dto/create-fitment.dto.js';
+import {
+  CreateFitmentDto,
+  VerifyFitmentDto,
+  FitmentDetectionDto,
+} from './dto/create-fitment.dto.js';
 import { SearchFitmentDto } from './dto/search-fitment.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -95,9 +105,7 @@ export class FitmentController {
 
   @Get('listing/:listingId')
   @ApiOperation({ summary: 'Get all fitments for a listing' })
-  getListingFitments(
-    @Param('listingId', ParseUUIDPipe) listingId: string,
-  ) {
+  getListingFitments(@Param('listingId', ParseUUIDPipe) listingId: string) {
     return this.fitmentService.getListingFitments(listingId);
   }
 
@@ -143,16 +151,25 @@ export class FitmentController {
   @Post('bulk-import')
   @RequirePermissions('fitment.manage')
   @ApiOperation({ summary: 'Enqueue ACES XML/CSV bulk import' })
-  bulkImport(@Body() body: { rows: AcesVehicleRow[] }, @CurrentUser() user: User) {
+  bulkImport(
+    @Body() body: { rows: AcesVehicleRow[] },
+    @CurrentUser() user: User,
+  ) {
     return this.importService.enqueueBulkImport(body.rows, user.id);
   }
 
   // ─── eBay MVL (Compatibility) ───
 
   @Get('compatibility-properties/:categoryId')
-  @ApiOperation({ summary: 'Get compatibility property names for an eBay category' })
+  @ApiOperation({
+    summary: 'Get compatibility property names for an eBay category',
+  })
   @ApiParam({ name: 'categoryId', type: String, example: '6000' })
-  @ApiQuery({ name: 'treeId', required: false, description: 'eBay category tree ID (default: 0 for US)' })
+  @ApiQuery({
+    name: 'treeId',
+    required: false,
+    description: 'eBay category tree ID (default: 0 for US)',
+  })
   getCompatibilityProperties(
     @Param('categoryId') categoryId: string,
     @Query('treeId') treeId?: string,
@@ -161,7 +178,9 @@ export class FitmentController {
   }
 
   @Get('property-values/:categoryId/:propertyName')
-  @ApiOperation({ summary: 'Get cascading property values (e.g. Models for a Make)' })
+  @ApiOperation({
+    summary: 'Get cascading property values (e.g. Models for a Make)',
+  })
   @ApiParam({ name: 'categoryId', type: String, example: '6000' })
   @ApiParam({ name: 'propertyName', type: String, example: 'Model' })
   @ApiQuery({ name: 'q', required: false, description: 'Text search filter' })
@@ -200,7 +219,9 @@ export class FitmentController {
   @Post('build-compatibility')
   @RequirePermissions('fitment.manage')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Convert fitment selections to eBay compatibility JSON' })
+  @ApiOperation({
+    summary: 'Convert fitment selections to eBay compatibility JSON',
+  })
   buildCompatibility(@Body() body: { selections: FitmentSelection[] }) {
     return this.mvlService.buildCompatibilityArray(body.selections);
   }
@@ -269,7 +290,9 @@ export class FitmentController {
 
   @Post('ebay-mvl/import')
   @RequirePermissions('fitment.manage')
-  @ApiOperation({ summary: 'Import eBay MVL workbooks from a server directory' })
+  @ApiOperation({
+    summary: 'Import eBay MVL workbooks from a server directory',
+  })
   importEbayMvlDirectory(@Body() dto: ImportEbayMvlDirectoryDto) {
     return this.mvlImportService.importDirectory(dto.directory, {
       force: dto.force,
@@ -282,9 +305,7 @@ export class FitmentController {
   importEbayMvlFile(@Body() dto: ImportEbayMvlFileDto) {
     return this.mvlImportService.importFile(
       dto.filePath,
-      dto.marketplace
-        ? resolveMvlMarketplace(dto.marketplace)
-        : undefined,
+      dto.marketplace ? resolveMvlMarketplace(dto.marketplace) : undefined,
       { force: dto.force },
     );
   }
@@ -292,7 +313,9 @@ export class FitmentController {
   @Post('ebay-mvl/validate-batch')
   @RequirePermissions('fitment.view')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Validate fitment rows against local eBay MVL (DB-first)' })
+  @ApiOperation({
+    summary: 'Validate fitment rows against local eBay MVL (DB-first)',
+  })
   async validateEbayMvlBatch(@Body() dto: ValidateEbayMvlBatchDto) {
     const marketplace = resolveMvlMarketplace(dto.marketplace);
     return this.mvlService.validateFitmentData(dto.rows ?? [], '6000', {
@@ -303,21 +326,27 @@ export class FitmentController {
   // ─── VIN Decode ───
 
   @Get('vin/:vin')
-  @ApiOperation({ summary: 'Decode a VIN via NHTSA and map to eBay compatibility filter' })
+  @ApiOperation({
+    summary: 'Decode a VIN via NHTSA and map to eBay compatibility filter',
+  })
   @ApiParam({ name: 'vin', type: String, example: '1HGCV1F34LA000001' })
   decodeVin(@Param('vin') vin: string) {
     return this.vinService.decode(vin);
   }
 
   @Get('vin/:vin/ebay-filter')
-  @ApiOperation({ summary: 'Decode VIN and return eBay compatibility filter object' })
+  @ApiOperation({
+    summary: 'Decode VIN and return eBay compatibility filter object',
+  })
   @ApiParam({ name: 'vin', type: String })
   vinToEbayFilter(@Param('vin') vin: string) {
     return this.vinService.toEbayCompatibilityFilter(vin);
   }
 
   @Get('vin/:vin/listings')
-  @ApiOperation({ summary: 'Get all part listings that fit a vehicle identified by VIN' })
+  @ApiOperation({
+    summary: 'Get all part listings that fit a vehicle identified by VIN',
+  })
   @ApiParam({ name: 'vin', type: String, example: '1HGCV1F34LA000001' })
   getListingsByVin(@Param('vin') vin: string) {
     return this.fitmentService.findListingsByVin(vin);
@@ -338,7 +367,8 @@ export class FitmentController {
     const result = await this.vinExport.generatePipelineInput(vin);
 
     res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${result.filename}"`,
       'X-Vehicle-Info': `${result.vehicleInfo.year} ${result.vehicleInfo.make} ${result.vehicleInfo.model}`,
       'X-Part-Count': String(result.partCount),
@@ -356,14 +386,12 @@ export class FitmentController {
       'Finds listings in the database that match the VIN-decoded vehicle and exports them as an XLSX file with images, pricing, and all listing data.',
   })
   @ApiParam({ name: 'vin', type: String, example: '1HGCV1F34LA000001' })
-  async exportVinDbListings(
-    @Param('vin') vin: string,
-    @Res() res: Response,
-  ) {
+  async exportVinDbListings(@Param('vin') vin: string, @Res() res: Response) {
     const result = await this.vinDbExport.exportListingsByVin(vin);
 
     res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${result.filename}"`,
       'X-Listing-Count': String(result.listingCount),
       'X-Match-Strategy': result.matchStrategy,

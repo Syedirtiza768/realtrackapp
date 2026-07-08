@@ -50,13 +50,15 @@ export class OpenAiService implements OnModuleInit {
       'text-embedding-3-small',
     );
     const detail = this.config.get<string>('OPENAI_VISION_DETAIL', 'auto');
-    this.visionDetail =
-      detail === 'low' || detail === 'high' ? detail : 'auto';
+    this.visionDetail = detail === 'low' || detail === 'high' ? detail : 'auto';
   }
 
   onModuleInit() {
     const apiKey = this.config.get<string>('OPENAI_API_KEY', '');
-    const baseURL = this.config.get<string>('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1');
+    const baseURL = this.config.get<string>(
+      'OPENAI_BASE_URL',
+      'https://openrouter.ai/api/v1',
+    );
     if (!apiKey) {
       this.logger.warn(
         'OPENAI_API_KEY not set — AI calls will fail. Set the env var to enable AI features.',
@@ -97,19 +99,13 @@ export class OpenAiService implements OnModuleInit {
     if (req.imageUrls?.length) {
       const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
         { type: 'text', text: req.userPrompt },
-        ...req.imageUrls.map(
-          (url) =>
-            ({
-              type: 'image_url' as const,
-              image_url: {
-                url,
-                detail: (req.imageDetail ?? this.visionDetail) as
-                  | 'low'
-                  | 'auto'
-                  | 'high',
-              },
-            }),
-        ),
+        ...req.imageUrls.map((url) => ({
+          type: 'image_url' as const,
+          image_url: {
+            url,
+            detail: req.imageDetail ?? this.visionDetail,
+          },
+        })),
       ];
       messages.push({ role: 'user', content });
     } else {
@@ -121,7 +117,9 @@ export class OpenAiService implements OnModuleInit {
         model,
         messages,
         temperature,
-        ...(typeof req.maxTokens === 'number' ? { max_tokens: req.maxTokens } : {}),
+        ...(typeof req.maxTokens === 'number'
+          ? { max_tokens: req.maxTokens }
+          : {}),
         ...(req.jsonMode ? { response_format: { type: 'json_object' } } : {}),
       }),
     );
@@ -225,7 +223,10 @@ export class OpenAiService implements OnModuleInit {
    * Retry wrapper with exponential backoff for rate limit (429) errors.
    * Max 3 retries with 1s, 4s, 16s delays.
    */
-  private async callWithRetry<T>(fn: () => Promise<T>, attempt = 0): Promise<T> {
+  private async callWithRetry<T>(
+    fn: () => Promise<T>,
+    attempt = 0,
+  ): Promise<T> {
     const maxRetries = 3;
     try {
       const result = await fn();

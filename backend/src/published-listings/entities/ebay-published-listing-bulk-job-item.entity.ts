@@ -22,7 +22,9 @@ export class EbayPublishedListingBulkJobItem {
   @Column({ name: 'bulk_job_id', type: 'uuid' })
   bulkJobId!: string;
 
-  @ManyToOne(() => EbayPublishedListingBulkJob, (j) => j.items, { onDelete: 'CASCADE' })
+  @ManyToOne(() => EbayPublishedListingBulkJob, (j) => j.items, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'bulk_job_id' })
   bulkJob!: EbayPublishedListingBulkJob;
 

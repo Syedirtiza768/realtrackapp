@@ -69,7 +69,11 @@ export function mapToEbayConditionEnum(
     return NUMERIC_CONDITION_MAP[numeric];
   }
 
-  const labelKey = trimmed.toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const labelKey = trimmed
+    .toLowerCase()
+    .replace(/[_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (LABEL_CONDITION_MAP[labelKey]) {
     return LABEL_CONDITION_MAP[labelKey];
   }

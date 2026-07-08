@@ -54,7 +54,8 @@ describe('ebay-english-listing.util', () => {
   });
 
   it('flags generation/year mismatch in English validation', () => {
-    const badTitle = '2013-2021 Lexus RX AL20 Dashboard Trim 1A421-034G Used OEM';
+    const badTitle =
+      '2013-2021 Lexus RX AL20 Dashboard Trim 1A421-034G Used OEM';
     const result = validateEnglishListing({
       title: badTitle,
       description: buildEnglishListingDescription(sampleInput, 'US'),

@@ -28,7 +28,9 @@ export class TeamsController {
 
   @Get()
   @RequirePermissions('teams.view')
-  @ApiOperation({ summary: 'List teams (all for admins, member teams for others)' })
+  @ApiOperation({
+    summary: 'List teams (all for admins, member teams for others)',
+  })
   async list(@CurrentUser() user: User) {
     const viewAll = await this.rbac.userHasPermission(user.id, 'teams.manage');
     const teams = await this.teamsService.listTeams(viewAll, user.id);
@@ -54,7 +56,10 @@ export class TeamsController {
   @Patch(':id')
   @RequirePermissions('teams.manage')
   @ApiOperation({ summary: 'Update a team' })
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTeamDto) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTeamDto,
+  ) {
     const team = await this.teamsService.updateTeam(id, dto);
     return { team };
   }

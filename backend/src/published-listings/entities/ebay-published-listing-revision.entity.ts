@@ -51,7 +51,12 @@ export class EbayPublishedListingRevision {
   @Column({ name: 'action_type', type: 'varchar', length: 80 })
   actionType!: string;
 
-  @Column({ name: 'ebay_item_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'ebay_item_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   ebayItemId!: string | null;
 
   @Column({ name: 'before_value', type: 'jsonb', nullable: true })

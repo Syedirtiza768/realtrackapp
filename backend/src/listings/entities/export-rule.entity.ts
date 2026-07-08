@@ -66,11 +66,23 @@ export class ExportRule {
   // ──────────────────────────── Overrides ─────────────────────────
 
   /** Price markup percentage (e.g. 1.15 = +15%) */
-  @Column({ name: 'price_multiplier', type: 'numeric', precision: 5, scale: 4, default: 1 })
+  @Column({
+    name: 'price_multiplier',
+    type: 'numeric',
+    precision: 5,
+    scale: 4,
+    default: 1,
+  })
   priceMultiplier!: number;
 
   /** Fixed price addition (applied after multiplier) */
-  @Column({ name: 'price_addition', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'price_addition',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
   priceAddition!: number;
 
   /** Title prefix to add (e.g. "OEM ") */
@@ -82,21 +94,41 @@ export class ExportRule {
   titleSuffix!: string | null;
 
   /** eBay fulfillment policy ID for this rule */
-  @Column({ name: 'fulfillment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'fulfillment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   fulfillmentPolicyId!: string | null;
 
   /** eBay payment policy ID */
-  @Column({ name: 'payment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'payment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   paymentPolicyId!: string | null;
 
   /** eBay return policy ID */
-  @Column({ name: 'return_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'return_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   returnPolicyId!: string | null;
 
   // ──────────────────────────── Scheduling ────────────────────────
 
   /** How often to check for new matching products (cron expression) */
-  @Column({ name: 'schedule_cron', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'schedule_cron',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   scheduleCron!: string | null;
 
   /** Whether to auto-publish or just create as draft offers */

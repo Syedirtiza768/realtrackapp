@@ -50,11 +50,11 @@ export class ReviewService {
       // Apply corrections over AI-extracted fields
       const corrections = dto.corrections ?? {};
       const title =
-        (corrections['title'] as string) ?? aiResult.extractedTitle ?? 'Untitled Part';
-      const brand =
-        (corrections['brand'] as string) ?? aiResult.extractedBrand;
-      const mpn =
-        (corrections['mpn'] as string) ?? aiResult.extractedMpn;
+        (corrections['title'] as string) ??
+        aiResult.extractedTitle ??
+        'Untitled Part';
+      const brand = (corrections['brand'] as string) ?? aiResult.extractedBrand;
+      const mpn = (corrections['mpn'] as string) ?? aiResult.extractedMpn;
 
       // Create a draft listing from AI results
       const listing = manager.create(ListingRecord, {

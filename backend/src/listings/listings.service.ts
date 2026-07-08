@@ -40,25 +40,25 @@ const HEADER_TO_PROPERTY: Record<string, keyof ListingRecord> = {
   'custom label (sku)': 'customLabelSku',
   'category id': 'categoryId',
   'category name': 'categoryName',
-  'title': 'title',
-  'relationship': 'relationship',
+  title: 'title',
+  relationship: 'relationship',
   'relationship details': 'relationshipDetails',
   'schedule time': 'scheduleTime',
   'p:upc': 'pUpc',
   'p:epid': 'pEpid',
   'start price': 'startPrice',
-  'quantity': 'quantity',
+  quantity: 'quantity',
   'item photo url': 'itemPhotoUrl',
   'condition id': 'conditionId',
-  'description': 'description',
-  'format': 'format',
-  'duration': 'duration',
+  description: 'description',
+  format: 'format',
+  duration: 'duration',
   'buy it now price': 'buyItNowPrice',
   'best offer enabled': 'bestOfferEnabled',
   'best offer auto accept price': 'bestOfferAutoAcceptPrice',
   'minimum best offer price': 'minimumBestOfferPrice',
   'immediate pay required': 'immediatePayRequired',
-  'location': 'location',
+  location: 'location',
   'shipping service 1 option': 'shippingService1Option',
   'shipping service 1 cost': 'shippingService1Cost',
   'shipping service 1 priority': 'shippingService1Priority',
@@ -73,7 +73,7 @@ const HEADER_TO_PROPERTY: Record<string, keyof ListingRecord> = {
   'shipping profile name': 'shippingProfileName',
   'return profile name': 'returnProfileName',
   'payment profile name': 'paymentProfileName',
-  'productcompliancepolicyid': 'productCompliancePolicyId',
+  productcompliancepolicyid: 'productCompliancePolicyId',
   'regional productcompliancepolicies': 'regionalProductCompliancePolicies',
   'c:brand': 'cBrand',
   'c:type': 'cType',
@@ -311,9 +311,7 @@ export class ListingsService {
     }
 
     if (query.hasImage === '1') {
-      qb.andWhere(
-        "r.itemPhotoUrl IS NOT NULL AND r.itemPhotoUrl != ''",
-      );
+      qb.andWhere("r.itemPhotoUrl IS NOT NULL AND r.itemPhotoUrl != ''");
     }
 
     const [items, total] = await qb.getManyAndCount();
@@ -344,7 +342,9 @@ export class ListingsService {
 
     let catalogProduct: CatalogProduct | null = null;
     if (record.customLabelSku) {
-      catalogProduct = await this.catalogProductRepo.findOneBy({ sku: record.customLabelSku });
+      catalogProduct = await this.catalogProductRepo.findOneBy({
+        sku: record.customLabelSku,
+      });
     }
     return { listing: record, catalogProduct };
   }
@@ -365,8 +365,8 @@ export class ListingsService {
   private isSkuUniqueViolation(err: unknown): boolean {
     return (
       err instanceof QueryFailedError &&
-      (err as QueryFailedError & { driverError?: { code?: string } }).driverError
-        ?.code === '23505'
+      (err as QueryFailedError & { driverError?: { code?: string } })
+        .driverError?.code === '23505'
     );
   }
 
@@ -470,11 +470,20 @@ export class ListingsService {
         }
 
         // Price change on a published listing requires price_override
-        const priceFields = ['startPrice', 'buyItNowPrice', 'bestOfferAutoAcceptPrice', 'minimumBestOfferPrice'] as const;
+        const priceFields = [
+          'startPrice',
+          'buyItNowPrice',
+          'bestOfferAutoAcceptPrice',
+          'minimumBestOfferPrice',
+        ] as const;
         const hasPriceChange = priceFields.some(
           (f) => (dto as unknown as Record<string, unknown>)[f] !== undefined,
         );
-        if (listing.status === 'published' && hasPriceChange && !canPriceOverride) {
+        if (
+          listing.status === 'published' &&
+          hasPriceChange &&
+          !canPriceOverride
+        ) {
           throw new ForbiddenException(
             'Changing price on a live listing requires manager approval.',
           );
@@ -546,7 +555,10 @@ export class ListingsService {
         dto.status === 'published' &&
         listing.status !== 'published'
       ) {
-        const canApprove = await this.rbac.userHasPermission(user.id, 'listings.approve');
+        const canApprove = await this.rbac.userHasPermission(
+          user.id,
+          'listings.approve',
+        );
         if (!canApprove) {
           throw new ForbiddenException(
             'You do not have permission to approve listings for publication.',
@@ -623,7 +635,10 @@ export class ListingsService {
           }
 
           const expectedVersion = dto.versions?.[id];
-          if (expectedVersion !== undefined && listing.version !== expectedVersion) {
+          if (
+            expectedVersion !== undefined &&
+            listing.version !== expectedVersion
+          ) {
             throw new ConflictException({
               message: 'This listing was modified since you loaded it.',
               currentVersion: listing.version,
@@ -648,7 +663,10 @@ export class ListingsService {
     return { updated: updated.length, failed };
   }
 
-  async bulkApplyProfiles(dto: BulkProfilesDto, user: User): Promise<{ updated: number }> {
+  async bulkApplyProfiles(
+    dto: BulkProfilesDto,
+    user: User,
+  ): Promise<{ updated: number }> {
     const { shippingProfile, returnProfile, paymentProfile } = dto;
     if (!shippingProfile && !returnProfile && !paymentProfile) {
       throw new BadRequestException('At least one profile must be provided');
@@ -659,7 +677,10 @@ export class ListingsService {
       throw new NotFoundException('No listings found for given IDs');
     }
 
-    const manageAll = await this.rbac.userHasPermission(user.id, 'teams.manage');
+    const manageAll = await this.rbac.userHasPermission(
+      user.id,
+      'teams.manage',
+    );
     await this.teamsService.assertListingsTeamScope(
       listings.map((l) => ({ id: l.id, teamId: l.teamId })),
       user.id,
@@ -698,7 +719,8 @@ export class ListingsService {
 
   async bulkSoftDelete(ids: string[]) {
     const listings = await this.listingRepo.findBy({ id: In(ids) });
-    if (!listings.length) throw new NotFoundException('No listings found for given IDs');
+    if (!listings.length)
+      throw new NotFoundException('No listings found for given IDs');
     await this.listingRepo.softRemove(listings);
     return { deleted: listings.length };
   }
@@ -707,11 +729,24 @@ export class ListingsService {
     const qb = this.listingRepo
       .createQueryBuilder('r')
       .select([
-        'r.id', 'r.customLabelSku', 'r.title', 'r.cBrand', 'r.cType',
-        'r.categoryId', 'r.categoryName', 'r.startPrice', 'r.quantity',
-        'r.conditionId', 'r.cManufacturerPartNumber', 'r.cOeOemPartNumber',
-        'r.location', 'r.format', 'r.description', 'r.itemPhotoUrl',
-        'r.sourceFileName', 'r.importedAt',
+        'r.id',
+        'r.customLabelSku',
+        'r.title',
+        'r.cBrand',
+        'r.cType',
+        'r.categoryId',
+        'r.categoryName',
+        'r.startPrice',
+        'r.quantity',
+        'r.conditionId',
+        'r.cManufacturerPartNumber',
+        'r.cOeOemPartNumber',
+        'r.location',
+        'r.format',
+        'r.description',
+        'r.itemPhotoUrl',
+        'r.sourceFileName',
+        'r.importedAt',
       ])
       .orderBy('r.importedAt', 'DESC')
       .limit(10000);
@@ -726,39 +761,76 @@ export class ListingsService {
       );
     }
     if (query.brands?.trim()) {
-      const brandList = query.brands.split(',').map(b => b.trim()).filter(Boolean);
+      const brandList = query.brands
+        .split(',')
+        .map((b) => b.trim())
+        .filter(Boolean);
       qb.andWhere('r.cBrand IN (:...brands)', { brands: brandList });
     }
     if (query.categories?.trim()) {
-      const catList = query.categories.split(',').map(c => c.trim()).filter(Boolean);
+      const catList = query.categories
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean);
       qb.andWhere('r.categoryId IN (:...cats)', { cats: catList });
     }
     if (query.conditions?.trim()) {
-      const condList = query.conditions.split(',').map(c => c.trim()).filter(Boolean);
+      const condList = query.conditions
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean);
       qb.andWhere('r.conditionId IN (:...conds)', { conds: condList });
     }
     if (query.minPrice != null) {
-      qb.andWhere('CAST(r.startPrice AS numeric) >= :minPrice', { minPrice: query.minPrice });
+      qb.andWhere('CAST(r.startPrice AS numeric) >= :minPrice', {
+        minPrice: query.minPrice,
+      });
     }
     if (query.maxPrice != null) {
-      qb.andWhere('CAST(r.startPrice AS numeric) <= :maxPrice', { maxPrice: query.maxPrice });
+      qb.andWhere('CAST(r.startPrice AS numeric) <= :maxPrice', {
+        maxPrice: query.maxPrice,
+      });
     }
 
     const items = await qb.getMany();
 
-    const headers = ['SKU','Title','Brand','Type','Category','Price','Qty','Condition','MPN','OEM Part','Location','Format'];
+    const headers = [
+      'SKU',
+      'Title',
+      'Brand',
+      'Type',
+      'Category',
+      'Price',
+      'Qty',
+      'Condition',
+      'MPN',
+      'OEM Part',
+      'Location',
+      'Format',
+    ];
     const escape = (v: string | null | undefined) => {
       if (v == null) return '';
       const s = String(v);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+      if (s.includes(',') || s.includes('"') || s.includes('\n'))
+        return `"${s.replace(/"/g, '""')}"`;
       return s;
     };
-    const rows = items.map(r => [
-      escape(r.customLabelSku), escape(r.title), escape(r.cBrand), escape(r.cType),
-      escape(r.categoryName), escape(r.startPrice), escape(r.quantity),
-      escape(r.conditionId), escape(r.cManufacturerPartNumber), escape(r.cOeOemPartNumber),
-      escape(r.location), escape(r.format),
-    ].join(','));
+    const rows = items.map((r) =>
+      [
+        escape(r.customLabelSku),
+        escape(r.title),
+        escape(r.cBrand),
+        escape(r.cType),
+        escape(r.categoryName),
+        escape(r.startPrice),
+        escape(r.quantity),
+        escape(r.conditionId),
+        escape(r.cManufacturerPartNumber),
+        escape(r.cOeOemPartNumber),
+        escape(r.location),
+        escape(r.format),
+      ].join(','),
+    );
 
     return [headers.join(','), ...rows].join('\n');
   }
@@ -818,7 +890,10 @@ export class ListingsService {
       .groupBy('r.cBrand');
     if (storeFilter) brandsQb.andWhere(storeFilter.sql, storeFilter.params);
     brandsQb.orderBy('count', 'DESC').limit(100);
-    const brandsRaw = await brandsQb.getRawMany<{ value: string; count: string }>();
+    const brandsRaw = await brandsQb.getRawMany<{
+      value: string;
+      count: string;
+    }>();
 
     const categoriesQb = this.listingRepo
       .createQueryBuilder('r')
@@ -830,7 +905,11 @@ export class ListingsService {
       .addGroupBy('r.categoryId');
     if (storeFilter) categoriesQb.andWhere(storeFilter.sql, storeFilter.params);
     categoriesQb.orderBy('count', 'DESC').limit(100);
-    const categoriesRaw = await categoriesQb.getRawMany<{ value: string; id: string; count: string }>();
+    const categoriesRaw = await categoriesQb.getRawMany<{
+      value: string;
+      id: string;
+      count: string;
+    }>();
 
     const conditionsQb = this.listingRepo
       .createQueryBuilder('r')
@@ -840,19 +919,29 @@ export class ListingsService {
       .groupBy('r.conditionId');
     if (storeFilter) conditionsQb.andWhere(storeFilter.sql, storeFilter.params);
     conditionsQb.orderBy('count', 'DESC');
-    const conditionsRaw = await conditionsQb.getRawMany<{ value: string; count: string }>();
+    const conditionsRaw = await conditionsQb.getRawMany<{
+      value: string;
+      count: string;
+    }>();
 
     const sourceFilesQb = this.listingRepo
       .createQueryBuilder('r')
       .select('r.sourceFileName', 'value')
       .addSelect('COUNT(*)', 'count')
       .groupBy('r.sourceFileName');
-    if (storeFilter) sourceFilesQb.andWhere(storeFilter.sql, storeFilter.params);
+    if (storeFilter)
+      sourceFilesQb.andWhere(storeFilter.sql, storeFilter.params);
     sourceFilesQb.orderBy('count', 'DESC');
-    const sourceFilesRaw = await sourceFilesQb.getRawMany<{ value: string; count: string }>();
+    const sourceFilesRaw = await sourceFilesQb.getRawMany<{
+      value: string;
+      count: string;
+    }>();
 
     return {
-      brands: brandsRaw.map((r) => ({ value: r.value, count: Number(r.count) })),
+      brands: brandsRaw.map((r) => ({
+        value: r.value,
+        count: Number(r.count),
+      })),
       categories: categoriesRaw.map((r) => ({
         value: r.value,
         id: r.id,
@@ -996,7 +1085,9 @@ export class ListingsService {
   /* ── Private helpers ────────────────────────────────────── */
 
   /** Store filter: returns { sql, params } or null if no filtering needed */
-  private async buildStoreFilter(user?: User): Promise<{ sql: string; params: Record<string, string[]> } | null> {
+  private async buildStoreFilter(
+    user?: User,
+  ): Promise<{ sql: string; params: Record<string, string[]> } | null> {
     const storeIds = await this.storeAccess.resolveStoreFilter(user);
     if (storeIds === undefined) return null; // accessAll or no user
     if (storeIds.length === 0) {
@@ -1015,10 +1106,11 @@ export class ListingsService {
       .insert()
       .into(ListingRecord)
       .values(batch as object[])
-      .orUpdate(
-        UPSERT_COLUMNS as string[],
-        ['sourceFileName', 'sheetName', 'sourceRowNumber'],
-      )
+      .orUpdate(UPSERT_COLUMNS as string[], [
+        'sourceFileName',
+        'sheetName',
+        'sourceRowNumber',
+      ])
       .execute();
   }
 
@@ -1026,9 +1118,7 @@ export class ListingsService {
    * Find the header row index by locating the cell
    * containing "Custom label (SKU)".
    */
-  private findHeaderRow(
-    rows: (string | number | null)[][],
-  ): number | null {
+  private findHeaderRow(rows: (string | number | null)[][]): number | null {
     for (let r = 0; r < Math.min(rows.length, 20); r += 1) {
       const row = rows[r] ?? [];
       for (let c = 0; c < row.length; c += 1) {
@@ -1094,17 +1184,43 @@ export class ListingsService {
   ): Record<string, { from: unknown; to: unknown }> {
     const diff: Record<string, { from: unknown; to: unknown }> = {};
     const tracked = new Set([
-      'title', 'startPrice', 'quantity', 'description', 'conditionId',
-      'buyItNowPrice', 'bestOfferEnabled', 'bestOfferAutoAcceptPrice',
-      'minimumBestOfferPrice', 'format', 'duration', 'location',
-      'shippingService1Option', 'shippingService1Cost', 'shippingService2Option',
-      'shippingService2Cost', 'maxDispatchTime', 'returnsAcceptedOption',
-      'returnsWithinOption', 'refundOption', 'returnShippingCostPaidBy',
-      'shippingProfileName', 'returnProfileName', 'paymentProfileName',
-      'cBrand', 'cType', 'customLabelSku', 'categoryId', 'categoryName',
-      'itemPhotoUrl', 'startPriceNum', 'quantityNum', 'buyItNowPriceNum',
-      'bestOfferAutoAcceptPriceNum', 'minimumBestOfferPriceNum',
-      'shippingService1CostNum', 'shippingService2CostNum',
+      'title',
+      'startPrice',
+      'quantity',
+      'description',
+      'conditionId',
+      'buyItNowPrice',
+      'bestOfferEnabled',
+      'bestOfferAutoAcceptPrice',
+      'minimumBestOfferPrice',
+      'format',
+      'duration',
+      'location',
+      'shippingService1Option',
+      'shippingService1Cost',
+      'shippingService2Option',
+      'shippingService2Cost',
+      'maxDispatchTime',
+      'returnsAcceptedOption',
+      'returnsWithinOption',
+      'refundOption',
+      'returnShippingCostPaidBy',
+      'shippingProfileName',
+      'returnProfileName',
+      'paymentProfileName',
+      'cBrand',
+      'cType',
+      'customLabelSku',
+      'categoryId',
+      'categoryName',
+      'itemPhotoUrl',
+      'startPriceNum',
+      'quantityNum',
+      'buyItNowPriceNum',
+      'bestOfferAutoAcceptPriceNum',
+      'minimumBestOfferPriceNum',
+      'shippingService1CostNum',
+      'shippingService2CostNum',
     ]);
     for (const key of tracked) {
       const fromVal = before[key];

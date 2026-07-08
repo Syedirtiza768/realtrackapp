@@ -1,7 +1,9 @@
 import { AiOptimizerService } from './ai-optimizer.service.js';
 
 describe('AiOptimizerService.computeReward', () => {
-  const service = Object.create(AiOptimizerService.prototype) as AiOptimizerService;
+  const service = Object.create(
+    AiOptimizerService.prototype,
+  ) as AiOptimizerService;
 
   it('rewards high approval, pass rate, and compliance', () => {
     const reward = service.computeReward({

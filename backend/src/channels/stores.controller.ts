@@ -57,7 +57,9 @@ export class StoresController {
   }
 
   @Get(':storeId/profiles')
-  @ApiOperation({ summary: 'Get available shipping, return, and payment profiles for a store' })
+  @ApiOperation({
+    summary: 'Get available shipping, return, and payment profiles for a store',
+  })
   getStoreProfiles(@Param('storeId', ParseUUIDPipe) storeId: string) {
     return this.storesService.getStoreProfiles(storeId);
   }

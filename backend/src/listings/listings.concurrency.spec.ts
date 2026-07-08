@@ -9,7 +9,15 @@ import { CatalogProduct } from '../catalog-import/entities/catalog-product.entit
 import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
 
-const mockUser = { id: 'user-1', email: 'test@test.com', name: 'Test', role: 'user', active: true, lastLoginAt: null, createdAt: new Date() };
+const mockUser = {
+  id: 'user-1',
+  email: 'test@test.com',
+  name: 'Test',
+  role: 'user',
+  active: true,
+  lastLoginAt: null,
+  createdAt: new Date(),
+};
 
 describe('ListingsService concurrency', () => {
   let service: ListingsService;
@@ -62,7 +70,16 @@ describe('ListingsService concurrency', () => {
         {
           provide: RbacService,
           useValue: {
-            getPermissionKeysForUser: jest.fn().mockResolvedValue(new Set(['listings.update', 'listings.revise', 'listings.price_override', 'listings.approve'])),
+            getPermissionKeysForUser: jest
+              .fn()
+              .mockResolvedValue(
+                new Set([
+                  'listings.update',
+                  'listings.revise',
+                  'listings.price_override',
+                  'listings.approve',
+                ]),
+              ),
             userHasPermission: jest.fn().mockResolvedValue(true),
           },
         },
@@ -81,10 +98,14 @@ describe('ListingsService concurrency', () => {
       organizationId: null,
     });
 
-    const result = await service.patchStatus('listing-1', {
-      status: 'ready',
-      version: 3,
-    }, mockUser as any);
+    const result = await service.patchStatus(
+      'listing-1',
+      {
+        status: 'ready',
+        version: 3,
+      },
+      mockUser as any,
+    );
 
     expect(result.listing.status).toBe('ready');
     expect(save).toHaveBeenCalled();
@@ -100,7 +121,11 @@ describe('ListingsService concurrency', () => {
     });
 
     await expect(
-      service.patchStatus('listing-1', { status: 'ready', version: 3 }, mockUser as any),
+      service.patchStatus(
+        'listing-1',
+        { status: 'ready', version: 3 },
+        mockUser as any,
+      ),
     ).rejects.toMatchObject({
       response: {
         currentVersion: 5,
@@ -108,14 +133,22 @@ describe('ListingsService concurrency', () => {
       },
     });
     await expect(
-      service.patchStatus('listing-1', { status: 'ready', version: 3 }, mockUser as any),
+      service.patchStatus(
+        'listing-1',
+        { status: 'ready', version: 3 },
+        mockUser as any,
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('patchStatus throws 404 when listing missing', async () => {
     findOne.mockResolvedValue(null);
     await expect(
-      service.patchStatus('missing', { status: 'ready', version: 1 }, mockUser as any),
+      service.patchStatus(
+        'missing',
+        { status: 'ready', version: 1 },
+        mockUser as any,
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

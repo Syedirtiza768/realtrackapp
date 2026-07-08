@@ -14,6 +14,11 @@ export class EbayCategoryController {
   async suggest(@Query('q') q: string) {
     if (!q?.trim()) return { suggestions: [] };
     const suggestions = await this.taxonomy.getCategorySuggestions(q.trim());
-    return { suggestions: suggestions.map((s) => ({ id: s.category.categoryId, name: s.category.categoryName })) };
+    return {
+      suggestions: suggestions.map((s) => ({
+        id: s.category.categoryId,
+        name: s.category.categoryName,
+      })),
+    };
   }
 }

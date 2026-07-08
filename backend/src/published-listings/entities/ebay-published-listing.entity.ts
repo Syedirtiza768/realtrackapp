@@ -37,10 +37,14 @@ export interface PublishedListingHealthFlag {
 @Index('idx_epl_sku', ['sku'])
 @Index('idx_epl_item_id', ['ebayItemId'])
 @Index('idx_epl_synced', ['lastSyncedAt'])
-@Index('uq_epl_account_item', ['ebayAccountId', 'marketplaceId', 'ebayItemId'], {
-  unique: true,
-  where: '"ebay_item_id" IS NOT NULL',
-})
+@Index(
+  'uq_epl_account_item',
+  ['ebayAccountId', 'marketplaceId', 'ebayItemId'],
+  {
+    unique: true,
+    where: '"ebay_item_id" IS NOT NULL',
+  },
+)
 export class EbayPublishedListing {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -69,7 +73,12 @@ export class EbayPublishedListing {
   @Column({ name: 'marketplace_id', type: 'varchar', length: 30 })
   marketplaceId!: string;
 
-  @Column({ name: 'ebay_item_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'ebay_item_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   ebayItemId!: string | null;
 
   @Column({ name: 'offer_id', type: 'varchar', length: 100, nullable: true })
@@ -102,10 +111,20 @@ export class EbayPublishedListing {
   @Column({ name: 'quantity_sold', type: 'int', default: 0 })
   quantitySold!: number;
 
-  @Column({ name: 'listing_status', type: 'varchar', length: 30, default: 'active' })
+  @Column({
+    name: 'listing_status',
+    type: 'varchar',
+    length: 30,
+    default: 'active',
+  })
   listingStatus!: PublishedListingStatus;
 
-  @Column({ name: 'listing_format', type: 'varchar', length: 30, default: 'fixed_price' })
+  @Column({
+    name: 'listing_format',
+    type: 'varchar',
+    length: 30,
+    default: 'fixed_price',
+  })
   listingFormat!: PublishedListingFormat;
 
   @Column({ type: 'varchar', length: 60, nullable: true })
@@ -141,7 +160,12 @@ export class EbayPublishedListing {
   @Column({ name: 'raw_ebay_response', type: 'jsonb', nullable: true })
   rawEbayResponse!: Record<string, unknown> | null;
 
-  @Column({ name: 'account_display_name', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'account_display_name',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   accountDisplayName!: string | null;
 
   @Column({ name: 'ebay_start_time', type: 'timestamptz', nullable: true })
@@ -150,7 +174,11 @@ export class EbayPublishedListing {
   @Column({ name: 'ebay_end_time', type: 'timestamptz', nullable: true })
   ebayEndTime!: Date | null;
 
-  @Column({ name: 'ebay_last_modified_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'ebay_last_modified_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   ebayLastModifiedAt!: Date | null;
 
   @Column({ name: 'last_synced_at', type: 'timestamptz', nullable: true })

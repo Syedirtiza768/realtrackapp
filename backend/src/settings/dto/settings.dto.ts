@@ -60,8 +60,16 @@ export class UpdateShippingProfileDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() carrier?: string;
   @IsOptional() @IsString() service?: string;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(30) handlingTime?: number;
-  @IsOptional() @IsEnum(['flat', 'calculated', 'free']) costType?: 'flat' | 'calculated' | 'free';
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(30)
+  handlingTime?: number;
+  @IsOptional() @IsEnum(['flat', 'calculated', 'free']) costType?:
+    | 'flat'
+    | 'calculated'
+    | 'free';
   @IsOptional() @IsString() flatCost?: string;
   @IsOptional() @IsBoolean() weightBased?: boolean;
   @IsOptional() @IsBoolean() domesticOnly?: boolean;
@@ -92,7 +100,8 @@ export class CreatePricingRuleDto {
 
 export class UpdatePricingRuleDto {
   @IsOptional() @IsString() name?: string;
-  @IsOptional() @IsEnum(['markup', 'markdown', 'round', 'min_margin', 'competitive'])
+  @IsOptional()
+  @IsEnum(['markup', 'markdown', 'round', 'min_margin', 'competitive'])
   ruleType?: 'markup' | 'markdown' | 'round' | 'min_margin' | 'competitive';
   @IsOptional() @IsString() channel?: string;
   @IsOptional() @IsString() storeId?: string;

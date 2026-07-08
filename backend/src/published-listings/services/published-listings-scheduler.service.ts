@@ -20,28 +20,32 @@ export class PublishedListingsSchedulerService {
   /** Sync published listings from all active eBay accounts every 6 hours. */
   @Cron('0 */6 * * *', { name: 'published-listings-sync' })
   async schedulePublishedListingsSync(): Promise<void> {
-    await this.leader.runIfLeader('published-listings-sync', 21_000, async () => {
-      const accounts = await this.accountRepo.find({
-        where: { connectionStatus: 'active' },
-      });
-      for (const account of accounts) {
-        try {
-          await this.sync.enqueueSync({
-            organizationId: account.organizationId,
-            ebayAccountId: account.id,
-            trigger: 'scheduled',
-          });
-        } catch (e) {
-          this.logger.warn(
-            `Failed to enqueue published listings sync for ${account.id}: ${
-              e instanceof Error ? e.message : String(e)
-            }`,
-          );
+    await this.leader.runIfLeader(
+      'published-listings-sync',
+      21_000,
+      async () => {
+        const accounts = await this.accountRepo.find({
+          where: { connectionStatus: 'active' },
+        });
+        for (const account of accounts) {
+          try {
+            await this.sync.enqueueSync({
+              organizationId: account.organizationId,
+              ebayAccountId: account.id,
+              trigger: 'scheduled',
+            });
+          } catch (e) {
+            this.logger.warn(
+              `Failed to enqueue published listings sync for ${account.id}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            );
+          }
         }
-      }
-      this.logger.log(
-        `Enqueued published listings sync for ${accounts.length} eBay account(s)`,
-      );
-    });
+        this.logger.log(
+          `Enqueued published listings sync for ${accounts.length} eBay account(s)`,
+        );
+      },
+    );
   }
 }

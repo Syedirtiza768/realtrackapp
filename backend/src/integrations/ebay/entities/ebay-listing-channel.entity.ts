@@ -75,16 +75,32 @@ export class EbayListingChannel {
   @Column({ name: 'listing_url', type: 'text', nullable: true })
   listingUrl!: string | null;
 
-  @Column({ name: 'channel_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'channel_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   channelPrice!: string | null;
 
   @Column({ name: 'channel_quantity', type: 'int', nullable: true })
   channelQuantity!: number | null;
 
-  @Column({ name: 'listing_status', type: 'varchar', length: 30, default: 'draft' })
+  @Column({
+    name: 'listing_status',
+    type: 'varchar',
+    length: 30,
+    default: 'draft',
+  })
   listingStatus!: EbayListingChannelStatus;
 
-  @Column({ name: 'last_error_code', type: 'varchar', length: 80, nullable: true })
+  @Column({
+    name: 'last_error_code',
+    type: 'varchar',
+    length: 80,
+    nullable: true,
+  })
   lastErrorCode!: string | null;
 
   @Column({ name: 'last_error_message', type: 'text', nullable: true })

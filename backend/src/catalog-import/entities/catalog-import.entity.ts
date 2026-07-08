@@ -42,7 +42,12 @@ export class CatalogImport {
   /* ── Column mapping ────────────────────────────────────── */
 
   /** CSV headers detected in the file */
-  @Column({ name: 'detected_headers', type: 'text', array: true, default: '{}' })
+  @Column({
+    name: 'detected_headers',
+    type: 'text',
+    array: true,
+    default: '{}',
+  })
   detectedHeaders!: string[];
 
   /** User-defined mapping: { csvColumn: catalogField } */

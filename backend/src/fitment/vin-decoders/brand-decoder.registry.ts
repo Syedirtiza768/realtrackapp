@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { BrandVinDecoder, DecodedVds, DecodedPlant, PlatformDefinition } from './brand-decoder.types.js';
+import type {
+  BrandVinDecoder,
+  DecodedVds,
+  DecodedPlant,
+  PlatformDefinition,
+} from './brand-decoder.types.js';
 import { ToyotaVinDecoder } from './brands/toyota.decoder.js';
 
 /**
@@ -64,12 +69,18 @@ export class BrandVinDecoderRegistry {
     for (const decoder of this.decoders) {
       if (decoder.brand.toLowerCase() === normalizedMake) return decoder;
       // Handle brand aliases
-      if (normalizedMake === 'lexus' && decoder.brand === 'Toyota') return decoder;
-      if (normalizedMake === 'scion' && decoder.brand === 'Toyota') return decoder;
-      if (normalizedMake === 'lincoln' && decoder.brand === 'Ford') return decoder;
-      if (normalizedMake === 'acura' && decoder.brand === 'Honda') return decoder;
-      if (normalizedMake === 'infiniti' && decoder.brand === 'Nissan') return decoder;
-      if (normalizedMake === 'genesis' && decoder.brand === 'Hyundai') return decoder;
+      if (normalizedMake === 'lexus' && decoder.brand === 'Toyota')
+        return decoder;
+      if (normalizedMake === 'scion' && decoder.brand === 'Toyota')
+        return decoder;
+      if (normalizedMake === 'lincoln' && decoder.brand === 'Ford')
+        return decoder;
+      if (normalizedMake === 'acura' && decoder.brand === 'Honda')
+        return decoder;
+      if (normalizedMake === 'infiniti' && decoder.brand === 'Nissan')
+        return decoder;
+      if (normalizedMake === 'genesis' && decoder.brand === 'Hyundai')
+        return decoder;
     }
 
     return null;
@@ -79,14 +90,14 @@ export class BrandVinDecoderRegistry {
    * Get all registered brands.
    */
   getRegisteredBrands(): string[] {
-    return [...new Set(this.decoders.map(d => d.brand))];
+    return [...new Set(this.decoders.map((d) => d.brand))];
   }
 
   /**
    * Get all known platforms across all brands.
    */
   getAllPlatforms(): PlatformDefinition[] {
-    return this.decoders.flatMap(d => d.knownPlatforms);
+    return this.decoders.flatMap((d) => d.knownPlatforms);
   }
 
   /**

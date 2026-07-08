@@ -143,18 +143,25 @@ export function validateGenerationYearAlignment(input: {
 
   let expected: PlatformGeneration | null = null;
   if (Number.isFinite(anchor) && anchor >= 1900) {
-    expected = resolvePlatformGeneration(input.make, input.model, anchor, ranges);
+    expected = resolvePlatformGeneration(
+      input.make,
+      input.model,
+      anchor,
+      ranges,
+    );
   } else if (parsed && key) {
     const gens = ranges[key] ?? [];
     expected =
-      gens.find(
-        (g) => parsed.min >= g.start && parsed.max <= g.end + 1,
-      ) ??
+      gens.find((g) => parsed.min >= g.start && parsed.max <= g.end + 1) ??
       gens.find((g) => parsed.min <= g.end && parsed.max >= g.start) ??
       null;
   }
 
-  if (generation && expected && generation.toUpperCase() !== expected.code.toUpperCase()) {
+  if (
+    generation &&
+    expected &&
+    generation.toUpperCase() !== expected.code.toUpperCase()
+  ) {
     return {
       valid: false,
       message: `Generation ${generation} conflicts with expected ${expected.code} (${expected.start}-${expected.end})`,
@@ -237,9 +244,7 @@ export function alignGenerationAndYearRange(input: {
   }
 
   const generation =
-    platform?.code ??
-    String(input.generation ?? '').trim() ??
-    '';
+    platform?.code ?? String(input.generation ?? '').trim() ?? '';
 
   const yearRange =
     yearStart != null && yearEnd != null
@@ -254,7 +259,11 @@ export function alignGenerationAndYearRange(input: {
 
 /** Extract buyer-search variant tokens (RX350, RX450h) from fitment trim/submodel fields. */
 export function extractFitmentVariantTokens(
-  rows: Array<{ trim?: string | null; submodel?: string | null; model?: string | null }>,
+  rows: Array<{
+    trim?: string | null;
+    submodel?: string | null;
+    model?: string | null;
+  }>,
   max = 2,
 ): string[] {
   const tokens = new Set<string>();
@@ -286,14 +295,18 @@ export function detectTitleGenerationMismatch(
   const text = String(title ?? '');
   if (!text.trim()) return null;
 
-  const yearMatch = text.match(/\b((19|20)\d{2})(?:\s*[-–]\s*((19|20)\d{2}))?\b/);
+  const yearMatch = text.match(
+    /\b((19|20)\d{2})(?:\s*[-–]\s*((19|20)\d{2}))?\b/,
+  );
   const yearRange = yearMatch
     ? yearMatch[3]
       ? `${yearMatch[1]}-${yearMatch[3]}`
       : yearMatch[1]
     : undefined;
 
-  const genMatch = text.match(/\b([A-Z]{1,3}\d{1,3}(?:\/[A-Z0-9]+)?|W\d{3}|XW\d{2}|XV\d{2}|XE\d{2}|AL\d{2}|XU\d{2})\b/i);
+  const genMatch = text.match(
+    /\b([A-Z]{1,3}\d{1,3}(?:\/[A-Z0-9]+)?|W\d{3}|XW\d{2}|XV\d{2}|XE\d{2}|AL\d{2}|XU\d{2})\b/i,
+  );
   const generation = genMatch?.[1];
 
   if (!generation && !yearRange) return null;
@@ -318,7 +331,12 @@ export interface PlatformSeoTitleInput {
   partName?: string | null;
   mpn?: string | null;
   placement?: string | null;
-  fitmentRows?: Array<{ year?: string; trim?: string; submodel?: string; model?: string }>;
+  fitmentRows?: Array<{
+    year?: string;
+    trim?: string;
+    submodel?: string;
+    model?: string;
+  }>;
 }
 
 /** Build SEO English Motors title with platform-aligned year range + variant tokens. */
@@ -326,12 +344,16 @@ export function buildPlatformSeoTitle(input: PlatformSeoTitleInput): string {
   const make = normalizePlatformMake(input.make);
   const model = normalizePlatformModel(make, input.model);
   const yearNum = Number(input.year);
-  const platform = Number.isFinite(yearNum) && yearNum >= 1900
-    ? resolvePlatformGeneration(make, model, yearNum)
-    : null;
+  const platform =
+    Number.isFinite(yearNum) && yearNum >= 1900
+      ? resolvePlatformGeneration(make, model, yearNum)
+      : null;
 
   const aligned = platform
-    ? { generation: platform.code, yearRange: formatYearRange(platform.start, platform.end) }
+    ? {
+        generation: platform.code,
+        yearRange: formatYearRange(platform.start, platform.end),
+      }
     : alignGenerationAndYearRange({
         make,
         model,

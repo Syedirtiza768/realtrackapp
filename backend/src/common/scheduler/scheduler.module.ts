@@ -10,11 +10,11 @@ import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected
 
 /**
  * SchedulerModule — Centralized cron-based job scheduling.
- * 
+ *
  * Registers BullMQ queue references needed by the scheduler
  * and provides the SchedulerService which uses @Cron decorators
  * to enqueue jobs at defined intervals.
- * 
+ *
  * Phase 5: also imports PricingIntelligenceModule for the 4h competitor
  * price collection cron.
  */

@@ -16,7 +16,7 @@ function createRepo<T extends Record<string, unknown>>() {
   return {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
-    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d } as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d }) as T),
     save: jest.fn((d: T) => Promise.resolve({ id: 'saved-id', ...d } as T)),
     delete: jest.fn().mockResolvedValue(undefined),
   } as unknown as Repository<T>;
@@ -30,9 +30,15 @@ describe('EbayPolicySyncService', () => {
   let policyRepo: ReturnType<typeof createRepo<EbayBusinessPolicy>>;
   let mpRepo: ReturnType<typeof createRepo<EbayAccountMarketplace>>;
   let tokens: { getValidAccessToken: jest.Mock };
-  let sellAccount: { listFulfillmentPolicies: jest.Mock; listPaymentPolicies: jest.Mock; listReturnPolicies: jest.Mock };
+  let sellAccount: {
+    listFulfillmentPolicies: jest.Mock;
+    listPaymentPolicies: jest.Mock;
+    listReturnPolicies: jest.Mock;
+  };
   let logWriter: { write: jest.Mock };
-  let sellerpunditPolicies: { overlaySellerpunditPoliciesFromEbayApi: jest.Mock };
+  let sellerpunditPolicies: {
+    overlaySellerpunditPoliciesFromEbayApi: jest.Mock;
+  };
   let inventoryApi: { ensureMerchantLocation: jest.Mock };
   let ebayAuth: { getAccessToken: jest.Mock; getApiBaseUrlForStore: jest.Mock };
 
@@ -48,11 +54,17 @@ describe('EbayPolicySyncService', () => {
       listInventoryLocations: jest.fn().mockResolvedValue([]),
     };
     logWriter = { write: jest.fn() };
-    sellerpunditPolicies = { overlaySellerpunditPoliciesFromEbayApi: jest.fn() };
-    inventoryApi = { ensureMerchantLocation: jest.fn().mockResolvedValue('loc-1') };
+    sellerpunditPolicies = {
+      overlaySellerpunditPoliciesFromEbayApi: jest.fn(),
+    };
+    inventoryApi = {
+      ensureMerchantLocation: jest.fn().mockResolvedValue('loc-1'),
+    };
     ebayAuth = {
       getAccessToken: jest.fn().mockResolvedValue('token'),
-      getApiBaseUrlForStore: jest.fn().mockResolvedValue('https://api.ebay.com'),
+      getApiBaseUrlForStore: jest
+        .fn()
+        .mockResolvedValue('https://api.ebay.com'),
     };
 
     svc = new EbayPolicySyncService(
@@ -81,17 +93,27 @@ describe('EbayPolicySyncService', () => {
         environment: 'production',
         connectionSource: 'ebay',
       });
-      mpRepo.find = jest.fn().mockResolvedValue([
-        { marketplaceId: 'EBAY_US', enabled: true },
-      ]);
+      mpRepo.find = jest
+        .fn()
+        .mockResolvedValue([{ marketplaceId: 'EBAY_US', enabled: true }]);
       sellAccount.listFulfillmentPolicies.mockResolvedValue([
-        { ebayPolicyId: 'fp-1', name: 'Standard Shipping', isDefault: true, raw: {} },
+        {
+          ebayPolicyId: 'fp-1',
+          name: 'Standard Shipping',
+          isDefault: true,
+          raw: {},
+        },
       ]);
       sellAccount.listPaymentPolicies.mockResolvedValue([
         { ebayPolicyId: 'pp-1', name: 'PayPal', isDefault: true, raw: {} },
       ]);
       sellAccount.listReturnPolicies.mockResolvedValue([
-        { ebayPolicyId: 'rp-1', name: '30 Day Return', isDefault: true, raw: {} },
+        {
+          ebayPolicyId: 'rp-1',
+          name: '30 Day Return',
+          isDefault: true,
+          raw: {},
+        },
       ]);
       mpRepo.findOne = jest.fn().mockResolvedValue({
         marketplaceId: 'EBAY_US',
@@ -112,9 +134,9 @@ describe('EbayPolicySyncService', () => {
         environment: 'production',
         connectionSource: 'ebay',
       });
-      mpRepo.find = jest.fn().mockResolvedValue([
-        { marketplaceId: 'EBAY_US', enabled: true },
-      ]);
+      mpRepo.find = jest
+        .fn()
+        .mockResolvedValue([{ marketplaceId: 'EBAY_US', enabled: true }]);
       ebayAuth.getAccessToken.mockRejectedValue(new Error('token expired'));
 
       // syncPolicies catches errors internally and returns error result

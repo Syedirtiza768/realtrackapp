@@ -7,7 +7,10 @@ import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-eb
 import { EbayFulfillmentApiService } from '../channels/ebay/ebay-fulfillment-api.service.js';
 import { OrdersService } from './orders.service.js';
 import { Order } from './entities/order.entity.js';
-import type { EbayOrder, EbayLineItem } from '../channels/ebay/ebay-api.types.js';
+import type {
+  EbayOrder,
+  EbayLineItem,
+} from '../channels/ebay/ebay-api.types.js';
 
 /**
  * EbayOrderImportService — Pulls orders from eBay via Fulfillment API
@@ -39,7 +42,9 @@ export class EbayOrderImportService {
    * Import orders from all active eBay stores.
    * Typically called by the scheduler every 15 minutes.
    */
-  async importFromAllStores(): Promise<{ storeId: string; imported: number; errors: number }[]> {
+  async importFromAllStores(): Promise<
+    { storeId: string; imported: number; errors: number }[]
+  > {
     const stores = await this.storeRepo.find({
       where: { channel: 'ebay', status: 'active' },
     });
@@ -52,7 +57,9 @@ export class EbayOrderImportService {
         results.push(result);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(`Failed to import orders from store ${store.id}: ${msg}`);
+        this.logger.error(
+          `Failed to import orders from store ${store.id}: ${msg}`,
+        );
         results.push({ storeId: store.id, imported: 0, errors: 1 });
       }
     }
@@ -71,7 +78,9 @@ export class EbayOrderImportService {
       where: { id: ebayAccountId, organizationId },
     });
     if (!account) {
-      throw new NotFoundException('eBay account not found for this organization');
+      throw new NotFoundException(
+        'eBay account not found for this organization',
+      );
     }
     if (account.connectionStatus !== 'active') {
       throw new NotFoundException(
@@ -84,14 +93,18 @@ export class EbayOrderImportService {
   /**
    * Import orders from a specific eBay store since its last sync.
    */
-  async importFromStore(storeId: string): Promise<{ storeId: string; imported: number; errors: number }> {
+  async importFromStore(
+    storeId: string,
+  ): Promise<{ storeId: string; imported: number; errors: number }> {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new Error(`Store ${storeId} not found`);
 
     // Default to 1 hour ago if no previous sync
     const since = store.lastSyncAt ?? new Date(Date.now() - 60 * 60 * 1000);
 
-    this.logger.log(`Importing eBay orders for store ${store.storeName} since ${since.toISOString()}`);
+    this.logger.log(
+      `Importing eBay orders for store ${store.storeName} since ${since.toISOString()}`,
+    );
 
     let imported = 0;
     let errors = 0;
@@ -101,7 +114,11 @@ export class EbayOrderImportService {
 
     while (hasMore) {
       const filter = `creationdate:[${since.toISOString()}..] `;
-      const page = await this.fulfillmentApi.getOrders(storeId, { filter, limit, offset });
+      const page = await this.fulfillmentApi.getOrders(storeId, {
+        filter,
+        limit,
+        offset,
+      });
       const orders = page.orders ?? [];
 
       for (const ebayOrder of orders) {
@@ -110,7 +127,9 @@ export class EbayOrderImportService {
           if (wasNew) imported++;
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          this.logger.warn(`Failed to import eBay order ${ebayOrder.orderId}: ${msg}`);
+          this.logger.warn(
+            `Failed to import eBay order ${ebayOrder.orderId}: ${msg}`,
+          );
           errors++;
         }
       }
@@ -132,7 +151,10 @@ export class EbayOrderImportService {
   /**
    * Import a single eBay order. Returns true if it was new (not a duplicate).
    */
-  private async importSingleOrder(ebayOrder: EbayOrder, store: Store): Promise<boolean> {
+  private async importSingleOrder(
+    ebayOrder: EbayOrder,
+    store: Store,
+  ): Promise<boolean> {
     // Idempotency: check if already imported
     const existing = await this.orderRepo.findOne({
       where: { channel: 'ebay', externalOrderId: ebayOrder.orderId },
@@ -140,21 +162,26 @@ export class EbayOrderImportService {
     if (existing) return false;
 
     // Extract shipping from fulfillmentStartInstructions
-    const shipTo = ebayOrder.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo as
-      | Record<string, unknown>
+    const shipTo =
+      ebayOrder.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo;
+    const contactAddress = shipTo?.contactAddress as
+      | Record<string, string>
       | undefined;
-    const contactAddress = shipTo?.contactAddress as Record<string, string> | undefined;
     const fullName = shipTo?.fullName as string | undefined;
 
     const shipping: Record<string, string> = {};
     if (fullName) shipping.name = fullName;
     if (contactAddress) {
-      if (contactAddress.addressLine1) shipping.address1 = contactAddress.addressLine1;
-      if (contactAddress.addressLine2) shipping.address2 = contactAddress.addressLine2;
+      if (contactAddress.addressLine1)
+        shipping.address1 = contactAddress.addressLine1;
+      if (contactAddress.addressLine2)
+        shipping.address2 = contactAddress.addressLine2;
       if (contactAddress.city) shipping.city = contactAddress.city;
-      if (contactAddress.stateOrProvince) shipping.state = contactAddress.stateOrProvince;
+      if (contactAddress.stateOrProvince)
+        shipping.state = contactAddress.stateOrProvince;
       if (contactAddress.postalCode) shipping.zip = contactAddress.postalCode;
-      if (contactAddress.countryCode) shipping.country = contactAddress.countryCode;
+      if (contactAddress.countryCode)
+        shipping.country = contactAddress.countryCode;
     }
 
     // Map line items
@@ -167,7 +194,9 @@ export class EbayOrderImportService {
     }));
 
     // Calculate financials
-    const subtotal = ebayOrder.pricingSummary.subtotal?.value ?? ebayOrder.pricingSummary.total.value;
+    const subtotal =
+      ebayOrder.pricingSummary.subtotal?.value ??
+      ebayOrder.pricingSummary.total.value;
     const deliveryCost = ebayOrder.pricingSummary.deliveryCost?.value ?? '0';
     const total = ebayOrder.pricingSummary.total.value;
     const currency = ebayOrder.pricingSummary.total.currency;

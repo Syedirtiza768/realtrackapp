@@ -72,6 +72,9 @@ export function isUsedEbayCondition(
   condition: string | null | undefined,
 ): boolean {
   if (!condition?.trim()) return false;
-  const c = condition.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  const c = condition
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
   return c.startsWith('USED_') || c === 'FOR_PARTS_OR_NOT_WORKING';
 }

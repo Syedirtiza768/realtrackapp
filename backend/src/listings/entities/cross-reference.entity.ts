@@ -44,7 +44,12 @@ export class CrossReference {
 
   /** Type of reference */
   @Column({ name: 'reference_type', type: 'varchar', length: 50 })
-  referenceType!: 'oem' | 'interchange' | 'competitor' | 'superseded' | 'alternate';
+  referenceType!:
+    | 'oem'
+    | 'interchange'
+    | 'competitor'
+    | 'superseded'
+    | 'alternate';
 
   /** Optional notes about this cross-reference */
   @Column({ type: 'text', nullable: true })

@@ -1,4 +1,11 @@
-import { MigrationInterface, QueryRunner, Table, TableColumn, TableIndex, TableUnique } from 'typeorm';
+import {
+  MigrationInterface,
+  QueryRunner,
+  Table,
+  TableColumn,
+  TableIndex,
+  TableUnique,
+} from 'typeorm';
 
 export class UserStoreAccess1784000000000 implements MigrationInterface {
   name = 'UserStoreAccess1784000000000';
@@ -9,10 +16,21 @@ export class UserStoreAccess1784000000000 implements MigrationInterface {
       new Table({
         name: 'user_store_assignments',
         columns: [
-          { name: 'id', type: 'uuid', isPrimary: true, generationStrategy: 'uuid', default: 'gen_random_uuid()' },
+          {
+            name: 'id',
+            type: 'uuid',
+            isPrimary: true,
+            generationStrategy: 'uuid',
+            default: 'gen_random_uuid()',
+          },
           { name: 'user_id', type: 'uuid', isNullable: false },
           { name: 'store_id', type: 'uuid', isNullable: false },
-          { name: 'access_level', type: 'varchar', length: '20', default: "'view'" },
+          {
+            name: 'access_level',
+            type: 'varchar',
+            length: '20',
+            default: "'view'",
+          },
           { name: 'created_at', type: 'timestamptz', default: 'now()' },
         ],
         foreignKeys: [
@@ -35,14 +53,30 @@ export class UserStoreAccess1784000000000 implements MigrationInterface {
       true,
     );
 
-    await queryRunner.createIndex('user_store_assignments', new TableIndex({ name: 'idx_usa_user', columnNames: ['user_id'] }));
-    await queryRunner.createIndex('user_store_assignments', new TableIndex({ name: 'idx_usa_store', columnNames: ['store_id'] }));
-    await queryRunner.createUniqueConstraint('user_store_assignments', new TableUnique({ name: 'uq_user_store', columnNames: ['user_id', 'store_id'] }));
+    await queryRunner.createIndex(
+      'user_store_assignments',
+      new TableIndex({ name: 'idx_usa_user', columnNames: ['user_id'] }),
+    );
+    await queryRunner.createIndex(
+      'user_store_assignments',
+      new TableIndex({ name: 'idx_usa_store', columnNames: ['store_id'] }),
+    );
+    await queryRunner.createUniqueConstraint(
+      'user_store_assignments',
+      new TableUnique({
+        name: 'uq_user_store',
+        columnNames: ['user_id', 'store_id'],
+      }),
+    );
 
     // 2. Add store_access_all column to users
     await queryRunner.addColumn(
       'users',
-      new TableColumn({ name: 'store_access_all', type: 'boolean', default: false }),
+      new TableColumn({
+        name: 'store_access_all',
+        type: 'boolean',
+        default: false,
+      }),
     );
 
     // 3. Auto-assign legacy store owners as admin

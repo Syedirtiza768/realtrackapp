@@ -60,7 +60,9 @@ describe('HeavyJobLimiterService', () => {
 
   it('allows pipeline job when under capacity', async () => {
     pipelineCount.mockResolvedValue(1);
-    await expect(service.assertPipelineSlotAvailable()).resolves.toBeUndefined();
+    await expect(
+      service.assertPipelineSlotAvailable(),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects pipeline job when at capacity', async () => {
@@ -72,14 +74,16 @@ describe('HeavyJobLimiterService', () => {
 
   it('allows catalog import when under capacity', async () => {
     importCount.mockResolvedValue(0);
-    await expect(service.assertCatalogImportSlotAvailable()).resolves.toBeUndefined();
+    await expect(
+      service.assertCatalogImportSlotAvailable(),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects catalog import when at capacity', async () => {
     importCount.mockResolvedValue(2);
-    await expect(service.assertCatalogImportSlotAvailable()).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    await expect(
+      service.assertCatalogImportSlotAvailable(),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it('skips pipeline cap when MAX_CONCURRENT_PIPELINE_JOBS is 0', async () => {
@@ -88,7 +92,9 @@ describe('HeavyJobLimiterService', () => {
       return fallback;
     });
     pipelineCount.mockResolvedValue(99);
-    await expect(service.assertPipelineSlotAvailable()).resolves.toBeUndefined();
+    await expect(
+      service.assertPipelineSlotAvailable(),
+    ).resolves.toBeUndefined();
     expect(pipelineCount).not.toHaveBeenCalled();
   });
 });

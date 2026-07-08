@@ -211,11 +211,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         throw new Error(`Pipeline exited with code ${exitCode}`);
       }
 
-      await this.runPostEnrichmentImport(jobId, outputDir, job.data.originalFilename);
-
-      this.logger.log(
-        `Pipeline job=${jobId} enrichment completed`,
+      await this.runPostEnrichmentImport(
+        jobId,
+        outputDir,
+        job.data.originalFilename,
       );
+
+      this.logger.log(`Pipeline job=${jobId} enrichment completed`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Pipeline job=${jobId} failed: ${message}`);
@@ -245,8 +247,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     );
 
     if (!fs.existsSync(outputDir)) {
-      await this.fail(jobId, `Cannot resume — output directory not found: ${outputDir}`);
-      throw new Error(`Cannot resume — output directory not found: ${outputDir}`);
+      await this.fail(
+        jobId,
+        `Cannot resume — output directory not found: ${outputDir}`,
+      );
+      throw new Error(
+        `Cannot resume — output directory not found: ${outputDir}`,
+      );
     }
 
     const dbJob = await this.jobRepo.findOneBy({ id: jobId });
@@ -262,7 +269,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     } as any);
 
     try {
-      await this.runPostEnrichmentImport(jobId, outputDir, dbJob.originalFilename);
+      await this.runPostEnrichmentImport(
+        jobId,
+        outputDir,
+        dbJob.originalFilename,
+      );
       this.logger.log(`Resume import completed for job=${jobId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -325,10 +336,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     return !(await this.mvlStore.hasAnyActiveRelease());
   }
 
-  private async touchSubStage(
-    jobId: string,
-    subStage: string,
-  ): Promise<void> {
+  private async touchSubStage(jobId: string, subStage: string): Promise<void> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
     await this.jobRepo.update(jobId, {
       stageDetails: {
@@ -999,7 +1007,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       return: dbJob?.returnProfileName?.trim() || null,
       payment: dbJob?.paymentProfileName?.trim() || null,
     };
-    const applyToOutput = shouldApplyJobProfilesToOutput(marketplace, jobMarketplace);
+    const applyToOutput = shouldApplyJobProfilesToOutput(
+      marketplace,
+      jobMarketplace,
+    );
     const applyToCatalogMaster =
       upsertCatalogProducts &&
       shouldApplyJobProfilesToCatalogMaster(jobMarketplace, marketplace);
@@ -1016,7 +1027,12 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     };
 
     const uploadConditionId = uploadConditionLabel
-      ? ({ Used: '3000', New: '1000', Refurbished: '2500' } as Record<string, string>)[uploadConditionLabel] ?? null
+      ? ((
+          { Used: '3000', New: '1000', Refurbished: '2500' } as Record<
+            string,
+            string
+          >
+        )[uploadConditionLabel] ?? null)
       : null;
 
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
@@ -1336,7 +1352,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             | undefined;
           if (Array.isArray(rawFitment) && rawFitment.length > 0) {
             const categoryId =
-              product.categoryId?.trim() || EbayMvlService.MOTORS_PARTS_CATEGORY;
+              product.categoryId?.trim() ||
+              EbayMvlService.MOTORS_PARTS_CATEGORY;
             try {
               const mvlResult = await this.mvlService.validateFitmentData(
                 rawFitment,
@@ -1360,10 +1377,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             }
           }
           mvlProcessed++;
-          if (
-            mvlProcessed % 10 === 0 ||
-            mvlProcessed === products.length
-          ) {
+          if (mvlProcessed % 10 === 0 || mvlProcessed === products.length) {
             this.scheduleCatalogImportProgress(jobId, {
               phase: 'mvl',
               marketplace,

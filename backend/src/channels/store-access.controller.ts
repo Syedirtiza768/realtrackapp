@@ -49,7 +49,11 @@ export class StoreAccessController {
   async assign(@Body() dto: SetAssignmentDto, @CurrentUser() user: User) {
     // Verify the assigning user has admin access to the target store
     await this.storeAccess.assertStoreAccess(user, dto.storeId, 'admin');
-    const assignment = await this.storeAccess.setAssignment(dto.userId, dto.storeId, dto.accessLevel);
+    const assignment = await this.storeAccess.setAssignment(
+      dto.userId,
+      dto.storeId,
+      dto.accessLevel,
+    );
     return { assignment };
   }
 
@@ -80,7 +84,11 @@ export class StoreAccessController {
     @CurrentUser() user: User,
   ) {
     await this.storeAccess.assertStoreAccess(user, storeId, 'admin');
-    const assignment = await this.storeAccess.setAssignment(userId, storeId, dto.accessLevel);
+    const assignment = await this.storeAccess.setAssignment(
+      userId,
+      storeId,
+      dto.accessLevel,
+    );
     return { assignment };
   }
 

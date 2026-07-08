@@ -44,7 +44,9 @@ export class SchedulerLeaderService {
     const token = randomUUID();
     const acquired = await this.redis.set(key, token, 'EX', ttlSeconds, 'NX');
     if (acquired !== 'OK') {
-      this.logger.debug(`Skipping scheduler job "${lockName}" — lock held elsewhere`);
+      this.logger.debug(
+        `Skipping scheduler job "${lockName}" — lock held elsewhere`,
+      );
       return false;
     }
 

@@ -46,7 +46,9 @@ export class CatalogPublishResolverService {
    * Resolve a catalog browse/publish reference ID.
    * Accepts either catalog_products.id or listing_records.id (catalog UI uses the latter).
    */
-  async resolve(productRefId: string): Promise<ResolvedCatalogPublishSource | null> {
+  async resolve(
+    productRefId: string,
+  ): Promise<ResolvedCatalogPublishSource | null> {
     const warnings: string[] = [];
 
     let catalogProduct = await this.catalogRepo.findOne({
@@ -116,11 +118,8 @@ export class CatalogPublishResolverService {
       price:
         catalogProduct?.price != null
           ? Number(catalogProduct.price)
-          : listingRecord?.startPriceNum ?? null,
-      quantity:
-        catalogProduct?.quantity ??
-        listingRecord?.quantityNum ??
-        null,
+          : (listingRecord?.startPriceNum ?? null),
+      quantity: catalogProduct?.quantity ?? listingRecord?.quantityNum ?? null,
       categoryId:
         catalogProduct?.categoryId ?? listingRecord?.categoryId ?? null,
       conditionId:
@@ -176,13 +175,15 @@ export class CatalogPublishResolverService {
     listing: ListingRecord,
     warnings: string[],
   ): Promise<CatalogProduct> {
-    const sku =
-      listing.customLabelSku?.trim() ||
-      `listing:${listing.id}`;
+    const sku = listing.customLabelSku?.trim() || `listing:${listing.id}`;
     const existing = await this.catalogRepo.findOne({ where: { sku } });
     if (existing) {
       warnings.push('Linked existing catalog product by SKU for publish');
-      return this.backfillCatalogProductFromListing(existing, listing, warnings);
+      return this.backfillCatalogProductFromListing(
+        existing,
+        listing,
+        warnings,
+      );
     }
 
     const imageUrls = sanitizeEbayImageUrls(

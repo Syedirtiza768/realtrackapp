@@ -56,7 +56,8 @@ export class ReviewQueueService {
       reason,
       reasonDetail: detail,
       priority,
-      productSnapshot: snapshots?.productSnapshot || this.snapshotProduct(product),
+      productSnapshot:
+        snapshots?.productSnapshot || this.snapshotProduct(product),
       candidatesSnapshot: snapshots?.candidatesSnapshot,
       extractionSnapshot: snapshots?.extractionSnapshot,
       fitmentSnapshot: snapshots?.fitmentSnapshot,
@@ -87,11 +88,12 @@ export class ReviewQueueService {
       qb.andWhere('rt.reason = :reason', { reason: query.reason });
     }
     if (query.assignedTo) {
-      qb.andWhere('rt.assignedTo = :assignedTo', { assignedTo: query.assignedTo });
+      qb.andWhere('rt.assignedTo = :assignedTo', {
+        assignedTo: query.assignedTo,
+      });
     }
 
-    qb.orderBy('rt.priority', 'DESC')
-      .addOrderBy('rt.createdAt', 'ASC');
+    qb.orderBy('rt.priority', 'DESC').addOrderBy('rt.createdAt', 'ASC');
 
     const total = await qb.getCount();
     const tasks = await qb
@@ -107,7 +109,9 @@ export class ReviewQueueService {
   }
 
   /** Aliases for controller compatibility */
-  async listTasks(query: ReviewTaskQueryDto): Promise<{ items: ReviewTask[]; total: number }> {
+  async listTasks(
+    query: ReviewTaskQueryDto,
+  ): Promise<{ items: ReviewTask[]; total: number }> {
     const page = Number((query as any).page || 1);
     const limit = Number(query.limit || 25);
     const result = await this.getReviewTasks({
@@ -127,7 +131,9 @@ export class ReviewQueueService {
   }
 
   async assignTask(taskId: string, userId: string): Promise<ReviewTask> {
-    const task = await this.reviewTaskRepo.findOneOrFail({ where: { id: taskId } });
+    const task = await this.reviewTaskRepo.findOneOrFail({
+      where: { id: taskId },
+    });
     task.assignedTo = userId;
     task.assignedAt = new Date();
     task.status = ReviewTaskStatus.IN_PROGRESS;
@@ -139,7 +145,9 @@ export class ReviewQueueService {
     userId: string,
     dto: ResolveReviewTaskDto,
   ): Promise<ReviewTask> {
-    const task = await this.reviewTaskRepo.findOneOrFail({ where: { id: taskId } });
+    const task = await this.reviewTaskRepo.findOneOrFail({
+      where: { id: taskId },
+    });
     const product = await this.motorsProductRepo.findOneOrFail({
       where: { id: task.motorsProductId },
     });
@@ -267,11 +275,22 @@ export class ReviewQueueService {
     resolutionData: Record<string, any>,
   ): void {
     const allowedFields = [
-      'brand', 'mpn', 'oemPartNumber', 'productType', 'placement',
-      'condition', 'ebayCategoryId', 'generatedTitle',
-      'generatedItemSpecifics', 'generatedBulletFeatures',
-      'generatedHtmlDescription', 'fitmentRows',
-      'price', 'quantity', 'sideOrientation', 'frontRear',
+      'brand',
+      'mpn',
+      'oemPartNumber',
+      'productType',
+      'placement',
+      'condition',
+      'ebayCategoryId',
+      'generatedTitle',
+      'generatedItemSpecifics',
+      'generatedBulletFeatures',
+      'generatedHtmlDescription',
+      'fitmentRows',
+      'price',
+      'quantity',
+      'sideOrientation',
+      'frontRear',
     ];
 
     for (const field of allowedFields) {
@@ -299,12 +318,14 @@ export class ReviewQueueService {
             reviewTaskId: task.id,
             feedbackType,
             field,
-            originalValue: typeof originalValue === 'object'
-              ? JSON.stringify(originalValue)
-              : String(originalValue || ''),
-            correctedValue: typeof value === 'object'
-              ? JSON.stringify(value)
-              : String(value || ''),
+            originalValue:
+              typeof originalValue === 'object'
+                ? JSON.stringify(originalValue)
+                : String(originalValue || ''),
+            correctedValue:
+              typeof value === 'object'
+                ? JSON.stringify(value)
+                : String(value || ''),
             context: {
               reason: task.reason,
               resolution: dto.resolution,
@@ -319,13 +340,20 @@ export class ReviewQueueService {
 
   private mapFieldToFeedbackType(field: string): FeedbackType | null {
     switch (field) {
-      case 'brand': return FeedbackType.BRAND_CORRECTION;
-      case 'mpn': return FeedbackType.MPN_CORRECTION;
-      case 'generatedTitle': return FeedbackType.TITLE_EDIT;
-      case 'fitmentRows': return FeedbackType.FITMENT_EDIT;
-      case 'generatedItemSpecifics': return FeedbackType.SPECIFICS_EDIT;
-      case 'ebayCategoryId': return FeedbackType.CATEGORY_CORRECTION;
-      default: return FeedbackType.REVIEWER_CORRECTION;
+      case 'brand':
+        return FeedbackType.BRAND_CORRECTION;
+      case 'mpn':
+        return FeedbackType.MPN_CORRECTION;
+      case 'generatedTitle':
+        return FeedbackType.TITLE_EDIT;
+      case 'fitmentRows':
+        return FeedbackType.FITMENT_EDIT;
+      case 'generatedItemSpecifics':
+        return FeedbackType.SPECIFICS_EDIT;
+      case 'ebayCategoryId':
+        return FeedbackType.CATEGORY_CORRECTION;
+      default:
+        return FeedbackType.REVIEWER_CORRECTION;
     }
   }
 }

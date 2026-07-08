@@ -13,8 +13,7 @@ const BRAND_MAP: Record<string, string> = {
   chevy: 'Chevrolet',
 };
 
-const DISCLAIMER =
-  'Please verify part number compatibility before purchasing';
+const DISCLAIMER = 'Please verify part number compatibility before purchasing';
 
 function normSpaces(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
@@ -131,7 +130,8 @@ export function applyListingGuards(
     const deduped = dedupeFitment(expanded);
     out.compatibility = deduped;
     if (deduped.length < expanded.length) fixes.push('FITMENT_DEDUPED');
-    if (expanded.length > rawCompat.length) fixes.push('FITMENT_YEAR_RANGES_EXPANDED');
+    if (expanded.length > rawCompat.length)
+      fixes.push('FITMENT_YEAR_RANGES_EXPANDED');
   }
 
   return { item: out, fixes };
@@ -146,7 +146,12 @@ export function applyListingGuards(
  * This is a deterministic guard — no AI cost, pure regex matching.
  */
 export function detectHallucinatedPartNumbers(
-  parts: Array<{ part_name?: string; partName?: string; oem_part_number?: string; oemPartNumber?: string }>,
+  parts: Array<{
+    part_name?: string;
+    partName?: string;
+    oem_part_number?: string;
+    oemPartNumber?: string;
+  }>,
   brand: string,
 ): string[] {
   // Brand → regex for OEM part number format
@@ -197,9 +202,10 @@ export function detectHallucinatedPartNumbers(
           matchedBrands.push(b);
         }
       }
-      const matchNote = matchedBrands.length > 0
-        ? ` (matches ${matchedBrands.join(', ')} format)`
-        : '';
+      const matchNote =
+        matchedBrands.length > 0
+          ? ` (matches ${matchedBrands.join(', ')} format)`
+          : '';
       warnings.push(
         `"${name}": OEM# "${pn}" does not match ${brand} format${matchNote}`,
       );

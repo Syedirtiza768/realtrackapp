@@ -111,7 +111,9 @@ export class EbayAccountTokenService {
           return this.encryption.decrypt(refreshed.accessTokenEncrypted);
         }
       }
-      throw new ServiceUnavailableException('Timed out waiting for token refresh lock');
+      throw new ServiceUnavailableException(
+        'Timed out waiting for token refresh lock',
+      );
     }
 
     try {
@@ -125,7 +127,9 @@ export class EbayAccountTokenService {
     ebayAccountId: string,
     environment: 'sandbox' | 'production',
   ): Promise<string> {
-    const row = await this.tokenRepo.findOneOrFail({ where: { ebayAccountId } });
+    const row = await this.tokenRepo.findOneOrFail({
+      where: { ebayAccountId },
+    });
     const refreshToken = this.encryption.decrypt(row.refreshTokenEncrypted);
     if (!refreshToken) {
       row.reconnectRequired = true;
@@ -166,7 +170,9 @@ export class EbayAccountTokenService {
       row.reconnectRequired = false;
       await this.tokenRepo.save(row);
 
-      const account = await this.accountRepo.findOneByOrFail({ id: ebayAccountId });
+      const account = await this.accountRepo.findOneByOrFail({
+        id: ebayAccountId,
+      });
       const conn = await this.connectionRepo.findOneByOrFail({
         id: account.channelConnectionId,
       });
@@ -188,7 +194,9 @@ export class EbayAccountTokenService {
       await this.accountRepo.update(ebayAccountId, {
         connectionStatus: 'reconnect_required',
       });
-      throw new UnauthorizedException('eBay token refresh failed — reconnect required');
+      throw new UnauthorizedException(
+        'eBay token refresh failed — reconnect required',
+      );
     }
   }
 

@@ -1,7 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
-import { EbayPublishService, type PublishRequest } from './ebay-publish.service.js';
+import {
+  EbayPublishService,
+  type PublishRequest,
+} from './ebay-publish.service.js';
 
 /* ── Helpers ── */
 
@@ -11,7 +14,7 @@ function createRepo<T extends Record<string, unknown>>() {
     findOne: jest.fn().mockResolvedValue(null),
     findOneBy: jest.fn().mockResolvedValue(null),
     findOneByOrFail: jest.fn(),
-    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d } as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d }) as T),
     save: jest.fn((d: T) => Promise.resolve({ id: 'saved-id', ...d } as T)),
     update: jest.fn().mockResolvedValue(undefined),
     delete: jest.fn().mockResolvedValue(undefined),
@@ -37,12 +40,16 @@ function mockAuth() {
   return {
     getAccessToken: jest.fn().mockResolvedValue('test-token'),
     getApiBaseUrlForStore: jest.fn().mockResolvedValue('https://api.ebay.com'),
-    getApiConfig: jest.fn().mockReturnValue({ baseUrl: 'https://api.ebay.com', sandbox: false }),
+    getApiConfig: jest
+      .fn()
+      .mockReturnValue({ baseUrl: 'https://api.ebay.com', sandbox: false }),
   };
 }
 
 function mockConfig(values: Record<string, string> = {}) {
-  return { get: (key: string, fallback = '') => values[key] ?? fallback } as unknown as ConfigService;
+  return {
+    get: (key: string, fallback = '') => values[key] ?? fallback,
+  } as unknown as ConfigService;
 }
 
 function validRequest(overrides: Partial<PublishRequest> = {}): PublishRequest {
@@ -86,17 +93,38 @@ describe('EbayPublishService', () => {
     auth = mockAuth();
 
     svc = new EbayPublishService(
-      mockConfig() as ConfigService,
+      mockConfig(),
       inventoryApi as any,
       {} as any, // taxonomyApi
       auth as any,
       {} as any, // sellAccount
-      { ensureCompliantReturnPolicy: jest.fn().mockResolvedValue({ action: 'picked', returnPolicyId: 'ret-1' }) } as any,
-      { publish: jest.fn().mockResolvedValue({ success: true, offerId: 'sp-offer', listingId: 'sp-listing' }) } as any,
+      {
+        ensureCompliantReturnPolicy: jest
+          .fn()
+          .mockResolvedValue({ action: 'picked', returnPolicyId: 'ret-1' }),
+      } as any,
+      {
+        publish: jest.fn().mockResolvedValue({
+          success: true,
+          offerId: 'sp-offer',
+          listingId: 'sp-listing',
+        }),
+      } as any,
       { ensurePoliciesFresh: jest.fn().mockResolvedValue({ ok: true }) } as any,
-      { ensureFreshAccessToken: jest.fn(), refreshTokenFromSellerpundit: jest.fn() } as any,
-      { resolveMarketplaceForAccount: jest.fn().mockReturnValue('EBAY_US') } as any,
-      { require: jest.fn().mockReturnValue({ currency: 'USD', locale: 'en_US', categoryTreeId: '0' }) } as any,
+      {
+        ensureFreshAccessToken: jest.fn(),
+        refreshTokenFromSellerpundit: jest.fn(),
+      } as any,
+      {
+        resolveMarketplaceForAccount: jest.fn().mockReturnValue('EBAY_US'),
+      } as any,
+      {
+        require: jest.fn().mockReturnValue({
+          currency: 'USD',
+          locale: 'en_US',
+          categoryTreeId: '0',
+        }),
+      } as any,
       storeRepo,
       connectedAccountRepo,
       mpRepo,
@@ -108,14 +136,18 @@ describe('EbayPublishService', () => {
 
   describe('publish', () => {
     it('throws BadRequestException when storeIds is empty', async () => {
-      await expect(svc.publish(validRequest({ storeIds: [] }))).rejects.toThrow(BadRequestException);
+      await expect(svc.publish(validRequest({ storeIds: [] }))).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws when no images available', async () => {
       listingRepo.findOne = jest.fn().mockResolvedValue(null);
       catalogRepo.findOne = jest.fn().mockResolvedValue(null);
 
-      await expect(svc.publish(validRequest({ imageUrls: [] }))).rejects.toThrow(/image/);
+      await expect(
+        svc.publish(validRequest({ imageUrls: [] })),
+      ).rejects.toThrow(/image/);
     });
 
     it('publishes to a store successfully via direct eBay', async () => {
@@ -162,13 +194,15 @@ describe('EbayPublishService', () => {
 
       const req = validRequest({
         compatibility: {
-          compatibleProducts: [{
-            compatibilityProperties: [
-              { name: 'Make', value: 'Toyota' },
-              { name: 'Model', value: 'Camry' },
-              { name: 'Year', value: '2018' },
-            ],
-          }],
+          compatibleProducts: [
+            {
+              compatibilityProperties: [
+                { name: 'Make', value: 'Toyota' },
+                { name: 'Model', value: 'Camry' },
+                { name: 'Year', value: '2018' },
+              ],
+            },
+          ],
         },
       });
 
@@ -177,6 +211,53 @@ describe('EbayPublishService', () => {
         'store-1',
         expect.any(String),
         req.compatibility,
+      );
+    });
+
+    it('derives compatibility from catalog product fitment when listing record has none', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'l-1',
+        customLabelSku: 'SKU-001',
+        title: 'Brake Pad',
+        description: '<p>Desc</p>',
+        cBrand: 'TRW',
+      });
+      catalogRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'cp-1',
+        sku: 'SKU-001',
+        fitmentData: [
+          { Make: 'Toyota', Model: 'Camry', Year: '2018', Trim: 'LE' },
+        ],
+      });
+
+      const req = validRequest({ compatibility: undefined });
+
+      await svc.publish(req);
+      expect(inventoryApi.setCompatibility).toHaveBeenCalledWith(
+        'store-1',
+        expect.any(String),
+        {
+          compatibleProducts: [
+            {
+              compatibilityProperties: [
+                { name: 'Make', value: 'Toyota' },
+                { name: 'Model', value: 'Camry' },
+                { name: 'Year', value: '2018' },
+                { name: 'Trim', value: 'LE' },
+              ],
+            },
+          ],
+        },
       );
     });
 
@@ -196,17 +277,23 @@ describe('EbayPublishService', () => {
       const error25002 = Object.assign(new Error('Offer exists'), {
         response: {
           data: {
-            errors: [{
-              errorId: 25002,
-              parameters: [{ name: 'offerId', value: 'existing-offer' }],
-            }],
+            errors: [
+              {
+                errorId: 25002,
+                parameters: [{ name: 'offerId', value: 'existing-offer' }],
+              },
+            ],
           },
         },
       });
       inventoryApi.createOffer = jest.fn().mockRejectedValue(error25002);
 
       const results = await svc.publish(validRequest());
-      expect(inventoryApi.updateOffer).toHaveBeenCalledWith('store-1', 'existing-offer', expect.any(Object));
+      expect(inventoryApi.updateOffer).toHaveBeenCalledWith(
+        'store-1',
+        'existing-offer',
+        expect.any(Object),
+      );
       expect(results[0].success).toBe(true);
     });
 
@@ -219,7 +306,9 @@ describe('EbayPublishService', () => {
       connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
       listingRepo.findOne = jest.fn().mockResolvedValue(null);
 
-      const results = await svc.publish(validRequest({ storeIds: ['store-1', 'store-1'] }));
+      const results = await svc.publish(
+        validRequest({ storeIds: ['store-1', 'store-1'] }),
+      );
       expect(results).toHaveLength(2);
     });
   });
@@ -227,7 +316,10 @@ describe('EbayPublishService', () => {
   describe('endListing', () => {
     it('calls withdrawOffer', async () => {
       await svc.endListing('store-1', 'offer-123');
-      expect(inventoryApi.withdrawOffer).toHaveBeenCalledWith('store-1', 'offer-123');
+      expect(inventoryApi.withdrawOffer).toHaveBeenCalledWith(
+        'store-1',
+        'offer-123',
+      );
     });
   });
 
@@ -236,7 +328,10 @@ describe('EbayPublishService', () => {
       await svc.updatePriceQuantity('store-1', [
         { offerId: 'offer-1', price: 29.99, quantity: 10 },
       ]);
-      expect(inventoryApi.bulkUpdatePriceQuantity).toHaveBeenCalledWith('store-1', expect.any(Array));
+      expect(inventoryApi.bulkUpdatePriceQuantity).toHaveBeenCalledWith(
+        'store-1',
+        expect.any(Array),
+      );
     });
   });
 
@@ -253,7 +348,9 @@ describe('EbayPublishService', () => {
 
   describe('publishByListingIds', () => {
     it('throws when storeIds empty', async () => {
-      await expect(svc.publishByListingIds(['l-1'], [])).rejects.toThrow(BadRequestException);
+      await expect(svc.publishByListingIds(['l-1'], [])).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -279,10 +376,9 @@ describe('EbayPublishService', () => {
 
   describe('buildOffer (private)', () => {
     it('uses GTC listing duration for FIXED_PRICE', () => {
-      const offer = (svc as any).buildOffer(
-        validRequest(),
-        { config: { marketplace: 'EBAY_US' } },
-      );
+      const offer = (svc as any).buildOffer(validRequest(), {
+        config: { marketplace: 'EBAY_US' },
+      });
       expect(offer.listingDuration).toBe('GTC');
       expect(offer.format).toBe('FIXED_PRICE');
       expect(offer.pricingSummary.price.value).toBe('49.99');
@@ -291,17 +387,23 @@ describe('EbayPublishService', () => {
 
   describe('fallbackConditionForCategory (private)', () => {
     it('maps USED_GOOD to USED_EXCELLENT', () => {
-      const result = (svc as any).fallbackConditionForCategory(validRequest({ condition: 'USED_GOOD' }));
+      const result = (svc as any).fallbackConditionForCategory(
+        validRequest({ condition: 'USED_GOOD' }),
+      );
       expect(result).toBe('USED_EXCELLENT');
     });
 
     it('returns undefined for NEW condition', () => {
-      const result = (svc as any).fallbackConditionForCategory(validRequest({ condition: 'NEW' }));
+      const result = (svc as any).fallbackConditionForCategory(
+        validRequest({ condition: 'NEW' }),
+      );
       expect(result).toBeUndefined();
     });
 
     it('returns undefined for USED_EXCELLENT (already the fallback)', () => {
-      const result = (svc as any).fallbackConditionForCategory(validRequest({ condition: 'USED_EXCELLENT' }));
+      const result = (svc as any).fallbackConditionForCategory(
+        validRequest({ condition: 'USED_EXCELLENT' }),
+      );
       expect(result).toBeUndefined();
     });
   });
@@ -309,7 +411,11 @@ describe('EbayPublishService', () => {
   describe('validateDirectOffer (private)', () => {
     it('returns error for missing fulfillment policy', () => {
       const error = (svc as any).validateDirectOffer(
-        { listingPolicies: { paymentPolicyId: 'p', returnPolicyId: 'r' }, categoryId: '6028', merchantLocationKey: 'loc' },
+        {
+          listingPolicies: { paymentPolicyId: 'p', returnPolicyId: 'r' },
+          categoryId: '6028',
+          merchantLocationKey: 'loc',
+        },
         { storeName: 'Test' },
       );
       expect(error).toContain('fulfillment');
@@ -317,7 +423,15 @@ describe('EbayPublishService', () => {
 
     it('returns error for missing category', () => {
       const error = (svc as any).validateDirectOffer(
-        { listingPolicies: { fulfillmentPolicyId: 'f', paymentPolicyId: 'p', returnPolicyId: 'r' }, categoryId: '', merchantLocationKey: 'loc' },
+        {
+          listingPolicies: {
+            fulfillmentPolicyId: 'f',
+            paymentPolicyId: 'p',
+            returnPolicyId: 'r',
+          },
+          categoryId: '',
+          merchantLocationKey: 'loc',
+        },
         { storeName: 'Test' },
       );
       expect(error).toContain('category');
@@ -325,7 +439,15 @@ describe('EbayPublishService', () => {
 
     it('returns null when all fields are valid', () => {
       const error = (svc as any).validateDirectOffer(
-        { listingPolicies: { fulfillmentPolicyId: 'f', paymentPolicyId: 'p', returnPolicyId: 'r' }, categoryId: '6028', merchantLocationKey: 'loc' },
+        {
+          listingPolicies: {
+            fulfillmentPolicyId: 'f',
+            paymentPolicyId: 'p',
+            returnPolicyId: 'r',
+          },
+          categoryId: '6028',
+          merchantLocationKey: 'loc',
+        },
         { storeName: 'Test' },
       );
       expect(error).toBeNull();

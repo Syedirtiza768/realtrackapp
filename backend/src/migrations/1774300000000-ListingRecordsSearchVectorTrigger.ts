@@ -63,7 +63,9 @@ export class ListingRecordsSearchVectorTrigger1774300000000 implements Migration
     await queryRunner.query(
       `DROP TRIGGER IF EXISTS trig_listing_search_vector ON "listing_records"`,
     );
-    await queryRunner.query(`DROP FUNCTION IF EXISTS listing_search_vector_trigger()`);
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS listing_search_vector_trigger()`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS idx_listing_search_vector`);
   }
 }

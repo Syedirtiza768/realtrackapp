@@ -15,18 +15,18 @@ function mockConfig(values: Record<string, string> = {}): {
 
 describe('ebay-inventory-location.util', () => {
   it('uses store locationKey when set', () => {
-    const key = resolvePreferredMerchantLocationKey(
-      mockConfig() as never,
-      { locationKey: 'warehouse-1', config: {} },
-    );
+    const key = resolvePreferredMerchantLocationKey(mockConfig() as never, {
+      locationKey: 'warehouse-1',
+      config: {},
+    });
     expect(key).toBe('warehouse-1');
   });
 
   it('falls back to default merchant location key', () => {
-    const key = resolvePreferredMerchantLocationKey(
-      mockConfig() as never,
-      { locationKey: null, config: {} },
-    );
+    const key = resolvePreferredMerchantLocationKey(mockConfig() as never, {
+      locationKey: null,
+      config: {},
+    });
     expect(key).toBe(DEFAULT_MERCHANT_LOCATION_KEY);
   });
 

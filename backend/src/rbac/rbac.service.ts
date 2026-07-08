@@ -110,7 +110,7 @@ export class RbacService implements OnModuleInit {
       }
 
       const permKeys = PERMISSION_REGISTRY.filter((p) =>
-        p.defaultRoles?.includes(roleDef.slug as RoleSlug),
+        p.defaultRoles?.includes(roleDef.slug),
       ).map((p) => p.key);
 
       const permissions = await this.permissionRepo.find({

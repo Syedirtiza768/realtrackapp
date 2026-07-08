@@ -13,7 +13,12 @@ import { Organization } from '../../../auth/entities/organization.entity.js';
 import { User } from '../../../auth/entities/user.entity.js';
 import { EbayListingJobTarget } from './ebay-listing-job-target.entity.js';
 
-export type EbayListingJobType = 'publish' | 'revise' | 'end' | 'delete' | 'sync';
+export type EbayListingJobType =
+  | 'publish'
+  | 'revise'
+  | 'end'
+  | 'delete'
+  | 'sync';
 export type EbayListingJobStatus =
   | 'pending'
   | 'processing'
@@ -47,7 +52,12 @@ export class EbayListingJob {
   @Column({ type: 'varchar', length: 30, default: 'pending' })
   status!: EbayListingJobStatus;
 
-  @Column({ name: 'idempotency_key', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'idempotency_key',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   idempotencyKey!: string | null;
 
   @OneToMany(() => EbayListingJobTarget, (t) => t.listingJob)

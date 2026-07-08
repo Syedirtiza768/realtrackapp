@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ExportRuleService } from './export-rule.service.js';
-import { CreateExportRuleDto, UpdateExportRuleDto } from './dto/export-rule.dto.js';
+import {
+  CreateExportRuleDto,
+  UpdateExportRuleDto,
+} from './dto/export-rule.dto.js';
 import type { ExportRule } from './entities/export-rule.entity.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 
@@ -37,9 +40,7 @@ export class ExportRuleController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get an export rule by ID' })
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<ExportRule> {
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ExportRule> {
     return this.service.findOne(id);
   }
 
@@ -60,7 +61,9 @@ export class ExportRuleController {
   }
 
   @Post(':id/execute')
-  @ApiOperation({ summary: 'Execute a rule: find matching products and create offers' })
+  @ApiOperation({
+    summary: 'Execute a rule: find matching products and create offers',
+  })
   @ApiResponse({ status: 200, description: 'Returns count of offers created' })
   async execute(
     @Param('id', ParseUUIDPipe) id: string,

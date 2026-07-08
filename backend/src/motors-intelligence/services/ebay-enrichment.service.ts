@@ -63,14 +63,20 @@ export class EbayEnrichmentService {
     if (!categoryId && product.productType) {
       // Try cached mapping by product type
       const mapping = await this.categoryMappingRepo.findOne({
-        where: { productType: product.productType, active: true, isMotorsCategory: true },
+        where: {
+          productType: product.productType,
+          active: true,
+          isMotorsCategory: true,
+        },
       });
 
       if (mapping && this.isCacheFresh(mapping.lastSyncedAt)) {
         categoryId = mapping.ebayCategoryId;
         categoryName = mapping.ebayCategoryName;
         cached = true;
-        this.logger.debug(`Cache hit for product type "${product.productType}" → category ${categoryId}`);
+        this.logger.debug(
+          `Cache hit for product type "${product.productType}" → category ${categoryId}`,
+        );
       } else {
         // Query eBay Taxonomy API for category suggestion
         const suggested = await this.suggestCategory(product);
@@ -114,7 +120,9 @@ export class EbayEnrichmentService {
           await this.aspectRepo.delete({ ebayCategoryId: categoryId });
           aspects = await this.aspectRepo.save(fetched);
         } else if (aspects.length === 0) {
-          warnings.push(`No aspect requirements found for category ${categoryId}`);
+          warnings.push(
+            `No aspect requirements found for category ${categoryId}`,
+          );
         }
       } else {
         cached = true;
@@ -165,7 +173,10 @@ export class EbayEnrichmentService {
       product.productType,
       product.productFamily,
       product.brand,
-    ].filter(Boolean).join(' ').toLowerCase();
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
 
     if (!searchTerms) return null;
 
@@ -187,7 +198,8 @@ export class EbayEnrichmentService {
         const mapType = mapping.productType.toLowerCase();
         const prodType = product.productType.toLowerCase();
         if (mapType === prodType) score += 10;
-        else if (mapType.includes(prodType) || prodType.includes(mapType)) score += 5;
+        else if (mapType.includes(prodType) || prodType.includes(mapType))
+          score += 5;
       }
 
       // Keyword match
@@ -202,7 +214,10 @@ export class EbayEnrichmentService {
       // Category name match
       if (mapping.ebayCategoryName) {
         const catName = mapping.ebayCategoryName.toLowerCase();
-        if (searchTerms.includes(catName) || catName.includes(product.productType?.toLowerCase() || '---')) {
+        if (
+          searchTerms.includes(catName) ||
+          catName.includes(product.productType?.toLowerCase() || '---')
+        ) {
           score += 4;
         }
       }
@@ -223,7 +238,9 @@ export class EbayEnrichmentService {
     }
 
     // Fallback: use the generic "Other Parts" category
-    const fallback = mappings.find(m => m.ebayCategoryName?.includes('Other'));
+    const fallback = mappings.find((m) =>
+      m.ebayCategoryName?.includes('Other'),
+    );
     if (fallback) {
       return {
         categoryId: fallback.ebayCategoryId,
@@ -243,7 +260,9 @@ export class EbayEnrichmentService {
    *
    * For now, generates standard Motors aspects based on category data.
    */
-  private async fetchCategoryAspects(categoryId: string): Promise<EbayAspectRequirement[]> {
+  private async fetchCategoryAspects(
+    categoryId: string,
+  ): Promise<EbayAspectRequirement[]> {
     const mapping = await this.categoryMappingRepo.findOne({
       where: { ebayCategoryId: categoryId },
     });
@@ -270,7 +289,18 @@ export class EbayEnrichmentService {
         requirementLevel: AspectRequirementLevel.RECOMMENDED,
         dataType: 'TEXT',
         maxLength: 65,
-        allowedValues: ['Front', 'Rear', 'Left', 'Right', 'Front Left', 'Front Right', 'Rear Left', 'Rear Right', 'Upper', 'Lower'],
+        allowedValues: [
+          'Front',
+          'Rear',
+          'Left',
+          'Right',
+          'Front Left',
+          'Front Right',
+          'Rear Left',
+          'Rear Right',
+          'Upper',
+          'Lower',
+        ],
       },
       {
         ebayCategoryId: categoryId,
@@ -278,7 +308,14 @@ export class EbayEnrichmentService {
         requirementLevel: AspectRequirementLevel.RECOMMENDED,
         dataType: 'TEXT',
         maxLength: 65,
-        allowedValues: ['1 Year', '2 Year', '3 Year', 'Lifetime', 'No Warranty', 'Unspecified'],
+        allowedValues: [
+          '1 Year',
+          '2 Year',
+          '3 Year',
+          'Lifetime',
+          'No Warranty',
+          'Unspecified',
+        ],
       },
       {
         ebayCategoryId: categoryId,
@@ -301,8 +338,17 @@ export class EbayEnrichmentService {
     }
 
     // Material/Finish for applicable categories
-    const materialCategories = ['Brake Pad', 'Brake Caliper', 'Control Arm', 'Wheel Hub', 'Radiator'];
-    if (mapping?.productType && materialCategories.includes(mapping.productType)) {
+    const materialCategories = [
+      'Brake Pad',
+      'Brake Caliper',
+      'Control Arm',
+      'Wheel Hub',
+      'Radiator',
+    ];
+    if (
+      mapping?.productType &&
+      materialCategories.includes(mapping.productType)
+    ) {
       aspects.push(
         {
           ebayCategoryId: categoryId,
@@ -321,7 +367,7 @@ export class EbayEnrichmentService {
       );
     }
 
-    return aspects.map(a => this.aspectRepo.create(a));
+    return aspects.map((a) => this.aspectRepo.create(a));
   }
 
   private async upsertCategoryMapping(
@@ -382,7 +428,10 @@ export class EbayEnrichmentService {
     if (aspects.length === 0) return false;
     // Aspects don't have lastSynced per-row, use creation date of first row
     const oldest = aspects.reduce(
-      (min, a) => (a.createdAt && new Date(a.createdAt) < min ? new Date(a.createdAt) : min),
+      (min, a) =>
+        a.createdAt && new Date(a.createdAt) < min
+          ? new Date(a.createdAt)
+          : min,
       new Date(),
     );
     return Date.now() - oldest.getTime() < this.CACHE_TTL_MS;

@@ -25,7 +25,12 @@ export interface EnglishListingInput {
   color?: string | null;
   donorVehicle?: string | null;
   wearNotes?: string | null;
-  fitmentRows?: Array<{ year?: string; make?: string; model?: string; trim?: string }>;
+  fitmentRows?: Array<{
+    year?: string;
+    make?: string;
+    model?: string;
+    trim?: string;
+  }>;
   fitmentConfirmed?: boolean;
   sellerCountry?: string | null;
   categoryId?: string | null;
@@ -44,7 +49,10 @@ export interface EnglishListingValidationResult {
   issues: EnglishListingValidationIssue[];
 }
 
-function truncateEnglishTitle(title: string, max = EBAY_TITLE_MAX_LENGTH): string {
+function truncateEnglishTitle(
+  title: string,
+  max = EBAY_TITLE_MAX_LENGTH,
+): string {
   const normalized = title.replace(/\s+/g, ' ').trim();
   if (normalized.length <= max) return normalized;
   const cut = normalized.slice(0, max);
@@ -179,7 +187,9 @@ ${buildShippingSection(input.sellerCountry, marketplace)}`;
 }
 
 /** English eBay Motors item specifics (omit unknown fields). */
-export function buildEnglishItemSpecifics(input: EnglishListingInput): Record<string, string> {
+export function buildEnglishItemSpecifics(
+  input: EnglishListingInput,
+): Record<string, string> {
   const specifics: Record<string, string> = {};
   const set = (key: string, value: string | null | undefined) => {
     const v = value?.trim();
@@ -194,7 +204,10 @@ export function buildEnglishItemSpecifics(input: EnglishListingInput): Record<st
     ? resolvePlatformGeneration(input.brand, input.model, anchorYear)
     : null;
   const aligned = platform
-    ? { generation: platform.code, yearRange: formatYearRange(platform.start, platform.end) }
+    ? {
+        generation: platform.code,
+        yearRange: formatYearRange(platform.start, platform.end),
+      }
     : alignGenerationAndYearRange({
         generation: input.generation,
         yearRange: input.yearRange,
@@ -234,7 +247,10 @@ export function applyAustralianSpelling(text: string): string {
 
 export function shouldRebuildEnglishTitle(
   title: string,
-  input: Pick<EnglishListingInput, 'brand' | 'model' | 'donorVehicle' | 'fitmentRows'>,
+  input: Pick<
+    EnglishListingInput,
+    'brand' | 'model' | 'donorVehicle' | 'fitmentRows'
+  >,
 ): boolean {
   const anchorYear =
     input.fitmentRows?.[0]?.year ??
@@ -260,13 +276,28 @@ export function validateEnglishListing(params: {
   const description = params.description?.trim() ?? '';
 
   if (!title) {
-    issues.push({ code: 'EN_TITLE_MISSING', severity: 'error', field: 'title', message: 'English title is missing' });
+    issues.push({
+      code: 'EN_TITLE_MISSING',
+      severity: 'error',
+      field: 'title',
+      message: 'English title is missing',
+    });
   } else if (title.length > EBAY_TITLE_MAX_LENGTH) {
-    issues.push({ code: 'EN_TITLE_TOO_LONG', severity: 'error', field: 'title', message: 'Title exceeds 80 characters' });
+    issues.push({
+      code: 'EN_TITLE_TOO_LONG',
+      severity: 'error',
+      field: 'title',
+      message: 'Title exceeds 80 characters',
+    });
   }
 
   if (!description || description.replace(/<[^>]+>/g, '').trim().length < 120) {
-    issues.push({ code: 'EN_DESCRIPTION_THIN', severity: 'error', field: 'description', message: 'English description is empty or too short' });
+    issues.push({
+      code: 'EN_DESCRIPTION_THIN',
+      severity: 'error',
+      field: 'description',
+      message: 'English description is empty or too short',
+    });
   }
 
   const titleMismatch = detectTitleGenerationMismatch(
@@ -288,7 +319,10 @@ export function validateEnglishListing(params: {
   if (hint && params.categoryId && params.categoryId !== hint.categoryId) {
     const interiorIds = new Set(['33695', '33717', '174090']);
     const exteriorIds = new Set(['33697', '174105']);
-    if (interiorIds.has(hint.categoryId) && exteriorIds.has(params.categoryId)) {
+    if (
+      interiorIds.has(hint.categoryId) &&
+      exteriorIds.has(params.categoryId)
+    ) {
       issues.push({
         code: 'EN_CATEGORY_MISMATCH',
         severity: 'error',
@@ -299,8 +333,17 @@ export function validateEnglishListing(params: {
   }
 
   const pn = params.oemPartNumber ?? params.mpn;
-  if (pn?.trim() && !params.itemSpecifics['Manufacturer Part Number'] && !params.itemSpecifics['OE/OEM Part Number']) {
-    issues.push({ code: 'EN_OEM_SPECIFIC_MISSING', severity: 'warning', field: 'itemSpecifics', message: 'OEM/MPN not reflected in item specifics' });
+  if (
+    pn?.trim() &&
+    !params.itemSpecifics['Manufacturer Part Number'] &&
+    !params.itemSpecifics['OE/OEM Part Number']
+  ) {
+    issues.push({
+      code: 'EN_OEM_SPECIFIC_MISSING',
+      severity: 'warning',
+      field: 'itemSpecifics',
+      message: 'OEM/MPN not reflected in item specifics',
+    });
   }
 
   return { valid: !issues.some((i) => i.severity === 'error'), issues };

@@ -112,7 +112,9 @@ export class ImageSearchService {
         hostPage: String(img.hostPageUrl ?? ''),
         width: Number(img.width ?? 0),
         height: Number(img.height ?? 0),
-        format: this.inferFormat(String(img.encodingFormat ?? img.contentUrl ?? '')),
+        format: this.inferFormat(
+          String(img.encodingFormat ?? img.contentUrl ?? ''),
+        ),
       }));
     } catch (err) {
       this.logger.warn(`Bing image search error: ${err}`);
@@ -187,7 +189,9 @@ export class ImageSearchService {
     for (const [brand, pattern] of Object.entries(brandPatterns)) {
       if (tokens.some((t) => t.includes(brand))) {
         // Extract part number-like tokens (alphanumeric with dashes)
-        const pnToken = tokens.find((t) => /^[a-z0-9]{3,}[-]?[a-z0-9]+$/i.test(t));
+        const pnToken = tokens.find((t) =>
+          /^[a-z0-9]{3,}[-]?[a-z0-9]+$/i.test(t),
+        );
         if (pnToken) {
           results.push({
             url: pattern.replace('{pn}', pnToken.toUpperCase()),

@@ -31,28 +31,30 @@ export class SellerpunditEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.auth.getConfigView(orgId);
   }
 
   @Put('config')
   @RequirePermissions('ebay.manage')
-  @ApiOperation({ summary: 'Save org-level SellerPundit credentials (optional)' })
+  @ApiOperation({
+    summary: 'Save org-level SellerPundit credentials (optional)',
+  })
   async putConfig(
     @Query('organizationId') organizationId: string | undefined,
     @Body() body: { email?: string; password?: string; enabled?: boolean },
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId, member } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId, member } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     this.permissions.assertCanConnect(member.role);
     if (body.email && body.password) {
-      await this.auth.saveOrgCredentials(orgId, body.email.trim(), body.password);
+      await this.auth.saveOrgCredentials(
+        orgId,
+        body.email.trim(),
+        body.password,
+      );
     }
     if (body.enabled != null) {
       await this.auth.upsertConfig(orgId, { enabled: body.enabled });
@@ -66,10 +68,8 @@ export class SellerpunditEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId, member } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId, member } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     this.permissions.assertCanConnect(member.role);
     return this.accounts.testConnection(orgId);
   }
@@ -81,34 +81,33 @@ export class SellerpunditEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId, member } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId, member } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     this.permissions.assertCanConnect(member.role);
     return this.accounts.syncStores(orgId, user.id);
   }
 
   @Post('sync/policies')
   @RequirePermissions('ebay.sync')
-  @ApiOperation({ summary: 'Sync SellerPundit policies for all SP accounts in workspace' })
+  @ApiOperation({
+    summary: 'Sync SellerPundit policies for all SP accounts in workspace',
+  })
   async syncAllPolicies(
     @Query('organizationId') organizationId: string | undefined,
     @Query('accountId') accountId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId, member } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId, member } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     this.permissions.assertCanManageStorePolicies(member.role);
 
     if (accountId) {
-      const { organizationId: accOrg } = await this.permissions.assertAccountAccess(
-        user.id,
-        accountId,
-        organizationId,
-      );
+      const { organizationId: accOrg } =
+        await this.permissions.assertAccountAccess(
+          user.id,
+          accountId,
+          organizationId,
+        );
       return this.policies.syncPolicies(accountId, accOrg, user.id);
     }
 
@@ -131,13 +130,15 @@ export class SellerpunditEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId, member } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId, member } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     this.permissions.assertCanConnect(member.role);
     const stores = await this.accounts.syncStores(orgId, user.id);
-    const policies = await this.syncAllPolicies(organizationId, undefined, user);
+    const policies = await this.syncAllPolicies(
+      organizationId,
+      undefined,
+      user,
+    );
     return { stores, policies };
   }
 }

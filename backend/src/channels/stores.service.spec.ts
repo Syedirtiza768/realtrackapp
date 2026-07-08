@@ -33,7 +33,9 @@ const mockStore = (overrides: Partial<Store> = {}): Store =>
     ...overrides,
   }) as Store;
 
-const mockInstance = (overrides: Partial<ListingChannelInstance> = {}): ListingChannelInstance =>
+const mockInstance = (
+  overrides: Partial<ListingChannelInstance> = {},
+): ListingChannelInstance =>
   ({
     id: 'inst-1',
     listingId: 'listing-1',
@@ -116,9 +118,18 @@ describe('StoresService (regression)', () => {
       providers: [
         StoresService,
         { provide: getRepositoryToken(Store), useValue: storeRepo },
-        { provide: getRepositoryToken(ListingChannelInstance), useValue: instanceRepo },
-        { provide: getRepositoryToken(DemoSimulationLog), useValue: demoLogRepo },
-        { provide: getRepositoryToken(ChannelConnection), useValue: connectionRepo },
+        {
+          provide: getRepositoryToken(ListingChannelInstance),
+          useValue: instanceRepo,
+        },
+        {
+          provide: getRepositoryToken(DemoSimulationLog),
+          useValue: demoLogRepo,
+        },
+        {
+          provide: getRepositoryToken(ChannelConnection),
+          useValue: connectionRepo,
+        },
         { provide: getRepositoryToken(ListingRecord), useValue: listingRepo },
         { provide: DataSource, useValue: {} },
         { provide: ConfigService, useValue: { get: () => 'true' } }, // demo mode
@@ -151,7 +162,11 @@ describe('StoresService (regression)', () => {
   it('createStore throws if connection not found', async () => {
     connectionRepo.findOneBy.mockResolvedValue(null);
     await expect(
-      service.createStore({ connectionId: 'bad', channel: 'ebay', storeName: 'X' }),
+      service.createStore({
+        connectionId: 'bad',
+        channel: 'ebay',
+        storeName: 'X',
+      }),
     ).rejects.toThrow('not found');
   });
 
@@ -182,7 +197,9 @@ describe('StoresService (regression)', () => {
   it('publishInstance rejects already published', async () => {
     const inst = mockInstance({ syncStatus: 'synced' });
     instanceRepo.findOne.mockResolvedValue(inst);
-    await expect(service.publishInstance('inst-1')).rejects.toThrow('already published');
+    await expect(service.publishInstance('inst-1')).rejects.toThrow(
+      'already published',
+    );
   });
 
   /* ─── publishToMultipleStores ─── */
@@ -195,10 +212,14 @@ describe('StoresService (regression)', () => {
       // For getInstance in publishInstance
       return mockInstance({ syncStatus: 'draft' });
     });
-    instanceRepo.save.mockImplementation((d) => Promise.resolve({ ...d, id: d.id || 'inst-new' }));
+    instanceRepo.save.mockImplementation((d) =>
+      Promise.resolve({ ...d, id: d.id || 'inst-new' }),
+    );
     instanceRepo.count.mockResolvedValue(1);
 
-    const result = await service.publishToMultipleStores('listing-1', ['store-1']);
+    const result = await service.publishToMultipleStores('listing-1', [
+      'store-1',
+    ]);
     expect(result.results).toHaveLength(1);
     expect(result.results[0].storeId).toBe('store-1');
   });
@@ -220,7 +241,12 @@ describe('StoresService (regression)', () => {
   it('getListingChannelOverview groups by channel', async () => {
     instanceRepo.find.mockResolvedValue([
       mockInstance({ channel: 'ebay', syncStatus: 'synced' }),
-      mockInstance({ id: 'inst-2', channel: 'shopify', storeId: 'store-2', syncStatus: 'pending' }),
+      mockInstance({
+        id: 'inst-2',
+        channel: 'shopify',
+        storeId: 'store-2',
+        syncStatus: 'pending',
+      }),
     ]);
 
     const result = await service.getListingChannelOverview('listing-1');

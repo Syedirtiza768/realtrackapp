@@ -178,10 +178,18 @@ export class PublishedListingsModule1785000000000 implements MigrationInterface 
     await queryRunner.query(
       `ALTER TABLE listing_action_logs DROP COLUMN IF EXISTS ebay_published_listing_id`,
     );
-    await queryRunner.query(`DROP TABLE IF EXISTS ebay_published_listing_revisions`);
-    await queryRunner.query(`DROP TABLE IF EXISTS ebay_published_listing_bulk_job_items`);
-    await queryRunner.query(`DROP TABLE IF EXISTS ebay_published_listing_bulk_jobs`);
-    await queryRunner.query(`DROP TABLE IF EXISTS ebay_published_listing_sync_logs`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS ebay_published_listing_revisions`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS ebay_published_listing_bulk_job_items`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS ebay_published_listing_bulk_jobs`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS ebay_published_listing_sync_logs`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS ebay_published_listings`);
   }
 }

@@ -57,7 +57,10 @@ describe('InventoryRealtimeSyncService', () => {
 
     it('skips when feature flag disabled', async () => {
       flags.isEnabled = jest.fn().mockResolvedValue(false);
-      svc = new InventoryRealtimeSyncService(queue as unknown as Queue, flags as unknown as FeatureFlagService);
+      svc = new InventoryRealtimeSyncService(
+        queue as unknown as Queue,
+        flags as unknown as FeatureFlagService,
+      );
 
       await svc.handleInventoryChange({
         channel: 'ebay',
@@ -120,9 +123,16 @@ describe('InventoryRealtimeSyncService', () => {
 
     it('skips when feature flag disabled', async () => {
       flags.isEnabled = jest.fn().mockResolvedValue(false);
-      svc = new InventoryRealtimeSyncService(queue as unknown as Queue, flags as unknown as FeatureFlagService);
+      svc = new InventoryRealtimeSyncService(
+        queue as unknown as Queue,
+        flags as unknown as FeatureFlagService,
+      );
 
-      await svc.handleOrderCreated({ orderId: 'order-1', channel: 'ebay', total: '99.99' });
+      await svc.handleOrderCreated({
+        orderId: 'order-1',
+        channel: 'ebay',
+        total: '99.99',
+      });
       expect(queue.add).not.toHaveBeenCalled();
     });
   });
@@ -184,7 +194,9 @@ describe('InventoryRealtimeSyncService', () => {
     });
 
     it('ignores non-inventory topics', async () => {
-      await svc.processShopifyInventoryWebhook('orders/create', { id: 'order-1' });
+      await svc.processShopifyInventoryWebhook('orders/create', {
+        id: 'order-1',
+      });
       expect(queue.add).not.toHaveBeenCalled();
     });
   });

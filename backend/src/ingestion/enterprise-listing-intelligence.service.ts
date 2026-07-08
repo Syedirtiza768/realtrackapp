@@ -31,7 +31,10 @@ import {
 } from '../fitment/platform-generation.util.js';
 
 export type Marketplace = 'US' | 'DE' | 'AU';
-export type ListingQualityProfile = 'max_seo_comprehensive' | 'balanced' | 'creative_exploration';
+export type ListingQualityProfile =
+  | 'max_seo_comprehensive'
+  | 'balanced'
+  | 'creative_exploration';
 
 interface EnterpriseOptions {
   marketplace: Marketplace;
@@ -128,7 +131,9 @@ export interface EnterpriseOptimizationResult {
 
 @Injectable()
 export class EnterpriseListingIntelligenceService {
-  private readonly logger = new Logger(EnterpriseListingIntelligenceService.name);
+  private readonly logger = new Logger(
+    EnterpriseListingIntelligenceService.name,
+  );
 
   constructor(
     @InjectRepository(PipelineJob)
@@ -147,8 +152,12 @@ export class EnterpriseListingIntelligenceService {
     const options: EnterpriseOptions = {
       marketplace: rawOptions?.marketplace ?? 'US',
       limit,
-      aiBudgetListings: Math.min(Math.max(rawOptions?.aiBudgetListings ?? limit, 0), 2000),
-      listingQualityProfile: rawOptions?.listingQualityProfile ?? 'max_seo_comprehensive',
+      aiBudgetListings: Math.min(
+        Math.max(rawOptions?.aiBudgetListings ?? limit, 0),
+        2000,
+      ),
+      listingQualityProfile:
+        rawOptions?.listingQualityProfile ?? 'max_seo_comprehensive',
     };
 
     const job = await this.pipelineRepo.findOneBy({ id: jobId });
@@ -177,10 +186,13 @@ export class EnterpriseListingIntelligenceService {
                 (row) => row.source === 'source_data',
               ),
             },
-            categoryName: product.categoryName ?? 'eBay Motors Parts & Accessories',
+            categoryName:
+              product.categoryName ?? 'eBay Motors Parts & Accessories',
             condition: product.conditionLabel ?? product.conditionId ?? 'Used',
             options: {
-              temperature: this.getTemperatureForProfile(options.listingQualityProfile),
+              temperature: this.getTemperatureForProfile(
+                options.listingQualityProfile,
+              ),
               marketplace: options.marketplace,
               sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
             },
@@ -205,11 +217,21 @@ export class EnterpriseListingIntelligenceService {
     }
     const aiGeneratedCount = aiByProductId.size;
 
-    const blockedCount = listings.filter((l) => l.validationStatus === 'block').length;
-    const reviewCount = listings.filter((l) => l.validationStatus === 'review').length;
-    const passCount = listings.filter((l) => l.validationStatus === 'pass').length;
+    const blockedCount = listings.filter(
+      (l) => l.validationStatus === 'block',
+    ).length;
+    const reviewCount = listings.filter(
+      (l) => l.validationStatus === 'review',
+    ).length;
+    const passCount = listings.filter(
+      (l) => l.validationStatus === 'pass',
+    ).length;
     const averageUploadReadiness = listings.length
-      ? Math.round((listings.reduce((sum, l) => sum + l.uploadReadinessScore, 0) / listings.length) * 100) / 100
+      ? Math.round(
+          (listings.reduce((sum, l) => sum + l.uploadReadinessScore, 0) /
+            listings.length) *
+            100,
+        ) / 100
       : 0;
 
     return {
@@ -239,7 +261,8 @@ export class EnterpriseListingIntelligenceService {
       marketplace: rawOptions?.marketplace ?? 'US',
       limit: 1,
       aiBudgetListings: 1,
-      listingQualityProfile: rawOptions?.listingQualityProfile ?? 'max_seo_comprehensive',
+      listingQualityProfile:
+        rawOptions?.listingQualityProfile ?? 'max_seo_comprehensive',
     };
 
     const aiResults = await this.listingPipeline.generateBatch([
@@ -258,7 +281,9 @@ export class EnterpriseListingIntelligenceService {
         categoryName: product.categoryName ?? 'eBay Motors Parts & Accessories',
         condition: product.conditionLabel ?? product.conditionId ?? 'Used',
         options: {
-          temperature: this.getTemperatureForProfile(options.listingQualityProfile),
+          temperature: this.getTemperatureForProfile(
+            options.listingQualityProfile,
+          ),
           marketplace: options.marketplace,
           sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
         },
@@ -284,17 +309,35 @@ export class EnterpriseListingIntelligenceService {
     const requiredSpecificNames = await this.getRequiredAspectsSafe(categoryId);
 
     let mergedSpecifics = { ...baseSpecifics };
-    let specificsEvaluation = this.evaluateSpecifics(mergedSpecifics, requiredSpecificNames);
+    let specificsEvaluation = this.evaluateSpecifics(
+      mergedSpecifics,
+      requiredSpecificNames,
+    );
     const compatibility = this.normalizeCompatibility(product.fitmentData);
-    const compatibilityValidRows = compatibility.filter((row) => row.source === 'source_data');
-    const compatibilityRejected = compatibility.length - compatibilityValidRows.length;
-    const fitmentConfidence = compatibilityValidRows.length > 0
-      ? Math.round((compatibilityValidRows.reduce((sum, row) => sum + row.confidence, 0) / compatibilityValidRows.length) * 100) / 100
-      : 0;
+    const compatibilityValidRows = compatibility.filter(
+      (row) => row.source === 'source_data',
+    );
+    const compatibilityRejected =
+      compatibility.length - compatibilityValidRows.length;
+    const fitmentConfidence =
+      compatibilityValidRows.length > 0
+        ? Math.round(
+            (compatibilityValidRows.reduce(
+              (sum, row) => sum + row.confidence,
+              0,
+            ) /
+              compatibilityValidRows.length) *
+              100,
+          ) / 100
+        : 0;
 
     let optimizedTitle = this.buildFallbackTitle(product, marketplace);
     let subtitle: string | null = null;
-    let seoDescription = this.buildFallbackDescription(product, marketplace, compatibilityValidRows);
+    let seoDescription = this.buildFallbackDescription(
+      product,
+      marketplace,
+      compatibilityValidRows,
+    );
     let shortDescription = this.buildShortDescription(product, marketplace);
     let aiTitleConfidence = 0.6;
     let aiDescriptionConfidence = 0.55;
@@ -302,25 +345,57 @@ export class EnterpriseListingIntelligenceService {
     if (aiListing) {
       try {
         optimizedTitle = this.cleanTitle(aiListing.title, marketplace);
-        subtitle = typeof aiListing.subtitle === 'string' ? aiListing.subtitle.slice(0, 55) : null;
-        seoDescription = this.cleanDescription(aiListing.description, product, marketplace);
-        shortDescription = this.buildShortDescriptionFromAi(aiListing.bulletPoints, product, marketplace);
-        mergedSpecifics = this.mergeAiSpecifics(baseSpecifics, aiListing.itemSpecifics);
-        specificsEvaluation = this.evaluateSpecifics(mergedSpecifics, requiredSpecificNames);
+        subtitle =
+          typeof aiListing.subtitle === 'string'
+            ? aiListing.subtitle.slice(0, 55)
+            : null;
+        seoDescription = this.cleanDescription(
+          aiListing.description,
+          product,
+          marketplace,
+        );
+        shortDescription = this.buildShortDescriptionFromAi(
+          aiListing.bulletPoints,
+          product,
+          marketplace,
+        );
+        mergedSpecifics = this.mergeAiSpecifics(
+          baseSpecifics,
+          aiListing.itemSpecifics,
+        );
+        specificsEvaluation = this.evaluateSpecifics(
+          mergedSpecifics,
+          requiredSpecificNames,
+        );
         aiTitleConfidence = 0.85;
         aiDescriptionConfidence = 0.82;
       } catch (error) {
-        this.logger.warn(`AI generation failed for product ${product.id}: ${String(error)}`);
+        this.logger.warn(
+          `AI generation failed for product ${product.id}: ${String(error)}`,
+        );
       }
     }
 
     if (marketplace === 'DE') {
-      const germanInput = this.toGermanListingInput(product, compatibilityValidRows);
-      const categoryHint = resolveMotorsCategoryFromPart(product.partType, product.placement);
-      if (categoryHint && categoryId && categoryHint.categoryId !== categoryId) {
+      const germanInput = this.toGermanListingInput(
+        product,
+        compatibilityValidRows,
+      );
+      const categoryHint = resolveMotorsCategoryFromPart(
+        product.partType,
+        product.placement,
+      );
+      if (
+        categoryHint &&
+        categoryId &&
+        categoryHint.categoryId !== categoryId
+      ) {
         const exteriorIds = new Set(['33697', '174105']);
         const interiorIds = new Set(['33695', '33717', '174090']);
-        if (interiorIds.has(categoryHint.categoryId) && exteriorIds.has(categoryId)) {
+        if (
+          interiorIds.has(categoryHint.categoryId) &&
+          exteriorIds.has(categoryId)
+        ) {
           categoryId = categoryHint.categoryId;
           categoryName = categoryHint.categoryName;
         }
@@ -342,19 +417,35 @@ export class EnterpriseListingIntelligenceService {
         ...mergedSpecifics,
         ...buildGermanItemSpecifics(germanInput),
       };
-      specificsEvaluation = this.evaluateSpecifics(mergedSpecifics, requiredSpecificNames);
+      specificsEvaluation = this.evaluateSpecifics(
+        mergedSpecifics,
+        requiredSpecificNames,
+      );
       shortDescription = this.buildShortDescriptionFromAi(
         [optimizedTitle.split(' ').slice(0, 8).join(' ')],
         product,
         marketplace,
       );
     } else if (marketplace === 'US' || marketplace === 'AU') {
-      const englishInput = this.toEnglishListingInput(product, compatibilityValidRows);
-      const categoryHint = resolveEnglishCategory(product.partType, product.placement);
-      if (categoryHint && categoryId && categoryHint.categoryId !== categoryId) {
+      const englishInput = this.toEnglishListingInput(
+        product,
+        compatibilityValidRows,
+      );
+      const categoryHint = resolveEnglishCategory(
+        product.partType,
+        product.placement,
+      );
+      if (
+        categoryHint &&
+        categoryId &&
+        categoryHint.categoryId !== categoryId
+      ) {
         const exteriorIds = new Set(['33697', '174105']);
         const interiorIds = new Set(['33695', '33717', '174090']);
-        if (interiorIds.has(categoryHint.categoryId) && exteriorIds.has(categoryId)) {
+        if (
+          interiorIds.has(categoryHint.categoryId) &&
+          exteriorIds.has(categoryId)
+        ) {
           categoryId = categoryHint.categoryId;
           categoryName = categoryHint.categoryName;
         }
@@ -373,7 +464,10 @@ export class EnterpriseListingIntelligenceService {
 
       const plainDescLen = seoDescription.replace(/<[^>]+>/g, '').trim().length;
       if (plainDescLen < 120) {
-        seoDescription = buildEnglishListingDescription(englishInput, marketplace);
+        seoDescription = buildEnglishListingDescription(
+          englishInput,
+          marketplace,
+        );
         aiDescriptionConfidence = Math.max(aiDescriptionConfidence, 0.86);
       } else if (marketplace === 'AU') {
         seoDescription = applyAustralianSpelling(seoDescription);
@@ -383,7 +477,10 @@ export class EnterpriseListingIntelligenceService {
         ...mergedSpecifics,
         ...buildEnglishItemSpecifics(englishInput),
       };
-      specificsEvaluation = this.evaluateSpecifics(mergedSpecifics, requiredSpecificNames);
+      specificsEvaluation = this.evaluateSpecifics(
+        mergedSpecifics,
+        requiredSpecificNames,
+      );
     }
 
     const imageAnalysis = this.evaluateImages(product.imageUrls);
@@ -402,9 +499,17 @@ export class EnterpriseListingIntelligenceService {
       itemSpecifics: mergedSpecifics,
     });
 
-    const errors = complianceWarnings.filter((i) => i.severity === 'error').length;
-    const warnings = complianceWarnings.filter((i) => i.severity === 'warning').length;
-    const missingDataReport = this.buildMissingDataReport(product, specificsEvaluation.details, compatibilityValidRows.length);
+    const errors = complianceWarnings.filter(
+      (i) => i.severity === 'error',
+    ).length;
+    const warnings = complianceWarnings.filter(
+      (i) => i.severity === 'warning',
+    ).length;
+    const missingDataReport = this.buildMissingDataReport(
+      product,
+      specificsEvaluation.details,
+      compatibilityValidRows.length,
+    );
 
     const confidenceScores = {
       title: aiTitleConfidence,
@@ -413,24 +518,20 @@ export class EnterpriseListingIntelligenceService {
       description: aiDescriptionConfidence,
       category: category.confidence,
       overall: this.round(
-        (aiTitleConfidence * 0.2)
-        + (specificsEvaluation.coverage * 0.25)
-        + (fitmentConfidence * 0.25)
-        + (aiDescriptionConfidence * 0.15)
-        + (category.confidence * 0.15),
+        aiTitleConfidence * 0.2 +
+          specificsEvaluation.coverage * 0.25 +
+          fitmentConfidence * 0.25 +
+          aiDescriptionConfidence * 0.15 +
+          category.confidence * 0.15,
       ),
     };
 
-    const uploadReadinessScore = this.round(Math.max(
-      0,
-      confidenceScores.overall - (errors * 0.25) - (warnings * 0.05),
-    ));
+    const uploadReadinessScore = this.round(
+      Math.max(0, confidenceScores.overall - errors * 0.25 - warnings * 0.05),
+    );
 
-    const validationStatus: 'pass' | 'review' | 'block' = errors > 0
-      ? 'block'
-      : uploadReadinessScore < 0.75
-        ? 'review'
-        : 'pass';
+    const validationStatus: 'pass' | 'review' | 'block' =
+      errors > 0 ? 'block' : uploadReadinessScore < 0.75 ? 'review' : 'pass';
 
     return {
       productId: product.id,
@@ -500,11 +601,17 @@ export class EnterpriseListingIntelligenceService {
     confidence: number;
   }> {
     if (product.categoryId) {
-      return { categoryId: product.categoryId, categoryName: product.categoryName, confidence: 0.95 };
+      return {
+        categoryId: product.categoryId,
+        categoryName: product.categoryName,
+        confidence: 0.95,
+      };
     }
 
     try {
-      const query = [product.brand, product.partType, product.title].filter(Boolean).join(' ');
+      const query = [product.brand, product.partType, product.title]
+        .filter(Boolean)
+        .join(' ');
       const suggestions = await this.taxonomy.getCategorySuggestions(query);
       const first = suggestions[0];
       if (first?.category?.categoryId) {
@@ -521,7 +628,9 @@ export class EnterpriseListingIntelligenceService {
     return { categoryId: null, categoryName: null, confidence: 0.2 };
   }
 
-  private async getRequiredAspectsSafe(categoryId: string | null): Promise<string[]> {
+  private async getRequiredAspectsSafe(
+    categoryId: string | null,
+  ): Promise<string[]> {
     if (!categoryId) return ['Brand', 'Manufacturer Part Number'];
     try {
       const aspects = await this.taxonomy.getItemAspectsForCategory(categoryId);
@@ -536,7 +645,9 @@ export class EnterpriseListingIntelligenceService {
     return ['Brand', 'Manufacturer Part Number'];
   }
 
-  private extractBaseSpecifics(product: CatalogProduct): Record<string, string> {
+  private extractBaseSpecifics(
+    product: CatalogProduct,
+  ): Record<string, string> {
     const entries: Array<[string, string | null | undefined]> = [
       ['Brand', product.brand],
       ['Manufacturer Part Number', product.mpn],
@@ -615,12 +726,19 @@ export class EnterpriseListingIntelligenceService {
       const model = String(raw['Model'] ?? raw['model'] ?? '').trim();
       const year = String(raw['Year'] ?? raw['year'] ?? '').trim();
       const trim = String(raw['Trim'] ?? raw['trim'] ?? '').trim() || undefined;
-      const engine = String(raw['Engine'] ?? raw['engine'] ?? '').trim() || undefined;
-      const drivetrain = String(raw['Drivetrain'] ?? raw['drivetrain'] ?? '').trim() || undefined;
-      const bodyStyle = String(raw['Body Style'] ?? raw['bodyStyle'] ?? '').trim() || undefined;
+      const engine =
+        String(raw['Engine'] ?? raw['engine'] ?? '').trim() || undefined;
+      const drivetrain =
+        String(raw['Drivetrain'] ?? raw['drivetrain'] ?? '').trim() ||
+        undefined;
+      const bodyStyle =
+        String(raw['Body Style'] ?? raw['bodyStyle'] ?? '').trim() || undefined;
 
       const yearNum = Number(year);
-      const yearValid = Number.isFinite(yearNum) && yearNum >= 1900 && yearNum <= new Date().getFullYear() + 2;
+      const yearValid =
+        Number.isFinite(yearNum) &&
+        yearNum >= 1900 &&
+        yearNum <= new Date().getFullYear() + 2;
       if (!make || !model || !year || !yearValid) {
         rows.push({
           make,
@@ -661,20 +779,36 @@ export class EnterpriseListingIntelligenceService {
   } {
     const findings: string[] = [];
     const recommendations: string[] = [];
-    const count = Array.isArray(imageUrls) ? imageUrls.filter(Boolean).length : 0;
+    const count = Array.isArray(imageUrls)
+      ? imageUrls.filter(Boolean).length
+      : 0;
 
     if (count === 0) findings.push('No product images detected');
-    if (count > 0 && count < 3) findings.push('Low image count for high-conversion Motors listing');
+    if (count > 0 && count < 3)
+      findings.push('Low image count for high-conversion Motors listing');
     if (count > 0 && count < 6) {
-      findings.push('Interior/trim parts typically need 6–12 photos (front, back, clips, label, wear)');
+      findings.push(
+        'Interior/trim parts typically need 6–12 photos (front, back, clips, label, wear)',
+      );
     }
-    if (imageUrls.some((url) => /watermark|placeholder|default|logo-only/i.test(url))) {
+    if (
+      imageUrls.some((url) =>
+        /watermark|placeholder|default|logo-only/i.test(url),
+      )
+    ) {
       findings.push('Potential watermark/placeholder style image detected');
     }
 
-    if (count < 6) recommendations.push('Add 6-12 images: front, side, rear, labels, connectors, defects');
-    recommendations.push('Prioritize first image with clear part angle on clean background');
-    recommendations.push('Add close-up of OEM/MPN label to improve buyer trust and returns reduction');
+    if (count < 6)
+      recommendations.push(
+        'Add 6-12 images: front, side, rear, labels, connectors, defects',
+      );
+    recommendations.push(
+      'Prioritize first image with clear part angle on clean background',
+    );
+    recommendations.push(
+      'Add close-up of OEM/MPN label to improve buyer trust and returns reduction',
+    );
 
     let qualityScore = 0.85;
     if (count === 0) qualityScore = 0;
@@ -684,7 +818,9 @@ export class EnterpriseListingIntelligenceService {
     if (findings.some((f) => f.includes('watermark'))) qualityScore -= 0.1;
     qualityScore = this.round(Math.max(0, qualityScore));
 
-    const readinessScore = this.round(Math.max(0, qualityScore - (count === 0 ? 0.4 : 0)));
+    const readinessScore = this.round(
+      Math.max(0, qualityScore - (count === 0 ? 0.4 : 0)),
+    );
     return { count, qualityScore, readinessScore, findings, recommendations };
   }
 
@@ -704,10 +840,20 @@ export class EnterpriseListingIntelligenceService {
   }): ComplianceWarning[] {
     const issues: ComplianceWarning[] = [];
     if (!input.title || input.title.length > 80) {
-      issues.push({ code: 'TITLE_INVALID', severity: 'error', field: 'title', message: 'Title missing or exceeds 80 characters' });
+      issues.push({
+        code: 'TITLE_INVALID',
+        severity: 'error',
+        field: 'title',
+        message: 'Title missing or exceeds 80 characters',
+      });
     }
     if (!input.categoryId) {
-      issues.push({ code: 'CATEGORY_MISSING', severity: 'error', field: 'categoryId', message: 'Category is missing' });
+      issues.push({
+        code: 'CATEGORY_MISSING',
+        severity: 'error',
+        field: 'categoryId',
+        message: 'Category is missing',
+      });
     }
     if (input.requiredSpecificsPresent < input.requiredSpecifics) {
       issues.push({
@@ -722,19 +868,40 @@ export class EnterpriseListingIntelligenceService {
         code: 'FITMENT_MISSING',
         severity: 'warning',
         field: 'compatibility',
-        message: 'No validated fitment rows; listing should be routed to review',
+        message:
+          'No validated fitment rows; listing should be routed to review',
       });
     }
     if (input.imageCount === 0) {
-      issues.push({ code: 'IMAGE_MISSING', severity: 'error', field: 'images', message: 'At least one product image is required' });
+      issues.push({
+        code: 'IMAGE_MISSING',
+        severity: 'error',
+        field: 'images',
+        message: 'At least one product image is required',
+      });
     } else if (input.imageQuality < 0.65) {
-      issues.push({ code: 'IMAGE_QUALITY_LOW', severity: 'warning', field: 'images', message: 'Image quality/readiness below recommended threshold' });
+      issues.push({
+        code: 'IMAGE_QUALITY_LOW',
+        severity: 'warning',
+        field: 'images',
+        message: 'Image quality/readiness below recommended threshold',
+      });
     }
     if (!input.hasPrice) {
-      issues.push({ code: 'PRICE_MISSING', severity: 'error', field: 'price', message: 'Positive price is required for upload' });
+      issues.push({
+        code: 'PRICE_MISSING',
+        severity: 'error',
+        field: 'price',
+        message: 'Positive price is required for upload',
+      });
     }
 
-    if (input.marketplace === 'DE' && input.product && input.description && input.itemSpecifics) {
+    if (
+      input.marketplace === 'DE' &&
+      input.product &&
+      input.description &&
+      input.itemSpecifics
+    ) {
       const deValidation = validateGermanListing({
         title: input.title,
         description: input.description,
@@ -815,11 +982,15 @@ export class EnterpriseListingIntelligenceService {
     product: CatalogProduct,
     fitmentRows: CompatibilityRow[],
   ): GermanListingInput {
-    const decoded = product.donorVinDecoded as Record<string, unknown> | null;
+    const decoded = product.donorVinDecoded;
     const donorYear = decoded?.['year'] ? String(decoded['year']) : '';
-    const donorMake = decoded?.['make'] ? String(decoded['make']) : product.brand ?? '';
+    const donorMake = decoded?.['make']
+      ? String(decoded['make'])
+      : (product.brand ?? '');
     const donorModel = decoded?.['model'] ? String(decoded['model']) : '';
-    const donorVehicle = [donorYear, donorMake, donorModel].filter(Boolean).join(' ').trim() || undefined;
+    const donorVehicle =
+      [donorYear, donorMake, donorModel].filter(Boolean).join(' ').trim() ||
+      undefined;
 
     const years = fitmentRows
       .map((r) => Number(r.year))
@@ -832,7 +1003,11 @@ export class EnterpriseListingIntelligenceService {
           : donorYear || undefined;
 
     const platform = donorYear
-      ? resolvePlatformGeneration(donorMake, donorModel || product.brand, donorYear)
+      ? resolvePlatformGeneration(
+          donorMake,
+          donorModel || product.brand,
+          donorYear,
+        )
       : null;
     const aligned = alignGenerationAndYearRange({
       generation: platform?.code,
@@ -861,8 +1036,13 @@ export class EnterpriseListingIntelligenceService {
         model: r.model,
         trim: r.trim,
       })),
-      fitmentConfirmed: fitmentRows.length > 0 && product.fitmentConfidence != null && Number(product.fitmentConfidence) >= 0.85,
-      sellerCountry: product.location?.toUpperCase().includes('DE') ? 'DE' : 'US',
+      fitmentConfirmed:
+        fitmentRows.length > 0 &&
+        product.fitmentConfidence != null &&
+        Number(product.fitmentConfidence) >= 0.85,
+      sellerCountry: product.location?.toUpperCase().includes('DE')
+        ? 'DE'
+        : 'US',
       categoryId: product.categoryId,
       categoryName: product.categoryName,
     };
@@ -873,11 +1053,14 @@ export class EnterpriseListingIntelligenceService {
     specifics: SpecificFieldScore[],
     compatibilityRows: number,
   ): string[] {
-    const missing = specifics.filter((s) => s.required && !s.present).map((s) => `Missing required specific: ${s.field}`);
+    const missing = specifics
+      .filter((s) => s.required && !s.present)
+      .map((s) => `Missing required specific: ${s.field}`);
     if (!product.description || product.description.trim().length < 60) {
       missing.push('Description is too short for production listing quality');
     }
-    if (compatibilityRows === 0) missing.push('No validated compatibility rows');
+    if (compatibilityRows === 0)
+      missing.push('No validated compatibility rows');
     if (!product.imageUrls?.length) missing.push('No images provided');
     return missing;
   }
@@ -888,16 +1071,29 @@ export class EnterpriseListingIntelligenceService {
     return local.slice(0, 80);
   }
 
-  private cleanDescription(description: string, product: CatalogProduct, marketplace: Marketplace): string {
+  private cleanDescription(
+    description: string,
+    product: CatalogProduct,
+    marketplace: Marketplace,
+  ): string {
     if (!description || description.trim().length < 250) {
       return this.buildFallbackDescription(product, marketplace, []);
     }
-    return this.localizeText(this.ensureEnterpriseDescriptionQuality(description), marketplace);
+    return this.localizeText(
+      this.ensureEnterpriseDescriptionQuality(description),
+      marketplace,
+    );
   }
 
   private ensureEnterpriseDescriptionQuality(description: string): string {
     const normalized = description.trim();
-    const requiredSections = ['Overview', 'Features', 'Specifications', 'Fitment', 'Condition Notes'];
+    const requiredSections = [
+      'Overview',
+      'Features',
+      'Specifications',
+      'Fitment',
+      'Condition Notes',
+    ];
     const missing = requiredSections.filter(
       (section) =>
         !new RegExp(`<h3>\\s*${section}\\s*</h3>`, 'i').test(normalized),
@@ -912,12 +1108,17 @@ export class EnterpriseListingIntelligenceService {
 <p>Please review product photos, part numbers, and fitment details before purchase to confirm compatibility.</p>`;
   }
 
-  private buildFallbackTitle(product: CatalogProduct, marketplace: Marketplace): string {
+  private buildFallbackTitle(
+    product: CatalogProduct,
+    marketplace: Marketplace,
+  ): string {
     if (marketplace === 'DE') {
       return buildGermanListingTitle(this.toGermanListingInput(product, []));
     }
     if (marketplace === 'US' || marketplace === 'AU') {
-      const title = buildEnglishListingTitle(this.toEnglishListingInput(product, []));
+      const title = buildEnglishListingTitle(
+        this.toEnglishListingInput(product, []),
+      );
       return marketplace === 'AU' ? applyAustralianSpelling(title) : title;
     }
     const parts = [
@@ -928,7 +1129,10 @@ export class EnterpriseListingIntelligenceService {
     ]
       .filter((v): v is string => Boolean(v && v.trim()))
       .join(' ');
-    return this.cleanTitle(parts || product.title || 'Automotive Part', marketplace);
+    return this.cleanTitle(
+      parts || product.title || 'Automotive Part',
+      marketplace,
+    );
   }
 
   private buildFallbackDescription(
@@ -949,7 +1153,13 @@ export class EnterpriseListingIntelligenceService {
     }
 
     const compatibilityText = compatibility.length
-      ? compatibility.slice(0, 10).map((c) => `${c.year} ${c.make} ${c.model}${c.trim ? ` ${c.trim}` : ''}`).join(', ')
+      ? compatibility
+          .slice(0, 10)
+          .map(
+            (c) =>
+              `${c.year} ${c.make} ${c.model}${c.trim ? ` ${c.trim}` : ''}`,
+          )
+          .join(', ')
       : 'Please verify fitment before purchase.';
 
     const body = `<h3>Product Overview</h3>
@@ -968,16 +1178,27 @@ export class EnterpriseListingIntelligenceService {
     return this.localizeText(body, marketplace);
   }
 
-  private buildShortDescription(product: CatalogProduct, marketplace: Marketplace): string {
-    const short = `${product.brand ?? 'Auto Part'} ${product.partType ?? ''} ${product.mpn ?? ''}`.trim();
+  private buildShortDescription(
+    product: CatalogProduct,
+    marketplace: Marketplace,
+  ): string {
+    const short =
+      `${product.brand ?? 'Auto Part'} ${product.partType ?? ''} ${product.mpn ?? ''}`.trim();
     return this.localizeText(short.slice(0, 160), marketplace);
   }
 
-  private buildShortDescriptionFromAi(bulletPoints: string[], product: CatalogProduct, marketplace: Marketplace): string {
+  private buildShortDescriptionFromAi(
+    bulletPoints: string[],
+    product: CatalogProduct,
+    marketplace: Marketplace,
+  ): string {
     if (!Array.isArray(bulletPoints) || bulletPoints.length === 0) {
       return this.buildShortDescription(product, marketplace);
     }
-    return this.localizeText(bulletPoints.slice(0, 3).join(' | ').slice(0, 220), marketplace);
+    return this.localizeText(
+      bulletPoints.slice(0, 3).join(' | ').slice(0, 220),
+      marketplace,
+    );
   }
 
   private localizeText(text: string, marketplace: Marketplace): string {

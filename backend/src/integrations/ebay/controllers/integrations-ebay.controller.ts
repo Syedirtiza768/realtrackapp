@@ -62,10 +62,8 @@ export class IntegrationsEbayController {
   @RequirePermissions('ebay.connect')
   @ApiOperation({ summary: 'Start eBay OAuth (returns consent URL)' })
   async oauthStart(@Body() dto: EbayOAuthStartDto, @CurrentUser() user: User) {
-    const { organizationId, member } = await this.permissions.resolveOrganization(
-      user.id,
-      dto.organizationId,
-    );
+    const { organizationId, member } =
+      await this.permissions.resolveOrganization(user.id, dto.organizationId);
     this.permissions.assertCanConnect(member.role);
     return this.oauth.startOAuth({
       userId: user.id,
@@ -91,7 +89,9 @@ export class IntegrationsEbayController {
     );
     try {
       if (!code || !state) {
-        res.redirect(`${base}/settings/integrations/ebay?error=missing_code_or_state`);
+        res.redirect(
+          `${base}/settings/integrations/ebay?error=missing_code_or_state`,
+        );
         return;
       }
       const result = await this.oauth.handleCallback({ code, state });
@@ -99,21 +99,24 @@ export class IntegrationsEbayController {
         `${base}/settings/integrations/ebay?success=1&accountId=${result.connectedEbayAccountId}`,
       );
     } catch (err) {
-      this.logger.error({ err, code: !!code, state: !!state }, 'eBay OAuth callback failed');
+      this.logger.error(
+        { err, code: !!code, state: !!state },
+        'eBay OAuth callback failed',
+      );
       res.redirect(`${base}/settings/integrations/ebay?error=oauth_failed`);
     }
   }
 
   @Get('accounts')
-  @ApiOperation({ summary: 'List connected eBay seller accounts for your workspace' })
+  @ApiOperation({
+    summary: 'List connected eBay seller accounts for your workspace',
+  })
   async listAccounts(
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.resolveOrganization(
-      user.id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
     return this.accounts.listForOrganization(orgId);
   }
 
@@ -124,11 +127,8 @@ export class IntegrationsEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.assertAccountAccess(
-      user.id,
-      id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.assertAccountAccess(user.id, id, organizationId);
     return this.accounts.getOne(id, orgId);
   }
 
@@ -141,11 +141,8 @@ export class IntegrationsEbayController {
     @CurrentUser() user: User,
     @Body() body: { accountDisplayName?: string; connectionStatus?: string },
   ) {
-    const { organizationId: orgId } = await this.permissions.assertAccountAccess(
-      user.id,
-      id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.assertAccountAccess(user.id, id, organizationId);
     return this.accounts.patch(id, orgId, body as never);
   }
 
@@ -156,11 +153,8 @@ export class IntegrationsEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.assertAccountAccess(
-      user.id,
-      id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.assertAccountAccess(user.id, id, organizationId);
     const account = await this.accounts.getOne(id, orgId);
     const policies = await this.accounts.getPolicies(id, orgId);
     return { account, ...policies };
@@ -168,7 +162,10 @@ export class IntegrationsEbayController {
 
   @Patch('accounts/:id/default-policies')
   @RequirePermissions('ebay.manage')
-  @ApiOperation({ summary: 'Set default payment/return/fulfillment/location for a marketplace' })
+  @ApiOperation({
+    summary:
+      'Set default payment/return/fulfillment/location for a marketplace',
+  })
   async patchDefaultPolicies(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('organizationId') organizationId: string | undefined,
@@ -241,17 +238,14 @@ export class IntegrationsEbayController {
     const { organizationId: orgId, member } =
       await this.permissions.assertAccountAccess(user.id, id, organizationId);
     this.permissions.assertCanManageStorePolicies(member.role);
-    return this.ebaySync.enqueueListingSync(
-      id,
-      orgId,
-      user.id,
-      marketplaceId,
-    );
+    return this.ebaySync.enqueueListingSync(id, orgId, user.id, marketplaceId);
   }
 
   @Post('accounts/:id/sync-orders')
   @RequirePermissions('ebay.sync')
-  @ApiOperation({ summary: 'Enqueue background import of eBay orders (Fulfillment API)' })
+  @ApiOperation({
+    summary: 'Enqueue background import of eBay orders (Fulfillment API)',
+  })
   async syncOrders(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('organizationId') organizationId: string | undefined,
@@ -270,11 +264,8 @@ export class IntegrationsEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.assertAccountAccess(
-      user.id,
-      id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.assertAccountAccess(user.id, id, organizationId);
     await this.accounts.getOne(id, orgId);
     return this.ebaySync.listSyncLogs(id, orgId);
   }
@@ -286,11 +277,8 @@ export class IntegrationsEbayController {
     @Query('organizationId') organizationId: string | undefined,
     @CurrentUser() user: User,
   ) {
-    const { organizationId: orgId } = await this.permissions.assertAccountAccess(
-      user.id,
-      id,
-      organizationId,
-    );
+    const { organizationId: orgId } =
+      await this.permissions.assertAccountAccess(user.id, id, organizationId);
     return this.apiAuditService.listForAccount(id, orgId);
   }
 

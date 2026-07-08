@@ -15,7 +15,10 @@ import { resolveMarketplaceId } from '../../channels/ebay/ebay-marketplace-heade
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
 import { EbayTradingApiService } from '../../channels/ebay/ebay-trading-api.service.js';
 import type { TradingSellerListItem } from '../../channels/ebay/ebay-trading-api.service.js';
-import type { EbayInventoryItem, EbayOffer } from '../../channels/ebay/ebay-api.types.js';
+import type {
+  EbayInventoryItem,
+  EbayOffer,
+} from '../../channels/ebay/ebay-api.types.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import { EbayPublishedListingSyncLog } from '../entities/ebay-published-listing-sync-log.entity.js';
 import { PublishedListingsHealthService } from './published-listings-health.service.js';
@@ -162,7 +165,10 @@ export class PublishedListingsSyncService {
     }
 
     const account = await this.accountRepo.findOne({
-      where: { id: payload.ebayAccountId, organizationId: payload.organizationId },
+      where: {
+        id: payload.ebayAccountId,
+        organizationId: payload.organizationId,
+      },
     });
     if (!account) {
       throw new NotFoundException('eBay account not found');
@@ -171,7 +177,8 @@ export class PublishedListingsSyncService {
     const storeId = account.primaryStoreId;
     const store = await this.storeRepo.findOneBy({ id: storeId });
     const accountMarketplaceId =
-      payload.marketplaceId ?? (store ? resolveMarketplaceId(store) : 'EBAY_US');
+      payload.marketplaceId ??
+      (store ? resolveMarketplaceId(store) : 'EBAY_US');
     const errors: Record<string, unknown>[] = [];
     const warnings: Record<string, unknown>[] = [];
     let processed = 0;
@@ -251,7 +258,11 @@ export class PublishedListingsSyncService {
           let offset = 0;
 
           for (;;) {
-            const page = await this.inventoryApi.getItems(storeId, limit, offset);
+            const page = await this.inventoryApi.getItems(
+              storeId,
+              limit,
+              offset,
+            );
             const items = page.inventoryItems ?? [];
             if (!items.length) break;
 
@@ -261,12 +272,13 @@ export class PublishedListingsSyncService {
 
               let offerOffset = 0;
               for (;;) {
-                const { offers, total } = await this.inventoryApi.getOffersBySku(
-                  storeId,
-                  sku,
-                  100,
-                  offerOffset,
-                );
+                const { offers, total } =
+                  await this.inventoryApi.getOffersBySku(
+                    storeId,
+                    sku,
+                    100,
+                    offerOffset,
+                  );
                 if (!offers.length) break;
 
                 for (const offer of offers) {
@@ -408,7 +420,10 @@ export class PublishedListingsSyncService {
           sku,
         )) as unknown as Record<string, unknown>;
       } catch {
-        compatibility = offer.compatibility as unknown as Record<string, unknown> | null;
+        compatibility = offer.compatibility as unknown as Record<
+          string,
+          unknown
+        > | null;
       }
     }
 
@@ -422,8 +437,7 @@ export class PublishedListingsSyncService {
       imageUrls: extracted.imageUrls,
       itemSpecifics: extracted.itemSpecifics,
       compatibility,
-      quantityAvailable:
-        offer.availableQuantity ?? extracted.quantityAvailable,
+      quantityAvailable: offer.availableQuantity ?? extracted.quantityAvailable,
       quantitySold: 0,
       performanceMetrics: {},
       categoryId: offer.categoryId ?? null,
@@ -443,8 +457,7 @@ export class PublishedListingsSyncService {
       categoryId: offer.categoryId ?? null,
       price: offer.pricingSummary?.price?.value ?? null,
       currency: offer.pricingSummary?.price?.currency ?? 'USD',
-      quantityAvailable:
-        offer.availableQuantity ?? extracted.quantityAvailable,
+      quantityAvailable: offer.availableQuantity ?? extracted.quantityAvailable,
       listingStatus,
       listingFormat: this.health.mapOfferFormat(offer.format),
       condition: extracted.condition,
@@ -455,7 +468,8 @@ export class PublishedListingsSyncService {
       ),
       imageUrls: extracted.imageUrls,
       itemSpecifics: extracted.itemSpecifics,
-      listingPolicies: (offer.listingPolicies as Record<string, unknown> | undefined) ?? null,
+      listingPolicies:
+        (offer.listingPolicies as Record<string, unknown> | undefined) ?? null,
       compatibility,
       healthFlags,
       accountDisplayName: account.accountDisplayName,
@@ -589,7 +603,8 @@ export class PublishedListingsSyncService {
 
     const performanceMetrics: Record<string, unknown> = {};
     if (item.viewCount != null) performanceMetrics.viewCount = item.viewCount;
-    if (item.watchCount != null) performanceMetrics.watchCount = item.watchCount;
+    if (item.watchCount != null)
+      performanceMetrics.watchCount = item.watchCount;
 
     const healthFlags = this.health.computeHealthFlags({
       title: item.title,
@@ -640,7 +655,7 @@ export class PublishedListingsSyncService {
       rawEbayResponse: { syncSource: 'trading_api', item },
     };
 
-    let row = await this.listingRepo.findOne({
+    const row = await this.listingRepo.findOne({
       where: {
         ebayAccountId: account.id,
         marketplaceId,

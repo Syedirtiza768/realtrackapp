@@ -81,7 +81,9 @@ export class AiOptimizerService {
     const next: AiRoutingPolicy = {
       version: (current?.version ?? 0) + 1,
       generatedAt: new Date().toISOString(),
-      canaryPercent: Number(this.config.get('AI_OPTIMIZER_CANARY_PERCENT', '10')),
+      canaryPercent: Number(
+        this.config.get('AI_OPTIMIZER_CANARY_PERCENT', '10'),
+      ),
       source: 'optimizer',
       segments: { ...(current?.segments ?? {}) },
       thresholds: { ...this.modelRouter.getThresholds() },
@@ -96,7 +98,8 @@ export class AiOptimizerService {
     for (const seg of stats) {
       if (seg.attempts < minSamples) continue;
       const reward = this.computeReward({
-        humanApprovalRate: seg.humanApprovalRate || PRIOR_REWARDS[seg.model] || 0.85,
+        humanApprovalRate:
+          seg.humanApprovalRate || PRIOR_REWARDS[seg.model] || 0.85,
         firstPassRate: seg.firstPassRate,
         publishSuccessRate: seg.publishSuccessRate,
         avgCost: seg.avgCost,
@@ -105,7 +108,10 @@ export class AiOptimizerService {
         hardFailRate: seg.hardFailRate,
         publishErrorRate: seg.publishErrorRate,
       });
-      if (!ALLOWED_MODELS.includes(seg.model) || blocklist.includes(seg.model)) {
+      if (
+        !ALLOWED_MODELS.includes(seg.model) ||
+        blocklist.includes(seg.model)
+      ) {
         this.logger.error(
           `Optimizer attempted blocklisted model ${seg.model} — skipping`,
         );

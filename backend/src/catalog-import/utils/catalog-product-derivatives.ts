@@ -1,5 +1,8 @@
 import type { CatalogProduct } from '../entities/catalog-product.entity.js';
-import { MOTORS_CATEGORY_BUCKETS, type MotorsCategoryBucket } from '../config/motors-category-buckets.js';
+import {
+  MOTORS_CATEGORY_BUCKETS,
+  type MotorsCategoryBucket,
+} from '../config/motors-category-buckets.js';
 
 export type ReadinessStatus = 'ready' | 'needs_review';
 
@@ -40,7 +43,7 @@ const NON_EMPTY = (v: string | null | undefined): boolean =>
 function fitmentRows(product: CatalogProduct): Record<string, unknown>[] {
   const f = product.fitmentData;
   if (!f || !Array.isArray(f)) return [];
-  return f as Record<string, unknown>[];
+  return f;
 }
 
 function yearFromEntry(e: Record<string, unknown>): number | null {
@@ -61,12 +64,16 @@ function modelFromEntry(e: Record<string, unknown>): string {
 }
 
 /** Heuristic: placement is important for body / lighting / large exterior parts. */
-export function placementLikelyRequired(partType: string | null | undefined): boolean {
+export function placementLikelyRequired(
+  partType: string | null | undefined,
+): boolean {
   if (!partType) return false;
   const t = partType.toLowerCase();
   return (
     /head\s*light|headlight|tail\s*light|taillight|lamp|fog\s*light/i.test(t) ||
-    /bumper|fender|hood|bonnet|door\s*panel|mirror|quarter\s*panel|rocker/i.test(t) ||
+    /bumper|fender|hood|bonnet|door\s*panel|mirror|quarter\s*panel|rocker/i.test(
+      t,
+    ) ||
     /deck\s*lid|trunk\s*lid|tailgate/i.test(t)
   );
 }
@@ -97,11 +104,13 @@ function duplicateFitmentCount(rows: Record<string, unknown>[]): number {
   return dups;
 }
 
-function categoryBucketsForProduct(categoryId: string | null): MotorsCategoryBucket[] {
+function categoryBucketsForProduct(
+  categoryId: string | null,
+): MotorsCategoryBucket[] {
   if (!categoryId) return [];
   const out: MotorsCategoryBucket[] = [];
   const cid = String(categoryId).trim();
-  (Object.keys(MOTORS_CATEGORY_BUCKETS) as MotorsCategoryBucket[]).forEach((bucket) => {
+  Object.keys(MOTORS_CATEGORY_BUCKETS).forEach((bucket) => {
     const ids = MOTORS_CATEGORY_BUCKETS[bucket];
     if (ids.length && ids.includes(cid)) {
       out.push(bucket);
@@ -110,11 +119,16 @@ function categoryBucketsForProduct(categoryId: string | null): MotorsCategoryBuc
   return out;
 }
 
-function strictReadyGates(product: CatalogProduct): { ok: boolean; missing: string[] } {
+function strictReadyGates(product: CatalogProduct): {
+  ok: boolean;
+  missing: string[];
+} {
   const missing: string[] = [];
   if (!NON_EMPTY(product.title)) missing.push('title');
-  if (product.price == null || Number(product.price) <= 0) missing.push('price');
-  if (product.quantity == null || product.quantity < 1) missing.push('quantity');
+  if (product.price == null || Number(product.price) <= 0)
+    missing.push('price');
+  if (product.quantity == null || product.quantity < 1)
+    missing.push('quantity');
   if (!NON_EMPTY(product.brand)) missing.push('brand');
   if (!NON_EMPTY(product.partType)) missing.push('partType');
   if (!NON_EMPTY(product.mpn)) missing.push('mpn');
@@ -129,22 +143,29 @@ function strictReadyGates(product: CatalogProduct): { ok: boolean; missing: stri
   return { ok: missing.length === 0, missing };
 }
 
-function manualReviewReasons(product: CatalogProduct, derived: {
-  has_images: boolean;
-  has_oem_number: boolean;
-  has_fitment: boolean;
-  duplicate_fitment_row_count: number;
-  title_length: number;
-}): string[] {
+function manualReviewReasons(
+  product: CatalogProduct,
+  derived: {
+    has_images: boolean;
+    has_oem_number: boolean;
+    has_fitment: boolean;
+    duplicate_fitment_row_count: number;
+    title_length: number;
+  },
+): string[] {
   const reasons: string[] = [];
   if (!derived.has_images) reasons.push('MISSING_IMAGES');
   if (!derived.has_oem_number) reasons.push('MISSING_OEM');
-  if (placementLikelyRequired(product.partType) && !NON_EMPTY(product.placement)) {
+  if (
+    placementLikelyRequired(product.partType) &&
+    !NON_EMPTY(product.placement)
+  ) {
     reasons.push('MISSING_PLACEMENT');
   }
   if (!derived.has_fitment) reasons.push('MISSING_FITMENT');
   if (derived.duplicate_fitment_row_count > 0) reasons.push('DUP_FITMENT');
-  if (derived.title_length > 0 && derived.title_length < 20) reasons.push('TITLE_SHORT');
+  if (derived.title_length > 0 && derived.title_length < 20)
+    reasons.push('TITLE_SHORT');
   if (derived.title_length > 80) reasons.push('TITLE_LONG');
   if (
     product.brand &&
@@ -176,7 +197,9 @@ function storeRoutingRecommendation(
   return 'General Motors catalog — assign store manually';
 }
 
-export function computeCatalogProductDerived(product: CatalogProduct): CatalogProductDerived {
+export function computeCatalogProductDerived(
+  product: CatalogProduct,
+): CatalogProductDerived {
   const urls = (product.imageUrls ?? []).filter((u) => NON_EMPTY(u));
   const image_count = urls.length;
   const has_images = image_count >= 1;
@@ -199,7 +222,9 @@ export function computeCatalogProductDerived(product: CatalogProduct): CatalogPr
   const year_min = years.length ? Math.min(...years) : null;
   const year_max = years.length ? Math.max(...years) : null;
 
-  const price_band = priceBandFromPrice(product.price != null ? Number(product.price) : null);
+  const price_band = priceBandFromPrice(
+    product.price != null ? Number(product.price) : null,
+  );
   const title_length = product.title?.length ?? 0;
 
   const has_oem_number = NON_EMPTY(product.oemPartNumber);
@@ -238,7 +263,8 @@ export function computeCatalogProductDerived(product: CatalogProduct): CatalogPr
         NON_EMPTY(product.shippingProfile) &&
         NON_EMPTY(product.returnProfile) &&
         NON_EMPTY(product.paymentProfile),
-      pts: 10 },
+      pts: 10,
+    },
   ];
   const data_completeness_score = Math.min(
     100,
@@ -253,11 +279,15 @@ export function computeCatalogProductDerived(product: CatalogProduct): CatalogPr
     has_fitment;
 
   const marketplace_multi_candidate =
-    data_completeness_score >= 80 && has_fitment && has_oem_number && has_images;
+    data_completeness_score >= 80 &&
+    has_fitment &&
+    has_oem_number &&
+    has_images;
 
   const marketplace_de_review = marketplace_multi_candidate;
   const marketplace_au_review = marketplace_multi_candidate;
-  const marketplace_manual_review = readiness_status !== 'ready' || mr.length > 0;
+  const marketplace_manual_review =
+    readiness_status !== 'ready' || mr.length > 0;
 
   return {
     image_count,

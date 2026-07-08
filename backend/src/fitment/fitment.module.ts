@@ -60,6 +60,18 @@ import { ChannelsModule } from '../channels/channels.module.js';
     EbayVinSearchService,
     BrandVinDecoderRegistry,
   ],
-  exports: [FitmentService, FitmentMatcherService, EbayMvlService, EbayMvlStoreService, EbayMvlImportService, MvlFitmentExpanderService, VinDecodeService, VinExportService, VinDbExportService, EbayVinSearchService, BrandVinDecoderRegistry],
+  exports: [
+    FitmentService,
+    FitmentMatcherService,
+    EbayMvlService,
+    EbayMvlStoreService,
+    EbayMvlImportService,
+    MvlFitmentExpanderService,
+    VinDecodeService,
+    VinExportService,
+    VinDbExportService,
+    EbayVinSearchService,
+    BrandVinDecoderRegistry,
+  ],
 })
 export class FitmentModule {}

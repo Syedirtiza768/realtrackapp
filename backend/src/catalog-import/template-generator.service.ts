@@ -37,9 +37,20 @@ export class TemplateGeneratorService {
 
     for (const fmt of formats) {
       const wb = this.generateWorkbook(products, fmt);
-      const xlsxBuf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-      const prefix = fmt === 'us' ? 'US-Motors' : fmt === 'au' ? 'AU-Category' : 'DE-Category';
-      buffers.push({ name: `${prefix}-Listings-${dateStr}.xlsx`, data: xlsxBuf });
+      const xlsxBuf = XLSX.write(wb, {
+        type: 'buffer',
+        bookType: 'xlsx',
+      }) as Buffer;
+      const prefix =
+        fmt === 'us'
+          ? 'US-Motors'
+          : fmt === 'au'
+            ? 'AU-Category'
+            : 'DE-Category';
+      buffers.push({
+        name: `${prefix}-Listings-${dateStr}.xlsx`,
+        data: xlsxBuf,
+      });
     }
 
     return this.zipBuffers(buffers);
@@ -48,16 +59,25 @@ export class TemplateGeneratorService {
   /**
    * Generate a single template XLSX file and return as buffer.
    */
-  generateSingleTemplate(products: CatalogProduct[], format: TemplateFormat): Buffer {
+  generateSingleTemplate(
+    products: CatalogProduct[],
+    format: TemplateFormat,
+  ): Buffer {
     const wb = this.generateWorkbook(products, format);
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
-  private generateWorkbook(products: CatalogProduct[], format: TemplateFormat): XLSX.WorkBook {
+  private generateWorkbook(
+    products: CatalogProduct[],
+    format: TemplateFormat,
+  ): XLSX.WorkBook {
     switch (format) {
-      case 'us': return this.buildUSWorkbook(products);
-      case 'au': return this.buildAUWorkbook(products);
-      case 'de': return this.buildDEWorkbook(products);
+      case 'us':
+        return this.buildUSWorkbook(products);
+      case 'au':
+        return this.buildAUWorkbook(products);
+      case 'de':
+        return this.buildDEWorkbook(products);
     }
   }
 
@@ -66,34 +86,80 @@ export class TemplateGeneratorService {
   private buildUSWorkbook(products: CatalogProduct[]): XLSX.WorkBook {
     const headers = [
       '*Action(SiteID=eBayMotors|Country=US|Currency=USD|Version=1193)',
-      'Custom label (SKU)', 'Category ID', 'Category Name', 'Title',
-      'Relationship', 'Relationship details',
-      'P:UPC', 'Start price', 'Quantity', 'Condition ID', 'Description',
-      'Format', 'Duration', 'Best Offer Enabled', 'Immediate pay required',
-      'Location', 'Max dispatch time',
-      'Returns accepted option', 'Returns within option', 'Refund option', 'Return shipping cost paid by',
-      'Shipping profile name', 'Return profile name', 'Payment profile name',
-      'C:Brand', 'C:Type', 'C:Manufacturer Part Number',
-      'C:OE/OEM Part Number', 'C:Placement on Vehicle',
-      'C:Fitment Type', 'C:Warranty', 'C:Material', 'C:Color', 'C:Surface Finish',
-      'C:Interchange Part Number', 'C:Bundle Description',
+      'Custom label (SKU)',
+      'Category ID',
+      'Category Name',
+      'Title',
+      'Relationship',
+      'Relationship details',
+      'P:UPC',
+      'Start price',
+      'Quantity',
+      'Condition ID',
+      'Description',
+      'Format',
+      'Duration',
+      'Best Offer Enabled',
+      'Immediate pay required',
+      'Location',
+      'Max dispatch time',
+      'Returns accepted option',
+      'Returns within option',
+      'Refund option',
+      'Return shipping cost paid by',
+      'Shipping profile name',
+      'Return profile name',
+      'Payment profile name',
+      'C:Brand',
+      'C:Type',
+      'C:Manufacturer Part Number',
+      'C:OE/OEM Part Number',
+      'C:Placement on Vehicle',
+      'C:Fitment Type',
+      'C:Warranty',
+      'C:Material',
+      'C:Color',
+      'C:Surface Finish',
+      'C:Interchange Part Number',
+      'C:Bundle Description',
       'C:Country/Region of Manufacture',
       'Item photo URL',
-      'AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
-      'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
-      'AdditionalPicURL6', 'AdditionalPicURL7',
+      'AdditionalPicURL',
+      'AdditionalPicURL1',
+      'AdditionalPicURL2',
+      'AdditionalPicURL3',
+      'AdditionalPicURL4',
+      'AdditionalPicURL5',
+      'AdditionalPicURL6',
+      'AdditionalPicURL7',
     ];
 
     const rows: (string | number | null)[][] = [
-      ['#INFO', `Created=${Date.now()}`, null, null, null, null, ' Indicates missing required fields'],
-      ['#INFO', 'Version=1.0', null, 'Template=fx_multi_category_template_EBAY_MOTOR'],
+      [
+        '#INFO',
+        `Created=${Date.now()}`,
+        null,
+        null,
+        null,
+        null,
+        ' Indicates missing required fields',
+      ],
+      [
+        '#INFO',
+        'Version=1.0',
+        null,
+        'Template=fx_multi_category_template_EBAY_MOTOR',
+      ],
       ['#INFO'],
       headers,
     ];
 
     for (const p of products) {
       rows.push(this.buildUSRow(headers, p));
-      for (const fitRow of this.buildCompatibilityRows(headers, p.fitmentData)) {
+      for (const fitRow of this.buildCompatibilityRows(
+        headers,
+        p.fitmentData,
+      )) {
         rows.push(fitRow);
       }
     }
@@ -104,14 +170,20 @@ export class TemplateGeneratorService {
     return wb;
   }
 
-  private buildUSRow(headers: string[], p: CatalogProduct): (string | number | null)[] {
+  private buildUSRow(
+    headers: string[],
+    p: CatalogProduct,
+  ): (string | number | null)[] {
     const row = new Array(headers.length).fill(null);
     const set = (col: string, val: string | number | null | undefined) => {
       const idx = headers.indexOf(col);
       if (idx >= 0 && val != null && val !== '') row[idx] = val;
     };
 
-    set('*Action(SiteID=eBayMotors|Country=US|Currency=USD|Version=1193)', 'Add');
+    set(
+      '*Action(SiteID=eBayMotors|Country=US|Currency=USD|Version=1193)',
+      'Add',
+    );
     set('Custom label (SKU)', p.sku);
     set('Category ID', p.categoryId);
     set('Category Name', p.categoryName);
@@ -153,25 +225,63 @@ export class TemplateGeneratorService {
   private buildAUWorkbook(products: CatalogProduct[]): XLSX.WorkBook {
     const headers = [
       '*Action(SiteID=Australia|Country=AU|Currency=AUD|Version=1193)',
-      'Custom label (SKU)', 'Category ID', 'Category name', 'Title',
-      'Relationship', 'Relationship details',
-      'P:UPC', 'Start price', 'Quantity', 'Condition ID', 'Description',
-      'Format', 'Duration', 'Best Offer Enabled', 'Immediate pay required',
-      'Location', 'Max dispatch time',
-      'Returns accepted option', 'Returns within option', 'Refund option', 'Return shipping cost paid by',
-      'Shipping profile name', 'Return profile name', 'Payment profile name',
-      'C:Brand', 'C:Type', 'C:Manufacturer Part Number',
-      'C:Reference OE/OEM Number', 'C:Country/Region of Manufacture',
-      'C:Placement on Vehicle', 'C:Fitment Type', 'C:Warranty',
-      'C:Material', 'C:Color', 'C:Surface Finish', 'C:Interchange Part Number',
+      'Custom label (SKU)',
+      'Category ID',
+      'Category name',
+      'Title',
+      'Relationship',
+      'Relationship details',
+      'P:UPC',
+      'Start price',
+      'Quantity',
+      'Condition ID',
+      'Description',
+      'Format',
+      'Duration',
+      'Best Offer Enabled',
+      'Immediate pay required',
+      'Location',
+      'Max dispatch time',
+      'Returns accepted option',
+      'Returns within option',
+      'Refund option',
+      'Return shipping cost paid by',
+      'Shipping profile name',
+      'Return profile name',
+      'Payment profile name',
+      'C:Brand',
+      'C:Type',
+      'C:Manufacturer Part Number',
+      'C:Reference OE/OEM Number',
+      'C:Country/Region of Manufacture',
+      'C:Placement on Vehicle',
+      'C:Fitment Type',
+      'C:Warranty',
+      'C:Material',
+      'C:Color',
+      'C:Surface Finish',
+      'C:Interchange Part Number',
       'Item photo URL',
-      'AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
-      'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
-      'AdditionalPicURL6', 'AdditionalPicURL7',
+      'AdditionalPicURL',
+      'AdditionalPicURL1',
+      'AdditionalPicURL2',
+      'AdditionalPicURL3',
+      'AdditionalPicURL4',
+      'AdditionalPicURL5',
+      'AdditionalPicURL6',
+      'AdditionalPicURL7',
     ];
 
     const rows: (string | number | null)[][] = [
-      ['#INFO', `Created=${Date.now()}`, null, null, null, null, ' Indicates missing required fields'],
+      [
+        '#INFO',
+        `Created=${Date.now()}`,
+        null,
+        null,
+        null,
+        null,
+        ' Indicates missing required fields',
+      ],
       ['#INFO', 'Version=1.0', null, 'Template=fx_category_template_EBAY_AU'],
       ['#INFO'],
       headers,
@@ -179,7 +289,10 @@ export class TemplateGeneratorService {
 
     for (const p of products) {
       rows.push(this.buildAURow(headers, p));
-      for (const fitRow of this.buildCompatibilityRows(headers, p.fitmentData)) {
+      for (const fitRow of this.buildCompatibilityRows(
+        headers,
+        p.fitmentData,
+      )) {
         rows.push(fitRow);
       }
     }
@@ -190,16 +303,25 @@ export class TemplateGeneratorService {
     return wb;
   }
 
-  private buildAURow(headers: string[], p: CatalogProduct): (string | number | null)[] {
+  private buildAURow(
+    headers: string[],
+    p: CatalogProduct,
+  ): (string | number | null)[] {
     const row = new Array(headers.length).fill(null);
     const set = (col: string, val: string | number | null | undefined) => {
       const idx = headers.indexOf(col);
       if (idx >= 0 && val != null && val !== '') row[idx] = val;
     };
 
-    const auPrice = p.price != null ? Math.round(p.price * FX.auMultiplier * 100) / 100 : null;
+    const auPrice =
+      p.price != null
+        ? Math.round(p.price * FX.auMultiplier * 100) / 100
+        : null;
 
-    set('*Action(SiteID=Australia|Country=AU|Currency=AUD|Version=1193)', 'Add');
+    set(
+      '*Action(SiteID=Australia|Country=AU|Currency=AUD|Version=1193)',
+      'Add',
+    );
     set('Custom label (SKU)', p.sku);
     set('Category ID', p.categoryId);
     set('Category name', p.categoryName);
@@ -241,25 +363,60 @@ export class TemplateGeneratorService {
   private buildDEWorkbook(products: CatalogProduct[]): XLSX.WorkBook {
     const headers = [
       '*Action(SiteID=Germany|Country=DE|Currency=EUR|Version=1193)',
-      'Custom label (SKU)', 'Category ID', 'Category name', 'Title',
-      'Relationship', 'Relationship details',
-      'P:EAN', 'Start price', 'Quantity', 'Condition ID', 'Description',
-      'Format', 'Duration', 'Best Offer Enabled', 'VAT%', 'Immediate pay required',
-      'Location', 'Max dispatch time',
-      'Returns accepted option', 'Returns within option', 'Refund option', 'Return shipping cost paid by',
-      'Shipping profile name', 'Return profile name', 'Payment profile name',
-      'C:Hersteller', 'C:Produktart', 'C:Herstellernummer',
-      'C:OE/OEM Referenznummer(n)', 'C:Einbauposition',
+      'Custom label (SKU)',
+      'Category ID',
+      'Category name',
+      'Title',
+      'Relationship',
+      'Relationship details',
+      'P:EAN',
+      'Start price',
+      'Quantity',
+      'Condition ID',
+      'Description',
+      'Format',
+      'Duration',
+      'Best Offer Enabled',
+      'VAT%',
+      'Immediate pay required',
+      'Location',
+      'Max dispatch time',
+      'Returns accepted option',
+      'Returns within option',
+      'Refund option',
+      'Return shipping cost paid by',
+      'Shipping profile name',
+      'Return profile name',
+      'Payment profile name',
+      'C:Hersteller',
+      'C:Produktart',
+      'C:Herstellernummer',
+      'C:OE/OEM Referenznummer(n)',
+      'C:Einbauposition',
       'C:Herstellungsland und -region',
-      'C:Material', 'C:Farbe',
+      'C:Material',
+      'C:Farbe',
       'Item photo URL',
-      'AdditionalPicURL', 'AdditionalPicURL1', 'AdditionalPicURL2',
-      'AdditionalPicURL3', 'AdditionalPicURL4', 'AdditionalPicURL5',
-      'AdditionalPicURL6', 'AdditionalPicURL7',
+      'AdditionalPicURL',
+      'AdditionalPicURL1',
+      'AdditionalPicURL2',
+      'AdditionalPicURL3',
+      'AdditionalPicURL4',
+      'AdditionalPicURL5',
+      'AdditionalPicURL6',
+      'AdditionalPicURL7',
     ];
 
     const rows: (string | number | null)[][] = [
-      ['#INFO', `Created=${Date.now()}`, null, null, null, null, ' Kennzeichnet fehlende Felder, die erforderlich sind'],
+      [
+        '#INFO',
+        `Created=${Date.now()}`,
+        null,
+        null,
+        null,
+        null,
+        ' Kennzeichnet fehlende Felder, die erforderlich sind',
+      ],
       ['#INFO', 'Version=1.0', null, 'Template=fx_category_template_EBAY_DE'],
       ['#INFO'],
       headers,
@@ -267,7 +424,10 @@ export class TemplateGeneratorService {
 
     for (const p of products) {
       rows.push(this.buildDERow(headers, p));
-      for (const fitRow of this.buildCompatibilityRows(headers, p.fitmentData)) {
+      for (const fitRow of this.buildCompatibilityRows(
+        headers,
+        p.fitmentData,
+      )) {
         rows.push(fitRow);
       }
     }
@@ -278,14 +438,20 @@ export class TemplateGeneratorService {
     return wb;
   }
 
-  private buildDERow(headers: string[], p: CatalogProduct): (string | number | null)[] {
+  private buildDERow(
+    headers: string[],
+    p: CatalogProduct,
+  ): (string | number | null)[] {
     const row = new Array(headers.length).fill(null);
     const set = (col: string, val: string | number | null | undefined) => {
       const idx = headers.indexOf(col);
       if (idx >= 0 && val != null && val !== '') row[idx] = val;
     };
 
-    const eurPrice = p.price != null ? Math.round(p.price * FX.deMultiplier * 100) / 100 : null;
+    const eurPrice =
+      p.price != null
+        ? Math.round(p.price * FX.deMultiplier * 100) / 100
+        : null;
 
     set('*Action(SiteID=Germany|Country=DE|Currency=EUR|Version=1193)', 'Add');
     set('Custom label (SKU)', p.sku);
@@ -346,8 +512,10 @@ export class TemplateGeneratorService {
   ): (string | number | null)[][] {
     if (!fitmentData?.length) return [];
 
-    const relIdx = headers.findIndex(h => /^Relationship$/i.test(h));
-    const relDetailIdx = headers.findIndex(h => /^Relationship\s*details$/i.test(h));
+    const relIdx = headers.findIndex((h) => /^Relationship$/i.test(h));
+    const relDetailIdx = headers.findIndex((h) =>
+      /^Relationship\s*details$/i.test(h),
+    );
     const rIdx = relIdx >= 0 ? relIdx : 5;
     const rdIdx = relDetailIdx >= 0 ? relDetailIdx : 6;
 
@@ -368,7 +536,9 @@ export class TemplateGeneratorService {
       });
   }
 
-  private async zipBuffers(files: { name: string; data: Buffer }[]): Promise<Buffer> {
+  private async zipBuffers(
+    files: { name: string; data: Buffer }[],
+  ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const archive = archiver.default('zip', { zlib: { level: 9 } });
       const chunks: Buffer[] = [];

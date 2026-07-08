@@ -25,10 +25,14 @@ export class EbayMultiStoreListingService {
   ) {}
 
   /** Resolve catalog browse id (listing or catalog) to a catalog_products FK id. */
-  private async resolveCanonicalProductId(productRefId: string): Promise<string> {
+  private async resolveCanonicalProductId(
+    productRefId: string,
+  ): Promise<string> {
     const resolved = await this.publishResolver.resolve(productRefId);
     if (!resolved) {
-      throw new BadRequestException('Catalog product or listing record not found');
+      throw new BadRequestException(
+        'Catalog product or listing record not found',
+      );
     }
     return resolved.snapshot.catalogProductId;
   }
@@ -58,7 +62,14 @@ export class EbayMultiStoreListingService {
     catalogProductId: string;
     targets: { ebayAccountId: string; marketplaceId: string }[];
     idempotencyKey?: string;
-  }): Promise<{ job: EbayListingJob; skipped: { ebayAccountId: string; marketplaceId: string; errors: string[] }[] }> {
+  }): Promise<{
+    job: EbayListingJob;
+    skipped: {
+      ebayAccountId: string;
+      marketplaceId: string;
+      errors: string[];
+    }[];
+  }> {
     if (!input.targets.length) {
       throw new BadRequestException('At least one target store is required');
     }
@@ -68,7 +79,11 @@ export class EbayMultiStoreListingService {
     );
 
     const eligible: { ebayAccountId: string; marketplaceId: string }[] = [];
-    const skipped: { ebayAccountId: string; marketplaceId: string; errors: string[] }[] = [];
+    const skipped: {
+      ebayAccountId: string;
+      marketplaceId: string;
+      errors: string[];
+    }[] = [];
     for (const t of input.targets) {
       const v = await this.validation.validatePublish({
         organizationId: input.organizationId,
@@ -88,7 +103,8 @@ export class EbayMultiStoreListingService {
     }
     if (!eligible.length) {
       throw new BadRequestException({
-        message: 'No targets passed validation — fix errors or deselect blocked stores.',
+        message:
+          'No targets passed validation — fix errors or deselect blocked stores.',
         failures: skipped,
       });
     }
@@ -136,7 +152,9 @@ export class EbayMultiStoreListingService {
   }
 
   async getJob(jobId: string, organizationId: string): Promise<EbayListingJob> {
-    const job = await this.jobRepo.findOne({ where: { id: jobId, organizationId } });
+    const job = await this.jobRepo.findOne({
+      where: { id: jobId, organizationId },
+    });
     if (!job) throw new NotFoundException('Job not found');
     return job;
   }

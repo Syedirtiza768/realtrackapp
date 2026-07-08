@@ -37,11 +37,19 @@ export class ListingActionLog {
   @Column({ name: 'ebay_account_id', type: 'uuid', nullable: true })
   ebayAccountId!: string | null;
 
-  @ManyToOne(() => ConnectedEbayAccount, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => ConnectedEbayAccount, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
   @JoinColumn({ name: 'ebay_account_id' })
   ebayAccount!: ConnectedEbayAccount | null;
 
-  @Column({ name: 'marketplace_id', type: 'varchar', length: 30, nullable: true })
+  @Column({
+    name: 'marketplace_id',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+  })
   marketplaceId!: string | null;
 
   @Column({ name: 'catalog_product_id', type: 'uuid', nullable: true })

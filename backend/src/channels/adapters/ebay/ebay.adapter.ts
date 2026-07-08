@@ -82,7 +82,8 @@ export class EbayAdapter implements ChannelAdapter {
       refreshToken: undefined,
       // Legacy tokens from the dev portal are valid for ~18 months
       expiresAt: new Date(Date.now() + 548 * 24 * 60 * 60 * 1000),
-      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+      scope:
+        'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account https://api.ebay.com/oauth/api_scope/sell.fulfillment',
       tokenType: 'legacy',
       legacyToken,
     };
@@ -281,7 +282,11 @@ export class EbayAdapter implements ChannelAdapter {
     }
   }
 
-  async endListing(tokens: TokenSet, externalId: string, _storeContext?: StoreContext): Promise<void> {
+  async endListing(
+    tokens: TokenSet,
+    externalId: string,
+    _storeContext?: StoreContext,
+  ): Promise<void> {
     await this.http.post(
       `/sell/inventory/v1/offer/${externalId}/withdraw`,
       {},
@@ -334,10 +339,13 @@ export class EbayAdapter implements ChannelAdapter {
       externalOrderId: o.orderId,
       externalListingId: o.lineItems?.[0]?.legacyItemId ?? '',
       buyerUsername: o.buyer?.username ?? '',
-      quantity: o.lineItems?.reduce((sum: number, li: any) => sum + li.quantity, 0) ?? 1,
+      quantity:
+        o.lineItems?.reduce((sum: number, li: any) => sum + li.quantity, 0) ??
+        1,
       totalPrice: parseFloat(o.pricingSummary?.total?.value ?? '0'),
       currency: o.pricingSummary?.total?.currency ?? 'USD',
-      shippingAddress: o.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo ?? {},
+      shippingAddress:
+        o.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo ?? {},
       orderedAt: new Date(o.creationDate),
       rawPayload: o,
     }));
@@ -352,9 +360,6 @@ export class EbayAdapter implements ChannelAdapter {
       .createHmac('sha256', secret)
       .update(rawBody)
       .digest('base64');
-    return crypto.timingSafeEqual(
-      Buffer.from(hash),
-      Buffer.from(signature),
-    );
+    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
   }
 }

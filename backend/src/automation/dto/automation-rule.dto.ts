@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsObject, IsArray, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsInt,
+  IsObject,
+  IsArray,
+  IsEnum,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAutomationRuleDto {
@@ -20,9 +28,31 @@ export class CreateAutomationRuleDto {
   @IsObject()
   triggerConfig?: Record<string, unknown>;
 
-  @ApiProperty({ enum: ['update_price', 'sync_inventory', 'publish', 'end_listing', 'notify', 'apply_template'] })
-  @IsEnum(['update_price', 'sync_inventory', 'publish', 'end_listing', 'notify', 'apply_template'])
-  actionType: 'update_price' | 'sync_inventory' | 'publish' | 'end_listing' | 'notify' | 'apply_template';
+  @ApiProperty({
+    enum: [
+      'update_price',
+      'sync_inventory',
+      'publish',
+      'end_listing',
+      'notify',
+      'apply_template',
+    ],
+  })
+  @IsEnum([
+    'update_price',
+    'sync_inventory',
+    'publish',
+    'end_listing',
+    'notify',
+    'apply_template',
+  ])
+  actionType:
+    | 'update_price'
+    | 'sync_inventory'
+    | 'publish'
+    | 'end_listing'
+    | 'notify'
+    | 'apply_template';
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -44,12 +74,16 @@ export class CreateAutomationRuleDto {
   @IsInt()
   priority?: number;
 
-  @ApiPropertyOptional({ description: 'Scope rule to a specific store (null = all stores)' })
+  @ApiPropertyOptional({
+    description: 'Scope rule to a specific store (null = all stores)',
+  })
   @IsOptional()
   @IsString()
   storeId?: string;
 
-  @ApiPropertyOptional({ description: 'Scope rule to a specific channel (null = all channels)' })
+  @ApiPropertyOptional({
+    description: 'Scope rule to a specific channel (null = all channels)',
+  })
   @IsOptional()
   @IsString()
   channel?: string;
@@ -58,9 +92,20 @@ export class CreateAutomationRuleDto {
 export class UpdateAutomationRuleDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsEnum(['schedule', 'event', 'condition']) triggerType?: string;
+  @IsOptional()
+  @IsEnum(['schedule', 'event', 'condition'])
+  triggerType?: string;
   @IsOptional() @IsObject() triggerConfig?: Record<string, unknown>;
-  @IsOptional() @IsEnum(['update_price', 'sync_inventory', 'publish', 'end_listing', 'notify', 'apply_template']) actionType?: string;
+  @IsOptional()
+  @IsEnum([
+    'update_price',
+    'sync_inventory',
+    'publish',
+    'end_listing',
+    'notify',
+    'apply_template',
+  ])
+  actionType?: string;
   @IsOptional() @IsObject() actionConfig?: Record<string, unknown>;
   @IsOptional() @IsArray() conditions?: Record<string, unknown>[];
   @IsOptional() @IsBoolean() enabled?: boolean;

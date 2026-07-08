@@ -12,9 +12,7 @@ import { CatalogProduct } from '../entities/catalog-product.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { StorageService } from '../../storage/storage.service.js';
-import {
-  DuplicateDetectionService,
-} from '../services/duplicate-detection.service.js';
+import { DuplicateDetectionService } from '../services/duplicate-detection.service.js';
 import { EbayComplianceService } from '../services/ebay-compliance.service.js';
 import { CategoryLookupService } from '../services/category-lookup.service.js';
 import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
@@ -156,7 +154,9 @@ export class CsvImportProcessor extends WorkerHost {
           select: ['status'],
         });
         if (currentStatus?.status === 'cancelled') {
-          this.logger.warn(`Import ${importId} cancelled at physical line ${physicalCursor}`);
+          this.logger.warn(
+            `Import ${importId} cancelled at physical line ${physicalCursor}`,
+          );
           return;
         }
 
@@ -167,7 +167,10 @@ export class CsvImportProcessor extends WorkerHost {
         };
 
         const batchPrimaryRows: ParsedRow[] = [];
-        while (physicalCursor < totalRows && batchPrimaryRows.length < BATCH_SIZE) {
+        while (
+          physicalCursor < totalRows &&
+          batchPrimaryRows.length < BATCH_SIZE
+        ) {
           const pulled = this.pullNextFileExchangeLogicalRow(
             dataLines,
             headers,
@@ -230,7 +233,9 @@ export class CsvImportProcessor extends WorkerHost {
             // Log auto-corrections as warnings
             for (const ac of compliance.autoCorrections) {
               if (warnings.length < 500) {
-                warnings.push(`Row ${row.rowNumber}: Auto-corrected ${ac.field}: "${ac.original}" → "${ac.corrected}"`);
+                warnings.push(
+                  `Row ${row.rowNumber}: Auto-corrected ${ac.field}: "${ac.original}" → "${ac.corrected}"`,
+                );
               }
             }
 
@@ -324,21 +329,39 @@ export class CsvImportProcessor extends WorkerHost {
           brand: row.data['brand'] || null,
         }));
 
-        const dupResults = await this.duplicateService.checkDuplicateBatch(dupCheckInputs);
+        const dupResults =
+          await this.duplicateService.checkDuplicateBatch(dupCheckInputs);
 
         // Process each valid row
         const productsToInsert: Partial<CatalogProduct>[] = [];
         const listingsToInsert: Partial<ListingRecord>[] = [];
-        const productsToUpdate: { product: Partial<CatalogProduct>; productId: string }[] = [];
-        const listingsToUpdate: { listing: Partial<ListingRecord>; key: { sourceFileName: string; sheetName: string; sourceRowNumber: number } }[] = [];
+        const productsToUpdate: {
+          product: Partial<CatalogProduct>;
+          productId: string;
+        }[] = [];
+        const listingsToUpdate: {
+          listing: Partial<ListingRecord>;
+          key: {
+            sourceFileName: string;
+            sheetName: string;
+            sourceRowNumber: number;
+          };
+        }[] = [];
 
         for (let i = 0; i < uniqueRows.length; i++) {
           const row = uniqueRows[i];
           const dupResult = dupResults.get(i);
 
           if (dupResult?.isDuplicate) {
-            const productUpdate = this.mapToProduct(row.data, importId, row.rowNumber);
-            productsToUpdate.push({ product: productUpdate, productId: dupResult.matchedProductId! });
+            const productUpdate = this.mapToProduct(
+              row.data,
+              importId,
+              row.rowNumber,
+            );
+            productsToUpdate.push({
+              product: productUpdate,
+              productId: dupResult.matchedProductId!,
+            });
 
             listingsToUpdate.push({
               listing: this.mapToListingRecord(
@@ -379,7 +402,11 @@ export class CsvImportProcessor extends WorkerHost {
             });
           } else {
             // New product — prepare for insert
-            const product = this.mapToProduct(row.data, importId, row.rowNumber);
+            const product = this.mapToProduct(
+              row.data,
+              importId,
+              row.rowNumber,
+            );
             productsToInsert.push(product);
             seenInsertedRows.add(row.rowNumber);
             listingsToInsert.push(
@@ -402,7 +429,11 @@ export class CsvImportProcessor extends WorkerHost {
 
         // Transactional batch insert + update
         let savedBatchProducts: CatalogProduct[] = [];
-        if (productsToInsert.length > 0 || productsToUpdate.length > 0 || importRowEntries.length > 0) {
+        if (
+          productsToInsert.length > 0 ||
+          productsToUpdate.length > 0 ||
+          importRowEntries.length > 0
+        ) {
           await this.dataSource.transaction(async (manager) => {
             if (productsToInsert.length > 0) {
               savedBatchProducts = await manager
@@ -416,7 +447,10 @@ export class CsvImportProcessor extends WorkerHost {
               // Link created product IDs to row entries
               let insertIdx = 0;
               for (const entry of importRowEntries) {
-                if (entry.status === 'inserted' && insertIdx < savedBatchProducts.length) {
+                if (
+                  entry.status === 'inserted' &&
+                  insertIdx < savedBatchProducts.length
+                ) {
                   entry.createdProductId = savedBatchProducts[insertIdx].id;
                   insertIdx++;
                 }
@@ -433,7 +467,11 @@ export class CsvImportProcessor extends WorkerHost {
               for (const { listing, key } of listingsToUpdate) {
                 await manager
                   .getRepository(ListingRecord)
-                  .upsert(listing as ListingRecord, ['sourceFileName', 'sheetName', 'sourceRowNumber']);
+                  .upsert(listing as ListingRecord, [
+                    'sourceFileName',
+                    'sheetName',
+                    'sourceRowNumber',
+                  ]);
               }
             }
 
@@ -447,10 +485,13 @@ export class CsvImportProcessor extends WorkerHost {
 
           insertedRows += productsToInsert.length;
 
-          if (savedBatchProducts.length > 0 && this.shouldMirrorCatalogImages()) {
+          if (
+            savedBatchProducts.length > 0 &&
+            this.shouldMirrorCatalogImages()
+          ) {
             await this.mirrorImagesForInsertedBatch(
               savedBatchProducts,
-              listingsToInsert as Partial<ListingRecord>[],
+              listingsToInsert,
               importRecord,
               listingSheetName,
             );
@@ -581,7 +622,11 @@ export class CsvImportProcessor extends WorkerHost {
     columnMapping: Record<string, string>,
     cursor: number,
   ): {
-    primary: { rowNumber: number; data: Record<string, string>; rawLine: string } | null;
+    primary: {
+      rowNumber: number;
+      data: Record<string, string>;
+      rawLine: string;
+    } | null;
     nextPhysicalIndex: number;
     mergedFitmentLines: number;
     skippedOrphanFitment: boolean;
@@ -595,7 +640,7 @@ export class CsvImportProcessor extends WorkerHost {
       };
     }
 
-    const firstLine = dataLines[cursor]!;
+    const firstLine = dataLines[cursor];
     const firstCells = this.parseCsvLine(firstLine);
 
     if (this.isFileExchangeFitmentContinuation(firstCells, headers)) {
@@ -611,20 +656,20 @@ export class CsvImportProcessor extends WorkerHost {
     let next = cursor + 1;
     let mergedFitmentLines = 0;
     while (next < dataLines.length) {
-      const nc = this.parseCsvLine(dataLines[next]!);
+      const nc = this.parseCsvLine(dataLines[next]);
       if (!this.isFileExchangeFitmentContinuation(nc, headers)) {
         break;
       }
-      chunk.push(dataLines[next]!);
+      chunk.push(dataLines[next]);
       mergedFitmentLines++;
       next++;
     }
 
-    const primaryLine = chunk[0]!;
+    const primaryLine = chunk[0];
     const data = this.parseRow(primaryLine, headers, columnMapping);
     const fitmentObjs: Record<string, string>[] = [];
     for (let i = 1; i < chunk.length; i++) {
-      const fc = this.parseCsvLine(chunk[i]!);
+      const fc = this.parseCsvLine(chunk[i]);
       const det = this.extractRelationshipDetailsCell(fc, headers);
       if (det) {
         fitmentObjs.push(this.parseFitmentPipeDetails(det));
@@ -721,14 +766,16 @@ export class CsvImportProcessor extends WorkerHost {
 
     const concurrency = Math.max(
       1,
-      Number(this.config.get<string>('CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY', '4')) || 4,
+      Number(
+        this.config.get<string>('CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY', '4'),
+      ) || 4,
     );
 
     for (let i = 0; i < targets.length; i += concurrency) {
       const slice = targets.slice(i, i + concurrency);
       await Promise.all(
         slice.map(async (r) => {
-          const legacyId = r.data['ebayItemId']!.trim();
+          const legacyId = r.data['ebayItemId'].trim();
           try {
             const item = await this.browseApi!.getItemByLegacyId(legacyId);
             if (!r.data['title']?.trim() && item.title) {
@@ -773,7 +820,9 @@ export class CsvImportProcessor extends WorkerHost {
     });
     if (targets.length === 0) return;
 
-    this.logger.log(`Looking up eBay categories for ${targets.length} rows missing categoryId`);
+    this.logger.log(
+      `Looking up eBay categories for ${targets.length} rows missing categoryId`,
+    );
 
     // Concurrency: eBay Taxonomy API is generous, but be polite
     const concurrency = 3;
@@ -803,7 +852,9 @@ export class CsvImportProcessor extends WorkerHost {
     }
 
     if (lookedUp > 0) {
-      this.logger.log(`Category enrichment complete: ${lookedUp}/${targets.length} rows resolved`);
+      this.logger.log(
+        `Category enrichment complete: ${lookedUp}/${targets.length} rows resolved`,
+      );
     }
   }
 
@@ -829,16 +880,21 @@ export class CsvImportProcessor extends WorkerHost {
     const n = Math.min(products.length, listings.length);
     const skuConcurrency = Math.max(
       1,
-      Number(this.config.get<string>('CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY', '4')) || 4,
+      Number(
+        this.config.get<string>('CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY', '4'),
+      ) || 4,
     );
 
     const mirrorOne = async (i: number): Promise<void> => {
-      const product = products[i]!;
+      const product = products[i];
       const urls =
         product.imageUrls?.filter((u) => /^https?:\/\//i.test(u.trim())) ?? [];
       if (urls.length === 0) return;
 
-      const skuPart = (product.sku || product.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const skuPart = (product.sku || product.id).replace(
+        /[^a-zA-Z0-9_-]/g,
+        '_',
+      );
       const ns = `${importRecord.id}/${skuPart}`;
 
       try {
@@ -853,7 +909,7 @@ export class CsvImportProcessor extends WorkerHost {
           {
             sourceFileName: importRecord.fileName,
             sheetName: listingSheetName,
-            sourceRowNumber: listings[i]!.sourceRowNumber!,
+            sourceRowNumber: listings[i].sourceRowNumber!,
           },
           { itemPhotoUrl: mirrored.filter(Boolean).join('|') },
         );
@@ -874,7 +930,10 @@ export class CsvImportProcessor extends WorkerHost {
 
   /* ── Row parsing & mapping ─────────────────────────────── */
 
-  private findHeaders(lines: string[]): { headers: string[]; dataStartIdx: number } {
+  private findHeaders(lines: string[]): {
+    headers: string[];
+    dataStartIdx: number;
+  } {
     for (let i = 0; i < Math.min(lines.length, 5); i++) {
       const cells = this.parseCsvLine(lines[i]);
       const hasAction = cells.some(
@@ -920,32 +979,51 @@ export class CsvImportProcessor extends WorkerHost {
     return mapped;
   }
 
-  private validateRow(data: Record<string, string>): { valid: boolean; error?: string; warnings?: string[] } {
+  private validateRow(data: Record<string, string>): {
+    valid: boolean;
+    error?: string;
+    warnings?: string[];
+  } {
     const warnings: string[] = [];
 
     // At minimum, we need a title or both brand + mpn
     if (!data['title'] && !(data['brand'] && data['mpn'])) {
-      return { valid: false, error: 'Missing required field: title or brand+mpn' };
+      return {
+        valid: false,
+        error: 'Missing required field: title or brand+mpn',
+      };
     }
 
     // Image link is required — flag missing images as a warning
     if (!data['imageUrls'] || !data['imageUrls'].trim()) {
-      warnings.push('Missing image URL — listings without images have significantly lower visibility');
+      warnings.push(
+        'Missing image URL — listings without images have significantly lower visibility',
+      );
     } else {
       // Validate that at least one URL is a valid HTTP(S) link
-      const urls = data['imageUrls'].split('|').map(u => u.trim()).filter(Boolean);
-      const validUrls = urls.filter(u => /^https?:\/\/.+/i.test(u));
+      const urls = data['imageUrls']
+        .split('|')
+        .map((u) => u.trim())
+        .filter(Boolean);
+      const validUrls = urls.filter((u) => /^https?:\/\/.+/i.test(u));
       if (validUrls.length === 0) {
-        warnings.push('No valid image URL found (must start with http:// or https://)');
+        warnings.push(
+          'No valid image URL found (must start with http:// or https://)',
+        );
       }
     }
 
     // Brand validation warning
     if (!data['brand'] || !data['brand'].trim()) {
-      warnings.push('Missing brand — brand is required for eBay item specifics');
+      warnings.push(
+        'Missing brand — brand is required for eBay item specifics',
+      );
     }
 
-    return { valid: true, warnings: warnings.length > 0 ? warnings : undefined };
+    return {
+      valid: true,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
   }
 
   private mapToProduct(
@@ -1175,15 +1253,26 @@ export class CsvImportProcessor extends WorkerHost {
   }
 
   private normalizeMpn(mpn: string): string {
-    return mpn.toUpperCase().replace(/[\s\-_.\/\\]+/g, '').trim();
+    return mpn
+      .toUpperCase()
+      .replace(/[\s\-_.\/\\]+/g, '')
+      .trim();
   }
 
   private normalizeBrand(brand: string): string {
-    return brand.toUpperCase().replace(/[\s\-_.]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return brand
+      .toUpperCase()
+      .replace(/[\s\-_.]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private normalizeTitle(title: string): string {
-    return title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private normalizeIdentifier(value: string): string {

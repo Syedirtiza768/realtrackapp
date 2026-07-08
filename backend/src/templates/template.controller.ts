@@ -69,10 +69,17 @@ export class TemplateController {
 
   @Post(':id/generate')
   @RequirePermissions('templates.manage')
-  @ApiOperation({ summary: 'Render template + run OpenAI listing generation pipeline' })
+  @ApiOperation({
+    summary: 'Render template + run OpenAI listing generation pipeline',
+  })
   generate(
     @Param('id') id: string,
-    @Body() body: { productData: Record<string, unknown>; categoryName?: string; condition?: string },
+    @Body()
+    body: {
+      productData: Record<string, unknown>;
+      categoryName?: string;
+      condition?: string;
+    },
   ) {
     return this.templateService.generateFromTemplate(
       id,

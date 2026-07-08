@@ -28,7 +28,11 @@ export class ListingGeneration {
   @Column({ type: 'int', default: 1 })
   version: number;
 
-  @Column({ type: 'enum', enum: ListingGenerationStatus, default: ListingGenerationStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: ListingGenerationStatus,
+    default: ListingGenerationStatus.PENDING,
+  })
   status: ListingGenerationStatus;
 
   // Input contract (validated product data used to generate)

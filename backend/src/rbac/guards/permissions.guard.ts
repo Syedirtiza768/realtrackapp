@@ -28,10 +28,10 @@ export class PermissionsGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const required = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
     if (!required?.length) return true;
 
     const request = context.switchToHttp().getRequest<{ user?: User }>();

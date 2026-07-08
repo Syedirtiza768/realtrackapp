@@ -8,9 +8,9 @@ import {
 
 describe('isSellerpunditGatewayTimeoutError', () => {
   it('detects 504 gateway timeout messages', () => {
-    expect(
-      isSellerpunditGatewayTimeoutError('API 504: Gateway Time-out'),
-    ).toBe(true);
+    expect(isSellerpunditGatewayTimeoutError('API 504: Gateway Time-out')).toBe(
+      true,
+    );
   });
 });
 

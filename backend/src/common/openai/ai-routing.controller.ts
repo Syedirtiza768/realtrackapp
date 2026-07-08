@@ -32,7 +32,9 @@ export class AiRoutingController {
 
   @Get('recommendations')
   @RequirePermissions('ai.routing.view')
-  @ApiOperation({ summary: 'Advisor-mode routing recommendations (no policy write)' })
+  @ApiOperation({
+    summary: 'Advisor-mode routing recommendations (no policy write)',
+  })
   getRecommendations() {
     return this.optimizer.generateRecommendations();
   }
@@ -53,7 +55,9 @@ export class AiRoutingController {
 
   @Post('optimize')
   @RequirePermissions('ai.routing.manage')
-  @ApiOperation({ summary: 'Run optimizer and write new routing policy version' })
+  @ApiOperation({
+    summary: 'Run optimizer and write new routing policy version',
+  })
   optimize() {
     return this.optimizer.optimize();
   }

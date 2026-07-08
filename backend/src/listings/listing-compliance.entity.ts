@@ -30,10 +30,18 @@ export class ListingCompliance {
 
   /* ── Product compliance ── */
 
-  @Column({ name: 'product_compliance_policy_id', type: 'text', nullable: true })
+  @Column({
+    name: 'product_compliance_policy_id',
+    type: 'text',
+    nullable: true,
+  })
   productCompliancePolicyId: string | null;
 
-  @Column({ name: 'regional_product_compliance_policies', type: 'text', nullable: true })
+  @Column({
+    name: 'regional_product_compliance_policies',
+    type: 'text',
+    nullable: true,
+  })
   regionalProductCompliancePolicies: string | null;
 
   /* ── Product safety ── */
@@ -70,7 +78,11 @@ export class ListingCompliance {
   @Column({ name: 'manufacturer_postal_code', type: 'text', nullable: true })
   manufacturerPostalCode: string | null;
 
-  @Column({ name: 'manufacturer_state_or_province', type: 'text', nullable: true })
+  @Column({
+    name: 'manufacturer_state_or_province',
+    type: 'text',
+    nullable: true,
+  })
   manufacturerStateOrProvince: string | null;
 
   @Column({ name: 'manufacturer_phone', type: 'text', nullable: true })
@@ -90,10 +102,18 @@ export class ListingCompliance {
   @Column({ name: 'responsible_person1_type', type: 'text', nullable: true })
   responsiblePerson1Type: string | null;
 
-  @Column({ name: 'responsible_person1_address_line1', type: 'text', nullable: true })
+  @Column({
+    name: 'responsible_person1_address_line1',
+    type: 'text',
+    nullable: true,
+  })
   responsiblePerson1AddressLine1: string | null;
 
-  @Column({ name: 'responsible_person1_address_line2', type: 'text', nullable: true })
+  @Column({
+    name: 'responsible_person1_address_line2',
+    type: 'text',
+    nullable: true,
+  })
   responsiblePerson1AddressLine2: string | null;
 
   @Column({ name: 'responsible_person1_city', type: 'text', nullable: true })
@@ -102,10 +122,18 @@ export class ListingCompliance {
   @Column({ name: 'responsible_person1_country', type: 'text', nullable: true })
   responsiblePerson1Country: string | null;
 
-  @Column({ name: 'responsible_person1_postal_code', type: 'text', nullable: true })
+  @Column({
+    name: 'responsible_person1_postal_code',
+    type: 'text',
+    nullable: true,
+  })
   responsiblePerson1PostalCode: string | null;
 
-  @Column({ name: 'responsible_person1_state_or_province', type: 'text', nullable: true })
+  @Column({
+    name: 'responsible_person1_state_or_province',
+    type: 'text',
+    nullable: true,
+  })
   responsiblePerson1StateOrProvince: string | null;
 
   @Column({ name: 'responsible_person1_phone', type: 'text', nullable: true })
@@ -114,7 +142,11 @@ export class ListingCompliance {
   @Column({ name: 'responsible_person1_email', type: 'text', nullable: true })
   responsiblePerson1Email: string | null;
 
-  @Column({ name: 'responsible_person1_contact_url', type: 'text', nullable: true })
+  @Column({
+    name: 'responsible_person1_contact_url',
+    type: 'text',
+    nullable: true,
+  })
   responsiblePerson1ContactUrl: string | null;
 
   /* ── Timestamps ── */

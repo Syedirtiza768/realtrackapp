@@ -9,13 +9,16 @@ function mockConfig(values: Record<string, string> = {}) {
 }
 
 describe('TokenEncryptionService', () => {
-  const VALID_HEX_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  const VALID_HEX_KEY =
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
   describe('with valid 64-char hex key', () => {
     let svc: TokenEncryptionService;
 
     beforeEach(() => {
-      svc = new TokenEncryptionService(mockConfig({ TOKEN_ENCRYPTION_KEY: VALID_HEX_KEY }));
+      svc = new TokenEncryptionService(
+        mockConfig({ TOKEN_ENCRYPTION_KEY: VALID_HEX_KEY }),
+      );
     });
 
     it('encrypt returns colon-separated base64 string with 3 parts', () => {
@@ -73,23 +76,33 @@ describe('TokenEncryptionService', () => {
 
   describe('key selection', () => {
     it('uses TOKEN_ENCRYPTION_KEY when provided', () => {
-      const svc = new TokenEncryptionService(mockConfig({ TOKEN_ENCRYPTION_KEY: VALID_HEX_KEY }));
+      const svc = new TokenEncryptionService(
+        mockConfig({ TOKEN_ENCRYPTION_KEY: VALID_HEX_KEY }),
+      );
       const encrypted = svc.encrypt('test');
       expect(svc.decrypt(encrypted)).toBe('test');
     });
 
     it('falls back to CHANNEL_ENCRYPTION_KEY when TOKEN_ENCRYPTION_KEY missing', () => {
-      const svc = new TokenEncryptionService(mockConfig({ CHANNEL_ENCRYPTION_KEY: VALID_HEX_KEY }));
+      const svc = new TokenEncryptionService(
+        mockConfig({ CHANNEL_ENCRYPTION_KEY: VALID_HEX_KEY }),
+      );
       const encrypted = svc.encrypt('test');
       expect(svc.decrypt(encrypted)).toBe('test');
     });
 
     it('TOKEN_ENCRYPTION_KEY takes precedence over CHANNEL_ENCRYPTION_KEY', () => {
-      const key2 = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+      const key2 =
+        'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
       const svc1 = new TokenEncryptionService(
-        mockConfig({ TOKEN_ENCRYPTION_KEY: VALID_HEX_KEY, CHANNEL_ENCRYPTION_KEY: key2 }),
+        mockConfig({
+          TOKEN_ENCRYPTION_KEY: VALID_HEX_KEY,
+          CHANNEL_ENCRYPTION_KEY: key2,
+        }),
       );
-      const svc2 = new TokenEncryptionService(mockConfig({ CHANNEL_ENCRYPTION_KEY: key2 }));
+      const svc2 = new TokenEncryptionService(
+        mockConfig({ CHANNEL_ENCRYPTION_KEY: key2 }),
+      );
       // Encrypted with key1 (TOKEN_ENCRYPTION_KEY) should not decrypt with key2
       const encrypted = svc1.encrypt('test');
       // svc2 uses key2, which is different from key1

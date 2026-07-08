@@ -57,7 +57,11 @@ export class ChannelPublishProcessor extends WorkerHost {
   /* ─── publish ─── */
 
   private async handlePublish(
-    job: Job<{ connectionId: string; listingId: string; overrides?: { price?: number; title?: string; quantity?: number } }>,
+    job: Job<{
+      connectionId: string;
+      listingId: string;
+      overrides?: { price?: number; title?: string; quantity?: number };
+    }>,
   ): Promise<void> {
     const { connectionId, listingId, overrides } = job.data;
     this.logger.log(
@@ -142,7 +146,12 @@ export class ChannelPublishProcessor extends WorkerHost {
   /* ─── sync-inventory ─── */
 
   private async handleSyncInventory(
-    job: Job<{ connectionId?: string; trigger?: string; ruleId?: string; channel?: string | null }>,
+    job: Job<{
+      connectionId?: string;
+      trigger?: string;
+      ruleId?: string;
+      channel?: string | null;
+    }>,
   ): Promise<void> {
     const { connectionId, trigger, channel } = job.data;
     this.logger.log(
@@ -174,7 +183,11 @@ export class ChannelPublishProcessor extends WorkerHost {
   /* ─── update ─── */
 
   private async handleUpdate(
-    job: Job<{ connectionId: string; listingId: string; channelListingId: string }>,
+    job: Job<{
+      connectionId: string;
+      listingId: string;
+      channelListingId: string;
+    }>,
   ): Promise<void> {
     const { connectionId, listingId, channelListingId } = job.data;
     this.logger.log(

@@ -26,7 +26,9 @@ export class CreateListingDto {
   @IsOptional() @IsString() conditionId?: string;
   @IsOptional()
   @IsString()
-  @Matches(/^\d+(\.\d{1,2})?$/, { message: 'startPrice must be a valid price (e.g. 19.99)' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'startPrice must be a valid price (e.g. 19.99)',
+  })
   startPrice?: string;
   @IsOptional() @IsString() quantity?: string;
   @IsOptional() @IsString() description?: string;

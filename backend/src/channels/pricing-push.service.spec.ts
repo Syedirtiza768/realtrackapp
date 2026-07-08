@@ -78,7 +78,13 @@ describe('PricingPushService', () => {
         parameters: { percentage: 20 },
       }),
     ]);
-    const result = await service.calculateEffectivePrice(100, 'ebay', undefined, undefined, 'store-1');
+    const result = await service.calculateEffectivePrice(
+      100,
+      'ebay',
+      undefined,
+      undefined,
+      'store-1',
+    );
     expect(result.effectivePrice).toBe(120); // 100 * 1.20
     expect(result.appliedRules[0]).toContain('Store Markup');
   });
@@ -92,7 +98,13 @@ describe('PricingPushService', () => {
         parameters: { percentage: 20 },
       }),
     ]);
-    const result = await service.calculateEffectivePrice(100, 'ebay', undefined, undefined, 'store-99');
+    const result = await service.calculateEffectivePrice(
+      100,
+      'ebay',
+      undefined,
+      undefined,
+      'store-99',
+    );
     expect(result.effectivePrice).toBe(100); // rule skipped
     expect(result.appliedRules).toHaveLength(0);
   });
@@ -101,14 +113,25 @@ describe('PricingPushService', () => {
     ruleRepo.find.mockResolvedValue([
       mockRule(), // global: no storeId, 10% markup
     ]);
-    const result = await service.calculateEffectivePrice(100, 'ebay', undefined, undefined, 'store-5');
+    const result = await service.calculateEffectivePrice(
+      100,
+      'ebay',
+      undefined,
+      undefined,
+      'store-5',
+    );
     expect(result.effectivePrice).toBe(110);
     expect(result.appliedRules).toHaveLength(1);
   });
 
   it('stacks global and store-specific rules in priority order', async () => {
     ruleRepo.find.mockResolvedValue([
-      mockRule({ id: 'r1', name: 'Global 10%', priority: 10, parameters: { percentage: 10 } }),
+      mockRule({
+        id: 'r1',
+        name: 'Global 10%',
+        priority: 10,
+        parameters: { percentage: 10 },
+      }),
       mockRule({
         id: 'r2',
         name: 'Store 5%',
@@ -118,7 +141,13 @@ describe('PricingPushService', () => {
       }),
     ]);
     // Both should apply: 100 * 1.10 = 110, then 110 * 1.05 = 115.5
-    const result = await service.calculateEffectivePrice(100, undefined, undefined, undefined, 'store-1');
+    const result = await service.calculateEffectivePrice(
+      100,
+      undefined,
+      undefined,
+      undefined,
+      'store-1',
+    );
     expect(result.effectivePrice).toBe(115.5);
     expect(result.appliedRules).toHaveLength(2);
   });
@@ -127,13 +156,20 @@ describe('PricingPushService', () => {
 
   it('handlePricingRuleChange does nothing when flag disabled', async () => {
     featureFlags.isEnabled.mockResolvedValue(false);
-    await service.handlePricingRuleChange({ ruleId: 'rule-1', ruleType: 'markup' });
+    await service.handlePricingRuleChange({
+      ruleId: 'rule-1',
+      ruleType: 'markup',
+    });
     expect(queue.add).not.toHaveBeenCalled();
   });
 
   it('handlePricingRuleChange enqueues job when flag enabled', async () => {
     featureFlags.isEnabled.mockResolvedValue(true);
-    await service.handlePricingRuleChange({ ruleId: 'rule-1', ruleType: 'markup', channel: 'ebay' });
+    await service.handlePricingRuleChange({
+      ruleId: 'rule-1',
+      ruleType: 'markup',
+      channel: 'ebay',
+    });
     expect(queue.add).toHaveBeenCalledWith(
       'sync-inventory',
       expect.objectContaining({ ruleId: 'rule-1', channel: 'ebay' }),

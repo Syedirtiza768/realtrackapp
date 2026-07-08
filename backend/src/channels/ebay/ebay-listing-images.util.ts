@@ -1,6 +1,7 @@
 export const EBAY_MAX_LISTING_IMAGES = 24;
 
-const PLACEHOLDER_IMAGE_PATTERN = /placeholder|no-image|default-image|logo-only/i;
+const PLACEHOLDER_IMAGE_PATTERN =
+  /placeholder|no-image|default-image|logo-only/i;
 
 /**
  * Parse a raw image URL field from the database into an array of valid URLs.
@@ -18,12 +19,17 @@ export function parseImageUrlField(raw: string | null | undefined): string[] {
 }
 
 /** Expand pipe-delimited image strings and drop blank entries. */
-export function flattenImageUrlInputs(urls: string[] | null | undefined): string[] {
+export function flattenImageUrlInputs(
+  urls: string[] | null | undefined,
+): string[] {
   if (!urls?.length) return [];
   const out: string[] = [];
   for (const raw of urls) {
     if (typeof raw !== 'string') continue;
-    const parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
+    const parts = raw
+      .split('|')
+      .map((part) => part.trim())
+      .filter(Boolean);
     out.push(...parts);
   }
   return out;
@@ -69,7 +75,9 @@ export function sanitizeEbayImageUrls(
     if (seen.has(key)) continue;
     seen.add(key);
     if (PLACEHOLDER_IMAGE_PATTERN.test(normalized)) {
-      warnings.push(`Skipped placeholder image URL: ${normalized.slice(0, 80)}`);
+      warnings.push(
+        `Skipped placeholder image URL: ${normalized.slice(0, 80)}`,
+      );
       continue;
     }
     imageUrls.push(normalized);

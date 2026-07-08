@@ -67,8 +67,7 @@ export class VinDecodeService {
     'https://vpic.nhtsa.dot.gov/api/vehicles';
 
   /** NHTSA recall API base URL */
-  private static readonly NHTSA_RECALL_BASE =
-    'https://api.nhtsa.gov/recalls';
+  private static readonly NHTSA_RECALL_BASE = 'https://api.nhtsa.gov/recalls';
 
   /** VIN regex: exactly 17 alphanumeric characters (excluding I, O, Q) */
   private static readonly VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/i;
@@ -206,7 +205,11 @@ export class VinDecodeService {
   /**
    * Fetch NHTSA recalls for a specific vehicle.
    */
-  async getRecalls(make: string, model: string, year: string): Promise<RecallInfo[]> {
+  async getRecalls(
+    make: string,
+    model: string,
+    year: string,
+  ): Promise<RecallInfo[]> {
     try {
       const url = `${VinDecodeService.NHTSA_RECALL_BASE}/recallsByVehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&modelYear=${encodeURIComponent(year)}`;
       const { data } = await axios.get(url, { timeout: 10_000 });
@@ -218,7 +221,9 @@ export class VinDecodeService {
         remedy: r.Remedy || '',
       }));
     } catch (err: any) {
-      this.logger.warn(`Failed to fetch recalls for ${year} ${make} ${model}: ${err.message}`);
+      this.logger.warn(
+        `Failed to fetch recalls for ${year} ${make} ${model}: ${err.message}`,
+      );
       return [];
     }
   }
@@ -229,7 +234,10 @@ export class VinDecodeService {
    * Use OpenRouter AI to fill in missing vehicle data from VIN pattern.
    * Now brand-aware: injects brand-specific VIN knowledge into the prompt.
    */
-  private async enrichWithAI(decoded: VinDecodeResult, brand?: string): Promise<VinDecodeResult> {
+  private async enrichWithAI(
+    decoded: VinDecodeResult,
+    brand?: string,
+  ): Promise<VinDecodeResult> {
     const nhtsaSummary = [
       decoded.year && `Year: ${decoded.year}`,
       decoded.make && `Make: ${decoded.make}`,
@@ -238,10 +246,12 @@ export class VinDecodeService {
       decoded.bodyClass && `Body: ${decoded.bodyClass}`,
       decoded.driveType && `Drive: ${decoded.driveType}`,
       decoded.engineCylinders && `Cylinders: ${decoded.engineCylinders}`,
-      decoded.engineDisplacementL && `Displacement: ${decoded.engineDisplacementL}L`,
+      decoded.engineDisplacementL &&
+        `Displacement: ${decoded.engineDisplacementL}L`,
       decoded.fuelType && `Fuel: ${decoded.fuelType}`,
       decoded.vehicleType && `Type: ${decoded.vehicleType}`,
-      (decoded as any)._brandEngineCode && `Brand Engine Code: ${(decoded as any)._brandEngineCode}`,
+      (decoded as any)._brandEngineCode &&
+        `Brand Engine Code: ${(decoded as any)._brandEngineCode}`,
       (decoded as any)._plantName && `Plant: ${(decoded as any)._plantName}`,
     ]
       .filter(Boolean)
@@ -304,9 +314,10 @@ Provide the full vehicle specification. Return ONLY valid JSON — no trailing c
 
     let aiData: any;
     try {
-      aiData = typeof response.content === 'string'
-        ? sanitizeJson(response.content)
-        : response.content;
+      aiData =
+        typeof response.content === 'string'
+          ? sanitizeJson(response.content)
+          : response.content;
     } catch {
       this.logger.warn('Failed to parse AI VIN enrichment response');
       return decoded;
@@ -326,7 +337,8 @@ Provide the full vehicle specification. Return ONLY valid JSON — no trailing c
       bodyClass: decoded.bodyClass || aiData.bodyClass || '',
       driveType: decoded.driveType || aiData.driveType || '',
       engineCylinders: decoded.engineCylinders || aiData.engineCylinders || '',
-      engineDisplacementL: decoded.engineDisplacementL || aiData.engineDisplacementL || '',
+      engineDisplacementL:
+        decoded.engineDisplacementL || aiData.engineDisplacementL || '',
       fuelType: decoded.fuelType || aiData.fuelType || '',
       plantCountry: decoded.plantCountry || aiData.plantCountry || '',
       vehicleType: decoded.vehicleType || aiData.vehicleType || '',
@@ -367,10 +379,7 @@ Provide the full vehicle specification. Return ONLY valid JSON — no trailing c
     return map;
   }
 
-  private normalize(
-    vin: string,
-    raw: Record<string, string>,
-  ): VinDecodeResult {
+  private normalize(vin: string, raw: Record<string, string>): VinDecodeResult {
     return {
       vin,
       year: raw['Model Year'] ?? '',

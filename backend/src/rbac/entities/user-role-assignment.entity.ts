@@ -32,7 +32,9 @@ export class UserRoleAssignment {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @ManyToOne(() => Role, (role) => role.userAssignments, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Role, (role) => role.userAssignments, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'roleId' })
   role: Role;
 

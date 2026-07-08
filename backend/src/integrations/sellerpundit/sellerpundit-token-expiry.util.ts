@@ -45,7 +45,10 @@ export function sellerpunditTokenNeedsRefresh(
 
   if (row.lastRefreshedAt) {
     const lastRefresh = new Date(row.lastRefreshedAt).getTime();
-    if (!Number.isNaN(lastRefresh) && nowMs - lastRefresh >= SELLERPUNDIT_MAX_TOKEN_AGE_MS) {
+    if (
+      !Number.isNaN(lastRefresh) &&
+      nowMs - lastRefresh >= SELLERPUNDIT_MAX_TOKEN_AGE_MS
+    ) {
       return true;
     }
   }

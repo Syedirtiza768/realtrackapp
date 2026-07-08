@@ -70,7 +70,14 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
   ],
-  controllers: [ChannelsController, StoresController, AiEnhancementController, EbayPublishController, StoreAccessController, EbayCategoryController],
+  controllers: [
+    ChannelsController,
+    StoresController,
+    AiEnhancementController,
+    EbayPublishController,
+    StoreAccessController,
+    EbayCategoryController,
+  ],
   providers: [
     ChannelsService,
     StoresService,

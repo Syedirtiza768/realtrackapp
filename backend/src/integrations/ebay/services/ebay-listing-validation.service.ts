@@ -59,7 +59,10 @@ export class EbayListingValidationService {
     }
 
     const account = await this.accountRepo.findOne({
-      where: { id: params.ebayAccountId, organizationId: params.organizationId },
+      where: {
+        id: params.ebayAccountId,
+        organizationId: params.organizationId,
+      },
       relations: ['oauthToken'],
     });
     if (!account) {
@@ -81,7 +84,9 @@ export class EbayListingValidationService {
           ? `eBay rejected the OAuth token for "${account.accountDisplayName ?? account.ebayUsername ?? 'this store'}". Re-sync in RealTrackApp only refreshes what SellerPundit has — reconnect eBay for this store inside SellerPundit admin, then Re-sync stores here.`
           : 'eBay account requires reconnection',
       );
-      requiredActions.push(isSellerpundit ? 'reconnect_sellerpundit_ebay' : 'reconnect_oauth');
+      requiredActions.push(
+        isSellerpundit ? 'reconnect_sellerpundit_ebay' : 'reconnect_oauth',
+      );
     } else if (isSellerpundit) {
       const tokenOk = await this.sellerpunditTokens.validateAccountEbayToken(
         params.ebayAccountId,
@@ -116,19 +121,25 @@ export class EbayListingValidationService {
       // policy IDs, not inventory locations. Auto-resolve via eBay Inventory API.
       if (account.primaryStoreId) {
         try {
-          const key = await this.inventoryApi.ensureMerchantLocation(account.primaryStoreId);
+          const key = await this.inventoryApi.ensureMerchantLocation(
+            account.primaryStoreId,
+          );
           if (key) {
             await this.mpRepo
               .createQueryBuilder()
               .update()
               .set({ defaultInventoryLocationKey: key })
-              .where('ebay_account_id = :accountId', { accountId: params.ebayAccountId })
+              .where('ebay_account_id = :accountId', {
+                accountId: params.ebayAccountId,
+              })
               .andWhere('default_inventory_location_key IS NULL')
               .execute();
           }
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);
-          this.logger.warn(`Inventory location hydration failed for ${params.ebayAccountId}: ${msg}`);
+          this.logger.warn(
+            `Inventory location hydration failed for ${params.ebayAccountId}: ${msg}`,
+          );
         }
       }
     }
@@ -182,7 +193,9 @@ export class EbayListingValidationService {
       }
     }
 
-    const resolved = await this.publishResolver.resolve(params.catalogProductId);
+    const resolved = await this.publishResolver.resolve(
+      params.catalogProductId,
+    );
     if (!resolved) {
       errors.push('Catalog product or listing record not found');
     } else {
@@ -249,7 +262,10 @@ export class EbayListingValidationService {
               'German marketplace: description may need German-language content',
             );
           }
-          if (snapshot.title && /\b(gebraucht OE|Genuine OEM|for \d{4})\b/i.test(snapshot.title)) {
+          if (
+            snapshot.title &&
+            /\b(gebraucht OE|Genuine OEM|for \d{4})\b/i.test(snapshot.title)
+          ) {
             warnings.push(
               'German marketplace: title contains non-native phrasing — regenerate DE optimization',
             );

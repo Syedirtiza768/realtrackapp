@@ -5,7 +5,9 @@ import {
 
 describe('ebay marketplace headers util', () => {
   it('maps EBAY_MOTORS_US to Inventory API offer enum EBAY_MOTORS', () => {
-    expect(toEbayInventoryApiMarketplaceId('EBAY_MOTORS_US')).toBe('EBAY_MOTORS');
+    expect(toEbayInventoryApiMarketplaceId('EBAY_MOTORS_US')).toBe(
+      'EBAY_MOTORS',
+    );
   });
 
   it('passes through standard marketplace ids', () => {

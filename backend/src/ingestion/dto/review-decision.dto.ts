@@ -1,4 +1,10 @@
-import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class ReviewDecisionDto {
   @IsString()

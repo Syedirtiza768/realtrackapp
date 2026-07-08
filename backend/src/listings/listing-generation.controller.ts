@@ -1,12 +1,12 @@
-import {
-  Controller,
-  Post,
-  Body,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   ListingGenerationService,
@@ -74,14 +74,14 @@ import { RequirePermissions } from '../rbac/decorators/require-permissions.decor
 @ApiTags('Listing Generation')
 @Controller('listings')
 export class ListingGenerationController {
-  constructor(
-    private readonly generationService: ListingGenerationService,
-  ) {}
+  constructor(private readonly generationService: ListingGenerationService) {}
 
   @Post('generate')
   @RequirePermissions('listings.generate')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Generate AI-optimized listing content for a master product' })
+  @ApiOperation({
+    summary: 'Generate AI-optimized listing content for a master product',
+  })
   generate(@Body() dto: GenerateDto) {
     const input: GenerateListingInput = {
       masterProductId: dto.masterProductId,
@@ -109,7 +109,10 @@ export class ListingGenerationController {
   @Post('generate-publish')
   @RequirePermissions('listings.publish')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Generate listing, create draft offers, and optionally publish to eBay' })
+  @ApiOperation({
+    summary:
+      'Generate listing, create draft offers, and optionally publish to eBay',
+  })
   generateAndPublish(@Body() dto: GenerateAndPublishDto) {
     const input: GenerateAndPublishInput = {
       masterProductId: dto.masterProductId,

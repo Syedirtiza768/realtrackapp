@@ -8,106 +8,157 @@ import { Type } from 'class-transformer';
 
 export class SearchQueryDto {
   /* -- Pagination ----------------------------------------- */
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200)
-  limit?: number;          // default 60, max 200
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number; // default 60, max 200
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0)
-  offset?: number;         // default 0
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number; // default 0
 
-  @IsOptional() @IsString()
-  cursor?: string;         // for infinite-scroll cursor-based paging
+  @IsOptional()
+  @IsString()
+  cursor?: string; // for infinite-scroll cursor-based paging
 
   /* -- Full-text search ----------------------------------- */
-  @IsOptional() @IsString()
-  q?: string;              // main search query (FTS + fuzzy)
+  @IsOptional()
+  @IsString()
+  q?: string; // main search query (FTS + fuzzy)
 
-  @IsOptional() @IsString()
-  exactSku?: string;       // exact SKU match (priority)
+  @IsOptional()
+  @IsString()
+  exactSku?: string; // exact SKU match (priority)
 
   /* -- Multi-select filters (comma-separated values) ----- */
-  @IsOptional() @IsString()
-  brands?: string;         // "Mercedes-Benz,BMW,Porsche"
+  @IsOptional()
+  @IsString()
+  brands?: string; // "Mercedes-Benz,BMW,Porsche"
 
-  @IsOptional() @IsString()
-  categories?: string;     // "33643,33644" (category IDs)
+  @IsOptional()
+  @IsString()
+  categories?: string; // "33643,33644" (category IDs)
 
-  @IsOptional() @IsString()
-  categoryNames?: string;  // "Brake Pads,Brake Rotors"
+  @IsOptional()
+  @IsString()
+  categoryNames?: string; // "Brake Pads,Brake Rotors"
 
-  @IsOptional() @IsString()
-  conditions?: string;     // "1000,1500,3000"
+  @IsOptional()
+  @IsString()
+  conditions?: string; // "1000,1500,3000"
 
-  @IsOptional() @IsString()
-  types?: string;          // cType multi-select
+  @IsOptional()
+  @IsString()
+  types?: string; // cType multi-select
 
-  @IsOptional() @IsString()
-  sourceFiles?: string;    // source file names
+  @IsOptional()
+  @IsString()
+  sourceFiles?: string; // source file names
 
-  @IsOptional() @IsString()
-  formats?: string;        // listing format (FixedPrice, Auction...)
+  @IsOptional()
+  @IsString()
+  formats?: string; // listing format (FixedPrice, Auction...)
 
-  @IsOptional() @IsString()
-  locations?: string;      // item locations
+  @IsOptional()
+  @IsString()
+  locations?: string; // item locations
 
-  @IsOptional() @IsString()
-  mpns?: string;           // manufacturer part numbers
+  @IsOptional()
+  @IsString()
+  mpns?: string; // manufacturer part numbers
 
   /* -- Pipeline job / marketplace filters ----------------- */
-  @IsOptional() @IsString()
-  pipelineJobIds?: string;  // comma-separated pipeline job UUIDs
+  @IsOptional()
+  @IsString()
+  pipelineJobIds?: string; // comma-separated pipeline job UUIDs
 
-  @IsOptional() @IsString()
-  marketplaces?: string;    // comma-separated: "US,DE"
+  @IsOptional()
+  @IsString()
+  marketplaces?: string; // comma-separated: "US,DE"
 
-  @IsOptional() @IsString()
-  teamIds?: string;         // comma-separated team UUIDs
+  @IsOptional()
+  @IsString()
+  teamIds?: string; // comma-separated team UUIDs
 
   /* -- Vehicle make/model filters (comma-separated names) - */
-  @IsOptional() @IsString()
-  makes?: string;          // make names: "Audi,BMW,Mercedes-Benz"
+  @IsOptional()
+  @IsString()
+  makes?: string; // make names: "Audi,BMW,Mercedes-Benz"
 
-  @IsOptional() @IsString()
-  models?: string;         // model names: "A4,Q7,X6"
+  @IsOptional()
+  @IsString()
+  models?: string; // model names: "A4,Q7,X6"
 
   /* -- Range filters -------------------------------------- */
-  @IsOptional() @Type(() => Number) @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0)
   minPrice?: number;
 
-  @IsOptional() @Type(() => Number) @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0)
   maxPrice?: number;
 
   /* -- Boolean filters ------------------------------------ */
-  @IsOptional() @IsString()
-  hasImage?: string;       // '1' = only with images
+  @IsOptional()
+  @IsString()
+  hasImage?: string; // '1' = only with images
 
-  @IsOptional() @IsString()
-  hasPrice?: string;       // '1' = only with price
+  @IsOptional()
+  @IsString()
+  hasPrice?: string; // '1' = only with price
 
   /** Comma-separated catalog workflow statuses: published, ready_to_publish, need_images */
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   catalogStatus?: string;
 
   /** Stock tier: in_stock | out_of_stock | low_stock (comma-separated) */
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   stockLevel?: string;
 
   /** Comma-separated shipping profile names */
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   shippingProfiles?: string;
 
   /** Imported-at range (ISO date YYYY-MM-DD) */
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   importedFrom?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   importedTo?: string;
 
   /* -- Filter logic --------------------------------------- */
-  @IsOptional() @IsIn(['and', 'or'])
+  @IsOptional()
+  @IsIn(['and', 'or'])
   filterMode?: 'and' | 'or'; // default 'and'
 
   /* -- Sorting -------------------------------------------- */
-  @IsOptional() @IsIn(['relevance', 'price_asc', 'price_desc', 'newest', 'title_asc', 'title_desc', 'sku_asc'])
-  sort?: 'relevance' | 'price_asc' | 'price_desc' | 'newest' |
-         'title_asc' | 'title_desc' | 'sku_asc';
+  @IsOptional()
+  @IsIn([
+    'relevance',
+    'price_asc',
+    'price_desc',
+    'newest',
+    'title_asc',
+    'title_desc',
+    'sku_asc',
+  ])
+  sort?:
+    | 'relevance'
+    | 'price_asc'
+    | 'price_desc'
+    | 'newest'
+    | 'title_asc'
+    | 'title_desc'
+    | 'sku_asc';
 }

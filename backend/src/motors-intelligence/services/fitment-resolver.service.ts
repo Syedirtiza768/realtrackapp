@@ -49,7 +49,9 @@ export class FitmentResolverService {
     private readonly fitmentService: FitmentService,
   ) {}
 
-  async resolveFitment(motorsProductId: string): Promise<FitmentResolutionResult> {
+  async resolveFitment(
+    motorsProductId: string,
+  ): Promise<FitmentResolutionResult> {
     const product = await this.motorsProductRepo.findOneOrFail({
       where: { id: motorsProductId },
     });
@@ -82,7 +84,7 @@ export class FitmentResolverService {
       });
 
       if (existing.length > 0) {
-        fitmentRows = existing.map(pf => ({
+        fitmentRows = existing.map((pf) => ({
           yearStart: pf.yearStart,
           yearEnd: pf.yearEnd,
           make: (pf as any).make?.name || '',
@@ -116,7 +118,12 @@ export class FitmentResolverService {
     const summary = this.generateCompatibilitySummary(deduped);
 
     // Calculate confidence
-    const confidence = this.calculateFitmentConfidence(deduped, errors, warnings, supportsCompatibility);
+    const confidence = this.calculateFitmentConfidence(
+      deduped,
+      errors,
+      warnings,
+      supportsCompatibility,
+    );
 
     // Update product
     product.fitmentRows = deduped;
@@ -136,55 +143,61 @@ export class FitmentResolverService {
   }
 
   private normalizeFitmentRows(rawRows: any[]): FitmentRow[] {
-    return rawRows.map(row => {
-      const normalized: FitmentRow = {
-        make: this.normalizeString(row.make || row.Make || ''),
-        model: this.normalizeString(row.model || row.Model || ''),
-      };
+    return rawRows
+      .map((row) => {
+        const normalized: FitmentRow = {
+          make: this.normalizeString(row.make || row.Make || ''),
+          model: this.normalizeString(row.model || row.Model || ''),
+        };
 
-      // Handle year/year_range
-      if (row.year) {
-        const yearStr = String(row.year);
-        if (yearStr.includes('-')) {
-          const parts = yearStr.split('-');
-          normalized.yearStart = parseInt(parts[0], 10);
-          normalized.yearEnd = parseInt(parts[1], 10);
+        // Handle year/year_range
+        if (row.year) {
+          const yearStr = String(row.year);
+          if (yearStr.includes('-')) {
+            const parts = yearStr.split('-');
+            normalized.yearStart = parseInt(parts[0], 10);
+            normalized.yearEnd = parseInt(parts[1], 10);
+          } else {
+            normalized.yearStart = parseInt(yearStr, 10);
+            normalized.yearEnd = parseInt(yearStr, 10);
+          }
+        } else if (row.year_range) {
+          const yearStr = String(row.year_range);
+          if (yearStr.includes('-')) {
+            const parts = yearStr.split('-');
+            normalized.yearStart = parseInt(parts[0], 10);
+            normalized.yearEnd = parseInt(parts[1], 10);
+          } else {
+            normalized.yearStart = parseInt(yearStr, 10);
+            normalized.yearEnd = parseInt(yearStr, 10);
+          }
         } else {
-          normalized.yearStart = parseInt(yearStr, 10);
-          normalized.yearEnd = parseInt(yearStr, 10);
+          if (row.yearStart)
+            normalized.yearStart = parseInt(String(row.yearStart), 10);
+          if (row.yearEnd)
+            normalized.yearEnd = parseInt(String(row.yearEnd), 10);
         }
-      } else if (row.year_range) {
-        const yearStr = String(row.year_range);
-        if (yearStr.includes('-')) {
-          const parts = yearStr.split('-');
-          normalized.yearStart = parseInt(parts[0], 10);
-          normalized.yearEnd = parseInt(parts[1], 10);
-        } else {
-          normalized.yearStart = parseInt(yearStr, 10);
-          normalized.yearEnd = parseInt(yearStr, 10);
+
+        // Submodel
+        if (row.submodel || row.Submodel || row.trim) {
+          normalized.submodel = this.normalizeString(
+            row.submodel || row.Submodel || row.trim,
+          );
         }
-      } else {
-        if (row.yearStart) normalized.yearStart = parseInt(String(row.yearStart), 10);
-        if (row.yearEnd) normalized.yearEnd = parseInt(String(row.yearEnd), 10);
-      }
 
-      // Submodel
-      if (row.submodel || row.Submodel || row.trim) {
-        normalized.submodel = this.normalizeString(row.submodel || row.Submodel || row.trim);
-      }
+        // Engine
+        if (row.engine || row.Engine) {
+          normalized.engine = row.engine || row.Engine;
+        }
 
-      // Engine
-      if (row.engine || row.Engine) {
-        normalized.engine = row.engine || row.Engine;
-      }
+        // Notes
+        if (row.notes) {
+          normalized.notes = Array.isArray(row.notes) ? row.notes : [row.notes];
+        }
 
-      // Notes
-      if (row.notes) {
-        normalized.notes = Array.isArray(row.notes) ? row.notes : [row.notes];
-      }
-
-      return normalized;
-    }).filter(row => row.make || row.model); // Filter out completely empty rows
+        return normalized;
+      })
+      .filter((row) => row.make || row.model); // Filter out completely empty rows
   }
 
   private async validateFitmentRow(row: FitmentRow): Promise<{
@@ -200,7 +213,10 @@ export class FitmentResolverService {
     // Validate year range
     if (normalizedRow.yearStart) {
       const currentYear = new Date().getFullYear();
-      if (normalizedRow.yearStart < 1900 || normalizedRow.yearStart > currentYear + 2) {
+      if (
+        normalizedRow.yearStart < 1900 ||
+        normalizedRow.yearStart > currentYear + 2
+      ) {
         errors.push(`Invalid year ${normalizedRow.yearStart}`);
         return { valid: false, normalizedRow, warnings, errors };
       }
@@ -208,11 +224,15 @@ export class FitmentResolverService {
 
     if (normalizedRow.yearEnd && normalizedRow.yearStart) {
       if (normalizedRow.yearEnd < normalizedRow.yearStart) {
-        errors.push(`Year end (${normalizedRow.yearEnd}) before year start (${normalizedRow.yearStart})`);
+        errors.push(
+          `Year end (${normalizedRow.yearEnd}) before year start (${normalizedRow.yearStart})`,
+        );
         return { valid: false, normalizedRow, warnings, errors };
       }
       if (normalizedRow.yearEnd - normalizedRow.yearStart > 50) {
-        warnings.push(`Large year range: ${normalizedRow.yearStart}-${normalizedRow.yearEnd}`);
+        warnings.push(
+          `Large year range: ${normalizedRow.yearStart}-${normalizedRow.yearEnd}`,
+        );
       }
     }
 
@@ -226,7 +246,9 @@ export class FitmentResolverService {
       } else {
         // Try fuzzy match
         normalizedRow.make = this.capitalizeWords(normalizedRow.make);
-        warnings.push(`Make "${normalizedRow.make}" not found in reference data`);
+        warnings.push(
+          `Make "${normalizedRow.make}" not found in reference data`,
+        );
       }
     }
 
@@ -245,8 +267,9 @@ export class FitmentResolverService {
 
   private deduplicateRows(rows: FitmentRow[]): FitmentRow[] {
     const seen = new Set<string>();
-    return rows.filter(row => {
-      const key = `${row.yearStart}-${row.yearEnd}-${row.make}-${row.model}-${row.submodel || ''}-${row.engine || ''}`.toLowerCase();
+    return rows.filter((row) => {
+      const key =
+        `${row.yearStart}-${row.yearEnd}-${row.make}-${row.model}-${row.submodel || ''}-${row.engine || ''}`.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -323,11 +346,11 @@ export class FitmentResolverService {
     else if (rows.length > 0) confidence += 0.1;
 
     // Validated make/model
-    const validMakeModel = rows.filter(r => r.make && r.model).length;
+    const validMakeModel = rows.filter((r) => r.make && r.model).length;
     confidence += (validMakeModel / rows.length) * 0.2;
 
     // Year data present
-    const hasYears = rows.filter(r => r.yearStart).length;
+    const hasYears = rows.filter((r) => r.yearStart).length;
     confidence += (hasYears / rows.length) * 0.1;
 
     // Deductions
@@ -345,7 +368,7 @@ export class FitmentResolverService {
     return str
       .toLowerCase()
       .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   }
 }

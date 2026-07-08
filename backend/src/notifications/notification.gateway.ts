@@ -18,7 +18,11 @@ interface WsJwtPayload {
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:3191', 'http://localhost:5173', 'https://mhn.realtrackapp.com'],
+    origin: [
+      'http://localhost:3191',
+      'http://localhost:5173',
+      'https://mhn.realtrackapp.com',
+    ],
   },
   namespace: '/notifications',
 })

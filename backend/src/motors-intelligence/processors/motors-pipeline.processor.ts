@@ -6,7 +6,15 @@ import { EbayEnrichmentService } from '../services/ebay-enrichment.service';
 
 export interface MotorsPipelineJobData {
   motorsProductId: string;
-  stage?: 'full' | 'extraction' | 'identity' | 'fitment' | 'enrichment' | 'listing' | 'compliance' | 'publish';
+  stage?:
+    | 'full'
+    | 'extraction'
+    | 'identity'
+    | 'fitment'
+    | 'enrichment'
+    | 'listing'
+    | 'compliance'
+    | 'publish';
   connectionId?: string;
 }
 
@@ -42,14 +50,17 @@ export class MotorsPipelineProcessor extends WorkerHost {
           if (result.status !== 'failed') {
             await job.updateProgress(80);
             try {
-              const enrichment = await this.ebayEnrichmentService.enrichProduct(motorsProductId);
+              const enrichment =
+                await this.ebayEnrichmentService.enrichProduct(motorsProductId);
               this.logger.log(
                 `eBay enrichment completed for ${motorsProductId}: ` +
-                `category=${enrichment.categoryId}, aspects=${enrichment.aspects.length}, ` +
-                `confidence=${enrichment.enrichmentConfidence}`,
+                  `category=${enrichment.categoryId}, aspects=${enrichment.aspects.length}, ` +
+                  `confidence=${enrichment.enrichmentConfidence}`,
               );
             } catch (err) {
-              this.logger.warn(`eBay enrichment failed (non-blocking): ${err.message}`);
+              this.logger.warn(
+                `eBay enrichment failed (non-blocking): ${err.message}`,
+              );
             }
           }
 
@@ -59,7 +70,8 @@ export class MotorsPipelineProcessor extends WorkerHost {
 
         case 'enrichment':
           await job.updateProgress(10);
-          const enrichResult = await this.ebayEnrichmentService.enrichProduct(motorsProductId);
+          const enrichResult =
+            await this.ebayEnrichmentService.enrichProduct(motorsProductId);
           await job.updateProgress(100);
           return enrichResult;
 
@@ -68,14 +80,18 @@ export class MotorsPipelineProcessor extends WorkerHost {
             throw new Error('connectionId required for publish stage');
           }
           await job.updateProgress(10);
-          const publishResult = await this.motorsService.publish(motorsProductId, connectionId);
+          const publishResult = await this.motorsService.publish(
+            motorsProductId,
+            connectionId,
+          );
           await job.updateProgress(100);
           return publishResult;
 
         default:
           // For individual stages, run the full pipeline
           await job.updateProgress(10);
-          const defaultResult = await this.motorsService.runPipeline(motorsProductId);
+          const defaultResult =
+            await this.motorsService.runPipeline(motorsProductId);
           await job.updateProgress(100);
           return defaultResult;
       }

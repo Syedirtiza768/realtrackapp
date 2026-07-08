@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
-import { computeCatalogProductDerived, type CatalogProductDerived } from './utils/catalog-product-derivatives.js';
+import {
+  computeCatalogProductDerived,
+  type CatalogProductDerived,
+} from './utils/catalog-product-derivatives.js';
 import {
   applyCatalogProductListFilters,
   type CatalogProductListParams,
@@ -71,7 +74,8 @@ export class CatalogProductService {
 
   async findOne(id: string): Promise<CatalogProduct> {
     const product = await this.productRepo.findOneBy({ id });
-    if (!product) throw new NotFoundException(`Catalog product ${id} not found`);
+    if (!product)
+      throw new NotFoundException(`Catalog product ${id} not found`);
     return product;
   }
 
@@ -87,7 +91,7 @@ export class CatalogProductService {
     // Look up listing records to get SKUs, then find catalog products by SKU
     const listings = await this.listingRepo.findBy({ id: In(listingIds) });
     const skus = listings
-      .map(l => l.customLabelSku)
+      .map((l) => l.customLabelSku)
       .filter((s): s is string => s != null && s !== '');
     if (!skus.length) return [];
     return this.productRepo
@@ -159,31 +163,41 @@ export class CatalogProductService {
     if (dto.description !== undefined) product.description = dto.description;
     if (dto.brand !== undefined) {
       product.brand = dto.brand;
-      product.brandNormalized = dto.brand ? dto.brand.toLowerCase().trim() : null;
+      product.brandNormalized = dto.brand
+        ? dto.brand.toLowerCase().trim()
+        : null;
     }
     if (dto.mpn !== undefined) {
       product.mpn = dto.mpn;
-      product.mpnNormalized = dto.mpn ? dto.mpn.toLowerCase().replace(/[\s\-]/g, '') : null;
+      product.mpnNormalized = dto.mpn
+        ? dto.mpn.toLowerCase().replace(/[\s\-]/g, '')
+        : null;
     }
-    if (dto.oemPartNumber !== undefined) product.oemPartNumber = dto.oemPartNumber;
+    if (dto.oemPartNumber !== undefined)
+      product.oemPartNumber = dto.oemPartNumber;
     if (dto.partType !== undefined) product.partType = dto.partType;
     if (dto.placement !== undefined) product.placement = dto.placement;
     if (dto.material !== undefined) product.material = dto.material;
     if (dto.features !== undefined) product.features = dto.features;
-    if (dto.countryOfOrigin !== undefined) product.countryOfOrigin = dto.countryOfOrigin;
+    if (dto.countryOfOrigin !== undefined)
+      product.countryOfOrigin = dto.countryOfOrigin;
     if (dto.price !== undefined) product.price = dto.price;
     if (dto.quantity !== undefined) product.quantity = dto.quantity;
     if (dto.conditionId !== undefined) product.conditionId = dto.conditionId;
-    if (dto.conditionLabel !== undefined) product.conditionLabel = dto.conditionLabel;
+    if (dto.conditionLabel !== undefined)
+      product.conditionLabel = dto.conditionLabel;
     if (dto.categoryId !== undefined) product.categoryId = dto.categoryId;
     if (dto.categoryName !== undefined) product.categoryName = dto.categoryName;
     if (dto.imageUrls !== undefined) product.imageUrls = dto.imageUrls;
     if (dto.location !== undefined) product.location = dto.location;
     if (dto.format !== undefined) product.format = dto.format;
     if (dto.duration !== undefined) product.duration = dto.duration;
-    if (dto.shippingProfile !== undefined) product.shippingProfile = dto.shippingProfile;
-    if (dto.returnProfile !== undefined) product.returnProfile = dto.returnProfile;
-    if (dto.paymentProfile !== undefined) product.paymentProfile = dto.paymentProfile;
+    if (dto.shippingProfile !== undefined)
+      product.shippingProfile = dto.shippingProfile;
+    if (dto.returnProfile !== undefined)
+      product.returnProfile = dto.returnProfile;
+    if (dto.paymentProfile !== undefined)
+      product.paymentProfile = dto.paymentProfile;
     if (dto.fitmentData !== undefined) product.fitmentData = dto.fitmentData;
 
     const saved = await this.productRepo.save(product);
@@ -194,9 +208,13 @@ export class CatalogProductService {
     return saved;
   }
 
-  async updateBySku(sku: string, dto: UpdateProductDto): Promise<CatalogProduct> {
+  async updateBySku(
+    sku: string,
+    dto: UpdateProductDto,
+  ): Promise<CatalogProduct> {
     const product = await this.findBySku(sku);
-    if (!product) throw new NotFoundException(`Catalog product with SKU ${sku} not found`);
+    if (!product)
+      throw new NotFoundException(`Catalog product with SKU ${sku} not found`);
     return this.update(product.id, dto);
   }
 
@@ -207,7 +225,9 @@ export class CatalogProductService {
   private async syncToListingRecord(product: CatalogProduct): Promise<void> {
     if (!product.sku) return;
 
-    const listings = await this.listingRepo.findBy({ customLabelSku: product.sku });
+    const listings = await this.listingRepo.findBy({
+      customLabelSku: product.sku,
+    });
     if (!listings.length) return;
 
     for (const listing of listings) {
@@ -215,9 +235,12 @@ export class CatalogProductService {
       listing.description = product.description;
       listing.startPrice = product.price != null ? String(product.price) : null;
       listing.startPriceNum = product.price;
-      listing.quantity = product.quantity != null ? String(product.quantity) : null;
+      listing.quantity =
+        product.quantity != null ? String(product.quantity) : null;
       listing.quantityNum = product.quantity;
-      listing.itemPhotoUrl = product.imageUrls?.length ? product.imageUrls.join('|') : null;
+      listing.itemPhotoUrl = product.imageUrls?.length
+        ? product.imageUrls.join('|')
+        : null;
       listing.conditionId = product.conditionId;
       listing.conditionLabel = product.conditionLabel;
       listing.categoryId = product.categoryId;

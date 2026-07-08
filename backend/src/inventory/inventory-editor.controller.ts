@@ -13,7 +13,10 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { InventoryEditorService } from './inventory-editor.service.js';
 import { InventoryPublishService } from './inventory-publish.service.js';
-import { SaveEditorDto, PublishListingDto } from './dto/inventory-editor.dto.js';
+import {
+  SaveEditorDto,
+  PublishListingDto,
+} from './dto/inventory-editor.dto.js';
 import type { EditorResponse } from './dto/inventory-editor.dto.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -30,7 +33,8 @@ export class InventoryEditorController {
   @Get(':id/editor')
   @RequirePermissions('inventory.view')
   @ApiOperation({
-    summary: 'Load all data for the listing editor: listing info, marketplace versions, accessible stores with policies',
+    summary:
+      'Load all data for the listing editor: listing info, marketplace versions, accessible stores with policies',
   })
   async getEditor(
     @Param('id', ParseUUIDPipe) id: string,
@@ -42,7 +46,9 @@ export class InventoryEditorController {
   @Put(':id/editor')
   @RequirePermissions('listings.update')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Save marketplace version edits to the catalog product' })
+  @ApiOperation({
+    summary: 'Save marketplace version edits to the catalog product',
+  })
   async saveEditor(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SaveEditorDto,
@@ -55,7 +61,8 @@ export class InventoryEditorController {
   @RequirePermissions('ebay.publish')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Publish listing to selected eBay stores. Creates catalog product if needed.',
+    summary:
+      'Publish listing to selected eBay stores. Creates catalog product if needed.',
   })
   async publishListing(
     @Param('id', ParseUUIDPipe) id: string,

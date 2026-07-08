@@ -120,14 +120,30 @@ export class Phase4MultiStoreFoundation1709683200000 implements MigrationInterfa
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Reverse order
-    await queryRunner.query(`ALTER TABLE channel_webhook_logs DROP COLUMN IF EXISTS store_id`);
-    await queryRunner.query(`DELETE FROM feature_flags WHERE key IN ('store_aware_publish', 'per_store_inventory')`);
+    await queryRunner.query(
+      `ALTER TABLE channel_webhook_logs DROP COLUMN IF EXISTS store_id`,
+    );
+    await queryRunner.query(
+      `DELETE FROM feature_flags WHERE key IN ('store_aware_publish', 'per_store_inventory')`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS store_inventory_allocations`);
-    await queryRunner.query(`ALTER TABLE sales_records DROP COLUMN IF EXISTS store_id`);
-    await queryRunner.query(`ALTER TABLE pricing_rules DROP COLUMN IF EXISTS store_id`);
-    await queryRunner.query(`ALTER TABLE automation_rules DROP COLUMN IF EXISTS channel`);
-    await queryRunner.query(`ALTER TABLE automation_rules DROP COLUMN IF EXISTS store_id`);
-    await queryRunner.query(`ALTER TABLE inventory_events DROP COLUMN IF EXISTS store_id`);
-    await queryRunner.query(`ALTER TABLE orders DROP COLUMN IF EXISTS store_id`);
+    await queryRunner.query(
+      `ALTER TABLE sales_records DROP COLUMN IF EXISTS store_id`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE pricing_rules DROP COLUMN IF EXISTS store_id`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE automation_rules DROP COLUMN IF EXISTS channel`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE automation_rules DROP COLUMN IF EXISTS store_id`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE inventory_events DROP COLUMN IF EXISTS store_id`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE orders DROP COLUMN IF EXISTS store_id`,
+    );
   }
 }

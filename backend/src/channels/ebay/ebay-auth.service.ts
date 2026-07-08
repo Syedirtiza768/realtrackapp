@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -51,9 +47,10 @@ export class EbayAuthService {
       .trim()
       .toUpperCase();
     const sandboxOverride = this.configService.get<string>('EBAY_SANDBOX');
-    const sandbox = sandboxOverride != null
-      ? sandboxOverride.toLowerCase() === 'true'
-      : environment !== 'PRODUCTION';
+    const sandbox =
+      sandboxOverride != null
+        ? sandboxOverride.toLowerCase() === 'true'
+        : environment !== 'PRODUCTION';
 
     this.config = {
       clientId: this.configService.get<string>('EBAY_CLIENT_ID', ''),
@@ -128,7 +125,7 @@ export class EbayAuthService {
       return 'https://api.sandbox.ebay.com';
     }
 
-    const storeConfig = (store.config ?? {}) as Record<string, unknown>;
+    const storeConfig = store.config ?? {};
     if (storeConfig.sellerpundit === true) {
       const spEnv = this.configService
         .get<string>('SELLERPUNDIT_ENVIRONMENT', 'production')
@@ -158,7 +155,8 @@ export class EbayAuthService {
       throw new Error(`Store ${storeId} not found`);
     }
 
-    const connection = store.connection ??
+    const connection =
+      store.connection ??
       (await this.connectionRepo.findOneByOrFail({ id: store.connectionId }));
 
     const linked = await this.findLinkedAccount(store.id, store.connectionId);
@@ -307,10 +305,9 @@ export class EbayAuthService {
     // Fetch seller identity
     let ebayUserId = 'unknown';
     try {
-      const identity = await this.http.get(
-        '/commerce/identity/v1/user/',
-        { headers: { Authorization: `Bearer ${tokens.accessToken}` } },
-      );
+      const identity = await this.http.get('/commerce/identity/v1/user/', {
+        headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      });
       ebayUserId = identity.data.username ?? identity.data.userId ?? 'unknown';
     } catch (err) {
       this.logger.warn('Could not fetch eBay identity after OAuth', err);
@@ -380,7 +377,8 @@ export class EbayAuthService {
   ): Promise<string> {
     if (!this.config.clientId || !this.config.clientSecret) {
       connection.status = 'error';
-      connection.lastError = 'EBAY_CLIENT_ID / EBAY_CLIENT_SECRET not configured';
+      connection.lastError =
+        'EBAY_CLIENT_ID / EBAY_CLIENT_SECRET not configured';
       await this.connectionRepo.save(connection);
       throw new UnauthorizedException(
         'eBay API credentials are not configured on the server (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET).',

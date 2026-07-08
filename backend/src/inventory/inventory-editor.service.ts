@@ -67,7 +67,9 @@ export class InventoryEditorService {
    */
   async getEditorData(listingId: string, user: User): Promise<EditorResponse> {
     // 1. Load the primary listing
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
@@ -123,8 +125,13 @@ export class InventoryEditorService {
   /**
    * Persist marketplace version edits to sibling listing records and catalog product.
    */
-  async saveEditorData(listingId: string, dto: SaveEditorDto): Promise<{ ok: boolean }> {
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+  async saveEditorData(
+    listingId: string,
+    dto: SaveEditorDto,
+  ): Promise<{ ok: boolean }> {
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
@@ -138,7 +145,7 @@ export class InventoryEditorService {
 
     const byMarketplace = new Map<string, ListingRecord>();
     for (const s of siblings) {
-      const mkt = s.marketplace as string | null;
+      const mkt = s.marketplace;
       if (mkt) byMarketplace.set(mkt, s);
     }
 
@@ -149,7 +156,7 @@ export class InventoryEditorService {
 
     const payloadVersions: Record<string, unknown> = {};
     if (catalogProduct?.optimizationPayload) {
-      const raw = catalogProduct.optimizationPayload as Record<string, unknown>;
+      const raw = catalogProduct.optimizationPayload;
       if (raw.US || raw.AU || raw.DE) {
         Object.assign(payloadVersions, raw);
       }
@@ -172,7 +179,8 @@ export class InventoryEditorService {
       target.conditionId = ver.conditionId;
       await this.listingRepo.save(target);
 
-      const existingPayload = (payloadVersions[ver.marketplace] ?? {}) as Record<string, unknown>;
+      const existingPayload = (payloadVersions[ver.marketplace] ??
+        {}) as Record<string, unknown>;
       payloadVersions[ver.marketplace] = {
         ...existingPayload,
         optimizedTitle: ver.title,
@@ -189,13 +197,17 @@ export class InventoryEditorService {
         catalogProduct.title = primaryVer.title;
         catalogProduct.description = primaryVer.description;
         if (primaryVer.price != null) catalogProduct.price = primaryVer.price;
-        if (primaryVer.quantity != null) catalogProduct.quantity = primaryVer.quantity;
-        if (primaryVer.conditionId) catalogProduct.conditionId = primaryVer.conditionId;
+        if (primaryVer.quantity != null)
+          catalogProduct.quantity = primaryVer.quantity;
+        if (primaryVer.conditionId)
+          catalogProduct.conditionId = primaryVer.conditionId;
       }
       await this.productRepo.save(catalogProduct);
     }
 
-    this.logger.log(`Saved editor data for listing ${listingId} (${dto.marketplaceVersions.length} versions)`);
+    this.logger.log(
+      `Saved editor data for listing ${listingId} (${dto.marketplaceVersions.length} versions)`,
+    );
     return { ok: true };
   }
 
@@ -248,15 +260,22 @@ export class InventoryEditorService {
     // Index siblings by marketplace
     const byMarketplace = new Map<string, ListingRecord>();
     for (const s of siblings) {
-      const mkt = s.marketplace as string | null;
+      const mkt = s.marketplace;
       if (mkt) byMarketplace.set(mkt, s);
     }
 
     // Parse optimization_payload if available
-    let payloadVersions: Record<string, { optimizedTitle?: string; seoDescription?: string; itemSpecifics?: Record<string, string> }> = {};
+    let payloadVersions: Record<
+      string,
+      {
+        optimizedTitle?: string;
+        seoDescription?: string;
+        itemSpecifics?: Record<string, string>;
+      }
+    > = {};
     if (catalogProduct?.optimizationPayload) {
       try {
-        const raw = catalogProduct.optimizationPayload as Record<string, unknown>;
+        const raw = catalogProduct.optimizationPayload;
         // Check if payload contains per-marketplace data
         if (raw.US || raw.AU || raw.DE) {
           payloadVersions = raw as any;
@@ -264,8 +283,12 @@ export class InventoryEditorService {
       } catch {}
     }
 
-    const seoScore = catalogProduct?.seoScore ? Number(catalogProduct.seoScore) : null;
-    const readinessScore = catalogProduct?.readinessScore ? Number(catalogProduct.readinessScore) : null;
+    const seoScore = catalogProduct?.seoScore
+      ? Number(catalogProduct.seoScore)
+      : null;
+    const readinessScore = catalogProduct?.readinessScore
+      ? Number(catalogProduct.readinessScore)
+      : null;
 
     return targetMarketplaces.map((mkt) => {
       const sibling = byMarketplace.get(mkt);
@@ -273,11 +296,20 @@ export class InventoryEditorService {
 
       return {
         marketplace: mkt,
-        title: sibling?.title ?? payload.optimizedTitle ?? primaryListing.title ?? '',
-        description: sibling?.description ?? payload.seoDescription ?? primaryListing.description ?? '',
+        title:
+          sibling?.title ??
+          payload.optimizedTitle ??
+          primaryListing.title ??
+          '',
+        description:
+          sibling?.description ??
+          payload.seoDescription ??
+          primaryListing.description ??
+          '',
         price: sibling?.startPriceNum ?? primaryListing.startPriceNum ?? null,
         quantity: sibling?.quantityNum ?? primaryListing.quantityNum ?? null,
-        conditionId: sibling?.conditionId ?? primaryListing.conditionId ?? 'Used',
+        conditionId:
+          sibling?.conditionId ?? primaryListing.conditionId ?? 'Used',
         conditionDescription: null,
         itemSpecifics: (payload as any)?.itemSpecifics ?? {},
         fitmentSummary: null,
@@ -291,7 +323,9 @@ export class InventoryEditorService {
    * Load stores the user can access, with their eBay account info,
    * marketplaces, and cached business policies.
    */
-  private async getStoresWithPolicies(user: User): Promise<StoreWithPolicies[]> {
+  private async getStoresWithPolicies(
+    user: User,
+  ): Promise<StoreWithPolicies[]> {
     const storeIds = await this.storeAccess.getAccessibleStoreIds(user);
 
     if (storeIds.size === 0) return [];
@@ -365,7 +399,9 @@ export class InventoryEditorService {
         ebayUserId: account.ebayUserId,
         marketplaces: accountMarketplaces.map((mp) => {
           const makePolicyList = (type: string): PolicyOption[] => {
-            return policyIndex.get(`${account.id}:${mp.marketplaceId}:${type}`) ?? [];
+            return (
+              policyIndex.get(`${account.id}:${mp.marketplaceId}:${type}`) ?? []
+            );
           };
 
           return {

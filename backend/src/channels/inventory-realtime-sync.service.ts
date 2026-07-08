@@ -35,7 +35,9 @@ export class InventoryRealtimeSyncService {
     quantityAvailable?: number;
     source: string;
   }): Promise<void> {
-    const enabled = await this.featureFlags.isEnabled('inventory_real_time_sync');
+    const enabled = await this.featureFlags.isEnabled(
+      'inventory_real_time_sync',
+    );
     if (!enabled) {
       this.logger.debug('inventory_real_time_sync flag disabled — skipping');
       return;
@@ -74,10 +76,14 @@ export class InventoryRealtimeSyncService {
     channel: string;
     total: string;
   }): Promise<void> {
-    const enabled = await this.featureFlags.isEnabled('inventory_real_time_sync');
+    const enabled = await this.featureFlags.isEnabled(
+      'inventory_real_time_sync',
+    );
     if (!enabled) return;
 
-    this.logger.log(`New order ${payload.orderId} from ${payload.channel} — enqueuing reconcile`);
+    this.logger.log(
+      `New order ${payload.orderId} from ${payload.channel} — enqueuing reconcile`,
+    );
 
     await this.inventoryQueue.add(
       'reconcile',
@@ -99,9 +105,13 @@ export class InventoryRealtimeSyncService {
    * Handle eBay-specific inventory webhook payloads.
    * Called directly by the channels controller webhook handler.
    */
-  async processEbayInventoryWebhook(body: Record<string, unknown>): Promise<void> {
+  async processEbayInventoryWebhook(
+    body: Record<string, unknown>,
+  ): Promise<void> {
     const metadata = body['metadata'] as Record<string, unknown> | undefined;
-    const notification = body['notification'] as Record<string, unknown> | undefined;
+    const notification = body['notification'] as
+      | Record<string, unknown>
+      | undefined;
 
     if (!notification) return;
 
@@ -128,7 +138,8 @@ export class InventoryRealtimeSyncService {
     const inventoryItemId = body['inventory_item_id'] as string | undefined;
     const sku = body['sku'] as string | undefined;
     const available = body['available'] as number | undefined;
-    const externalId = inventoryItemId ?? (body['id'] ? String(body['id']) : '');
+    const externalId =
+      inventoryItemId ?? (body['id'] ? String(body['id']) : '');
 
     if (externalId) {
       await this.handleWebhookPayload('shopify', externalId, sku, available);
@@ -138,7 +149,9 @@ export class InventoryRealtimeSyncService {
   /**
    * Handle Amazon EventBridge notification payloads.
    */
-  async processAmazonInventoryWebhook(body: Record<string, unknown>): Promise<void> {
+  async processAmazonInventoryWebhook(
+    body: Record<string, unknown>,
+  ): Promise<void> {
     const detail = body['detail'] as Record<string, unknown> | undefined;
     if (!detail) return;
 
@@ -153,7 +166,9 @@ export class InventoryRealtimeSyncService {
   /**
    * Handle Walmart webhook inventory payloads.
    */
-  async processWalmartInventoryWebhook(body: Record<string, unknown>): Promise<void> {
+  async processWalmartInventoryWebhook(
+    body: Record<string, unknown>,
+  ): Promise<void> {
     const sku = (body['sku'] as string) ?? '';
     const quantity = body['quantity'] as Record<string, unknown> | undefined;
     const available = quantity?.['amount'] as number | undefined;

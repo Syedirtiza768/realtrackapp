@@ -21,7 +21,10 @@ import { Store } from '../../channels/entities/store.entity.js';
 @Entity('ebay_offers')
 @Index('idx_ebay_offer_product', ['masterProductId'])
 @Index('idx_ebay_offer_store', ['storeId'])
-@Index('idx_ebay_offer_ebay_offer_id', ['ebayOfferId'], { unique: true, where: '"ebay_offer_id" IS NOT NULL' })
+@Index('idx_ebay_offer_ebay_offer_id', ['ebayOfferId'], {
+  unique: true,
+  where: '"ebay_offer_id" IS NOT NULL',
+})
 @Index('idx_ebay_offer_ebay_listing_id', ['ebayListingId'])
 @Index('idx_ebay_offer_sku_store', ['sku', 'storeId'], { unique: true })
 @Index('idx_ebay_offer_status', ['status'])
@@ -52,21 +55,41 @@ export class EbayOffer {
   sku!: string;
 
   /** eBay offer ID (returned by Inventory API) */
-  @Column({ name: 'ebay_offer_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'ebay_offer_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   ebayOfferId!: string | null;
 
   /** eBay listing ID (returned after publishing) */
-  @Column({ name: 'ebay_listing_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'ebay_listing_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   ebayListingId!: string | null;
 
   /** eBay marketplace (e.g. EBAY_US) */
-  @Column({ name: 'marketplace_id', type: 'varchar', length: 30, default: 'EBAY_US' })
+  @Column({
+    name: 'marketplace_id',
+    type: 'varchar',
+    length: 30,
+    default: 'EBAY_US',
+  })
   marketplaceId!: string;
 
   // ──────────────────────────── Per-Store Overrides ───────────────
 
   /** Store-specific title override (null = use master title) */
-  @Column({ name: 'title_override', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'title_override',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   titleOverride!: string | null;
 
   /** Store-specific price */
@@ -87,16 +110,36 @@ export class EbayOffer {
 
   // ──────────────────────────── Policy IDs ────────────────────────
 
-  @Column({ name: 'fulfillment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'fulfillment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   fulfillmentPolicyId!: string | null;
 
-  @Column({ name: 'payment_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'payment_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   paymentPolicyId!: string | null;
 
-  @Column({ name: 'return_policy_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'return_policy_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   returnPolicyId!: string | null;
 
-  @Column({ name: 'merchant_location_key', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'merchant_location_key',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   merchantLocationKey!: string | null;
 
   // ──────────────────────────── Status ────────────────────────────

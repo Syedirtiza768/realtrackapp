@@ -1,5 +1,8 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { VinDecodeService, type VinDecodeResult } from './vin-decode.service.js';
+import {
+  VinDecodeService,
+  type VinDecodeResult,
+} from './vin-decode.service.js';
 import { OpenAiService } from '../common/openai/openai.service.js';
 import { sanitizeJson } from '../common/openai/json-sanitizer.js';
 import { getBrandContext } from './vin-decoders/brand-knowledge.js';
@@ -73,7 +76,9 @@ export class VinExportService {
     const year = vehicle.year;
     const model = vehicle.model;
     const trim = vehicle.trim || '';
-    const engine = vehicle.aiData?.engineDescription || `${vehicle.engineDisplacementL}L ${vehicle.engineCylinders}cyl`;
+    const engine =
+      vehicle.aiData?.engineDescription ||
+      `${vehicle.engineDisplacementL}L ${vehicle.engineCylinders}cyl`;
 
     const systemPrompt = `You are an expert ${brand} OEM parts catalog specialist. Generate a comprehensive list of ALL parts that would be available from a dismantled ${year} ${brand} ${model} ${trim}.
 
@@ -134,15 +139,20 @@ Return ALL parts organized by category. Include every major component a salvage 
 
     let aiData: any;
     try {
-      aiData = typeof response.content === 'string'
-        ? sanitizeJson(response.content)
-        : response.content;
+      aiData =
+        typeof response.content === 'string'
+          ? sanitizeJson(response.content)
+          : response.content;
     } catch {
-      throw new BadRequestException('Failed to generate parts data from AI. Please try again.');
+      throw new BadRequestException(
+        'Failed to generate parts data from AI. Please try again.',
+      );
     }
 
     if (!aiData?.categories || !Array.isArray(aiData.categories)) {
-      throw new BadRequestException('AI returned invalid parts structure. Please try again.');
+      throw new BadRequestException(
+        'AI returned invalid parts structure. Please try again.',
+      );
     }
 
     // ── Step 3: Build GridX Connect rows ──
@@ -156,17 +166,21 @@ Return ALL parts organized by category. Include every major component a salvage 
 
       const categoryCode = this.getCategoryCode(categoryName);
 
-      for (const part of (cat.parts || [])) {
+      for (const part of cat.parts || []) {
         partIndex++;
         const suffix = String.fromCharCode(65 + (parts.length % 26)); // A, B, C...
         const sku = `${skuPrefix}-${categoryCode}-${suffix}`;
 
         // Clean part number — remove [VERIFY] markers from the field
-        let partNumber = String(part.partNumber || part.part_number || '').trim();
+        let partNumber = String(
+          part.partNumber || part.part_number || '',
+        ).trim();
         partNumber = partNumber.replace(/\[VERIFY\]/gi, '').trim();
 
         // Build description with vehicle context
-        let description = String(part.description || part.partName || part.part_name || '');
+        let description = String(
+          part.description || part.partName || part.part_name || '',
+        );
         if (!description.includes(year)) {
           description = `${year} ${brand} ${model} ${description} Used OEM`;
         }
@@ -200,10 +214,36 @@ Return ALL parts organized by category. Include every major component a salvage 
     const sheetData: any[][] = [];
 
     // Row 0: Info header (pipeline detects "GridX" to identify format)
-    sheetData.push(['#INFO', 'GridX Connect Advanced Template v4.0 - Add your items starting from row 3. Please keep column names unchanged.', '', '', '', '', '', '', '', '', '', '']);
+    sheetData.push([
+      '#INFO',
+      'GridX Connect Advanced Template v4.0 - Add your items starting from row 3. Please keep column names unchanged.',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ]);
 
     // Row 1: Column headers
-    sheetData.push(['Part Number', 'Price', 'Quantity', 'Vehicle Make', 'Description', 'Image URLs', 'SKU', 'Weight Major', 'Weight Minor', 'Package Length', 'Package Width', 'Package Depth']);
+    sheetData.push([
+      'Part Number',
+      'Price',
+      'Quantity',
+      'Vehicle Make',
+      'Description',
+      'Image URLs',
+      'SKU',
+      'Weight Major',
+      'Weight Minor',
+      'Package Length',
+      'Package Width',
+      'Package Depth',
+    ]);
 
     // Row 2+: Part rows (flat — no category header rows; the pipeline skips
     // rows with <= 1 non-empty cell, but omitting them keeps the file clean)
@@ -230,18 +270,18 @@ Return ALL parts organized by category. Include every major component a salvage 
 
     // Set column widths for readability
     ws['!cols'] = [
-      { wch: 18 },  // Part Number
-      { wch: 10 },  // Price
-      { wch: 10 },  // Quantity
-      { wch: 15 },  // Vehicle Make
-      { wch: 80 },  // Description
-      { wch: 30 },  // Image URLs
-      { wch: 25 },  // SKU
-      { wch: 12 },  // Weight Major
-      { wch: 12 },  // Weight Minor
-      { wch: 14 },  // Package Length
-      { wch: 13 },  // Package Width
-      { wch: 13 },  // Package Depth
+      { wch: 18 }, // Part Number
+      { wch: 10 }, // Price
+      { wch: 10 }, // Quantity
+      { wch: 15 }, // Vehicle Make
+      { wch: 80 }, // Description
+      { wch: 30 }, // Image URLs
+      { wch: 25 }, // SKU
+      { wch: 12 }, // Weight Major
+      { wch: 12 }, // Weight Minor
+      { wch: 14 }, // Package Length
+      { wch: 13 }, // Package Width
+      { wch: 13 }, // Package Depth
     ];
 
     // Use the VIN as the sheet name — the pipeline derives VIN from sheet name
@@ -249,7 +289,9 @@ Return ALL parts organized by category. Include every major component a salvage 
     // "Sheet1" caused decode failures since it's only 6 chars (< 11 minimum).
     XLSX.utils.book_append_sheet(wb, ws, vin);
 
-    const buffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+    const buffer = Buffer.from(
+      XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }),
+    );
     const safeModelName = model.replace(/[^a-zA-Z0-9]/g, '_');
     const filename = `${year}_${brand}_${safeModelName}_VIN_${vin.substring(vin.length - 6)}.xlsx`;
 
@@ -292,13 +334,13 @@ Return ALL parts organized by category. Include every major component a salvage 
       Exhaust: 'EX',
       Transmission: 'TR',
       Steering: 'ST',
-      'HVAC': 'AC',
+      HVAC: 'AC',
       'Fuel System': 'FL',
       'Body Panels': 'BD',
-      'Safety': 'SF',
-      'Sensors': 'SN',
+      Safety: 'SF',
+      Sensors: 'SN',
       'Exterior Trim': 'ET',
-      'Lighting': 'LT',
+      Lighting: 'LT',
       'Wheels & Tires': 'WT',
     };
 

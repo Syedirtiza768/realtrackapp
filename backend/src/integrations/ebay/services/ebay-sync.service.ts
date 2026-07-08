@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -106,7 +102,10 @@ export class EbaySyncService {
     syncLogId: string,
   ): Promise<{ processed: number; updated: number; failed: number }> {
     const account = await this.accountRepo.findOne({
-      where: { id: payload.ebayAccountId, organizationId: payload.organizationId },
+      where: {
+        id: payload.ebayAccountId,
+        organizationId: payload.organizationId,
+      },
       relations: ['marketplaces'],
     });
     if (!account) {
@@ -161,11 +160,7 @@ export class EbaySyncService {
 
             for (const offer of offers) {
               const mp = offer.marketplaceId ?? payload.marketplaceId ?? null;
-              if (
-                payload.marketplaceId &&
-                mp &&
-                mp !== payload.marketplaceId
-              ) {
+              if (payload.marketplaceId && mp && mp !== payload.marketplaceId) {
                 continue;
               }
 
@@ -240,7 +235,7 @@ export class EbaySyncService {
         lastListingsFetchedCount: totalOffers,
         lastErrorMessage:
           status === 'failed'
-            ? (errors[0] as { message?: string })?.message ?? 'Sync failed'
+            ? ((errors[0] as { message?: string })?.message ?? 'Sync failed')
             : null,
       });
 
@@ -311,7 +306,8 @@ export class EbaySyncService {
 
     await this.accountRepo.update(payload.ebayAccountId, {
       lastSuccessfulSyncAt: new Date(),
-      lastErrorMessage: result.errors > 0 ? `${result.errors} order(s) failed to import` : null,
+      lastErrorMessage:
+        result.errors > 0 ? `${result.errors} order(s) failed to import` : null,
     });
 
     await this.logWriter.write({

@@ -23,18 +23,18 @@ export interface IdentityResolutionResult {
 // Weight config for the scoring model
 const IDENTITY_WEIGHTS = {
   exactMpn: 0.35,
-  brandMatch: 0.20,
+  brandMatch: 0.2,
   ocrMpn: 0.15,
-  visualFamily: 0.10,
-  dimensionMatch: 0.10,
+  visualFamily: 0.1,
+  dimensionMatch: 0.1,
   supplierDescSimilarity: 0.05,
   fitmentConsistency: 0.05,
 };
 
 const CONFIDENCE_THRESHOLDS = {
   AUTO_APPROVE: 0.85,
-  REVIEW_REQUIRED: 0.60,
-  REJECT: 0.30,
+  REVIEW_REQUIRED: 0.6,
+  REJECT: 0.3,
 };
 
 @Injectable()
@@ -54,7 +54,9 @@ export class ProductIdentityService {
     private readonly correctionRuleRepo: Repository<CorrectionRule>,
   ) {}
 
-  async resolveIdentity(motorsProductId: string): Promise<IdentityResolutionResult> {
+  async resolveIdentity(
+    motorsProductId: string,
+  ): Promise<IdentityResolutionResult> {
     const product = await this.motorsProductRepo.findOneOrFail({
       where: { id: motorsProductId },
     });
@@ -68,11 +70,18 @@ export class ProductIdentityService {
     const signals = this.mergeExtractionSignals(extractions);
 
     // Stage 1: Deterministic Resolution
-    let candidates = await this.deterministicResolution(motorsProductId, signals);
+    let candidates = await this.deterministicResolution(
+      motorsProductId,
+      signals,
+    );
 
     // Stage 2: AI-Assisted if no exact match found
     if (candidates.length === 0 && extractions.length > 0) {
-      candidates = await this.aiAssistedCandidateGeneration(motorsProductId, signals, extractions);
+      candidates = await this.aiAssistedCandidateGeneration(
+        motorsProductId,
+        signals,
+        extractions,
+      );
     }
 
     // Stage 3: Score all candidates
@@ -81,16 +90,23 @@ export class ProductIdentityService {
     }
 
     // Sort by composite score descending
-    candidates.sort((a, b) => Number(b.compositeScore) - Number(a.compositeScore));
+    candidates.sort(
+      (a, b) => Number(b.compositeScore) - Number(a.compositeScore),
+    );
 
     // Assign ranks
-    candidates.forEach((c, i) => { c.rank = i + 1; });
+    candidates.forEach((c, i) => {
+      c.rank = i + 1;
+    });
 
     // Save all candidates
     const savedCandidates = await this.candidateRepo.save(candidates);
 
     // Stage 3b: Validation gates
-    const validationResult = this.applyValidationGates(savedCandidates, signals);
+    const validationResult = this.applyValidationGates(
+      savedCandidates,
+      signals,
+    );
 
     if (validationResult.resolved && validationResult.winner) {
       // Mark winner
@@ -104,7 +120,9 @@ export class ProductIdentityService {
     return validationResult;
   }
 
-  private mergeExtractionSignals(extractions: ExtractedAttribute[]): Record<string, any> {
+  private mergeExtractionSignals(
+    extractions: ExtractedAttribute[],
+  ): Record<string, any> {
     const signals: Record<string, any> = {
       brands: [],
       mpns: [],
@@ -123,24 +141,36 @@ export class ProductIdentityService {
     for (const ext of extractions) {
       if (ext.extractedBrand) signals.brands.push(ext.extractedBrand);
       if (ext.extractedMpn) signals.mpns.push(ext.extractedMpn);
-      if (ext.extractedOemNumber) signals.oemNumbers.push(ext.extractedOemNumber);
-      if (ext.extractedProductType) signals.productTypes.push(ext.extractedProductType);
-      if (ext.extractedProductFamily) signals.productFamilies.push(ext.extractedProductFamily);
-      if (ext.extractedPlacement) signals.placements.push(ext.extractedPlacement);
-      if (ext.extractedCondition) signals.conditions.push(ext.extractedCondition);
-      if (ext.extractedSideOrientation) signals.sideOrientations.push(ext.extractedSideOrientation);
-      if (ext.extractedFrontRear) signals.frontRears.push(ext.extractedFrontRear);
-      if (ext.extractedFeatures) signals.features.push(...ext.extractedFeatures);
-      if (ext.extractedFitmentRaw) signals.fitmentRaw.push(...ext.extractedFitmentRaw);
+      if (ext.extractedOemNumber)
+        signals.oemNumbers.push(ext.extractedOemNumber);
+      if (ext.extractedProductType)
+        signals.productTypes.push(ext.extractedProductType);
+      if (ext.extractedProductFamily)
+        signals.productFamilies.push(ext.extractedProductFamily);
+      if (ext.extractedPlacement)
+        signals.placements.push(ext.extractedPlacement);
+      if (ext.extractedCondition)
+        signals.conditions.push(ext.extractedCondition);
+      if (ext.extractedSideOrientation)
+        signals.sideOrientations.push(ext.extractedSideOrientation);
+      if (ext.extractedFrontRear)
+        signals.frontRears.push(ext.extractedFrontRear);
+      if (ext.extractedFeatures)
+        signals.features.push(...ext.extractedFeatures);
+      if (ext.extractedFitmentRaw)
+        signals.fitmentRaw.push(...ext.extractedFitmentRaw);
       if (ext.extractedDimensions && !signals.dimensions) {
         signals.dimensions = ext.extractedDimensions;
       }
 
       // Use normalized output if available
       if (ext.normalizedOutput) {
-        if (ext.normalizedOutput.brand) signals.brands.push(ext.normalizedOutput.brand);
-        if (ext.normalizedOutput.mpn) signals.mpns.push(ext.normalizedOutput.mpn);
-        if (ext.normalizedOutput.productType) signals.productTypes.push(ext.normalizedOutput.productType);
+        if (ext.normalizedOutput.brand)
+          signals.brands.push(ext.normalizedOutput.brand);
+        if (ext.normalizedOutput.mpn)
+          signals.mpns.push(ext.normalizedOutput.mpn);
+        if (ext.normalizedOutput.productType)
+          signals.productTypes.push(ext.normalizedOutput.productType);
       }
     }
 
@@ -202,7 +232,9 @@ export class ProductIdentityService {
       for (const mpn of signals.mpns) {
         const prefixMatches = await this.catalogProductRepo
           .createQueryBuilder('cp')
-          .where(`cp."mpnNormalized" LIKE :pattern`, { pattern: `${this.normalizeMpn(mpn)}%` })
+          .where(`cp."mpnNormalized" LIKE :pattern`, {
+            pattern: `${this.normalizeMpn(mpn)}%`,
+          })
           .limit(5)
           .getMany();
 
@@ -239,8 +271,10 @@ export class ProductIdentityService {
       });
 
       for (const match of oemMatches) {
-        const exists = candidates.some(c =>
-          c.mpnNormalized === match.mpnNormalized && c.source !== 'oem_interchange',
+        const exists = candidates.some(
+          (c) =>
+            c.mpnNormalized === match.mpnNormalized &&
+            c.source !== 'oem_interchange',
         );
         if (!exists) {
           const candidate = this.candidateRepo.create({
@@ -291,10 +325,13 @@ export class ProductIdentityService {
           });
         }
         if (typeQuery) {
-          qb.andWhere(`(cp."partType" ILIKE :type OR cp."title" ILIKE :typeTitle)`, {
-            type: `%${typeQuery}%`,
-            typeTitle: `%${typeQuery}%`,
-          });
+          qb.andWhere(
+            `(cp."partType" ILIKE :type OR cp."title" ILIKE :typeTitle)`,
+            {
+              type: `%${typeQuery}%`,
+              typeTitle: `%${typeQuery}%`,
+            },
+          );
         }
 
         const matches = await qb.limit(10).getMany();
@@ -310,10 +347,16 @@ export class ProductIdentityService {
             placement: match.placement,
             source: 'ai_vision',
             sourceReference: bestExtraction.id,
-            exactMpnScore: this.scoreMpnSimilarity(signals.mpns, match.mpnNormalized),
+            exactMpnScore: this.scoreMpnSimilarity(
+              signals.mpns,
+              match.mpnNormalized,
+            ),
             brandMatchScore: this.scoreBrandMatch(signals.brands, match.brand),
             ocrMpnScore: bestExtraction.confidenceScores?.mpn || 0,
-            visualFamilyScore: this.scoreProductTypeSimilarity(signals.productTypes, match.partType),
+            visualFamilyScore: this.scoreProductTypeSimilarity(
+              signals.productTypes,
+              match.partType,
+            ),
             candidateData: {
               catalogProductId: match.id,
               sku: match.sku,
@@ -363,9 +406,9 @@ export class ProductIdentityService {
 
     // Check: no brand conflict
     if (signals.brands.length > 1) {
-      const uniqueBrands = signals.brands.map((b: string) => b.toLowerCase()).filter(
-        (b: string, i: number, a: string[]) => a.indexOf(b) === i,
-      );
+      const uniqueBrands = signals.brands
+        .map((b: string) => b.toLowerCase())
+        .filter((b: string, i: number, a: string[]) => a.indexOf(b) === i);
       if (uniqueBrands.length > 1) {
         reviewReasons.push('brand_ambiguity');
       }
@@ -378,7 +421,11 @@ export class ProductIdentityService {
 
     // Check: no side/orientation ambiguity
     if (signals.sideOrientations?.length > 1) {
-      const unique = [...new Set(signals.sideOrientations.map((s: string) => s.toLowerCase()))];
+      const unique = [
+        ...new Set(
+          signals.sideOrientations.map((s: string) => s.toLowerCase()),
+        ),
+      ];
       if (unique.length > 1) {
         reviewReasons.push('side_orientation_conflict');
       }
@@ -386,20 +433,29 @@ export class ProductIdentityService {
 
     // Check: no front/rear ambiguity
     if (signals.frontRears?.length > 1) {
-      const unique = [...new Set(signals.frontRears.map((s: string) => s.toLowerCase()))];
+      const unique = [
+        ...new Set(signals.frontRears.map((s: string) => s.toLowerCase())),
+      ];
       if (unique.length > 1) {
         reviewReasons.push('front_rear_conflict');
       }
     }
 
-    const resolved = confidence >= CONFIDENCE_THRESHOLDS.AUTO_APPROVE && reviewReasons.length === 0;
+    const resolved =
+      confidence >= CONFIDENCE_THRESHOLDS.AUTO_APPROVE &&
+      reviewReasons.length === 0;
 
     return {
       resolved,
       candidates,
-      winner: resolved || confidence >= CONFIDENCE_THRESHOLDS.REVIEW_REQUIRED ? topCandidate : null,
+      winner:
+        resolved || confidence >= CONFIDENCE_THRESHOLDS.REVIEW_REQUIRED
+          ? topCandidate
+          : null,
       identityConfidence: confidence,
-      requiresReview: reviewReasons.length > 0 || confidence < CONFIDENCE_THRESHOLDS.AUTO_APPROVE,
+      requiresReview:
+        reviewReasons.length > 0 ||
+        confidence < CONFIDENCE_THRESHOLDS.AUTO_APPROVE,
       reviewReasons,
     };
   }
@@ -409,7 +465,8 @@ export class ProductIdentityService {
     winner: ProductCandidate,
   ): Promise<void> {
     product.brand = winner.brand;
-    product.brandNormalized = winner.brand?.toLowerCase().replace(/[^a-z0-9]/g, '') || null;
+    product.brandNormalized =
+      winner.brand?.toLowerCase().replace(/[^a-z0-9]/g, '') || null;
     product.mpn = winner.mpn;
     product.mpnNormalized = winner.mpnNormalized;
     product.oemPartNumber = winner.oemPartNumber;
@@ -430,7 +487,10 @@ export class ProductIdentityService {
           product.ebayCategoryId = catalogProduct.categoryId;
           product.ebayCategoryName = catalogProduct.categoryName;
         }
-        if (catalogProduct.imageUrls && (!product.imageUrls || product.imageUrls.length === 0)) {
+        if (
+          catalogProduct.imageUrls &&
+          (!product.imageUrls || product.imageUrls.length === 0)
+        ) {
           product.imageUrls = catalogProduct.imageUrls;
         }
         if (catalogProduct.fitmentData) {
@@ -449,9 +509,12 @@ export class ProductIdentityService {
         IDENTITY_WEIGHTS.brandMatch * Number(candidate.brandMatchScore) +
         IDENTITY_WEIGHTS.ocrMpn * Number(candidate.ocrMpnScore) +
         IDENTITY_WEIGHTS.visualFamily * Number(candidate.visualFamilyScore) +
-        IDENTITY_WEIGHTS.dimensionMatch * Number(candidate.dimensionMatchScore) +
-        IDENTITY_WEIGHTS.supplierDescSimilarity * Number(candidate.supplierDescSimilarityScore) +
-        IDENTITY_WEIGHTS.fitmentConsistency * Number(candidate.fitmentConsistencyScore)
+        IDENTITY_WEIGHTS.dimensionMatch *
+          Number(candidate.dimensionMatchScore) +
+        IDENTITY_WEIGHTS.supplierDescSimilarity *
+          Number(candidate.supplierDescSimilarityScore) +
+        IDENTITY_WEIGHTS.fitmentConsistency *
+          Number(candidate.fitmentConsistencyScore)
       ).toFixed(4),
     );
   }
@@ -465,39 +528,59 @@ export class ProductIdentityService {
       .trim();
   }
 
-  private scoreBrandMatch(extractedBrands: string[], candidateBrand: string | null): number {
+  private scoreBrandMatch(
+    extractedBrands: string[],
+    candidateBrand: string | null,
+  ): number {
     if (!candidateBrand || extractedBrands.length === 0) return 0;
     const normalized = candidateBrand.toLowerCase().replace(/[^a-z0-9]/g, '');
     for (const brand of extractedBrands) {
       const normalizedBrand = brand.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (normalizedBrand === normalized) return 1.0;
-      if (normalizedBrand.includes(normalized) || normalized.includes(normalizedBrand)) return 0.8;
+      if (
+        normalizedBrand.includes(normalized) ||
+        normalized.includes(normalizedBrand)
+      )
+        return 0.8;
     }
     return 0;
   }
 
-  private scoreMpnSimilarity(extractedMpns: string[], candidateMpn: string | null): number {
+  private scoreMpnSimilarity(
+    extractedMpns: string[],
+    candidateMpn: string | null,
+  ): number {
     if (!candidateMpn || extractedMpns.length === 0) return 0;
     const normalizedCandidate = this.normalizeMpn(candidateMpn);
     for (const mpn of extractedMpns) {
       const normalizedExtracted = this.normalizeMpn(mpn);
       if (normalizedExtracted === normalizedCandidate) return 1.0;
-      if (normalizedCandidate.startsWith(normalizedExtracted) ||
-          normalizedExtracted.startsWith(normalizedCandidate)) return 0.7;
+      if (
+        normalizedCandidate.startsWith(normalizedExtracted) ||
+        normalizedExtracted.startsWith(normalizedCandidate)
+      )
+        return 0.7;
       // Levenshtein-like rough check
-      if (this.roughSimilarity(normalizedExtracted, normalizedCandidate) > 0.85) return 0.6;
+      if (this.roughSimilarity(normalizedExtracted, normalizedCandidate) > 0.85)
+        return 0.6;
     }
     return 0;
   }
 
-  private scoreProductTypeSimilarity(extractedTypes: string[], candidateType: string | null): number {
+  private scoreProductTypeSimilarity(
+    extractedTypes: string[],
+    candidateType: string | null,
+  ): number {
     if (!candidateType || extractedTypes.length === 0) return 0;
     const normalizedCandidate = candidateType.toLowerCase();
     for (const type of extractedTypes) {
       const normalizedExtracted = type.toLowerCase();
       if (normalizedExtracted === normalizedCandidate) return 1.0;
-      if (normalizedCandidate.includes(normalizedExtracted) ||
-          normalizedExtracted.includes(normalizedCandidate)) return 0.7;
+      if (
+        normalizedCandidate.includes(normalizedExtracted) ||
+        normalizedExtracted.includes(normalizedCandidate)
+      )
+        return 0.7;
     }
     return 0;
   }

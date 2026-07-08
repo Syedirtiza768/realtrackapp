@@ -11,7 +11,11 @@ import { User } from '../../../auth/entities/user.entity.js';
 import { ConnectedEbayAccount } from './connected-ebay-account.entity.js';
 
 export type EbayListingSyncType = 'listings' | 'policies' | 'identity' | 'full';
-export type EbayListingSyncStatus = 'running' | 'success' | 'partial' | 'failed';
+export type EbayListingSyncStatus =
+  | 'running'
+  | 'success'
+  | 'partial'
+  | 'failed';
 
 @Entity('ebay_listing_sync_logs')
 @Index('idx_ebay_sync_log_account', ['ebayAccountId'])
@@ -34,7 +38,12 @@ export class EbayListingSyncLog {
   @JoinColumn({ name: 'ebay_account_id' })
   ebayAccount!: ConnectedEbayAccount;
 
-  @Column({ name: 'marketplace_id', type: 'varchar', length: 30, nullable: true })
+  @Column({
+    name: 'marketplace_id',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+  })
   marketplaceId!: string | null;
 
   @Column({ name: 'sync_type', type: 'varchar', length: 30 })
@@ -61,7 +70,11 @@ export class EbayListingSyncLog {
   @Column({ name: 'raw_summary', type: 'jsonb', default: () => `'{}'` })
   rawSummary!: Record<string, unknown>;
 
-  @Column({ name: 'started_at', type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'started_at',
+    type: 'timestamptz',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   startedAt!: Date;
 
   @Column({ name: 'finished_at', type: 'timestamptz', nullable: true })

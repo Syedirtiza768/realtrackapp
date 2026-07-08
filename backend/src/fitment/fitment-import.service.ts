@@ -61,7 +61,9 @@ export class FitmentImportService {
       },
     );
 
-    this.logger.log(`Enqueued ACES import job ${job.id} with ${rows.length} rows`);
+    this.logger.log(
+      `Enqueued ACES import job ${job.id} with ${rows.length} rows`,
+    );
     return { jobId: job.id!, rowCount: rows.length };
   }
 
@@ -100,7 +102,11 @@ export class FitmentImportService {
       });
       if (!model) {
         model = await this.modelRepo.save(
-          this.modelRepo.create({ makeId: make.id, name: row.modelName, slug: modelSlug }),
+          this.modelRepo.create({
+            makeId: make.id,
+            name: row.modelName,
+            slug: modelSlug,
+          }),
         );
         modelsCreated++;
       }
@@ -112,7 +118,10 @@ export class FitmentImportService {
         });
         if (!existing) {
           await this.submodelRepo.save(
-            this.submodelRepo.create({ modelId: model.id, name: row.submodelName }),
+            this.submodelRepo.create({
+              modelId: model.id,
+              name: row.submodelName,
+            }),
           );
           submodelsCreated++;
         }
@@ -120,7 +129,9 @@ export class FitmentImportService {
 
       // 4. Upsert years
       for (let y = row.yearStart; y <= row.yearEnd; y++) {
-        const existingYear = await this.yearRepo.findOne({ where: { year: y } });
+        const existingYear = await this.yearRepo.findOne({
+          where: { year: y },
+        });
         if (!existingYear) {
           await this.yearRepo.save(this.yearRepo.create({ year: y }));
           yearsCreated++;
@@ -129,7 +140,9 @@ export class FitmentImportService {
 
       // 5. Upsert engine
       if (row.engineCode) {
-        const existing = await this.engineRepo.findOne({ where: { code: row.engineCode } });
+        const existing = await this.engineRepo.findOne({
+          where: { code: row.engineCode },
+        });
         if (!existing) {
           await this.engineRepo.save(
             this.engineRepo.create({
@@ -150,7 +163,13 @@ export class FitmentImportService {
         `${submodelsCreated} submodels, ${yearsCreated} years, ${enginesCreated} engines`,
     );
 
-    return { makesCreated, modelsCreated, submodelsCreated, yearsCreated, enginesCreated };
+    return {
+      makesCreated,
+      modelsCreated,
+      submodelsCreated,
+      yearsCreated,
+      enginesCreated,
+    };
   }
 
   private slugify(text: string): string {

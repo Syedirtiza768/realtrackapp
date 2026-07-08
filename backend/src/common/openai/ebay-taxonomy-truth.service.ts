@@ -34,7 +34,9 @@ export class EbayTaxonomyTruthService {
   ) {}
 
   isEnabled(): boolean {
-    return this.config.get('AI_TAXONOMY_VALIDATION_ENABLED', 'false') === 'true';
+    return (
+      this.config.get('AI_TAXONOMY_VALIDATION_ENABLED', 'false') === 'true'
+    );
   }
 
   async validate(
@@ -67,7 +69,7 @@ export class EbayTaxonomyTruthService {
     }
 
     const requiredNames = (category.requiredAspects ?? [])
-      .map((a) => aspectLabel(a as Record<string, unknown>))
+      .map((a) => aspectLabel(a))
       .filter((n): n is string => Boolean(n));
 
     for (const aspectName of requiredNames) {

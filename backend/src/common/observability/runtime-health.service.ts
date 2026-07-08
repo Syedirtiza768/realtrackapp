@@ -36,10 +36,18 @@ export class RuntimeHealthService {
 
   getSnapshot(): RuntimeHealthSnapshot {
     const mem = process.memoryUsage();
-    const toMb = (bytes: number) => Math.round((bytes / 1024 / 1024) * 100) / 100;
+    const toMb = (bytes: number) =>
+      Math.round((bytes / 1024 / 1024) * 100) / 100;
 
-    const pool = (this.dataSource.driver as { master?: { totalCount?: number; idleCount?: number; waitingCount?: number } })
-      ?.master;
+    const pool = (
+      this.dataSource.driver as {
+        master?: {
+          totalCount?: number;
+          idleCount?: number;
+          waitingCount?: number;
+        };
+      }
+    )?.master;
 
     const flag = (key: string, fallback = false): boolean => {
       const value = this.config.get<string>(key);

@@ -16,9 +16,7 @@ describe('formatEbayApiError', () => {
             {
               errorId: 25002,
               message: 'A user error has occurred.',
-              parameters: [
-                { name: 'Brand', value: 'Brand is required.' },
-              ],
+              parameters: [{ name: 'Brand', value: 'Brand is required.' }],
             },
           ],
         },

@@ -80,7 +80,7 @@ export const ECU_PART_TYPE_KEYWORDS = [
   'transmission control',
   'computer',
   'module',
-  'steuergerät',   // German: control unit
+  'steuergerät', // German: control unit
   'steuergeraet',
   'motorsteuergerät',
 ] as const;

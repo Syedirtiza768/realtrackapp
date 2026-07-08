@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseInterceptors,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseInterceptors } from '@nestjs/common';
 import { ListingsService } from './listings.service.js';
 import { ListingsQueryDto } from './dto/listings-query.dto.js';
 import { SearchService } from './search.service.js';
@@ -47,10 +41,11 @@ export class ListingsV2Controller {
     const result = await this.searchService.search(query);
     return {
       ...result,
-      results: (result as any).results?.map((r: any) => ({
-        ...r,
-        ...toV2PriceFields(r),
-      })) ?? [],
+      results:
+        (result as any).results?.map((r: any) => ({
+          ...r,
+          ...toV2PriceFields(r),
+        })) ?? [],
     };
   }
 
@@ -78,7 +73,11 @@ export class ListingsV2Controller {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    return this.listingsService.getRevisions(id, Number(limit) || 20, Number(offset) || 0);
+    return this.listingsService.getRevisions(
+      id,
+      Number(limit) || 20,
+      Number(offset) || 0,
+    );
   }
 }
 
@@ -122,9 +121,15 @@ function toV2FullListing(record: any) {
     startPrice: record.startPriceNum ?? parsePrice(record.startPrice),
     quantity: record.quantityNum ?? parseQty(record.quantity),
     buyItNowPrice: record.buyItNowPriceNum ?? parsePrice(record.buyItNowPrice),
-    bestOfferAutoAcceptPrice: record.bestOfferAutoAcceptPriceNum ?? parsePrice(record.bestOfferAutoAcceptPrice),
-    minimumBestOfferPrice: record.minimumBestOfferPriceNum ?? parsePrice(record.minimumBestOfferPrice),
-    shippingService1Cost: record.shippingService1CostNum ?? parsePrice(record.shippingService1Cost),
-    shippingService2Cost: record.shippingService2CostNum ?? parsePrice(record.shippingService2Cost),
+    bestOfferAutoAcceptPrice:
+      record.bestOfferAutoAcceptPriceNum ??
+      parsePrice(record.bestOfferAutoAcceptPrice),
+    minimumBestOfferPrice:
+      record.minimumBestOfferPriceNum ??
+      parsePrice(record.minimumBestOfferPrice),
+    shippingService1Cost:
+      record.shippingService1CostNum ?? parsePrice(record.shippingService1Cost),
+    shippingService2Cost:
+      record.shippingService2CostNum ?? parsePrice(record.shippingService2Cost),
   };
 }

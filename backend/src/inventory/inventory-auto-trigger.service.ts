@@ -26,7 +26,8 @@ export const INLINE_ENRICH_STAGES = {
   FAILED: 'failed',
 } as const;
 
-export type InlineEnrichStage = (typeof INLINE_ENRICH_STAGES)[keyof typeof INLINE_ENRICH_STAGES];
+export type InlineEnrichStage =
+  (typeof INLINE_ENRICH_STAGES)[keyof typeof INLINE_ENRICH_STAGES];
 
 /** Set of stages that indicate active inline enrichment */
 const INLINE_RUNNING_STAGES = new Set<string>([
@@ -78,10 +79,18 @@ export class InventoryAutoTriggerService {
    * Checks inline enrichmentStage first, then pipeline job status.
    */
   deriveStatus(
-    listing: Pick<ListingRecord, 'itemPhotoUrl' | 'cOeOemPartNumber' | 'cManufacturerPartNumber' | 'cBrand' | 'pipelineJobId'> & { enrichmentStage?: string | null },
+    listing: Pick<
+      ListingRecord,
+      | 'itemPhotoUrl'
+      | 'cOeOemPartNumber'
+      | 'cManufacturerPartNumber'
+      | 'cBrand'
+      | 'pipelineJobId'
+    > & { enrichmentStage?: string | null },
     pipelineJob?: PipelineJob | null,
   ): EnrichmentStatus {
-    const stage = (listing as { enrichmentStage?: string | null }).enrichmentStage;
+    const stage = (listing as { enrichmentStage?: string | null })
+      .enrichmentStage;
     if (stage) {
       if (INLINE_RUNNING_STAGES.has(stage)) return 'enriching';
       if (stage === INLINE_ENRICH_STAGES.COMPLETED) return 'completed';
@@ -90,7 +99,8 @@ export class InventoryAutoTriggerService {
     }
 
     if (pipelineJob) {
-      const optStatus = (pipelineJob as { optimizationStatus?: string }).optimizationStatus;
+      const optStatus = (pipelineJob as { optimizationStatus?: string })
+        .optimizationStatus;
       if (optStatus) {
         if (RUNNING_OPTIMIZATION_STATUSES.has(optStatus)) return 'enriching';
         if (optStatus === 'completed') return 'completed';
@@ -100,7 +110,10 @@ export class InventoryAutoTriggerService {
 
       if (pipelineJob.status === 'completed') return 'completed';
       if (pipelineJob.status === 'failed') return 'failed';
-      if (pipelineJob.status && RUNNING_PIPELINE_STATUSES.has(pipelineJob.status)) {
+      if (
+        pipelineJob.status &&
+        RUNNING_PIPELINE_STATUSES.has(pipelineJob.status)
+      ) {
         return 'enriching';
       }
       return 'enriching';
@@ -113,24 +126,34 @@ export class InventoryAutoTriggerService {
   }
 
   async queryStatus(listingId: string): Promise<EnrichmentStatus> {
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) return 'idle';
 
     let pipelineJob: PipelineJob | null = null;
     if (listing.pipelineJobId) {
-      pipelineJob = await this.pipelineJobRepo.findOne({ where: { id: listing.pipelineJobId } });
+      pipelineJob = await this.pipelineJobRepo.findOne({
+        where: { id: listing.pipelineJobId },
+      });
     }
 
     return this.deriveStatus(listing, pipelineJob);
   }
 
-  async queryStatusWithStage(listingId: string): Promise<{ status: EnrichmentStatus; stage: string | null }> {
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+  async queryStatusWithStage(
+    listingId: string,
+  ): Promise<{ status: EnrichmentStatus; stage: string | null }> {
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) return { status: 'idle', stage: null };
 
     let pipelineJob: PipelineJob | null = null;
     if (listing.pipelineJobId) {
-      pipelineJob = await this.pipelineJobRepo.findOne({ where: { id: listing.pipelineJobId } });
+      pipelineJob = await this.pipelineJobRepo.findOne({
+        where: { id: listing.pipelineJobId },
+      });
     }
 
     return {
@@ -148,14 +171,18 @@ export class InventoryAutoTriggerService {
     listingId: string,
     options?: { force?: boolean },
   ): Promise<{ queued: boolean; reason?: string }> {
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing || listing.deletedAt) {
       return { queued: false, reason: 'listing_not_found' };
     }
 
     const imageCount = this.parseImageUrls(listing.itemPhotoUrl).length;
     if (imageCount < 2) {
-      this.logger.debug(`Auto-enrich skipped for listing ${listingId}: images=${imageCount}`);
+      this.logger.debug(
+        `Auto-enrich skipped for listing ${listingId}: images=${imageCount}`,
+      );
       return { queued: false, reason: 'insufficient_images' };
     }
 
@@ -168,7 +195,11 @@ export class InventoryAutoTriggerService {
       }
 
       if (stage && INLINE_RUNNING_STAGES.has(stage)) {
-        const pendingJobs = await this.inventoryQueue.getJobs(['waiting', 'active', 'delayed']);
+        const pendingJobs = await this.inventoryQueue.getJobs([
+          'waiting',
+          'active',
+          'delayed',
+        ]);
         const alreadyQueued = pendingJobs.some(
           (job) =>
             job.name === 'auto-enrich' &&
@@ -179,10 +210,16 @@ export class InventoryAutoTriggerService {
         }
       }
     } else if (stage && REENRICHABLE_STAGES.has(stage)) {
-      await this.listingRepo.update(listingId, { enrichmentStage: null } as Partial<ListingRecord>);
+      await this.listingRepo.update(listingId, {
+        enrichmentStage: null,
+      } as Partial<ListingRecord>);
     }
 
-    const pendingJobs = await this.inventoryQueue.getJobs(['waiting', 'active', 'delayed']);
+    const pendingJobs = await this.inventoryQueue.getJobs([
+      'waiting',
+      'active',
+      'delayed',
+    ]);
     const duplicate = pendingJobs.some(
       (job) =>
         job.name === 'auto-enrich' &&

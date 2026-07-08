@@ -199,7 +199,9 @@ export class StorageService {
     namespace: string,
     parallel = 1,
   ): Promise<MirroredRemoteImage[]> {
-    const sanitizedNs = namespace.replace(/[^a-zA-Z0-9/_-]/g, '_').replace(/\/+/g, '/');
+    const sanitizedNs = namespace
+      .replace(/[^a-zA-Z0-9/_-]/g, '_')
+      .replace(/\/+/g, '/');
     const out: MirroredRemoteImage[] = new Array(urls.length);
     const conc = Math.max(1, Math.min(16, parallel));
 
@@ -228,7 +230,9 @@ export class StorageService {
           },
         });
         if (!res.ok) {
-          this.logger.warn(`mirrorRemoteImages: HTTP ${res.status} for ${u.slice(0, 80)}`);
+          this.logger.warn(
+            `mirrorRemoteImages: HTTP ${res.status} for ${u.slice(0, 80)}`,
+          );
           out[i] = { url: u, s3Key: null };
           return;
         }
@@ -300,7 +304,9 @@ export class StorageService {
       if (m && m[1]) {
         const e = `.${m[1].toLowerCase()}`;
         if (
-          ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic'].includes(e)
+          ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic'].includes(
+            e,
+          )
         ) {
           return e;
         }

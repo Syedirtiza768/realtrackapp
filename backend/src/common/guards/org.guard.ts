@@ -38,7 +38,9 @@ export class OrgGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Check feature flag — if multi_tenant is off, pass through
-    const flag = await this.flagRepo.findOne({ where: { key: 'multi_tenant' } });
+    const flag = await this.flagRepo.findOne({
+      where: { key: 'multi_tenant' },
+    });
     if (!flag?.enabled) {
       return true;
     }
@@ -52,7 +54,9 @@ export class OrgGuard implements CanActivate {
 
     const orgId = request.headers['x-organization-id'] as string;
     if (!orgId) {
-      throw new ForbiddenException('x-organization-id header is required when multi-tenant mode is enabled');
+      throw new ForbiddenException(
+        'x-organization-id header is required when multi-tenant mode is enabled',
+      );
     }
 
     const membership = await this.memberRepo.findOne({
@@ -63,7 +67,10 @@ export class OrgGuard implements CanActivate {
     }
 
     // Check required org-level roles if specified via decorator
-    const requiredRoles = this.reflector.get<string[]>(ORG_ROLES_KEY, context.getHandler());
+    const requiredRoles = this.reflector.get<string[]>(
+      ORG_ROLES_KEY,
+      context.getHandler(),
+    );
     if (requiredRoles?.length) {
       if (!requiredRoles.includes(membership.role)) {
         throw new ForbiddenException(

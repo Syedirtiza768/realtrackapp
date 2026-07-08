@@ -1,4 +1,12 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
@@ -12,7 +20,11 @@ import { EnterpriseListingIntelligenceService } from './enterprise-listing-intel
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import { ListingOptimizationService } from '../listing-optimization/listing-optimization.service.js';
 import type { JobOptimizationStatus } from '../listing-optimization/listing-optimization.types.js';
-import { applyCreatedByVisibility, canViewJob, withCreatedByBackfill } from '../common/utils/job-visibility.js';
+import {
+  applyCreatedByVisibility,
+  canViewJob,
+  withCreatedByBackfill,
+} from '../common/utils/job-visibility.js';
 import { HeavyJobLimiterService } from '../common/jobs/heavy-job-limiter.service.js';
 import { SingleListingFormService } from './services/single-listing-form.service.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
@@ -33,7 +45,11 @@ import {
 const SINGLE_LISTING_DEFAULT_PRICE = 100;
 const SINGLE_LISTING_DEFAULT_QUANTITY = 1;
 
-export { PIPELINE_CONDITION_OPTIONS, mapPipelineDisplayStatus, type PipelineDisplayStatus } from './pipeline.constants.js';
+export {
+  PIPELINE_CONDITION_OPTIONS,
+  mapPipelineDisplayStatus,
+  type PipelineDisplayStatus,
+} from './pipeline.constants.js';
 
 export interface PipelineJobListItem {
   id: string;
@@ -137,14 +153,17 @@ export class PipelineService {
   ) {}
 
   private async nextUploadCode(): Promise<string> {
-    const rows = await this.jobRepo.query(`SELECT nextval('pipeline_upload_seq') AS n`);
+    const rows = await this.jobRepo.query(
+      `SELECT nextval('pipeline_upload_seq') AS n`,
+    );
     const n = Number(rows[0]?.n ?? 1);
     const year = new Date().getFullYear();
     return `UPL-${year}-${String(n).padStart(6, '0')}`;
   }
 
   private pipelineUploadRoot(): string {
-    const projectRoot = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const projectRoot =
+      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
     return path.resolve(projectRoot, 'uploads', 'pipeline');
   }
 
@@ -169,7 +188,9 @@ export class PipelineService {
   ): Promise<PipelineJob> {
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
 
-    const enabled = await this.featureFlagService.isEnabled('pipeline_enrichment');
+    const enabled = await this.featureFlagService.isEnabled(
+      'pipeline_enrichment',
+    );
     if (!enabled) {
       throw new ServiceUnavailableException(
         'Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.',
@@ -188,7 +209,11 @@ export class PipelineService {
       );
     }
     if (userId) {
-      await this.teamsService.assertUserCanAccessTeam(userId, teamId, manageAllTeams);
+      await this.teamsService.assertUserCanAccessTeam(
+        userId,
+        teamId,
+        manageAllTeams,
+      );
     }
 
     if (!profileOptions) {
@@ -212,7 +237,11 @@ export class PipelineService {
         `Invalid marketplace. Allowed: US, UK, AU, DE`,
       );
     }
-    if (!shippingProfileName?.trim() || !returnProfileName?.trim() || !paymentProfileName?.trim()) {
+    if (
+      !shippingProfileName?.trim() ||
+      !returnProfileName?.trim() ||
+      !paymentProfileName?.trim()
+    ) {
       throw new BadRequestException(
         'shippingProfileName, returnProfileName, and paymentProfileName are required',
       );
@@ -222,15 +251,22 @@ export class PipelineService {
     if (store.channel !== 'ebay' || store.status !== 'active') {
       throw new BadRequestException('storeId must be an active eBay store');
     }
-    if (!storeMatchesPipelineMarketplace(store.ebayMarketplaceId, marketplace)) {
+    if (
+      !storeMatchesPipelineMarketplace(store.ebayMarketplaceId, marketplace)
+    ) {
       throw new BadRequestException(
         `Store "${store.storeName}" does not belong to marketplace ${marketplace}`,
       );
     }
     if (user) {
-      const accessible = await this.storesService.getStoresByChannel('ebay', user);
+      const accessible = await this.storesService.getStoresByChannel(
+        'ebay',
+        user,
+      );
       if (!accessible.some((s) => s.id === storeId)) {
-        throw new ForbiddenException('You do not have access to the selected store');
+        throw new ForbiddenException(
+          'You do not have access to the selected store',
+        );
       }
     }
 
@@ -272,11 +308,18 @@ export class PipelineService {
   /**
    * Create a new enrichment pipeline job and enqueue for processing.
    */
-  async createJob(dto: CreatePipelineJobDto, userId?: string): Promise<PipelineJob> {
+  async createJob(
+    dto: CreatePipelineJobDto,
+    userId?: string,
+  ): Promise<PipelineJob> {
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
-    const enabled = await this.featureFlagService.isEnabled('pipeline_enrichment');
+    const enabled = await this.featureFlagService.isEnabled(
+      'pipeline_enrichment',
+    );
     if (!enabled) {
-      throw new ServiceUnavailableException('Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.');
+      throw new ServiceUnavailableException(
+        'Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.',
+      );
     }
 
     const job = this.jobRepo.create({
@@ -300,7 +343,11 @@ export class PipelineService {
       );
     }
 
-    return this.enqueuePipelineJob(saved, dto.storedFilePath, dto.originalFilename);
+    return this.enqueuePipelineJob(
+      saved,
+      dto.storedFilePath,
+      dto.originalFilename,
+    );
   }
 
   private async enqueuePipelineJob(
@@ -330,14 +377,17 @@ export class PipelineService {
       );
       await this.jobRepo.update(saved.id, {
         status: 'failed',
-        lastError: 'Failed to enqueue job. Redis may be unavailable. Try again.',
+        lastError:
+          'Failed to enqueue job. Redis may be unavailable. Try again.',
       } as any);
       throw new ServiceUnavailableException(
         'Pipeline job created but could not be queued for processing. Redis may be unavailable. Try again.',
       );
     }
 
-    this.logger.log(`Created pipeline job ${saved.id} for file: ${originalFilename}`);
+    this.logger.log(
+      `Created pipeline job ${saved.id} for file: ${originalFilename}`,
+    );
     return saved;
   }
 
@@ -345,13 +395,18 @@ export class PipelineService {
    * Create a pipeline job from a single listing's form data.
    * Generates a single-row CSV and feeds it into the existing pipeline.
    */
-  async createSingleJob(dto: CreateSingleListingDto, userId?: string): Promise<PipelineJob> {
+  async createSingleJob(
+    dto: CreateSingleListingDto,
+    userId?: string,
+  ): Promise<PipelineJob> {
     if (!dto.partNumber?.trim()) {
       throw new BadRequestException('partNumber is required');
     }
 
     const price =
-      dto.price != null && !Number.isNaN(dto.price) ? dto.price : SINGLE_LISTING_DEFAULT_PRICE;
+      dto.price != null && !Number.isNaN(dto.price)
+        ? dto.price
+        : SINGLE_LISTING_DEFAULT_PRICE;
     const quantity =
       dto.quantity != null && !Number.isNaN(dto.quantity)
         ? dto.quantity
@@ -369,7 +424,19 @@ export class PipelineService {
         : s;
     };
 
-    const headers = ['sku', 'brand', 'model', 'vin', 'category', 'part number', 'part name', 'note', 'price', 'quantity', 'image urls'];
+    const headers = [
+      'sku',
+      'brand',
+      'model',
+      'vin',
+      'category',
+      'part number',
+      'part name',
+      'note',
+      'price',
+      'quantity',
+      'image urls',
+    ];
     const row = [
       sku,
       dto.brand ?? '',
@@ -382,15 +449,20 @@ export class PipelineService {
       price,
       quantity,
       dto.imageUrls ?? '',
-    ].map(escapeCsv).join(',');
+    ]
+      .map(escapeCsv)
+      .join(',');
 
     const csv = `${headers.join(',')}\n${row}\n`;
     const csvBuffer = Buffer.from(csv, 'utf8');
-    const displayName = dto.partName || dto.partNumber || dto.sku || 'Unknown Part';
+    const displayName =
+      dto.partName || dto.partNumber || dto.sku || 'Unknown Part';
     const originalFilename = `Single Listing - ${displayName}`;
 
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
-    const enabled = await this.featureFlagService.isEnabled('pipeline_enrichment');
+    const enabled = await this.featureFlagService.isEnabled(
+      'pipeline_enrichment',
+    );
     if (!enabled) {
       throw new ServiceUnavailableException(
         'Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.',
@@ -482,10 +554,14 @@ export class PipelineService {
         '';
       const price =
         listing.startPriceNum ??
-        (listing.startPrice ? parseFloat(listing.startPrice) : SINGLE_LISTING_DEFAULT_PRICE);
+        (listing.startPrice
+          ? parseFloat(listing.startPrice)
+          : SINGLE_LISTING_DEFAULT_PRICE);
       const quantity =
         listing.quantityNum ??
-        (listing.quantity ? parseInt(listing.quantity, 10) : SINGLE_LISTING_DEFAULT_QUANTITY);
+        (listing.quantity
+          ? parseInt(listing.quantity, 10)
+          : SINGLE_LISTING_DEFAULT_QUANTITY);
       const imageUrls = (listing.itemPhotoUrl ?? '')
         .split('|')
         .map((u) => u.trim())
@@ -514,7 +590,9 @@ export class PipelineService {
     const originalFilename = `Inventory Batch - ${listings.length} parts`;
 
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
-    const enabled = await this.featureFlagService.isEnabled('pipeline_enrichment');
+    const enabled = await this.featureFlagService.isEnabled(
+      'pipeline_enrichment',
+    );
     if (!enabled) {
       throw new ServiceUnavailableException(
         'Pipeline enrichment feature is not enabled. Enable the "pipeline_enrichment" feature flag.',
@@ -553,7 +631,10 @@ export class PipelineService {
       },
     } as any);
 
-    await this.listingRepo.update({ id: In(uniqueIds) }, { pipelineJobId: job.id });
+    await this.listingRepo.update(
+      { id: In(uniqueIds) },
+      { pipelineJobId: job.id },
+    );
 
     this.logger.log(
       `Created batch pipeline job ${job.id} for ${uniqueIds.length} inventory listing(s)`,
@@ -574,7 +655,9 @@ export class PipelineService {
     displayStatus?: string,
     teamIds?: string[],
   ): Promise<{ jobs: PipelineJobListItem[]; total: number }> {
-    const qb = this.jobRepo.createQueryBuilder('j').orderBy('j.createdAt', 'DESC');
+    const qb = this.jobRepo
+      .createQueryBuilder('j')
+      .orderBy('j.createdAt', 'DESC');
     if (status) qb.andWhere('j.status = :status', { status });
     if (viewerId) {
       applyCreatedByVisibility(qb, 'j', viewerId, viewAll);
@@ -584,13 +667,18 @@ export class PipelineService {
       if (accessible.length === 0) {
         qb.andWhere('1 = 0');
       } else {
-        qb.andWhere('(j.team_id IN (:...accessibleTeams) OR j.team_id IS NULL)', {
-          accessibleTeams: accessible,
-        });
+        qb.andWhere(
+          '(j.team_id IN (:...accessibleTeams) OR j.team_id IS NULL)',
+          {
+            accessibleTeams: accessible,
+          },
+        );
       }
     }
     if (teamIds?.length) {
-      qb.andWhere('j.team_id IN (:...filterTeamIds)', { filterTeamIds: teamIds });
+      qb.andWhere('j.team_id IN (:...filterTeamIds)', {
+        filterTeamIds: teamIds,
+      });
     }
     if (displayStatus) {
       switch (displayStatus) {
@@ -598,7 +686,9 @@ export class PipelineService {
           qb.andWhere('j.status = :queuedStatus', { queuedStatus: 'pending' });
           break;
         case 'uploaded':
-          qb.andWhere('j.status = :uploadedStatus', { uploadedStatus: 'completed' });
+          qb.andWhere('j.status = :uploadedStatus', {
+            uploadedStatus: 'completed',
+          });
           break;
         case 'failed':
           qb.andWhere('j.status IN (:...failedStatuses)', {
@@ -619,23 +709,40 @@ export class PipelineService {
     return { jobs: await this.enrichJobList(jobs), total };
   }
 
-  private async enrichJobList(jobs: PipelineJob[]): Promise<PipelineJobListItem[]> {
+  private async enrichJobList(
+    jobs: PipelineJob[],
+  ): Promise<PipelineJobListItem[]> {
     if (jobs.length === 0) return [];
 
-    const teamIds = [...new Set(jobs.map((j) => j.teamId).filter(Boolean))] as string[];
-    const userIds = [...new Set(jobs.map((j) => j.createdBy).filter(Boolean))] as string[];
-    const storeIds = [...new Set(jobs.map((j) => j.storeId).filter(Boolean))] as string[];
+    const teamIds = [
+      ...new Set(jobs.map((j) => j.teamId).filter(Boolean)),
+    ] as string[];
+    const userIds = [
+      ...new Set(jobs.map((j) => j.createdBy).filter(Boolean)),
+    ] as string[];
+    const storeIds = [
+      ...new Set(jobs.map((j) => j.storeId).filter(Boolean)),
+    ] as string[];
 
     const teamMap = await this.teamsService.findTeamsByIds(teamIds);
     const users = userIds.length
-      ? await this.userRepo.find({ where: { id: In(userIds) }, select: ['id', 'name', 'email'] })
+      ? await this.userRepo.find({
+          where: { id: In(userIds) },
+          select: ['id', 'name', 'email'],
+        })
       : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
     const stores = storeIds.length
-      ? await Promise.all(storeIds.map((id) => this.storesService.getStore(id).catch(() => null)))
+      ? await Promise.all(
+          storeIds.map((id) =>
+            this.storesService.getStore(id).catch(() => null),
+          ),
+        )
       : [];
     const storeMap = new Map(
-      stores.filter(Boolean).map((s) => [s!.id, { id: s!.id, storeName: s!.storeName }]),
+      stores
+        .filter(Boolean)
+        .map((s) => [s!.id, { id: s!.id, storeName: s!.storeName }]),
     );
 
     return jobs.map((job) => {
@@ -655,9 +762,7 @@ export class PipelineService {
         shippingProfileName: job.shippingProfileName,
         returnProfileName: job.returnProfileName,
         paymentProfileName: job.paymentProfileName,
-        team: team
-          ? { id: team.id, name: team.name, color: team.color }
-          : null,
+        team: team ? { id: team.id, name: team.name, color: team.color } : null,
         uploadedBy: user
           ? { id: user.id, name: user.name || user.email }
           : null,
@@ -670,11 +775,17 @@ export class PipelineService {
   /**
    * Get a single pipeline job by ID.
    */
-  async getJob(id: string, viewerId?: string, viewAll = true): Promise<PipelineJob> {
+  async getJob(
+    id: string,
+    viewerId?: string,
+    viewAll = true,
+  ): Promise<PipelineJob> {
     const job = await this.jobRepo.findOneBy({ id });
     if (!job) throw new NotFoundException(`Pipeline job ${id} not found`);
     if (viewerId && !canViewJob(job.createdBy, viewerId, viewAll)) {
-      throw new ForbiddenException('You do not have access to this pipeline job');
+      throw new ForbiddenException(
+        'You do not have access to this pipeline job',
+      );
     }
     return job;
   }
@@ -693,10 +804,16 @@ export class PipelineService {
   /**
    * Cancel a pending/processing pipeline job.
    */
-  async cancelJob(id: string, actorId?: string, viewAll = true): Promise<PipelineJob> {
+  async cancelJob(
+    id: string,
+    actorId?: string,
+    viewAll = true,
+  ): Promise<PipelineJob> {
     const job = await this.getJob(id, actorId, viewAll);
     if (job.status === 'completed' || job.status === 'cancelled') {
-      throw new BadRequestException(`Job ${id} cannot be cancelled (current: ${job.status})`);
+      throw new BadRequestException(
+        `Job ${id} cannot be cancelled (current: ${job.status})`,
+      );
     }
 
     job.status = 'cancelled';
@@ -708,10 +825,16 @@ export class PipelineService {
   /**
    * Retry a failed pipeline job.
    */
-  async retryJob(id: string, actorId?: string, viewAll = true): Promise<PipelineJob> {
+  async retryJob(
+    id: string,
+    actorId?: string,
+    viewAll = true,
+  ): Promise<PipelineJob> {
     const job = await this.getJob(id, actorId, viewAll);
     if (job.status !== 'failed') {
-      throw new BadRequestException(`Job ${id} is not in failed state (current: ${job.status})`);
+      throw new BadRequestException(
+        `Job ${id} is not in failed state (current: ${job.status})`,
+      );
     }
 
     job.status = 'pending';
@@ -784,7 +907,9 @@ export class PipelineService {
       for (const entry of existing) {
         if ((entry.data as PipelineJobData).jobId === id) {
           await entry.remove();
-          this.logger.log(`Removed stale BullMQ job ${entry.id} for ${id} before resume`);
+          this.logger.log(
+            `Removed stale BullMQ job ${entry.id} for ${id} before resume`,
+          );
         }
       }
     } catch (err) {
@@ -853,7 +978,10 @@ export class PipelineService {
     const failed = byStatus.failed ?? 0;
     const cancelled = byStatus.cancelled ?? 0;
     const processing = Object.entries(byStatus)
-      .filter(([status]) => !['completed', 'failed', 'cancelled', 'pending'].includes(status))
+      .filter(
+        ([status]) =>
+          !['completed', 'failed', 'cancelled', 'pending'].includes(status),
+      )
       .reduce((sum, [, count]) => sum + count, 0);
 
     return {
@@ -880,7 +1008,10 @@ export class PipelineService {
     },
   ): Promise<EnterpriseOptimizationResult> {
     const enterpriseDefaults = this.normalizeEnterpriseOptions(options);
-    return this.enterpriseListingIntelligence.generateForPipelineJob(jobId, enterpriseDefaults);
+    return this.enterpriseListingIntelligence.generateForPipelineJob(
+      jobId,
+      enterpriseDefaults,
+    );
   }
 
   async runCombinedOptimization(
@@ -906,12 +1037,22 @@ export class PipelineService {
     const refreshedJob = await this.getJob(jobId);
     return {
       job: refreshedJob,
-      enterprise: this.optimizationStatusToEnterpriseResult(jobId, status, marketplace),
+      enterprise: this.optimizationStatusToEnterpriseResult(
+        jobId,
+        status,
+        marketplace,
+      ),
     };
   }
 
-  async getOptimizationStatus(jobId: string, marketplace?: string): Promise<JobOptimizationStatus> {
-    return this.listingOptimization.getJobOptimizationStatus(jobId, marketplace);
+  async getOptimizationStatus(
+    jobId: string,
+    marketplace?: string,
+  ): Promise<JobOptimizationStatus> {
+    return this.listingOptimization.getJobOptimizationStatus(
+      jobId,
+      marketplace,
+    );
   }
 
   async getProductOptimization(productId: string) {
@@ -922,7 +1063,9 @@ export class PipelineService {
     productId: string,
     marketplace: 'US' | 'DE' | 'AU' = 'US',
   ) {
-    return this.listingOptimization.optimizeProduct(productId, marketplace, { force: true });
+    return this.listingOptimization.optimizeProduct(productId, marketplace, {
+      force: true,
+    });
   }
 
   async markProductManualReview(productId: string, enabled = true) {
@@ -984,7 +1127,8 @@ export class PipelineService {
       limit,
       // Enforce full enterprise AI optimization coverage for all selected rows.
       aiBudgetListings: limit,
-      listingQualityProfile: options?.listingQualityProfile ?? 'max_seo_comprehensive',
+      listingQualityProfile:
+        options?.listingQualityProfile ?? 'max_seo_comprehensive',
     };
   }
 }

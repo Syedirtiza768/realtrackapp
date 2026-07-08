@@ -47,7 +47,10 @@ import {
   isEbayRecoverableBusinessPolicyError,
   isEbaySellingLimitError,
 } from './ebay-api-error.util.js';
-import { EbayBusinessPolicy } from '../../integrations/ebay/entities/ebay-business-policy.entity.js';
+import {
+  EbayBusinessPolicy,
+  type EbayPolicyType,
+} from '../../integrations/ebay/entities/ebay-business-policy.entity.js';
 import {
   coalesceValidPolicyId,
   hasValidDefaultPolicyIds,
@@ -65,6 +68,7 @@ import {
   isUsedEbayCondition,
   localizeAspectsForMarketplace,
 } from './ebay-listing-aspects.util.js';
+import { fitmentDataToCompatibilityPayload } from '../../fitment/fitment-mvl.util.js';
 
 /**
  * Publishing request payload from the frontend / caller.
@@ -186,13 +190,17 @@ export class EbayPublishService {
     const initial = sanitizeEbayImageUrls(provided);
     if (initial.imageUrls.length) return initial;
 
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (listing?.itemPhotoUrl) {
       const fromListing = sanitizeEbayImageUrls([listing.itemPhotoUrl]);
       if (fromListing.imageUrls.length) return fromListing;
     }
 
-    const catalog = await this.catalogRepo.findOne({ where: { id: listingId } });
+    const catalog = await this.catalogRepo.findOne({
+      where: { id: listingId },
+    });
     if (catalog?.imageUrls?.length) {
       const fromCatalog = sanitizeEbayImageUrls(catalog.imageUrls);
       if (fromCatalog.imageUrls.length) return fromCatalog;
@@ -228,7 +236,9 @@ export class EbayPublishService {
   }
 
   /** Backfill SKU, text, category, condition, and pricing from listing_records when the client sends stubs. */
-  private async enrichPublishRequest(req: PublishRequest): Promise<PublishRequest> {
+  private async enrichPublishRequest(
+    req: PublishRequest,
+  ): Promise<PublishRequest> {
     const listing = await this.listingRepo.findOne({
       where: { id: req.listingId },
     });
@@ -260,12 +270,16 @@ export class EbayPublishService {
     }
 
     const skuLooksLikeListingId =
-      !req.sku?.trim() ||
-      req.sku === req.listingId ||
-      req.sku === listing.id;
-    const sku = (skuLooksLikeListingId
+      !req.sku?.trim() || req.sku === req.listingId || req.sku === listing.id;
+    const sku = skuLooksLikeListingId
       ? listing.customLabelSku?.trim() || req.sku
-      : req.sku.trim()) + 'IGBC';
+      : req.sku.trim();
+
+    const compatibility = req.compatibility?.compatibleProducts?.length
+      ? req.compatibility
+      : await this.resolveCompatibilityFromCatalog(
+          listing.customLabelSku?.trim() || req.sku,
+        );
 
     const parsedPrice = parseFloat(listing.startPrice ?? '');
     const parsedQty = parseInt(listing.quantity ?? '', 10);
@@ -313,6 +327,7 @@ export class EbayPublishService {
       conditionDescription,
       listingDuration,
       aspects,
+      compatibility,
       price:
         req.price > 0
           ? req.price
@@ -325,7 +340,35 @@ export class EbayPublishService {
           : Number.isFinite(parsedQty) && parsedQty > 0
             ? parsedQty
             : req.quantity || 1,
+      requestedFulfillmentPolicyName:
+        req.requestedFulfillmentPolicyName?.trim() ||
+        listing.shippingProfileName?.trim() ||
+        undefined,
+      requestedReturnPolicyName:
+        req.requestedReturnPolicyName?.trim() ||
+        listing.returnProfileName?.trim() ||
+        undefined,
+      requestedPaymentPolicyName:
+        req.requestedPaymentPolicyName?.trim() ||
+        listing.paymentProfileName?.trim() ||
+        undefined,
     };
+  }
+
+  /**
+   * Resolve structured vehicle compatibility from a catalog product.
+   * Used by legacy publish-by-listing-id paths that only receive a listing record.
+   */
+  private async resolveCompatibilityFromCatalog(
+    sku: string,
+  ): Promise<EbayCompatibilityPayload | undefined> {
+    const catalog = await this.catalogRepo.findOne({
+      where: [{ sku }, { id: sku }],
+    });
+    if (!catalog) return undefined;
+
+    const source = catalog.fitmentData ?? catalog.fitmentRows ?? undefined;
+    return fitmentDataToCompatibilityPayload(source);
   }
 
   /** Extract and log policy details for debugging shipping cost discrepancies. */
@@ -335,47 +378,55 @@ export class EbayPublishService {
     sku: string,
   ): Promise<void> {
     if (!fulfillmentPolicyId) return;
-    
+
     try {
       const policy = await this.policyRepo.findOne({
         where: { ebayPolicyId: fulfillmentPolicyId },
       });
-      
+
       if (!policy) {
         this.logger.warn(
           `Policy ${fulfillmentPolicyId} not found in database for SKU ${sku} on "${storeName}"`,
         );
         return;
       }
-      
-      const raw = policy.rawPayload as Record<string, unknown>;
-      const shippingOptions = raw?.shippingOptions as Array<Record<string, unknown>> | undefined;
+
+      const raw = policy.rawPayload;
+      const shippingOptions = raw?.shippingOptions as
+        | Array<Record<string, unknown>>
+        | undefined;
       let shippingCost: string | undefined;
       let serviceCode: string | undefined;
-      
+
       if (shippingOptions?.[0]?.shippingServices) {
-        const services = shippingOptions[0].shippingServices as Array<Record<string, unknown>>;
+        const services = shippingOptions[0].shippingServices as Array<
+          Record<string, unknown>
+        >;
         if (services[0]?.shippingCost) {
-          const cost = services[0].shippingCost as { value?: string; currency?: string };
-          shippingCost = cost.value ? `${cost.value} ${cost.currency || 'USD'}` : undefined;
+          const cost = services[0].shippingCost as {
+            value?: string;
+            currency?: string;
+          };
+          shippingCost = cost.value
+            ? `${cost.value} ${cost.currency || 'USD'}`
+            : undefined;
         }
         serviceCode = services[0]?.shippingServiceCode as string;
       }
-      
+
       this.logger.log(
         `Policy details for SKU ${sku} on "${storeName}": ` +
-        `ID=${fulfillmentPolicyId}, Name="${policy.name}", ` +
-        `ShippingCost=${shippingCost || 'N/A'}, Service=${serviceCode || 'N/A'}`,
+          `ID=${fulfillmentPolicyId}, Name="${policy.name}", ` +
+          `ShippingCost=${shippingCost || 'N/A'}, Service=${serviceCode || 'N/A'}`,
       );
     } catch (err) {
-      this.logger.warn(`Failed to log policy details for ${fulfillmentPolicyId}: ${err}`);
+      this.logger.warn(
+        `Failed to log policy details for ${fulfillmentPolicyId}: ${err}`,
+      );
     }
   }
 
-  private validateDirectOffer(
-    offer: EbayOffer,
-    store: Store,
-  ): string | null {
+  private validateDirectOffer(offer: EbayOffer, store: Store): string | null {
     const policies = offer.listingPolicies ?? {};
     if (!policies.fulfillmentPolicyId?.trim()) {
       return `Missing fulfillment policy for "${store.storeName}". Sync eBay policies in Settings → eBay Integrations.`;
@@ -482,7 +533,8 @@ export class EbayPublishService {
       await this.applyListingProfileNames(listingIds, options);
     }
 
-    const allResults: Array<{ listingId: string; results: PublishResult[] }> = [];
+    const allResults: Array<{ listingId: string; results: PublishResult[] }> =
+      [];
     for (const listingId of listingIds) {
       const results = await this.publish(
         this.stubPublishRequest(listingId, storeIds, options),
@@ -596,10 +648,15 @@ export class EbayPublishService {
           store,
           req,
         );
-        return this.publishViaDirectEbay(store, storeId, {
-          ...enriched,
-          forceDirectEbay: true,
-        }, account);
+        return this.publishViaDirectEbay(
+          store,
+          storeId,
+          {
+            ...enriched,
+            forceDirectEbay: true,
+          },
+          account,
+        );
       }
       return spResult;
     }
@@ -618,7 +675,11 @@ export class EbayPublishService {
   ): Promise<PublishResult> {
     const runDirectPublish = async (): Promise<PublishResult> => {
       const inventoryItem = this.buildInventoryItem(req, store);
-      await this.inventoryApi.createOrReplaceItem(storeId, req.sku, inventoryItem);
+      await this.inventoryApi.createOrReplaceItem(
+        storeId,
+        req.sku,
+        inventoryItem,
+      );
 
       if (req.compatibility?.compatibleProducts?.length) {
         await this.inventoryApi.setCompatibility(
@@ -629,14 +690,14 @@ export class EbayPublishService {
       }
 
       const offer = this.buildOffer(req, store);
-      
+
       // Log policy details for debugging shipping cost discrepancies
       await this.logPolicyDetails(
         offer.listingPolicies?.fulfillmentPolicyId,
         store.storeName,
         req.sku,
       );
-      
+
       const offerValidationError = this.validateDirectOffer(offer, store);
       if (offerValidationError) {
         return {
@@ -760,7 +821,7 @@ export class EbayPublishService {
           );
         errorMsg =
           `eBay rejected the OAuth token for "${store.storeName}". ` +
-          'RealTrackApp is connected to SellerPundit, but SellerPundit\'s eBay authorization for this store is invalid or expired. ' +
+          "RealTrackApp is connected to SellerPundit, but SellerPundit's eBay authorization for this store is invalid or expired. " +
           'Reconnect eBay in SellerPundit for this account, then use Settings → eBay Integrations → Re-sync stores.';
       } else {
         errorMsg = `eBay authorization failed for "${store.storeName}". Re-sync or reconnect this store in Settings → eBay Integrations.`;
@@ -775,7 +836,8 @@ export class EbayPublishService {
         'or eBay approves a limit increase. ' +
         'Request a limit increase at: https://www.ebay.de/help/selling/listings/selling-limits?id=4107';
     }
-    const responseData = (err as { response?: { data?: unknown } })?.response?.data;
+    const responseData = (err as { response?: { data?: unknown } })?.response
+      ?.data;
     if (responseData) {
       this.logger.error(
         `eBay API error for "${req.sku}" on "${store.storeName}": ${JSON.stringify(responseData)}`,
@@ -796,7 +858,10 @@ export class EbayPublishService {
     store: Store,
     req: PublishRequest,
   ): Promise<PublishRequest> {
-    let merchantLocationKey = await this.resolveMerchantLocationKey(store, req);
+    const merchantLocationKey = await this.resolveMerchantLocationKey(
+      store,
+      req,
+    );
     return {
       ...req,
       fulfillmentPolicyId:
@@ -873,11 +938,12 @@ export class EbayPublishService {
         where: { ebayAccountId: account.id, marketplaceId },
       });
       if (policyCount === 0 || !hasValidDefaultPolicyIds(mpRow)) {
-        const policyResult = await this.sellerpunditPolicies.ensurePoliciesFresh(
-          account.id,
-          account.organizationId,
-          marketplaceId,
-        );
+        const policyResult =
+          await this.sellerpunditPolicies.ensurePoliciesFresh(
+            account.id,
+            account.organizationId,
+            marketplaceId,
+          );
         if (!policyResult.ok) {
           throw new BadRequestException(policyResult.message);
         }
@@ -885,7 +951,7 @@ export class EbayPublishService {
       }
     }
 
-    let merchantLocationKey = await this.resolveMerchantLocationKey(
+    const merchantLocationKey = await this.resolveMerchantLocationKey(
       store,
       req,
       mpRow?.defaultInventoryLocationKey,
@@ -904,8 +970,35 @@ export class EbayPublishService {
       req.categoryId,
       req.condition,
     );
+
+    // Resolve profile NAMES → policy IDs using the synced ebay_business_policies
+    // table. This ensures a listing_records.shippingProfileName like
+    // "BLAP shipping policy 3 KG" is resolved to the correct eBay fulfillment
+    // policy ID instead of silently falling back to the marketplace default.
+    const nameResolvedFulfillment = await this.resolvePolicyByName(
+      account.id,
+      marketplaceId,
+      'fulfillment',
+      req.requestedFulfillmentPolicyName,
+    );
+    const nameResolvedPayment = await this.resolvePolicyByName(
+      account.id,
+      marketplaceId,
+      'payment',
+      req.requestedPaymentPolicyName,
+    );
+    const nameResolvedReturn = await this.resolvePolicyByName(
+      account.id,
+      marketplaceId,
+      'return',
+      req.requestedReturnPolicyName,
+      req.categoryId,
+      req.condition,
+    );
+
     const resolvedFulfillment = coalesceValidPolicyId(
       req.fulfillmentPolicyId,
+      nameResolvedFulfillment,
       synced.fulfillmentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
         ? mpRow?.defaultFulfillmentPolicyId
@@ -913,13 +1006,19 @@ export class EbayPublishService {
     );
     const resolvedPayment = coalesceValidPolicyId(
       req.paymentPolicyId,
+      nameResolvedPayment,
       synced.paymentPolicyId,
-      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultPaymentPolicyId : undefined,
+      hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultPaymentPolicyId
+        : undefined,
     );
     const resolvedReturn = coalesceValidPolicyId(
       req.returnPolicyId,
+      nameResolvedReturn,
       synced.returnPolicyId,
-      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultReturnPolicyId : undefined,
+      hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultReturnPolicyId
+        : undefined,
     );
     const needsAccountApiRefresh =
       !resolvedFulfillment ||
@@ -936,6 +1035,7 @@ export class EbayPublishService {
 
     const fulfillmentPolicyId = coalesceValidPolicyId(
       req.fulfillmentPolicyId,
+      nameResolvedFulfillment,
       refreshed.fulfillmentPolicyId,
       synced.fulfillmentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -945,6 +1045,7 @@ export class EbayPublishService {
     );
     const paymentPolicyId = coalesceValidPolicyId(
       req.paymentPolicyId,
+      nameResolvedPayment,
       refreshed.paymentPolicyId,
       synced.paymentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -954,6 +1055,7 @@ export class EbayPublishService {
     );
     let returnPolicyId = coalesceValidPolicyId(
       req.returnPolicyId,
+      nameResolvedReturn,
       refreshed.returnPolicyId,
       synced.returnPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -977,10 +1079,7 @@ export class EbayPublishService {
         );
       }
       if (ensured.returnPolicyId) {
-        if (
-          ensured.action === 'upgraded' ||
-          ensured.action === 'created'
-        ) {
+        if (ensured.action === 'upgraded' || ensured.action === 'created') {
           this.logger.log(
             `P&A return policy ${ensured.action}: ${ensured.returnPolicyId} for store "${store.storeName}"`,
           );
@@ -993,41 +1092,59 @@ export class EbayPublishService {
 
     // Log which source provided each policy ID
     const fulfillmentSource = this.policyResolutionSource(
-      req.fulfillmentPolicyId, refreshed.fulfillmentPolicyId, synced.fulfillmentPolicyId,
-      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultFulfillmentPolicyId : undefined, store.fulfillmentPolicyId,
+      req.fulfillmentPolicyId,
+      nameResolvedFulfillment,
+      refreshed.fulfillmentPolicyId,
+      synced.fulfillmentPolicyId,
+      hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultFulfillmentPolicyId
+        : undefined,
+      store.fulfillmentPolicyId,
     );
     const paymentSource = this.policyResolutionSource(
-      req.paymentPolicyId, refreshed.paymentPolicyId, synced.paymentPolicyId,
-      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultPaymentPolicyId : undefined, store.paymentPolicyId,
+      req.paymentPolicyId,
+      nameResolvedPayment,
+      refreshed.paymentPolicyId,
+      synced.paymentPolicyId,
+      hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultPaymentPolicyId
+        : undefined,
+      store.paymentPolicyId,
     );
     const returnSource = this.policyResolutionSource(
-      req.returnPolicyId, refreshed.returnPolicyId, synced.returnPolicyId,
-      hasValidDefaultPolicyIds(mpRow) ? mpRow?.defaultReturnPolicyId : undefined, store.returnPolicyId,
+      req.returnPolicyId,
+      nameResolvedReturn,
+      refreshed.returnPolicyId,
+      synced.returnPolicyId,
+      hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultReturnPolicyId
+        : undefined,
+      store.returnPolicyId,
     );
     this.logger.log(
       `Policy resolution for "${store.storeName}" (${marketplaceId}): ` +
-      `fulfillment=${fulfillmentPolicyId ?? 'NONE'} [${fulfillmentSource}], ` +
-      `payment=${paymentPolicyId ?? 'NONE'} [${paymentSource}], ` +
-      `return=${returnPolicyId ?? 'NONE'} [${returnSource}]`,
+        `fulfillment=${fulfillmentPolicyId ?? 'NONE'} [${fulfillmentSource}], ` +
+        `payment=${paymentPolicyId ?? 'NONE'} [${paymentSource}], ` +
+        `return=${returnPolicyId ?? 'NONE'} [${returnSource}]`,
     );
 
     // Validate: if user selected a profile by name but we couldn't resolve it to an ID, fail loudly
     if (req.requestedFulfillmentPolicyName && !fulfillmentPolicyId) {
       throw new BadRequestException(
         `Shipping profile "${req.requestedFulfillmentPolicyName}" could not be resolved to an eBay fulfillment policy. ` +
-        `Sync eBay policies in Settings → eBay Integrations, then try again.`,
+          `Sync eBay policies in Settings → eBay Integrations, then try again.`,
       );
     }
     if (req.requestedPaymentPolicyName && !paymentPolicyId) {
       throw new BadRequestException(
         `Payment profile "${req.requestedPaymentPolicyName}" could not be resolved to an eBay payment policy. ` +
-        `Sync eBay policies in Settings → eBay Integrations, then try again.`,
+          `Sync eBay policies in Settings → eBay Integrations, then try again.`,
       );
     }
     if (req.requestedReturnPolicyName && !returnPolicyId) {
       throw new BadRequestException(
         `Return profile "${req.requestedReturnPolicyName}" could not be resolved to an eBay return policy. ` +
-        `Sync eBay policies in Settings → eBay Integrations, then try again.`,
+          `Sync eBay policies in Settings → eBay Integrations, then try again.`,
       );
     }
 
@@ -1124,6 +1241,60 @@ export class EbayPublishService {
     };
   }
 
+  /**
+   * Resolve a business-policy NAME to its eBay policy ID using the synced
+   * ebay_business_policies table.
+   *
+   * This closes the bug where listing_records store profile names (e.g.
+   * "BLAP shipping policy 3 KG") but the publish coalesce only checked
+   * pre-existing numeric IDs — causing silent fallback to the marketplace
+   * default policy (which may be a free-shipping policy).
+   */
+  async resolvePolicyByName(
+    ebayAccountId: string,
+    marketplaceId: string,
+    policyType: EbayPolicyType,
+    name: string | null | undefined,
+    categoryId?: string,
+    condition?: string,
+  ): Promise<string | undefined> {
+    const trimmed = name?.trim();
+    if (!trimmed) return undefined;
+
+    const rows = await this.policyRepo.find({
+      where: { ebayAccountId, marketplaceId, policyType },
+    });
+
+    const candidates = rows
+      .filter((r) => r.name?.trim() === trimmed)
+      .map((r) => ({
+        ebayPolicyId: r.ebayPolicyId,
+        isDefault: r.isDefault,
+        geoSite: readPolicyGeoSite(r.rawPayload ?? {}),
+        rawPayload: r.rawPayload ?? {},
+      }));
+
+    if (!candidates.length) {
+      this.logger.warn(
+        `Profile name "${trimmed}" (${policyType}) not found in synced policies ` +
+          `for account ${ebayAccountId} / ${marketplaceId}. Falling back to default policy resolution.`,
+      );
+      return undefined;
+    }
+
+    const resolved =
+      policyType === 'return'
+        ? pickReturnPolicyIdForListing(
+            candidates,
+            marketplaceId,
+            categoryId,
+            condition,
+          )
+        : pickPolicyIdForMarketplace(candidates, marketplaceId);
+
+    return coalesceValidPolicyId(resolved ?? undefined);
+  }
+
   private async pickCompliantReturnPolicyFromStore(
     ebayAccountId: string,
     marketplaceId: string,
@@ -1161,9 +1332,24 @@ export class EbayPublishService {
       const marketplaceId = resolveMarketplaceId(store);
 
       const [fulfill, payment, ret] = await Promise.all([
-        this.sellAccount.listFulfillmentPolicies(token, baseUrl, marketplaceId, controller.signal),
-        this.sellAccount.listPaymentPolicies(token, baseUrl, marketplaceId, controller.signal),
-        this.sellAccount.listReturnPolicies(token, baseUrl, marketplaceId, controller.signal),
+        this.sellAccount.listFulfillmentPolicies(
+          token,
+          baseUrl,
+          marketplaceId,
+          controller.signal,
+        ),
+        this.sellAccount.listPaymentPolicies(
+          token,
+          baseUrl,
+          marketplaceId,
+          controller.signal,
+        ),
+        this.sellAccount.listReturnPolicies(
+          token,
+          baseUrl,
+          marketplaceId,
+          controller.signal,
+        ),
       ]);
       const pick = (items: { ebayPolicyId: string; isDefault: boolean }[]) =>
         items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId;
@@ -1222,15 +1408,20 @@ export class EbayPublishService {
   /** Determine which source provided the winning policy ID for logging. */
   private policyResolutionSource(
     reqId?: string | null,
+    nameResolvedId?: string | null,
     refreshedId?: string | null,
     syncedId?: string | null,
     defaultId?: string | null,
     storeId?: string | null,
   ): string {
     if (reqId && coalesceValidPolicyId(reqId)) return 'user-selected';
-    if (refreshedId && coalesceValidPolicyId(refreshedId)) return 'ebay-api-refresh';
+    if (nameResolvedId && coalesceValidPolicyId(nameResolvedId))
+      return 'profile-name';
+    if (refreshedId && coalesceValidPolicyId(refreshedId))
+      return 'ebay-api-refresh';
     if (syncedId && coalesceValidPolicyId(syncedId)) return 'synced-table';
-    if (defaultId && coalesceValidPolicyId(defaultId)) return 'marketplace-default';
+    if (defaultId && coalesceValidPolicyId(defaultId))
+      return 'marketplace-default';
     if (storeId && coalesceValidPolicyId(storeId)) return 'store-fallback';
     return 'none';
   }
@@ -1356,7 +1547,7 @@ export class EbayPublishService {
       store.locationKey?.trim() ||
       undefined;
 
-    const storeConfig = (store.config ?? {}) as Record<string, unknown>;
+    const storeConfig = store.config ?? {};
     if (!merchantLocationKey && typeof storeConfig.locationKey === 'string') {
       merchantLocationKey = storeConfig.locationKey.trim() || undefined;
     }
@@ -1560,8 +1751,7 @@ export class EbayPublishService {
           marketplaceId,
           categoryId: req.categoryId,
           condition: req.condition,
-          currentReturnPolicyId:
-            refreshed.returnPolicyId ?? req.returnPolicyId,
+          currentReturnPolicyId: refreshed.returnPolicyId ?? req.returnPolicyId,
         });
         if (ensured.action === 'blocked') {
           throw new BadRequestException(
@@ -1625,7 +1815,10 @@ export class EbayPublishService {
   /**
    * Build an EbayInventoryItem from the publish request.
    */
-  private buildInventoryItem(req: PublishRequest, store: Store): EbayInventoryItem {
+  private buildInventoryItem(
+    req: PublishRequest,
+    store: Store,
+  ): EbayInventoryItem {
     const condition = mapToEbayConditionEnum(req.condition);
     const marketplaceId = resolveMarketplaceId(store);
     const item: EbayInventoryItem = {
@@ -1671,18 +1864,14 @@ export class EbayPublishService {
       listingPolicies: {
         fulfillmentPolicyId:
           req.fulfillmentPolicyId ?? storeConfig.fulfillmentPolicyId,
-        paymentPolicyId:
-          req.paymentPolicyId ?? storeConfig.paymentPolicyId,
-        returnPolicyId:
-          req.returnPolicyId ?? storeConfig.returnPolicyId,
+        paymentPolicyId: req.paymentPolicyId ?? storeConfig.paymentPolicyId,
+        returnPolicyId: req.returnPolicyId ?? storeConfig.returnPolicyId,
       },
-      merchantLocationKey:
-        req.merchantLocationKey ?? storeConfig.locationKey,
+      merchantLocationKey: req.merchantLocationKey ?? storeConfig.locationKey,
     };
 
     offer.listingDuration =
-      req.listingDuration ??
-      (format === 'FIXED_PRICE' ? 'GTC' : undefined);
+      req.listingDuration ?? (format === 'FIXED_PRICE' ? 'GTC' : undefined);
 
     return offer;
   }
@@ -1692,7 +1881,12 @@ export class EbayPublishService {
    */
   async updatePriceQuantity(
     storeId: string,
-    offers: { offerId: string; price: number; quantity: number; currency?: string }[],
+    offers: {
+      offerId: string;
+      price: number;
+      quantity: number;
+      currency?: string;
+    }[],
   ) {
     return this.inventoryApi.bulkUpdatePriceQuantity(
       storeId,

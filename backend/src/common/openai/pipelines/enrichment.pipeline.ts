@@ -12,10 +12,7 @@ import {
   MOTORS_ENRICHMENT_FULL_PROMPT,
 } from '../prompts/motors-enrichment.prompt.js';
 import { EnrichmentCacheService } from '../enrichment-cache.service.js';
-import {
-  compactJson,
-  getEnrichmentProfile,
-} from '../token-optimization.js';
+import { compactJson, getEnrichmentProfile } from '../token-optimization.js';
 import type { OpenAiChatResponse } from '../openai.types.js';
 import type { RunMode } from '../ai-routing-policy.types.js';
 
@@ -84,7 +81,10 @@ export class EnrichmentPipeline {
       partNumber: this.str(rawData.partNumber ?? rawData.mpn) ?? undefined,
       partName: this.str(rawData.partName ?? rawData.title) ?? undefined,
       partType: this.str(rawData.partType) ?? undefined,
-      price: typeof rawData.price === 'number' ? rawData.price : Number(rawData.price) || undefined,
+      price:
+        typeof rawData.price === 'number'
+          ? rawData.price
+          : Number(rawData.price) || undefined,
       marketplace: options?.marketplace ?? 'US',
     };
     partContext.partType = partContext.partType ?? inferPartType(partContext);
@@ -95,11 +95,7 @@ export class EnrichmentPipeline {
       thresholds.lowValueMaxPrice,
     );
     const mpn = partContext.partNumber;
-    const cached = this.enrichmentCache.get(
-      mpn,
-      this.promptVersion,
-      profile,
-    );
+    const cached = this.enrichmentCache.get(mpn, this.promptVersion, profile);
     if (cached) {
       this.logger.debug(
         `Enrichment cache hit for MPN ${mpn} profile=${profile}`,
@@ -118,14 +114,19 @@ export class EnrichmentPipeline {
           latencyMs: 0,
           estimatedCostUsd: 0,
         },
-        validation: await this.validator.validateWithTaxonomy(cached, {
-          partNumber: partContext.partNumber,
-          donorMake: this.str(rawData.donorMake ?? rawData.brand) ?? 'mercedes',
-        }, {
-          compactProfile: profile === 'compact',
-          ebayCategoryId:
-            this.str(rawData.ebayCategoryId ?? rawData.categoryId) ?? null,
-        }),
+        validation: await this.validator.validateWithTaxonomy(
+          cached,
+          {
+            partNumber: partContext.partNumber,
+            donorMake:
+              this.str(rawData.donorMake ?? rawData.brand) ?? 'mercedes',
+          },
+          {
+            compactProfile: profile === 'compact',
+            ebayCategoryId:
+              this.str(rawData.ebayCategoryId ?? rawData.categoryId) ?? null,
+          },
+        ),
       });
     }
 
@@ -134,13 +135,20 @@ export class EnrichmentPipeline {
         ? MOTORS_ENRICHMENT_COMPACT_PROMPT
         : MOTORS_ENRICHMENT_FULL_PROMPT;
 
-    const route = this.modelRouter.selectRoute(partContext, options?.runMode ?? 'default');
+    const route = this.modelRouter.selectRoute(
+      partContext,
+      options?.runMode ?? 'default',
+    );
     let attempt = 1;
     let model = route.model;
     let lane = route.lane;
     let escalated = false;
 
-    const runOnce = async (useModel: string, useLane: string, useAttempt: number) => {
+    const runOnce = async (
+      useModel: string,
+      useLane: string,
+      useAttempt: number,
+    ) => {
       const { systemPrompt, userPrompt } = renderPrompt(promptTemplate, {
         rawData: compactJson(rawData),
       });
@@ -172,13 +180,8 @@ export class EnrichmentPipeline {
         if (guardFixes.length) {
           await this.guardAudit.logGuardFixes(guardFixes, {
             productId:
-              options?.productId ??
-              this.str(rawData.productId) ??
-              null,
-            importId:
-              options?.importId ??
-              this.str(rawData.importId) ??
-              null,
+              options?.productId ?? this.str(rawData.productId) ?? null,
+            importId: options?.importId ?? this.str(rawData.importId) ?? null,
             sku: partContext.sku ?? null,
             before: beforeGuard,
             after: parsed,
@@ -288,7 +291,9 @@ export class EnrichmentPipeline {
       partType: this.str(parsed.partType) ?? partContext.partType ?? null,
       condition: this.str(parsed.condition),
       description: this.str(parsed.description),
-      features: Array.isArray(parsed.features) ? (parsed.features as string[]) : [],
+      features: Array.isArray(parsed.features)
+        ? (parsed.features as string[])
+        : [],
       suggestedCategory: this.str(parsed.suggestedCategory),
       itemSpecifics:
         typeof parsed.itemSpecifics === 'object' && parsed.itemSpecifics

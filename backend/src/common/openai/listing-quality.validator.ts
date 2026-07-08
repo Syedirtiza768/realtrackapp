@@ -90,7 +90,9 @@ export function scoreItem(
       `CROSS_MAKE x${nonDonor.length}: ${[...new Set(nonDonor.map((c: Record<string, unknown>) => c.make))].join(',')}`,
     );
   }
-  const badYears = [...years].filter((y) => Number(y) < 1995 || Number(y) > 2030);
+  const badYears = [...years].filter(
+    (y) => Number(y) < 1995 || Number(y) > 2030,
+  );
   if (badYears.length) flags.push(`IMPLAUSIBLE_YEARS: ${badYears.join(',')}`);
 
   const composite = Math.round(
@@ -102,8 +104,7 @@ export function scoreItem(
         /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(
           String(c.chassisCode || c.submodel || c.model || ''),
         ),
-      ) ||
-      /w20[0-9]|al\d{2}|xv\d{2}/i.test(title)
+      ) || /w20[0-9]|al\d{2}|xv\d{2}/i.test(title)
         ? 10
         : 0) +
       (mpnMatchesProvided ? 5 : 0),
@@ -214,11 +215,10 @@ export class ListingQualityValidator {
       srcPart.donorMake ||
       '';
     const titleModel =
-      sp.Model ||
-      (typeof item.model === 'string' ? item.model : '') ||
-      '';
+      sp.Model || (typeof item.model === 'string' ? item.model : '') || '';
     const donorYear =
-      typeof (srcPart as { donorYear?: number | string }).donorYear === 'number' ||
+      typeof (srcPart as { donorYear?: number | string }).donorYear ===
+        'number' ||
       typeof (srcPart as { donorYear?: number | string }).donorYear === 'string'
         ? (srcPart as { donorYear?: number | string }).donorYear
         : title.match(/\b(19|20)\d{2}\b/)?.[0];
@@ -259,7 +259,9 @@ export class ListingQualityValidator {
     }
     const compat = Array.isArray(item.compatibility) ? item.compatibility : [];
     const hasChassisSignal =
-      /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(title) ||
+      /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(
+        title,
+      ) ||
       compat.some((c: Record<string, unknown>) =>
         /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(
           String(c.chassisCode || c.submodel || ''),

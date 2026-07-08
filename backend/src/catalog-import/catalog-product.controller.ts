@@ -37,7 +37,10 @@ export class CatalogProductController {
 
   @Patch('by-sku/:sku')
   @RequirePermissions('catalog.update')
-  async updateBySku(@Param('sku') sku: string, @Body() dto: Record<string, unknown>) {
+  async updateBySku(
+    @Param('sku') sku: string,
+    @Body() dto: Record<string, unknown>,
+  ) {
     return this.productService.updateBySku(sku, dto);
   }
 
@@ -54,7 +57,14 @@ export class CatalogProductController {
 
   @Post('backfill-categories')
   @RequirePermissions('catalog.update')
-  async backfillCategories(@Body() body: { batchSize?: number; concurrency?: number; includeListings?: boolean }) {
+  async backfillCategories(
+    @Body()
+    body: {
+      batchSize?: number;
+      concurrency?: number;
+      includeListings?: boolean;
+    },
+  ) {
     const catalogResult = await this.categoryLookup.backfillMissingCategories(
       body.batchSize ?? 10,
       body.concurrency ?? 2,
@@ -82,7 +92,8 @@ export class CatalogProductController {
   @Post('export-templates')
   @RequirePermissions('catalog.export')
   async exportTemplates(
-    @Body() body: {
+    @Body()
+    body: {
       ids?: string[];
       listingIds?: string[];
       formats?: ('us' | 'au' | 'de')[];
@@ -105,7 +116,9 @@ export class CatalogProductController {
     }
 
     if (!products.length) {
-      res.status(404).json({ error: 'No catalog products found for given IDs' });
+      res
+        .status(404)
+        .json({ error: 'No catalog products found for given IDs' });
       return;
     }
 
@@ -127,10 +140,16 @@ export class CatalogProductController {
       returnProfile: body.returnProfile,
       paymentProfile: body.paymentProfile,
     };
-    products = this.productService.applyProfileOverrides(products, profileOverrides);
+    products = this.productService.applyProfileOverrides(
+      products,
+      profileOverrides,
+    );
 
     const formats = body.formats || ['us', 'au', 'de'];
-    const zip = await this.templateService.generateTemplatesZip(products, formats);
+    const zip = await this.templateService.generateTemplatesZip(
+      products,
+      formats,
+    );
 
     const dateStr = new Date().toISOString().slice(0, 10);
     res.set({

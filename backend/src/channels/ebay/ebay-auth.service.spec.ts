@@ -21,7 +21,7 @@ function createRepo<T extends Record<string, unknown>>() {
     findOne: jest.fn().mockResolvedValue(null),
     findOneBy: jest.fn().mockResolvedValue(null),
     findOneByOrFail: jest.fn(),
-    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d } as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d }) as T),
     save: jest.fn((d: T) => Promise.resolve({ id: 'saved-id', ...d } as T)),
     update: jest.fn().mockResolvedValue(undefined),
     remove: jest.fn().mockResolvedValue(undefined),
@@ -65,7 +65,7 @@ describe('EbayAuthService', () => {
         EBAY_CLIENT_SECRET: 'test-client-secret',
         EBAY_REDIRECT_URI: 'https://app.example.com/callback',
         EBAY_ENVIRONMENT: 'PRODUCTION',
-      }) as ConfigService,
+      }),
       encryption as any,
       sellerpunditTokens as any,
       connectionRepo,
@@ -89,7 +89,7 @@ describe('EbayAuthService', () => {
           EBAY_CLIENT_ID: 'id',
           EBAY_CLIENT_SECRET: 'secret',
           EBAY_ENVIRONMENT: 'SANDBOX',
-        }) as ConfigService,
+        }),
         encryption as any,
         sellerpunditTokens as any,
         connectionRepo,
@@ -135,7 +135,13 @@ describe('EbayAuthService', () => {
 
       // Mock refresh to succeed
       const httpPost = jest.fn().mockResolvedValue({
-        data: { access_token: 'new-tok', refresh_token: 'new-ref', expires_in: 7200, scope: 'x', token_type: 'Bearer' },
+        data: {
+          access_token: 'new-tok',
+          refresh_token: 'new-ref',
+          expires_in: 7200,
+          scope: 'x',
+          token_type: 'Bearer',
+        },
       });
       (svc as any).http = { post: httpPost };
 
@@ -158,7 +164,9 @@ describe('EbayAuthService', () => {
       });
       connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
 
-      await expect(svc.getAccessToken('store-1')).rejects.toThrow(UnauthorizedException);
+      await expect(svc.getAccessToken('store-1')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('delegates to sellerpunditTokens for SellerPundit accounts', async () => {
@@ -176,7 +184,10 @@ describe('EbayAuthService', () => {
 
       const token = await svc.getAccessToken('store-1');
       expect(token).toBe('sp-token');
-      expect(sellerpunditTokens.ensureFreshAccessToken).toHaveBeenCalledWith('acct-1', { force: false });
+      expect(sellerpunditTokens.ensureFreshAccessToken).toHaveBeenCalledWith(
+        'acct-1',
+        { force: false },
+      );
     });
 
     it('wraps SellerPundit errors with hint', async () => {
@@ -190,9 +201,13 @@ describe('EbayAuthService', () => {
         id: 'acct-1',
         connectionSource: 'sellerpundit',
       });
-      sellerpunditTokens.ensureFreshAccessToken.mockRejectedValue(new Error('network'));
+      sellerpunditTokens.ensureFreshAccessToken.mockRejectedValue(
+        new Error('network'),
+      );
 
-      await expect(svc.getAccessToken('store-1')).rejects.toThrow(/SellerPundit/);
+      await expect(svc.getAccessToken('store-1')).rejects.toThrow(
+        /SellerPundit/,
+      );
     });
 
     it('throws for missing store', async () => {
@@ -203,16 +218,24 @@ describe('EbayAuthService', () => {
 
   describe('getApiBaseUrlForStore', () => {
     it('returns production URL for production linked account', async () => {
-      storeRepo.findOneBy = jest.fn().mockResolvedValue({ id: 'store-1', connectionId: 'conn-1' });
-      connectedAccountRepo.findOne = jest.fn().mockResolvedValue({ environment: 'production' });
+      storeRepo.findOneBy = jest
+        .fn()
+        .mockResolvedValue({ id: 'store-1', connectionId: 'conn-1' });
+      connectedAccountRepo.findOne = jest
+        .fn()
+        .mockResolvedValue({ environment: 'production' });
 
       const url = await svc.getApiBaseUrlForStore('store-1');
       expect(url).toBe('https://api.ebay.com');
     });
 
     it('returns sandbox URL for sandbox linked account', async () => {
-      storeRepo.findOneBy = jest.fn().mockResolvedValue({ id: 'store-1', connectionId: 'conn-1' });
-      connectedAccountRepo.findOne = jest.fn().mockResolvedValue({ environment: 'sandbox' });
+      storeRepo.findOneBy = jest
+        .fn()
+        .mockResolvedValue({ id: 'store-1', connectionId: 'conn-1' });
+      connectedAccountRepo.findOne = jest
+        .fn()
+        .mockResolvedValue({ environment: 'sandbox' });
 
       const url = await svc.getApiBaseUrlForStore('store-1');
       expect(url).toBe('https://api.sandbox.ebay.com');
@@ -246,7 +269,11 @@ describe('EbayAuthService', () => {
         response: { status: 401 },
         isAxiosError: true,
       });
-      const result = (svc as any).wrapTokenError('MyStore', axiosErr, 'hint text');
+      const result = (svc as any).wrapTokenError(
+        'MyStore',
+        axiosErr,
+        'hint text',
+      );
       expect(result).toBeInstanceOf(UnauthorizedException);
       expect(result.message).toContain('hint text');
     });
@@ -258,7 +285,11 @@ describe('EbayAuthService', () => {
     });
 
     it('wraps generic errors with hint and message', () => {
-      const result = (svc as any).wrapTokenError('MyStore', new Error('timeout'), 'hint text');
+      const result = (svc as any).wrapTokenError(
+        'MyStore',
+        new Error('timeout'),
+        'hint text',
+      );
       expect(result).toBeInstanceOf(UnauthorizedException);
       expect(result.message).toContain('hint text');
       expect(result.message).toContain('timeout');

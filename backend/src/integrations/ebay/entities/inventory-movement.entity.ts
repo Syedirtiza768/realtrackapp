@@ -52,11 +52,19 @@ export class InventoryMovement {
   @Column({ name: 'ebay_account_id', type: 'uuid', nullable: true })
   ebayAccountId!: string | null;
 
-  @ManyToOne(() => ConnectedEbayAccount, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => ConnectedEbayAccount, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
   @JoinColumn({ name: 'ebay_account_id' })
   ebayAccount!: ConnectedEbayAccount | null;
 
-  @Column({ name: 'ebay_order_id', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'ebay_order_id',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   ebayOrderId!: string | null;
 
   @Column({ type: 'text', nullable: true })

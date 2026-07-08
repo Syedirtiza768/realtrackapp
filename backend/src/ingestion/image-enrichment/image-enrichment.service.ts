@@ -8,7 +8,10 @@ import { OpenAiService } from '../../common/openai/openai.service.js';
 import { ModelRouter } from '../../common/openai/model-router.js';
 import { AiRunLogService } from '../../common/openai/ai-run-log.service.js';
 import { ImageSearchService } from './image-search.service.js';
-import { ImageOptimizerService, type OptimizedImage } from './image-optimizer.service.js';
+import {
+  ImageOptimizerService,
+  type OptimizedImage,
+} from './image-optimizer.service.js';
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -87,7 +90,10 @@ interface SearchHit {
 }
 
 /* ── Image result cache ────────────────────────────────────── */
-const imageCache = new Map<string, { result: PartImageResult; cachedAt: number }>();
+const imageCache = new Map<
+  string,
+  { result: PartImageResult; cachedAt: number }
+>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const imageHashSet = new Set<string>();
 
@@ -121,10 +127,20 @@ export class ImageEnrichmentService {
    *   set true when called from the BullMQ pipeline processor.
    */
   async enrichBatch(
-    parts: Array<{ partNumber: string; title: string; brand?: string; mpn?: string; fitment?: string; existingImages?: string[] }>,
+    parts: Array<{
+      partNumber: string;
+      title: string;
+      brand?: string;
+      mpn?: string;
+      fitment?: string;
+      existingImages?: string[];
+    }>,
     jobId?: string,
     options: { downloadImages?: boolean } = {},
-  ): Promise<{ results: PartImageResult[]; progress: ImageEnrichmentProgress }> {
+  ): Promise<{
+    results: PartImageResult[];
+    progress: ImageEnrichmentProgress;
+  }> {
     const downloadImages = options.downloadImages ?? false;
     const CONCURRENCY = 8; // process 8 parts in parallel
 
@@ -177,7 +193,11 @@ export class ImageEnrichmentService {
               } satisfies PartImageResult;
             }
 
-            const result = await this.enrichSinglePart(part, progress, downloadImages);
+            const result = await this.enrichSinglePart(
+              part,
+              progress,
+              downloadImages,
+            );
 
             // Cache the result
             imageCache.set(cacheKey, { result, cachedAt: Date.now() });
@@ -190,7 +210,9 @@ export class ImageEnrichmentService {
             progress.processedParts++;
             return result;
           } catch (err) {
-            this.logger.warn(`Failed to enrich images for part ${part.partNumber}: ${err}`);
+            this.logger.warn(
+              `Failed to enrich images for part ${part.partNumber}: ${err}`,
+            );
             progress.failedParts++;
             progress.processedParts++;
             return {
@@ -228,7 +250,13 @@ export class ImageEnrichmentService {
    *   blocking download/optimize step and return ranked URLs directly.
    */
   private async enrichSinglePart(
-    part: { partNumber: string; title: string; brand?: string; mpn?: string; fitment?: string },
+    part: {
+      partNumber: string;
+      title: string;
+      brand?: string;
+      mpn?: string;
+      fitment?: string;
+    },
     progress: ImageEnrichmentProgress,
     downloadImages = false,
   ): Promise<PartImageResult> {
@@ -238,10 +266,16 @@ export class ImageEnrichmentService {
     // Step 2: Search for images from multiple sources
     // For the sync HTTP path, skip the external web search API to reduce latency
     // (AI-suggested + OEM structured URLs are sufficient for quick results)
-    const candidates = await this.searchImages(queries, part, { skipWebSearch: !downloadImages });
+    const candidates = await this.searchImages(queries, part, {
+      skipWebSearch: !downloadImages,
+    });
 
     // Step 3: Use AI to validate and rank candidates (single combined call)
-    const validated = await this.validateAndRankImages(candidates, part, progress);
+    const validated = await this.validateAndRankImages(
+      candidates,
+      part,
+      progress,
+    );
 
     // Step 4: Deduplicate by perceptual hash
     const deduped = this.deduplicateImages(validated);
@@ -249,7 +283,10 @@ export class ImageEnrichmentService {
     let finalCandidates: ImageCandidate[];
     if (downloadImages) {
       // Heavy path: actually download + optimize images (BullMQ processor)
-      finalCandidates = await this.downloadAndOptimizeCandidates(deduped.slice(0, 8), progress);
+      finalCandidates = await this.downloadAndOptimizeCandidates(
+        deduped.slice(0, 8),
+        progress,
+      );
     } else {
       // Fast path: return ranked URL list without downloading
       finalCandidates = deduped.slice(0, 6);
@@ -260,29 +297,46 @@ export class ImageEnrichmentService {
     const gallery = finalCandidates.slice(1, 6); // up to 5 additional images
 
     const confidenceScore = primary
-      ? Math.round((primary.relevanceScore * 0.6 + primary.qualityScore * 0.4) * 100) / 100
+      ? Math.round(
+          (primary.relevanceScore * 0.6 + primary.qualityScore * 0.4) * 100,
+        ) / 100
       : 0;
 
     // Separate diagram/reference images (source contains 'diagram' or 'schematic')
     const diagrams = finalCandidates.filter(
-      (c) => c.source?.toLowerCase().includes('diagram') || c.source?.toLowerCase().includes('schematic'),
+      (c) =>
+        c.source?.toLowerCase().includes('diagram') ||
+        c.source?.toLowerCase().includes('schematic'),
     );
     const nonDiagrams = finalCandidates.filter(
-      (c) => !c.source?.toLowerCase().includes('diagram') && !c.source?.toLowerCase().includes('schematic'),
+      (c) =>
+        !c.source?.toLowerCase().includes('diagram') &&
+        !c.source?.toLowerCase().includes('schematic'),
     );
 
     const primaryImg = nonDiagrams.length > 0 ? nonDiagrams[0] : primary;
-    const galleryImgs = (nonDiagrams.length > 1 ? nonDiagrams.slice(1, 6) : gallery);
+    const galleryImgs =
+      nonDiagrams.length > 1 ? nonDiagrams.slice(1, 6) : gallery;
 
     // Build validation summary
     const allCandidates = deduped;
-    const accessibleCount = allCandidates.filter((c) => (c.accessible ?? true)).length;
-    const meetsRes = allCandidates.filter((c) => c.width >= 1000 && c.height >= 1000).length;
-    const compliantCount = allCandidates.filter((c) => !c.hasWatermark && c.qualityScore >= 0.6).length;
+    const accessibleCount = allCandidates.filter(
+      (c) => c.accessible ?? true,
+    ).length;
+    const meetsRes = allCandidates.filter(
+      (c) => c.width >= 1000 && c.height >= 1000,
+    ).length;
+    const compliantCount = allCandidates.filter(
+      (c) => !c.hasWatermark && c.qualityScore >= 0.6,
+    ).length;
     const rejectedCount = allCandidates.length - finalCandidates.length;
     const validationIssues: string[] = [];
-    if (meetsRes === 0 && allCandidates.length > 0) validationIssues.push('No images meet 1000px minimum resolution');
-    if (accessibleCount < allCandidates.length) validationIssues.push(`${allCandidates.length - accessibleCount} image URLs inaccessible`);
+    if (meetsRes === 0 && allCandidates.length > 0)
+      validationIssues.push('No images meet 1000px minimum resolution');
+    if (accessibleCount < allCandidates.length)
+      validationIssues.push(
+        `${allCandidates.length - accessibleCount} image URLs inaccessible`,
+      );
 
     return {
       partNumber: part.partNumber,
@@ -321,17 +375,23 @@ export class ImageEnrichmentService {
 
     for (const candidate of candidates) {
       // Skip local/structured URLs that can't be downloaded
-      if (!candidate.url.startsWith('http://') && !candidate.url.startsWith('https://')) {
+      if (
+        !candidate.url.startsWith('http://') &&
+        !candidate.url.startsWith('https://')
+      ) {
         results.push(candidate);
         continue;
       }
 
       try {
-        const optimized = await this.imageOptimizer.downloadAndOptimize(candidate.url, {
-          targetFormat: 'webp',
-          maxWidth: 1600,
-          quality: 82,
-        });
+        const optimized = await this.imageOptimizer.downloadAndOptimize(
+          candidate.url,
+          {
+            targetFormat: 'webp',
+            maxWidth: 1600,
+            quality: 82,
+          },
+        );
 
         if (!optimized) continue;
 
@@ -352,7 +412,9 @@ export class ImageEnrichmentService {
           optimized: true,
         });
       } catch (err) {
-        this.logger.debug(`Failed to download/optimize ${candidate.url}: ${err}`);
+        this.logger.debug(
+          `Failed to download/optimize ${candidate.url}: ${err}`,
+        );
       }
     }
 
@@ -362,9 +424,13 @@ export class ImageEnrichmentService {
   /**
    * Build search queries optimized for finding product images.
    */
-  private buildSearchQueries(
-    part: { partNumber: string; title: string; brand?: string; mpn?: string; fitment?: string },
-  ): string[] {
+  private buildSearchQueries(part: {
+    partNumber: string;
+    title: string;
+    brand?: string;
+    mpn?: string;
+    fitment?: string;
+  }): string[] {
     const queries: string[] = [];
 
     // Query 1: Brand + MPN (most specific)
@@ -406,27 +472,36 @@ export class ImageEnrichmentService {
     const candidates: ImageCandidate[] = [];
 
     // Source 1: Real web image search (Bing/Google) — skipped on fast sync path
-    if (!opts.skipWebSearch) try {
-      const webResults = await this.imageSearch.search(queries, { maxPerQuery: 6, minWidth: 500 });
-      for (const result of webResults) {
-        if (result.url && result.width >= 300) {
-          const hash = crypto.createHash('md5').update(result.url).digest('hex');
-          candidates.push({
-            url: result.url,
-            source: result.source,
-            width: result.width,
-            height: result.height,
-            format: result.format,
-            relevanceScore: 0.7,
-            qualityScore: 0.7,
-            hasWatermark: false,
-            hash,
-          });
+    if (!opts.skipWebSearch)
+      try {
+        const webResults = await this.imageSearch.search(queries, {
+          maxPerQuery: 6,
+          minWidth: 500,
+        });
+        for (const result of webResults) {
+          if (result.url && result.width >= 300) {
+            const hash = crypto
+              .createHash('md5')
+              .update(result.url)
+              .digest('hex');
+            candidates.push({
+              url: result.url,
+              source: result.source,
+              width: result.width,
+              height: result.height,
+              format: result.format,
+              relevanceScore: 0.7,
+              qualityScore: 0.7,
+              hasWatermark: false,
+              hash,
+            });
+          }
         }
+      } catch (err) {
+        this.logger.warn(
+          `Web image search failed for ${part.partNumber}: ${err}`,
+        );
       }
-    } catch (err) {
-      this.logger.warn(`Web image search failed for ${part.partNumber}: ${err}`);
-    }
 
     // Source 2: AI-suggested URLs from known automotive databases
     try {
@@ -452,7 +527,10 @@ Return up to 6 candidate image URLs as JSON array.`,
       );
 
       try {
-        const text = (response.content as string).replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        const text = (response.content as string)
+          .replace(/```json?\n?/g, '')
+          .replace(/```/g, '')
+          .trim();
         const suggestions = JSON.parse(text) as Array<{
           url: string;
           source: string;
@@ -478,10 +556,14 @@ Return up to 6 candidate image URLs as JSON array.`,
           }
         }
       } catch {
-        this.logger.debug(`Could not parse AI image suggestions for ${part.partNumber}`);
+        this.logger.debug(
+          `Could not parse AI image suggestions for ${part.partNumber}`,
+        );
       }
     } catch (err) {
-      this.logger.warn(`AI image suggestion failed for ${part.partNumber}: ${err}`);
+      this.logger.warn(
+        `AI image suggestion failed for ${part.partNumber}: ${err}`,
+      );
     }
 
     // Source 3: Structured OEM catalog URLs
@@ -495,10 +577,14 @@ Return up to 6 candidate image URLs as JSON array.`,
    * Generate structured image URLs based on part identifiers.
    * Represents the output of querying OEM catalogs / manufacturer DBs.
    */
-  private generateStructuredImageUrls(
-    part: { partNumber: string; title: string; brand?: string },
-  ): ImageCandidate[] {
-    const sanitizedPN = (part.partNumber || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  private generateStructuredImageUrls(part: {
+    partNumber: string;
+    title: string;
+    brand?: string;
+  }): ImageCandidate[] {
+    const sanitizedPN = (part.partNumber || '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase();
     const brand = (part.brand || 'generic').toLowerCase().replace(/\s+/g, '-');
 
     if (!sanitizedPN) return [];
@@ -515,7 +601,10 @@ Return up to 6 candidate image URLs as JSON array.`,
       relevanceScore: 0.9,
       qualityScore: 0.95,
       hasWatermark: false,
-      hash: crypto.createHash('md5').update(`oem_${brand}_${sanitizedPN}_main`).digest('hex'),
+      hash: crypto
+        .createHash('md5')
+        .update(`oem_${brand}_${sanitizedPN}_main`)
+        .digest('hex'),
     });
 
     // Angle views
@@ -529,7 +618,10 @@ Return up to 6 candidate image URLs as JSON array.`,
         relevanceScore: 0.85,
         qualityScore: 0.9,
         hasWatermark: false,
-        hash: crypto.createHash('md5').update(`oem_${brand}_${sanitizedPN}_${angle}`).digest('hex'),
+        hash: crypto
+          .createHash('md5')
+          .update(`oem_${brand}_${sanitizedPN}_${angle}`)
+          .digest('hex'),
       });
     }
 
@@ -575,7 +667,10 @@ Score each candidate.`,
       progress.openaiTokensUsed += response.usage?.totalTokens ?? 0;
 
       try {
-        const text = (response.content as string).replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        const text = (response.content as string)
+          .replace(/```json?\n?/g, '')
+          .replace(/```/g, '')
+          .trim();
         const scores = JSON.parse(text) as Array<{
           index: number;
           relevanceScore: number;
@@ -586,15 +681,26 @@ Score each candidate.`,
 
         for (const score of scores) {
           if (score.index >= 0 && score.index < candidates.length) {
-            candidates[score.index].relevanceScore = Math.max(0, Math.min(1, score.relevanceScore));
-            candidates[score.index].qualityScore = Math.max(0, Math.min(1, score.qualityScore));
+            candidates[score.index].relevanceScore = Math.max(
+              0,
+              Math.min(1, score.relevanceScore),
+            );
+            candidates[score.index].qualityScore = Math.max(
+              0,
+              Math.min(1, score.qualityScore),
+            );
             candidates[score.index].hasWatermark = score.hasWatermark;
           }
         }
 
         // Filter: reject low-relevance, watermarked, or explicitly rejected
         return candidates
-          .filter((c) => c.relevanceScore >= 0.5 && !c.hasWatermark && c.qualityScore >= 0.5)
+          .filter(
+            (c) =>
+              c.relevanceScore >= 0.5 &&
+              !c.hasWatermark &&
+              c.qualityScore >= 0.5,
+          )
           .sort((a, b) => {
             const scoreA = a.relevanceScore * 0.6 + a.qualityScore * 0.4;
             const scoreB = b.relevanceScore * 0.6 + b.qualityScore * 0.4;
@@ -636,7 +742,10 @@ Score each candidate.`,
     return `${partNumber}||${title}`.toLowerCase();
   }
 
-  private async updateJobProgress(jobId: string, progress: ImageEnrichmentProgress): Promise<void> {
+  private async updateJobProgress(
+    jobId: string,
+    progress: ImageEnrichmentProgress,
+  ): Promise<void> {
     try {
       await this.jobRepo.update(jobId, {
         stageDetails: {
@@ -652,10 +761,12 @@ Score each candidate.`,
   /**
    * Get enrichment status for a pipeline job.
    */
-  async getEnrichmentStatus(jobId: string): Promise<ImageEnrichmentProgress | null> {
+  async getEnrichmentStatus(
+    jobId: string,
+  ): Promise<ImageEnrichmentProgress | null> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
     if (!job?.stageDetails) return null;
-    return (job.stageDetails as Record<string, unknown>).imageEnrichment as ImageEnrichmentProgress | null;
+    return job.stageDetails.imageEnrichment as ImageEnrichmentProgress | null;
   }
 
   // ─── Image URL Validation ────────────────────────────────────
@@ -677,14 +788,20 @@ Score each candidate.`,
         results.push(
           r.status === 'fulfilled'
             ? r.value
-            : { url: chunk[results.length - i] ?? '', accessible: false, issues: ['Request failed'] },
+            : {
+                url: chunk[results.length - i] ?? '',
+                accessible: false,
+                issues: ['Request failed'],
+              },
         );
       }
     }
     return results;
   }
 
-  private async validateSingleImageUrl(url: string): Promise<ImageValidationResult> {
+  private async validateSingleImageUrl(
+    url: string,
+  ): Promise<ImageValidationResult> {
     const issues: string[] = [];
 
     if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
@@ -702,11 +819,20 @@ Score each candidate.`,
 
       const statusCode = resp.status;
       const contentType = String(resp.headers['content-type'] ?? '');
-      const contentLength = parseInt(String(resp.headers['content-length'] ?? '0'), 10) || undefined;
+      const contentLength =
+        parseInt(String(resp.headers['content-length'] ?? '0'), 10) ||
+        undefined;
 
       if (statusCode < 200 || statusCode >= 400) {
         issues.push(`HTTP ${statusCode}`);
-        return { url, accessible: false, statusCode, contentType, contentLength, issues };
+        return {
+          url,
+          accessible: false,
+          statusCode,
+          contentType,
+          contentLength,
+          issues,
+        };
       }
 
       if (!contentType.startsWith('image/')) {
@@ -720,7 +846,12 @@ Score each candidate.`,
 
       // Flag known placeholder/stock image hosts
       const lowerUrl = url.toLowerCase();
-      const placeholderHosts = ['placeholder.com', 'placehold.it', 'via.placeholder', 'dummyimage.com'];
+      const placeholderHosts = [
+        'placeholder.com',
+        'placehold.it',
+        'via.placeholder',
+        'dummyimage.com',
+      ];
       if (placeholderHosts.some((h) => lowerUrl.includes(h))) {
         issues.push('Placeholder image detected');
       }

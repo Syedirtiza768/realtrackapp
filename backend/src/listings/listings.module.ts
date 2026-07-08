@@ -46,8 +46,23 @@ import { RbacModule } from '../rbac/rbac.module.js';
     TeamsModule,
     RbacModule,
   ],
-  controllers: [ListingsController, ListingsV2Controller, ExportRuleController, ListingGenerationController],
-  providers: [ListingsService, SearchService, ExportRuleService, ListingGenerationService],
-  exports: [ListingsService, SearchService, ExportRuleService, ListingGenerationService],
+  controllers: [
+    ListingsController,
+    ListingsV2Controller,
+    ExportRuleController,
+    ListingGenerationController,
+  ],
+  providers: [
+    ListingsService,
+    SearchService,
+    ExportRuleService,
+    ListingGenerationService,
+  ],
+  exports: [
+    ListingsService,
+    SearchService,
+    ExportRuleService,
+    ListingGenerationService,
+  ],
 })
 export class ListingsModule {}

@@ -106,7 +106,10 @@ export class SettingsController {
   @Put('pricing-rules/:id')
   @RequirePermissions('settings.manage')
   @ApiOperation({ summary: 'Update pricing rule' })
-  updatePricingRule(@Param('id') id: string, @Body() dto: UpdatePricingRuleDto) {
+  updatePricingRule(
+    @Param('id') id: string,
+    @Body() dto: UpdatePricingRuleDto,
+  ) {
     return this.settingsService.updatePricingRule(id, dto);
   }
 

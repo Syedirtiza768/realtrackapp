@@ -37,9 +37,14 @@ export class PipelineOutputImageService {
    * Mirror listing images in pipeline output XLSX files to S3 and rewrite PicURL columns.
    * Adds pipe-separated S3 keys in {@link S3_PATH_COLUMN}.
    */
-  async mirrorImagesInOutputDir(jobId: string, outputDir: string): Promise<void> {
+  async mirrorImagesInOutputDir(
+    jobId: string,
+    outputDir: string,
+  ): Promise<void> {
     if (!this.shouldMirror()) {
-      this.logger.log(`Job ${jobId}: PIPELINE_MIRROR_IMAGES disabled — skipping S3 image mirror`);
+      this.logger.log(
+        `Job ${jobId}: PIPELINE_MIRROR_IMAGES disabled — skipping S3 image mirror`,
+      );
       return;
     }
 
@@ -58,7 +63,8 @@ export class PipelineOutputImageService {
 
     const skuConcurrency = Math.max(
       1,
-      Number(this.config.get<string>('PIPELINE_IMAGE_SKU_CONCURRENCY', '4')) || 4,
+      Number(this.config.get<string>('PIPELINE_IMAGE_SKU_CONCURRENCY', '4')) ||
+        4,
     );
 
     let totalMirrored = 0;
@@ -94,10 +100,15 @@ export class PipelineOutputImageService {
     const ws = wb.Sheets[sheetName];
     if (!ws) return { mirrored: 0, rows: 0 };
 
-    const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const rows: string[][] = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: '',
+    });
     const headerIdx = this.findHeaderRow(rows);
     if (headerIdx < 0) {
-      this.logger.warn(`Job ${jobId}: No header row in ${path.basename(filePath)}`);
+      this.logger.warn(
+        `Job ${jobId}: No header row in ${path.basename(filePath)}`,
+      );
       return { mirrored: 0, rows: 0 };
     }
 
@@ -140,7 +151,12 @@ export class PipelineOutputImageService {
         const v = String(row[col] ?? '').trim();
         if (!v) continue;
         if (col === imageColIdxs[0] && v.includes('|')) {
-          urls.push(...v.split('|').map((u) => u.trim()).filter(Boolean));
+          urls.push(
+            ...v
+              .split('|')
+              .map((u) => u.trim())
+              .filter(Boolean),
+          );
         } else {
           urls.push(v);
         }
@@ -163,7 +179,11 @@ export class PipelineOutputImageService {
         const hadNewMirror = results.some((r) => r.s3Key != null);
         if (!hadNewMirror) return;
 
-        this.writeImageColumns(row, imageColIdxs, results.map((r) => r.url));
+        this.writeImageColumns(
+          row,
+          imageColIdxs,
+          results.map((r) => r.url),
+        );
         row[s3ColIdx] = results
           .map((r) => r.s3Key ?? '')
           .filter(Boolean)
@@ -178,7 +198,11 @@ export class PipelineOutputImageService {
       }
     };
 
-    for (let batch = 0; batch < listingRowIndices.length; batch += skuConcurrency) {
+    for (
+      let batch = 0;
+      batch < listingRowIndices.length;
+      batch += skuConcurrency
+    ) {
       const slice = listingRowIndices.slice(batch, batch + skuConcurrency);
       await Promise.all(slice.map((idx) => mirrorRow(idx)));
     }
@@ -195,10 +219,7 @@ export class PipelineOutputImageService {
       const row = rows[i];
       if (
         row?.some(
-          (h) =>
-            h &&
-            /title/i.test(String(h)) &&
-            !/info/i.test(String(h)),
+          (h) => h && /title/i.test(String(h)) && !/info/i.test(String(h)),
         )
       ) {
         return i;
@@ -210,7 +231,10 @@ export class PipelineOutputImageService {
   private colIdx(headers: string[], name: string): number {
     const norm = name.toLowerCase().replace(/[^a-z0-9]/g, '');
     return headers.findIndex((h) =>
-      h.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm),
+      h
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .includes(norm),
     );
   }
 
@@ -226,9 +250,12 @@ export class PipelineOutputImageService {
     imageColIdxs: number[],
     urls: string[],
   ): void {
-    const trimmed = urls.map((u) => u.trim()).filter(Boolean).slice(0, 24);
+    const trimmed = urls
+      .map((u) => u.trim())
+      .filter(Boolean)
+      .slice(0, 24);
     for (let i = 0; i < imageColIdxs.length; i++) {
-      row[imageColIdxs[i]!] = trimmed[i] ?? '';
+      row[imageColIdxs[i]] = trimmed[i] ?? '';
     }
   }
 }

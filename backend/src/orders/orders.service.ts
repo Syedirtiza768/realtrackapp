@@ -9,8 +9,16 @@ import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Order } from './entities/order.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
-import { canTransition, getValidTransitions, ALL_ORDER_STATUSES } from './order-state-machine.js';
-import type { OrdersQueryDto, UpdateShippingDto, RefundDto } from './dto/orders.dto.js';
+import {
+  canTransition,
+  getValidTransitions,
+  ALL_ORDER_STATUSES,
+} from './order-state-machine.js';
+import type {
+  OrdersQueryDto,
+  UpdateShippingDto,
+  RefundDto,
+} from './dto/orders.dto.js';
 
 @Injectable()
 export class OrdersService {
@@ -26,8 +34,11 @@ export class OrdersService {
 
   // ─── Queries ───
 
-  async findAll(dto: OrdersQueryDto): Promise<{ orders: Order[]; total: number }> {
-    const qb = this.orderRepo.createQueryBuilder('o')
+  async findAll(
+    dto: OrdersQueryDto,
+  ): Promise<{ orders: Order[]; total: number }> {
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       .leftJoinAndSelect('o.connection', 'conn');
 
     if (dto.status) {
@@ -91,14 +102,18 @@ export class OrdersService {
 
   // ─── State transitions ───
 
-  async transitionStatus(id: string, newStatus: string, reason?: string): Promise<Order> {
+  async transitionStatus(
+    id: string,
+    newStatus: string,
+    reason?: string,
+  ): Promise<Order> {
     const order = await this.orderRepo.findOneBy({ id });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
 
     if (!canTransition(order.status, newStatus)) {
       throw new BadRequestException(
         `Cannot transition from '${order.status}' to '${newStatus}'. ` +
-        `Valid transitions: ${getValidTransitions(order.status).join(', ') || 'none (terminal state)'}`,
+          `Valid transitions: ${getValidTransitions(order.status).join(', ') || 'none (terminal state)'}`,
       );
     }
 
@@ -122,7 +137,9 @@ export class OrdersService {
     }
 
     await this.orderRepo.save(order);
-    this.logger.log(`Order ${id}: ${oldStatus} → ${newStatus}${reason ? ` (${reason})` : ''}`);
+    this.logger.log(
+      `Order ${id}: ${oldStatus} → ${newStatus}${reason ? ` (${reason})` : ''}`,
+    );
 
     if (newStatus === 'shipped') {
       this.eventEmitter.emit('order.shipped', {
@@ -170,8 +187,13 @@ export class OrdersService {
     if (!order) throw new NotFoundException(`Order ${id} not found`);
 
     // Must be in a refundable state
-    if (!canTransition(order.status, 'refund_requested') && order.status !== 'refund_requested') {
-      throw new BadRequestException(`Cannot refund order in '${order.status}' state`);
+    if (
+      !canTransition(order.status, 'refund_requested') &&
+      order.status !== 'refund_requested'
+    ) {
+      throw new BadRequestException(
+        `Cannot refund order in '${order.status}' state`,
+      );
     }
 
     const refundAmt = parseFloat(dto.amount);
@@ -181,7 +203,9 @@ export class OrdersService {
 
     const totalAmt = parseFloat(order.totalAmount);
     if (refundAmt > totalAmt) {
-      throw new BadRequestException(`Refund amount $${refundAmt} exceeds order total $${totalAmt}`);
+      throw new BadRequestException(
+        `Refund amount $${refundAmt} exceeds order total $${totalAmt}`,
+      );
     }
 
     order.refundAmount = dto.amount;
@@ -204,8 +228,22 @@ export class OrdersService {
     externalUrl?: string;
     buyer?: { username?: string; email?: string; name?: string };
     shipping?: Record<string, string>;
-    financials: { subtotal: string; shippingCost?: string; tax?: string; total: string; currency?: string; fee?: string };
-    items: Array<{ externalItemId?: string; listingId?: string; sku?: string; title: string; quantity: number; unitPrice: string }>;
+    financials: {
+      subtotal: string;
+      shippingCost?: string;
+      tax?: string;
+      total: string;
+      currency?: string;
+      fee?: string;
+    };
+    items: Array<{
+      externalItemId?: string;
+      listingId?: string;
+      sku?: string;
+      title: string;
+      quantity: number;
+      unitPrice: string;
+    }>;
     orderedAt?: Date;
   }): Promise<Order> {
     // Idempotency: check if order already exists
@@ -244,7 +282,9 @@ export class OrdersService {
 
     // Create order items
     for (const item of data.items) {
-      const totalPrice = (item.quantity * parseFloat(item.unitPrice)).toFixed(2);
+      const totalPrice = (item.quantity * parseFloat(item.unitPrice)).toFixed(
+        2,
+      );
       await this.itemRepo.save(
         this.itemRepo.create({
           orderId: savedOrder.id,

@@ -1,4 +1,12 @@
-import { IsOptional, IsString, IsNumber, IsObject, IsArray, ValidateNested, IsIn } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsObject,
+  IsArray,
+  ValidateNested,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 /* ─── Editor request/response types ─── */

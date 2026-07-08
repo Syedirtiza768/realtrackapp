@@ -46,7 +46,9 @@ export class CreateExportRuleDto {
   @Min(0)
   priceMultiplier?: number;
 
-  @ApiPropertyOptional({ description: 'Fixed price addition (after multiplier)' })
+  @ApiPropertyOptional({
+    description: 'Fixed price addition (after multiplier)',
+  })
   @IsOptional()
   @IsNumber()
   priceAddition?: number;

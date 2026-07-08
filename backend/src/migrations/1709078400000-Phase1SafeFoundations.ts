@@ -2,10 +2,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Phase 1 Safe Foundations Migration
- * 
+ *
  * This migration is purely ADDITIVE — it does NOT modify or remove
  * any existing tables, columns, constraints, or indexes.
- * 
+ *
  * Changes:
  * 1. Creates tables that previously existed only in raw SQL:
  *    - stores
@@ -19,7 +19,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * 3. Creates feature_flags table
  * 4. Adds missing FK constraints (with NO ACTION / SET NULL to be safe)
  * 5. Adds missing indexes for common query patterns
- * 
+ *
  * All CREATE/ALTER use IF NOT EXISTS / IF NOT EXISTS patterns
  * so this migration is idempotent on databases that already
  * had these objects from the raw SQL scripts.
@@ -54,8 +54,12 @@ export class Phase1SafeFoundations1709078400000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_store_connection" ON "stores" ("connection_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_store_channel_name" ON "stores" ("channel", "store_name")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_store_connection" ON "stores" ("connection_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_store_channel_name" ON "stores" ("channel", "store_name")`,
+    );
 
     // 1b. listing_channel_instances
     await queryRunner.query(`
@@ -89,12 +93,24 @@ export class Phase1SafeFoundations1709078400000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_lci_listing_store" ON "listing_channel_instances" ("listing_id", "store_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_lci_listing" ON "listing_channel_instances" ("listing_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_lci_store" ON "listing_channel_instances" ("store_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_lci_connection" ON "listing_channel_instances" ("connection_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_lci_external" ON "listing_channel_instances" ("external_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_lci_sync_status" ON "listing_channel_instances" ("sync_status")`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_lci_listing_store" ON "listing_channel_instances" ("listing_id", "store_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_lci_listing" ON "listing_channel_instances" ("listing_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_lci_store" ON "listing_channel_instances" ("store_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_lci_connection" ON "listing_channel_instances" ("connection_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_lci_external" ON "listing_channel_instances" ("external_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_lci_sync_status" ON "listing_channel_instances" ("sync_status")`,
+    );
 
     // 1c. ai_enhancements
     await queryRunner.query(`
@@ -121,10 +137,18 @@ export class Phase1SafeFoundations1709078400000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ai_enh_listing" ON "ai_enhancements" ("listing_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ai_enh_type" ON "ai_enhancements" ("enhancement_type")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ai_enh_status" ON "ai_enhancements" ("status")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ai_enh_listing_type" ON "ai_enhancements" ("listing_id", "enhancement_type")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ai_enh_listing" ON "ai_enhancements" ("listing_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ai_enh_type" ON "ai_enhancements" ("enhancement_type")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ai_enh_status" ON "ai_enhancements" ("status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ai_enh_listing_type" ON "ai_enhancements" ("listing_id", "enhancement_type")`,
+    );
 
     // 1d. demo_simulation_logs
     await queryRunner.query(`
@@ -144,10 +168,18 @@ export class Phase1SafeFoundations1709078400000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_demo_log_operation" ON "demo_simulation_logs" ("operation_type")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_demo_log_channel" ON "demo_simulation_logs" ("channel")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_demo_log_listing" ON "demo_simulation_logs" ("listing_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_demo_log_created" ON "demo_simulation_logs" ("created_at")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_demo_log_operation" ON "demo_simulation_logs" ("operation_type")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_demo_log_channel" ON "demo_simulation_logs" ("channel")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_demo_log_listing" ON "demo_simulation_logs" ("listing_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_demo_log_created" ON "demo_simulation_logs" ("created_at")`,
+    );
 
     // ═══════════════════════════════════════════════════════════
     // 2. Columns from raw SQL scripts (extract_make_model, setup_search)
@@ -174,8 +206,12 @@ export class Phase1SafeFoundations1709078400000 implements MigrationInterface {
       END $$
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_listing_extracted_make" ON "listing_records" ("extractedMake")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_listing_extracted_model" ON "listing_records" ("extractedModel")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_listing_extracted_make" ON "listing_records" ("extractedMake")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_listing_extracted_model" ON "listing_records" ("extractedModel")`,
+    );
 
     // ═══════════════════════════════════════════════════════════
     // 3. Feature flags table
@@ -253,14 +289,30 @@ export class Phase1SafeFoundations1709078400000 implements MigrationInterface {
     // 5. Missing indexes for common query patterns
     // ═══════════════════════════════════════════════════════════
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_listing_status" ON "listing_records" ("status")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_listing_ebay_id" ON "listing_records" ("ebayListingId")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_listing_shopify_id" ON "listing_records" ("shopifyProductId")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_listing_updated_at" ON "listing_records" ("updatedAt")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_lci_sync_updated" ON "listing_channel_instances" ("sync_status", "updated_at")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_notif_unread" ON "notifications" ("recipientId") WHERE "read" = false`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_order_connection" ON "orders" ("connection_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_audit_entity_id" ON "audit_logs" ("entityType", "entityId")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_listing_status" ON "listing_records" ("status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_listing_ebay_id" ON "listing_records" ("ebayListingId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_listing_shopify_id" ON "listing_records" ("shopifyProductId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_listing_updated_at" ON "listing_records" ("updatedAt")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_lci_sync_updated" ON "listing_channel_instances" ("sync_status", "updated_at")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_notif_unread" ON "notifications" ("recipientId") WHERE "read" = false`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_order_connection" ON "orders" ("connection_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_audit_entity_id" ON "audit_logs" ("entityType", "entityId")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -279,11 +331,21 @@ export class Phase1SafeFoundations1709078400000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_listing_status"`);
 
     // 4. Drop added FK constraints
-    await queryRunner.query(`ALTER TABLE "inventory_events" DROP CONSTRAINT IF EXISTS "FK_inv_event_listing"`);
-    await queryRunner.query(`ALTER TABLE "sales_records" DROP CONSTRAINT IF EXISTS "FK_sales_order"`);
-    await queryRunner.query(`ALTER TABLE "sales_records" DROP CONSTRAINT IF EXISTS "FK_sales_listing"`);
-    await queryRunner.query(`ALTER TABLE "order_items" DROP CONSTRAINT IF EXISTS "FK_order_item_listing"`);
-    await queryRunner.query(`ALTER TABLE "listing_revisions" DROP CONSTRAINT IF EXISTS "FK_revision_listing"`);
+    await queryRunner.query(
+      `ALTER TABLE "inventory_events" DROP CONSTRAINT IF EXISTS "FK_inv_event_listing"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "sales_records" DROP CONSTRAINT IF EXISTS "FK_sales_order"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "sales_records" DROP CONSTRAINT IF EXISTS "FK_sales_listing"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "order_items" DROP CONSTRAINT IF EXISTS "FK_order_item_listing"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "listing_revisions" DROP CONSTRAINT IF EXISTS "FK_revision_listing"`,
+    );
 
     // 3. Drop feature_flags table
     await queryRunner.query(`DROP TABLE IF EXISTS "feature_flags"`);

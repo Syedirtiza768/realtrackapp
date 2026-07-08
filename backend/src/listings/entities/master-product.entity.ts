@@ -89,15 +89,33 @@ export class MasterProduct {
   // ──────────────────────────── Pricing ───────────────────────────
 
   /** Base cost (what we paid) — NUMERIC for precision */
-  @Column({ name: 'cost_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'cost_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   costPrice!: number | null;
 
   /** Base retail price — NUMERIC for precision */
-  @Column({ name: 'retail_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'retail_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   retailPrice!: number | null;
 
   /** MAP (Minimum Advertised Price) */
-  @Column({ name: 'map_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'map_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   mapPrice!: number | null;
 
   @Column({ type: 'varchar', length: 3, default: 'USD' })
@@ -110,11 +128,22 @@ export class MasterProduct {
   totalQuantity!: number;
 
   /** Warehouse location identifier */
-  @Column({ name: 'warehouse_location', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'warehouse_location',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   warehouseLocation!: string | null;
 
   /** Weight in pounds */
-  @Column({ name: 'weight_lbs', type: 'numeric', precision: 8, scale: 2, nullable: true })
+  @Column({
+    name: 'weight_lbs',
+    type: 'numeric',
+    precision: 8,
+    scale: 2,
+    nullable: true,
+  })
   weightLbs!: number | null;
 
   /** Dimensions as JSONB {length, width, height, unit} */
@@ -130,11 +159,21 @@ export class MasterProduct {
   // ──────────────────────────── Classification ────────────────────
 
   /** eBay category ID (leaf category) */
-  @Column({ name: 'ebay_category_id', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'ebay_category_id',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   ebayCategoryId!: string | null;
 
   /** eBay category name (for display) */
-  @Column({ name: 'ebay_category_name', type: 'varchar', length: 300, nullable: true })
+  @Column({
+    name: 'ebay_category_name',
+    type: 'varchar',
+    length: 300,
+    nullable: true,
+  })
   ebayCategoryName!: string | null;
 
   /** Item specifics / aspects (key → value arrays, eBay format) */

@@ -1,11 +1,7 @@
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EbayMvlEntry } from './entities/ebay-mvl-entry.entity.js';
@@ -53,7 +49,11 @@ export class EbayMvlImportService {
   resolveAllowedDirectory(requested?: string): string {
     const base =
       process.env.EBAY_MVL_DATA_DIR?.trim() ||
-      path.resolve(process.cwd(), '..', 'drive-download-20260706T171856Z-3-001');
+      path.resolve(
+        process.cwd(),
+        '..',
+        'drive-download-20260706T171856Z-3-001',
+      );
 
     if (!requested?.trim()) {
       return path.resolve(base);

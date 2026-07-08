@@ -29,7 +29,10 @@ export class EbayApiAuditLog {
   @Column({ name: 'ebay_account_id', type: 'uuid', nullable: true })
   ebayAccountId!: string | null;
 
-  @ManyToOne(() => ConnectedEbayAccount, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => ConnectedEbayAccount, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
   @JoinColumn({ name: 'ebay_account_id' })
   ebayAccount!: ConnectedEbayAccount | null;
 
@@ -49,19 +52,34 @@ export class EbayApiAuditLog {
   @Column({ name: 'endpoint_path', type: 'varchar', length: 500 })
   endpointPath!: string;
 
-  @Column({ name: 'marketplace_id', type: 'varchar', length: 30, nullable: true })
+  @Column({
+    name: 'marketplace_id',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+  })
   marketplaceId!: string | null;
 
   @Column({ name: 'response_status', type: 'int', nullable: true })
   responseStatus!: number | null;
 
-  @Column({ name: 'ebay_error_id', type: 'varchar', length: 80, nullable: true })
+  @Column({
+    name: 'ebay_error_id',
+    type: 'varchar',
+    length: 80,
+    nullable: true,
+  })
   ebayErrorId!: string | null;
 
   @Column({ name: 'ebay_error_message', type: 'text', nullable: true })
   ebayErrorMessage!: string | null;
 
-  @Column({ name: 'correlation_id', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'correlation_id',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   correlationId!: string | null;
 
   @Column({ name: 'duration_ms', type: 'int', nullable: true })

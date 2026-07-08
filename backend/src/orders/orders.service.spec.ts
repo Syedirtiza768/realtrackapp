@@ -92,7 +92,9 @@ describe('OrdersService (regression)', () => {
   it('findOne returns order + items', async () => {
     const order = mockOrder();
     orderRepo.findOne.mockResolvedValue(order);
-    itemRepo.find.mockResolvedValue([{ id: 'item-1', orderId: 'order-1', title: 'Part' }]);
+    itemRepo.find.mockResolvedValue([
+      { id: 'item-1', orderId: 'order-1', title: 'Part' },
+    ]);
     const result = await service.findOne('order-1');
     expect(result.order.id).toBe('order-1');
     expect(result.items).toHaveLength(1);
@@ -116,7 +118,9 @@ describe('OrdersService (regression)', () => {
   it('rejects invalid transition', async () => {
     const order = mockOrder({ status: 'delivered' });
     orderRepo.findOneBy.mockResolvedValue(order);
-    await expect(service.transitionStatus('order-1', 'pending')).rejects.toThrow();
+    await expect(
+      service.transitionStatus('order-1', 'pending'),
+    ).rejects.toThrow();
   });
 
   /* ─── Import idempotency ─── */
@@ -139,9 +143,7 @@ describe('OrdersService (regression)', () => {
       channel: 'shopify',
       externalOrderId: 'SHOP-001',
       financials: { subtotal: '50', total: '60' },
-      items: [
-        { title: 'Part A', quantity: 2, unitPrice: '25' },
-      ],
+      items: [{ title: 'Part A', quantity: 2, unitPrice: '25' }],
     });
     expect(orderRepo.create).toHaveBeenCalled();
     expect(itemRepo.save).toHaveBeenCalledTimes(1);
@@ -163,7 +165,10 @@ describe('OrdersService (regression)', () => {
   /* ─── Refund ─── */
 
   it('processRefund rejects amount > total', async () => {
-    const order = mockOrder({ status: 'refund_requested', totalAmount: '100.00' });
+    const order = mockOrder({
+      status: 'refund_requested',
+      totalAmount: '100.00',
+    });
     orderRepo.findOneBy.mockResolvedValue(order);
     await expect(
       service.processRefund('order-1', { amount: '200.00' }),
@@ -179,16 +184,17 @@ describe('OrdersService (regression)', () => {
       orderBy: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
-      getManyAndCount: jest.fn().mockResolvedValue([[mockOrder({ storeId: 'store-1' })], 1]),
+      getManyAndCount: jest
+        .fn()
+        .mockResolvedValue([[mockOrder({ storeId: 'store-1' })], 1]),
     };
     orderRepo.createQueryBuilder.mockReturnValue(mockQb);
 
     const result = await service.findAll({ storeId: 'store-1' });
     expect(result.total).toBe(1);
-    expect(mockQb.andWhere).toHaveBeenCalledWith(
-      'o.store_id = :storeId',
-      { storeId: 'store-1' },
-    );
+    expect(mockQb.andWhere).toHaveBeenCalledWith('o.store_id = :storeId', {
+      storeId: 'store-1',
+    });
   });
 
   it('findAll omits storeId filter when not provided', async () => {
@@ -205,7 +211,8 @@ describe('OrdersService (regression)', () => {
     await service.findAll({});
     // andWhere should NOT be called with storeId
     const storeIdCalls = mockQb.andWhere.mock.calls.filter(
-      (call: any[]) => typeof call[0] === 'string' && call[0].includes('store_id'),
+      (call: any[]) =>
+        typeof call[0] === 'string' && call[0].includes('store_id'),
     );
     expect(storeIdCalls).toHaveLength(0);
   });

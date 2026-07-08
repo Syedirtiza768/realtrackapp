@@ -56,14 +56,21 @@ describe('ebay-german-listing.util', () => {
 
   it('flags awkward machine-translated titles', () => {
     expect(hasAwkwardGermanPhrasing('Toyota OEM gebraucht OE 123')).toBe(true);
-    expect(hasAwkwardGermanPhrasing('Toyota Camry Armlehne OEM 123 Original gebraucht')).toBe(false);
+    expect(
+      hasAwkwardGermanPhrasing(
+        'Toyota Camry Armlehne OEM 123 Original gebraucht',
+      ),
+    ).toBe(false);
   });
 
   it('validates interior part in exterior category as error', () => {
     const result = validateGermanListing({
       title: buildGermanListingTitle(sampleInput),
       description: buildGermanListingDescription(sampleInput),
-      itemSpecifics: { Einbauposition: 'hinten links', Herstellernummer: '74260-33170-C0' },
+      itemSpecifics: {
+        Einbauposition: 'hinten links',
+        Herstellernummer: '74260-33170-C0',
+      },
       categoryId: '33697',
       categoryName: 'Exterior Door Panels & Frames',
       partType: 'Door Armrest',
@@ -71,7 +78,9 @@ describe('ebay-german-listing.util', () => {
       mpn: '74260-33170-C0',
     });
     expect(result.valid).toBe(false);
-    expect(result.issues.some((i) => i.code === 'DE_CATEGORY_MISMATCH')).toBe(true);
+    expect(result.issues.some((i) => i.code === 'DE_CATEGORY_MISMATCH')).toBe(
+      true,
+    );
   });
 
   it('flags generation/year mismatch in German validation', () => {

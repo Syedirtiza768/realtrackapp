@@ -50,8 +50,13 @@ export class InventoryController {
 
   @Get('listings/:listingId/enrichment-status')
   @RequirePermissions('inventory.view')
-  @ApiOperation({ summary: 'Get current enrichment status + stage for a listing (idle/ready/enriching/completed/failed + stage name)' })
-  async getEnrichmentStatus(@Param('listingId', ParseUUIDPipe) listingId: string) {
+  @ApiOperation({
+    summary:
+      'Get current enrichment status + stage for a listing (idle/ready/enriching/completed/failed + stage name)',
+  })
+  async getEnrichmentStatus(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+  ) {
     return this.autoTrigger.queryStatusWithStage(listingId);
   }
 
@@ -71,7 +76,9 @@ export class InventoryController {
 
   @Patch('listings/:listingId/images')
   @RequirePermissions('listings.update')
-  @ApiOperation({ summary: 'Attach uploaded photos to an inventory draft listing' })
+  @ApiOperation({
+    summary: 'Attach uploaded photos to an inventory draft listing',
+  })
   updateListingImages(
     @Param('listingId', ParseUUIDPipe) listingId: string,
     @Body() dto: UpdateListingImagesDto,
@@ -85,7 +92,10 @@ export class InventoryController {
 
   @Patch('listings/:listingId/images/reorder')
   @RequirePermissions('listings.update')
-  @ApiOperation({ summary: 'Reorder or remove images for a listing. Pass the complete desired URL array.' })
+  @ApiOperation({
+    summary:
+      'Reorder or remove images for a listing. Pass the complete desired URL array.',
+  })
   reorderImages(
     @Param('listingId', ParseUUIDPipe) listingId: string,
     @Body() dto: ReorderImagesDto,
@@ -98,7 +108,8 @@ export class InventoryController {
   @RequirePermissions('inventory.enrich')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Vision-first fetch details for one inventory part (OEM + brand + photos → title, category, SEO notes)',
+    summary:
+      'Vision-first fetch details for one inventory part (OEM + brand + photos → title, category, SEO notes)',
   })
   lookupPart(@Body() dto: InventoryPartLookupDto) {
     return this.workbench.lookupPartForListing(dto.listingId);
@@ -134,7 +145,10 @@ export class InventoryController {
   @Throttle({ medium: { limit: 10, ttl: 60_000 } })
   @RequirePermissions('inventory.enrich')
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Force re-enqueue inline enrichment for a stuck or incomplete listing' })
+  @ApiOperation({
+    summary:
+      'Force re-enqueue inline enrichment for a stuck or incomplete listing',
+  })
   async retryEnrichment(@Param('listingId', ParseUUIDPipe) listingId: string) {
     const result = await this.autoTrigger.enqueueAutoEnrich(listingId, {
       force: true,
@@ -153,14 +167,18 @@ export class InventoryController {
 
   @Get('filters/makes')
   @RequirePermissions('inventory.view')
-  @ApiOperation({ summary: 'Distinct extracted make values from listing records' })
+  @ApiOperation({
+    summary: 'Distinct extracted make values from listing records',
+  })
   getFilterMakes() {
     return this.workbench.getFilterMakes();
   }
 
   @Get('filters/models')
   @RequirePermissions('inventory.view')
-  @ApiOperation({ summary: 'Distinct extracted model values, optionally filtered by make' })
+  @ApiOperation({
+    summary: 'Distinct extracted model values, optionally filtered by make',
+  })
   getFilterModels(@Query('make') make?: string) {
     return this.workbench.getFilterModels(make);
   }
@@ -178,7 +196,9 @@ export class InventoryController {
   @Throttle({ medium: { limit: 10, ttl: 60_000 } })
   @RequirePermissions('inventory.enrich')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Create/update catalog products from enriched listing data' })
+  @ApiOperation({
+    summary: 'Create/update catalog products from enriched listing data',
+  })
   sendToCatalog(@Body() dto: InventorySendToCatalogDto) {
     return this.workbench.sendToCatalog(dto.listingIds);
   }
@@ -187,7 +207,10 @@ export class InventoryController {
   @Throttle({ medium: { limit: 5, ttl: 60_000 } })
   @RequirePermissions('inventory.enrich')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Send selected inventory parts to enrichment pipeline (one batch job, vision on photos)' })
+  @ApiOperation({
+    summary:
+      'Send selected inventory parts to enrichment pipeline (one batch job, vision on photos)',
+  })
   sendToPipeline(@Body() dto: InventoryEnrichDto, @CurrentUser() user: User) {
     return this.workbench.sendToPipeline(dto.listingIds, user.id);
   }
@@ -203,7 +226,9 @@ export class InventoryController {
 
   @Get(':listingId')
   @RequirePermissions('inventory.view')
-  @ApiOperation({ summary: 'Get inventory ledger and recent events for a listing' })
+  @ApiOperation({
+    summary: 'Get inventory ledger and recent events for a listing',
+  })
   getLedger(@Param('listingId', ParseUUIDPipe) listingId: string) {
     return this.inventoryService.getLedger(listingId);
   }
@@ -231,7 +256,11 @@ export class InventoryController {
     @Param('listingId', ParseUUIDPipe) listingId: string,
     @Body() dto: ReserveInventoryDto,
   ) {
-    return this.inventoryService.reserveQuantity(listingId, dto.quantity, dto.orderId);
+    return this.inventoryService.reserveQuantity(
+      listingId,
+      dto.quantity,
+      dto.orderId,
+    );
   }
 
   @Post(':listingId/release')
@@ -241,7 +270,11 @@ export class InventoryController {
     @Param('listingId', ParseUUIDPipe) listingId: string,
     @Body() dto: ReleaseInventoryDto,
   ) {
-    return this.inventoryService.releaseReservation(listingId, dto.quantity, dto.orderId);
+    return this.inventoryService.releaseReservation(
+      listingId,
+      dto.quantity,
+      dto.orderId,
+    );
   }
 
   @Get('alerts/low-stock')
@@ -273,7 +306,9 @@ export class InventoryController {
 
   @Get('duplicates/scan')
   @RequirePermissions('inventory.view')
-  @ApiOperation({ summary: 'Find duplicate listings by SKU/MPN/title similarity' })
+  @ApiOperation({
+    summary: 'Find duplicate listings by SKU/MPN/title similarity',
+  })
   duplicates(@Query('confidence') confidence?: string) {
     return this.inventoryService.findDuplicates(
       confidence ? parseFloat(confidence) : undefined,
@@ -299,16 +334,27 @@ export class InventoryController {
     @Param('listingId', ParseUUIDPipe) listingId: string,
     @Body() body: { storeId: string; quantity: number },
   ) {
-    return this.inventoryService.allocateToStore(listingId, body.storeId, body.quantity);
+    return this.inventoryService.allocateToStore(
+      listingId,
+      body.storeId,
+      body.quantity,
+    );
   }
 
   @Post(':listingId/allocations/reserve')
   @RequirePermissions('inventory.allocate')
-  @ApiOperation({ summary: 'Reserve from store allocation (order placed on store)' })
+  @ApiOperation({
+    summary: 'Reserve from store allocation (order placed on store)',
+  })
   reserveFromStore(
     @Param('listingId', ParseUUIDPipe) listingId: string,
     @Body() body: { storeId: string; quantity: number; orderId: string },
   ) {
-    return this.inventoryService.reserveFromStore(listingId, body.storeId, body.quantity, body.orderId);
+    return this.inventoryService.reserveFromStore(
+      listingId,
+      body.storeId,
+      body.quantity,
+      body.orderId,
+    );
   }
 }

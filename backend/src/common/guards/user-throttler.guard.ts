@@ -14,7 +14,9 @@ export class UserThrottlerGuard extends ThrottlerGuard {
       return Promise.resolve(`user:${userId}`);
     }
     const ip =
-      (request.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ||
+      (request.headers['x-forwarded-for'] as string | undefined)
+        ?.split(',')[0]
+        ?.trim() ||
       request.ip ||
       'unknown';
     return Promise.resolve(ip);

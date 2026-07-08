@@ -14,7 +14,8 @@ import Redis from 'ioredis';
 
 /** Decorator to mark a controller method as cacheable */
 export const CACHE_TTL_KEY = 'cache_ttl';
-export const CacheTTL = (seconds: number) => SetMetadata(CACHE_TTL_KEY, seconds);
+export const CacheTTL = (seconds: number) =>
+  SetMetadata(CACHE_TTL_KEY, seconds);
 
 /**
  * Redis-backed HTTP response cache interceptor.
@@ -39,14 +40,18 @@ export class RedisCacheInterceptor implements NestInterceptor {
       this.redis = new Redis({
         host: this.configService.get<string>('REDIS_HOST', 'localhost'),
         port: Number(this.configService.get<string>('REDIS_PORT', '6379')),
-        password: this.configService.get<string>('REDIS_PASSWORD', '') || undefined,
+        password:
+          this.configService.get<string>('REDIS_PASSWORD', '') || undefined,
         keyPrefix: this.prefix,
         lazyConnect: true,
         maxRetriesPerRequest: 1,
-        retryStrategy: (times) => (times > 2 ? null : Math.min(times * 200, 2000)),
+        retryStrategy: (times) =>
+          times > 2 ? null : Math.min(times * 200, 2000),
       });
       this.redis.connect().catch(() => {
-        this.logger.warn('Redis cache unavailable — falling through to handler');
+        this.logger.warn(
+          'Redis cache unavailable — falling through to handler',
+        );
         this.redis?.disconnect();
       });
     } catch {

@@ -32,7 +32,9 @@ export class SettingsService {
   /* ═══ Tenant Settings ═══ */
 
   async getAll(): Promise<Record<string, Record<string, unknown>>> {
-    const rows = await this.settingRepo.find({ order: { category: 'ASC', key: 'ASC' } });
+    const rows = await this.settingRepo.find({
+      order: { category: 'ASC', key: 'ASC' },
+    });
     const grouped: Record<string, Record<string, unknown>> = {};
     for (const row of rows) {
       if (!grouped[row.category]) grouped[row.category] = {};
@@ -71,7 +73,12 @@ export class SettingsService {
   ): Promise<TenantSetting> {
     let row = await this.settingRepo.findOne({ where: { category, key } });
     if (!row) {
-      row = this.settingRepo.create({ category, key, value, updatedBy: updatedBy ?? null });
+      row = this.settingRepo.create({
+        category,
+        key,
+        value,
+        updatedBy: updatedBy ?? null,
+      });
     } else {
       row.value = value;
       row.updatedBy = updatedBy ?? null;
@@ -84,10 +91,14 @@ export class SettingsService {
   /* ═══ Shipping Profiles ═══ */
 
   async getShippingProfiles(): Promise<ShippingProfile[]> {
-    return this.shippingRepo.find({ order: { isDefault: 'DESC', name: 'ASC' } });
+    return this.shippingRepo.find({
+      order: { isDefault: 'DESC', name: 'ASC' },
+    });
   }
 
-  async createShippingProfile(dto: CreateShippingProfileDto): Promise<ShippingProfile> {
+  async createShippingProfile(
+    dto: CreateShippingProfileDto,
+  ): Promise<ShippingProfile> {
     // If setting as default, unset all others
     if (dto.isDefault) {
       await this.shippingRepo.update({}, { isDefault: false });
@@ -113,13 +124,16 @@ export class SettingsService {
 
   async deleteShippingProfile(id: string): Promise<void> {
     const result = await this.shippingRepo.delete(id);
-    if (result.affected === 0) throw new NotFoundException('Shipping profile not found');
+    if (result.affected === 0)
+      throw new NotFoundException('Shipping profile not found');
   }
 
   /* ═══ Pricing Rules ═══ */
 
   async getPricingRules(): Promise<PricingRule[]> {
-    return this.pricingRepo.find({ order: { priority: 'ASC', createdAt: 'DESC' } });
+    return this.pricingRepo.find({
+      order: { priority: 'ASC', createdAt: 'DESC' },
+    });
   }
 
   async createPricingRule(dto: CreatePricingRuleDto): Promise<PricingRule> {
@@ -142,7 +156,10 @@ export class SettingsService {
     return saved;
   }
 
-  async updatePricingRule(id: string, dto: UpdatePricingRuleDto): Promise<PricingRule> {
+  async updatePricingRule(
+    id: string,
+    dto: UpdatePricingRuleDto,
+  ): Promise<PricingRule> {
     const rule = await this.pricingRepo.findOne({ where: { id } });
     if (!rule) throw new NotFoundException('Pricing rule not found');
     Object.assign(rule, dto);
@@ -157,6 +174,7 @@ export class SettingsService {
 
   async deletePricingRule(id: string): Promise<void> {
     const result = await this.pricingRepo.delete(id);
-    if (result.affected === 0) throw new NotFoundException('Pricing rule not found');
+    if (result.affected === 0)
+      throw new NotFoundException('Pricing rule not found');
   }
 }

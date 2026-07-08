@@ -11,9 +11,12 @@ export function applyCreatedByVisibility<T extends object>(
   if (viewAll) return qb;
   return qb.andWhere(
     new Brackets((w) => {
-      w.where(`${alias}.createdBy IS NULL`).orWhere(`${alias}.createdBy = :viewerId`, {
-        viewerId,
-      });
+      w.where(`${alias}.createdBy IS NULL`).orWhere(
+        `${alias}.createdBy = :viewerId`,
+        {
+          viewerId,
+        },
+      );
     }),
   );
 }

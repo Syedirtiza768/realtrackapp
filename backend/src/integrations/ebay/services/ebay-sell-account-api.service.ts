@@ -39,13 +39,22 @@ export class EbaySellAccountApiService {
       '/sell/account/v1/fulfillment_policy',
       marketplaceId,
       (data) => {
-        const policies = (data as { fulfillmentPolicies?: unknown[] }).fulfillmentPolicies ?? [];
+        const policies =
+          (data as { fulfillmentPolicies?: unknown[] }).fulfillmentPolicies ??
+          [];
         return policies.map((p) => {
           const row = p as Record<string, unknown>;
-          const id = String(row.fulfillmentPolicyId ?? row.fulfillment_policy_id ?? '');
+          const id = String(
+            row.fulfillmentPolicyId ?? row.fulfillment_policy_id ?? '',
+          );
           const name = String(row.name ?? id);
           const isDefault = this.readDefaultFlag(row);
-          return { ebayPolicyId: id, name, isDefault, raw: row as Record<string, unknown> };
+          return {
+            ebayPolicyId: id,
+            name,
+            isDefault,
+            raw: row,
+          };
         });
       },
       signal,
@@ -64,13 +73,19 @@ export class EbaySellAccountApiService {
       '/sell/account/v1/payment_policy',
       marketplaceId,
       (data) => {
-        const policies = (data as { paymentPolicies?: unknown[] }).paymentPolicies ?? [];
+        const policies =
+          (data as { paymentPolicies?: unknown[] }).paymentPolicies ?? [];
         return policies.map((p) => {
           const row = p as Record<string, unknown>;
           const id = String(row.paymentPolicyId ?? row.payment_policy_id ?? '');
           const name = String(row.name ?? id);
           const isDefault = this.readDefaultFlag(row);
-          return { ebayPolicyId: id, name, isDefault, raw: row as Record<string, unknown> };
+          return {
+            ebayPolicyId: id,
+            name,
+            isDefault,
+            raw: row,
+          };
         });
       },
       signal,
@@ -84,12 +99,16 @@ export class EbaySellAccountApiService {
     body: Record<string, unknown>,
   ): Promise<{ returnPolicyId: string; raw: Record<string, unknown> }> {
     const http = this.client(baseUrl);
-    const { data, headers } = await http.post('/sell/account/v1/return_policy', body, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+    const { data, headers } = await http.post(
+      '/sell/account/v1/return_policy',
+      body,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+        },
       },
-    });
+    );
     const row = (data ?? {}) as Record<string, unknown>;
     const fromBody = String(row.returnPolicyId ?? row.return_policy_id ?? '');
     const location = String(headers.location ?? headers.Location ?? '');
@@ -134,13 +153,19 @@ export class EbaySellAccountApiService {
       '/sell/account/v1/return_policy',
       marketplaceId,
       (data) => {
-        const policies = (data as { returnPolicies?: unknown[] }).returnPolicies ?? [];
+        const policies =
+          (data as { returnPolicies?: unknown[] }).returnPolicies ?? [];
         return policies.map((p) => {
           const row = p as Record<string, unknown>;
           const id = String(row.returnPolicyId ?? row.return_policy_id ?? '');
           const name = String(row.name ?? id);
           const isDefault = this.readDefaultFlag(row);
-          return { ebayPolicyId: id, name, isDefault, raw: row as Record<string, unknown> };
+          return {
+            ebayPolicyId: id,
+            name,
+            isDefault,
+            raw: row,
+          };
         });
       },
       signal,
@@ -154,9 +179,19 @@ export class EbaySellAccountApiService {
     accessToken: string,
     baseUrl: string,
     marketplaceId: string,
-  ): Promise<{ merchantLocationKey: string; name: string; raw: Record<string, unknown> }[]> {
+  ): Promise<
+    {
+      merchantLocationKey: string;
+      name: string;
+      raw: Record<string, unknown>;
+    }[]
+  > {
     const http = this.client(baseUrl);
-    const out: { merchantLocationKey: string; name: string; raw: Record<string, unknown> }[] = [];
+    const out: {
+      merchantLocationKey: string;
+      name: string;
+      raw: Record<string, unknown>;
+    }[] = [];
     let offset = 0;
     const limit = 50;
     for (;;) {
@@ -173,7 +208,11 @@ export class EbaySellAccountApiService {
         const key = String(row.merchantLocationKey ?? '');
         if (!key) continue;
         const name = String(row.name ?? key);
-        out.push({ merchantLocationKey: key, name, raw: row as Record<string, unknown> });
+        out.push({
+          merchantLocationKey: key,
+          name,
+          raw: row,
+        });
       }
       if (locs.length !== limit) break;
       offset += limit;
@@ -224,7 +263,9 @@ export class EbaySellAccountApiService {
         offset += limit;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        this.logger.warn(`eBay policy list failed ${path} mp=${marketplaceId} offset=${offset}: ${msg}`);
+        this.logger.warn(
+          `eBay policy list failed ${path} mp=${marketplaceId} offset=${offset}: ${msg}`,
+        );
         throw err;
       }
     }

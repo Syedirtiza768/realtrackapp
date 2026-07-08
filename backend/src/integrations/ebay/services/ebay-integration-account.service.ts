@@ -130,7 +130,11 @@ export class EbayIntegrationAccountService {
       defaultFulfillmentPolicyId?: string | null;
       defaultInventoryLocationKey?: string | null;
     },
-    meta?: { userId?: string | null; ip?: string | null; userAgent?: string | null },
+    meta?: {
+      userId?: string | null;
+      ip?: string | null;
+      userAgent?: string | null;
+    },
   ) {
     await this.getOne(id, organizationId);
     const mp = await this.mpRepo.findOne({
@@ -152,10 +156,12 @@ export class EbayIntegrationAccountService {
       mp.defaultReturnPolicyId = body.defaultReturnPolicyId?.trim() || null;
     }
     if (body.defaultFulfillmentPolicyId !== undefined) {
-      mp.defaultFulfillmentPolicyId = body.defaultFulfillmentPolicyId?.trim() || null;
+      mp.defaultFulfillmentPolicyId =
+        body.defaultFulfillmentPolicyId?.trim() || null;
     }
     if (body.defaultInventoryLocationKey !== undefined) {
-      mp.defaultInventoryLocationKey = body.defaultInventoryLocationKey?.trim() || null;
+      mp.defaultInventoryLocationKey =
+        body.defaultInventoryLocationKey?.trim() || null;
     }
     await this.mpRepo.save(mp);
     await this.logWriter.write({
@@ -181,7 +187,10 @@ export class EbayIntegrationAccountService {
   async patch(
     id: string,
     organizationId: string,
-    patch: { accountDisplayName?: string; connectionStatus?: ConnectedEbayAccount['connectionStatus'] },
+    patch: {
+      accountDisplayName?: string;
+      connectionStatus?: ConnectedEbayAccount['connectionStatus'];
+    },
   ) {
     const a = await this.accountRepo.findOne({ where: { id, organizationId } });
     if (!a) throw new NotFoundException('Account not found');

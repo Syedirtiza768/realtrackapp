@@ -9,7 +9,13 @@ export class FitmentEngine {
   @Column({ type: 'varchar', length: 50 })
   code!: string;
 
-  @Column({ name: 'displacement_l', type: 'numeric', precision: 4, scale: 1, nullable: true })
+  @Column({
+    name: 'displacement_l',
+    type: 'numeric',
+    precision: 4,
+    scale: 1,
+    nullable: true,
+  })
   displacementL!: number | null;
 
   @Column({ type: 'smallint', nullable: true })

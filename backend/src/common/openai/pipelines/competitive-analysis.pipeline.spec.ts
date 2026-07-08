@@ -16,8 +16,8 @@ function mockOpenAi(response: Record<string, unknown> = {}) {
           priceStdDev: 8.5,
         },
         conditionBreakdown: {
-          'New': { count: 5, avgPrice: 55 },
-          'Used': { count: 10, avgPrice: 35 },
+          New: { count: 5, avgPrice: 55 },
+          Used: { count: 10, avgPrice: 35 },
         },
         recommendedPricing: {
           competitive: 38,
@@ -25,8 +25,14 @@ function mockOpenAi(response: Record<string, unknown> = {}) {
           aggressive: 28,
           rationale: 'Market supports competitive pricing at $38',
         },
-        marketInsights: ['High demand for OEM parts', 'Price war between top 3 sellers'],
-        listingOptimizations: ['Add fitment details', 'Include OEM part number'],
+        marketInsights: [
+          'High demand for OEM parts',
+          'Price war between top 3 sellers',
+        ],
+        listingOptimizations: [
+          'Add fitment details',
+          'Include OEM part number',
+        ],
         confidence: 0.82,
         ...response,
       },
@@ -55,8 +61,14 @@ describe('CompetitiveAnalysisPipeline', () => {
 
   it('parses conditionBreakdown', async () => {
     const result = await svc.analyze('TRW Brake Pad', 'BP-123', 'Used', []);
-    expect(result.conditionBreakdown['New']).toEqual({ count: 5, avgPrice: 55 });
-    expect(result.conditionBreakdown['Used']).toEqual({ count: 10, avgPrice: 35 });
+    expect(result.conditionBreakdown['New']).toEqual({
+      count: 5,
+      avgPrice: 55,
+    });
+    expect(result.conditionBreakdown['Used']).toEqual({
+      count: 10,
+      avgPrice: 35,
+    });
   });
 
   it('parses recommendedPricing at 3 tiers', async () => {

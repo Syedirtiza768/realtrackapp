@@ -22,16 +22,29 @@ import { OrganizationMember } from './entities/organization-member.entity';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'dev-secret-change-in-production'),
+        secret: config.get<string>(
+          'JWT_SECRET',
+          'dev-secret-change-in-production',
+        ),
         signOptions: {
           expiresIn: Number(config.get<string>('JWT_EXPIRY_SECONDS', '14400')),
         },
       }),
     }),
-    TypeOrmModule.forFeature([User, Organization, OrganizationMember, AuditLog]),
+    TypeOrmModule.forFeature([
+      User,
+      Organization,
+      OrganizationMember,
+      AuditLog,
+    ]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, UserOrganizationService, JwtStrategy, AuthAuditService],
+  providers: [
+    AuthService,
+    UserOrganizationService,
+    JwtStrategy,
+    AuthAuditService,
+  ],
   exports: [
     AuthService,
     UserOrganizationService,

@@ -50,7 +50,10 @@ export class PricingIntelligenceController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @Query('limit') limit?: string,
   ) {
-    return this.priceMonitor.getSnapshotHistory(productId, limit ? parseInt(limit, 10) : 30);
+    return this.priceMonitor.getSnapshotHistory(
+      productId,
+      limit ? parseInt(limit, 10) : 30,
+    );
   }
 
   @Get(':productId/competitors')
@@ -59,13 +62,18 @@ export class PricingIntelligenceController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @Query('days') days?: string,
   ) {
-    return this.priceMonitor.getCompetitorHistory(productId, days ? parseInt(days, 10) : 30);
+    return this.priceMonitor.getCompetitorHistory(
+      productId,
+      days ? parseInt(days, 10) : 30,
+    );
   }
 
   /* ─── AI Pricing ─── */
 
   @Get(':productId/suggestion')
-  @ApiOperation({ summary: 'Get AI pricing suggestion for a product (does not apply)' })
+  @ApiOperation({
+    summary: 'Get AI pricing suggestion for a product (does not apply)',
+  })
   getSuggestion(@Param('productId', ParseUUIDPipe) productId: string) {
     return this.autoReprice.getSuggestion(productId);
   }

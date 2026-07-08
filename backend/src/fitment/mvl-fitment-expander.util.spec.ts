@@ -8,9 +8,7 @@ import {
 
 describe('mvl-fitment-expander.util', () => {
   const platformRanges = {
-    'Mercedes-Benz|C-Class': [
-      { start: 2008, end: 2014, code: 'W204' },
-    ],
+    'Mercedes-Benz|C-Class': [{ start: 2008, end: 2014, code: 'W204' }],
   };
 
   it('resolves expansion mode', () => {
@@ -47,9 +45,24 @@ describe('mvl-fitment-expander.util', () => {
 
   it('collapses per-year rows into ranges', () => {
     const ranges = collapseYearRanges([
-      { year: '2008', make: 'Mercedes-Benz', model: 'C-Class', source: 'platform_generation' },
-      { year: '2009', make: 'Mercedes-Benz', model: 'C-Class', source: 'platform_generation' },
-      { year: '2010', make: 'Mercedes-Benz', model: 'C-Class', source: 'platform_generation' },
+      {
+        year: '2008',
+        make: 'Mercedes-Benz',
+        model: 'C-Class',
+        source: 'platform_generation',
+      },
+      {
+        year: '2009',
+        make: 'Mercedes-Benz',
+        model: 'C-Class',
+        source: 'platform_generation',
+      },
+      {
+        year: '2010',
+        make: 'Mercedes-Benz',
+        model: 'C-Class',
+        source: 'platform_generation',
+      },
     ]);
     expect(ranges).toHaveLength(1);
     expect(ranges[0].yearStart).toBe(2008);

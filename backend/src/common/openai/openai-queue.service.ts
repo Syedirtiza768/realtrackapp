@@ -35,9 +35,7 @@ const PRIORITY_MAP: Record<OpenAiJobPriority, number> = {
 export class OpenAiQueueService implements OnModuleInit {
   private readonly logger = new Logger(OpenAiQueueService.name);
 
-  constructor(
-    @InjectQueue('openai') private readonly queue: Queue,
-  ) {}
+  constructor(@InjectQueue('openai') private readonly queue: Queue) {}
 
   onModuleInit() {
     this.logger.log('OpenAI queue service initialized');

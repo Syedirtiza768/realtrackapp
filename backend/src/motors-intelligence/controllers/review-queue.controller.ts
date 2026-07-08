@@ -19,9 +19,7 @@ import { User } from '../../auth/entities/user.entity.js';
 @Controller('motors-intelligence/review')
 @RequirePermissions('motors.review')
 export class ReviewQueueController {
-  constructor(
-    private readonly reviewService: ReviewQueueService,
-  ) {}
+  constructor(private readonly reviewService: ReviewQueueService) {}
 
   @Get('tasks')
   @ApiOperation({ summary: 'List review tasks with filters' })

@@ -25,7 +25,9 @@ export class CreateSkuSequence1785200000000 implements MigrationInterface {
     const maxNum = Number(rows[0]?.max_num ?? 0);
 
     // CREATE SEQUENCE … START WITH N means the first nextval() returns N.
-    await queryRunner.query(`CREATE SEQUENCE IF NOT EXISTS sku_seq START WITH ${maxNum + 1}`);
+    await queryRunner.query(
+      `CREATE SEQUENCE IF NOT EXISTS sku_seq START WITH ${maxNum + 1}`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

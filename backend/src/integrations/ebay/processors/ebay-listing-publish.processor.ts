@@ -55,132 +55,138 @@ export class EbayListingPublishProcessor extends WorkerHost {
     await this.targetRepo.update(target.id, { status: 'processing' });
 
     try {
-    const v = await this.validation.validatePublish({
-      organizationId: listingJob.organizationId,
-      catalogProductId: target.catalogProductId,
-      ebayAccountId: target.ebayAccountId,
-      marketplaceId: target.marketplaceId,
-    });
-
-    if (v.status === 'blocked') {
-      await this.targetRepo.update(target.id, {
-        status: 'failed',
-        errorPayload: {
-          source: 'internal',
-          stage: 'validation',
-          message: 'Publish validation blocked',
-          errors: v.errors,
-          warnings: v.warnings,
-        } satisfies PublishErrorPayload,
-      });
-      await this.refreshJobStatus(listingJob.id);
-      return;
-    }
-
-    const store = await this.storeRepo.findOneBy({ id: account.primaryStoreId });
-    if (!store) {
-      await this.targetRepo.update(target.id, {
-        status: 'failed',
-        errorPayload: { message: 'Primary store missing' },
-      });
-      await this.refreshJobStatus(listingJob.id);
-      return;
-    }
-
-    if (store.ebayMarketplaceId !== target.marketplaceId) {
-      store.config = {
-        ...(store.config ?? {}),
-        marketplace: target.marketplaceId,
-      };
-      store.ebayMarketplaceId = target.marketplaceId;
-      await this.storeRepo.save(store);
-    }
-
-    const resolved = await this.publishResolver.resolve(target.catalogProductId);
-    const built = await this.builder.build({
-      catalogProductId: target.catalogProductId,
-      ebayAccountId: target.ebayAccountId,
-      marketplaceId: target.marketplaceId,
-      listingRecordId:
-        resolved?.snapshot.listingRecordId ?? target.catalogProductId,
-      storeId: account.primaryStoreId,
-    });
-
-    if (built.blockingErrors.length) {
-      await this.targetRepo.update(target.id, {
-        status: 'failed',
-        errorPayload: {
-          source: 'internal',
-          stage: 'build',
-          message: 'Listing build failed',
-          errors: built.blockingErrors,
-        } satisfies PublishErrorPayload,
-      });
-      await this.refreshJobStatus(listingJob.id);
-      return;
-    }
-
-    const results = await this.ebayPublish.publish(built.publishRequest);
-    const r = results[0];
-    if (r?.success) {
-      await this.targetRepo.update(target.id, {
-        status: 'success',
-        resultPayload: {
-          offerId: r.offerId,
-          listingId: r.listingId,
-          warnings: [...v.warnings, ...built.warnings],
-        },
+      const v = await this.validation.validatePublish({
+        organizationId: listingJob.organizationId,
+        catalogProductId: target.catalogProductId,
+        ebayAccountId: target.ebayAccountId,
+        marketplaceId: target.marketplaceId,
       });
 
-      let ch = await this.channelRepo.findOne({
-        where: {
-          organizationId: listingJob.organizationId,
-          catalogProductId: target.catalogProductId,
-          ebayAccountId: target.ebayAccountId,
-          marketplaceId: target.marketplaceId,
-        },
+      if (v.status === 'blocked') {
+        await this.targetRepo.update(target.id, {
+          status: 'failed',
+          errorPayload: {
+            source: 'internal',
+            stage: 'validation',
+            message: 'Publish validation blocked',
+            errors: v.errors,
+            warnings: v.warnings,
+          } satisfies PublishErrorPayload,
+        });
+        await this.refreshJobStatus(listingJob.id);
+        return;
+      }
+
+      const store = await this.storeRepo.findOneBy({
+        id: account.primaryStoreId,
       });
-      if (!ch) {
-        ch = this.channelRepo.create({
-          organizationId: listingJob.organizationId,
-          catalogProductId: target.catalogProductId,
-          ebayAccountId: target.ebayAccountId,
-          marketplaceId: target.marketplaceId,
+      if (!store) {
+        await this.targetRepo.update(target.id, {
+          status: 'failed',
+          errorPayload: { message: 'Primary store missing' },
+        });
+        await this.refreshJobStatus(listingJob.id);
+        return;
+      }
+
+      if (store.ebayMarketplaceId !== target.marketplaceId) {
+        store.config = {
+          ...(store.config ?? {}),
+          marketplace: target.marketplaceId,
+        };
+        store.ebayMarketplaceId = target.marketplaceId;
+        await this.storeRepo.save(store);
+      }
+
+      const resolved = await this.publishResolver.resolve(
+        target.catalogProductId,
+      );
+      const built = await this.builder.build({
+        catalogProductId: target.catalogProductId,
+        ebayAccountId: target.ebayAccountId,
+        marketplaceId: target.marketplaceId,
+        listingRecordId:
+          resolved?.snapshot.listingRecordId ?? target.catalogProductId,
+        storeId: account.primaryStoreId,
+      });
+
+      if (built.blockingErrors.length) {
+        await this.targetRepo.update(target.id, {
+          status: 'failed',
+          errorPayload: {
+            source: 'internal',
+            stage: 'build',
+            message: 'Listing build failed',
+            errors: built.blockingErrors,
+          } satisfies PublishErrorPayload,
+        });
+        await this.refreshJobStatus(listingJob.id);
+        return;
+      }
+
+      const results = await this.ebayPublish.publish(built.publishRequest);
+      const r = results[0];
+      if (r?.success) {
+        await this.targetRepo.update(target.id, {
+          status: 'success',
+          resultPayload: {
+            offerId: r.offerId,
+            listingId: r.listingId,
+            warnings: [...v.warnings, ...built.warnings],
+          },
+        });
+
+        let ch = await this.channelRepo.findOne({
+          where: {
+            organizationId: listingJob.organizationId,
+            catalogProductId: target.catalogProductId,
+            ebayAccountId: target.ebayAccountId,
+            marketplaceId: target.marketplaceId,
+          },
+        });
+        if (!ch) {
+          ch = this.channelRepo.create({
+            organizationId: listingJob.organizationId,
+            catalogProductId: target.catalogProductId,
+            ebayAccountId: target.ebayAccountId,
+            marketplaceId: target.marketplaceId,
+          });
+        }
+        ch.internalSku = built.publishRequest.sku;
+        ch.ebayInventorySku = built.publishRequest.sku;
+        ch.offerId = r.offerId ?? null;
+        ch.listingId = r.listingId ?? null;
+        ch.listingUrl =
+          r.listingId != null
+            ? `https://www.ebay.com/itm/${r.listingId}`
+            : null;
+        ch.channelPrice = String(built.publishRequest.price);
+        ch.channelQuantity = built.publishRequest.quantity;
+        ch.listingStatus = 'published';
+        ch.publishedAt = new Date();
+        ch.lastErrorCode = null;
+        ch.lastErrorMessage = null;
+        await this.channelRepo.save(ch);
+      } else {
+        await this.targetRepo.update(target.id, {
+          status: 'failed',
+          errorPayload: {
+            source: 'ebay',
+            stage: 'bulk_create',
+            message: r?.error ?? 'Publish failed',
+            errors: [r?.error ?? 'Publish failed'],
+          } satisfies PublishErrorPayload,
         });
       }
-      ch.internalSku = built.publishRequest.sku;
-      ch.ebayInventorySku = built.publishRequest.sku;
-      ch.offerId = r.offerId ?? null;
-      ch.listingId = r.listingId ?? null;
-      ch.listingUrl =
-        r.listingId != null
-          ? `https://www.ebay.com/itm/${r.listingId}`
-          : null;
-      ch.channelPrice = String(built.publishRequest.price);
-      ch.channelQuantity = built.publishRequest.quantity;
-      ch.listingStatus = 'published';
-      ch.publishedAt = new Date();
-      ch.lastErrorCode = null;
-      ch.lastErrorMessage = null;
-      await this.channelRepo.save(ch);
-    } else {
-      await this.targetRepo.update(target.id, {
-        status: 'failed',
-        errorPayload: {
-          source: 'ebay',
-          stage: 'bulk_create',
-          message: r?.error ?? 'Publish failed',
-          errors: [r?.error ?? 'Publish failed'],
-        } satisfies PublishErrorPayload,
-      });
-    }
 
-    await this.refreshJobStatus(listingJob.id);
+      await this.refreshJobStatus(listingJob.id);
     } catch (err: unknown) {
       this.logger.error(`Publish target ${target.id} crashed`, err);
       await this.targetRepo.update(target.id, {
         status: 'failed',
-        errorPayload: { message: err instanceof Error ? err.message : String(err) },
+        errorPayload: {
+          message: err instanceof Error ? err.message : String(err),
+        },
       });
       await this.refreshJobStatus(listingJob.id);
       throw err;
@@ -188,7 +194,9 @@ export class EbayListingPublishProcessor extends WorkerHost {
   }
 
   private async refreshJobStatus(jobId: string): Promise<void> {
-    const targets = await this.targetRepo.find({ where: { listingJobId: jobId } });
+    const targets = await this.targetRepo.find({
+      where: { listingJobId: jobId },
+    });
     const failed = targets.filter((t) => t.status === 'failed').length;
     const success = targets.filter((t) => t.status === 'success').length;
     const pending = targets.filter(

@@ -49,9 +49,7 @@ export function readMvlWorkbook(
   }
 
   const pw =
-    password ??
-    process.env.EBAY_MVL_WORKBOOK_PASSWORD ??
-    'VehicleList';
+    password ?? process.env.EBAY_MVL_WORKBOOK_PASSWORD ?? 'VehicleList';
 
   const result = spawnSync(resolvePythonBinary(), [scriptPath, filePath], {
     env: {
@@ -68,7 +66,11 @@ export function readMvlWorkbook(
     );
   }
   if (result.status !== 0) {
-    const detail = (result.stderr?.toString() || result.stdout?.toString() || '').trim();
+    const detail = (
+      result.stderr?.toString() ||
+      result.stdout?.toString() ||
+      ''
+    ).trim();
     throw new Error(
       `MVL workbook decrypt failed (exit ${result.status})${detail ? `: ${detail}` : ''}`,
     );
@@ -95,14 +97,15 @@ export function sheetToRows(
     raw: false,
   });
 
-  const nonEmpty = matrix.filter((row) =>
-    Array.isArray(row) && row.some((cell) => String(cell ?? '').trim()),
+  const nonEmpty = matrix.filter(
+    (row) =>
+      Array.isArray(row) && row.some((cell) => String(cell ?? '').trim()),
   );
   if (nonEmpty.length === 0) {
     return { headers: [], rows: [] };
   }
 
-  const headers = (nonEmpty[0] as unknown[]).map((cell) => String(cell ?? '').trim());
-  const rows = nonEmpty.slice(1) as unknown[][];
+  const headers = nonEmpty[0].map((cell) => String(cell ?? '').trim());
+  const rows = nonEmpty.slice(1);
   return { headers, rows };
 }

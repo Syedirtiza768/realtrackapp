@@ -26,7 +26,12 @@ export class OrderItem {
   @Column({ name: 'listing_id', type: 'uuid', nullable: true })
   listingId!: string | null;
 
-  @Column({ name: 'external_item_id', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'external_item_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   externalItemId!: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })

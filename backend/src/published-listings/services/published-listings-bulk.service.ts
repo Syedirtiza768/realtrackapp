@@ -58,7 +58,7 @@ export class PublishedListingsBulkService {
       this.jobRepo.create({
         organizationId,
         requestedByUserId: user.id,
-        actionType: dto.action as BulkJobAction,
+        actionType: dto.action,
         status: 'pending',
         actionPayload: dto.payload ?? null,
         totalItems: listings.length,

@@ -15,7 +15,7 @@ function createRepo<T extends Record<string, unknown>>() {
   return {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
-    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d } as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'new-id', ...d }) as T),
     save: jest.fn((d: T) => Promise.resolve(d)),
     createQueryBuilder: jest.fn(() => ({
       update: jest.fn().mockReturnThis(),
@@ -73,12 +73,21 @@ describe('EbayListingValidationService', () => {
     accountRepo = createRepo<ConnectedEbayAccount>();
     mpRepo = createRepo<EbayAccountMarketplace>();
     tokens = { getValidAccessToken: jest.fn().mockResolvedValue('token') };
-    sellerpunditPolicies = { ensurePoliciesFresh: jest.fn().mockResolvedValue({ ok: true }) };
-    sellerpunditTokens = { validateAccountEbayToken: jest.fn().mockResolvedValue(true) };
-    inventoryApi = { ensureMerchantLocation: jest.fn().mockResolvedValue('loc-1') };
+    sellerpunditPolicies = {
+      ensurePoliciesFresh: jest.fn().mockResolvedValue({ ok: true }),
+    };
+    sellerpunditTokens = {
+      validateAccountEbayToken: jest.fn().mockResolvedValue(true),
+    };
+    inventoryApi = {
+      ensureMerchantLocation: jest.fn().mockResolvedValue('loc-1'),
+    };
     publishResolver = { resolve: jest.fn().mockResolvedValue(mockSnapshot()) };
     marketplaceConfig = {
-      get: jest.fn().mockReturnValue({ requiresLocalizedDescription: false, supportsMotorsFitment: true }),
+      get: jest.fn().mockReturnValue({
+        requiresLocalizedDescription: false,
+        supportsMotorsFitment: true,
+      }),
     };
 
     svc = new EbayListingValidationService(
@@ -121,7 +130,9 @@ describe('EbayListingValidationService', () => {
 
     const result = await svc.validatePublish(baseParams);
     expect(result.status).toBe('blocked');
-    expect(result.errors).toContainEqual(expect.stringContaining('reconnection'));
+    expect(result.errors).toContainEqual(
+      expect.stringContaining('reconnection'),
+    );
     expect(result.requiredActions).toContain('reconnect_oauth');
   });
 
@@ -140,7 +151,9 @@ describe('EbayListingValidationService', () => {
     });
 
     const result = await svc.validatePublish(baseParams);
-    expect(result.errors).toContainEqual(expect.stringContaining('fulfillment'));
+    expect(result.errors).toContainEqual(
+      expect.stringContaining('fulfillment'),
+    );
   });
 
   it('requires inventory location', async () => {
@@ -158,7 +171,9 @@ describe('EbayListingValidationService', () => {
     });
 
     const result = await svc.validatePublish(baseParams);
-    expect(result.errors).toContainEqual(expect.stringContaining('inventory location'));
+    expect(result.errors).toContainEqual(
+      expect.stringContaining('inventory location'),
+    );
   });
 
   it('errors for missing SKU', async () => {
@@ -212,12 +227,16 @@ describe('EbayListingValidationService', () => {
       defaultReturnPolicyId: 'rp-1',
       defaultInventoryLocationKey: 'loc-1',
     });
-    publishResolver.resolve.mockResolvedValue(mockSnapshot({
-      title: 'A'.repeat(100),
-    }));
+    publishResolver.resolve.mockResolvedValue(
+      mockSnapshot({
+        title: 'A'.repeat(100),
+      }),
+    );
 
     const result = await svc.validatePublish(baseParams);
-    expect(result.warnings).toContainEqual(expect.stringContaining('truncated'));
+    expect(result.warnings).toContainEqual(
+      expect.stringContaining('truncated'),
+    );
   });
 
   it('checks OAuth token validity at end', async () => {
@@ -236,6 +255,8 @@ describe('EbayListingValidationService', () => {
     tokens.getValidAccessToken.mockRejectedValue(new Error('token expired'));
 
     const result = await svc.validatePublish(baseParams);
-    expect(result.errors).toContainEqual(expect.stringContaining('OAuth token'));
+    expect(result.errors).toContainEqual(
+      expect.stringContaining('OAuth token'),
+    );
   });
 });

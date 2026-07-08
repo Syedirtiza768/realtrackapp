@@ -35,11 +35,25 @@ import { TeamsModule } from '../teams/teams.module.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([IngestionJob, AiResult, ImageAsset, ListingRecord, PipelineJob, CatalogProduct, User]),
+    TypeOrmModule.forFeature([
+      IngestionJob,
+      AiResult,
+      ImageAsset,
+      ListingRecord,
+      PipelineJob,
+      CatalogProduct,
+      User,
+    ]),
     RbacModule,
     BullModule.registerQueue({ name: 'ingestion' }),
     BullModule.registerQueue({ name: 'pipeline' }),
-    BullModule.registerQueue({ name: 'listing-optimization', defaultJobOptions: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } } }),
+    BullModule.registerQueue({
+      name: 'listing-optimization',
+      defaultJobOptions: {
+        removeOnComplete: { count: 50 },
+        removeOnFail: { count: 100 },
+      },
+    }),
     ListingOptimizationModule,
     FitmentModule,
     AiModule,
@@ -50,7 +64,12 @@ import { TeamsModule } from '../teams/teams.module.js';
     HeavyJobLimiterModule,
     TeamsModule,
   ],
-  controllers: [IngestionController, ReviewController, PipelineController, ImageEnrichmentController],
+  controllers: [
+    IngestionController,
+    ReviewController,
+    PipelineController,
+    ImageEnrichmentController,
+  ],
   providers: [
     IngestionService,
     IngestionProcessor,
@@ -63,6 +82,12 @@ import { TeamsModule } from '../teams/teams.module.js';
     PipelineOutputImageService,
     SingleListingFormService,
   ],
-  exports: [IngestionService, PipelineService, ImageEnrichmentService, ListingOptimizationModule, SingleListingFormService],
+  exports: [
+    IngestionService,
+    PipelineService,
+    ImageEnrichmentService,
+    ListingOptimizationModule,
+    SingleListingFormService,
+  ],
 })
 export class IngestionModule {}

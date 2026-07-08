@@ -30,7 +30,11 @@ export class EbayOAuthToken {
   @Column({ name: 'refresh_token_encrypted', type: 'text' })
   refreshTokenEncrypted!: string;
 
-  @Column({ name: 'refresh_token_expires_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'refresh_token_expires_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   refreshTokenExpiresAt!: Date | null;
 
   @Column({ name: 'granted_scopes', type: 'jsonb', default: () => `'[]'` })

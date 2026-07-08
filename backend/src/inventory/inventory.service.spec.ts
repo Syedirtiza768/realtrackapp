@@ -12,7 +12,9 @@ import { InventoryEvent } from './entities/inventory-event.entity';
 import { StoreInventoryAllocation } from './entities/store-inventory-allocation.entity';
 import { FeatureFlagService } from '../common/feature-flags/feature-flag.service';
 
-const mockLedger = (overrides: Partial<InventoryLedger> = {}): InventoryLedger =>
+const mockLedger = (
+  overrides: Partial<InventoryLedger> = {},
+): InventoryLedger =>
   ({
     id: 'led-1',
     listingId: 'listing-1',
@@ -44,7 +46,10 @@ const mockEvent = (overrides: Partial<InventoryEvent> = {}): InventoryEvent =>
   }) as InventoryEvent;
 
 // Helper to create a mock entity manager for transaction tests
-function createMockEntityManager(ledger: InventoryLedger, existingEvent: InventoryEvent | null = null) {
+function createMockEntityManager(
+  ledger: InventoryLedger,
+  existingEvent: InventoryEvent | null = null,
+) {
   return {
     findOne: jest.fn().mockImplementation((_entity, opts) => {
       if (opts?.where?.idempotencyKey) return Promise.resolve(existingEvent);
@@ -106,11 +111,17 @@ describe('InventoryService (regression)', () => {
         InventoryService,
         { provide: getRepositoryToken(InventoryLedger), useValue: ledgerRepo },
         { provide: getRepositoryToken(InventoryEvent), useValue: eventRepo },
-        { provide: getRepositoryToken(StoreInventoryAllocation), useValue: {
-          find: jest.fn().mockResolvedValue([]),
-        }},
+        {
+          provide: getRepositoryToken(StoreInventoryAllocation),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
+          },
+        },
         { provide: DataSource, useValue: dataSource },
-        { provide: FeatureFlagService, useValue: { isEnabled: jest.fn().mockResolvedValue(false) } },
+        {
+          provide: FeatureFlagService,
+          useValue: { isEnabled: jest.fn().mockResolvedValue(false) },
+        },
       ],
     }).compile();
 
@@ -142,7 +153,12 @@ describe('InventoryService (regression)', () => {
     const em = createMockEntityManager(ledger);
     dataSource.transaction.mockImplementation((_iso, cb) => cb(em));
 
-    const result = await service.adjustQuantity('listing-1', 10, 'restock', 'idem-new');
+    const result = await service.adjustQuantity(
+      'listing-1',
+      10,
+      'restock',
+      'idem-new',
+    );
     expect(em.save).toHaveBeenCalled();
   });
 
@@ -162,7 +178,12 @@ describe('InventoryService (regression)', () => {
     const em = createMockEntityManager(ledger, existingEvent);
     dataSource.transaction.mockImplementation((_iso, cb) => cb(em));
 
-    const result = await service.adjustQuantity('listing-1', 10, 'dup', 'idem-dup');
+    const result = await service.adjustQuantity(
+      'listing-1',
+      10,
+      'dup',
+      'idem-dup',
+    );
     expect(result.event.idempotencyKey).toBe('idem-dup');
   });
 
@@ -218,7 +239,13 @@ describe('InventoryService (regression)', () => {
   /* ─── getEvents ─── */
 
   it('getEvents returns paginated events', async () => {
-    const result = await service.getEvents('listing-1', undefined, undefined, 20, 0);
+    const result = await service.getEvents(
+      'listing-1',
+      undefined,
+      undefined,
+      20,
+      0,
+    );
     expect(result).toEqual({ events: [], total: 0 });
   });
 
@@ -227,8 +254,20 @@ describe('InventoryService (regression)', () => {
   it('getAllocations returns allocations for a listing', async () => {
     const allocationRepo = (service as any).allocationRepo;
     allocationRepo.find.mockResolvedValue([
-      { id: 'alloc-1', listingId: 'listing-1', storeId: 'store-1', allocatedQty: 20, reservedQty: 5 },
-      { id: 'alloc-2', listingId: 'listing-1', storeId: 'store-2', allocatedQty: 10, reservedQty: 0 },
+      {
+        id: 'alloc-1',
+        listingId: 'listing-1',
+        storeId: 'store-1',
+        allocatedQty: 20,
+        reservedQty: 5,
+      },
+      {
+        id: 'alloc-2',
+        listingId: 'listing-1',
+        storeId: 'store-2',
+        allocatedQty: 10,
+        reservedQty: 0,
+      },
     ]);
 
     const result = await service.getAllocations('listing-1');
@@ -239,13 +278,22 @@ describe('InventoryService (regression)', () => {
   it('getAllocations filters by storeId when provided', async () => {
     const allocationRepo = (service as any).allocationRepo;
     allocationRepo.find.mockResolvedValue([
-      { id: 'alloc-1', listingId: 'listing-1', storeId: 'store-1', allocatedQty: 20, reservedQty: 5 },
+      {
+        id: 'alloc-1',
+        listingId: 'listing-1',
+        storeId: 'store-1',
+        allocatedQty: 20,
+        reservedQty: 5,
+      },
     ]);
 
     const result = await service.getAllocations('listing-1', 'store-1');
     expect(allocationRepo.find).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ listingId: 'listing-1', storeId: 'store-1' }),
+        where: expect.objectContaining({
+          listingId: 'listing-1',
+          storeId: 'store-1',
+        }),
       }),
     );
   });
@@ -265,28 +313,35 @@ describe('InventoryService (regression)', () => {
 
     const ledger = mockLedger({ quantityTotal: 100, quantityReserved: 10 });
     const mockEm = {
-      createQueryBuilder: jest.fn().mockImplementation((_entity: any, alias: string) => {
-        if (alias === 'l') {
-          return {
-            setLock: jest.fn().mockReturnThis(),
-            where: jest.fn().mockReturnThis(),
-            getOne: jest.fn().mockResolvedValue(ledger),
-          };
-        }
-        if (alias === 'a') {
-          return {
-            select: jest.fn().mockReturnThis(),
-            where: jest.fn().mockReturnThis(),
-            andWhere: jest.fn().mockReturnThis(),
-            getRawOne: jest.fn().mockResolvedValue({ total: '30' }),
-          };
-        }
-      }),
+      createQueryBuilder: jest
+        .fn()
+        .mockImplementation((_entity: any, alias: string) => {
+          if (alias === 'l') {
+            return {
+              setLock: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              getOne: jest.fn().mockResolvedValue(ledger),
+            };
+          }
+          if (alias === 'a') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              andWhere: jest.fn().mockReturnThis(),
+              getRawOne: jest.fn().mockResolvedValue({ total: '30' }),
+            };
+          }
+        }),
       findOne: jest.fn().mockResolvedValue(null),
-      create: jest.fn((_entity: any, data: any) => ({ id: 'alloc-new', ...data })),
+      create: jest.fn((_entity: any, data: any) => ({
+        id: 'alloc-new',
+        ...data,
+      })),
       save: jest.fn((_entity: any, data: any) => Promise.resolve(data)),
     };
-    dataSource.transaction.mockImplementation((_iso: any, cb: any) => cb(mockEm));
+    dataSource.transaction.mockImplementation((_iso: any, cb: any) =>
+      cb(mockEm),
+    );
 
     const result = await service.allocateToStore('listing-1', 'store-1', 20);
     expect(result.allocatedQty).toBe(20);
@@ -299,26 +354,30 @@ describe('InventoryService (regression)', () => {
 
     const ledger = mockLedger({ quantityTotal: 50, quantityReserved: 5 });
     const mockEm = {
-      createQueryBuilder: jest.fn().mockImplementation((_entity: any, alias: string) => {
-        if (alias === 'l') {
-          return {
-            setLock: jest.fn().mockReturnThis(),
-            where: jest.fn().mockReturnThis(),
-            getOne: jest.fn().mockResolvedValue(ledger),
-          };
-        }
-        if (alias === 'a') {
-          return {
-            select: jest.fn().mockReturnThis(),
-            where: jest.fn().mockReturnThis(),
-            andWhere: jest.fn().mockReturnThis(),
-            getRawOne: jest.fn().mockResolvedValue({ total: '40' }),
-          };
-        }
-      }),
+      createQueryBuilder: jest
+        .fn()
+        .mockImplementation((_entity: any, alias: string) => {
+          if (alias === 'l') {
+            return {
+              setLock: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              getOne: jest.fn().mockResolvedValue(ledger),
+            };
+          }
+          if (alias === 'a') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              andWhere: jest.fn().mockReturnThis(),
+              getRawOne: jest.fn().mockResolvedValue({ total: '40' }),
+            };
+          }
+        }),
       findOne: jest.fn().mockResolvedValue(null),
     };
-    dataSource.transaction.mockImplementation((_iso: any, cb: any) => cb(mockEm));
+    dataSource.transaction.mockImplementation((_iso: any, cb: any) =>
+      cb(mockEm),
+    );
 
     await expect(
       service.allocateToStore('listing-1', 'store-1', 20),
@@ -352,9 +411,16 @@ describe('InventoryService (regression)', () => {
       }),
       save: jest.fn((_entity: any, data: any) => Promise.resolve(data)),
     };
-    dataSource.transaction.mockImplementation((_iso: any, cb: any) => cb(mockEm));
+    dataSource.transaction.mockImplementation((_iso: any, cb: any) =>
+      cb(mockEm),
+    );
 
-    const result = await service.reserveFromStore('listing-1', 'store-1', 10, 'order-5');
+    const result = await service.reserveFromStore(
+      'listing-1',
+      'store-1',
+      10,
+      'order-5',
+    );
     expect(result.reservedQty).toBe(15); // 5 + 10
   });
 
@@ -376,7 +442,9 @@ describe('InventoryService (regression)', () => {
         getOne: jest.fn().mockResolvedValue(allocation),
       }),
     };
-    dataSource.transaction.mockImplementation((_iso: any, cb: any) => cb(mockEm));
+    dataSource.transaction.mockImplementation((_iso: any, cb: any) =>
+      cb(mockEm),
+    );
 
     await expect(
       service.reserveFromStore('listing-1', 'store-1', 5, 'order-6'),
@@ -394,7 +462,9 @@ describe('InventoryService (regression)', () => {
         getOne: jest.fn().mockResolvedValue(null),
       }),
     };
-    dataSource.transaction.mockImplementation((_iso: any, cb: any) => cb(mockEm));
+    dataSource.transaction.mockImplementation((_iso: any, cb: any) =>
+      cb(mockEm),
+    );
 
     await expect(
       service.reserveFromStore('listing-1', 'store-missing', 1, 'order-7'),

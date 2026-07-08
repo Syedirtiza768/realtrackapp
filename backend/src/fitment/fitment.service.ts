@@ -108,9 +108,7 @@ export class FitmentService {
     });
 
     const saved = await this.fitmentRepo.save(fitment);
-    this.logger.log(
-      `Created fitment ${saved.id} for listing=${listingId}`,
-    );
+    this.logger.log(`Created fitment ${saved.id} for listing=${listingId}`);
     return saved;
   }
 
@@ -150,10 +148,14 @@ export class FitmentService {
       .leftJoinAndSelect('pf.engine', 'engine');
 
     if (dto.make) {
-      qb.andWhere('make.slug = :makeSlug', { makeSlug: dto.make.toLowerCase() });
+      qb.andWhere('make.slug = :makeSlug', {
+        makeSlug: dto.make.toLowerCase(),
+      });
     }
     if (dto.model) {
-      qb.andWhere('model.slug = :modelSlug', { modelSlug: dto.model.toLowerCase() });
+      qb.andWhere('model.slug = :modelSlug', {
+        modelSlug: dto.model.toLowerCase(),
+      });
     }
     if (dto.yearStart) {
       qb.andWhere('pf.year_end >= :yearStart', { yearStart: dto.yearStart });
@@ -218,11 +220,19 @@ export class FitmentService {
     }
 
     let listings = Array.from(listingsMap.values());
-    let matchStrategy: 'fitment' | 'fallback_text' | 'ai_enriched' | 'ebay_browse' = 'fitment';
+    let matchStrategy:
+      | 'fitment'
+      | 'fallback_text'
+      | 'ai_enriched'
+      | 'ebay_browse' = 'fitment';
 
     // Fallback for datasets where explicit fitment rows are missing
     if (listings.length === 0) {
-      listings = await this.findListingsByVehicleText(decoded.make, decoded.model, year);
+      listings = await this.findListingsByVehicleText(
+        decoded.make,
+        decoded.model,
+        year,
+      );
       matchStrategy = 'fallback_text';
     }
 
@@ -237,7 +247,10 @@ export class FitmentService {
 
     // eBay Browse API fallback: search eBay for parts matching this vehicle
     if (listings.length === 0) {
-      const ebayListings = await this.ebayVinSearch.searchAndPersist(vin, decoded);
+      const ebayListings = await this.ebayVinSearch.searchAndPersist(
+        vin,
+        decoded,
+      );
       if (ebayListings.length > 0) {
         listings = ebayListings;
         matchStrategy = 'ebay_browse';
@@ -263,14 +276,18 @@ export class FitmentService {
   /**
    * Search listings using AI-enriched data: knownFitment vehicles and commonParts keywords.
    */
-  private async findListingsByAiEnrichment(decoded: any): Promise<ListingRecord[]> {
+  private async findListingsByAiEnrichment(
+    decoded: any,
+  ): Promise<ListingRecord[]> {
     const aiData = decoded.aiData;
     const listingsMap = new Map<string, ListingRecord>();
 
     // Search by known compatible vehicles (e.g. "2015-2020 Lexus NX 200t")
     if (aiData.knownFitment?.length) {
       for (const fitment of aiData.knownFitment.slice(0, 5)) {
-        const parts = fitment.match(/(\d{4})?[-–]?(\d{4})?\s+(\w+)\s+(\w[\w\s]*)/);
+        const parts = fitment.match(
+          /(\d{4})?[-–]?(\d{4})?\s+(\w+)\s+(\w[\w\s]*)/,
+        );
         if (parts) {
           const [, yrStart, yrEnd, make, model] = parts;
           const results = await this.findListingsByVehicleText(
@@ -295,11 +312,25 @@ export class FitmentService {
         const qb = this.listingRepo
           .createQueryBuilder('r')
           .select([
-            'r.id', 'r.customLabelSku', 'r.title', 'r.cBrand', 'r.cType',
-            'r.categoryId', 'r.categoryName', 'r.startPrice', 'r.quantity',
-            'r.conditionId', 'r.itemPhotoUrl', 'r.cManufacturerPartNumber',
-            'r.cOeOemPartNumber', 'r.location', 'r.format', 'r.sourceFileName',
-            'r.importedAt', 'r.extractedMake', 'r.extractedModel',
+            'r.id',
+            'r.customLabelSku',
+            'r.title',
+            'r.cBrand',
+            'r.cType',
+            'r.categoryId',
+            'r.categoryName',
+            'r.startPrice',
+            'r.quantity',
+            'r.conditionId',
+            'r.itemPhotoUrl',
+            'r.cManufacturerPartNumber',
+            'r.cOeOemPartNumber',
+            'r.location',
+            'r.format',
+            'r.sourceFileName',
+            'r.importedAt',
+            'r.extractedMake',
+            'r.extractedModel',
           ])
           .where('r.title ILIKE :term', { term: `%${term}%` })
           .orderBy('r.importedAt', 'DESC')
@@ -354,13 +385,10 @@ export class FitmentService {
         new Brackets((whereQb) => {
           whereQb
             .where('r.extractedMake ILIKE :make', { make: normalizedMake })
-            .orWhere(
-              '(r.title ILIKE :makeLike AND r.title ILIKE :modelLike)',
-              {
-                makeLike: `%${normalizedMake}%`,
-                modelLike: `%${normalizedModel}%`,
-              },
-            )
+            .orWhere('(r.title ILIKE :makeLike AND r.title ILIKE :modelLike)', {
+              makeLike: `%${normalizedMake}%`,
+              modelLike: `%${normalizedModel}%`,
+            })
             .orWhere(
               '(r.description ILIKE :makeLike2 AND r.description ILIKE :modelLike2)',
               {
@@ -379,7 +407,9 @@ export class FitmentService {
         new Brackets((yearQb) => {
           yearQb
             .where('r.title ILIKE :yearStr', { yearStr: `%${year}%` })
-            .orWhere('r.description ILIKE :yearStr2', { yearStr2: `%${year}%` });
+            .orWhere('r.description ILIKE :yearStr2', {
+              yearStr2: `%${year}%`,
+            });
         }),
       );
     }

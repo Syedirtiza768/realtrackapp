@@ -1,1 +1,5 @@
-export { RedisCacheInterceptor, CacheTTL, CACHE_TTL_KEY } from './redis-cache.interceptor.js';
+export {
+  RedisCacheInterceptor,
+  CacheTTL,
+  CACHE_TTL_KEY,
+} from './redis-cache.interceptor.js';

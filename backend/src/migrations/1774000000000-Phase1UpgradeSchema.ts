@@ -55,13 +55,27 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_master_product_sku" ON "master_products" ("sku");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_master_product_brand" ON "master_products" ("brand");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_master_product_mpn" ON "master_products" ("mpn");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_master_product_oem" ON "master_products" ("oem_number");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_master_product_part_type" ON "master_products" ("part_type");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_master_product_org" ON "master_products" ("organization_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_master_product_status" ON "master_products" ("status");`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_master_product_sku" ON "master_products" ("sku");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_master_product_brand" ON "master_products" ("brand");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_master_product_mpn" ON "master_products" ("mpn");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_master_product_oem" ON "master_products" ("oem_number");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_master_product_part_type" ON "master_products" ("part_type");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_master_product_org" ON "master_products" ("organization_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_master_product_status" ON "master_products" ("status");`,
+    );
 
     // ═══════════════════════════════════════════════════════
     //  ebay_offers
@@ -94,12 +108,24 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ebay_offer_product" ON "ebay_offers" ("master_product_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ebay_offer_store" ON "ebay_offers" ("store_id");`);
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_ebay_offer_ebay_offer_id" ON "ebay_offers" ("ebay_offer_id") WHERE "ebay_offer_id" IS NOT NULL;`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ebay_offer_ebay_listing_id" ON "ebay_offers" ("ebay_listing_id");`);
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_ebay_offer_sku_store" ON "ebay_offers" ("sku", "store_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ebay_offer_status" ON "ebay_offers" ("status");`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ebay_offer_product" ON "ebay_offers" ("master_product_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ebay_offer_store" ON "ebay_offers" ("store_id");`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_ebay_offer_ebay_offer_id" ON "ebay_offers" ("ebay_offer_id") WHERE "ebay_offer_id" IS NOT NULL;`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ebay_offer_ebay_listing_id" ON "ebay_offers" ("ebay_listing_id");`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_ebay_offer_sku_store" ON "ebay_offers" ("sku", "store_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ebay_offer_status" ON "ebay_offers" ("status");`,
+    );
 
     // ═══════════════════════════════════════════════════════
     //  cross_references
@@ -117,10 +143,18 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_xref_product" ON "cross_references" ("master_product_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_xref_part_number" ON "cross_references" ("part_number");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_xref_type" ON "cross_references" ("reference_type");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_xref_brand_part" ON "cross_references" ("brand", "part_number");`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_xref_product" ON "cross_references" ("master_product_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_xref_part_number" ON "cross_references" ("part_number");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_xref_type" ON "cross_references" ("reference_type");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_xref_brand_part" ON "cross_references" ("brand", "part_number");`,
+    );
 
     // ═══════════════════════════════════════════════════════
     //  ebay_categories
@@ -144,10 +178,18 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_ebay_cat_id_tree" ON "ebay_categories" ("ebay_category_id", "tree_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ebay_cat_parent" ON "ebay_categories" ("parent_category_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ebay_cat_name" ON "ebay_categories" ("category_name");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_ebay_cat_leaf" ON "ebay_categories" ("is_leaf");`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_ebay_cat_id_tree" ON "ebay_categories" ("ebay_category_id", "tree_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ebay_cat_parent" ON "ebay_categories" ("parent_category_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ebay_cat_name" ON "ebay_categories" ("category_name");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_ebay_cat_leaf" ON "ebay_categories" ("is_leaf");`,
+    );
 
     // ═══════════════════════════════════════════════════════
     //  competitor_prices
@@ -170,9 +212,15 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_competitor_part" ON "competitor_prices" ("part_number");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_competitor_captured" ON "competitor_prices" ("captured_at");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_competitor_product" ON "competitor_prices" ("master_product_id");`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_competitor_part" ON "competitor_prices" ("part_number");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_competitor_captured" ON "competitor_prices" ("captured_at");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_competitor_product" ON "competitor_prices" ("master_product_id");`,
+    );
 
     // ═══════════════════════════════════════════════════════
     //  market_snapshots
@@ -196,8 +244,12 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_market_snapshot_product" ON "market_snapshots" ("master_product_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_market_snapshot_captured" ON "market_snapshots" ("captured_at");`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_market_snapshot_product" ON "market_snapshots" ("master_product_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_market_snapshot_captured" ON "market_snapshots" ("captured_at");`,
+    );
 
     // ═══════════════════════════════════════════════════════
     //  export_rules
@@ -228,9 +280,15 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_export_rule_store" ON "export_rules" ("store_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_export_rule_status" ON "export_rules" ("status");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_export_rule_org" ON "export_rules" ("organization_id");`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_export_rule_store" ON "export_rules" ("store_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_export_rule_status" ON "export_rules" ("status");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_export_rule_org" ON "export_rules" ("organization_id");`,
+    );
 
     // ═══════════════════════════════════════════════════════
     //  Extend stores table with eBay-specific columns
@@ -275,12 +333,16 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
     `);
 
     // Index the numeric price column
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_listing_start_price_num" ON "listing_records" ("start_price_num");`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_listing_start_price_num" ON "listing_records" ("start_price_num");`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop indexes first
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_listing_start_price_num";`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_listing_start_price_num";`,
+    );
 
     // Drop numeric shadow columns
     await queryRunner.query(`
@@ -308,7 +370,9 @@ export class Phase1UpgradeSchema1774000000000 implements MigrationInterface {
     // Drop tables in reverse dependency order
     await queryRunner.query(`DROP TABLE IF EXISTS "export_rules" CASCADE;`);
     await queryRunner.query(`DROP TABLE IF EXISTS "market_snapshots" CASCADE;`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "competitor_prices" CASCADE;`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "competitor_prices" CASCADE;`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "ebay_categories" CASCADE;`);
     await queryRunner.query(`DROP TABLE IF EXISTS "cross_references" CASCADE;`);
     await queryRunner.query(`DROP TABLE IF EXISTS "ebay_offers" CASCADE;`);

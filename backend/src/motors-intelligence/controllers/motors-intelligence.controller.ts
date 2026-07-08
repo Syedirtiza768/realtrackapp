@@ -15,7 +15,20 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { Observable, Subject, interval, map, takeWhile, finalize, startWith, switchMap, from, of, concat, timer } from 'rxjs';
+import {
+  Observable,
+  Subject,
+  interval,
+  map,
+  takeWhile,
+  finalize,
+  startWith,
+  switchMap,
+  from,
+  of,
+  concat,
+  timer,
+} from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MotorsIntelligenceService } from '../services/motors-intelligence.service';
 import { EbayEnrichmentService } from '../services/ebay-enrichment.service';
@@ -55,7 +68,9 @@ export class MotorsIntelligenceController {
 
   @Post('products/upload-images')
   @RequirePermissions('motors.manage')
-  @ApiOperation({ summary: 'Start image-based product creation with presigned S3 URLs' })
+  @ApiOperation({
+    summary: 'Start image-based product creation with presigned S3 URLs',
+  })
   async uploadImages(
     @Body() dto: ImageUploadRequestDto,
     @CurrentUser() user: User,
@@ -70,7 +85,10 @@ export class MotorsIntelligenceController {
         condition: dto.condition || 'New',
         price: dto.price || null,
         quantity: dto.quantity || null,
-        sourcePayload: { files: dto.files, autoRunPipeline: dto.autoRunPipeline ?? true },
+        sourcePayload: {
+          files: dto.files,
+          autoRunPipeline: dto.autoRunPipeline ?? true,
+        },
       },
       user.id,
     );
@@ -82,7 +100,11 @@ export class MotorsIntelligenceController {
           `motors-${product.id}-${file.fileName}`,
           file.mimeType,
         );
-        return { fileName: file.fileName, uploadUrl: result.uploadUrl, key: result.s3Key };
+        return {
+          fileName: file.fileName,
+          uploadUrl: result.uploadUrl,
+          key: result.s3Key,
+        };
       }),
     );
 
@@ -95,13 +117,17 @@ export class MotorsIntelligenceController {
 
   @Post('products/:id/confirm-upload')
   @RequirePermissions('motors.manage')
-  @ApiOperation({ summary: 'Confirm images uploaded to S3, optionally start pipeline' })
+  @ApiOperation({
+    summary: 'Confirm images uploaded to S3, optionally start pipeline',
+  })
   async confirmUpload(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ConfirmUploadDto,
   ): Promise<ConfirmUploadResponseDto> {
     // Build CDN URLs from the uploaded keys
-    const imageUrls = dto.uploadedKeys.map(key => this.storageService.getCdnUrl(key));
+    const imageUrls = dto.uploadedKeys.map((key) =>
+      this.storageService.getCdnUrl(key),
+    );
 
     // Update product with resolved image URLs
     await this.motorsService.updateProduct(id, {
@@ -111,14 +137,18 @@ export class MotorsIntelligenceController {
     let pipelineStarted = false;
     if (dto.autoRunPipeline !== false) {
       // Queue the full pipeline job
-      await this.pipelineQueue.add('process', {
-        motorsProductId: id,
-        stage: 'full',
-      }, {
-        priority: 1,
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 5000 },
-      });
+      await this.pipelineQueue.add(
+        'process',
+        {
+          motorsProductId: id,
+          stage: 'full',
+        },
+        {
+          priority: 1,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      );
       pipelineStarted = true;
     }
 
@@ -152,31 +182,95 @@ export class MotorsIntelligenceController {
       MotorsProductStatus.REVIEW_REQUIRED,
     ]);
 
-    const STAGE_MAP: Record<string, { stage: string; label: string; order: number }> = {
-      [MotorsProductStatus.PENDING]: { stage: 'upload', label: 'Upload Complete', order: 0 },
-      [MotorsProductStatus.EXTRACTING]: { stage: 'extraction', label: 'AI Vision Analysis', order: 1 },
-      [MotorsProductStatus.IDENTIFYING]: { stage: 'identity', label: 'Product Identification', order: 2 },
-      [MotorsProductStatus.RESOLVING_FITMENT]: { stage: 'fitment', label: 'Fitment Resolution', order: 3 },
-      [MotorsProductStatus.GENERATING_LISTING]: { stage: 'listing', label: 'Listing Generation', order: 4 },
-      [MotorsProductStatus.VALIDATING]: { stage: 'compliance', label: 'Compliance Check', order: 5 },
-      [MotorsProductStatus.APPROVED]: { stage: 'complete', label: 'Ready to Publish', order: 6 },
-      [MotorsProductStatus.REVIEW_REQUIRED]: { stage: 'review', label: 'Review Required', order: 6 },
-      [MotorsProductStatus.PUBLISHED]: { stage: 'published', label: 'Published', order: 7 },
-      [MotorsProductStatus.FAILED]: { stage: 'failed', label: 'Failed', order: -1 },
+    const STAGE_MAP: Record<
+      string,
+      { stage: string; label: string; order: number }
+    > = {
+      [MotorsProductStatus.PENDING]: {
+        stage: 'upload',
+        label: 'Upload Complete',
+        order: 0,
+      },
+      [MotorsProductStatus.EXTRACTING]: {
+        stage: 'extraction',
+        label: 'AI Vision Analysis',
+        order: 1,
+      },
+      [MotorsProductStatus.IDENTIFYING]: {
+        stage: 'identity',
+        label: 'Product Identification',
+        order: 2,
+      },
+      [MotorsProductStatus.RESOLVING_FITMENT]: {
+        stage: 'fitment',
+        label: 'Fitment Resolution',
+        order: 3,
+      },
+      [MotorsProductStatus.GENERATING_LISTING]: {
+        stage: 'listing',
+        label: 'Listing Generation',
+        order: 4,
+      },
+      [MotorsProductStatus.VALIDATING]: {
+        stage: 'compliance',
+        label: 'Compliance Check',
+        order: 5,
+      },
+      [MotorsProductStatus.APPROVED]: {
+        stage: 'complete',
+        label: 'Ready to Publish',
+        order: 6,
+      },
+      [MotorsProductStatus.REVIEW_REQUIRED]: {
+        stage: 'review',
+        label: 'Review Required',
+        order: 6,
+      },
+      [MotorsProductStatus.PUBLISHED]: {
+        stage: 'published',
+        label: 'Published',
+        order: 7,
+      },
+      [MotorsProductStatus.FAILED]: {
+        stage: 'failed',
+        label: 'Failed',
+        order: -1,
+      },
     };
 
-    const ALL_STAGES = ['upload', 'extraction', 'identity', 'fitment', 'listing', 'compliance', 'complete'];
+    const ALL_STAGES = [
+      'upload',
+      'extraction',
+      'identity',
+      'fitment',
+      'listing',
+      'compliance',
+      'complete',
+    ];
 
     const buildProgress = (product: any): PipelineProgressDto => {
-      const statusInfo = STAGE_MAP[product.status] || { stage: 'unknown', label: product.status, order: -1 };
+      const statusInfo = STAGE_MAP[product.status] || {
+        stage: 'unknown',
+        label: product.status,
+        order: -1,
+      };
       const currentOrder = statusInfo.order;
 
       const stages: PipelineStageDto[] = ALL_STAGES.map((stage, idx) => {
         let status: PipelineStageDto['status'] = 'pending';
         if (idx < currentOrder) status = 'completed';
-        else if (idx === currentOrder && !TERMINAL_STATUSES.has(product.status)) status = 'running';
-        else if (idx === currentOrder && product.status === MotorsProductStatus.APPROVED) status = 'completed';
-        else if (product.status === MotorsProductStatus.FAILED && idx === currentOrder) status = 'failed';
+        else if (idx === currentOrder && !TERMINAL_STATUSES.has(product.status))
+          status = 'running';
+        else if (
+          idx === currentOrder &&
+          product.status === MotorsProductStatus.APPROVED
+        )
+          status = 'completed';
+        else if (
+          product.status === MotorsProductStatus.FAILED &&
+          idx === currentOrder
+        )
+          status = 'failed';
 
         const stageLabels: Record<string, string> = {
           upload: 'Upload Complete',
@@ -201,12 +295,22 @@ export class MotorsIntelligenceController {
         currentStage: statusInfo.stage,
         stages,
         confidence: {
-          identity: product.identityConfidence ? Number(product.identityConfidence) : null,
-          fitment: product.fitmentConfidence ? Number(product.fitmentConfidence) : null,
-          compliance: product.complianceConfidence ? Number(product.complianceConfidence) : null,
-          content: product.contentQualityScore ? Number(product.contentQualityScore) : null,
+          identity: product.identityConfidence
+            ? Number(product.identityConfidence)
+            : null,
+          fitment: product.fitmentConfidence
+            ? Number(product.fitmentConfidence)
+            : null,
+          compliance: product.complianceConfidence
+            ? Number(product.complianceConfidence)
+            : null,
+          content: product.contentQualityScore
+            ? Number(product.contentQualityScore)
+            : null,
         },
-        completedAt: TERMINAL_STATUSES.has(product.status) ? new Date().toISOString() : undefined,
+        completedAt: TERMINAL_STATUSES.has(product.status)
+          ? new Date().toISOString()
+          : undefined,
       };
     };
 
@@ -225,17 +329,21 @@ export class MotorsIntelligenceController {
           res.write(`data: ${JSON.stringify(progress)}\n\n`);
         }
 
-        if (TERMINAL_STATUSES.has(product.status as MotorsProductStatus)) {
+        if (TERMINAL_STATUSES.has(product.status)) {
           // Send one final update then close
           clearInterval(pollInterval);
-          res.write(`data: ${JSON.stringify({ ...buildProgress(product), done: true })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({ ...buildProgress(product), done: true })}\n\n`,
+          );
           res.end();
         }
       } catch (err) {
         consecutiveErrors++;
         if (consecutiveErrors >= maxErrors) {
           clearInterval(pollInterval);
-          res.write(`data: ${JSON.stringify({ error: 'Product not found or polling failed' })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({ error: 'Product not found or polling failed' })}\n\n`,
+          );
           res.end();
         }
       }
@@ -251,7 +359,9 @@ export class MotorsIntelligenceController {
 
   @Post('products/:id/enrich')
   @RequirePermissions('motors.manage')
-  @ApiOperation({ summary: 'Run eBay enrichment (category + aspects) for a product' })
+  @ApiOperation({
+    summary: 'Run eBay enrichment (category + aspects) for a product',
+  })
   async enrichProduct(@Param('id', ParseUUIDPipe) id: string) {
     return this.ebayEnrichmentService.enrichProduct(id);
   }
@@ -261,14 +371,20 @@ export class MotorsIntelligenceController {
   @Post('products')
   @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Create a new Motors product and start pipeline' })
-  async createProduct(@Body() dto: CreateMotorsProductDto, @CurrentUser() user: User) {
+  async createProduct(
+    @Body() dto: CreateMotorsProductDto,
+    @CurrentUser() user: User,
+  ) {
     return this.motorsService.createProduct(dto, user.id);
   }
 
   @Post('products/batch')
   @RequirePermissions('motors.manage')
   @ApiOperation({ summary: 'Batch create Motors products' })
-  async batchCreate(@Body() dto: BatchCreateMotorsProductDto, @CurrentUser() user: User) {
+  async batchCreate(
+    @Body() dto: BatchCreateMotorsProductDto,
+    @CurrentUser() user: User,
+  ) {
     return this.motorsService.batchCreateProducts(dto.products, user.id);
   }
 

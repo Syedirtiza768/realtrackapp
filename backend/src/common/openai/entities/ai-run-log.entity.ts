@@ -60,7 +60,13 @@ export class AiRunLog {
   @Column({ name: 'output_tokens', type: 'int', nullable: true })
   outputTokens!: number | null;
 
-  @Column({ name: 'cost_usd', type: 'numeric', precision: 10, scale: 6, nullable: true })
+  @Column({
+    name: 'cost_usd',
+    type: 'numeric',
+    precision: 10,
+    scale: 6,
+    nullable: true,
+  })
   costUsd!: number | null;
 
   @Column({ name: 'latency_ms', type: 'int', nullable: true })
@@ -69,7 +75,13 @@ export class AiRunLog {
   @Column({ name: 'validation_score', type: 'smallint', nullable: true })
   validationScore!: number | null;
 
-  @Column({ name: 'compliance_score', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  @Column({
+    name: 'compliance_score',
+    type: 'numeric',
+    precision: 5,
+    scale: 4,
+    nullable: true,
+  })
   complianceScore!: number | null;
 
   @Column({ name: 'hard_fails', type: 'jsonb', default: () => "'[]'" })
@@ -87,7 +99,12 @@ export class AiRunLog {
   @Column({ name: 'fitment_row_count', type: 'int', nullable: true })
   fitmentRowCount!: number | null;
 
-  @Column({ name: 'fitment_source', type: 'varchar', length: 20, nullable: true })
+  @Column({
+    name: 'fitment_source',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
   fitmentSource!: string | null;
 
   @Column({ name: 'fitment_rows_pre', type: 'int', nullable: true })
@@ -114,11 +131,20 @@ export class AiRunLog {
   @Column({ name: 'publish_error', type: 'text', nullable: true })
   publishError!: string | null;
 
-  @Column({ name: 'ebay_category_id', type: 'varchar', length: 20, nullable: true })
+  @Column({
+    name: 'ebay_category_id',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
   ebayCategoryId!: string | null;
 
   @Column({ name: 'field_edits', type: 'jsonb', nullable: true })
-  fieldEdits!: Array<{ field: string; aiValue: string; finalValue: string }> | null;
+  fieldEdits!: Array<{
+    field: string;
+    aiValue: string;
+    finalValue: string;
+  }> | null;
 
   @Column({ name: 'guard_fixes', type: 'jsonb', nullable: true })
   guardFixes!: string[] | null;

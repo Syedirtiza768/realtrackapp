@@ -16,7 +16,9 @@ import { RequirePermissions } from '../../rbac/decorators/require-permissions.de
 @Controller('pipeline/images')
 @RequirePermissions('pipeline.run')
 export class ImageEnrichmentController {
-  constructor(private readonly imageEnrichmentService: ImageEnrichmentService) {}
+  constructor(
+    private readonly imageEnrichmentService: ImageEnrichmentService,
+  ) {}
 
   @Post('enrich')
   @HttpCode(HttpStatus.OK)
@@ -53,12 +55,14 @@ export class ImageEnrichmentController {
 
   @Post('validate')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Validate a batch of image URLs (accessibility, resolution, compliance)' })
-  async validateUrls(
-    @Body() body: { urls: string[] },
-  ) {
+  @ApiOperation({
+    summary:
+      'Validate a batch of image URLs (accessibility, resolution, compliance)',
+  })
+  async validateUrls(@Body() body: { urls: string[] }) {
     const urls = body.urls?.slice(0, 200) ?? [];
-    if (!urls.length) return { results: [], summary: { total: 0, accessible: 0, issues: 0 } };
+    if (!urls.length)
+      return { results: [], summary: { total: 0, accessible: 0, issues: 0 } };
 
     const results = await this.imageEnrichmentService.validateImageUrls(urls);
     const accessible = results.filter((r) => r.accessible).length;
@@ -73,7 +77,8 @@ export class ImageEnrichmentController {
   @Get(':jobId/status')
   @ApiOperation({ summary: 'Get image enrichment status for a pipeline job' })
   async getStatus(@Param('jobId') jobId: string) {
-    const progress = await this.imageEnrichmentService.getEnrichmentStatus(jobId);
+    const progress =
+      await this.imageEnrichmentService.getEnrichmentStatus(jobId);
     return { jobId, progress };
   }
 }

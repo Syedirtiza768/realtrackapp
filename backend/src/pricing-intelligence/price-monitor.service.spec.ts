@@ -16,7 +16,7 @@ function createRepo<T extends Record<string, unknown>>() {
     findOne: jest.fn().mockResolvedValue(null),
     findOneBy: jest.fn().mockResolvedValue(null),
     findOneByOrFail: jest.fn(),
-    create: jest.fn((d: Partial<T>) => ({ id: 'snap-1', ...d } as T)),
+    create: jest.fn((d: Partial<T>) => ({ id: 'snap-1', ...d }) as T),
     save: jest.fn((d: T) => Promise.resolve({ id: 'saved-1', ...d } as T)),
   } as unknown as Repository<T>;
 }
@@ -65,7 +65,13 @@ describe('PriceMonitorService', () => {
 
     it('iterates all published products with MPN', async () => {
       productRepo.find = jest.fn().mockResolvedValue([
-        { id: 'p-1', title: 'Part A', brand: 'TRW', mpn: 'BP-123', condition: 'Used' },
+        {
+          id: 'p-1',
+          title: 'Part A',
+          brand: 'TRW',
+          mpn: 'BP-123',
+          condition: 'Used',
+        },
       ]);
       browseApi.getCompetitorPricing.mockResolvedValue({
         items: [],
@@ -93,8 +99,20 @@ describe('PriceMonitorService', () => {
       });
       browseApi.getCompetitorPricing.mockResolvedValue({
         items: [
-          { itemId: 'ebay-1', title: 'TRW Brake Pad', price: { value: '35.00', currency: 'USD' }, seller: { username: 'seller1' }, condition: 'Used' },
-          { itemId: 'ebay-2', title: 'TRW Brake Pad New', price: { value: '42.00', currency: 'USD' }, seller: { username: 'seller2' }, condition: 'New' },
+          {
+            itemId: 'ebay-1',
+            title: 'TRW Brake Pad',
+            price: { value: '35.00', currency: 'USD' },
+            seller: { username: 'seller1' },
+            condition: 'Used',
+          },
+          {
+            itemId: 'ebay-2',
+            title: 'TRW Brake Pad New',
+            price: { value: '42.00', currency: 'USD' },
+            seller: { username: 'seller2' },
+            condition: 'New',
+          },
         ],
         total: 2,
         avgPrice: 38.5,
@@ -110,13 +128,33 @@ describe('PriceMonitorService', () => {
 
     it('generates AI snapshot when >= 3 prices', async () => {
       productRepo.findOneByOrFail = jest.fn().mockResolvedValue({
-        id: 'p-1', title: 'Part', brand: 'TRW', mpn: 'BP-123', retailPrice: 50, condition: 'Used',
+        id: 'p-1',
+        title: 'Part',
+        brand: 'TRW',
+        mpn: 'BP-123',
+        retailPrice: 50,
+        condition: 'Used',
       });
       browseApi.getCompetitorPricing.mockResolvedValue({
         items: [
-          { itemId: '1', price: { value: '30' }, seller: { username: 'a' }, condition: 'Used' },
-          { itemId: '2', price: { value: '35' }, seller: { username: 'b' }, condition: 'Used' },
-          { itemId: '3', price: { value: '40' }, seller: { username: 'c' }, condition: 'Used' },
+          {
+            itemId: '1',
+            price: { value: '30' },
+            seller: { username: 'a' },
+            condition: 'Used',
+          },
+          {
+            itemId: '2',
+            price: { value: '35' },
+            seller: { username: 'b' },
+            condition: 'Used',
+          },
+          {
+            itemId: '3',
+            price: { value: '40' },
+            seller: { username: 'c' },
+            condition: 'Used',
+          },
         ],
         total: 3,
         avgPrice: 35,
@@ -125,7 +163,13 @@ describe('PriceMonitorService', () => {
         maxPrice: 40,
       });
       analysisPipeline.analyze.mockResolvedValue({
-        marketSummary: { totalListings: 3, avgPrice: 35, medianPrice: 35, minPrice: 30, maxPrice: 40 },
+        marketSummary: {
+          totalListings: 3,
+          avgPrice: 35,
+          medianPrice: 35,
+          minPrice: 30,
+          maxPrice: 40,
+        },
         recommendedPricing: { competitive: 32, premium: 45, aggressive: 25 },
         marketInsights: ['Insight 1'],
         confidence: 0.8,
@@ -139,11 +183,21 @@ describe('PriceMonitorService', () => {
 
     it('stores basic stats when < 3 prices', async () => {
       productRepo.findOneByOrFail = jest.fn().mockResolvedValue({
-        id: 'p-1', title: 'Part', brand: 'TRW', mpn: 'BP-123', retailPrice: 50, condition: 'Used',
+        id: 'p-1',
+        title: 'Part',
+        brand: 'TRW',
+        mpn: 'BP-123',
+        retailPrice: 50,
+        condition: 'Used',
       });
       browseApi.getCompetitorPricing.mockResolvedValue({
         items: [
-          { itemId: '1', price: { value: '35' }, seller: { username: 'a' }, condition: 'Used' },
+          {
+            itemId: '1',
+            price: { value: '35' },
+            seller: { username: 'a' },
+            condition: 'Used',
+          },
         ],
         total: 1,
         avgPrice: 35,
@@ -160,13 +214,33 @@ describe('PriceMonitorService', () => {
 
     it('emits pricing.significant_change on > 15% shift', async () => {
       productRepo.findOneByOrFail = jest.fn().mockResolvedValue({
-        id: 'p-1', title: 'Part', brand: 'TRW', mpn: 'BP-123', retailPrice: 100, condition: 'Used',
+        id: 'p-1',
+        title: 'Part',
+        brand: 'TRW',
+        mpn: 'BP-123',
+        retailPrice: 100,
+        condition: 'Used',
       });
       browseApi.getCompetitorPricing.mockResolvedValue({
         items: [
-          { itemId: '1', price: { value: '50' }, seller: { username: 'a' }, condition: 'Used' },
-          { itemId: '2', price: { value: '55' }, seller: { username: 'b' }, condition: 'Used' },
-          { itemId: '3', price: { value: '60' }, seller: { username: 'c' }, condition: 'Used' },
+          {
+            itemId: '1',
+            price: { value: '50' },
+            seller: { username: 'a' },
+            condition: 'Used',
+          },
+          {
+            itemId: '2',
+            price: { value: '55' },
+            seller: { username: 'b' },
+            condition: 'Used',
+          },
+          {
+            itemId: '3',
+            price: { value: '60' },
+            seller: { username: 'c' },
+            condition: 'Used',
+          },
         ],
         total: 3,
         avgPrice: 55,
@@ -175,7 +249,13 @@ describe('PriceMonitorService', () => {
         maxPrice: 60,
       });
       analysisPipeline.analyze.mockResolvedValue({
-        marketSummary: { totalListings: 3, avgPrice: 55, medianPrice: 55, minPrice: 50, maxPrice: 60 },
+        marketSummary: {
+          totalListings: 3,
+          avgPrice: 55,
+          medianPrice: 55,
+          minPrice: 50,
+          maxPrice: 60,
+        },
         recommendedPricing: { competitive: 52, premium: 65, aggressive: 40 },
         marketInsights: [],
         confidence: 0.8,
@@ -191,7 +271,11 @@ describe('PriceMonitorService', () => {
 
     it('handles no MPN gracefully', async () => {
       productRepo.findOneByOrFail = jest.fn().mockResolvedValue({
-        id: 'p-1', title: 'Part', brand: null, mpn: null, condition: 'Used',
+        id: 'p-1',
+        title: 'Part',
+        brand: null,
+        mpn: null,
+        condition: 'Used',
       });
 
       const result = await svc.collectForProduct('p-1');

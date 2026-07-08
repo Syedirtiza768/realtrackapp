@@ -35,7 +35,12 @@ export class ImageAsset {
   @Column({ name: 's3_key', type: 'varchar', length: 500 })
   s3Key!: string;
 
-  @Column({ name: 's3_key_thumb', type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 's3_key_thumb',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   s3KeyThumb!: string | null;
 
   @Column({ name: 'cdn_url', type: 'text', nullable: true })

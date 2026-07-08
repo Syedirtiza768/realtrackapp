@@ -28,4 +28,5 @@ ${COMPACT_NOTE}`,
 };
 
 /** Legacy v3 — use when FITMENT_EXPANSION_MODE=ai */
-export const MOTORS_ENRICHMENT_PROMPT_VERSION_LEGACY = 'enrichment-v3-platform-fitment';
+export const MOTORS_ENRICHMENT_PROMPT_VERSION_LEGACY =
+  'enrichment-v3-platform-fitment';

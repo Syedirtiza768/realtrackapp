@@ -29,11 +29,19 @@ export class EbayApiError {
   @Column({ name: 'ebay_account_id', type: 'uuid', nullable: true })
   ebayAccountId!: string | null;
 
-  @ManyToOne(() => ConnectedEbayAccount, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => ConnectedEbayAccount, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
   @JoinColumn({ name: 'ebay_account_id' })
   ebayAccount!: ConnectedEbayAccount | null;
 
-  @Column({ name: 'marketplace_id', type: 'varchar', length: 30, nullable: true })
+  @Column({
+    name: 'marketplace_id',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+  })
   marketplaceId!: string | null;
 
   @Column({ name: 'catalog_product_id', type: 'uuid', nullable: true })
@@ -59,13 +67,28 @@ export class EbayApiError {
   @Column({ name: 'response_code', type: 'int', nullable: true })
   responseCode!: number | null;
 
-  @Column({ name: 'ebay_error_id', type: 'varchar', length: 80, nullable: true })
+  @Column({
+    name: 'ebay_error_id',
+    type: 'varchar',
+    length: 80,
+    nullable: true,
+  })
   ebayErrorId!: string | null;
 
-  @Column({ name: 'ebay_error_domain', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'ebay_error_domain',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   ebayErrorDomain!: string | null;
 
-  @Column({ name: 'ebay_error_category', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'ebay_error_category',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   ebayErrorCategory!: string | null;
 
   @Column({ name: 'ebay_error_message', type: 'text', nullable: true })

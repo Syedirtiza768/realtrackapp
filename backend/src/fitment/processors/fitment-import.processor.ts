@@ -1,7 +1,10 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { FitmentImportService, type AcesVehicleRow } from '../fitment-import.service.js';
+import {
+  FitmentImportService,
+  type AcesVehicleRow,
+} from '../fitment-import.service.js';
 
 @Processor('fitment', { concurrency: 1 })
 export class FitmentImportProcessor extends WorkerHost {
@@ -12,11 +15,17 @@ export class FitmentImportProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<{ rows: AcesVehicleRow[]; userId?: string }>): Promise<void> {
+  async process(
+    job: Job<{ rows: AcesVehicleRow[]; userId?: string }>,
+  ): Promise<void> {
     const { rows } = job.data;
-    this.logger.log(`Processing ACES import job ${job.id}: ${rows.length} rows`);
+    this.logger.log(
+      `Processing ACES import job ${job.id}: ${rows.length} rows`,
+    );
 
-    const totalBatches = Math.ceil(rows.length / FitmentImportProcessor.BATCH_SIZE);
+    const totalBatches = Math.ceil(
+      rows.length / FitmentImportProcessor.BATCH_SIZE,
+    );
     let totalMakes = 0;
     let totalModels = 0;
     let totalSubmodels = 0;
@@ -25,7 +34,10 @@ export class FitmentImportProcessor extends WorkerHost {
 
     for (let i = 0; i < totalBatches; i++) {
       const start = i * FitmentImportProcessor.BATCH_SIZE;
-      const batch = rows.slice(start, start + FitmentImportProcessor.BATCH_SIZE);
+      const batch = rows.slice(
+        start,
+        start + FitmentImportProcessor.BATCH_SIZE,
+      );
 
       const result = await this.importService.processImportBatch(batch);
       totalMakes += result.makesCreated;

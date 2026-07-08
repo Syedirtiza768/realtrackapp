@@ -2,7 +2,10 @@ export { OpenAiModule } from './openai.module.js';
 export { OpenAiService } from './openai.service.js';
 export { OpenAiQueueService } from './openai-queue.service.js';
 export { ModelRouter, inferPartType } from './model-router.js';
-export { ListingQualityValidator, scoreItem } from './listing-quality.validator.js';
+export {
+  ListingQualityValidator,
+  scoreItem,
+} from './listing-quality.validator.js';
 export { applyListingGuards } from './listing-guards.js';
 export { AiRunLogService } from './ai-run-log.service.js';
 export { AiOptimizerService } from './ai-optimizer.service.js';

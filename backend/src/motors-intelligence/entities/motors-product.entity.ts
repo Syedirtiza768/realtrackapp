@@ -57,7 +57,11 @@ export class MotorsProduct {
   @Column({ type: 'uuid', nullable: true })
   catalogProductId: string | null;
 
-  @Column({ type: 'enum', enum: MotorsProductStatus, default: MotorsProductStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: MotorsProductStatus,
+    default: MotorsProductStatus.PENDING,
+  })
   status: MotorsProductStatus;
 
   @Column({ type: 'enum', enum: MotorsSourceType })

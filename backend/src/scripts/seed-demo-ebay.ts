@@ -31,7 +31,9 @@ async function main() {
     `SELECT to_regclass('public.channel_connections') AS cc, to_regclass('public.stores') AS st`,
   );
   if (!tableCheck[0]?.cc) {
-    console.error('✗ channel_connections table not found — run migrations first');
+    console.error(
+      '✗ channel_connections table not found — run migrations first',
+    );
     process.exit(1);
   }
 
@@ -51,7 +53,8 @@ async function main() {
       accessToken: 'DEMO_SANDBOX_TOKEN_' + Date.now(),
       refreshToken: 'DEMO_SANDBOX_REFRESH_' + Date.now(),
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account',
+      scope:
+        'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account',
       tokenType: 'User Access Token',
     });
 
@@ -59,7 +62,10 @@ async function main() {
     const key = crypto.scryptSync('dev-insecure-key', 'salt', 32);
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    const encrypted = Buffer.concat([cipher.update(demoTokens, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(demoTokens, 'utf8'),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
     const encryptedTokens = `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted.toString('base64')}`;
 
@@ -74,7 +80,8 @@ async function main() {
         'ebay',
         userId,
         'eBay Sandbox Demo',
-        process.env.EBAY_CLIENT_ID ?? 'IrtizaHa-listingp-SBX-e6e5fa804-178dade4',
+        process.env.EBAY_CLIENT_ID ??
+          'IrtizaHa-listingp-SBX-e6e5fa804-178dade4',
         encryptedTokens,
         new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         'https://api.ebay.com/oauth/api_scope/sell.inventory',
@@ -103,7 +110,8 @@ async function main() {
         'ebay',
         'MHN eBay Sandbox Store',
         'https://sandbox.ebay.com',
-        process.env.EBAY_CLIENT_ID ?? 'IrtizaHa-listingp-SBX-e6e5fa804-178dade4',
+        process.env.EBAY_CLIENT_ID ??
+          'IrtizaHa-listingp-SBX-e6e5fa804-178dade4',
         true,
         JSON.stringify({
           marketplace: 'EBAY_MOTORS_US',
@@ -119,21 +127,25 @@ async function main() {
 
   // Log the demo simulation entry
   if (tableCheck[0]?.st) {
-    await qr.query(
-      `INSERT INTO demo_simulation_logs (operation_type, channel, notes, request_payload, response_payload)
+    await qr
+      .query(
+        `INSERT INTO demo_simulation_logs (operation_type, channel, notes, request_payload, response_payload)
        VALUES ($1, $2, $3, $4, $5)`,
-      [
-        'auth_simulated',
-        'ebay',
-        'Demo eBay sandbox store seeded via script',
-        JSON.stringify({
-          clientId: process.env.EBAY_CLIENT_ID,
-          devId: process.env.EBAY_DEV_ID,
-          sandbox: true,
-        }),
-        JSON.stringify({ connectionId, status: 'active' }),
-      ],
-    ).catch(() => { /* table may not exist yet */ });
+        [
+          'auth_simulated',
+          'ebay',
+          'Demo eBay sandbox store seeded via script',
+          JSON.stringify({
+            clientId: process.env.EBAY_CLIENT_ID,
+            devId: process.env.EBAY_DEV_ID,
+            sandbox: true,
+          }),
+          JSON.stringify({ connectionId, status: 'active' }),
+        ],
+      )
+      .catch(() => {
+        /* table may not exist yet */
+      });
   }
 
   console.log('\n🎉 Demo eBay sandbox store is ready!');

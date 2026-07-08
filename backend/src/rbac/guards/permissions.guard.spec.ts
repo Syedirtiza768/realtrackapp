@@ -6,12 +6,14 @@ import type { User } from '../../auth/entities/user.entity.js';
 
 /* ── Helpers ── */
 
-function mockContext(options: {
-  isPublic?: boolean;
-  permissions?: string[];
-  mode?: 'all' | 'any';
-  user?: User | null;
-} = {}): ExecutionContext {
+function mockContext(
+  options: {
+    isPublic?: boolean;
+    permissions?: string[];
+    mode?: 'all' | 'any';
+    user?: User | null;
+  } = {},
+): ExecutionContext {
   const request = { user: options.user ?? null };
   return {
     getHandler: jest.fn(),
@@ -40,9 +42,7 @@ describe('PermissionsGuard', () => {
   });
 
   it('returns true for public routes', async () => {
-    (reflector.getAllAndOverride as jest.Mock)
-      .mockReturnValueOnce(true) // IS_PUBLIC_KEY
-    ;
+    (reflector.getAllAndOverride as jest.Mock).mockReturnValueOnce(true); // IS_PUBLIC_KEY
     const result = await guard.canActivate(mockContext());
     expect(result).toBe(true);
   });
@@ -50,8 +50,7 @@ describe('PermissionsGuard', () => {
   it('returns true when no permissions required', async () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false) // IS_PUBLIC_KEY
-      .mockReturnValueOnce(undefined) // PERMISSIONS_KEY
-    ;
+      .mockReturnValueOnce(undefined); // PERMISSIONS_KEY
     const result = await guard.canActivate(mockContext());
     expect(result).toBe(true);
   });
@@ -60,13 +59,14 @@ describe('PermissionsGuard', () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(['listings.view', 'listings.create'])
-      .mockReturnValueOnce('all')
-    ;
+      .mockReturnValueOnce('all');
     (rbac.getPermissionKeysForUser as jest.Mock).mockResolvedValue(
       new Set(['listings.view', 'listings.create', 'dashboard.view']),
     );
 
-    const result = await guard.canActivate(mockContext({ user: { id: 'u-1' } as User }));
+    const result = await guard.canActivate(
+      mockContext({ user: { id: 'u-1' } as User }),
+    );
     expect(result).toBe(true);
   });
 
@@ -74,8 +74,7 @@ describe('PermissionsGuard', () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(['listings.publish'])
-      .mockReturnValueOnce('all')
-    ;
+      .mockReturnValueOnce('all');
     (rbac.getPermissionKeysForUser as jest.Mock).mockResolvedValue(
       new Set(['listings.view']),
     );
@@ -89,13 +88,14 @@ describe('PermissionsGuard', () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(['listings.publish', 'listings.approve'])
-      .mockReturnValueOnce('any')
-    ;
+      .mockReturnValueOnce('any');
     (rbac.getPermissionKeysForUser as jest.Mock).mockResolvedValue(
       new Set(['listings.publish']),
     );
 
-    const result = await guard.canActivate(mockContext({ user: { id: 'u-1' } as User }));
+    const result = await guard.canActivate(
+      mockContext({ user: { id: 'u-1' } as User }),
+    );
     expect(result).toBe(true);
   });
 
@@ -103,8 +103,7 @@ describe('PermissionsGuard', () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(['listings.publish', 'listings.approve'])
-      .mockReturnValueOnce('any')
-    ;
+      .mockReturnValueOnce('any');
     (rbac.getPermissionKeysForUser as jest.Mock).mockResolvedValue(
       new Set(['listings.view']),
     );
@@ -118,8 +117,7 @@ describe('PermissionsGuard', () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(['listings.view'])
-      .mockReturnValueOnce('all')
-    ;
+      .mockReturnValueOnce('all');
 
     await expect(
       guard.canActivate(mockContext({ user: null })),
@@ -130,13 +128,14 @@ describe('PermissionsGuard', () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(['dashboard.view'])
-      .mockReturnValueOnce('all')
-    ;
+      .mockReturnValueOnce('all');
     (rbac.getPermissionKeysForUser as jest.Mock).mockResolvedValue(
       new Set(['dashboard.view']),
     );
 
-    const result = await guard.canActivate(mockContext({ user: { id: 'u-1' } as User }));
+    const result = await guard.canActivate(
+      mockContext({ user: { id: 'u-1' } as User }),
+    );
     expect(result).toBe(true);
   });
 
@@ -144,8 +143,7 @@ describe('PermissionsGuard', () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(['a', 'b'])
-      .mockReturnValueOnce(undefined)
-    ;
+      .mockReturnValueOnce(undefined);
     (rbac.getPermissionKeysForUser as jest.Mock).mockResolvedValue(
       new Set(['a']), // only has 'a', missing 'b'
     );

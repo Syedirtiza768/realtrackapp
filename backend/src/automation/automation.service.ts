@@ -25,22 +25,35 @@ export class AutomationService {
     const qb = this.ruleRepo.createQueryBuilder('r');
 
     if (query?.triggerType) {
-      qb.andWhere('r.triggerType = :triggerType', { triggerType: query.triggerType });
+      qb.andWhere('r.triggerType = :triggerType', {
+        triggerType: query.triggerType,
+      });
     }
     if (query?.actionType) {
-      qb.andWhere('r.actionType = :actionType', { actionType: query.actionType });
+      qb.andWhere('r.actionType = :actionType', {
+        actionType: query.actionType,
+      });
     }
     if (query?.enabled === 'true' || query?.enabled === 'false') {
-      qb.andWhere('r.enabled = :enabled', { enabled: query.enabled === 'true' });
+      qb.andWhere('r.enabled = :enabled', {
+        enabled: query.enabled === 'true',
+      });
     }
     if (query?.storeId) {
-      qb.andWhere('(r.storeId = :storeId OR r.storeId IS NULL)', { storeId: query.storeId });
+      qb.andWhere('(r.storeId = :storeId OR r.storeId IS NULL)', {
+        storeId: query.storeId,
+      });
     }
     if (query?.channel) {
-      qb.andWhere('(r.channel = :channel OR r.channel IS NULL)', { channel: query.channel });
+      qb.andWhere('(r.channel = :channel OR r.channel IS NULL)', {
+        channel: query.channel,
+      });
     }
 
-    return qb.orderBy('r.priority', 'DESC').addOrderBy('r.createdAt', 'DESC').getMany();
+    return qb
+      .orderBy('r.priority', 'DESC')
+      .addOrderBy('r.createdAt', 'DESC')
+      .getMany();
   }
 
   async findOne(id: string): Promise<AutomationRule> {
@@ -52,23 +65,35 @@ export class AutomationService {
   async create(dto: CreateAutomationRuleDto): Promise<AutomationRule> {
     const rule = this.ruleRepo.create(dto as Partial<AutomationRule>);
     const saved = await this.ruleRepo.save(rule);
-    this.eventEmitter.emit('automation.rule_created', { ruleId: saved.id, name: saved.name });
+    this.eventEmitter.emit('automation.rule_created', {
+      ruleId: saved.id,
+      name: saved.name,
+    });
     this.logger.log(`Created automation rule: ${saved.name} (${saved.id})`);
     return saved;
   }
 
-  async update(id: string, dto: UpdateAutomationRuleDto): Promise<AutomationRule> {
+  async update(
+    id: string,
+    dto: UpdateAutomationRuleDto,
+  ): Promise<AutomationRule> {
     const rule = await this.findOne(id);
     Object.assign(rule, dto);
     const saved = await this.ruleRepo.save(rule);
-    this.eventEmitter.emit('automation.rule_updated', { ruleId: saved.id, name: saved.name });
+    this.eventEmitter.emit('automation.rule_updated', {
+      ruleId: saved.id,
+      name: saved.name,
+    });
     return saved;
   }
 
   async remove(id: string): Promise<void> {
     const rule = await this.findOne(id);
     await this.ruleRepo.remove(rule);
-    this.eventEmitter.emit('automation.rule_deleted', { ruleId: id, name: rule.name });
+    this.eventEmitter.emit('automation.rule_deleted', {
+      ruleId: id,
+      name: rule.name,
+    });
     this.logger.log(`Deleted automation rule: ${rule.name} (${id})`);
   }
 
@@ -130,10 +155,14 @@ export class AutomationService {
       .orderBy('r.priority', 'DESC');
 
     if (context?.storeId) {
-      qb.andWhere('(r.storeId = :storeId OR r.storeId IS NULL)', { storeId: context.storeId });
+      qb.andWhere('(r.storeId = :storeId OR r.storeId IS NULL)', {
+        storeId: context.storeId,
+      });
     }
     if (context?.channel) {
-      qb.andWhere('(r.channel = :channel OR r.channel IS NULL)', { channel: context.channel });
+      qb.andWhere('(r.channel = :channel OR r.channel IS NULL)', {
+        channel: context.channel,
+      });
     }
 
     const rules = await qb.getMany();
@@ -144,7 +173,9 @@ export class AutomationService {
       if (result.executed) executed++;
     }
 
-    this.logger.log(`Evaluated ${rules.length} ${triggerType} rules, executed ${executed}`);
+    this.logger.log(
+      `Evaluated ${rules.length} ${triggerType} rules, executed ${executed}`,
+    );
     return executed;
   }
 
@@ -166,7 +197,9 @@ export class AutomationService {
 
       // For now, all conditions are considered met.
       // Real evaluation will be wired when we have listing context injection.
-      this.logger.debug(`Condition: ${field} ${operator} ${JSON.stringify(value)} — auto-pass (Phase 2 stub)`);
+      this.logger.debug(
+        `Condition: ${field} ${operator} ${JSON.stringify(value)} — auto-pass (Phase 2 stub)`,
+      );
     }
 
     return true;

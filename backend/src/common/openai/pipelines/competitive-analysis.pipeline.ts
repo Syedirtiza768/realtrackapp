@@ -78,7 +78,10 @@ export class CompetitiveAnalysisPipeline {
     const parsed = response.content as Record<string, unknown>;
 
     const summary = (parsed.marketSummary ?? {}) as Record<string, unknown>;
-    const pricing = (parsed.recommendedPricing ?? {}) as Record<string, unknown>;
+    const pricing = (parsed.recommendedPricing ?? {}) as Record<
+      string,
+      unknown
+    >;
     const breakdown = (parsed.conditionBreakdown ?? {}) as Record<
       string,
       Record<string, unknown>

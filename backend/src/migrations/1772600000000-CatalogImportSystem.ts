@@ -50,13 +50,27 @@ export class CatalogImportSystem1772600000000 implements MigrationInterface {
     `);
 
     // Indexes for catalog_products
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_catalog_sku" ON "catalog_products" ("sku") WHERE "sku" IS NOT NULL`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_catalog_mpn" ON "catalog_products" ("mpn")`);
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_catalog_upc" ON "catalog_products" ("upc") WHERE "upc" IS NOT NULL`);
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_catalog_ebay_item_id" ON "catalog_products" ("ebay_item_id") WHERE "ebay_item_id" IS NOT NULL`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_catalog_brand_mpn" ON "catalog_products" ("brand_normalized", "mpn_normalized")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_catalog_title_normalized" ON "catalog_products" ("title_normalized")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_catalog_brand" ON "catalog_products" ("brand_normalized")`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_catalog_sku" ON "catalog_products" ("sku") WHERE "sku" IS NOT NULL`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_catalog_mpn" ON "catalog_products" ("mpn")`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_catalog_upc" ON "catalog_products" ("upc") WHERE "upc" IS NOT NULL`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_catalog_ebay_item_id" ON "catalog_products" ("ebay_item_id") WHERE "ebay_item_id" IS NOT NULL`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_catalog_brand_mpn" ON "catalog_products" ("brand_normalized", "mpn_normalized")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_catalog_title_normalized" ON "catalog_products" ("title_normalized")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_catalog_brand" ON "catalog_products" ("brand_normalized")`,
+    );
 
     // ── catalog_imports table ────────────────────────────────
     await queryRunner.query(`
@@ -87,7 +101,9 @@ export class CatalogImportSystem1772600000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_catalog_import_status" ON "catalog_imports" ("status")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_catalog_import_status" ON "catalog_imports" ("status")`,
+    );
 
     // ── catalog_import_rows table ───────────────────────────
     await queryRunner.query(`
@@ -105,8 +121,12 @@ export class CatalogImportSystem1772600000000 implements MigrationInterface {
       );
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_import_row_import_id" ON "catalog_import_rows" ("import_id")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_import_row_status" ON "catalog_import_rows" ("status")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_import_row_import_id" ON "catalog_import_rows" ("import_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_import_row_status" ON "catalog_import_rows" ("status")`,
+    );
 
     // ── Full-text search trigger for catalog_products ────────
     await queryRunner.query(`
@@ -131,12 +151,18 @@ export class CatalogImportSystem1772600000000 implements MigrationInterface {
         FOR EACH ROW EXECUTE FUNCTION catalog_products_search_update();
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_catalog_search_vector" ON "catalog_products" USING gin("searchVector")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "idx_catalog_search_vector" ON "catalog_products" USING gin("searchVector")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TRIGGER IF EXISTS trg_catalog_products_search ON "catalog_products"`);
-    await queryRunner.query(`DROP FUNCTION IF EXISTS catalog_products_search_update()`);
+    await queryRunner.query(
+      `DROP TRIGGER IF EXISTS trg_catalog_products_search ON "catalog_products"`,
+    );
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS catalog_products_search_update()`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "catalog_import_rows"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "catalog_imports"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "catalog_products"`);

@@ -119,7 +119,9 @@ export class MvlFitmentExpanderService {
           mvlRejected: 0,
         },
         needsAiInterchange: true,
-        manualReviewReasons: ['FITMENT_EXPANSION_MODE=ai — legacy AI fitment path'],
+        manualReviewReasons: [
+          'FITMENT_EXPANSION_MODE=ai — legacy AI fitment path',
+        ],
       };
     }
 
@@ -135,7 +137,7 @@ export class MvlFitmentExpanderService {
     );
     const mkt = this.resolveMarketplace(input.marketplace, input.treeId);
 
-    let result = expandFitmentDeterministic({
+    const result = expandFitmentDeterministic({
       donor: input.donor,
       partType: input.partType,
       placement: input.placement,
@@ -221,8 +223,7 @@ export class MvlFitmentExpanderService {
         const model = String(hint['model'] ?? '').trim();
         const yStart =
           parseInt(String(hint['yearStart'] ?? hint['year'] ?? ''), 10) || 0;
-        const yEnd =
-          parseInt(String(hint['yearEnd'] ?? yStart), 10) || yStart;
+        const yEnd = parseInt(String(hint['yearEnd'] ?? yStart), 10) || yStart;
         if (!make || !model || !yStart) continue;
         for (let y = yStart; y <= yEnd; y++) {
           addUniqueRow(result.expandedRows, seen, {
@@ -251,8 +252,7 @@ export class MvlFitmentExpanderService {
       if (filtered.usedDb) {
         result.expandedRows = filtered.accepted;
         result.coverage.mvlRejected += filtered.rejectedCount;
-        fitmentSource =
-          filtered.rejectedCount > 0 ? 'mvl+filtered' : 'mvl';
+        fitmentSource = filtered.rejectedCount > 0 ? 'mvl+filtered' : 'mvl';
       }
     } else if (
       this.config.get<string>('FITMENT_MVL_REQUIRED', 'true') !== 'false'

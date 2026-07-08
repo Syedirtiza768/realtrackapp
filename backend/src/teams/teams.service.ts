@@ -59,7 +59,9 @@ export class TeamsService {
       .groupBy('m.team_id')
       .getRawMany<{ teamId: string; cnt: string }>();
 
-    const countByTeam = new Map(countRows.map((r) => [r.teamId, Number(r.cnt) || 0]));
+    const countByTeam = new Map(
+      countRows.map((r) => [r.teamId, Number(r.cnt) || 0]),
+    );
 
     return teams.map((t) => ({
       id: t.id,
@@ -94,7 +96,9 @@ export class TeamsService {
   async updateTeam(id: string, dto: UpdateTeamDto): Promise<Team> {
     const team = await this.getTeam(id);
     if (dto.name && dto.name.trim() !== team.name) {
-      const clash = await this.teamRepo.findOne({ where: { name: dto.name.trim() } });
+      const clash = await this.teamRepo.findOne({
+        where: { name: dto.name.trim() },
+      });
       if (clash && clash.id !== id) {
         throw new ConflictException(`Team "${dto.name}" already exists`);
       }
@@ -107,7 +111,10 @@ export class TeamsService {
 
   async getMemberUserIds(teamId: string): Promise<string[]> {
     await this.getTeam(teamId);
-    const members = await this.memberRepo.find({ where: { teamId }, select: ['userId'] });
+    const members = await this.memberRepo.find({
+      where: { teamId },
+      select: ['userId'],
+    });
     return members.map((m) => m.userId);
   }
 
@@ -130,7 +137,11 @@ export class TeamsService {
     return rows.map((r) => r.teamId);
   }
 
-  async assertUserCanAccessTeam(userId: string, teamId: string, manageAll: boolean): Promise<void> {
+  async assertUserCanAccessTeam(
+    userId: string,
+    teamId: string,
+    manageAll: boolean,
+  ): Promise<void> {
     if (manageAll) return;
     const member = await this.memberRepo.findOne({ where: { userId, teamId } });
     if (!member) {
@@ -148,7 +159,9 @@ export class TeamsService {
     const allowedSet = new Set(allowed);
     for (const id of teamIds) {
       if (!allowedSet.has(id)) {
-        throw new ForbiddenException('You do not have access to one or more selected teams');
+        throw new ForbiddenException(
+          'You do not have access to one or more selected teams',
+        );
       }
     }
   }
@@ -206,7 +219,9 @@ export class TeamsService {
     const userTeams = new Set(await this.getUserTeamIds(userId));
     for (const row of listings) {
       if (row.teamId && !userTeams.has(row.teamId)) {
-        throw new ForbiddenException('You do not have access to one or more selected listings');
+        throw new ForbiddenException(
+          'You do not have access to one or more selected listings',
+        );
       }
     }
   }

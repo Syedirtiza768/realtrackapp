@@ -38,7 +38,12 @@ export class PipelineJob {
   @Column({ name: 'original_filename', type: 'varchar', length: 500 })
   originalFilename!: string;
 
-  @Column({ name: 'stored_file_path', type: 'varchar', length: 1000, nullable: true })
+  @Column({
+    name: 'stored_file_path',
+    type: 'varchar',
+    length: 1000,
+    nullable: true,
+  })
   storedFilePath!: string | null;
 
   @Column({ name: 'file_size_bytes', type: 'integer', nullable: true })
@@ -82,23 +87,53 @@ export class PipelineJob {
   openaiCostUsd!: number;
 
   // ─── Output files ───
-  @Column({ name: 'output_us_path', type: 'varchar', length: 1000, nullable: true })
+  @Column({
+    name: 'output_us_path',
+    type: 'varchar',
+    length: 1000,
+    nullable: true,
+  })
   outputUsPath!: string | null;
 
-  @Column({ name: 'output_au_path', type: 'varchar', length: 1000, nullable: true })
+  @Column({
+    name: 'output_au_path',
+    type: 'varchar',
+    length: 1000,
+    nullable: true,
+  })
   outputAuPath!: string | null;
 
-  @Column({ name: 'output_de_path', type: 'varchar', length: 1000, nullable: true })
+  @Column({
+    name: 'output_de_path',
+    type: 'varchar',
+    length: 1000,
+    nullable: true,
+  })
   outputDePath!: string | null;
 
-  @Column({ name: 'output_uk_path', type: 'varchar', length: 1000, nullable: true })
+  @Column({
+    name: 'output_uk_path',
+    type: 'varchar',
+    length: 1000,
+    nullable: true,
+  })
   outputUkPath!: string | null;
 
-  @Column({ name: 'report_path', type: 'varchar', length: 1000, nullable: true })
+  @Column({
+    name: 'report_path',
+    type: 'varchar',
+    length: 1000,
+    nullable: true,
+  })
   reportPath!: string | null;
 
   // ─── Mandatory listing optimization (post-enrichment) ───
-  @Column({ name: 'optimization_status', type: 'varchar', length: 32, default: 'pending' })
+  @Column({
+    name: 'optimization_status',
+    type: 'varchar',
+    length: 32,
+    default: 'pending',
+  })
   optimizationStatus!: string;
 
   @Column({ name: 'optimization_processed', type: 'integer', default: 0 })
@@ -118,14 +153,17 @@ export class PipelineJob {
 
   // ─── Per-marketplace optimization tracking (JSONB) ───
   @Column({ name: 'optimization_by_marketplace', type: 'jsonb', default: '{}' })
-  optimizationByMarketplace!: Record<string, {
-    status: string;
-    passCount: number;
-    reviewCount: number;
-    blockCount: number;
-    processed?: number;
-    total?: number;
-  }>;
+  optimizationByMarketplace!: Record<
+    string,
+    {
+      status: string;
+      passCount: number;
+      reviewCount: number;
+      blockCount: number;
+      processed?: number;
+      total?: number;
+    }
+  >;
 
   // ─── Progress detail (JSON for real-time update) ───
   @Column({ name: 'stage_details', type: 'jsonb', default: '{}' })
@@ -143,7 +181,12 @@ export class PipelineJob {
   @Index('idx_pipeline_job_team')
   teamId!: string | null;
 
-  @Column({ name: 'condition_label', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'condition_label',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   conditionLabel!: string | null;
 
   /** Target marketplace for this upload (US, UK, AU, DE). */
@@ -154,22 +197,52 @@ export class PipelineJob {
   @Column({ name: 'store_id', type: 'uuid', nullable: true })
   storeId!: string | null;
 
-  @Column({ name: 'shipping_profile_name', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'shipping_profile_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   shippingProfileName!: string | null;
 
-  @Column({ name: 'return_profile_name', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'return_profile_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   returnProfileName!: string | null;
 
-  @Column({ name: 'payment_profile_name', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'payment_profile_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   paymentProfileName!: string | null;
 
-  @Column({ name: 'fulfillment_policy_id', type: 'varchar', length: 64, nullable: true })
+  @Column({
+    name: 'fulfillment_policy_id',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
   fulfillmentPolicyId!: string | null;
 
-  @Column({ name: 'payment_policy_id', type: 'varchar', length: 64, nullable: true })
+  @Column({
+    name: 'payment_policy_id',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
   paymentPolicyId!: string | null;
 
-  @Column({ name: 'return_policy_id', type: 'varchar', length: 64, nullable: true })
+  @Column({
+    name: 'return_policy_id',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
   returnPolicyId!: string | null;
 
   @Column({ name: 'upload_code', type: 'varchar', length: 30, nullable: true })

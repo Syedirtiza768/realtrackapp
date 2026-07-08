@@ -24,10 +24,7 @@ export class FeatureFlagController {
   @Patch(':key')
   @RequirePermissions('feature_flags.manage')
   @ApiOperation({ summary: 'Update a feature flag' })
-  async update(
-    @Param('key') key: string,
-    @Body() body: { enabled: boolean },
-  ) {
+  async update(@Param('key') key: string, @Body() body: { enabled: boolean }) {
     return this.flagService.setEnabled(key, body.enabled);
   }
 

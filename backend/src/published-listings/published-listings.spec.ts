@@ -65,10 +65,7 @@ describe('PublishedListingsHealthService', () => {
 describe('PublishedListingsService isolation', () => {
   it('store access filter excludes unauthorized stores', () => {
     const accessible = new Set(['store-a']);
-    const listings = [
-      { storeId: 'store-a' },
-      { storeId: 'store-b' },
-    ];
+    const listings = [{ storeId: 'store-a' }, { storeId: 'store-b' }];
     const filtered = listings.filter((l) => accessible.has(l.storeId));
     expect(filtered).toHaveLength(1);
     expect(filtered[0].storeId).toBe('store-a');

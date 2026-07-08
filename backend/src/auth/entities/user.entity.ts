@@ -5,12 +5,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-export type UserRole =
-  | 'super_admin'
-  | 'admin'
-  | 'manager'
-  | 'user'
-  | 'viewer';
+export type UserRole = 'super_admin' | 'admin' | 'manager' | 'user' | 'viewer';
 
 @Entity({ name: 'users' })
 export class User {

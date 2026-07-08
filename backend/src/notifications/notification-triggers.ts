@@ -77,7 +77,11 @@ export class NotificationTriggers {
   }
 
   @OnEvent('channel.error')
-  async onChannelError(data: { channel: string; connectionId: string; error?: string }) {
+  async onChannelError(data: {
+    channel: string;
+    connectionId: string;
+    error?: string;
+  }) {
     await this.notifService.create({
       type: 'channel_error',
       title: `${data.channel} Error`,
@@ -90,7 +94,11 @@ export class NotificationTriggers {
   }
 
   @OnEvent('listing.published')
-  async onListingPublished(data: { listingId: string; channel: string; title?: string }) {
+  async onListingPublished(data: {
+    listingId: string;
+    channel: string;
+    title?: string;
+  }) {
     await this.notifService.create({
       type: 'listing_published',
       title: 'Listing Published',
@@ -106,7 +114,12 @@ export class NotificationTriggers {
   /* ─── Module 5: Inventory ─── */
 
   @OnEvent('inventory.low_stock')
-  async onLowStock(data: { listingId: string; title?: string; available: number; threshold: number }) {
+  async onLowStock(data: {
+    listingId: string;
+    title?: string;
+    available: number;
+    threshold: number;
+  }) {
     await this.notifService.create({
       type: 'low_stock',
       title: 'Low Stock Alert',
@@ -170,7 +183,11 @@ export class NotificationTriggers {
   /* ─── System ─── */
 
   @OnEvent('system.alert')
-  async onSystemAlert(data: { title: string; body?: string; severity?: 'info' | 'warning' | 'error' }) {
+  async onSystemAlert(data: {
+    title: string;
+    body?: string;
+    severity?: 'info' | 'warning' | 'error';
+  }) {
     await this.notifService.create({
       type: 'system_alert',
       title: data.title,

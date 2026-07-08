@@ -4,7 +4,10 @@ import { Repository } from 'typeorm';
 import { ExportRule } from './entities/export-rule.entity.js';
 import { MasterProduct } from './entities/master-product.entity.js';
 import { EbayOffer } from './entities/ebay-offer.entity.js';
-import type { CreateExportRuleDto, UpdateExportRuleDto } from './dto/export-rule.dto.js';
+import type {
+  CreateExportRuleDto,
+  UpdateExportRuleDto,
+} from './dto/export-rule.dto.js';
 import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
 
 /**
@@ -31,7 +34,9 @@ export class ExportRuleService {
   async create(dto: CreateExportRuleDto): Promise<ExportRule> {
     const rule = this.ruleRepo.create(dto);
     const saved = await this.ruleRepo.save(rule);
-    this.logger.log(`Created export rule "${saved.name}" → store ${saved.storeId}`);
+    this.logger.log(
+      `Created export rule "${saved.name}" → store ${saved.storeId}`,
+    );
     return saved;
   }
 
@@ -72,29 +77,41 @@ export class ExportRuleService {
    */
   async findMatchingProducts(ruleId: string): Promise<MasterProduct[]> {
     const rule = await this.findOne(ruleId);
-    const filters = rule.filters as Record<string, unknown>;
+    const filters = rule.filters;
 
     const qb = this.productRepo.createQueryBuilder('p');
-    qb.where('p.status IN (:...statuses)', { statuses: ['ready', 'published'] });
+    qb.where('p.status IN (:...statuses)', {
+      statuses: ['ready', 'published'],
+    });
 
     // Apply filter criteria
     if (filters.brand && Array.isArray(filters.brand)) {
       qb.andWhere('p.brand IN (:...brands)', { brands: filters.brand });
     }
     if (filters.partType && Array.isArray(filters.partType)) {
-      qb.andWhere('p.part_type IN (:...partTypes)', { partTypes: filters.partType });
+      qb.andWhere('p.part_type IN (:...partTypes)', {
+        partTypes: filters.partType,
+      });
     }
     if (filters.condition && Array.isArray(filters.condition)) {
-      qb.andWhere('p.condition IN (:...conditions)', { conditions: filters.condition });
+      qb.andWhere('p.condition IN (:...conditions)', {
+        conditions: filters.condition,
+      });
     }
     if (typeof filters.minPrice === 'number') {
-      qb.andWhere('p.retail_price >= :minPrice', { minPrice: filters.minPrice });
+      qb.andWhere('p.retail_price >= :minPrice', {
+        minPrice: filters.minPrice,
+      });
     }
     if (typeof filters.maxPrice === 'number') {
-      qb.andWhere('p.retail_price <= :maxPrice', { maxPrice: filters.maxPrice });
+      qb.andWhere('p.retail_price <= :maxPrice', {
+        maxPrice: filters.maxPrice,
+      });
     }
     if (typeof filters.minQuantity === 'number') {
-      qb.andWhere('p.total_quantity >= :minQty', { minQty: filters.minQuantity });
+      qb.andWhere('p.total_quantity >= :minQty', {
+        minQty: filters.minQuantity,
+      });
     }
 
     // Exclude products already exported to this store

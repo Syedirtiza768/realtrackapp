@@ -60,14 +60,29 @@ describe('ChannelsService — multi-store webhooks', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChannelsService,
-        { provide: getRepositoryToken(ChannelConnection), useValue: connectionRepo },
-        { provide: getRepositoryToken(ListingChannelInstance), useValue: instanceRepo },
-        { provide: getRepositoryToken(ChannelWebhookLog), useValue: webhookLogRepo },
+        {
+          provide: getRepositoryToken(ChannelConnection),
+          useValue: connectionRepo,
+        },
+        {
+          provide: getRepositoryToken(ListingChannelInstance),
+          useValue: instanceRepo,
+        },
+        {
+          provide: getRepositoryToken(ChannelWebhookLog),
+          useValue: webhookLogRepo,
+        },
         { provide: getRepositoryToken(Store), useValue: storeRepoMock },
         { provide: getQueueToken('channels'), useValue: { add: jest.fn() } },
-        { provide: TokenEncryptionService, useValue: { encrypt: jest.fn(), decrypt: jest.fn() } },
+        {
+          provide: TokenEncryptionService,
+          useValue: { encrypt: jest.fn(), decrypt: jest.fn() },
+        },
         { provide: EbayAdapter, useValue: stubAdapter() },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('true') } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('true') },
+        },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
@@ -88,7 +103,10 @@ describe('ChannelsService — multi-store webhooks', () => {
 
   it('resolveStoreFromWebhook returns null when no match', async () => {
     storeRepoMock.findOne.mockResolvedValue(null);
-    const result = await service.resolveStoreFromWebhook('shopify', 'unknown-shop.myshopify.com');
+    const result = await service.resolveStoreFromWebhook(
+      'shopify',
+      'unknown-shop.myshopify.com',
+    );
     expect(result).toBeNull();
   });
 
@@ -106,7 +124,13 @@ describe('ChannelsService — multi-store webhooks', () => {
   /* ─── logWebhook with storeId ─── */
 
   it('logWebhook includes storeId in log entry', async () => {
-    await service.logWebhook('ebay', 'ITEM_SOLD', { price: 99 }, 'ext-123', 'store-42');
+    await service.logWebhook(
+      'ebay',
+      'ITEM_SOLD',
+      { price: 99 },
+      'ext-123',
+      'store-42',
+    );
     expect(webhookLogRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: 'ebay',
