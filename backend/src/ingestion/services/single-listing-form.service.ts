@@ -72,6 +72,8 @@ export interface CreateIntakePartDto {
   title?: string;
   categoryName?: string;
   description?: string;
+  teamId?: string;
+  location?: string;
 }
 
 export interface PartLookupPricingEstimate {
