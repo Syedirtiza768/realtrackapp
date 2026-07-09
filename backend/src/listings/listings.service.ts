@@ -505,26 +505,20 @@ export class ListingsService {
 
       const afterSnapshot = { ...saved } as Record<string, unknown>;
 
-      const revision = em.create(ListingRevision, {
-        listingId: id,
-        version: saved.version,
-        statusBefore: oldStatus,
-        statusAfter: saved.status ?? oldStatus ?? 'draft',
-        snapshot: afterSnapshot,
-        changeReason: 'manual_edit',
-        changedBy: user?.id ?? null,
+      const existingRevision = await em.findOne(ListingRevision, {
+        where: { listingId: id, version: saved.version },
       });
-      try {
+      if (!existingRevision) {
+        const revision = em.create(ListingRevision, {
+          listingId: id,
+          version: saved.version,
+          statusBefore: oldStatus,
+          statusAfter: saved.status ?? oldStatus ?? 'draft',
+          snapshot: afterSnapshot,
+          changeReason: 'manual_edit',
+          changedBy: user?.id ?? null,
+        });
         await em.save(ListingRevision, revision);
-      } catch (err) {
-        if (
-          err instanceof QueryFailedError &&
-          (err as { driverError?: { code?: string } }).driverError?.code === '23505'
-        ) {
-          // Revision for this version already exists (e.g. from pipeline import) — skip
-        } else {
-          throw err;
-        }
       }
 
       // ── Audit log entry (user-initiated only, requires org) ──
