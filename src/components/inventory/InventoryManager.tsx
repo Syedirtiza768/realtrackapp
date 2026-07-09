@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Package,
   Search,
@@ -30,6 +31,7 @@ import {
   type EnrichmentStatus,
   type InventoryStoreListing,
 } from '../../lib/inventoryApi';
+import { fetchWithAuth } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import InventoryDetailModal from './InventoryDetailModal';
 
@@ -156,6 +158,11 @@ export default function InventoryManager() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [catalogSuccess, setCatalogSuccess] = useState<string | null>(null);
+
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [editingLocationValue, setEditingLocationValue] = useState('');
+  const [locationSaving, setLocationSaving] = useState(false);
+  const qc = useQueryClient();
   const limit = 25;
 
   useEffect(() => {
@@ -214,6 +221,25 @@ export default function InventoryManager() {
       setActionError(err instanceof Error ? err.message : 'Failed to send to catalog');
     }
   }, [canSendToCatalog, selected, sendToCatalogMutation]);
+
+  const handleSaveLocation = useCallback(async (item: InventoryListingItem) => {
+    setLocationSaving(true);
+    try {
+      await fetchWithAuth(`/api/listings/${item.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          version: item.version,
+          location: editingLocationValue.trim() || null,
+        }),
+      });
+      await qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+      setEditingLocationId(null);
+    } catch {
+      // error silently — user can retry
+    } finally {
+      setLocationSaving(false);
+    }
+  }, [editingLocationValue, qc]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -557,14 +583,51 @@ export default function InventoryManager() {
                           {item.brand}
                         </span>
                       </td>
-                      <td className="py-3 pr-3">
-                        {item.location ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
-                            <MapPin className="h-3 w-3 text-slate-400" />
-                            {item.location}
-                          </span>
+                      <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
+                        {editingLocationId === item.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={editingLocationValue}
+                              onChange={(e) => setEditingLocationValue(e.target.value)}
+                              placeholder="e.g. Aisle 3, Bin B12"
+                              className="w-28 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') void handleSaveLocation(item);
+                                if (e.key === 'Escape') setEditingLocationId(null);
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveLocation(item)}
+                              disabled={locationSaving}
+                              className="p-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+                            >
+                              {locationSaving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingLocationId(null)}
+                              className="p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                            >
+                              <XCircle size={12} />
+                            </button>
+                          </div>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLocationId(item.id);
+                              setEditingLocationValue(item.location ?? '');
+                            }}
+                            className="flex items-center gap-1 text-xs hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                          >
+                            <MapPin className="h-3 w-3 text-slate-400" />
+                            {item.location || (
+                              <span className="text-slate-400 italic">Set</span>
+                            )}
+                          </button>
                         )}
                       </td>
                       <td className="py-3 pr-3">

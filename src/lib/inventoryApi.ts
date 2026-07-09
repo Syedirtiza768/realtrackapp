@@ -72,6 +72,7 @@ export interface InventoryListingItem {
   marketplaceVariants: InventoryMarketplaceVariant[];
   storeListings: InventoryStoreListing[];
   location?: string;
+  version?: number;
   importedAt?: string;
 }
 
