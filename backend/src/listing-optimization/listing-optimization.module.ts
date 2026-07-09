@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
+import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
 import { FitmentModule } from '../fitment/fitment.module.js';
 import { ChannelsModule } from '../channels/channels.module.js';
 import { OpenAiModule } from '../common/openai/openai.module.js';
@@ -14,7 +15,7 @@ import { ListingOptimizationProcessor } from './processors/listing-optimization.
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CatalogProduct, ListingRecord, PipelineJob]),
+    TypeOrmModule.forFeature([CatalogProduct, ListingRecord, PipelineJob, EbayCategoryMapping]),
     BullModule.registerQueue({
       name: 'listing-optimization',
       defaultJobOptions: {

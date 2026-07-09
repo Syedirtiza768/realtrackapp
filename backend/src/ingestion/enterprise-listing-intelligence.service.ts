@@ -1,8 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { PipelineJob } from './entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import type { ListingGenerationResult } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
@@ -140,6 +141,8 @@ export class EnterpriseListingIntelligenceService {
     private readonly pipelineRepo: Repository<PipelineJob>,
     @InjectRepository(CatalogProduct)
     private readonly productRepo: Repository<CatalogProduct>,
+    @InjectRepository(EbayCategoryMapping)
+    private readonly categoryMappingRepo: Repository<EbayCategoryMapping>,
     private readonly listingPipeline: ListingGenerationPipeline,
     private readonly taxonomy: EbayTaxonomyApiService,
   ) {}
@@ -600,12 +603,19 @@ export class EnterpriseListingIntelligenceService {
     categoryName: string | null;
     confidence: number;
   }> {
-    if (product.categoryId) {
-      return {
-        categoryId: product.categoryId,
-        categoryName: product.categoryName,
-        confidence: 0.95,
-      };
+    const candidate = product.categoryId?.trim();
+    if (candidate) {
+      const isValid = await this.isMotorsCategory(candidate);
+      if (isValid) {
+        return {
+          categoryId: candidate,
+          categoryName: product.categoryName,
+          confidence: 0.95,
+        };
+      }
+      this.logger.warn(
+        `Category ${candidate} (${product.categoryName ?? '?'}) for SKU ${product.sku ?? '?'} is not a known Motors category — will re-resolve`,
+      );
     }
 
     try {
@@ -613,19 +623,41 @@ export class EnterpriseListingIntelligenceService {
         .filter(Boolean)
         .join(' ');
       const suggestions = await this.taxonomy.getCategorySuggestions(query);
-      const first = suggestions[0];
-      if (first?.category?.categoryId) {
-        return {
-          categoryId: first.category.categoryId,
-          categoryName: first.category.categoryName ?? null,
-          confidence: 0.75,
-        };
+      for (const suggestion of suggestions) {
+        const catId = suggestion.category?.categoryId;
+        if (!catId) continue;
+        const isValid = await this.isMotorsCategory(catId);
+        if (isValid) {
+          return {
+            categoryId: catId,
+            categoryName: suggestion.category.categoryName ?? null,
+            confidence: 0.75,
+          };
+        }
       }
     } catch {
       // fallback below
     }
 
-    return { categoryId: null, categoryName: null, confidence: 0.2 };
+    return { categoryId: '6000', categoryName: 'Parts & Accessories', confidence: 0.3 };
+  }
+
+  /**
+   * Check whether a category ID is a known eBay Motors category.
+   * Uses the cached ebay_category_mappings table. Returns false for
+   * categories that are clearly non-automotive (Guitars, LEGO, etc.).
+   */
+  private async isMotorsCategory(categoryId: string): Promise<boolean> {
+    try {
+      const mapping = await this.categoryMappingRepo.findOne({
+        where: { ebayCategoryId: categoryId },
+      });
+      if (mapping) return mapping.isMotorsCategory;
+      // Not in mapping table — allow it (could be a valid unmapped category)
+      return true;
+    } catch {
+      return true;
+    }
   }
 
   private async getRequiredAspectsSafe(
