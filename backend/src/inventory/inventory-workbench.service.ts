@@ -652,6 +652,7 @@ export class InventoryWorkbenchService {
       importedAt: listing.importedAt,
       updatedAt: listing.updatedAt,
       publishedAt: listing.publishedAt,
+      version: listing.version,
     };
   }
 

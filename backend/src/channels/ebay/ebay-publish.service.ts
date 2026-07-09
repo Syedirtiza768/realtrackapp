@@ -271,9 +271,9 @@ export class EbayPublishService {
     const skuLooksLikeListingId =
       !req.sku?.trim() || req.sku === req.listingId || req.sku === listing.id;
     const sku =
-      (skuLooksLikeListingId
+      skuLooksLikeListingId
         ? listing.customLabelSku?.trim() || req.sku
-        : req.sku.trim()) + 'IGBC';
+        : req.sku.trim();
 
     const parsedPrice = parseFloat(listing.startPrice ?? '');
     const parsedQty = parseInt(listing.quantity ?? '', 10);

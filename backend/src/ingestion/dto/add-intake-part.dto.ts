@@ -69,4 +69,12 @@ export class AddIntakePartDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsUUID()
+  teamId?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 }

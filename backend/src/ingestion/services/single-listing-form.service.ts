@@ -285,6 +285,8 @@ export class SingleListingFormService {
           sourceFilePath: 'warehouse-intake',
           sheetName: 'intake',
           sourceRowNumber,
+          teamId: dto.teamId || null,
+          location: dto.location?.trim() || null,
         }),
       );
     } catch (err) {
@@ -321,6 +323,8 @@ export class SingleListingFormService {
           imageUrls,
           sourceFile: 'warehouse-intake',
           sourceRow: sourceRowNumber,
+          teamId: dto.teamId || null,
+          location: dto.location?.trim() || null,
         }),
       );
     } catch (err) {

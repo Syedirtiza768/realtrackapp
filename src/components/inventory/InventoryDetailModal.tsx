@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   X,
   ChevronLeft,
@@ -16,6 +17,7 @@ import {
   CheckCircle2,
   GripVertical,
   Save,
+  MapPin,
 } from 'lucide-react';
 import {
   DndContext,
@@ -34,6 +36,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Badge } from '../ui/badge';
 import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment, useReorderInventoryImages } from '../../lib/inventoryApi';
+import { fetchWithAuth } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import ImageUploadZone from '../listings/ImageUploadZone';
 import type { UploadedImage } from '../../lib/storageApi';
@@ -161,6 +164,12 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [enrichingListingId, setEnrichingListingId] = useState<string | null>(null);
 
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [locationValue, setLocationValue] = useState('');
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const qc = useQueryClient();
+
   // Local image order state for drag-and-drop reordering
   const [localImages, setLocalImages] = useState<string[]>([]);
   const [orderDirty, setOrderDirty] = useState(false);
@@ -244,6 +253,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
     extractedMake?: string;
     extractedModel?: string;
     importedAt?: string;
+    version?: number;
   };
 
   useEffect(() => setActiveImg(0), [listingId]);
@@ -293,6 +303,27 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [listingId, onClose, localImages.length]);
+
+  const handleSaveLocation = useCallback(async () => {
+    if (!listingId || !listing) return;
+    setLocationSaving(true);
+    setLocationError(null);
+    try {
+      await fetchWithAuth(`/api/listings/${listingId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          version: listing.version,
+          location: locationValue.trim() || null,
+        }),
+      });
+      await qc.invalidateQueries({ queryKey: ['inventory-detail', listingId] });
+      setEditingLocation(false);
+    } catch (err) {
+      setLocationError(err instanceof Error ? err.message : 'Failed to save location');
+    } finally {
+      setLocationSaving(false);
+    }
+  }, [listingId, listing, locationValue, qc]);
 
   if (!listingId) return null;
 
@@ -583,7 +614,66 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                       <DetailRow label="UPC" value={listing?.pUpc} mono />
                       <DetailRow label="ePID" value={listing?.pEpid} mono />
                       <DetailRow label="Features" value={listing?.cFeatures} />
-                      <DetailRow label="Location" value={listing?.location} />
+                      <tr>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          <span className="flex items-center gap-1.5">
+                            <MapPin size={12} />
+                            Location
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {editingLocation ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={locationValue}
+                                onChange={(e) => setLocationValue(e.target.value)}
+                                placeholder="e.g. Aisle 3, Bin B12"
+                                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void handleSaveLocation();
+                                  if (e.key === 'Escape') setEditingLocation(false);
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveLocation()}
+                                disabled={locationSaving}
+                                className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+                              >
+                                {locationSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingLocation(false)}
+                                className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLocationValue(listing?.location ?? '');
+                                setEditingLocation(true);
+                                setLocationError(null);
+                              }}
+                              className="text-sm text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 text-left"
+                            >
+                              {listing?.location || (
+                                <span className="text-slate-400 dark:text-slate-500 italic">
+                                  Click to set location
+                                </span>
+                              )}
+                            </button>
+                          )}
+                          {locationError && (
+                            <p className="text-[11px] text-red-400 mt-1">{locationError}</p>
+                          )}
+                        </td>
+                      </tr>
                       <DetailRow label="Format" value={listing?.format} />
                       <DetailRow label="Extracted Make" value={listing?.extractedMake} />
                       <DetailRow label="Extracted Model" value={listing?.extractedModel} />

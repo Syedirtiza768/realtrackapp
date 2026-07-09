@@ -315,6 +315,8 @@ export function useAddIntakePart() {
       title?: string;
       categoryName?: string;
       description?: string;
+      teamId?: string;
+      location?: string;
     }) =>
       postJson<{ listing: { id: string; customLabelSku: string | null } }>(
         '/pipeline/single-listing/add-part',

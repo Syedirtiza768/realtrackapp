@@ -7,8 +7,11 @@ import {
   Loader2,
   PackagePlus,
   ScanLine,
+  Users,
+  MapPin,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
   useAddIntakePart,
@@ -16,6 +19,7 @@ import {
   useSingleListingBrands,
   type PartLookupResult,
 } from '../../lib/pipelineApi';
+import { listTeams } from '../../lib/teamsApi';
 import {
   loadJson,
   saveJson,
@@ -57,6 +61,10 @@ export default function SingleListingPipeline() {
   const addPartMutation = useAddIntakePart();
   const partLookupMutation = usePartLookup();
   const { data: brandsData } = useSingleListingBrands();
+  const { data: teams = [], isLoading: teamsLoading } = useQuery({
+    queryKey: ['teams'],
+    queryFn: ({ signal }) => listTeams(signal),
+  });
 
   const [partType, setPartType] = useState<PartType>(() => {
     const prefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
@@ -71,6 +79,9 @@ export default function SingleListingPipeline() {
   const [vehicleMake, setVehicleMake] = useState('');
   const [price, setPrice] = useState('100');
   const [quantity, setQuantity] = useState('1');
+  const [teamId, setTeamId] = useState('');
+  const [notes, setNotes] = useState('');
+  const [location, setLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [lookupWarning, setLookupWarning] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
@@ -102,6 +113,8 @@ export default function SingleListingPipeline() {
     setVehicleMake('');
     setPrice('100');
     setQuantity('1');
+    setNotes('');
+    setLocation('');
     const prefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
     setPartType(prefs.partType ?? 'OEM');
     setConditionId(prefs.conditionId ?? '3000');
@@ -174,6 +187,10 @@ export default function SingleListingPipeline() {
       }
 
       try {
+        const userNotes = notes.trim();
+        const aiNote = lookup?.note?.trim();
+        const combinedDescription = [userNotes, aiNote].filter(Boolean).join('\n\n') || undefined;
+
         const result = await addPartMutation.mutateAsync({
           partNumber: pn,
           brand: effectiveBrand,
@@ -184,7 +201,9 @@ export default function SingleListingPipeline() {
           quantity: qty,
           title: lookup?.partName?.trim(),
           categoryName: lookup?.category?.trim(),
-          description: lookup?.note?.trim(),
+          description: combinedDescription,
+          teamId: teamId || undefined,
+          location: location.trim() || undefined,
         });
 
         const savedSku = result.listing.customLabelSku ?? '';
@@ -193,6 +212,8 @@ export default function SingleListingPipeline() {
         setVehicleMake('');
         setPrice('100');
         setQuantity('1');
+        setNotes('');
+        setLocation('');
         const savedPrefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
         setPartType(savedPrefs.partType ?? 'OEM');
         setConditionId(savedPrefs.conditionId ?? '3000');
@@ -212,6 +233,9 @@ export default function SingleListingPipeline() {
       partType,
       conditionId,
       vehicleMake,
+      teamId,
+      notes,
+      location,
       isAftermarket,
       partLookupMutation,
       addPartMutation,
@@ -385,6 +409,71 @@ export default function SingleListingPipeline() {
                   Salvage defaults to Used
                 </p>
               )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Team
+              </label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <select
+                  value={teamId}
+                  onChange={(e) => setTeamId(e.target.value)}
+                  disabled={teamsLoading || teams.length === 0}
+                  className={`${inputClassName} pl-9 disabled:opacity-50`}
+                >
+                  <option value="">No team</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {teams.length === 0 && !teamsLoading && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">
+                  Create teams in{' '}
+                  <Link to="/settings/teams" className="text-blue-400 hover:underline">
+                    Settings → Teams
+                  </Link>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Notes
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes — condition details, cross-references, fitment notes…"
+                rows={3}
+                className={`${inputClassName} resize-none`}
+              />
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">
+                These notes will be included in the listing description and can be edited later on Inventory.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Storage location
+              </label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="e.g. Aisle 3, Bin B12, Shelf 2C"
+                  className={`${inputClassName} pl-9`}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">
+                Optional — helps locate the part in the warehouse.
+              </p>
             </div>
 
             <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
