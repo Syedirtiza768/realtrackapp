@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
 export interface ListingFormPrefs {
     partType?: 'OEM' | 'Aftermarket' | 'Salvage';
     conditionId?: '1000' | '3000';
+    teamId?: string;
 }
 
 export function loadJson<T>(key: string, fallback: T): T {

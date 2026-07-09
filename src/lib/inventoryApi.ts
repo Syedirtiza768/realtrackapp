@@ -71,6 +71,7 @@ export interface InventoryListingItem {
   intakeSource?: boolean;
   marketplaceVariants: InventoryMarketplaceVariant[];
   storeListings: InventoryStoreListing[];
+  location?: string;
   importedAt?: string;
 }
 

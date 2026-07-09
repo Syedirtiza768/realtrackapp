@@ -15,6 +15,7 @@ import {
   Send,
   Calendar,
   BookMarked,
+  MapPin,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -481,6 +482,7 @@ export default function InventoryManager() {
                     <th className="pb-3 pr-3 w-16">Image</th>
                     <th className="pb-3 pr-3">SKU / Title</th>
                     <th className="pb-3 pr-3">Brand</th>
+                    <th className="pb-3 pr-3">Location</th>
                     <th className="pb-3 pr-3">Marketplaces</th>
                     <th className="pb-3 pr-3">eBay Stores</th>
                     <th className="pb-3 pr-3">
@@ -554,6 +556,16 @@ export default function InventoryManager() {
                         >
                           {item.brand}
                         </span>
+                      </td>
+                      <td className="py-3 pr-3">
+                        {item.location ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
+                            <MapPin className="h-3 w-3 text-slate-400" />
+                            {item.location}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="py-3 pr-3">
                         <MarketplaceSummary item={item} />

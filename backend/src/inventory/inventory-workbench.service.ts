@@ -424,6 +424,7 @@ export class InventoryWorkbenchService {
         storeListings: listing.customLabelSku
           ? (storeListingsBySku.get(listing.customLabelSku) ?? [])
           : [],
+        location: listing.location ?? undefined,
         importedAt: listing.importedAt
           ? new Date(listing.importedAt).toISOString()
           : undefined,

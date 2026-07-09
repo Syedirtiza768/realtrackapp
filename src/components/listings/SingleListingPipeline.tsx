@@ -79,7 +79,10 @@ export default function SingleListingPipeline() {
   const [vehicleMake, setVehicleMake] = useState('');
   const [price, setPrice] = useState('100');
   const [quantity, setQuantity] = useState('1');
-  const [teamId, setTeamId] = useState('');
+  const [teamId, setTeamId] = useState<string>(() => {
+    const prefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
+    return prefs.teamId ?? '';
+  });
   const [notes, setNotes] = useState('');
   const [location, setLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -95,8 +98,8 @@ export default function SingleListingPipeline() {
   }, [partType]);
 
   useEffect(() => {
-    saveJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, { partType, conditionId });
-  }, [partType, conditionId]);
+    saveJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, { partType, conditionId, teamId });
+  }, [partType, conditionId, teamId]);
 
   const isAftermarket = partType === 'Aftermarket';
 
