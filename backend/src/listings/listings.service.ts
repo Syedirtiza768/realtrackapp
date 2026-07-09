@@ -514,7 +514,18 @@ export class ListingsService {
         changeReason: 'manual_edit',
         changedBy: user?.id ?? null,
       });
-      await em.save(ListingRevision, revision);
+      try {
+        await em.save(ListingRevision, revision);
+      } catch (err) {
+        if (
+          err instanceof QueryFailedError &&
+          (err as { driverError?: { code?: string } }).driverError?.code === '23505'
+        ) {
+          // Revision for this version already exists (e.g. from pipeline import) — skip
+        } else {
+          throw err;
+        }
+      }
 
       // ── Audit log entry (user-initiated only, requires org) ──
       if (user && saved.organizationId) {
