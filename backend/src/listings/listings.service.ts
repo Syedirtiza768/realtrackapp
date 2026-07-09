@@ -508,8 +508,9 @@ export class ListingsService {
       const existingRevision = await em.findOne(ListingRevision, {
         where: { listingId: id, version: saved.version },
       });
-      if (!existingRevision) {
-        const revision = em.create(ListingRevision, {
+      let revision = existingRevision;
+      if (!revision) {
+        revision = em.create(ListingRevision, {
           listingId: id,
           version: saved.version,
           statusBefore: oldStatus,
