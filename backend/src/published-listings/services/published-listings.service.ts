@@ -51,6 +51,9 @@ export class PublishedListingsService {
         ebayAccountId: query.ebayAccountId,
       });
     }
+    if (query.storeId) {
+      qb.andWhere('l.storeId = :storeId', { storeId: query.storeId });
+    }
     if (query.marketplaceId) {
       qb.andWhere('l.marketplaceId = :marketplaceId', {
         marketplaceId: query.marketplaceId,

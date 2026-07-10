@@ -22,6 +22,10 @@ export class PublishedListingsQueryDto {
   ebayAccountId?: string;
 
   @IsOptional()
+  @IsUUID()
+  storeId?: string;
+
+  @IsOptional()
   @IsString()
   marketplaceId?: string;
 

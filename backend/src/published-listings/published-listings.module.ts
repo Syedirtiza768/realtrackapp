@@ -13,6 +13,7 @@ import { EbayPublishedListingBulkJob } from './entities/ebay-published-listing-b
 import { EbayPublishedListingBulkJobItem } from './entities/ebay-published-listing-bulk-job-item.entity.js';
 import { EbayPublishedListingRevision } from './entities/ebay-published-listing-revision.entity.js';
 import { PublishedListingsController } from './published-listings.controller.js';
+import { StorePublishedListingsController } from './store-published-listings.controller.js';
 import { PublishedListingsService } from './services/published-listings.service.js';
 import { PublishedListingsSyncService } from './services/published-listings-sync.service.js';
 import { PublishedListingsActionService } from './services/published-listings-action.service.js';
@@ -46,7 +47,7 @@ import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
     EbayIntegrationsModule,
     SchedulerModule,
   ],
-  controllers: [PublishedListingsController],
+  controllers: [PublishedListingsController, StorePublishedListingsController],
   providers: [
     PublishedListingsService,
     PublishedListingsSyncService,
