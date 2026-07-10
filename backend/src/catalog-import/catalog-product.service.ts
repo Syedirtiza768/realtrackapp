@@ -281,7 +281,7 @@ export class CatalogProductService {
       const catalogResult = await runner.query(`
         UPDATE catalog_products
            SET title = trim(regexp_replace(regexp_replace(title, '\\mNew\\M', '', 'gi'), '\\s+', ' ', 'g')),
-               updated_at = NOW()
+               "updatedAt" = NOW()
          WHERE pipeline_job_id = $1
            AND title ~* '\\mNew\\M'
            ${conditionFilter}
