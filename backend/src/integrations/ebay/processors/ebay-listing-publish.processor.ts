@@ -50,6 +50,29 @@ export class EbayListingPublishProcessor extends WorkerHost {
     const listingJob = target.listingJob;
     const account = target.ebayAccount;
 
+    if (!target.catalogProductId || !account) {
+      await this.targetRepo.update(target.id, {
+        status: 'failed',
+        errorPayload: {
+          source: 'internal',
+          stage: 'precondition',
+          message: !target.catalogProductId
+            ? 'Catalog product was deleted before publish could run'
+            : 'eBay account was disconnected before publish could run',
+          errors: [
+            !target.catalogProductId
+              ? `catalogProductId is null for target ${target.id}`
+              : `ebayAccountId ${target.ebayAccountId ?? 'null'} no longer exists`,
+          ],
+        } satisfies PublishErrorPayload,
+      });
+      await this.refreshJobStatus(listingJob.id);
+      return;
+    }
+
+    const catalogProductId = target.catalogProductId;
+    const ebayAccountId = target.ebayAccountId!;
+
     await this.jobRepo.update(listingJob.id, { status: 'processing' });
 
     await this.targetRepo.update(target.id, { status: 'processing' });
@@ -57,8 +80,8 @@ export class EbayListingPublishProcessor extends WorkerHost {
     try {
       const v = await this.validation.validatePublish({
         organizationId: listingJob.organizationId,
-        catalogProductId: target.catalogProductId,
-        ebayAccountId: target.ebayAccountId,
+        catalogProductId,
+        ebayAccountId,
         marketplaceId: target.marketplaceId,
       });
 
@@ -98,15 +121,12 @@ export class EbayListingPublishProcessor extends WorkerHost {
         await this.storeRepo.save(store);
       }
 
-      const resolved = await this.publishResolver.resolve(
-        target.catalogProductId,
-      );
+      const resolved = await this.publishResolver.resolve(catalogProductId);
       const built = await this.builder.build({
-        catalogProductId: target.catalogProductId,
-        ebayAccountId: target.ebayAccountId,
+        catalogProductId,
+        ebayAccountId,
         marketplaceId: target.marketplaceId,
-        listingRecordId:
-          resolved?.snapshot.listingRecordId ?? target.catalogProductId,
+        listingRecordId: resolved?.snapshot.listingRecordId ?? catalogProductId,
         storeId: account.primaryStoreId,
       });
 
@@ -139,16 +159,16 @@ export class EbayListingPublishProcessor extends WorkerHost {
         let ch = await this.channelRepo.findOne({
           where: {
             organizationId: listingJob.organizationId,
-            catalogProductId: target.catalogProductId,
-            ebayAccountId: target.ebayAccountId,
+            catalogProductId,
+            ebayAccountId,
             marketplaceId: target.marketplaceId,
           },
         });
         if (!ch) {
           ch = this.channelRepo.create({
             organizationId: listingJob.organizationId,
-            catalogProductId: target.catalogProductId,
-            ebayAccountId: target.ebayAccountId,
+            catalogProductId,
+            ebayAccountId,
             marketplaceId: target.marketplaceId,
           });
         }

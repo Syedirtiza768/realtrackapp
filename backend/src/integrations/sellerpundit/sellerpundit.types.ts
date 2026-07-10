@@ -42,7 +42,13 @@ export interface SellerpunditPublishResult {
 
 export interface PublishErrorPayload {
   source: 'sellerpundit' | 'ebay' | 'internal';
-  stage: 'policy_sync' | 'validation' | 'bulk_create' | 'build' | 'unknown';
+  stage:
+    | 'policy_sync'
+    | 'validation'
+    | 'bulk_create'
+    | 'build'
+    | 'precondition'
+    | 'unknown';
   message: string;
   errors?: string[];
   warnings?: string[];

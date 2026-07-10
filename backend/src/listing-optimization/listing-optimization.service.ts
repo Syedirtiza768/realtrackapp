@@ -307,6 +307,26 @@ export class ListingOptimizationService {
       manualReview,
     } as any);
 
+    // Persist the resolved eBay category back to the marketplace-specific
+    // listing record so publish paths use a validated Motors category instead
+    // of the raw source categoryId.
+    if (product.sku) {
+      const mktListing = await this.listingRepo.findOne({
+        where: {
+          customLabelSku: product.sku,
+          marketplace,
+          deletedAt: IsNull(),
+        },
+      });
+      if (mktListing && listing.categoryId) {
+        mktListing.categoryId = listing.categoryId;
+        if (listing.categoryName) {
+          mktListing.categoryName = listing.categoryName;
+        }
+        await this.listingRepo.save(mktListing);
+      }
+    }
+
     if (product.pipelineJobId) {
       await this.refreshJobOptimizationCounts(
         product.pipelineJobId,

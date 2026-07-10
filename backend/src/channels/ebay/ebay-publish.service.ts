@@ -41,6 +41,7 @@ import {
   extractEbayErrorParameter,
   formatEbayApiError,
   isEbayInvalidAccessTokenError,
+  isEbayInvalidCategoryError,
   isEbayInvalidItemConditionError,
   isEbayOfferAlreadyExistsError,
   isEbayPartsAccessoriesReturnPolicyError,
@@ -730,7 +731,12 @@ export class EbayPublishService {
         };
       }
 
-      const offerId = await this.resolveOrCreateOfferId(storeId, offer);
+      const offerId = await this.resolveOrCreateOfferId(
+        storeId,
+        offer,
+        store,
+        inventoryItem,
+      );
 
       let publishResult: EbayPublishResponse;
       try {
@@ -1687,10 +1693,85 @@ export class EbayPublishService {
     };
   }
 
+  /**
+   * Delete a stale offer + inventory item on eBay so a fresh offer with the
+   * correct category can be created. This is needed when a previous publish
+   * created an offer with an invalid category that eBay refuses to update
+   * (errorId 25005).
+   */
+  private async purgeStaleEbayInventory(
+    storeId: string,
+    sku: string,
+    offerId?: string,
+    inventoryItem?: EbayInventoryItem,
+  ): Promise<void> {
+    try {
+      if (offerId) {
+        // Withdraw first if the offer is published
+        try {
+          await this.inventoryApi.withdrawOffer(storeId, offerId);
+          this.logger.log(
+            `Withdrew stale offer ${offerId} for SKU ${sku}`,
+          );
+        } catch {
+          // Offer may not be published — try deleting directly
+        }
+        try {
+          await this.inventoryApi.deleteOffer(storeId, offerId);
+          this.logger.log(`Deleted stale offer ${offerId} for SKU ${sku}`);
+        } catch {
+          // Offer may have been withdrawn already
+        }
+      }
+
+      // Find and delete any remaining offers for this SKU
+      try {
+        const { offers } = await this.inventoryApi.getOffersBySku(
+          storeId,
+          sku,
+        );
+        for (const o of offers) {
+          if (!o.offerId) continue;
+          try {
+            if (o.status === 'PUBLISHED') {
+              await this.inventoryApi.withdrawOffer(storeId, o.offerId);
+            }
+            await this.inventoryApi.deleteOffer(storeId, o.offerId);
+            this.logger.log(
+              `Deleted remaining offer ${o.offerId} for SKU ${sku}`,
+            );
+          } catch {
+            // Best effort
+          }
+        }
+      } catch {
+        // No offers found — fine
+      }
+
+      // Delete the inventory item itself
+      await this.inventoryApi.deleteItem(storeId, sku);
+      this.logger.log(
+        `Purged stale inventory item for SKU ${sku} — ready for fresh publish`,
+      );
+
+      // Recreate the inventory item so createOffer can succeed
+      if (inventoryItem) {
+        await this.inventoryApi.createOrReplaceItem(storeId, sku, inventoryItem);
+        this.logger.log(`Recreated inventory item for SKU ${sku}`);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not fully purge stale inventory for SKU ${sku}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
   /** Reuse an unpublished offer for the SKU when createOffer returns 25002. */
   private async resolveOrCreateOfferId(
     storeId: string,
     offer: EbayOffer,
+    store?: Store,
+    inventoryItem?: EbayInventoryItem,
   ): Promise<string> {
     try {
       const created = await this.inventoryApi.createOffer(storeId, offer);
@@ -1703,8 +1784,30 @@ export class EbayPublishService {
         this.logger.warn(
           `Offer already exists for SKU ${offer.sku} — updating offer ${existingOfferId}`,
         );
-        await this.inventoryApi.updateOffer(storeId, existingOfferId, offer);
-        return existingOfferId;
+        try {
+          await this.inventoryApi.updateOffer(
+            storeId,
+            existingOfferId,
+            offer,
+          );
+          return existingOfferId;
+        } catch (updateErr: unknown) {
+          if (!isEbayInvalidCategoryError(updateErr)) throw updateErr;
+          this.logger.warn(
+            `Offer ${existingOfferId} for SKU ${offer.sku} has a stale/invalid category — purging and recreating`,
+          );
+          await this.purgeStaleEbayInventory(
+            storeId,
+            offer.sku,
+            existingOfferId,
+            inventoryItem,
+          );
+          const recreated = await this.inventoryApi.createOffer(
+            storeId,
+            offer,
+          );
+          return recreated.offerId;
+        }
       }
 
       const { offers } = await this.inventoryApi.getOffersBySku(
@@ -1719,8 +1822,30 @@ export class EbayPublishService {
       this.logger.warn(
         `Offer already exists for SKU ${offer.sku} — updating offer ${unpublished.offerId}`,
       );
-      await this.inventoryApi.updateOffer(storeId, unpublished.offerId, offer);
-      return unpublished.offerId;
+      try {
+        await this.inventoryApi.updateOffer(
+          storeId,
+          unpublished.offerId,
+          offer,
+        );
+        return unpublished.offerId;
+      } catch (updateErr: unknown) {
+        if (!isEbayInvalidCategoryError(updateErr)) throw updateErr;
+        this.logger.warn(
+          `Offer ${unpublished.offerId} for SKU ${offer.sku} has a stale/invalid category — purging and recreating`,
+        );
+        await this.purgeStaleEbayInventory(
+          storeId,
+          offer.sku,
+          unpublished.offerId,
+          inventoryItem,
+        );
+        const recreated = await this.inventoryApi.createOffer(
+          storeId,
+          offer,
+        );
+        return recreated.offerId;
+      }
     }
   }
 

@@ -217,7 +217,40 @@ export class StorageService {
         return;
       }
       if (this.urlLooksLikeOurBucket(u)) {
-        out[i] = { url: u, s3Key: this.tryKeyFromOurUrl(u) };
+        const existingKey = this.tryKeyFromOurUrl(u);
+        // Permanent keys (catalog-images/, originals/, …) are already durable —
+        // reference them as-is. But `temp/` keys are ephemeral: they get purged
+        // after upload confirmation / temp cleanup, which would leave the catalog
+        // row pointing at a dead object (403). Copy those into the durable
+        // catalog-images/ prefix now, while the temp object still exists.
+        if (existingKey && this.isTempKey(existingKey)) {
+          // Uploads are often processed to .webp (with the original .jpg/.png
+          // removed), so the referenced key can be gone while a variant
+          // survives. Try the referenced key first, then a .webp fallback.
+          const candidates = [existingKey];
+          const webpVariant = existingKey.replace(/\.[a-z0-9]+$/i, '.webp');
+          if (webpVariant !== existingKey) candidates.push(webpVariant);
+
+          for (const srcKey of candidates) {
+            try {
+              const buf = await this.getObjectBuffer(srcKey);
+              const ext =
+                srcKey.slice(srcKey.lastIndexOf('.')).toLowerCase() || '.jpg';
+              const key = this.withKeyPrefix(
+                `catalog-images/${sanitizedNs}/${String(i).padStart(3, '0')}${ext}`,
+              );
+              await this.putObject(key, buf, this.mimeFromExt(ext));
+              out[i] = { url: this.getCdnUrl(key), s3Key: key };
+              return;
+            } catch {
+              // Object missing under this key — try the next candidate.
+            }
+          }
+          this.logger.warn(
+            `mirrorRemoteImages: temp key ${existingKey} (and .webp variant) not found — referencing as-is`,
+          );
+        }
+        out[i] = { url: u, s3Key: existingKey };
         return;
       }
       try {

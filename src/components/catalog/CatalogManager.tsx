@@ -353,16 +353,29 @@ export default function CatalogManager() {
   const handlePublishStart = useCallback((params: PublishStartParams) => {
     setPublishModalOpen(false);
     setBulkPublishOpen(false);
+
+    // Build a listingId → title map from the loaded catalog rows so the
+    // bulk progress panel can show each listing's name as it publishes.
+    let listingNames: Record<string, string> | undefined;
+    if (params.listingIds?.length) {
+      const idSet = new Set(params.listingIds);
+      listingNames = {};
+      for (const item of displayItems) {
+        if (idSet.has(item.id) && item.title) listingNames[item.id] = item.title;
+      }
+    }
+
     setPublishJob({
       id: `pub-${Date.now()}`,
       mode: params.mode,
       listing: params.listing,
       listingIds: params.listingIds,
+      listingNames,
       stores: params.stores,
       overrides: params.overrides,
       profiles: params.profiles,
     });
-  }, []);
+  }, [displayItems]);
 
   const handlePublishDismiss = useCallback(() => {
     setPublishJob(null);

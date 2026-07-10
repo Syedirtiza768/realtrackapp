@@ -316,6 +316,24 @@ Applied globally via `ThrottlerGuard`.
 
 ---
 
+## API / integration users
+
+Custom-role, narrow-permission service accounts (no separate API-key mechanism — same
+JWT login flow as any user, just a role with a minimal permission set instead of a
+built-in one). See [docs/operations/api-users.md](../operations/api-users.md) for the
+current list and the (currently DB-only) steps to create one.
+
+### R10: No admin endpoint to attach a custom role to a user
+
+- **Issue**: `POST /api/rbac/users` and `PATCH /api/rbac/users/:id/role` both validate
+  `roleSlug` against the fixed system role enum (`ROLE_SLUG_VALUES`), so a custom role
+  created via `POST /api/rbac/roles` can only be attached to a user via a direct
+  `user_roles` table update.
+- **Impact**: Creating a scoped API/integration user requires DB access, not just the
+  admin API.
+- **Mitigation**: Restrict access to trusted operators (already required for DB access).
+  Fix would be to validate `roleSlug` against the `roles` table instead of the enum.
+
 ## Known Security Gaps
 
 ### R9: No JWT Revocation

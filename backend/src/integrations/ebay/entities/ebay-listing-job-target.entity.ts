@@ -33,19 +33,22 @@ export class EbayListingJobTarget {
   @JoinColumn({ name: 'listing_job_id' })
   listingJob!: EbayListingJob;
 
-  @Column({ name: 'catalog_product_id', type: 'uuid' })
-  catalogProductId!: string;
+  @Column({ name: 'catalog_product_id', type: 'uuid', nullable: true })
+  catalogProductId!: string | null;
 
-  @ManyToOne(() => CatalogProduct, { onDelete: 'CASCADE' })
+  @ManyToOne(() => CatalogProduct, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'catalog_product_id' })
-  catalogProduct!: CatalogProduct;
+  catalogProduct!: CatalogProduct | null;
 
-  @Column({ name: 'ebay_account_id', type: 'uuid' })
-  ebayAccountId!: string;
+  @Column({ name: 'ebay_account_id', type: 'uuid', nullable: true })
+  ebayAccountId!: string | null;
 
-  @ManyToOne(() => ConnectedEbayAccount, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ConnectedEbayAccount, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
   @JoinColumn({ name: 'ebay_account_id' })
-  ebayAccount!: ConnectedEbayAccount;
+  ebayAccount!: ConnectedEbayAccount | null;
 
   @Column({ name: 'marketplace_id', type: 'varchar', length: 30 })
   marketplaceId!: string;

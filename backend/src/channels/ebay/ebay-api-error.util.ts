@@ -228,6 +228,27 @@ export function isEbaySellingLimitError(err: unknown): boolean {
   );
 }
 
+/** True when an offer update/publish failed because the existing eBay offer has an invalid or stale category (errorId 25005). */
+export function isEbayInvalidCategoryError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const bodies: unknown[] = [
+    (err as { response?: { data?: unknown } }).response?.data,
+    err,
+  ];
+  for (const body of bodies) {
+    if (!body || typeof body !== 'object') continue;
+    const errors = (body as { errors?: EbayErrorRow[] }).errors;
+    if (!Array.isArray(errors)) continue;
+    for (const e of errors) {
+      if (String(e.errorId) === '25005') return true;
+      const msg = e.longMessage ?? e.message ?? '';
+      if (/invalid categor/i.test(msg)) return true;
+    }
+  }
+  const formatted = formatEbayApiError(err, '');
+  return /invalid categor/i.test(formatted);
+}
+
 /** Policy errors where refresh or alternate policy selection may recover publish. */
 export function isEbayRecoverableBusinessPolicyError(err: unknown): boolean {
   return (

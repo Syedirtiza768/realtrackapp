@@ -1346,46 +1346,54 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const skipMvlOnImport = await this.shouldSkipMvlOnImport();
       if (!skipMvlOnImport) {
         let mvlProcessed = 0;
-        for (const product of products) {
-          const rawFitment = product.fitmentData as
-            | Record<string, unknown>[]
-            | undefined;
-          if (Array.isArray(rawFitment) && rawFitment.length > 0) {
-            const categoryId =
-              product.categoryId?.trim() ||
-              EbayMvlService.MOTORS_PARTS_CATEGORY;
-            try {
-              const mvlResult = await this.mvlService.validateFitmentData(
-                rawFitment,
-                categoryId,
-                {
-                  treeId: resolveCategoryTreeId(marketplace),
-                },
-              );
-              product.fitmentData = mvlResult.accepted;
-              mvlRejectedTotal += mvlResult.rejectedCount;
-              mvlValidatedTotal += mvlResult.validCount;
-              if (mvlResult.apiUnavailable) {
+        const mvlConcurrency = Math.max(
+          1,
+          Number(process.env.PIPELINE_MVL_IMPORT_CONCURRENCY ?? '8') || 8,
+        );
+        const treeId = resolveCategoryTreeId(marketplace);
+
+        await this.mapWithConcurrency(
+          products,
+          mvlConcurrency,
+          async (product) => {
+            const rawFitment = product.fitmentData as
+              | Record<string, unknown>[]
+              | undefined;
+            if (Array.isArray(rawFitment) && rawFitment.length > 0) {
+              const categoryId =
+                product.categoryId?.trim() ||
+                EbayMvlService.MOTORS_PARTS_CATEGORY;
+              try {
+                const mvlResult = await this.mvlService.validateFitmentData(
+                  rawFitment,
+                  categoryId,
+                  { treeId },
+                );
+                product.fitmentData = mvlResult.accepted;
+                mvlRejectedTotal += mvlResult.rejectedCount;
+                mvlValidatedTotal += mvlResult.validCount;
+                if (mvlResult.apiUnavailable) {
+                  this.logger.warn(
+                    `Job ${jobId} [${marketplace}]: eBay MVL API unavailable — fitment kept as needs_review where possible`,
+                  );
+                }
+              } catch (err) {
                 this.logger.warn(
-                  `Job ${jobId} [${marketplace}]: eBay MVL API unavailable — fitment kept as needs_review where possible`,
+                  `Job ${jobId} [${marketplace}]: MVL validation failed for SKU ${product.sku ?? '?'}: ${err instanceof Error ? err.message : err}`,
                 );
               }
-            } catch (err) {
-              this.logger.warn(
-                `Job ${jobId} [${marketplace}]: MVL validation failed for SKU ${product.sku ?? '?'}: ${err instanceof Error ? err.message : err}`,
-              );
             }
-          }
-          mvlProcessed++;
-          if (mvlProcessed % 10 === 0 || mvlProcessed === products.length) {
-            this.scheduleCatalogImportProgress(jobId, {
-              phase: 'mvl',
-              marketplace,
-              processed: mvlProcessed,
-              total: products.length,
-            });
-          }
-        }
+            mvlProcessed++;
+            if (mvlProcessed % 10 === 0 || mvlProcessed === products.length) {
+              this.scheduleCatalogImportProgress(jobId, {
+                phase: 'mvl',
+                marketplace,
+                processed: mvlProcessed,
+                total: products.length,
+              });
+            }
+          },
+        );
       } else {
         this.logger.log(
           `Job ${jobId} [${marketplace}]: PIPELINE_SKIP_MVL_ON_IMPORT — using fitment from pipeline output as-is`,
@@ -1681,5 +1689,28 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       );
       return false;
     }
+  }
+
+  /** Run an async mapper over items with bounded concurrency, preserving order. */
+  private async mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    fn: (item: T) => Promise<R>,
+  ): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= items.length) return;
+        results[i] = await fn(items[i]);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, items.length) }, () =>
+        worker(),
+      ),
+    );
+    return results;
   }
 }

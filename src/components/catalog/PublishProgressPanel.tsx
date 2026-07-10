@@ -1,10 +1,18 @@
 /* ─── PublishProgressPanel ────────────────────────────────────
  *  Inline progress panel for eBay publishing — renders on the
  *  catalog page instead of a blocking overlay modal.
- *  Shows per-store progress during publishing and results after.
+ *
+ *  Two modes:
+ *   • single — one listing → many stores. Animates per store.
+ *   • bulk   — many listings → many stores. Client-driven live
+ *     loop (concurrency 5) reveals each listing's name, live
+ *     "X of N" counter, and per-listing errors as they resolve.
+ *
+ *  A "View summary" section expands after completion with totals,
+ *  a per-store breakdown, and every failed/partial listing.
  * ─────────────────────────────────────────────────────────── */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   X,
@@ -15,11 +23,13 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  ListChecks,
+  Package,
 } from 'lucide-react';
 import {
   publishToEbay,
   publishListingIdsToEbay,
-  type BatchPublishResult,
+  type PublishResult,
   type PublishRequest,
 } from '../../lib/publishApi';
 import type { SearchItem } from '../../types/search';
@@ -46,11 +56,31 @@ export interface StoreProgress {
   error?: string;
 }
 
+/** Per-listing status for bulk mode. `partial` = some stores ok, some failed. */
+export type ListingPublishStatus =
+  | 'pending'
+  | 'publishing'
+  | 'success'
+  | 'partial'
+  | 'failed';
+
+export interface ListingProgress {
+  listingId: string;
+  name: string;
+  status: ListingPublishStatus;
+  successStores: number;
+  failedStores: number;
+  error?: string;
+  storeResults?: PublishResult[];
+}
+
 export interface PublishJob {
   id: string;
   mode: 'single' | 'bulk';
   listing?: SearchItem;
   listingIds?: string[];
+  /** listingId → human-readable title, for bulk progress rows. */
+  listingNames?: Record<string, string>;
   stores: Store[];
   overrides: Record<string, StoreOverrides>;
   profiles: ProfileSelection;
@@ -61,11 +91,20 @@ interface Props {
   onDismiss: () => void;
 }
 
+/** Concurrency for the client-driven bulk loop; matches backend batching. */
+const BULK_CONCURRENCY = 5;
+
 /* ── Component ────────────────────────────────────────────── */
 
 export default function PublishProgressPanel({ job, onDismiss }: Props) {
   const queryClient = useQueryClient();
   const [collapsed, setCollapsed] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [overallStatus, setOverallStatus] = useState<'publishing' | 'complete'>('publishing');
+
+  const isBulk = job.mode === 'bulk';
+
+  /* ── Single-mode: per-store progress ────────────────────── */
   const [storeProgress, setStoreProgress] = useState<StoreProgress[]>(() =>
     job.stores.map((s) => ({
       storeId: s.id,
@@ -73,15 +112,19 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
       status: 'pending' as StorePublishStatus,
     })),
   );
-  const [bulkResults, setBulkResults] = useState<BatchPublishResult[]>([]);
-  const [overallStatus, setOverallStatus] = useState<'publishing' | 'complete'>('publishing');
 
-  const successCount = storeProgress.filter((s) => s.status === 'success').length;
-  const failCount = storeProgress.filter((s) => s.status === 'failed').length;
-  const completedCount = successCount + failCount;
-  const totalCount = job.stores.length;
+  /* ── Bulk-mode: per-listing progress ────────────────────── */
+  const [listingProgress, setListingProgress] = useState<ListingProgress[]>(() =>
+    (job.listingIds ?? []).map((id) => ({
+      listingId: id,
+      name: job.listingNames?.[id]?.trim() || `Listing ${id.slice(0, 8)}`,
+      status: 'pending' as ListingPublishStatus,
+      successStores: 0,
+      failedStores: 0,
+    })),
+  );
 
-  /* ── Build publish request ──────────────────────────────── */
+  /* ── Build single-publish request ───────────────────────── */
   const buildRequest = useCallback(
     (store: Store): PublishRequest => {
       if (!job.listing) throw new Error('No listing data');
@@ -126,96 +169,117 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
   useEffect(() => {
     let cancelled = false;
 
-    const run = async () => {
-      if (job.mode === 'single' && job.listing) {
-        // Sequential per-store publishing with progress updates
-        for (const store of job.stores) {
+    const runSingle = async () => {
+      if (!job.listing) return;
+      for (const store of job.stores) {
+        if (cancelled) return;
+
+        setStoreProgress((prev) =>
+          prev.map((s) => (s.storeId === store.id ? { ...s, status: 'publishing' } : s)),
+        );
+
+        try {
+          const req = buildRequest(store);
+          const res = await publishToEbay(req);
           if (cancelled) return;
 
-          setStoreProgress((prev) =>
-            prev.map((s) =>
-              s.storeId === store.id ? { ...s, status: 'publishing' } : s,
-            ),
-          );
-
-          try {
-            const req = buildRequest(store);
-            const res = await publishToEbay(req);
-            if (cancelled) return;
-
-            for (const r of res) {
-              setStoreProgress((prev) =>
-                prev.map((s) =>
-                  s.storeId === r.storeId
-                    ? {
-                        ...s,
-                        status: r.success ? 'success' : 'failed',
-                        offerId: r.offerId,
-                        listingId: r.listingId,
-                        error: r.error,
-                      }
-                    : s,
-                ),
-              );
-            }
-          } catch (err: unknown) {
-            if (cancelled) return;
-            const msg = err instanceof Error ? err.message : 'Unknown error';
+          for (const r of res) {
             setStoreProgress((prev) =>
               prev.map((s) =>
-                s.storeId === store.id
-                  ? { ...s, status: 'failed', error: msg }
+                s.storeId === r.storeId
+                  ? {
+                      ...s,
+                      status: r.success ? 'success' : 'failed',
+                      offerId: r.offerId,
+                      listingId: r.listingId,
+                      error: r.error,
+                    }
                   : s,
               ),
             );
           }
-        }
-      } else if (job.mode === 'bulk' && job.listingIds) {
-        // Bulk publish — mark all as publishing, then update
-        setStoreProgress((prev) =>
-          prev.map((s) => ({ ...s, status: 'publishing' as StorePublishStatus })),
-        );
-
-        try {
-          const storeIdArray = job.stores.map((s) => s.id);
-          const batchRes = await publishListingIdsToEbay(job.listingIds, storeIdArray);
-          if (cancelled) return;
-
-          setBulkResults(batchRes);
-
-          // Aggregate results per store
-          const storeResults = new Map<string, { success: number; failed: number; error?: string }>();
-          for (const br of batchRes) {
-            for (const r of br.results) {
-              const existing = storeResults.get(r.storeId) ?? { success: 0, failed: 0 };
-              if (r.success) existing.success++;
-              else {
-                existing.failed++;
-                if (!existing.error) existing.error = r.error;
-              }
-              storeResults.set(r.storeId, existing);
-            }
-          }
-
-          setStoreProgress((prev) =>
-            prev.map((s) => {
-              const agg = storeResults.get(s.storeId);
-              if (!agg) return { ...s, status: 'failed' as StorePublishStatus, error: 'No result' };
-              return {
-                ...s,
-                status: agg.failed === 0 ? ('success' as const) : ('failed' as const),
-                error: agg.error,
-              };
-            }),
-          );
         } catch (err: unknown) {
           if (cancelled) return;
           const msg = err instanceof Error ? err.message : 'Unknown error';
           setStoreProgress((prev) =>
-            prev.map((s) => ({ ...s, status: 'failed' as StorePublishStatus, error: msg })),
+            prev.map((s) => (s.storeId === store.id ? { ...s, status: 'failed', error: msg } : s)),
           );
         }
       }
+    };
+
+    const runBulk = async () => {
+      const ids = job.listingIds ?? [];
+      const storeIdArray = job.stores.map((s) => s.id);
+      if (!ids.length || !storeIdArray.length) return;
+
+      // Publish in concurrent chunks; each listing resolves independently so
+      // its name + result appear live rather than all at once.
+      for (let i = 0; i < ids.length; i += BULK_CONCURRENCY) {
+        if (cancelled) return;
+        const chunk = ids.slice(i, i + BULK_CONCURRENCY);
+
+        setListingProgress((prev) =>
+          prev.map((lp) =>
+            chunk.includes(lp.listingId) ? { ...lp, status: 'publishing' } : lp,
+          ),
+        );
+
+        await Promise.all(
+          chunk.map(async (id) => {
+            try {
+              const res = await publishListingIdsToEbay([id], storeIdArray);
+              if (cancelled) return;
+              const results = res[0]?.results ?? [];
+              const successStores = results.filter((r) => r.success).length;
+              const failedStores = results.length - successStores;
+              const firstErr = results.find((r) => !r.success && r.error)?.error;
+              const status: ListingPublishStatus =
+                results.length === 0
+                  ? 'failed'
+                  : failedStores === 0
+                    ? 'success'
+                    : successStores === 0
+                      ? 'failed'
+                      : 'partial';
+              setListingProgress((prev) =>
+                prev.map((lp) =>
+                  lp.listingId === id
+                    ? {
+                        ...lp,
+                        status,
+                        successStores,
+                        failedStores,
+                        error: firstErr,
+                        storeResults: results,
+                      }
+                    : lp,
+                ),
+              );
+            } catch (err: unknown) {
+              if (cancelled) return;
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+              setListingProgress((prev) =>
+                prev.map((lp) =>
+                  lp.listingId === id
+                    ? {
+                        ...lp,
+                        status: 'failed',
+                        failedStores: storeIdArray.length,
+                        error: msg,
+                      }
+                    : lp,
+                ),
+              );
+            }
+          }),
+        );
+      }
+    };
+
+    const run = async () => {
+      if (isBulk) await runBulk();
+      else await runSingle();
 
       if (!cancelled) {
         setOverallStatus('complete');
@@ -224,17 +288,55 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
     };
 
     void run();
-    return () => { cancelled = true; };
-  }, [job, buildRequest, queryClient]);
+    return () => {
+      cancelled = true;
+    };
+  }, [job, buildRequest, queryClient, isBulk]);
 
-  /* ── Auto-collapse during publishing, expand on complete ── */
-  useEffect(() => {
-    if (overallStatus === 'complete') setCollapsed(false);
-  }, [overallStatus]);
+  /* ── Derived counts ─────────────────────────────────────── */
+  const counts = useMemo(() => {
+    if (isBulk) {
+      const total = listingProgress.length;
+      const success = listingProgress.filter((l) => l.status === 'success').length;
+      const partial = listingProgress.filter((l) => l.status === 'partial').length;
+      const failed = listingProgress.filter((l) => l.status === 'failed').length;
+      const completed = success + partial + failed;
+      return { total, success, partial, failed, completed };
+    }
+    const total = storeProgress.length;
+    const success = storeProgress.filter((s) => s.status === 'success').length;
+    const failed = storeProgress.filter((s) => s.status === 'failed').length;
+    return { total, success, partial: 0, failed, completed: success + failed };
+  }, [isBulk, listingProgress, storeProgress]);
 
-  const allSuccess = failCount === 0 && overallStatus === 'complete';
-  const allFailed = successCount === 0 && overallStatus === 'complete';
-  const partial = overallStatus === 'complete' && successCount > 0 && failCount > 0;
+  const { total, success, partial, failed, completed } = counts;
+  const unit = isBulk ? 'listing' : 'store';
+  const pct = total > 0 ? (completed / total) * 100 : 0;
+
+  const allSuccess = overallStatus === 'complete' && failed === 0 && partial === 0;
+  const allFailed = overallStatus === 'complete' && success === 0 && partial === 0 && failed > 0;
+  const hasIssues = overallStatus === 'complete' && !allSuccess;
+
+  /* ── Per-store aggregate for the summary (bulk) ─────────── */
+  const storeAggregate = useMemo(() => {
+    if (!isBulk) return [];
+    const map = new Map<string, { storeName: string; success: number; failed: number }>();
+    for (const s of job.stores) map.set(s.id, { storeName: s.storeName, success: 0, failed: 0 });
+    for (const lp of listingProgress) {
+      for (const r of lp.storeResults ?? []) {
+        const agg = map.get(r.storeId) ?? { storeName: r.storeName || r.storeId, success: 0, failed: 0 };
+        if (r.success) agg.success++;
+        else agg.failed++;
+        map.set(r.storeId, agg);
+      }
+    }
+    return Array.from(map.values());
+  }, [isBulk, job.stores, listingProgress]);
+
+  const problemListings = useMemo(
+    () => listingProgress.filter((l) => l.status === 'failed' || l.status === 'partial'),
+    [listingProgress],
+  );
 
   /* ── Render ─────────────────────────────────────────────── */
   return (
@@ -243,7 +345,7 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+        className="w-full flex items-center gap-3 px-3 sm:px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
       >
         {overallStatus === 'publishing' ? (
           <Loader2 size={16} className="animate-spin text-blue-500 shrink-0" />
@@ -256,26 +358,32 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
         )}
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
             {overallStatus === 'publishing'
-              ? `Publishing to eBay${job.mode === 'bulk' ? ` (${job.listingIds?.length ?? 0} listings)` : ''}…`
+              ? isBulk
+                ? `Publishing to eBay — ${completed} of ${total} listings`
+                : `Publishing to eBay${total !== 1 ? ` (${total} stores)` : ''}…`
               : allSuccess
-                ? 'Published successfully'
+                ? isBulk
+                  ? `Published ${success} listing${success !== 1 ? 's' : ''}`
+                  : 'Published successfully'
                 : allFailed
                   ? 'Publishing failed'
                   : 'Publishing complete (partial)'}
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
             {overallStatus === 'publishing'
-              ? `${completedCount} of ${totalCount} store${totalCount !== 1 ? 's' : ''} processed`
-              : `${successCount} succeeded, ${failCount} failed`}
+              ? `${completed} of ${total} ${unit}${total !== 1 ? 's' : ''} processed`
+              : isBulk
+                ? `${success} published${partial > 0 ? `, ${partial} partial` : ''}${failed > 0 ? `, ${failed} failed` : ''}`
+                : `${success} succeeded, ${failed} failed`}
           </p>
         </div>
 
         {/* Progress fraction */}
         {overallStatus === 'publishing' && (
-          <span className="text-xs font-mono text-slate-500 dark:text-slate-400 shrink-0">
-            {completedCount}/{totalCount}
+          <span className="text-xs font-mono text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
+            {completed}/{total}
           </span>
         )}
 
@@ -284,84 +392,277 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
             <span
               role="button"
               tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onDismiss(); } }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  onDismiss();
+                }
+              }}
               className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
               title="Dismiss"
             >
               <X size={14} />
             </span>
           )}
-          {collapsed ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronUp size={14} className="text-slate-400" />}
+          {collapsed ? (
+            <ChevronDown size={14} className="text-slate-400" />
+          ) : (
+            <ChevronUp size={14} className="text-slate-400" />
+          )}
         </div>
       </button>
 
       {/* Progress bar */}
       {overallStatus === 'publishing' && (
-        <div className="h-0.5 bg-slate-100 dark:bg-slate-800">
+        <div
+          className="h-1 bg-slate-100 dark:bg-slate-800"
+          role="progressbar"
+          aria-valuenow={Math.round(pct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
           <div
             className="h-full bg-blue-500 transition-all duration-500 ease-out"
-            style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+            style={{ width: `${pct}%` }}
           />
         </div>
       )}
 
-      {/* Body — per-store status */}
+      {/* Body */}
       {!collapsed && (
-        <div className="px-4 pb-3 space-y-1.5">
-          {storeProgress.map((sp) => (
-            <div
-              key={sp.storeId}
-              className={`flex items-center gap-2.5 py-1.5 px-2.5 rounded-lg text-xs transition-colors ${
-                sp.status === 'success'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/20'
-                  : sp.status === 'failed'
-                    ? 'bg-red-50 dark:bg-red-950/20'
-                    : sp.status === 'publishing'
-                      ? 'bg-blue-50 dark:bg-blue-950/20'
-                      : 'bg-slate-50 dark:bg-slate-800/30'
-              }`}
-            >
-              <StoreIcon size={12} className="text-slate-400 shrink-0" />
-              <span className="text-slate-700 dark:text-slate-300 font-medium truncate flex-1">
-                {sp.storeName}
-              </span>
+        <div className="px-3 sm:px-4 pb-3 space-y-1.5">
+          {/* ── Single mode: per-store rows ─────────────────── */}
+          {!isBulk &&
+            storeProgress.map((sp) => (
+              <div
+                key={sp.storeId}
+                className={`flex items-center gap-2.5 py-1.5 px-2.5 rounded-lg text-xs transition-colors ${
+                  sp.status === 'success'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/20'
+                    : sp.status === 'failed'
+                      ? 'bg-red-50 dark:bg-red-950/20'
+                      : sp.status === 'publishing'
+                        ? 'bg-blue-50 dark:bg-blue-950/20'
+                        : 'bg-slate-50 dark:bg-slate-800/30'
+                }`}
+              >
+                <StoreIcon size={12} className="text-slate-400 shrink-0" />
+                <span className="text-slate-700 dark:text-slate-300 font-medium truncate flex-1">
+                  {sp.storeName}
+                </span>
+                {sp.status === 'pending' && (
+                  <span className="text-slate-400 dark:text-slate-500 shrink-0">Waiting</span>
+                )}
+                {sp.status === 'publishing' && (
+                  <Loader2 size={12} className="animate-spin text-blue-500 shrink-0" />
+                )}
+                {sp.status === 'success' && (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 shrink-0">
+                    <CheckCircle2 size={12} />
+                    Published
+                  </span>
+                )}
+                {sp.status === 'failed' && (
+                  <span
+                    className="flex items-center gap-1 text-red-600 dark:text-red-400 truncate max-w-[55%] sm:max-w-[240px]"
+                    title={sp.error}
+                  >
+                    <XCircle size={12} className="shrink-0" />
+                    <span className="truncate">{sp.error ?? 'Failed'}</span>
+                  </span>
+                )}
+                {sp.offerId && sp.status === 'success' && (
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden sm:inline shrink-0">
+                    {sp.offerId}
+                  </span>
+                )}
+              </div>
+            ))}
 
-              {sp.status === 'pending' && (
-                <span className="text-slate-400 dark:text-slate-500">Waiting</span>
-              )}
-              {sp.status === 'publishing' && (
-                <Loader2 size={12} className="animate-spin text-blue-500" />
-              )}
-              {sp.status === 'success' && (
-                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 size={12} />
-                  Published
-                </span>
-              )}
-              {sp.status === 'failed' && (
-                <span className="flex items-center gap-1 text-red-600 dark:text-red-400 truncate max-w-[200px]" title={sp.error}>
-                  <XCircle size={12} />
-                  {sp.error ?? 'Failed'}
-                </span>
-              )}
+          {/* ── Bulk mode: per-listing rows ─────────────────── */}
+          {isBulk && (
+            <div className="space-y-1 max-h-72 overflow-y-auto pr-0.5">
+              {listingProgress.map((lp) => (
+                <div
+                  key={lp.listingId}
+                  className={`flex items-center gap-2.5 py-1.5 px-2.5 rounded-lg text-xs transition-colors ${
+                    lp.status === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/20'
+                      : lp.status === 'failed'
+                        ? 'bg-red-50 dark:bg-red-950/20'
+                        : lp.status === 'partial'
+                          ? 'bg-amber-50 dark:bg-amber-950/20'
+                          : lp.status === 'publishing'
+                            ? 'bg-blue-50 dark:bg-blue-950/20'
+                            : 'bg-slate-50 dark:bg-slate-800/30'
+                  }`}
+                >
+                  <Package size={12} className="text-slate-400 shrink-0" />
+                  <span
+                    className="text-slate-700 dark:text-slate-300 font-medium truncate flex-1 min-w-0"
+                    title={lp.name}
+                  >
+                    {lp.name}
+                  </span>
 
-              {sp.offerId && sp.status === 'success' && (
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden sm:inline">
-                  {sp.offerId}
-                </span>
+                  {lp.status === 'pending' && (
+                    <span className="text-slate-400 dark:text-slate-500 shrink-0">Waiting</span>
+                  )}
+                  {lp.status === 'publishing' && (
+                    <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 shrink-0">
+                      <Loader2 size={12} className="animate-spin" />
+                      <span className="hidden sm:inline">Publishing…</span>
+                    </span>
+                  )}
+                  {lp.status === 'success' && (
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <CheckCircle2 size={12} />
+                      <span className="hidden sm:inline">
+                        {lp.successStores} store{lp.successStores !== 1 ? 's' : ''}
+                      </span>
+                    </span>
+                  )}
+                  {lp.status === 'partial' && (
+                    <span
+                      className="flex items-center gap-1 text-amber-600 dark:text-amber-400 shrink-0"
+                      title={lp.error}
+                    >
+                      <AlertTriangle size={12} />
+                      <span>
+                        {lp.successStores}/{lp.successStores + lp.failedStores}
+                      </span>
+                    </span>
+                  )}
+                  {lp.status === 'failed' && (
+                    <span
+                      className="flex items-center gap-1 text-red-600 dark:text-red-400 truncate max-w-[50%] sm:max-w-[260px]"
+                      title={lp.error}
+                    >
+                      <XCircle size={12} className="shrink-0" />
+                      <span className="truncate">{lp.error ?? 'Failed'}</span>
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Summary toggle + section ────────────────────── */}
+          {overallStatus === 'complete' && (
+            <div className="pt-1.5">
+              <button
+                type="button"
+                onClick={() => setShowSummary((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <ListChecks size={13} />
+                {showSummary ? 'Hide summary' : 'View summary'}
+                {showSummary ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+
+              {showSummary && (
+                <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 space-y-3">
+                  {/* Totals */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <SummaryStat label={isBulk ? 'Listings' : 'Stores'} value={total} tone="neutral" />
+                    <SummaryStat label="Published" value={success} tone="success" />
+                    {isBulk && <SummaryStat label="Partial" value={partial} tone="warn" />}
+                    <SummaryStat label="Failed" value={failed} tone="danger" />
+                  </div>
+
+                  {/* Per-store breakdown (bulk) */}
+                  {isBulk && storeAggregate.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">
+                        Per store
+                      </p>
+                      <div className="space-y-1">
+                        {storeAggregate.map((agg) => (
+                          <div
+                            key={agg.storeName}
+                            className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300"
+                          >
+                            <StoreIcon size={12} className="text-slate-400 shrink-0" />
+                            <span className="truncate flex-1">{agg.storeName}</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 shrink-0">
+                              {agg.success} ✓
+                            </span>
+                            {agg.failed > 0 && (
+                              <span className="text-red-600 dark:text-red-400 shrink-0">
+                                {agg.failed} ✕
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Problem listings (bulk) */}
+                  {isBulk && problemListings.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">
+                        Needs attention ({problemListings.length})
+                      </p>
+                      <div className="space-y-1">
+                        {problemListings.map((lp) => (
+                          <div
+                            key={lp.listingId}
+                            className="flex items-start gap-2 text-xs"
+                          >
+                            {lp.status === 'partial' ? (
+                              <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                            ) : (
+                              <XCircle size={12} className="text-red-500 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-slate-700 dark:text-slate-300 font-medium shrink-0 max-w-[40%] truncate" title={lp.name}>
+                              {lp.name}
+                            </span>
+                            <span className="text-slate-500 dark:text-slate-400 truncate flex-1" title={lp.error}>
+                              {lp.error ?? (lp.status === 'partial' ? 'Some stores failed' : 'Failed')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          ))}
-
-          {/* Bulk mode: listing count summary */}
-          {job.mode === 'bulk' && overallStatus === 'complete' && bulkResults.length > 0 && (
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-1">
-              {bulkResults.length} listing{bulkResults.length !== 1 ? 's' : ''} processed across {totalCount} store{totalCount !== 1 ? 's' : ''}
-            </p>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Summary stat tile ────────────────────────────────────── */
+
+function SummaryStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'neutral' | 'success' | 'warn' | 'danger';
+}) {
+  const toneCls =
+    tone === 'success'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : tone === 'warn'
+        ? 'text-amber-600 dark:text-amber-400'
+        : tone === 'danger'
+          ? 'text-red-600 dark:text-red-400'
+          : 'text-slate-800 dark:text-slate-100';
+  return (
+    <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2.5 py-2 text-center">
+      <p className={`text-lg font-semibold tabular-nums ${toneCls}`}>{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
     </div>
   );
 }

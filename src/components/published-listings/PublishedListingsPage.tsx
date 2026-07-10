@@ -26,6 +26,7 @@ import {
   type PublishedListing,
 } from '../../lib/publishedListingsApi';
 import { listEbayAccounts, getEbayWorkspace } from '../../lib/ebayIntegrationsApi';
+import { getStores } from '../../lib/multiStoreApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useQuery } from '@tanstack/react-query';
 
@@ -64,6 +65,7 @@ export default function PublishedListingsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [ebayAccountId, setEbayAccountId] = useState('');
+  const [storeId, setStoreId] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('updated');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -94,6 +96,11 @@ export default function PublishedListingsPage() {
     enabled: Boolean(organizationId),
   });
 
+  const { data: stores = [] } = useQuery({
+    queryKey: ['stores'],
+    queryFn: () => getStores(),
+  });
+
   const query = useMemo(
     () => ({
       organizationId,
@@ -101,11 +108,12 @@ export default function PublishedListingsPage() {
       limit: 50,
       search: debouncedSearch || undefined,
       ebayAccountId: ebayAccountId || undefined,
+      storeId: storeId || undefined,
       status: statusFilter || undefined,
       sortBy,
       sortDir: 'desc' as const,
     }),
-    [organizationId, page, debouncedSearch, ebayAccountId, statusFilter, sortBy],
+    [organizationId, page, debouncedSearch, ebayAccountId, storeId, statusFilter, sortBy],
   );
 
   const { data, isLoading, isFetching, refetch } = usePublishedListings(query);
@@ -248,9 +256,19 @@ export default function PublishedListingsPage() {
               value={ebayAccountId}
               onChange={(e) => { setEbayAccountId(e.target.value); setPage(1); }}
             >
-              <option value="">All stores</option>
+              <option value="">All eBay accounts</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>{a.accountDisplayName}</option>
+              ))}
+            </select>
+            <select
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+              value={storeId}
+              onChange={(e) => { setStoreId(e.target.value); setPage(1); }}
+            >
+              <option value="">All stores</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>{s.storeName}</option>
               ))}
             </select>
             <select

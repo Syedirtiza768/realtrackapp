@@ -60,6 +60,7 @@ export interface PublishedListingsSummary {
 export interface PublishedListingsQuery {
   organizationId?: string;
   ebayAccountId?: string;
+  storeId?: string;
   marketplaceId?: string;
   status?: string;
   format?: string;
