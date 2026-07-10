@@ -168,6 +168,7 @@ const PUBLISHED_SQL = `(
   OR EXISTS (
     SELECT 1 FROM ebay_published_listings epl
     WHERE epl.sku = r."customLabelSku" AND epl.listing_status = 'active'
+      AND r."ebayListingId" IS NOT NULL AND r."ebayListingId" != ''
   )
 )`;
 
@@ -276,7 +277,7 @@ export class SearchService {
       'hasChannelInstance',
     );
     qb.addSelect(
-      `(SELECT EXISTS(SELECT 1 FROM ebay_published_listings epl WHERE epl.sku = r."customLabelSku" AND epl.listing_status = 'active'))`,
+      `(SELECT EXISTS(SELECT 1 FROM ebay_published_listings epl WHERE epl.sku = r."customLabelSku" AND epl.listing_status = 'active' AND r."ebayListingId" IS NOT NULL AND r."ebayListingId" != ''))`,
       'hasEbayPublishedListing',
     );
 
