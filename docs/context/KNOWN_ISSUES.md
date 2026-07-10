@@ -57,6 +57,18 @@
 
 ## High Priority Issues
 
+### R16: Empty ebay_category_mappings Caused Invalid Category Publishes
+
+**Type**: Bug  
+**Severity**: High  
+**Status**: Resolved (2026-07-10)
+
+**Description**: The `ebay_category_mappings` table was empty on production because seed migration `1709769600000-MotorsIntelligenceSystem` was never run (not in `typeorm_migrations`). Combined with `isMotorsCategory()` returning `true` for unmapped categories by default, the AI taxonomy suggestion API (using tree `'0'` = all eBay US, not Motors-specific) returned non-automotive categories (e.g. "Lincoln Memorial" cat 31373, "Other Educational Toys" cat 2518, "Other Welding Equipment" cat 11774) that passed validation. These bad category IDs were stored in `listing_records.categoryId` and caused eBay `publishOffer` to fail with errorId 25005 ("invalid category ID").
+
+**Resolution**: (1) `isMotorsCategory()` in `enterprise-listing-intelligence.service.ts` now returns `false` for unmapped/unknown categories, forcing fallback to `6000` (Parts & Accessories). (2) Seeded `ebay_category_mappings` with 15 known Motors categories + the `6000` default. (3) Bulk-updated 335 `listing_records.categoryId` to `6000` for pipeline job `6892099a`. (4) Deployed code fix to EC2 via backend image rebuild.
+
+**Files**: `backend/src/ingestion/enterprise-listing-intelligence.service.ts`, `backend/src/migrations/1709769600000-MotorsIntelligenceSystem.ts`
+
 ### R2: Low Test Coverage
 
 **Type**: Technical Debt  

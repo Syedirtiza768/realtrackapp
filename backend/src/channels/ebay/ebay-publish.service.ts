@@ -436,6 +436,8 @@ export class EbayPublishService {
     const listing = await this.listingRepo.findOne({
       where: { id: enriched.listingId },
     });
+    const listingOem =
+      listing?.cOeOemPartNumber ?? listing?.cManufacturerPartNumber ?? '';
     const sanitized = sanitizePublishListingText({
       title: enriched.title,
       description: enriched.description,
@@ -443,6 +445,11 @@ export class EbayPublishService {
       brand: listing?.cBrand,
       mpn: listing?.cManufacturerPartNumber,
       partType: listing?.cType,
+      make: (listing?.cBrand ?? listing?.extractedMake ?? '').trim() || null,
+      model: (listing?.extractedModel ?? '').trim() || null,
+      position: (listing?.cPlacement ?? '').trim() || null,
+      partName: (listing?.cType ?? '').trim() || null,
+      oemPartNumber: listingOem.trim() || null,
     });
     if (sanitized.warnings.length) {
       this.logger.debug(
@@ -478,6 +485,23 @@ export class EbayPublishService {
     this.logger.log(
       `Publish "${req.sku}" complete: ${succeeded} succeeded, ${failed} failed across ${req.storeIds.length} stores`,
     );
+
+    if (succeeded > 0) {
+      const firstSuccess = results.find((r) => r.success);
+      try {
+        await this.listingRepo.update(req.listingId, {
+          status: 'published',
+          publishedAt: new Date(),
+          ...(firstSuccess?.listingId
+            ? { ebayListingId: firstSuccess.listingId }
+            : {}),
+        });
+      } catch (writeErr) {
+        this.logger.warn(
+          `Failed to write publish status for listing ${req.listingId}: ${(writeErr as Error).message}`,
+        );
+      }
+    }
 
     return results;
   }

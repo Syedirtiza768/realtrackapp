@@ -14,6 +14,7 @@ import {
   buildGermanListingTitle,
   type GermanListingInput,
   isLikelyGermanText,
+  CATEGORY_KEYWORD_ROWS,
   resolveMotorsCategoryFromPart,
   validateGermanListing,
 } from '../channels/ebay/ebay-german-listing.util.js';
@@ -135,6 +136,21 @@ export class EnterpriseListingIntelligenceService {
   private readonly logger = new Logger(
     EnterpriseListingIntelligenceService.name,
   );
+
+  /**
+   * eBay Motors P&A category tree ID (US). The general EBAY_US tree is '0'
+   * but Motors categories live on tree '100'.
+   */
+  private static readonly MOTORS_TREE_ID = '100';
+
+  /** Category IDs from keyword-based Motors mapping (known leaf categories). */
+  private static readonly KEYWORD_MOTORS_IDS = new Set(
+    CATEGORY_KEYWORD_ROWS.map((r) => r.id),
+  );
+
+  /** Cached fallback leaf category under 6000. */
+  private fallbackLeaf: { categoryId: string; categoryName: string } | null =
+    null;
 
   constructor(
     @InjectRepository(PipelineJob)
@@ -618,45 +634,141 @@ export class EnterpriseListingIntelligenceService {
       );
     }
 
-    try {
-      const query = [product.brand, product.partType, product.title]
+    // Fast path: keyword-based matching (no API call, deterministic)
+    const keywordMatch = resolveMotorsCategoryFromPart(
+      product.partType,
+      product.placement,
+    );
+    if (keywordMatch) {
+      return { ...keywordMatch, confidence: 0.85 };
+    }
+
+    // Taxonomy API: try progressively broader queries; accept only
+    // categories whose ancestor chain includes 6000 (Parts & Accessories).
+    const queries = [
+      [product.brand, product.partType, product.title]
         .filter(Boolean)
-        .join(' ');
-      const suggestions = await this.taxonomy.getCategorySuggestions(query);
-      for (const suggestion of suggestions) {
-        const catId = suggestion.category?.categoryId;
+        .join(' '),
+      product.partType ? `automotive ${product.partType}` : null,
+      product.partType ?? null,
+    ].filter(Boolean) as string[];
+
+    for (const query of queries) {
+      const match = await this.findMotorsLeafFromSuggestions(query);
+      if (match) return { ...match, confidence: 0.75 };
+    }
+
+    // Last resort: find a real leaf under 6000 via the subtree API.
+    const fallback = await this.getFallbackLeafCategory();
+    return {
+      categoryId: fallback.categoryId,
+      categoryName: fallback.categoryName,
+      confidence: 0.3,
+    };
+  }
+
+  /**
+   * Query eBay taxonomy for category suggestions and return the first one
+   * whose ancestor chain includes category 6000 (Parts & Accessories).
+   * Taxonomy suggestions are leaf-level by design, so this guarantees a
+   * valid Motors leaf category.
+   */
+  private async findMotorsLeafFromSuggestions(
+    query: string,
+  ): Promise<{ categoryId: string; categoryName: string } | null> {
+    try {
+      const suggestions = await this.taxonomy.getCategorySuggestions(
+        query,
+        EnterpriseListingIntelligenceService.MOTORS_TREE_ID,
+      );
+      for (const s of suggestions) {
+        const catId = s.category?.categoryId;
         if (!catId) continue;
-        const isValid = await this.isMotorsCategory(catId);
-        if (isValid) {
+        const underMotors = s.categoryTreeNodeAncestors?.some(
+          (a) => a.categoryId === '6000',
+        );
+        if (underMotors) {
           return {
             categoryId: catId,
-            categoryName: suggestion.category.categoryName ?? null,
-            confidence: 0.75,
+            categoryName: s.category.categoryName,
           };
         }
       }
     } catch {
-      // fallback below
+      // ignore — caller will try the next query or fallback
+    }
+    return null;
+  }
+
+  /**
+   * Find a safe leaf category under 6000 via the subtree API.
+   * Uses BFS to find the shallowest leaf. Result is cached for the
+   * lifetime of the service instance.
+   */
+  private async getFallbackLeafCategory(): Promise<{
+    categoryId: string;
+    categoryName: string;
+  }> {
+    if (this.fallbackLeaf) return this.fallbackLeaf;
+
+    try {
+      const subtree = await this.taxonomy.getCategorySubtree(
+        '6000',
+        EnterpriseListingIntelligenceService.MOTORS_TREE_ID,
+      );
+      const queue = [subtree.categorySubtreeNode];
+      while (queue.length > 0) {
+        const node = queue.shift()!;
+        if (node.leafCategoryTreeNode) {
+          this.fallbackLeaf = {
+            categoryId: node.category.categoryId,
+            categoryName: node.category.categoryName,
+          };
+          this.logger.log(
+            `Resolved fallback Motors leaf: ${this.fallbackLeaf.categoryId} (${this.fallbackLeaf.categoryName})`,
+          );
+          return this.fallbackLeaf;
+        }
+        if (node.childCategoryTreeNodes) {
+          queue.push(...node.childCategoryTreeNodes);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to resolve fallback Motors leaf from subtree: ${(err as Error).message}`,
+      );
     }
 
-    return { categoryId: '6000', categoryName: 'Parts & Accessories', confidence: 0.3 };
+    // Hardcoded emergency fallback — still under 6000 but not ideal.
+    this.fallbackLeaf = { categoryId: '6000', categoryName: 'Parts & Accessories' };
+    return this.fallbackLeaf;
   }
 
   /**
    * Check whether a category ID is a known eBay Motors category.
-   * Uses the cached ebay_category_mappings table. Returns false for
-   * categories that are clearly non-automotive (Guitars, LEGO, etc.).
+   * Checks the cached ebay_category_mappings table AND the static
+   * keyword-based Motors category IDs. Returns false for categories
+   * that are clearly non-automotive (Guitars, LEGO, etc.).
    */
   private async isMotorsCategory(categoryId: string): Promise<boolean> {
     try {
+      // Check keyword-mapped IDs first (fast, no DB call)
+      if (
+        EnterpriseListingIntelligenceService.KEYWORD_MOTORS_IDS.has(categoryId)
+      ) {
+        return true;
+      }
+
       const mapping = await this.categoryMappingRepo.findOne({
         where: { ebayCategoryId: categoryId },
       });
       if (mapping) return mapping.isMotorsCategory;
-      // Not in mapping table — allow it (could be a valid unmapped category)
-      return true;
+
+      // Not in mapping table or keyword rows — reject by default.
+      // The caller will re-resolve via the taxonomy API.
+      return false;
     } catch {
-      return true;
+      return false;
     }
   }
 

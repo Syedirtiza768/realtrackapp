@@ -1,6 +1,7 @@
 import {
   buildEbayListingDescription,
   buildEbayListingTitle,
+  buildStructuredEbayTitle,
   stripListingHtmlBoilerplate,
   truncateEbayDescription,
   truncateEbayTitle,
@@ -22,8 +23,8 @@ describe('ebay-listing-text.util', () => {
       brand: 'Mercedes-Benz',
       mpn: '2048208661',
     });
-    expect(title).toBe('Mercedes-Benz 2048208661');
-    expect(warnings.some((w) => w.includes('generated'))).toBe(true);
+    expect(title).toBe('Mercedes-Benz 2048208661 OEM Used');
+    expect(warnings.some((w) => w.includes('composed'))).toBe(true);
   });
 
   it('uses SKU when title and metadata are missing', () => {
@@ -80,5 +81,152 @@ describe('ebay-listing-text.util', () => {
     });
     expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result).toContain('Brake Pad');
+  });
+});
+
+describe('buildStructuredEbayTitle', () => {
+  it('assembles the full house structure with the OEM Used suffix', () => {
+    const title = buildStructuredEbayTitle({
+      yearRange: '2012-2018',
+      make: 'Audi',
+      model: 'A6',
+      generation: 'C7',
+      position: 'Front Left',
+      partName: 'Hood Hinge Cover Cap',
+      oemPartNumber: '4G9827279',
+    });
+    expect(title).toBe(
+      '2012-2018 Audi A6 C7 Front Left Hood Hinge Cover Cap 4G9827279 OEM Used',
+    );
+    expect(title.length).toBeLessThanOrEqual(80);
+    expect(title.endsWith('OEM Used')).toBe(true);
+  });
+
+  it('omits empty segments and still ends with OEM Used', () => {
+    expect(
+      buildStructuredEbayTitle({
+        yearRange: '2012-2018',
+        make: 'Audi',
+        partName: 'Rear Third Brake Light',
+        oemPartNumber: '4G9945097',
+      }),
+    ).toBe('2012-2018 Audi Rear Third Brake Light 4G9945097 OEM Used');
+  });
+
+  it('returns empty string when no body segments are provided', () => {
+    expect(buildStructuredEbayTitle({})).toBe('');
+  });
+
+  it('drops position first when over the limit, keeping the OEM Used suffix', () => {
+    const title = buildStructuredEbayTitle({
+      yearRange: '2012-2018',
+      make: 'Audi',
+      model: 'A6',
+      generation: 'C7',
+      position: 'Front Left',
+      partName: 'Hood Hinge Cover Cap Trim Panel Molding',
+      oemPartNumber: '4G9827279',
+    });
+    expect(title.length).toBeLessThanOrEqual(80);
+    expect(title.endsWith('OEM Used')).toBe(true);
+    expect(title).not.toContain('Front Left');
+    expect(title).toContain('4G9827279');
+    expect(title.startsWith('2012-2018 Audi')).toBe(true);
+  });
+
+  it('drops optional segments down to essentials when the body is very long', () => {
+    const title = buildStructuredEbayTitle({
+      yearRange: '2012-2018',
+      make: 'Audi',
+      model: 'A6',
+      generation: 'C7',
+      position: 'Front Left',
+      partName: 'X'.repeat(70),
+      oemPartNumber: '4G9827279',
+    });
+    expect(title).toBe('2012-2018 Audi 4G9827279 OEM Used');
+    expect(title.length).toBeLessThanOrEqual(80);
+  });
+
+  it('drops the OEM Used suffix when even essentials barely fit without it', () => {
+    // essentials core = "2012-2018 Audi " (15) + 60-char OEM = 75 chars; with
+    // suffix that is 84 (>80), so the suffix is omitted.
+    const title = buildStructuredEbayTitle({
+      yearRange: '2012-2018',
+      make: 'Audi',
+      oemPartNumber: '4G9' + '8'.repeat(57),
+    });
+    expect(title.length).toBeLessThanOrEqual(80);
+    expect(title).not.toContain('OEM Used');
+    expect(title.startsWith('2012-2018 Audi')).toBe(true);
+  });
+
+  it('truncates an oversized essentials core on a word boundary keeping the suffix', () => {
+    const title = buildStructuredEbayTitle({
+      yearRange: '2012-2018',
+      make: 'Audi',
+      oemPartNumber: '4G9' + '8'.repeat(97),
+    });
+    expect(title.length).toBeLessThanOrEqual(80);
+    expect(title.endsWith('OEM Used')).toBe(true);
+    expect(title.startsWith('2012-2018 Audi')).toBe(true);
+  });
+});
+
+describe('buildEbayListingTitle structured composition', () => {
+  it('composes from structured fields and warns when replacing an existing title', () => {
+    const { title, warnings } = buildEbayListingTitle({
+      title: 'Some old free-text title 4G9827279',
+      make: 'Audi',
+      model: 'A6',
+      position: 'Front Left',
+      partName: 'Hood Hinge Cover Cap',
+      oemPartNumber: '4G9827279',
+    });
+    expect(title).toBe(
+      'Audi A6 Front Left Hood Hinge Cover Cap 4G9827279 OEM Used',
+    );
+    expect(warnings.some((w) => w.includes('recomposed'))).toBe(true);
+  });
+
+  it('composes without a warning when no title was present', () => {
+    const { title, warnings } = buildEbayListingTitle({
+      make: 'Audi',
+      partName: 'Fog Light',
+      oemPartNumber: '8T0941699E',
+    });
+    expect(title).toBe('Audi Fog Light 8T0941699E OEM Used');
+    expect(warnings.some((w) => w.includes('empty'))).toBe(true);
+    expect(warnings.some((w) => w.includes('recomposed'))).toBe(false);
+  });
+
+  it('leads with an explicit year range when provided', () => {
+    const { title } = buildEbayListingTitle({
+      yearRange: '2012-2018',
+      make: 'Audi',
+      model: 'A6',
+      partName: 'Control Module',
+      oemPartNumber: '4H0907163A',
+    });
+    expect(title).toBe('2012-2018 Audi A6 Control Module 4H0907163A OEM Used');
+  });
+
+  it('honors a title override verbatim and skips composition', () => {
+    const { title, warnings } = buildEbayListingTitle({
+      title: 'Stored title',
+      titleOverride: 'Manual Override Title 4G9827279',
+      make: 'Audi',
+      partName: 'Hood Hinge Cover Cap',
+      oemPartNumber: '4G9827279',
+    });
+    expect(title).toBe('Manual Override Title 4G9827279');
+    expect(warnings.some((w) => w.includes('recomposed'))).toBe(false);
+  });
+
+  it('falls back to the stored title when no structured signal is present', () => {
+    const { title } = buildEbayListingTitle({
+      title: 'Pre-existing Hand-Written Title',
+    });
+    expect(title).toBe('Pre-existing Hand-Written Title');
   });
 });

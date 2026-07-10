@@ -66,6 +66,11 @@
 
 ## Latest Session Summary
 
+**2026-07-10** — eBay error 25005 fix (invalid category IDs):
+- Root cause: `ebay_category_mappings` table empty (seed migration `1709769600000-MotorsIntelligenceSystem` never run on prod) + `isMotorsCategory()` returned `true` for unmapped categories → AI taxonomy suggestions returned non-Motors categories (31373 "Lincoln Memorial", 2518 "Other Educational Toys", 11774 "Other Welding Equipment", 34 others) → stored in `listing_records.categoryId` → eBay rejected with errorId 25005.
+- Fix: (1) `isMotorsCategory()` in `enterprise-listing-intelligence.service.ts` now returns `false` for unmapped categories (was `true`), forcing fallback to `6000` (Parts & Accessories). (2) Seeded `ebay_category_mappings` with 15 known Motors categories + `6000` default. (3) Bulk-updated 335 `listing_records.categoryId` to `6000` for pipeline job `6892099a`. (4) Deployed to EC2 via backend image rebuild + `docker compose up -d backend`.
+- See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) R16.
+
 **2026-07-01 (continued)** — Inventory pipeline hardening:
 - Auto-enrich now triggers on **2+ images only** (vision lookup runs inside the job; no longer requires part#/brand upfront).
 - `PUT /inventory/:id/editor` persists marketplace version edits to sibling listing records + `catalog_products.optimization_payload`.

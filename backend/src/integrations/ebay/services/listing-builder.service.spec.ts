@@ -144,7 +144,10 @@ describe('ListingBuilderService', () => {
       storeId: 'store-1',
     });
 
-    expect(result.publishRequest.title).toContain('Catalog Title');
+    expect(result.publishRequest.title).toBe('TRW Brake Pad BP-123 OEM Used');
+    expect(result.warnings).toContainEqual(
+      expect.stringContaining('recomposed'),
+    );
     expect(result.publishRequest.price).toBe(49.99);
   });
 

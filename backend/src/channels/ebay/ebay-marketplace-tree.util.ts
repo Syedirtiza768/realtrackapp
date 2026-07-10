@@ -12,7 +12,7 @@
  */
 export const MARKETPLACE_CATEGORY_TREE_IDS: Record<string, string> = {
   EBAY_US: '0',
-  EBAY_MOTORS_US: '0',
+  EBAY_MOTORS_US: '100',
   EBAY_GB: '3',
   EBAY_DE: '77',
   EBAY_AU: '15',

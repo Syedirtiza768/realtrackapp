@@ -97,7 +97,7 @@ const AWKWARD_GERMAN_PATTERNS = [
 ];
 
 /** Motors category keyword rows — interior before exterior; first match wins. */
-const CATEGORY_KEYWORD_ROWS: Array<{ kw: string[]; id: string; name: string }> =
+export const CATEGORY_KEYWORD_ROWS: Array<{ kw: string[]; id: string; name: string }> =
   [
     {
       kw: [

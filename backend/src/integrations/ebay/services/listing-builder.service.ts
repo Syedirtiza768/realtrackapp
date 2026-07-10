@@ -110,6 +110,35 @@ export class ListingBuilderService {
 
     const sku = snapshot.sku;
 
+    const listingRecord = resolved.listingRecord;
+    const catalogProduct = resolved.catalogProduct;
+
+    // Structured (deterministic) composition fields — sourced only from stored
+    // catalog/listing columns. Year range and generation are intentionally NOT
+    // derived; pass an explicit yearRange/generation elsewhere to lead with it.
+    const structuredMake =
+      (
+        snapshot.brand ??
+        listingRecord?.cBrand ??
+        listingRecord?.extractedMake ??
+        ''
+      ).trim() || null;
+    const structuredModel =
+      (listingRecord?.extractedModel ?? '').trim() || null;
+    const structuredPosition =
+      (catalogProduct?.placement ?? listingRecord?.cPlacement ?? '').trim() ||
+      null;
+    const structuredPartName =
+      (snapshot.partType ?? listingRecord?.cType ?? '').trim() || null;
+    const structuredOem =
+      (
+        catalogProduct?.oemPartNumber ??
+        listingRecord?.cOeOemPartNumber ??
+        snapshot.mpn ??
+        listingRecord?.cManufacturerPartNumber ??
+        ''
+      ).trim() || null;
+
     const titleResult = buildEbayListingTitle({
       title: snapshot.title,
 
@@ -122,6 +151,16 @@ export class ListingBuilderService {
       mpn: snapshot.mpn,
 
       sku,
+
+      make: structuredMake,
+
+      model: structuredModel,
+
+      position: structuredPosition,
+
+      partName: structuredPartName,
+
+      oemPartNumber: structuredOem,
     });
 
     warnings.push(...titleResult.warnings);
