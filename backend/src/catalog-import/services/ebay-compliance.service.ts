@@ -997,6 +997,7 @@ Missing fields: ${missingFields.join(', ')}`,
 - No spammy phrases (FREE SHIPPING, BEST PRICE, L@@K, etc.)
 - No excessive punctuation or ALL CAPS
 - Natural, professional language
+- TITLE RULE: The title MUST reflect the stated Condition. If Condition is Used/Refurbished, do NOT include "New" in the title. If Condition is New, do NOT include "Used".
 - Return ONLY the title text, nothing else.`,
         userPrompt: `Generate an optimized eBay title for:
 Brand: ${product.brand || 'N/A'}

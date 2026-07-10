@@ -23,4 +23,30 @@ describe('applyListingGuards', () => {
     );
     expect(item.compatibility).toHaveLength(1);
   });
+
+  it('strips "New" from title when condition is Used', () => {
+    const { item, fixes } = applyListingGuards(
+      { title: 'BMW 328i New Style Grille OEM Used', mpn: '5111' },
+      { partNumber: '5111', condition: 'Used' },
+    );
+    expect(item.title).not.toMatch(/\bNew\b/i);
+    expect(fixes).toContain('TITLE_CONDITION_MISMATCH_STRIPPED');
+  });
+
+  it('strips "Used" from title when condition is New', () => {
+    const { item, fixes } = applyListingGuards(
+      { title: 'BMW 328i Grille OEM Used', mpn: '5111' },
+      { partNumber: '5111', condition: 'New' },
+    );
+    expect(item.title).not.toMatch(/\bUsed\b/i);
+    expect(fixes).toContain('TITLE_CONDITION_MISMATCH_STRIPPED');
+  });
+
+  it('does not strip condition words when condition is not provided', () => {
+    const { item } = applyListingGuards(
+      { title: 'BMW 328i New Style Grille', mpn: '5111' },
+      { partNumber: '5111' },
+    );
+    expect(item.title).toBe('BMW 328i New Style Grille');
+  });
 });

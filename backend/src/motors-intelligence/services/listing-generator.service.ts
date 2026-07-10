@@ -286,6 +286,7 @@ Rules:
 7. Use fitment in title ONLY if provided and validated
 8. HTML description must be clean, simple, and eBay-safe (no JavaScript, no external CSS, no iframes)
 9. Item specifics must satisfy the required aspects listed
+10. TITLE RULE: The title MUST reflect the actual condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used".
 
 Forbidden claims: {forbiddenClaims}
 

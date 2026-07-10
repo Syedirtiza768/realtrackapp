@@ -127,7 +127,8 @@ Rules:
 - Chassis codes must match year ranges (Lexus RX AL20 = 2015–2022; AL10 = 2009–2015). Never mix generation codes with incompatible years.
 - Interior/trim parts: mention placement, color/finish, and verify-part-number guidance in the note.
 - If uncertain, use lower confidence and leave fields empty rather than guessing wildly.
-- The note field must be ready to paste into a listing form as additional seller details.`;
+- The note field must be ready to paste into a listing form as additional seller details.
+- TITLE RULE: partName is for used OEM parts — do NOT include "New" in partName. Use neutral wording (no condition word) or "Used"/"OEM Used".`;
 
 const SINGLE_LISTING_VISION_PROMPT = `Analyze ALL provided photos of this automotive part for a single eBay Motors listing.
 Use the seller hints together with what you see in the images — do not rely on text hints alone when photos contradict them.
@@ -161,7 +162,8 @@ Rules:
 - Do NOT invent part numbers — only report clearly visible numbers
 - Set confidence to low if identification is uncertain
 - imageCoverage must reflect what is actually in the photos
-- The note must be accurate, seller-facing, and ready to paste into a listing description`;
+- The note must be accurate, seller-facing, and ready to paste into a listing description
+- TITLE RULE: partName is for used OEM parts — do NOT include "New" in partName. Use neutral wording (no condition word) or "Used"/"OEM Used".`;
 
 @Injectable()
 export class SingleListingFormService {

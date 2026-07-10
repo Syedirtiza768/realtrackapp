@@ -263,4 +263,49 @@ export class CatalogProductService {
 
     await this.listingRepo.save(listings);
   }
+
+  async bulkFixConditionMismatchTitles(pipelineJobId: string): Promise<{
+    catalogUpdated: number;
+    listingsUpdated: number;
+  }> {
+    const runner = this.productRepo.manager.connection.createQueryRunner();
+    await runner.connect();
+    try {
+      const conditionFilter = `
+        AND (
+          condition_label ~* '\\m(used|refurbished|salvage)\\M'
+          OR condition_id IN ('3000','4000','5000','6000','7000','2000','2500')
+          OR condition_id ~* '^(USED_|FOR_PARTS|SELLER_REFURB)'
+        )`;
+
+      const catalogResult = await runner.query(`
+        UPDATE catalog_products
+           SET title = trim(regexp_replace(regexp_replace(title, '\\mNew\\M', '', 'gi'), '\\s+', ' ', 'g')),
+               updated_at = NOW()
+         WHERE pipeline_job_id = $1
+           AND title ~* '\\mNew\\M'
+           ${conditionFilter}
+      `, [pipelineJobId]);
+
+      const listingResult = await runner.query(`
+        UPDATE listing_records
+           SET title = trim(regexp_replace(regexp_replace(title, '\\mNew\\M', '', 'gi'), '\\s+', ' ', 'g')),
+               "updatedAt" = NOW()
+         WHERE pipeline_job_id = $1
+           AND title ~* '\\mNew\\M'
+           AND (
+             condition_label ~* '\\m(used|refurbished|salvage)\\M'
+             OR "conditionId" IN ('3000','4000','5000','6000','7000','2000','2500')
+             OR "conditionId" ~* '^(USED_|FOR_PARTS|SELLER_REFURB)'
+           )
+      `, [pipelineJobId]);
+
+      return {
+        catalogUpdated: catalogResult[1] ?? 0,
+        listingsUpdated: listingResult[1] ?? 0,
+      };
+    } finally {
+      await runner.release();
+    }
+  }
 }

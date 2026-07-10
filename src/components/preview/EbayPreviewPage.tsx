@@ -25,6 +25,7 @@ function InlineEditField({
   style,
   multiline,
   placeholder,
+  maxLength,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -32,6 +33,7 @@ function InlineEditField({
   style?: React.CSSProperties;
   multiline?: boolean;
   placeholder?: string;
+  maxLength?: number;
 }) {
   const cls = 'bg-transparent border-0 border-b-2 border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors ' + (className ?? '');
   if (multiline) {
@@ -42,6 +44,7 @@ function InlineEditField({
         className={cls + ' resize-y min-h-[80px]'}
         style={style}
         placeholder={placeholder}
+        maxLength={maxLength}
       />
     );
   }
@@ -53,6 +56,7 @@ function InlineEditField({
       className={cls}
       style={style}
       placeholder={placeholder}
+      maxLength={maxLength}
     />
   );
 }
@@ -446,6 +450,7 @@ input[type="radio"][name="tab"] {
                 onChange={(v) => onFieldChange?.('title', v)}
                 style={{ fontSize: 22, fontWeight: 400, color: '#191919', margin: '0 0 8px', lineHeight: 1.3, width: '100%' }}
                 placeholder="Listing title"
+                maxLength={80}
               />
             ) : (
               <h1 style={{ fontSize: 22, fontWeight: 400, color: '#191919', margin: '0 0 8px', lineHeight: 1.3 }}>

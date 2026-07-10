@@ -166,7 +166,7 @@ export default function EditListingPanel({ listing, onSave, onCancel }: EditList
           <div className="space-y-3 pb-3">
             <div>
               <label className={labelClasses}>Title</label>
-              <input className={inputClasses} value={draft.title} onChange={e => updateField('title', e.target.value)} />
+              <input className={inputClasses} value={draft.title} onChange={e => updateField('title', e.target.value)} maxLength={80} />
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{draft.title.length}/80 characters</p>
             </div>
             <div className="grid grid-cols-2 gap-3">

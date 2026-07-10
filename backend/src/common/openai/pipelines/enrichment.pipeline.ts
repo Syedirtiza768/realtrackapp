@@ -169,6 +169,7 @@ export class EnrichmentPipeline {
       const srcPart = {
         partNumber: partContext.partNumber,
         donorMake: this.str(rawData.donorMake ?? rawData.brand) ?? 'mercedes',
+        condition: this.str(rawData.condition),
       };
 
       let guardFixes: string[] = [];

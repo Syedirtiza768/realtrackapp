@@ -19,6 +19,8 @@ Never fabricate part numbers or brand names.`,
 
 Fill in any missing fields. For existing fields, validate and improve them if possible.
 
+TITLE RULE: The title MUST reflect the actual condition from rawData.condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used".
+
 Return JSON with these exact keys:
 {
   "title": "eBay-optimized title (max 80 chars, include brand + part type + fitment keywords)",

@@ -353,6 +353,7 @@ export default function ListingEditor() {
                                             type="text"
                                             value={title}
                                             onChange={(event) => setTitle(event.target.value)}
+                                            maxLength={80}
                                             className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                         />
                                         <Badge variant="success" className="absolute right-3 top-3">{title.length}/80 chars</Badge>

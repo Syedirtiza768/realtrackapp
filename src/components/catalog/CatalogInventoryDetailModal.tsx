@@ -655,13 +655,18 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                 </div>
                 <div className="min-w-0 flex-1">
                   {editMode ? (
-                    <input
-                      type="text"
-                      value={displayDraft.title}
-                      onChange={(e) => updateDraft('title', e.target.value)}
-                      className={`${inputClass} text-base font-semibold`}
-                      maxLength={80}
-                    />
+                    <div>
+                      <input
+                        type="text"
+                        value={displayDraft.title}
+                        onChange={(e) => updateDraft('title', e.target.value)}
+                        className={`${inputClass} text-base font-semibold`}
+                        maxLength={80}
+                      />
+                      <span className="text-[10px] text-slate-400 mt-0.5 block text-right">
+                        {displayDraft.title.length}/80 characters
+                      </span>
+                    </div>
                   ) : (
                     <button
                       type="button"

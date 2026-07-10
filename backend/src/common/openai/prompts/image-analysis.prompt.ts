@@ -16,7 +16,7 @@ Always return valid JSON matching the exact schema specified.`,
 
 Return JSON with these exact keys:
 {
-  "title": "eBay-optimized title (max 80 chars)",
+  "title": "eBay-optimized title (max 80 chars). TITLE RULE: title must reflect actual condition — if condition is Used/Refurbished, do NOT include 'New' in title",
   "brand": "string | null",
   "mpn": "manufacturer part number | null",
   "oemNumber": "OEM/OE part number | null",
