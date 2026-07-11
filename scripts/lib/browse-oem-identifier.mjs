@@ -246,7 +246,9 @@ export function createOemIdentifier(options) {
           return result;
         }
 
-        const type = topTypeFromRefinements(refinement.aspectDistributions, minAgreement);
+        // Confidence is gated on category agreement above; the Type is then just
+        // the most common value in the histogram (top by matchCount, count >= 1).
+        const type = topTypeFromRefinements(refinement.aspectDistributions, 1);
         const result = {
           type,
           categoryId: best.categoryId,
