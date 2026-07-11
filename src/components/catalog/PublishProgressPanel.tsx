@@ -92,7 +92,27 @@ interface Props {
 }
 
 /** Concurrency for the client-driven bulk loop; matches backend batching. */
-const BULK_CONCURRENCY = 5;
+const BULK_REQUEST_SIZE = 5;
+const TRANSIENT_PUBLISH_RETRIES = 3;
+
+function isTransientPublishError(error?: string): boolean {
+  if (!error) return false;
+  const message = error.toLowerCase();
+  return [
+    'product not found',
+    'core inventory service internal error',
+    'status code 500',
+    'temporarily unavailable',
+    'timed out',
+    'timeout',
+    'rate limit',
+    'too many requests',
+  ].some((marker) => message.includes(marker));
+}
+
+function waitForRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
 
 /* ── Component ────────────────────────────────────────────── */
 
@@ -213,11 +233,12 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
       const storeIdArray = job.stores.map((s) => s.id);
       if (!ids.length || !storeIdArray.length) return;
 
-      // Publish in concurrent chunks; each listing resolves independently so
-      // its name + result appear live rather than all at once.
-      for (let i = 0; i < ids.length; i += BULK_CONCURRENCY) {
+      // Send one backend request per chunk. The backend already processes each
+      // listing with bounded concurrency, so this preserves live chunk updates
+      // without consuming one authenticated HTTP request per listing.
+      for (let i = 0; i < ids.length; i += BULK_REQUEST_SIZE) {
         if (cancelled) return;
-        const chunk = ids.slice(i, i + BULK_CONCURRENCY);
+        const chunk = ids.slice(i, i + BULK_REQUEST_SIZE);
 
         setListingProgress((prev) =>
           prev.map((lp) =>
@@ -225,55 +246,83 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
           ),
         );
 
-        await Promise.all(
-          chunk.map(async (id) => {
-            try {
-              const res = await publishListingIdsToEbay([id], storeIdArray);
-              if (cancelled) return;
-              const results = res[0]?.results ?? [];
-              const successStores = results.filter((r) => r.success).length;
-              const failedStores = results.length - successStores;
-              const firstErr = results.find((r) => !r.success && r.error)?.error;
-              const status: ListingPublishStatus =
-                results.length === 0
-                  ? 'failed'
-                  : failedStores === 0
-                    ? 'success'
-                    : successStores === 0
-                      ? 'failed'
-                      : 'partial';
-              setListingProgress((prev) =>
-                prev.map((lp) =>
-                  lp.listingId === id
-                    ? {
-                        ...lp,
-                        status,
-                        successStores,
-                        failedStores,
-                        error: firstErr,
-                        storeResults: results,
-                      }
-                    : lp,
-                ),
+        try {
+          const response = await publishListingIdsToEbay(chunk, storeIdArray);
+          if (cancelled) return;
+
+          for (const id of chunk) {
+            let results = response.find((item) => item.listingId === id)?.results ?? [];
+
+            // SellerPundit can briefly return Product not found immediately
+            // after inventory creation, or a transient Core Inventory 500.
+            // Retry only failed stores so already-published offers are never
+            // submitted again and cannot be duplicated.
+            for (let attempt = 0; attempt < TRANSIENT_PUBLISH_RETRIES; attempt++) {
+              const retryStoreIds = results
+                .filter((result) => !result.success && isTransientPublishError(result.error))
+                .map((result) => result.storeId);
+              if (!retryStoreIds.length || cancelled) break;
+
+              const isRateLimited = results.some(
+                (result) =>
+                  retryStoreIds.includes(result.storeId) &&
+                  result.error?.toLowerCase().includes('too many requests'),
               );
-            } catch (err: unknown) {
+              await waitForRetry((isRateLimited ? 5_000 : 750) * 2 ** attempt);
+              const retryResponse = await publishListingIdsToEbay([id], retryStoreIds);
               if (cancelled) return;
-              const msg = err instanceof Error ? err.message : 'Unknown error';
-              setListingProgress((prev) =>
-                prev.map((lp) =>
-                  lp.listingId === id
-                    ? {
-                        ...lp,
-                        status: 'failed',
-                        failedStores: storeIdArray.length,
-                        error: msg,
-                      }
-                    : lp,
-                ),
-              );
+              const retryResults = retryResponse[0]?.results ?? [];
+              if (!retryResults.length) break;
+
+              const merged = new Map(results.map((result) => [result.storeId, result]));
+              for (const retryResult of retryResults) {
+                merged.set(retryResult.storeId, retryResult);
+              }
+              results = Array.from(merged.values());
             }
-          }),
-        );
+
+            const successStores = results.filter((r) => r.success).length;
+            const failedStores = results.length - successStores;
+            const firstErr = results.find((r) => !r.success && r.error)?.error;
+            const status: ListingPublishStatus =
+              results.length === 0
+                ? 'failed'
+                : failedStores === 0
+                  ? 'success'
+                  : successStores === 0
+                    ? 'failed'
+                    : 'partial';
+            setListingProgress((prev) =>
+              prev.map((lp) =>
+                lp.listingId === id
+                  ? {
+                      ...lp,
+                      status,
+                      successStores,
+                      failedStores,
+                      error: firstErr,
+                      storeResults: results,
+                    }
+                  : lp,
+              ),
+            );
+          }
+        } catch (err: unknown) {
+          if (cancelled) return;
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          setListingProgress((prev) =>
+            prev.map((lp) =>
+              chunk.includes(lp.listingId)
+                ? {
+                    ...lp,
+                    status: 'failed',
+                    failedStores: storeIdArray.length,
+                    error: msg,
+                  }
+                : lp,
+            ),
+          );
+        }
       }
     };
 

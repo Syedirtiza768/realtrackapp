@@ -118,6 +118,7 @@
 | `NODE_OPTIONS` | `--max-old-space-size=1536` (t3.medium) | V8 heap; raise on larger instances |
 | `IGNORE_ENV_FILE` | `true` (Docker) | Ignore host `.env` in container |
 | `PIPELINE_PROJECT_ROOT` | `/app` | Root for pipeline scripts/output |
+| `PIPELINE_CATEGORY_GUARD_CONCURRENCY` | `8` | Bounded concurrency for the post-enrichment, pre-persistence Motors leaf-category guard |
 | `PIPELINE_AI_CONCURRENCY` | `3` (t3.medium) | Max parallel OpenRouter enrichment batches |
 | `PIPELINE_AI_BATCH_SIZE` | `6` (t3.medium) | Parts per AI batch |
 | `PIPELINE_LOCALIZATION_CONCURRENCY` | `3` | Parallel AU/DE localization |

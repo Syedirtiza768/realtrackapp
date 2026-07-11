@@ -15,11 +15,21 @@ const BRAND_MAP: Record<string, string> = {
 
 const DISCLAIMER = 'Please verify part number compatibility before purchasing';
 
-const USED_CONDITION_RE = /\b(used|refurbished|salvage|for.parts|not.working)\b/i;
+const USED_CONDITION_RE =
+  /\b(used|refurbished|salvage|for.parts|not.working)\b/i;
 
-const USED_NUMERIC_IDS = new Set(['3000', '4000', '5000', '6000', '7000', '2000', '2500']);
+const USED_NUMERIC_IDS = new Set([
+  '3000',
+  '4000',
+  '5000',
+  '6000',
+  '7000',
+  '2000',
+  '2500',
+]);
 const NEW_NUMERIC_IDS = new Set(['1000', '1500', '1750']);
-const USED_ENUM_RE = /^(USED_|FOR_PARTS|SELLER_REFURB|MANUFACTURER_REFURB|CERTIFIED_REFURB)/i;
+const USED_ENUM_RE =
+  /^(USED_|FOR_PARTS|SELLER_REFURB|MANUFACTURER_REFURB|CERTIFIED_REFURB)/i;
 
 function normSpaces(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
@@ -40,7 +50,13 @@ function isUsedCondition(condition: string): boolean {
 
 function isNewCondition(condition: string): boolean {
   const c = condition.toLowerCase().trim();
-  if (c === 'new' || c === 'new_oem' || c === 'new_other' || c === 'new_with_defects') return true;
+  if (
+    c === 'new' ||
+    c === 'new_oem' ||
+    c === 'new_other' ||
+    c === 'new_with_defects'
+  )
+    return true;
   const numeric = c.replace(/-.*/, '').trim();
   if (NEW_NUMERIC_IDS.has(numeric)) return true;
   if (/^NEW(?!_)/i.test(condition) || /^NEW_/i.test(condition)) return true;
@@ -52,13 +68,23 @@ function isNewCondition(condition: string): boolean {
  * If the part is Used/Refurbished, remove standalone "New" from the title.
  * If the part is New, remove "Used"/"OEM Used" from the title.
  */
-function stripMismatchedCondition(title: string, condition?: string | null): string {
+function stripMismatchedCondition(
+  title: string,
+  condition?: string | null,
+): string {
   if (!condition) return title;
   if (isUsedCondition(condition)) {
-    return title.replace(/\bNew\b\s*/gi, '').replace(/\s{2,}/g, ' ').trim();
+    return title
+      .replace(/\bNew\b\s*/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
   if (isNewCondition(condition)) {
-    return title.replace(/\b(OEM\s*)?Used\b/gi, '').replace(/\bRefurbished\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+    return title
+      .replace(/\b(OEM\s*)?Used\b/gi, '')
+      .replace(/\bRefurbished\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
   return title;
 }
@@ -143,7 +169,8 @@ export function applyListingGuards(
   out.fitmentType = out.fitmentType || 'Direct Replacement';
 
   let title = String(out.title ?? '');
-  const condition = srcPart.condition ?? (out.condition as string | undefined) ?? null;
+  const condition =
+    srcPart.condition ?? (out.condition as string | undefined) ?? null;
   const conditionStripped = stripMismatchedCondition(title, condition);
   if (conditionStripped !== title) {
     title = conditionStripped;

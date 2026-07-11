@@ -271,10 +271,9 @@ export class EbayPublishService {
 
     const skuLooksLikeListingId =
       !req.sku?.trim() || req.sku === req.listingId || req.sku === listing.id;
-    const sku =
-      skuLooksLikeListingId
-        ? listing.customLabelSku?.trim() || req.sku
-        : req.sku.trim();
+    const sku = skuLooksLikeListingId
+      ? listing.customLabelSku?.trim() || req.sku
+      : req.sku.trim();
 
     const parsedPrice = parseFloat(listing.startPrice ?? '');
     const parsedQty = parseInt(listing.quantity ?? '', 10);
@@ -536,7 +535,8 @@ export class EbayPublishService {
     }
 
     const CONCURRENCY = 5;
-    const allResults: Array<{ listingId: string; results: PublishResult[] }> = [];
+    const allResults: Array<{ listingId: string; results: PublishResult[] }> =
+      [];
 
     for (let i = 0; i < listingIds.length; i += CONCURRENCY) {
       const chunk = listingIds.slice(i, i + CONCURRENCY);
@@ -1710,9 +1710,7 @@ export class EbayPublishService {
         // Withdraw first if the offer is published
         try {
           await this.inventoryApi.withdrawOffer(storeId, offerId);
-          this.logger.log(
-            `Withdrew stale offer ${offerId} for SKU ${sku}`,
-          );
+          this.logger.log(`Withdrew stale offer ${offerId} for SKU ${sku}`);
         } catch {
           // Offer may not be published — try deleting directly
         }
@@ -1726,10 +1724,7 @@ export class EbayPublishService {
 
       // Find and delete any remaining offers for this SKU
       try {
-        const { offers } = await this.inventoryApi.getOffersBySku(
-          storeId,
-          sku,
-        );
+        const { offers } = await this.inventoryApi.getOffersBySku(storeId, sku);
         for (const o of offers) {
           if (!o.offerId) continue;
           try {
@@ -1756,7 +1751,11 @@ export class EbayPublishService {
 
       // Recreate the inventory item so createOffer can succeed
       if (inventoryItem) {
-        await this.inventoryApi.createOrReplaceItem(storeId, sku, inventoryItem);
+        await this.inventoryApi.createOrReplaceItem(
+          storeId,
+          sku,
+          inventoryItem,
+        );
         this.logger.log(`Recreated inventory item for SKU ${sku}`);
       }
     } catch (err) {
@@ -1785,11 +1784,7 @@ export class EbayPublishService {
           `Offer already exists for SKU ${offer.sku} — updating offer ${existingOfferId}`,
         );
         try {
-          await this.inventoryApi.updateOffer(
-            storeId,
-            existingOfferId,
-            offer,
-          );
+          await this.inventoryApi.updateOffer(storeId, existingOfferId, offer);
           return existingOfferId;
         } catch (updateErr: unknown) {
           if (!isEbayInvalidCategoryError(updateErr)) throw updateErr;
@@ -1802,10 +1797,7 @@ export class EbayPublishService {
             existingOfferId,
             inventoryItem,
           );
-          const recreated = await this.inventoryApi.createOffer(
-            storeId,
-            offer,
-          );
+          const recreated = await this.inventoryApi.createOffer(storeId, offer);
           return recreated.offerId;
         }
       }
@@ -1840,10 +1832,7 @@ export class EbayPublishService {
           unpublished.offerId,
           inventoryItem,
         );
-        const recreated = await this.inventoryApi.createOffer(
-          storeId,
-          offer,
-        );
+        const recreated = await this.inventoryApi.createOffer(storeId, offer);
         return recreated.offerId;
       }
     }

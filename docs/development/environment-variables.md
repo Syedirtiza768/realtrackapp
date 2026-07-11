@@ -178,6 +178,7 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `EBAY_TAXONOMY_CACHE_PATH` | `config/.ebay-taxonomy-suggestions-cache.json` | Shared persistent category suggestion cache |
 | `PIPELINE_VIN_BATCH_CONCURRENCY` | `3` (t3.medium) | Parallel NHTSA VIN decode batches |
 | `PIPELINE_MVL_IMPORT_CONCURRENCY` | `8` | Parallel MVL fitment validation during post-enrichment catalog import (store-based; DB-bound) |
+| `PIPELINE_CATEGORY_GUARD_CONCURRENCY` | `8` | Parallel category normalization before pipeline catalog/listing persistence; unrelated, parent, or unresolved categories are remapped to a verified Motors leaf, with `9886` as the emergency fallback |
 | `PIPELINE_IMAGE_SKU_CONCURRENCY` | `2` (t3.medium) | Parallel S3 image mirror per SKU |
 | `CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY` | `2` (t3.medium) | eBay browse calls during CSV import |
 | `CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY` | `2` (t3.medium) | Image mirror concurrency during CSV import |

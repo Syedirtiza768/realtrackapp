@@ -322,7 +322,7 @@ export class EnterpriseListingIntelligenceService {
     aiListing: ListingGenerationResult | null,
   ): Promise<EnterpriseListingResult> {
     const baseSpecifics = this.extractBaseSpecifics(product);
-    const category = await this.resolveCategory(product);
+    const category = await this.resolvePublishableCategory(product);
     let categoryId = category.categoryId;
     let categoryName = category.categoryName;
     const requiredSpecificNames = await this.getRequiredAspectsSafe(categoryId);
@@ -614,7 +614,13 @@ export class EnterpriseListingIntelligenceService {
     return merged;
   }
 
-  private async resolveCategory(product: CatalogProduct): Promise<{
+  /**
+   * Resolve a publishable eBay Motors leaf category for pipeline persistence.
+   * This is intentionally public so the ingestion worker can normalize the
+   * category before catalog/listing rows are saved, rather than relying on the
+   * later optional optimization pass to repair bad taxonomy output.
+   */
+  async resolvePublishableCategory(product: CatalogProduct): Promise<{
     categoryId: string | null;
     categoryName: string | null;
     confidence: number;
@@ -739,8 +745,12 @@ export class EnterpriseListingIntelligenceService {
       );
     }
 
-    // Hardcoded emergency fallback — still under 6000 but not ideal.
-    this.fallbackLeaf = { categoryId: '6000', categoryName: 'Parts & Accessories' };
+    // Hardcoded emergency fallback must itself be a publishable leaf.
+    // Category 6000 is the Motors P&A root and eBay Inventory rejects it.
+    this.fallbackLeaf = {
+      categoryId: '9886',
+      categoryName: 'Other Car & Truck Parts & Accessories',
+    };
     return this.fallbackLeaf;
   }
 

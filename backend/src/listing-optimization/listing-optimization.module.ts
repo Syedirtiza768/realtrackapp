@@ -15,7 +15,12 @@ import { ListingOptimizationProcessor } from './processors/listing-optimization.
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CatalogProduct, ListingRecord, PipelineJob, EbayCategoryMapping]),
+    TypeOrmModule.forFeature([
+      CatalogProduct,
+      ListingRecord,
+      PipelineJob,
+      EbayCategoryMapping,
+    ]),
     BullModule.registerQueue({
       name: 'listing-optimization',
       defaultJobOptions: {

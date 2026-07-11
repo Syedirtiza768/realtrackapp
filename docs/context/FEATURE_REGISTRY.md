@@ -21,7 +21,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Motors filters view | `/catalog/motors-filters` | `catalog-import` | Implemented | Motors-specific facets |
 | Compliance audits | (catalog) | `catalog-import` (`compliance.controller`) | Partial | `catalog.compliance` |
 | Ingestion (images/AI) | `/ingestion` | `ingestion` | Partial | Image enrichment + AI pipeline |
-| Pipeline wizard | `/pipeline` | `ingestion` (`pipeline.controller`) | Partial | Multi-step enrichment; review queue |
+| Pipeline wizard | `/pipeline` | `ingestion` (`pipeline.controller`) | Partial | Multi-step enrichment; review queue; pre-persistence Motors leaf-category guard synchronizes catalog and listing rows |
 | Motors Intelligence dashboard | `/motors`, `/motors/:id` | `motors-intelligence` | Partial | Candidate/attribute extraction, validation |
 | Motors AI upload | `/motors/upload` | `motors-intelligence` | Partial | `motors.manage` |
 | Motors review queue | `/motors/review` | `motors-intelligence` | Partial | Human-in-loop review |

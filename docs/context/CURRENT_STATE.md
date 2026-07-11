@@ -66,9 +66,14 @@
 
 ## Latest Session Summary
 
+**2026-07-11** — Pipeline `1c3a0f2a` two-store publish hardening:
+- Repaired all 903 listing and catalog rows from non-Motors/non-leaf categories to verified eBay Motors leaf `9886` (`Other Car & Truck Parts & Accessories`) and published the complete pipeline to BLACKLINEAUTOPARTS and Primemotive.
+- Catalog bulk publishing now submits five listings per authenticated backend request, retries only transiently failed store/listing pairs, and uses throttle-aware exponential backoff.
+- Publish progress is keyed by job ID so targeted retries start with clean state and report accurate per-store results.
+
 **2026-07-10** — eBay error 25005 fix (invalid category IDs):
 - Root cause: `ebay_category_mappings` table empty (seed migration `1709769600000-MotorsIntelligenceSystem` never run on prod) + `isMotorsCategory()` returned `true` for unmapped categories → AI taxonomy suggestions returned non-Motors categories (31373 "Lincoln Memorial", 2518 "Other Educational Toys", 11774 "Other Welding Equipment", 34 others) → stored in `listing_records.categoryId` → eBay rejected with errorId 25005.
-- Fix: (1) `isMotorsCategory()` in `enterprise-listing-intelligence.service.ts` now returns `false` for unmapped categories (was `true`), forcing fallback to `6000` (Parts & Accessories). (2) Seeded `ebay_category_mappings` with 15 known Motors categories + `6000` default. (3) Bulk-updated 335 `listing_records.categoryId` to `6000` for pipeline job `6892099a`. (4) Deployed to EC2 via backend image rebuild + `docker compose up -d backend`.
+- Fix: (1) `isMotorsCategory()` in `enterprise-listing-intelligence.service.ts` now returns `false` for unmapped categories (was `true`), forcing taxonomy re-resolution. (2) Seeded `ebay_category_mappings` with 15 known Motors categories. (3) The emergency fallback was initially `6000`, but production follow-up on 2026-07-11 proved that eBay rejects this root as non-leaf; the emergency fallback is now leaf `9886` (`Other Car & Truck Parts & Accessories`). (4) Affected records must be repaired in both `listing_records` and `catalog_products` before retrying publish.
 - See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) R16.
 
 **2026-07-01 (continued)** — Inventory pipeline hardening:

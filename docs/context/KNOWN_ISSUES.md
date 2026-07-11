@@ -57,6 +57,18 @@
 
 ## High Priority Issues
 
+### R17: Catalog Bulk Publish Exhausted Authenticated-User Throttle
+
+**Type**: Reliability bug  
+**Severity**: High  
+**Status**: Resolved (2026-07-11)
+
+**Description**: Bulk publish issued one authenticated `publish-by-listings` request per listing at concurrency 5. Large, consecutive page batches could exhaust the global 1,000-request/hour user bucket. SellerPundit also intermittently returned `Product not found` immediately after inventory creation or Core Inventory HTTP 500 responses. Targeted retry jobs reused mounted `PublishProgressPanel` state, which could show a stale 100-row summary for a smaller retry.
+
+**Resolution**: `PublishProgressPanel` sends chunks of five listing IDs through the existing backend batch endpoint, reducing a 100-listing page from 100 authenticated requests to 20. It recognizes SellerPundit timing/500 and application throttle errors and retries only failed store IDs with exponential backoff. `CatalogManager` keys the panel by publish-job ID so each retry receives fresh state. Successful store results are never resubmitted by the automatic retry path.
+
+**Files**: `src/components/catalog/PublishProgressPanel.tsx`, `src/components/catalog/CatalogManager.tsx`
+
 ### R16: Empty ebay_category_mappings Caused Invalid Category Publishes
 
 **Type**: Bug  
@@ -65,7 +77,7 @@
 
 **Description**: The `ebay_category_mappings` table was empty on production because seed migration `1709769600000-MotorsIntelligenceSystem` was never run (not in `typeorm_migrations`). Combined with `isMotorsCategory()` returning `true` for unmapped categories by default, the AI taxonomy suggestion API (using tree `'0'` = all eBay US, not Motors-specific) returned non-automotive categories (e.g. "Lincoln Memorial" cat 31373, "Other Educational Toys" cat 2518, "Other Welding Equipment" cat 11774) that passed validation. These bad category IDs were stored in `listing_records.categoryId` and caused eBay `publishOffer` to fail with errorId 25005 ("invalid category ID").
 
-**Resolution**: (1) `isMotorsCategory()` in `enterprise-listing-intelligence.service.ts` now returns `false` for unmapped/unknown categories, forcing fallback to `6000` (Parts & Accessories). (2) Seeded `ebay_category_mappings` with 15 known Motors categories + the `6000` default. (3) Bulk-updated 335 `listing_records.categoryId` to `6000` for pipeline job `6892099a`. (4) Deployed code fix to EC2 via backend image rebuild.
+**Resolution**: (1) `isMotorsCategory()` in `enterprise-listing-intelligence.service.ts` now returns `false` for unmapped/unknown categories, forcing taxonomy re-resolution. (2) Seeded `ebay_category_mappings` with 15 known Motors categories. (3) Production follow-up on 2026-07-11 showed that category `6000` is a non-publishable root; `getFallbackLeafCategory()` now uses verified leaf `9886` (`Other Car & Truck Parts & Accessories`) only when live subtree leaf discovery fails. (4) Repairs update both `listing_records` and `catalog_products` so stale category data cannot re-enter the publish path.
 
 **Files**: `backend/src/ingestion/enterprise-listing-intelligence.service.ts`, `backend/src/migrations/1709769600000-MotorsIntelligenceSystem.ts`
 

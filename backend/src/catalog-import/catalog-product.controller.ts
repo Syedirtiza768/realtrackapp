@@ -58,7 +58,9 @@ export class CatalogProductController {
   @Post('fix-condition-titles')
   @RequirePermissions('catalog.update')
   async fixConditionTitles(@Body() body: { pipelineJobId: string }) {
-    return this.productService.bulkFixConditionMismatchTitles(body.pipelineJobId);
+    return this.productService.bulkFixConditionMismatchTitles(
+      body.pipelineJobId,
+    );
   }
 
   @Post('backfill-categories')

@@ -546,6 +546,7 @@ export default function CatalogManager() {
         {publishJob && (
           <div className="mb-3">
             <PublishProgressPanel
+              key={publishJob.id}
               job={publishJob}
               onDismiss={handlePublishDismiss}
             />

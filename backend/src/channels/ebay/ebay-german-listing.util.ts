@@ -97,85 +97,88 @@ const AWKWARD_GERMAN_PATTERNS = [
 ];
 
 /** Motors category keyword rows — interior before exterior; first match wins. */
-export const CATEGORY_KEYWORD_ROWS: Array<{ kw: string[]; id: string; name: string }> =
-  [
-    {
-      kw: [
-        'dashboard',
-        'dash panel',
-        'instrument panel',
-        'dash trim',
-        'dash bezel',
-        'armaturenbrett',
-      ],
-      id: '33717',
-      name: 'Dashboards & Dashboard Parts',
-    },
-    {
-      kw: [
-        'armrest',
-        'armlehne',
-        'türverkleidung',
-        'door armrest',
-        'inner panel',
-        'door finisher',
-      ],
-      id: '33695',
-      name: 'Interior Door Panels & Parts',
-    },
-    {
-      kw: [
-        'interior door',
-        'door moulding',
-        'door molding',
-        'door trim',
-        'innen',
-      ],
-      id: '33695',
-      name: 'Interior Door Panels & Parts',
-    },
-    {
-      kw: ['exterior door panel', 'door skin', 'door shell', 'exterior door'],
-      id: '33697',
-      name: 'Exterior Door Panels & Frames',
-    },
-    {
-      kw: [
-        'complete door',
-        'door assembly',
-        'driver door',
-        "driver's door",
-        'door body-in-white',
-      ],
-      id: '174105',
-      name: 'Doors & Door Parts',
-    },
-    {
-      kw: ['door handle', 'handle strip'],
-      id: '174106',
-      name: 'Door Handles',
-    },
-    {
-      kw: ['window regulator', 'window lifter', 'window motor'],
-      id: '174085',
-      name: 'Window Motors, Parts & Accessories',
-    },
-    {
-      kw: ['mirror', 'side mirror', 'rearview'],
-      id: '33726',
-      name: 'Exterior Mirrors',
-    },
-    {
-      kw: ['headlight', 'headlamp'],
-      id: '33710',
-      name: 'Headlights',
-    },
-    {
-      kw: ['center console', 'armrest console'],
-      id: '174090',
-      name: 'Center Consoles',
-    },
-  ];
+export const CATEGORY_KEYWORD_ROWS: Array<{
+  kw: string[];
+  id: string;
+  name: string;
+}> = [
+  {
+    kw: [
+      'dashboard',
+      'dash panel',
+      'instrument panel',
+      'dash trim',
+      'dash bezel',
+      'armaturenbrett',
+    ],
+    id: '33717',
+    name: 'Dashboards & Dashboard Parts',
+  },
+  {
+    kw: [
+      'armrest',
+      'armlehne',
+      'türverkleidung',
+      'door armrest',
+      'inner panel',
+      'door finisher',
+    ],
+    id: '33695',
+    name: 'Interior Door Panels & Parts',
+  },
+  {
+    kw: [
+      'interior door',
+      'door moulding',
+      'door molding',
+      'door trim',
+      'innen',
+    ],
+    id: '33695',
+    name: 'Interior Door Panels & Parts',
+  },
+  {
+    kw: ['exterior door panel', 'door skin', 'door shell', 'exterior door'],
+    id: '33697',
+    name: 'Exterior Door Panels & Frames',
+  },
+  {
+    kw: [
+      'complete door',
+      'door assembly',
+      'driver door',
+      "driver's door",
+      'door body-in-white',
+    ],
+    id: '174105',
+    name: 'Doors & Door Parts',
+  },
+  {
+    kw: ['door handle', 'handle strip'],
+    id: '174106',
+    name: 'Door Handles',
+  },
+  {
+    kw: ['window regulator', 'window lifter', 'window motor'],
+    id: '174085',
+    name: 'Window Motors, Parts & Accessories',
+  },
+  {
+    kw: ['mirror', 'side mirror', 'rearview'],
+    id: '33726',
+    name: 'Exterior Mirrors',
+  },
+  {
+    kw: ['headlight', 'headlamp'],
+    id: '33710',
+    name: 'Headlights',
+  },
+  {
+    kw: ['center console', 'armrest console'],
+    id: '174090',
+    name: 'Center Consoles',
+  },
+];
 
 export function translatePartNameToGerman(
   partType: string | null | undefined,

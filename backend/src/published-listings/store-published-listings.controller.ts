@@ -34,7 +34,8 @@ export class StorePublishedListingsController {
 
   @Get(':storeId/listings/published')
   @ApiOperation({
-    summary: 'Complete published listing data for everything live on this store',
+    summary:
+      'Complete published listing data for everything live on this store',
   })
   async listForStore(
     @Param('storeId', ParseUUIDPipe) storeId: string,

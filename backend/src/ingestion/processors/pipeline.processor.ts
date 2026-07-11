@@ -13,6 +13,7 @@ import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
+import { EnterpriseListingIntelligenceService } from '../enterprise-listing-intelligence.service.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 import { EbayMvlStoreService } from '../../fitment/ebay-mvl-store.service.js';
 import { resolveCategoryTreeId } from '../../channels/ebay/ebay-marketplace-tree.util.js';
@@ -106,6 +107,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     private readonly pipelineOutputImages: PipelineOutputImageService,
     private readonly mvlService: EbayMvlService,
     private readonly mvlStore: EbayMvlStoreService,
+    private readonly enterpriseListingIntelligence: EnterpriseListingIntelligenceService,
   ) {
     super();
   }
@@ -1341,6 +1343,40 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         true,
       );
 
+      // Category output from the enrichment script is untrusted. Normalize it
+      // before either table is persisted so parent, missing, and unrelated
+      // taxonomy IDs cannot bypass the optional optimization stage.
+      const categoryConcurrency = Math.max(
+        1,
+        Number(process.env.PIPELINE_CATEGORY_GUARD_CONCURRENCY ?? '8') || 8,
+      );
+      let categoryCorrections = 0;
+      await this.mapWithConcurrency(
+        products,
+        categoryConcurrency,
+        async (product, index) => {
+          const resolved =
+            await this.enterpriseListingIntelligence.resolvePublishableCategory(
+              product as CatalogProduct,
+            );
+          const changed =
+            product.categoryId !== resolved.categoryId ||
+            product.categoryName !== resolved.categoryName;
+          product.categoryId = resolved.categoryId;
+          product.categoryName = resolved.categoryName;
+          if (listingRecords[index]) {
+            listingRecords[index].categoryId = resolved.categoryId;
+            listingRecords[index].categoryName = resolved.categoryName;
+          }
+          if (changed) categoryCorrections++;
+        },
+      );
+      if (categoryCorrections > 0) {
+        this.logger.warn(
+          `Job ${jobId} [${marketplace}]: category guard corrected ${categoryCorrections}/${products.length} rows before persistence`,
+        );
+      }
+
       let mvlRejectedTotal = 0;
       let mvlValidatedTotal = 0;
       const skipMvlOnImport = await this.shouldSkipMvlOnImport();
@@ -1695,7 +1731,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   private async mapWithConcurrency<T, R>(
     items: T[],
     concurrency: number,
-    fn: (item: T) => Promise<R>,
+    fn: (item: T, index: number) => Promise<R>,
   ): Promise<R[]> {
     const results = new Array<R>(items.length);
     let nextIndex = 0;
@@ -1703,7 +1739,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       while (true) {
         const i = nextIndex++;
         if (i >= items.length) return;
-        results[i] = await fn(items[i]);
+        results[i] = await fn(items[i], i);
       }
     };
     await Promise.all(

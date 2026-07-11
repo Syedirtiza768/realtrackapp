@@ -278,16 +278,20 @@ export class CatalogProductService {
           OR condition_id ~* '^(USED_|FOR_PARTS|SELLER_REFURB)'
         )`;
 
-      const catalogResult = await runner.query(`
+      const catalogResult = await runner.query(
+        `
         UPDATE catalog_products
            SET title = trim(regexp_replace(regexp_replace(title, '\\mNew\\M', '', 'gi'), '\\s+', ' ', 'g')),
                "updatedAt" = NOW()
          WHERE pipeline_job_id = $1
            AND title ~* '\\mNew\\M'
            ${conditionFilter}
-      `, [pipelineJobId]);
+      `,
+        [pipelineJobId],
+      );
 
-      const listingResult = await runner.query(`
+      const listingResult = await runner.query(
+        `
         UPDATE listing_records
            SET title = trim(regexp_replace(regexp_replace(title, '\\mNew\\M', '', 'gi'), '\\s+', ' ', 'g')),
                "updatedAt" = NOW()
@@ -298,7 +302,9 @@ export class CatalogProductService {
              OR "conditionId" IN ('3000','4000','5000','6000','7000','2000','2500')
              OR "conditionId" ~* '^(USED_|FOR_PARTS|SELLER_REFURB)'
            )
-      `, [pipelineJobId]);
+      `,
+        [pipelineJobId],
+      );
 
       return {
         catalogUpdated: catalogResult[1] ?? 0,
