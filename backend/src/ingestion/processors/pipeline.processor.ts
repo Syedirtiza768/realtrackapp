@@ -1599,24 +1599,82 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             true,
           );
         }
-        // Deduplicate listing records by customLabelSku (keep last occurrence) to prevent
-        // "ON CONFLICT DO UPDATE command cannot affect row a second time"
-        const dedupedLrMap = new Map<string, (typeof listingRecords)[0]>();
-        const lrNoSku: typeof listingRecords = [];
-        for (const lr of listingRecords) {
-          const s = lr.customLabelSku?.trim();
-          if (s) dedupedLrMap.set(s, lr);
-          else lrNoSku.push(lr);
-        }
-        const dedupedListingRecords = [...dedupedLrMap.values(), ...lrNoSku];
-        if (dedupedListingRecords.length < listingRecords.length) {
-          this.logger.warn(
-            `Job ${jobId} [${marketplace}]: Deduplicated ${listingRecords.length} → ${dedupedListingRecords.length} listing records by SKU`,
+        // Re-run safe: a pipeline job's listings are identified by the stable
+        // (pipeline_job_id, sourceRowNumber) pair. Match existing rows on that and
+        // UPDATE them in place — preserving row ids and FK links (ai_enhancements,
+        // channel_listings, image_assets) — then insert only genuinely new rows.
+        // The uq_listing_source_row constraint (sourceFileName, sheetName,
+        // sourceRowNumber) is date-stamped via the output filename, so it is NOT
+        // stable across days and cannot be the conflict target — the previous
+        // ON CONFLICT ("customLabelSku","marketplace") upsert aborted the whole
+        // batch with a uq_listing_source_row violation whenever a re-run's SKU no
+        // longer matched its old row, so re-runs never refreshed titles.
+        const existingRows: Array<{ id: string; sourceRowNumber: number | null }> =
+          await this.listingRepo.query(
+            `SELECT id, "sourceRowNumber" FROM "listing_records" WHERE pipeline_job_id = $1 AND "marketplace" = $2`,
+            [jobId, marketplace],
           );
+        const existingIdByRow = new Map<number, string>();
+        for (const r of existingRows) {
+          if (r.sourceRowNumber != null) {
+            existingIdByRow.set(Number(r.sourceRowNumber), r.id);
+          }
         }
 
+        const rowsToUpdate: Array<{
+          id: string;
+          lr: (typeof listingRecords)[0];
+        }> = [];
+        const rowsToInsert: typeof listingRecords = [];
+        const seenSourceRows = new Set<number>();
+        for (const lr of listingRecords) {
+          const rn = lr.sourceRowNumber == null ? null : Number(lr.sourceRowNumber);
+          if (rn == null) {
+            rowsToInsert.push(lr);
+            continue;
+          }
+          if (seenSourceRows.has(rn)) continue; // guard intra-file duplicate rows
+          seenSourceRows.add(rn);
+          const existingId = existingIdByRow.get(rn);
+          if (existingId) rowsToUpdate.push({ id: existingId, lr });
+          else rowsToInsert.push(lr);
+        }
+
+        // ── UPDATE matched rows in place (type-safe, bounded concurrency) ──
+        let updatedCount = 0;
+        const UPDATE_CONCURRENCY = 10;
+        for (let i = 0; i < rowsToUpdate.length; i += UPDATE_CONCURRENCY) {
+          const slice = rowsToUpdate.slice(i, i + UPDATE_CONCURRENCY);
+          await Promise.all(
+            slice.map(async ({ id, lr }) => {
+              const patch: Record<string, unknown> = {
+                ...(lr as Record<string, unknown>),
+              };
+              delete patch.version; // @VersionColumn — managed by the DB/TypeORM
+              // Keep the existing photo when the re-run produced none (mirrors the
+              // COALESCE the old upsert used for itemPhotoUrl).
+              if (!String(patch.itemPhotoUrl ?? '').trim()) delete patch.itemPhotoUrl;
+              try {
+                await this.listingRepo.update({ id }, patch as any);
+                updatedCount++;
+              } catch (updErr) {
+                this.logger.error(
+                  `Job ${jobId} [${marketplace}]: listing update failed for row ${lr.sourceRowNumber}: ${updErr instanceof Error ? updErr.message : updErr}`,
+                );
+              }
+            }),
+          );
+          this.scheduleCatalogImportProgress(jobId, {
+            phase: 'saving',
+            marketplace,
+            processed: Math.min(i + UPDATE_CONCURRENCY, rowsToUpdate.length),
+            total: importTotal,
+          });
+        }
+
+        // ── INSERT new rows (bulk, parameterised) ──
+        let insertedCount = 0;
         const CHUNK = 500;
-        let totalInserted = 0;
         // Map entity property names → DB column names (pipeline_job_id uses explicit name)
         const PROP_TO_COL: Record<string, string> = {
           sourceFileName: 'sourceFileName',
@@ -1653,18 +1711,16 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           teamId: 'team_id',
           version: 'version',
         };
-        const ALL_COLS = Object.values(PROP_TO_COL); // all columns for INSERT / UPDATE on conflict
-
-        for (let i = 0; i < dedupedListingRecords.length; i += CHUNK) {
+        const ALL_COLS = Object.values(PROP_TO_COL);
+        for (let i = 0; i < rowsToInsert.length; i += CHUNK) {
           try {
-            const batch = dedupedListingRecords.slice(i, i + CHUNK);
-            // Build parameterised INSERT … ON CONFLICT DO UPDATE
+            const batch = rowsToInsert.slice(i, i + CHUNK);
             const values: unknown[] = [];
             const rowsSql: string[] = [];
             let paramIdx = 0;
             for (const lr of batch) {
               const rowParams: string[] = [];
-              for (const [prop, col] of Object.entries(PROP_TO_COL)) {
+              for (const [prop] of Object.entries(PROP_TO_COL)) {
                 paramIdx++;
                 rowParams.push(`$${paramIdx}`);
                 values.push((lr as Record<string, unknown>)[prop] ?? null);
@@ -1672,37 +1728,28 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               rowsSql.push(`(${rowParams.join(', ')})`);
             }
             const colList = ALL_COLS.map((c) => `"${c}"`).join(', ');
-            const updateSet = ALL_COLS.map((c) => {
-              if (c === 'itemPhotoUrl') {
-                return `"${c}" = COALESCE(NULLIF(EXCLUDED."${c}", ''), listing_records."${c}")`;
-              }
-              return `"${c}" = EXCLUDED."${c}"`;
-            }).join(', ');
             const sql = `
               INSERT INTO "listing_records" (${colList})
               VALUES ${rowsSql.join(',\n')}
-              ON CONFLICT ("customLabelSku", "marketplace")
-              WHERE ("customLabelSku" IS NOT NULL) AND ("deletedAt" IS NULL) AND ("marketplace" IS NOT NULL)
-              DO UPDATE SET ${updateSet}
+              ON CONFLICT ("sourceFileName", "sheetName", "sourceRowNumber") DO NOTHING
               RETURNING id
             `;
             const result = await this.listingRepo.query(sql, values);
-            totalInserted += result?.length ?? 0;
+            insertedCount += result?.length ?? 0;
           } catch (insertErr) {
             this.logger.error(
-              `Job ${jobId} [${marketplace}]: Listing batch upsert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
+              `Job ${jobId} [${marketplace}]: Listing insert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
             );
           }
-
           this.scheduleCatalogImportProgress(jobId, {
             phase: 'saving',
             marketplace,
-            processed: Math.min(i + CHUNK, dedupedListingRecords.length),
+            processed: Math.min(i + CHUNK, rowsToInsert.length),
             total: importTotal,
           });
         }
         this.logger.log(
-          `Job ${jobId} [${marketplace}]: Attempted ${dedupedListingRecords.length} listing records, upserted ${totalInserted}`,
+          `Job ${jobId} [${marketplace}]: listing records — updated ${updatedCount}, inserted ${insertedCount} (of ${listingRecords.length})`,
         );
       } else {
         this.logger.warn(
