@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -155,6 +156,21 @@ export class StorageService {
   }
 
   /**
+   * Lightweight existence check (HEAD, no body transfer). Used to skip
+   * re-downloading + re-uploading images already mirrored on a prior run.
+   */
+  async objectExists(key: string): Promise<boolean> {
+    try {
+      await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Soft-delete by removing from S3.
    */
   async deleteObject(key: string): Promise<void> {
@@ -204,6 +220,14 @@ export class StorageService {
       .replace(/\/+/g, '/');
     const out: MirroredRemoteImage[] = new Array(urls.length);
     const conc = Math.max(1, Math.min(16, parallel));
+    // Idempotency: on a re-run the same (namespace, index) maps to the same
+    // deterministic key, so skip the re-download + re-upload when the object is
+    // already present. Disable with PIPELINE_MIRROR_SKIP_EXISTING=false.
+    const skipExisting = !/^(0|false|no|off)$/i.test(
+      String(
+        this.config.get<string>('PIPELINE_MIRROR_SKIP_EXISTING', 'true'),
+      ).trim(),
+    );
 
     const mirrorOne = async (i: number): Promise<void> => {
       const raw = urls[i];
@@ -252,6 +276,25 @@ export class StorageService {
         }
         out[i] = { url: u, s3Key: existingKey };
         return;
+      }
+      // Skip the fetch + upload if this row/index was already mirrored on a
+      // prior run. The upload key is deterministic per (namespace, index); the
+      // extension isn't known without fetching, so probe the URL's extension
+      // first, then the common variants (uploads are often converted to .webp).
+      if (skipExisting) {
+        const idxPart = String(i).padStart(3, '0');
+        const candidateExts = [
+          ...new Set([this.extFromUrlOrMime(u, ''), '.webp', '.jpg', '.png', '.jpeg']),
+        ];
+        for (const ext of candidateExts) {
+          const key = this.withKeyPrefix(
+            `catalog-images/${sanitizedNs}/${idxPart}${ext}`,
+          );
+          if (await this.objectExists(key)) {
+            out[i] = { url: this.getCdnUrl(key), s3Key: key };
+            return;
+          }
+        }
       }
       try {
         const res = await fetch(u, {

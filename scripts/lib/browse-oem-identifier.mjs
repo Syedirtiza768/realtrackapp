@@ -169,24 +169,40 @@ export function createOemIdentifier(options) {
     return best;
   }
 
-  /** Majority-vote the Type aspect from fetched item details. */
-  function majorityType(items) {
-    const tally = new Map();
-    for (const item of items) {
-      const aspects = Array.isArray(item?.localizedAspects) ? item.localizedAspects : [];
-      const match = aspects.find((a) => TYPE_ASPECT_NAMES.includes(String(a?.name || '').toLowerCase()));
-      const value = match?.value ? String(match.value).trim() : '';
-      if (!value || value.length > 60) continue;
-      const key = value.toLowerCase();
-      const entry = tally.get(key) ?? { count: 0, value };
-      entry.count++;
-      tally.set(key, entry);
-    }
+  /** Top leaf category from the Browse CATEGORY_REFINEMENTS histogram (full result set). */
+  function topCategoryFromRefinements(catDist) {
+    if (!Array.isArray(catDist) || catDist.length === 0) return null;
     let best = null;
-    for (const entry of tally.values()) {
-      if (!best || entry.count > best.count) best = entry;
+    for (const c of catDist) {
+      const id = c?.categoryId ? String(c.categoryId) : null;
+      if (!id) continue;
+      const count = Number(c?.matchCount) || 0;
+      if (!best || count > best.count) {
+        best = { categoryId: id, categoryName: c.categoryName || '', count };
+      }
     }
-    return best?.value || null;
+    return best;
+  }
+
+  /** Top Type value from the Browse ASPECT_REFINEMENTS histogram (gated by minCount). */
+  function topTypeFromRefinements(aspectDist, minCount) {
+    if (!Array.isArray(aspectDist)) return null;
+    const typeAspect = aspectDist.find((a) =>
+      TYPE_ASPECT_NAMES.includes(String(a?.localizedAspectName || '').toLowerCase()),
+    );
+    const values =
+      typeAspect && Array.isArray(typeAspect.aspectValueDistributions)
+        ? typeAspect.aspectValueDistributions
+        : [];
+    let best = null;
+    for (const v of values) {
+      const value = v?.localizedAspectValue ? String(v.localizedAspectValue).trim() : '';
+      if (!value || value.length > 60) continue;
+      const count = Number(v?.matchCount) || 0;
+      if (!best || count > best.count) best = { value, count };
+    }
+    if (!best || best.count < minCount) return null;
+    return best.value;
   }
 
   return {
@@ -216,14 +232,25 @@ export function createOemIdentifier(options) {
       }
 
       try {
+        // Single call: ASPECT + CATEGORY refinements return Type and leaf-category
+        // histograms computed over ALL matching listings — no per-item detail
+        // fetches, and a stronger signal than sampling the top few items.
         const search = await request('/item_summary/search', {
           q: String(partNumber).trim(),
           limit: searchLimit,
+          fieldgroups: 'ASPECT_REFINEMENTS,CATEGORY_REFINEMENTS',
         });
         const summaries = Array.isArray(search?.itemSummaries) ? search.itemSummaries : [];
-        const matchCount = summaries.length;
+        const refinement = search?.refinement ?? {};
+        const matchCount =
+          typeof search?.total === 'number' ? search.total : summaries.length;
 
-        const best = topCategory(summaries);
+        // Category: prefer the refinement histogram; fall back to a majority vote
+        // over the returned summaries if refinements are absent for this query.
+        const best =
+          topCategoryFromRefinements(refinement.categoryDistributions) ||
+          topCategory(summaries);
+
         if (!best || best.count < minAgreement) {
           const result = { type: null, categoryId: null, categoryName: null, confidence: 'none', matchCount };
           cache[key] = { result, cachedAt: Date.now() };
@@ -232,18 +259,7 @@ export function createOemIdentifier(options) {
           return result;
         }
 
-        // Fetch a few items in the winning category for the authoritative Type aspect.
-        const inCategory = summaries.filter((s) => String(s.categories?.[0]?.categoryId || '') === best.categoryId);
-        const toFetch = inCategory.slice(0, Math.max(0, itemFetch));
-        const details = [];
-        for (const s of toFetch) {
-          if (stats.calls >= dailyCap) break;
-          try {
-            details.push(await request(`/item/${encodeURIComponent(s.itemId)}`, undefined));
-          } catch { /* skip individual item */ }
-        }
-
-        const type = majorityType(details);
+        const type = topTypeFromRefinements(refinement.aspectDistributions, minAgreement);
         const result = {
           type,
           categoryId: best.categoryId,
