@@ -104,6 +104,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     private readonly imageAssetRepo: Repository<ImageAsset>,
     @InjectQueue('pipeline')
     private readonly pipelineQueue: Queue,
+    @InjectQueue('listing-optimization')
+    private readonly listingOptimizationQueue: Queue,
     private readonly pipelineOutputImages: PipelineOutputImageService,
     private readonly mvlService: EbayMvlService,
     private readonly mvlStore: EbayMvlStoreService,
@@ -315,6 +317,24 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     await this.propagateSourceImages(jobId);
 
     await this.updateStatus(jobId, 'completed');
+
+    const completedJob = await this.jobRepo.findOneBy({ id: jobId });
+    const optimizationMarketplace =
+      completedJob?.marketplace === 'DE' || completedJob?.marketplace === 'AU'
+        ? completedJob.marketplace
+        : 'US';
+    await this.listingOptimizationQueue.add(
+      'optimize-job',
+      { jobId, marketplace: optimizationMarketplace },
+      {
+        jobId: `pipeline-optimization-${jobId}-${optimizationMarketplace}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 30_000 },
+      },
+    );
+    this.logger.log(
+      `Queued mandatory listing optimization for job ${jobId} [${optimizationMarketplace}]`,
+    );
   }
 
   private getJobProgress(jobId: string): JobProgressState {

@@ -1,5 +1,7 @@
 # Changelog
 
+- **Automatic publish-readiness optimization:** Completed enrichment pipelines now durably enqueue the mandatory marketplace listing-optimization pass with an idempotent BullMQ job ID and retry backoff. This prevents eBay Motors publish attempts from reaching compatibility validation while every product is still missing structured Year/Make/Model fitment.
+
 - **Pipeline category prevention guard:** Post-enrichment import now treats generated category IDs as untrusted and runs every product through `EnterpriseListingIntelligenceService.resolvePublishableCategory()` before catalog or listing upserts. Known Motors leaves are retained; unrelated, parent, and missing categories are deterministically remapped, checked through eBay Taxonomy when needed, and finally fall back to publishable leaf `9886`. The resolved category is written identically to `catalog_products` and `listing_records`, so pipelines cannot bypass category validation when mandatory optimization is pending. Bounded concurrency defaults to 8 via `PIPELINE_CATEGORY_GUARD_CONCURRENCY`.
 
 All notable changes to this project are documented here. Format loosely follows

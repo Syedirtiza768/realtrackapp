@@ -1,5 +1,7 @@
 # Feature Registry
 
+> **2026-07-12 publish-readiness update:** A completed enrichment pipeline automatically enqueues its mandatory US/AU/DE listing optimization pass. That pass discovers and validates structured fitment before eBay Motors publishing; the queue handoff is idempotent and retries transient worker failures.
+
 > **Source**: Extracted from `docs/product/features.md` (2026-05-29).
 > Status legend: **Implemented** (working end-to-end) · **Partial** (present but incomplete/unverified) · **Missing** (planned/scaffolding only) · **Needs Verification** (code exists, behavior unconfirmed).
 

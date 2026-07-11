@@ -106,6 +106,12 @@ Per-module details: [/docs/backend/MODULE_MAP.md](../backend/MODULE_MAP.md).
 
 ## Primary Data Flow (Ingestion → Publish)
 
+After the pipeline persists catalog and listing rows, it enqueues one idempotent
+`listing-optimization` job for the pipeline marketplace. Optimization derives and
+validates structured fitment before the products enter the eBay publish path; a
+pipeline is complete before optimization begins, but is not publish-ready until
+that queued optimization has processed its products.
+
 ```
 Upload / CSV / image
    → catalog-import or ingestion (BullMQ job)
