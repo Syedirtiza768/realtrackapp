@@ -223,7 +223,10 @@ export function createOemIdentifier(options) {
         const search = await request('/item_summary/search', {
           q: String(partNumber).trim(),
           limit: searchLimit,
-          fieldgroups: 'ASPECT_REFINEMENTS',
+          // MATCHING_ITEMS keeps the item summaries (for the leaf category);
+          // ASPECT_REFINEMENTS adds the Type histogram. fieldgroups replaces the
+          // default, so MATCHING_ITEMS must be listed explicitly.
+          fieldgroups: 'MATCHING_ITEMS,ASPECT_REFINEMENTS',
         });
         const summaries = Array.isArray(search?.itemSummaries) ? search.itemSummaries : [];
         const refinement = search?.refinement ?? {};
