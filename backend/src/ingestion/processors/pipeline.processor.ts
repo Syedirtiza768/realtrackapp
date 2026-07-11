@@ -205,6 +205,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           paymentProfile: dbJob?.paymentProfileName ?? undefined,
           marketplace: dbJob?.marketplace ?? undefined,
           storeId: dbJob?.storeId ?? undefined,
+          originalFilename: job.data.originalFilename ?? undefined,
         },
       );
 
@@ -433,6 +434,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       paymentProfile?: string;
       marketplace?: string;
       storeId?: string;
+      originalFilename?: string;
     } = {},
   ): Promise<number> {
     return new Promise((resolve, reject) => {
@@ -457,6 +459,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             ? { PIPELINE_TARGET_MARKETPLACE: options.marketplace }
             : {}),
           ...(options.storeId ? { PIPELINE_STORE_ID: options.storeId } : {}),
+          ...(options.originalFilename
+            ? { PIPELINE_ORIGINAL_FILENAME: options.originalFilename }
+            : {}),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       });

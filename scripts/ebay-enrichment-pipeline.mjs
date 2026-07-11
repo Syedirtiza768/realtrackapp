@@ -45,6 +45,7 @@ import {
 import { SHARED_PLATFORMS } from './lib/shared-platforms.mjs';
 import { createEnrichmentCache } from './lib/enrichment-cache.mjs';
 import { createTaxonomyClient, MOTORS_CATEGORY_TREE_ID } from './lib/taxonomy-client.mjs';
+import { createOemIdentifier } from './lib/browse-oem-identifier.mjs';
 import {
   createAiCategoryClassifier,
   AI_CATEGORY_DEFAULT_MODEL,
@@ -283,6 +284,14 @@ const REPORT = {
     DE: { api: 0, ai: 0, fallback: 0, cross: 0 },
   },
   taxonomyErrors: [],
+  // ── OEM part identification (eBay Browse) ──
+  oemIdentification: {
+    uniqueNumbers: 0,
+    identified: 0,      // confident overrides applied
+    lowConfidence: 0,   // searched but < minAgreement
+    skipped: 0,         // blank/too-short part numbers
+    partsUpdated: 0,
+  },
   taxonomyTreeCacheHit: false,
   taxonomyTreeCacheSource: null,
   taxonomyApiSkippedReason: null,
@@ -580,6 +589,25 @@ const taxonomyClient = createTaxonomyClient({
   baseUrl: CONFIG.ebay.baseUrl,
   requestsPerSecond: taxonomyRps > 0 ? taxonomyRps : 2,
   dailyQuota: taxonomyDailyQuota > 0 ? taxonomyDailyQuota : 4800,
+  log: (level, msg) => log[level]?.(msg) ?? log.info(msg),
+});
+
+// OEM part identity anchor via eBay Browse (shares the application token).
+// Off only when explicitly disabled; gated by confidence so it can't regress rows it can't resolve.
+const oemIdentifyEnabled = !/^(0|false|no|off)$/i.test(
+  String(env.PIPELINE_OEM_IDENTIFY ?? 'true').trim(),
+);
+const oemIdentifyConcurrency = Math.max(
+  1,
+  Number(env.PIPELINE_OEM_IDENTIFY_CONCURRENCY) || 3,
+);
+const oemIdentifier = createOemIdentifier({
+  rootDir: ROOT,
+  getToken: getEbayAppToken,
+  baseUrl: CONFIG.ebay.baseUrl,
+  requestsPerSecond: Number(env.PIPELINE_OEM_IDENTIFY_RPS) || 2,
+  dailyCap: Number(env.PIPELINE_OEM_IDENTIFY_DAILY_CAP) || 4000,
+  minAgreement: Number(env.PIPELINE_OEM_IDENTIFY_MIN_AGREEMENT) || 2,
   log: (level, msg) => log[level]?.(msg) ?? log.info(msg),
 });
 
@@ -933,11 +961,117 @@ function buildGridxColumnMap(headers) {
   return map;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  SHARED VEHICLE KNOWLEDGE + FREE-TEXT / FILENAME RESOLVER
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Make → known models. Single source of truth reused by the filename resolver,
+ * sheet-name parser, and description parser. Multi-word models are matched
+ * longest-first so "Range Rover Sport" wins over "Range Rover".
+ */
+const VEHICLE_MAKE_MODELS = {
+  'Land Rover': ['Range Rover Sport', 'Range Rover Velar', 'Range Rover Evoque', 'Range Rover', 'Discovery Sport', 'Discovery', 'Defender', 'Freelander'],
+  'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'GLE', 'GLC', 'GLA', 'GLB', 'CLA', 'CLS', 'A-Class', 'B-Class', 'G-Class', 'AMG GT'],
+  'Jaguar': ['F-Pace', 'E-Pace', 'I-Pace', 'F-Type', 'XF', 'XE', 'XJ', 'XK', 'XJR', 'S-Type', 'X-Type'],
+  'BMW': ['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'M2', 'M3', 'M4', 'M5', 'M6', 'M8', 'Z4', 'Z3', 'i3', 'i4', 'i8', 'iX'],
+  'Audi': ['A1', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'Q2', 'Q3', 'Q5', 'Q7', 'Q8', 'TT', 'R8', 'RS3', 'RS4', 'RS5', 'RS6', 'RS7', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'e-tron'],
+  'Volkswagen': ['Golf', 'Jetta', 'Passat', 'Tiguan', 'Touareg', 'Polo', 'Arteon', 'Atlas', 'ID.4', 'ID.3', 'Beetle', 'CC'],
+  'Porsche': ['Cayenne', 'Macan', 'Panamera', '911', '718', 'Boxster', 'Cayman', 'Taycan'],
+  'Ford': ['F-150', 'F-250', 'F-350', 'Mustang', 'Explorer', 'Escape', 'Edge', 'Bronco', 'Ranger', 'Expedition', 'Focus', 'Fusion'],
+  'Toyota': ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Tacoma', 'Tundra', '4Runner', 'Prius', 'Land Cruiser', 'Supra'],
+  'Honda': ['Civic', 'Accord', 'CR-V', 'HR-V', 'Pilot', 'Odyssey', 'Fit'],
+  'Dodge': ['Charger', 'Challenger', 'Durango', 'Ram', 'Journey', 'Grand Caravan'],
+  'Chrysler': ['300', 'Pacifica', 'Town & Country', 'Voyager'],
+  'Jeep': ['Grand Cherokee', 'Cherokee', 'Wrangler', 'Compass', 'Renegade', 'Gladiator'],
+  'Nissan': ['Altima', 'Maxima', 'Sentra', 'Rogue', 'Murano', 'Pathfinder', '370Z', 'GT-R', 'Frontier', 'Titan'],
+  'Lexus': ['IS', 'ES', 'GS', 'LS', 'RX', 'NX', 'UX', 'GX', 'LX', 'RC', 'LC'],
+  'Bentley': ['Continental', 'Flying Spur', 'Bentayga', 'Mulsanne'],
+  'Maserati': ['Ghibli', 'Levante', 'Quattroporte', 'GranTurismo'],
+  'Rolls-Royce': ['Ghost', 'Wraith', 'Dawn', 'Phantom', 'Cullinan'],
+};
+
+/** Alias map for make names found in free text (filenames, sheet names, descriptions). */
+const VEHICLE_MAKE_ALIASES = {
+  'range rover': 'Land Rover', 'lr': 'Land Rover', 'landrover': 'Land Rover',
+  'mercedes': 'Mercedes-Benz', 'mb': 'Mercedes-Benz', 'benz': 'Mercedes-Benz',
+  'vw': 'Volkswagen',
+  'chevy': 'Chevrolet',
+};
+
+/** Donor vehicle parsed from the uploaded filename; gap-fills parts lacking a VIN. */
+let DONOR_VEHICLE = { year: '', make: '', model: '' };
+
+function _escapeRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** First model year (single, or the start of a range) found in free text. */
+function extractYearFromText(text) {
+  const range = String(text).match(/\b((?:19|20)?\d{2})\s*[-–]\s*(?:19|20)?\d{2}\b/);
+  if (range) {
+    let y = parseInt(range[1], 10);
+    if (y < 100) y += y > 50 ? 1900 : 2000;
+    if (y >= 1950 && y <= 2100) return String(y);
+  }
+  const single = String(text).match(/\b(19|20)\d{2}\b/);
+  return single ? single[0] : '';
+}
+
+/**
+ * Resolve { year, make, model } from arbitrary text (filename, sheet name),
+ * independent of token order and tolerant of color / trim / noise words.
+ * "Q7 AUDI SILVER 2008" → { year: '2008', make: 'Audi', model: 'Q7' }.
+ * Any field may be '' when not confidently found.
+ */
+function resolveVehicleFromText(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return { year: '', make: '', model: '' };
+  const upper = text.toUpperCase();
+  const year = extractYearFromText(text);
+
+  // Make: aliases first, then canonical make names (word-boundary match)
+  let make = '';
+  for (const [alias, real] of Object.entries(VEHICLE_MAKE_ALIASES)) {
+    if (new RegExp(`\\b${_escapeRe(alias.toUpperCase())}\\b`).test(upper)) { make = real; break; }
+  }
+  if (!make) {
+    for (const name of Object.keys(VEHICLE_MAKE_MODELS)) {
+      if (new RegExp(`\\b${_escapeRe(name.toUpperCase())}\\b`).test(upper)) { make = name; break; }
+    }
+  }
+  if (!make) return { year, make: '', model: '' };
+
+  // Model: the make's known models, longest match first (multi-word wins)
+  let model = '';
+  const models = [...(VEHICLE_MAKE_MODELS[make] || [])].sort((a, b) => b.length - a.length);
+  for (const m of models) {
+    if (new RegExp(`\\b${_escapeRe(m.toUpperCase())}\\b`).test(upper)) { model = m; break; }
+  }
+
+  return { year, make, model };
+}
+
+/** Parse the donor vehicle from an uploaded filename (strips extension + stored-path timestamp). */
+function parseVehicleFromFilename(name) {
+  const base = String(name || '')
+    .replace(/\.(xlsx|xls|xlsm|csv)$/i, '')
+    .replace(/^\d{10,}[_-]/, '')      // stored as `${Date.now()}_${safeName}`
+    .replace(/[_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return resolveVehicleFromText(base);
+}
+
 /**
  * Parse vehicle year/make/model from a GridX Connect sheet name.
  * Examples: "2008 Mercedes C350 AMG", "2007 Mercedes-Benz C350 AMG 535 - 679"
  */
 function parseVehicleFromSheetName(sheetName) {
+  // Dictionary resolver first — handles reversed order ("Q7 Audi") + color/noise words.
+  const resolved = resolveVehicleFromText(sheetName);
+  if (resolved.make && resolved.model) return resolved;
+
   const yearMatch = sheetName.match(/\b(19|20)\d{2}\b/);
   const year = yearMatch ? yearMatch[0] : '';
 
@@ -947,7 +1081,7 @@ function parseVehicleFromSheetName(sheetName) {
   rest = rest.replace(/\d+\s*-\s*\d+\s*$/, '').trim();
 
   // First word is typically make, rest is model
-  const words = rest.split(/\s+/);
+  const words = rest.split(/\s+/).filter(Boolean);
   let make = '';
   let model = '';
 
@@ -955,7 +1089,7 @@ function parseVehicleFromSheetName(sheetName) {
     // Handle "Mercedes-Benz" or "Mercedes"
     if (words[0].toLowerCase().startsWith('mercedes')) {
       make = 'MERCEDES-BENZ';
-      model = words.slice(words[0].includes('-') ? 1 : 1).join(' ').trim();
+      model = words.slice(1).join(' ').trim();
     } else if (words[0].toLowerCase() === 'bmw') {
       make = 'BMW';
       model = words.slice(1).join(' ').trim();
@@ -965,7 +1099,12 @@ function parseVehicleFromSheetName(sheetName) {
     }
   }
 
-  return { year, make, model };
+  // Fill any gaps from the dictionary resolver (canonical make/year the heuristic missed).
+  return {
+    year: year || resolved.year || '',
+    make: make || resolved.make || '',
+    model: model || resolved.model || '',
+  };
 }
 
 /**
@@ -1018,35 +1157,9 @@ function parseVehicleFromDescription(desc, brand) {
   const text = desc.trim();
   const brandNorm = normalizeBrand(brand);
 
-  // Known make → model patterns (order matters: longer names first)
-  const MAKE_MODELS = {
-    'Land Rover': ['Range Rover Sport', 'Range Rover Velar', 'Range Rover Evoque', 'Range Rover', 'Discovery Sport', 'Discovery', 'Defender', 'Freelander'],
-    'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'GLE', 'GLC', 'GLA', 'GLB', 'CLA', 'CLS', 'A-Class', 'B-Class', 'G-Class', 'AMG GT'],
-    'Jaguar': ['F-Pace', 'E-Pace', 'I-Pace', 'F-Type', 'XF', 'XE', 'XJ', 'XK', 'XJR', 'S-Type', 'X-Type'],
-    'BMW': ['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'M2', 'M3', 'M4', 'M5', 'M6', 'M8', 'Z4', 'Z3', 'i3', 'i4', 'i8', 'iX'],
-    'Audi': ['A1', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'Q2', 'Q3', 'Q5', 'Q7', 'Q8', 'TT', 'R8', 'RS3', 'RS4', 'RS5', 'RS6', 'RS7', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'e-tron'],
-    'Volkswagen': ['Golf', 'Jetta', 'Passat', 'Tiguan', 'Touareg', 'Polo', 'Arteon', 'Atlas', 'ID.4', 'ID.3', 'Beetle', 'CC'],
-    'Porsche': ['Cayenne', 'Macan', 'Panamera', '911', '718', 'Boxster', 'Cayman', 'Taycan'],
-    'Ford': ['F-150', 'F-250', 'F-350', 'Mustang', 'Explorer', 'Escape', 'Edge', 'Bronco', 'Ranger', 'Expedition', 'Focus', 'Fusion'],
-    'Toyota': ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Tacoma', 'Tundra', '4Runner', 'Prius', 'Land Cruiser', 'Supra'],
-    'Honda': ['Civic', 'Accord', 'CR-V', 'HR-V', 'Pilot', 'Odyssey', 'Fit'],
-    'Dodge': ['Charger', 'Challenger', 'Durango', 'Ram', 'Journey', 'Grand Caravan'],
-    'Chrysler': ['300', 'Pacifica', 'Town & Country', 'Voyager'],
-    'Jeep': ['Grand Cherokee', 'Cherokee', 'Wrangler', 'Compass', 'Renegade', 'Gladiator'],
-    'Nissan': ['Altima', 'Maxima', 'Sentra', 'Rogue', 'Murano', 'Pathfinder', '370Z', 'GT-R', 'Frontier', 'Titan'],
-    'Lexus': ['IS', 'ES', 'GS', 'LS', 'RX', 'NX', 'UX', 'GX', 'LX', 'RC', 'LC'],
-    'Bentley': ['Continental', 'Flying Spur', 'Bentayga', 'Mulsanne'],
-    'Maserati': ['Ghibli', 'Levante', 'Quattroporte', 'GranTurismo'],
-    'Rolls-Royce': ['Ghost', 'Wraith', 'Dawn', 'Phantom', 'Cullinan'],
-  };
-
-  // Alias map for make names found in descriptions
-  const MAKE_ALIASES = {
-    'range rover': 'Land Rover', 'lr': 'Land Rover', 'landrover': 'Land Rover',
-    'mercedes': 'Mercedes-Benz', 'mb': 'Mercedes-Benz', 'benz': 'Mercedes-Benz',
-    'vw': 'Volkswagen',
-    'chevy': 'Chevrolet',
-  };
+  // Shared make → model + alias knowledge (module-level single source of truth)
+  const MAKE_MODELS = VEHICLE_MAKE_MODELS;
+  const MAKE_ALIASES = VEHICLE_MAKE_ALIASES;
 
   const textUpper = text.toUpperCase();
 
@@ -1446,11 +1559,12 @@ async function decodeAllVins(parts) {
 
 function getVehicleInfo(part, vinData) {
   const decoded = vinData.get(part.vin);
+  let v;
   // Only use decoded VIN data if it actually has meaningful year+make
   // (GridX sheet names like "2008 Mercedes C350 AMG" may pass VIN decode
   //  but return empty fields, which would override _vehicleInfo)
   if (decoded && decoded.year && decoded.make) {
-    return {
+    v = {
       year: decoded.year,
       make: decoded.make,
       model: decoded.model,
@@ -1462,11 +1576,9 @@ function getVehicleInfo(part, vinData) {
       fuelType: decoded.fuelType,
       driveType: decoded.driveType,
     };
-  }
-
-  // GridX Connect parts carry pre-parsed vehicle info from the sheet name
-  if (part._vehicleInfo) {
-    return {
+  } else if (part._vehicleInfo) {
+    // GridX Connect parts carry pre-parsed vehicle info from the sheet name
+    v = {
       year: part._vehicleInfo.year || '',
       make: part._vehicleInfo.make || '',
       model: part._vehicleInfo.model || '',
@@ -1478,25 +1590,139 @@ function getVehicleInfo(part, vinData) {
       fuelType: '',
       driveType: '',
     };
+  } else {
+    // Fallback: parse from sheet data
+    const brand = titleCase(part.brand);
+    const model = part.model || '';
+    // Try to extract year from model string (e.g. "XF 2009 - 2015 (X250)")
+    const yearMatch = model.match(/\b(19|20)\d{2}\b/);
+    v = {
+      year: yearMatch ? yearMatch[0] : '',
+      make: brand,
+      model: model.replace(/\d{4}[\s\-]*/g, '').replace(/\(.*?\)/g, '').trim(),
+      trim: '',
+      engine: '',
+      bodyClass: '',
+      engineCylinders: '',
+      engineDisplacement: '',
+      fuelType: '',
+      driveType: '',
+    };
   }
 
-  // Fallback: parse from sheet data
-  const brand = titleCase(part.brand);
-  const model = part.model;
-  // Try to extract year from model string (e.g. "XF 2009 - 2015 (X250)")
-  const yearMatch = model.match(/\b(19|20)\d{2}\b/);
-  return {
-    year: yearMatch ? yearMatch[0] : '',
-    make: brand,
-    model: model.replace(/\d{4}[\s\-]*/g, '').replace(/\(.*?\)/g, '').trim(),
-    trim: '',
-    engine: '',
-    bodyClass: '',
-    engineCylinders: '',
-    engineDisplacement: '',
-    fuelType: '',
-    driveType: '',
+  // Gap-fill from the donor vehicle parsed off the uploaded filename. For a
+  // single-vehicle workbook (e.g. "Q7 AUDI SILVER 2008.xlsx") this supplies the
+  // year/make/model that no VIN or sheet name provided, so the AI identifies the
+  // correct part and the title leads with Year/Make/Model. VIN/sheet data always
+  // wins — only empty fields are filled.
+  if (!v.year && DONOR_VEHICLE.year) v.year = DONOR_VEHICLE.year;
+  if (!v.make && DONOR_VEHICLE.make) v.make = DONOR_VEHICLE.make;
+  if (!v.model && DONOR_VEHICLE.model) v.model = DONOR_VEHICLE.model;
+
+  return v;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  OEM PART IDENTIFICATION (eBay Browse — identity truth-gate)
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Normalize a part number for grouping unique Browse lookups. */
+function normalizePartNumberKey(pn) {
+  return String(pn || '').toUpperCase().replace(/[\s\-_.\/\\]+/g, '');
+}
+
+/**
+ * Anchor each row's part name/type to eBay's live catalog by searching its OEM
+ * part number on the Browse API. When >= minAgreement live listings agree on a
+ * leaf category and expose a Type aspect, that verified component identity
+ * overrides the noisy description-derived name — so the AI titles the correct
+ * part instead of inferring the wrong one. Rows we cannot confidently anchor
+ * (blank/garbage part number, no agreement, no Type) keep the existing path.
+ *
+ * Runs once per UNIQUE part number (deduped) with bounded concurrency + disk
+ * cache, before category mapping and enrichment so both benefit.
+ */
+async function identifyPartsByOem(parts) {
+  if (!oemIdentifyEnabled) {
+    log.info('OEM identification (eBay Browse) disabled via PIPELINE_OEM_IDENTIFY');
+    return;
+  }
+
+  const token = await getEbayAppToken();
+  if (!token) {
+    log.warn('OEM identification skipped — no eBay application token');
+    return;
+  }
+
+  log.step('OEM Part Identification (eBay Browse)');
+
+  // Group parts by normalized part number → one Browse lookup per unique number.
+  const groups = new Map();
+  for (const part of parts) {
+    const key = normalizePartNumberKey(part.partNumber);
+    if (key.length < 5) {
+      REPORT.oemIdentification.skipped++;
+      continue;
+    }
+    if (!groups.has(key)) groups.set(key, { partNumber: (part.partNumber || '').trim(), parts: [] });
+    groups.get(key).parts.push(part);
+  }
+
+  const uniqueGroups = [...groups.values()];
+  REPORT.oemIdentification.uniqueNumbers = uniqueGroups.length;
+  if (uniqueGroups.length === 0) {
+    log.info('OEM identification: no usable part numbers to anchor');
+    return;
+  }
+
+  log.info(`Identifying ${uniqueGroups.length} unique part number(s) via eBay Browse...`);
+
+  let processed = 0;
+  const runGroup = async (group) => {
+    const result = await oemIdentifier.identify(group.partNumber);
+    processed++;
+    if (processed % 25 === 0 || processed === uniqueGroups.length) {
+      log.progress({ sub_stage: 'oem_identify', total_parts: parts.length, processed });
+    }
+    if (!result || result.confidence !== 'high') {
+      if (result && result.confidence === 'none') REPORT.oemIdentification.lowConfidence++;
+      return;
+    }
+    // Category agreed but no authoritative Type aspect — don't rename the part.
+    const verifiedType = result.type ? titleCase(result.type) : null;
+    if (!verifiedType) return;
+
+    REPORT.oemIdentification.identified++;
+    for (const part of group.parts) {
+      part._rawPartName = part._rawPartName ?? part.partName;
+      part._verifiedPartType = verifiedType;
+      part._verifiedIdentity = {
+        type: verifiedType,
+        categoryId: result.categoryId,
+        categoryName: result.categoryName,
+        source: 'ebay-browse',
+        matchCount: result.matchCount,
+      };
+      // Drive category keywords (buildCategoryKeywords), the enrichment prompt,
+      // and deterministic titles (resolvePartDisplayName) off the verified name.
+      part.partName = verifiedType;
+      part._shortPartName = verifiedType;
+      REPORT.oemIdentification.partsUpdated++;
+    }
   };
+
+  for (let i = 0; i < uniqueGroups.length; i += oemIdentifyConcurrency) {
+    const slice = uniqueGroups.slice(i, i + oemIdentifyConcurrency);
+    await Promise.all(slice.map(runGroup));
+  }
+
+  const s = oemIdentifier.getStats();
+  log.info(
+    `OEM identification: ${REPORT.oemIdentification.identified} anchored, ` +
+    `${REPORT.oemIdentification.lowConfidence} low-confidence, ` +
+    `${REPORT.oemIdentification.partsUpdated} rows updated ` +
+    `(browse calls=${s.calls}, cache hits=${s.cacheHits}, errors=${s.errors})`,
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1892,6 +2118,7 @@ async function enrichBatch(batchParts, vinData, options = {}) {
       vehicleBodyClass: vehicle.bodyClass || decoded?.bodyClass || '',
       vehicleDriveType: vehicle.driveType || decoded?.driveType || '',
       partName: part.partName,
+      verifiedPartType: part._verifiedPartType || '',
       partNumber: part.partNumber,
       note: part.note,
       category: getPartCategory(part, 'US')?.categoryName || part._category?.categoryName || '',
@@ -4856,6 +5083,18 @@ async function main() {
     fs.mkdirSync(CONFIG.outputDir, { recursive: true });
   }
 
+  // Donor vehicle context from the uploaded filename (e.g. "Q7 AUDI SILVER 2008.xlsx").
+  // Fills make/model/year for parts that lack a VIN or a descriptive sheet name so the
+  // AI identifies the correct part and the title leads with Year/Make/Model.
+  DONOR_VEHICLE = parseVehicleFromFilename(
+    process.env.PIPELINE_ORIGINAL_FILENAME || path.basename(CONFIG.input || ''),
+  );
+  if (DONOR_VEHICLE.make || DONOR_VEHICLE.model || DONOR_VEHICLE.year) {
+    log.info(
+      `Donor vehicle (from filename): ${`${DONOR_VEHICLE.year} ${DONOR_VEHICLE.make} ${DONOR_VEHICLE.model}`.trim()}`,
+    );
+  }
+
   // ── Step 1: Parse Input ──
   const parts = parseInputFile(CONFIG.input);
   if (parts.length === 0) {
@@ -4867,6 +5106,12 @@ async function main() {
   // ── Step 2: VIN Decoding ──
   const vinData = await decodeAllVins(parts);
   saveCheckpoint(parts, 'vin-decode');
+
+  // ── Step 2.5: OEM Part Identification (eBay Browse) ──
+  // Anchor each row's part name/type to eBay's live catalog before category
+  // mapping + enrichment so both use the verified component, not the noisy
+  // supplier description.
+  await identifyPartsByOem(parts);
 
   // ── Step 3: Category Mapping ──
   await mapCategories(parts, vinData);
