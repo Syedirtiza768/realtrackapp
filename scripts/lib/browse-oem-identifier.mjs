@@ -190,6 +190,26 @@ export function createOemIdentifier(options) {
     return best.value;
   }
 
+  /** Majority Type aspect from fetched item details — fallback when the histogram omits Type. */
+  function typeFromItems(items) {
+    const tally = new Map();
+    for (const item of items) {
+      const aspects = Array.isArray(item?.localizedAspects) ? item.localizedAspects : [];
+      const m = aspects.find((a) =>
+        TYPE_ASPECT_NAMES.includes(String(a?.name || '').toLowerCase()),
+      );
+      const v = m?.value ? String(m.value).trim() : '';
+      if (!v || v.length > 60) continue;
+      const k = v.toLowerCase();
+      const e = tally.get(k) ?? { count: 0, value: v };
+      e.count++;
+      tally.set(k, e);
+    }
+    let best = null;
+    for (const e of tally.values()) if (!best || e.count > best.count) best = e;
+    return best?.value || null;
+  }
+
   return {
     /**
      * @param {string} partNumber
@@ -248,7 +268,23 @@ export function createOemIdentifier(options) {
 
         // Confidence is gated on category agreement above; the Type is then just
         // the most common value in the histogram (top by matchCount, count >= 1).
-        const type = topTypeFromRefinements(refinement.aspectDistributions, 1);
+        let type = topTypeFromRefinements(refinement.aspectDistributions, 1);
+        // The histogram omits Type for some categories (e.g. Air Filter Housings)
+        // even when listings carry it. Only then fetch a couple items to recover
+        // it — so the common case still costs one call, with no Type-coverage loss.
+        if (!type) {
+          const inCat = summaries.filter(
+            (s) => String(s.categories?.[0]?.categoryId || '') === best.categoryId,
+          );
+          const details = [];
+          for (const s of inCat.slice(0, Math.max(0, itemFetch))) {
+            if (stats.calls >= dailyCap) break;
+            try {
+              details.push(await request(`/item/${encodeURIComponent(s.itemId)}`, undefined));
+            } catch { /* skip individual item */ }
+          }
+          type = typeFromItems(details);
+        }
         const result = {
           type,
           categoryId: best.categoryId,
