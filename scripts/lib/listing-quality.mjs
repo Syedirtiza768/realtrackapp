@@ -23,6 +23,21 @@ const BRAND_MAP = {
 
 const DISCLAIMER = 'Please verify part number compatibility before purchasing';
 
+/**
+ * Strip VIN blocks + duplicate make/model from a title (mirrors backend
+ * listing-guards.sanitizeTitle). The GridX source description embeds
+ * "Wauay54l98d068586, Audi, Q7, " before the part name; without this, that
+ * VIN + duplicate make/model leaks into the composed title.
+ */
+// Case-insensitive: GridX VINs arrive lowercase (e.g. "wauay54l98d068586").
+const VIN_BLOCK_RE =
+  /\s*[A-HJ-NPR-Z0-9]{17}\s*,\s*[A-Za-z][A-Za-z-]*,\s*[A-Za-z0-9]+,?\s*/gi;
+
+export function sanitizeTitle(title) {
+  const t = String(title ?? '').replace(VIN_BLOCK_RE, ' ');
+  return t.replace(/\s{2,}/g, ' ').trim();
+}
+
 export function trimTitle(title, mpn) {
   let t = title.replace(/\s+/g, ' ').trim();
   if (t.length <= 80) return t;
@@ -81,6 +96,13 @@ export function applyListingGuards(item, srcPart) {
   out.itemSpecifics = specifics;
   out.warranty = 'No Warranty';
   out.fitmentType = out.fitmentType || 'Direct Replacement';
+
+  // Strip VIN + duplicate make/model BEFORE trimming so they never reach the title.
+  const sanitized = sanitizeTitle(String(out.title ?? ''));
+  if (sanitized !== String(out.title ?? '')) {
+    out.title = sanitized;
+    fixes.push('TITLE_SANITIZED');
+  }
 
   const trimmed = trimTitle(String(out.title ?? ''), out.mpn);
   if (trimmed !== out.title) {

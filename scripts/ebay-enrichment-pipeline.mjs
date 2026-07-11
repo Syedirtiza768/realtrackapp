@@ -26,7 +26,7 @@ import XLSX from 'xlsx';
 import OpenAI from 'openai';
 import axios from 'axios';
 import { createModelRouter } from './lib/model-router.mjs';
-import { applyListingGuards, validateListing } from './lib/listing-quality.mjs';
+import { applyListingGuards, validateListing, sanitizeTitle } from './lib/listing-quality.mjs';
 import { createConcurrencyPool, isRateLimitError } from './lib/concurrency-pool.mjs';
 import {
   PROMPT_VERSION as MOTORS_PROMPT_VERSION,
@@ -1251,6 +1251,15 @@ function parseVehicleFromDescription(desc, brand) {
 function extractPartNameFromDescription(desc, vehicle = {}) {
   if (!desc) return '';
   let text = clean(desc);
+
+  // GridX rows embed "<17-char VIN>, Make, Model," before the part name — strip it
+  // at the source so the VIN/duplicate make-model never reaches the name or title.
+  text = text
+    .replace(
+      /\b[A-HJ-NPR-Z0-9]{17}\s*,\s*[A-Za-z][A-Za-z-]*\s*,\s*[A-Za-z0-9]+\s*,?\s*/gi,
+      '',
+    )
+    .trim();
 
   text = text
     .replace(/\bthis is\b[^,]*,?\s*/gi, '')
@@ -2576,13 +2585,17 @@ function buildSeoTitle(vehicle, part, normalizedPN) {
   const partName = resolvePartDisplayName(part, vehicle);
   const fitments = part._fitments || part._enriched?.compatibility || [];
 
-  return buildPlatformSeoTitle({
-    vehicle,
-    partName,
-    mpn: normalizedPN,
-    placement,
-    fitments,
-  });
+  // sanitizeTitle strips any VIN + duplicate make/model that leaked through the
+  // part name (e.g. un-anchored GridX rows) so the deterministic title is clean.
+  return sanitizeTitle(
+    buildPlatformSeoTitle({
+      vehicle,
+      partName,
+      mpn: normalizedPN,
+      placement,
+      fitments,
+    }),
+  );
 }
 
 function buildBasicDescription(part, vehicle) {
