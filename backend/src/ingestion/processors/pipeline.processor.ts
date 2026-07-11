@@ -1599,26 +1599,26 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             true,
           );
         }
-        // Re-run safe: a pipeline job's listings are identified by the stable
-        // (pipeline_job_id, sourceRowNumber) pair. Match existing rows on that and
-        // UPDATE them in place — preserving row ids and FK links (ai_enhancements,
-        // channel_listings, image_assets) — then insert only genuinely new rows.
-        // The uq_listing_source_row constraint (sourceFileName, sheetName,
-        // sourceRowNumber) is date-stamped via the output filename, so it is NOT
-        // stable across days and cannot be the conflict target — the previous
-        // ON CONFLICT ("customLabelSku","marketplace") upsert aborted the whole
-        // batch with a uq_listing_source_row violation whenever a re-run's SKU no
-        // longer matched its old row, so re-runs never refreshed titles.
-        const existingRows: Array<{ id: string; sourceRowNumber: number | null }> =
+        // Re-run safe: the stable part identity within a pipeline job/marketplace
+        // is the SKU (customLabelSku). Match existing rows on it and UPDATE them
+        // in place — preserving row ids and FK links (ai_enhancements,
+        // channel_listings, image_assets) — then insert only genuinely new SKUs.
+        // sourceRowNumber is the XLSX row position, which shifts between runs as
+        // fitment rows change, and uq_listing_source_row (sourceFileName,
+        // sheetName, sourceRowNumber) is date-stamped via the output filename —
+        // so neither is a stable key. The previous ON CONFLICT
+        // ("customLabelSku","marketplace") upsert aborted the whole batch with a
+        // uq_listing_source_row violation whenever an INSERT was attempted, so
+        // re-runs never refreshed titles.
+        const existingRows: Array<{ id: string; customLabelSku: string | null }> =
           await this.listingRepo.query(
-            `SELECT id, "sourceRowNumber" FROM "listing_records" WHERE pipeline_job_id = $1 AND "marketplace" = $2`,
+            `SELECT id, "customLabelSku" FROM "listing_records" WHERE pipeline_job_id = $1 AND "marketplace" = $2`,
             [jobId, marketplace],
           );
-        const existingIdByRow = new Map<number, string>();
+        const existingIdBySku = new Map<string, string>();
         for (const r of existingRows) {
-          if (r.sourceRowNumber != null) {
-            existingIdByRow.set(Number(r.sourceRowNumber), r.id);
-          }
+          const s = r.customLabelSku?.trim();
+          if (s) existingIdBySku.set(s, r.id);
         }
 
         const rowsToUpdate: Array<{
@@ -1626,16 +1626,16 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           lr: (typeof listingRecords)[0];
         }> = [];
         const rowsToInsert: typeof listingRecords = [];
-        const seenSourceRows = new Set<number>();
+        const seenSku = new Set<string>();
         for (const lr of listingRecords) {
-          const rn = lr.sourceRowNumber == null ? null : Number(lr.sourceRowNumber);
-          if (rn == null) {
+          const sku = lr.customLabelSku?.trim();
+          if (!sku) {
             rowsToInsert.push(lr);
             continue;
           }
-          if (seenSourceRows.has(rn)) continue; // guard intra-file duplicate rows
-          seenSourceRows.add(rn);
-          const existingId = existingIdByRow.get(rn);
+          if (seenSku.has(sku)) continue; // guard intra-file duplicate SKUs
+          seenSku.add(sku);
+          const existingId = existingIdBySku.get(sku);
           if (existingId) rowsToUpdate.push({ id: existingId, lr });
           else rowsToInsert.push(lr);
         }
