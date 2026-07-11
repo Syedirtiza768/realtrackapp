@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Package, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Package, Search } from 'lucide-react';
 import { sanitizeHighlight } from '../../lib/sanitize';
 import { getFirstImageUrl } from '../../lib/searchApi';
 import type { SearchItem, SortMode } from '../../types/search';
@@ -109,13 +109,14 @@ export default function CatalogTable({
                 </button>
               </th>
               <th className="px-3 py-3">Status</th>
+              <th className="w-10 px-3 py-3 text-center">eBay</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {loading && items.length === 0 &&
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  <td colSpan={11} className="px-3 py-4">
+                  <td colSpan={12} className="px-3 py-4">
                     <div className="h-4 rounded bg-slate-200 dark:bg-slate-800" />
                   </td>
                 </tr>
@@ -123,7 +124,7 @@ export default function CatalogTable({
 
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-6 py-16 text-center">
+                <td colSpan={12} className="px-6 py-16 text-center">
                   <Search className="mx-auto mb-3 text-slate-300 dark:text-slate-600" size={28} />
                   <p className="font-medium text-slate-700 dark:text-slate-200">No results found</p>
                   <p className="mt-1 text-xs text-slate-500">Try adjusting search or filters.</p>
@@ -212,6 +213,21 @@ export default function CatalogTable({
                           : undefined
                       }
                     />
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    {item.ebayListingId ? (
+                      <a
+                        href={`https://www.ebay.com/itm/${item.ebayListingId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`View on eBay (${item.ebayListingId})`}
+                        className="inline-flex items-center justify-center rounded-md p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                      >
+                        <ExternalLink size={15} />
+                      </a>
+                    ) : (
+                      <span className="text-slate-300 dark:text-slate-700">—</span>
+                    )}
                   </td>
                 </tr>
               );

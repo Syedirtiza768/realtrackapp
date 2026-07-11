@@ -101,6 +101,15 @@ describe('fitment-mvl.util', () => {
     expect(payload?.compatibleProducts[0].notes).toBe('AWD only; sedan');
   });
 
+  it('deduplicates identical structured compatibility rows', () => {
+    const payload = fitmentDataToCompatibilityPayload([
+      { make: 'Audi', model: 'A4', year: '2018', trim: 'Premium' },
+      { Make: 'Audi', Model: 'A4', Year: '2018', Trim: 'Premium' },
+    ]);
+
+    expect(payload?.compatibleProducts).toHaveLength(1);
+  });
+
   it('ignores invalid year ranges', () => {
     const payload = fitmentDataToCompatibilityPayload([
       { make: 'BMW', model: 'X5', yearStart: 1800, yearEnd: 2020 },

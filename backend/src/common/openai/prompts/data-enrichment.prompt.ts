@@ -19,7 +19,10 @@ Never fabricate part numbers or brand names.`,
 
 Fill in any missing fields. For existing fields, validate and improve them if possible.
 
-TITLE RULE: The title MUST reflect the actual condition from rawData.condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used". NEVER include VIN numbers, raw OEM part numbers, or duplicate make/model in the title — the title should read naturally: "Year Make Model PartName [Condition]".
+TITLE RULE: The title MUST reflect the actual condition from rawData.condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used". NEVER include VIN numbers or duplicate make/model in the title.
+TITLE STRUCTURE (strictly follow): [Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used
+Example: 2012-2018 Audi A6 C7 Front Left Fog Light 8T0941699E OEM Used
+Max 80 characters. Put Year, Make, Model first. Include the OEM part number. Include position (Left/Right, Front/Rear) when applicable. Add 'OEM Used' at end if space permits.
 
 Return JSON with these exact keys:
 {

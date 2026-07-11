@@ -132,6 +132,7 @@ export function fitmentDataToCompatibilityPayload(
   if (!Array.isArray(fitmentData) || fitmentData.length === 0) return undefined;
 
   const compatibleProducts: EbayCompatibilityPayload['compatibleProducts'] = [];
+  const seenRows = new Set<string>();
 
   for (const raw of fitmentData) {
     if (options?.excludeRejected !== false && isRejectedFitmentRow(raw)) {
@@ -159,6 +160,11 @@ export function fitmentDataToCompatibilityPayload(
       if (engine) properties.push({ name: 'Engine', value: engine });
       if (submodel) properties.push({ name: 'Submodel', value: submodel });
 
+      const rowKey = properties
+        .map((property) => `${property.name}:${property.value}`)
+        .join('|');
+      if (seenRows.has(rowKey)) continue;
+      seenRows.add(rowKey);
       compatibleProducts.push({
         compatibilityProperties: properties,
         ...(notes ? { notes } : {}),

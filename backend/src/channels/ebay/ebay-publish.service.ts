@@ -69,6 +69,7 @@ import {
   isUsedEbayCondition,
   localizeAspectsForMarketplace,
 } from './ebay-listing-aspects.util.js';
+import { fitmentDataToCompatibilityPayload } from '../../fitment/fitment-mvl.util.js';
 
 /**
  * Publishing request payload from the frontend / caller.
@@ -155,6 +156,7 @@ export interface PublishResult {
 @Injectable()
 export class EbayPublishService {
   private readonly logger = new Logger(EbayPublishService.name);
+  private readonly compatibilityCategoryCache = new Map<string, boolean>();
 
   constructor(
     private readonly config: ConfigService,
@@ -235,6 +237,113 @@ export class EbayPublishService {
     );
   }
 
+  private async resolveCatalogProductForPublish(
+    listingId: string,
+    sku?: string | null,
+  ): Promise<CatalogProduct | null> {
+    const byId = await this.catalogRepo.findOne({ where: { id: listingId } });
+    if (byId) return byId;
+    const normalizedSku = sku?.trim();
+    if (!normalizedSku) return null;
+    return this.catalogRepo.findOne({ where: { sku: normalizedSku } });
+  }
+
+  private compatibilityFromCatalog(
+    catalog: CatalogProduct | null,
+  ): EbayCompatibilityPayload | undefined {
+    if (!catalog) return undefined;
+    const source =
+      Array.isArray(catalog.fitmentData) && catalog.fitmentData.length > 0
+        ? catalog.fitmentData
+        : Array.isArray(catalog.fitmentRows) && catalog.fitmentRows.length > 0
+          ? catalog.fitmentRows
+          : undefined;
+    const compatibility = fitmentDataToCompatibilityPayload(source);
+    if (source?.length && !compatibility) {
+      throw new BadRequestException(
+        'Structured fitment rows exist but none contain a valid Year, Make, and Model. Correct or validate fitment before publishing.',
+      );
+    }
+    return compatibility;
+  }
+
+  private async categoryRequiresCompatibility(
+    store: Store,
+    categoryId: string,
+    account?: ConnectedEbayAccount | null,
+  ): Promise<boolean> {
+    const marketplaceId = account
+      ? this.resolvePublishMarketplaceId(account, store)
+      : resolveMarketplaceId(store);
+    const marketplace = this.mpConfig.require(marketplaceId);
+    if (!marketplace.supportsMotorsFitment) return false;
+
+    const normalizedCategory = categoryId.trim();
+    if (!normalizedCategory) return false;
+    const cacheKey = `${marketplace.categoryTreeId}:${normalizedCategory}`;
+    const cached = this.compatibilityCategoryCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    try {
+      const properties = await this.taxonomyApi.getCompatibilityProperties(
+        marketplace.categoryTreeId,
+        normalizedCategory,
+      );
+      const names = new Set(
+        properties.map((property) =>
+          property.propertyName.trim().toLowerCase(),
+        ),
+      );
+      const required =
+        names.has('year') && names.has('make') && names.has('model');
+      this.compatibilityCategoryCache.set(cacheKey, required);
+      return required;
+    } catch (err: unknown) {
+      throw new BadRequestException(
+        `Could not verify whether eBay category ${normalizedCategory} requires vehicle compatibility. Publishing is blocked to prevent a description-only fitment listing. ${err instanceof Error ? err.message : ''}`.trim(),
+      );
+    }
+  }
+
+  private compatibilityRowKey(
+    row: EbayCompatibilityPayload['compatibleProducts'][number],
+  ): string {
+    return row.compatibilityProperties
+      .map((property) => ({
+        name: property.name.trim().toLowerCase(),
+        value: property.value.trim().toLowerCase(),
+      }))
+      .filter((property) => property.name && property.value)
+      .sort((a, b) =>
+        `${a.name}:${a.value}`.localeCompare(`${b.name}:${b.value}`),
+      )
+      .map((property) => `${property.name}:${property.value}`)
+      .join('|');
+  }
+
+  private assertCompatibilityPersisted(
+    sku: string,
+    expected: EbayCompatibilityPayload,
+    actual: EbayCompatibilityPayload,
+  ): void {
+    const actualRows = new Set(
+      (actual.compatibleProducts ?? [])
+        .map((row) => this.compatibilityRowKey(row))
+        .filter(Boolean),
+    );
+    const missingRows = expected.compatibleProducts.filter(
+      (row) => !actualRows.has(this.compatibilityRowKey(row)),
+    );
+    if (missingRows.length > 0) {
+      throw new BadRequestException(
+        `eBay compatibility verification failed for SKU ${sku}: ${missingRows.length} of ${expected.compatibleProducts.length} structured fitment row(s) were not persisted. The offer was not published.`,
+      );
+    }
+    this.logger.log(
+      `Verified ${expected.compatibleProducts.length} structured eBay compatibility row(s) for SKU ${sku}`,
+    );
+  }
+
   /** Backfill SKU, text, category, condition, and pricing from listing_records when the client sends stubs. */
   private async enrichPublishRequest(
     req: PublishRequest,
@@ -274,6 +383,10 @@ export class EbayPublishService {
     const sku = skuLooksLikeListingId
       ? listing.customLabelSku?.trim() || req.sku
       : req.sku.trim();
+    const catalog = await this.resolveCatalogProductForPublish(listing.id, sku);
+    const compatibility = req.compatibility?.compatibleProducts?.length
+      ? req.compatibility
+      : this.compatibilityFromCatalog(catalog);
 
     const parsedPrice = parseFloat(listing.startPrice ?? '');
     const parsedQty = parseInt(listing.quantity ?? '', 10);
@@ -321,6 +434,7 @@ export class EbayPublishService {
       conditionDescription,
       listingDuration,
       aspects,
+      compatibility,
       price:
         req.price > 0
           ? req.price
@@ -648,12 +762,42 @@ export class EbayPublishService {
       where: { primaryStoreId: storeId },
     });
 
+    if (!req.compatibility?.compatibleProducts?.length) {
+      try {
+        const requiresCompatibility = await this.categoryRequiresCompatibility(
+          store,
+          req.categoryId,
+          account,
+        );
+        if (requiresCompatibility) {
+          return {
+            storeId,
+            storeName: store.storeName,
+            success: false,
+            error:
+              'This eBay Motors category supports vehicle compatibility, but no validated structured fitment rows were found. Add Year, Make, and Model fitment before publishing; description text alone is not accepted.',
+          };
+        }
+      } catch (err: unknown) {
+        return {
+          storeId,
+          storeName: store.storeName,
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Could not validate eBay fitment requirements',
+        };
+      }
+    }
+
     const fallbackMode = parseSellerpunditPublishFallbackMode(
       this.config.get<string>('SELLERPUNDIT_PUBLISH_FALLBACK'),
     );
 
     if (
       account?.connectionSource === 'sellerpundit' &&
+      !req.compatibility?.compatibleProducts?.length &&
       shouldAttemptSellerpunditBulkCreate(fallbackMode, req.forceDirectEbay)
     ) {
       const spResult = await this.publishViaSellerpundit(store, account, req);
@@ -709,6 +853,15 @@ export class EbayPublishService {
           storeId,
           req.sku,
           req.compatibility,
+        );
+        const persistedCompatibility = await this.inventoryApi.getCompatibility(
+          storeId,
+          req.sku,
+        );
+        this.assertCompatibilityPersisted(
+          req.sku,
+          req.compatibility,
+          persistedCompatibility,
         );
       }
 

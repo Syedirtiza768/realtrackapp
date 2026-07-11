@@ -460,6 +460,7 @@ export class SearchService {
       teamName: row.teamName ?? null,
       teamColor: row.teamColor ?? null,
       shippingProfileName: row.r_shippingProfileName ?? null,
+      ebayListingId: row.r_ebayListingId ?? null,
       catalogStatus: deriveCatalogStatus({
         status: row.r_status,
         publishedAt: row.r_publishedAt,

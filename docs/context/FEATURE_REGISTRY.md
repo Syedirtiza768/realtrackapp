@@ -31,7 +31,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Orders | `/orders` | `orders` | Implemented | eBay order import |
 | eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth |
 | eBay store detail / policies | `/settings/integrations/ebay/:id[/policies]` | `integrations/ebay` | Partial | Business-policy mapping/sync |
-| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Partial | Publish flow; verify against live API |
+| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Partial | Structured fitment is derived centrally, required for compatibility-capable Motors categories, written/read back before offer publish; live multi-store verification remains operationally required |
 | eBay OAuth callback | `/channels/ebay/callback` | `integrations/ebay` | Implemented | Public callback |
 | eBay/marketplace preview | `/preview` | `listings` | Implemented | Listing preview |
 | Channels (multi-marketplace) | — | `channels` | Partial | Shopify/Amazon/Walmart scaffolding |

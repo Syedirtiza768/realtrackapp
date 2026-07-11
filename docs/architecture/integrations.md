@@ -27,7 +27,14 @@
   `catalog_products.fitment_data`; `fitment_rows` is used as a fallback, and
   rows tagged `rejected` (via `MvlStatus` or `validationStatus`) are skipped.
   `fitment-mvl.util.ts` normalizes both field naming conventions and expands
-  `yearStart`/`yearEnd` ranges into per-year compatibility rows.
+  `yearStart`/`yearEnd` ranges into deduplicated per-year compatibility rows.
+  `EbayPublishService` applies this derivation to every publish entry point,
+  including bulk `publish-by-listings`. For fitment-capable Motors categories,
+  publish fails closed when no validated Year/Make/Model rows exist. When rows
+  are present, SellerPundit-connected stores use the direct Inventory API path;
+  the service reads `product_compatibility` back and verifies all requested
+  rows before publishing the offer. Description HTML is never treated as a
+  substitute for eBay's structured compatibility section.
 - Reference docs: `docs/EBAY_MULTI_STORE_DEVELOPER_HANDOFF.md`,
   `docs/ebay-multi-store-architecture.md`, `docs/ebay-api-integration-notes.md`,
   `docs/ebay-client-onboarding.md`.

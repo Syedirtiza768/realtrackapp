@@ -14,7 +14,10 @@ export const LISTING_GENERATION_PROMPT: PromptTemplate = {
 {{productData}}
 Category: {{categoryName}} | Condition: {{condition}}
 
-TITLE RULE: The title MUST reflect the stated Condition. If Condition is Used/Refurbished, do NOT include "New" in the title. If Condition is New, do NOT include "Used". NEVER include VIN numbers, raw OEM part numbers, or duplicate make/model in the title — the title should read naturally: "Year Make Model PartName [Condition]".
+TITLE RULE: The title MUST reflect the stated Condition. If Condition is Used/Refurbished, do NOT include "New" in the title. If Condition is New, do NOT include "Used". NEVER include VIN numbers or duplicate make/model in the title.
+TITLE STRUCTURE (strictly follow): [Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used
+Example: 2012-2018 Audi A6 C7 Front Left Fog Light 8T0941699E OEM Used
+Max 80 characters. Put Year, Make, Model first. Include the OEM part number. Include position (Left/Right, Front/Rear) when applicable. Add 'OEM Used' at end if space permits.
 
 Return JSON:
 {

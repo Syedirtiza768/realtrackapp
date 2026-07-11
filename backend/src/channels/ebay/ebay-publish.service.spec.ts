@@ -23,12 +23,23 @@ function createRepo<T extends Record<string, unknown>>() {
 }
 
 function mockInventoryApi() {
+  let compatibility: { compatibleProducts: unknown[] } = {
+    compatibleProducts: [],
+  };
   return {
     createOrReplaceItem: jest.fn().mockResolvedValue(undefined),
     createOffer: jest.fn().mockResolvedValue({ offerId: 'offer-123' }),
     updateOffer: jest.fn().mockResolvedValue(undefined),
     publishOffer: jest.fn().mockResolvedValue({ listingId: 'listing-456' }),
-    setCompatibility: jest.fn().mockResolvedValue(undefined),
+    setCompatibility: jest
+      .fn()
+      .mockImplementation((_storeId, _sku, payload) => {
+        compatibility = payload;
+        return Promise.resolve(undefined);
+      }),
+    getCompatibility: jest
+      .fn()
+      .mockImplementation(() => Promise.resolve(compatibility)),
     withdrawOffer: jest.fn().mockResolvedValue(undefined),
     bulkUpdatePriceQuantity: jest.fn().mockResolvedValue(undefined),
     ensureMerchantLocation: jest.fn().mockResolvedValue('default-loc'),
@@ -81,6 +92,7 @@ describe('EbayPublishService', () => {
   let catalogRepo: ReturnType<typeof createRepo>;
   let inventoryApi: ReturnType<typeof mockInventoryApi>;
   let auth: ReturnType<typeof mockAuth>;
+  let taxonomyApi: { getCompatibilityProperties: jest.Mock };
 
   beforeEach(() => {
     storeRepo = createRepo();
@@ -91,11 +103,14 @@ describe('EbayPublishService', () => {
     catalogRepo = createRepo();
     inventoryApi = mockInventoryApi();
     auth = mockAuth();
+    taxonomyApi = {
+      getCompatibilityProperties: jest.fn().mockResolvedValue([]),
+    };
 
     svc = new EbayPublishService(
       mockConfig(),
       inventoryApi as any,
-      {} as any, // taxonomyApi
+      taxonomyApi as any,
       auth as any,
       {} as any, // sellAccount
       {
@@ -123,6 +138,7 @@ describe('EbayPublishService', () => {
           currency: 'USD',
           locale: 'en_US',
           categoryTreeId: '0',
+          supportsMotorsFitment: true,
         }),
       } as any,
       storeRepo,
@@ -259,6 +275,64 @@ describe('EbayPublishService', () => {
           ],
         },
       );
+    });
+
+    it('blocks a fitment-capable Motors category when structured rows are missing', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({ cBrand: 'TRW' });
+      catalogRepo.findOne = jest.fn().mockResolvedValue(null);
+      taxonomyApi.getCompatibilityProperties.mockResolvedValue([
+        { propertyName: 'Year', localizedPropertyName: 'Year' },
+        { propertyName: 'Make', localizedPropertyName: 'Make' },
+        { propertyName: 'Model', localizedPropertyName: 'Model' },
+      ]);
+
+      const results = await svc.publish(
+        validRequest({ compatibility: undefined }),
+      );
+
+      expect(results[0].success).toBe(false);
+      expect(results[0].error).toContain('no validated structured fitment');
+      expect(inventoryApi.publishOffer).not.toHaveBeenCalled();
+    });
+
+    it('does not publish when eBay compatibility readback is missing rows', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({ cBrand: 'TRW' });
+      inventoryApi.getCompatibility = jest.fn().mockResolvedValue({
+        compatibleProducts: [],
+      });
+
+      const results = await svc.publish(
+        validRequest({
+          compatibility: {
+            compatibleProducts: [
+              {
+                compatibilityProperties: [
+                  { name: 'Year', value: '2018' },
+                  { name: 'Make', value: 'Toyota' },
+                  { name: 'Model', value: 'Camry' },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(results[0].success).toBe(false);
+      expect(results[0].error).toContain('compatibility verification failed');
+      expect(inventoryApi.publishOffer).not.toHaveBeenCalled();
     });
 
     it('handles offer-already-exists (25002) by updating existing offer', async () => {

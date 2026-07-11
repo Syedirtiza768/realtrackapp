@@ -99,6 +99,8 @@ export interface SearchItem {
   teamColor?: string | null;
   catalogStatus?: CatalogListingStatus;
   shippingProfileName?: string | null;
+  /** eBay item ID (set when listing is published to eBay) */
+  ebayListingId?: string | null;
 }
 
 /* -- Suggestions ----------------------------------------------------- */
