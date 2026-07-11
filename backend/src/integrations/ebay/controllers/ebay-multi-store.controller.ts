@@ -22,6 +22,8 @@ import { EbayIntegrationPermissionsService } from '../services/ebay-integration-
 import { EbayListingChannel } from '../entities/ebay-listing-channel.entity.js';
 import { EbayApiError } from '../entities/ebay-api-error.entity.js';
 import { ListingActionLog } from '../entities/listing-action-log.entity.js';
+import { EbayBulkPublishJobDto } from '../dto/ebay-integrations.dto.js';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('ebay-multi-store')
 @ApiBearerAuth()
@@ -71,6 +73,36 @@ export class EbayMultiStoreController {
     return { jobId: job.id, status: job.status, skippedTargets: skipped };
   }
 
+  @Post('listings/publish-bulk')
+  @RequirePermissions('ebay.publish')
+  @ApiOperation({
+    summary:
+      'Enqueue up to 500 listings as one durable multi-store publish job',
+  })
+  async publishBulk(
+    @Body() dto: EbayBulkPublishJobDto,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId, member } =
+      await this.permissions.resolveOrganization(user.id, dto.organizationId);
+    this.permissions.assertCanPublish(member.role);
+    const result = await this.listings.createBulkPublishJob({
+      organizationId,
+      requestedByUserId: user.id,
+      listingIds: dto.listingIds,
+      storeIds: dto.storeIds,
+      idempotencyKey: dto.idempotencyKey,
+    });
+    return {
+      jobId: result.job.id,
+      status: result.job.status,
+      targetCount: result.targetCount,
+      dailyLimit: result.dailyLimit,
+      dailyUsed: result.dailyUsed,
+      dailyRemaining: Math.max(0, result.dailyLimit - result.dailyUsed),
+    };
+  }
+
   @Get('listing-jobs/:id')
   @ApiOperation({ summary: 'Get listing job status' })
   async getJob(
@@ -84,6 +116,11 @@ export class EbayMultiStoreController {
   }
 
   @Get('listing-jobs/:id/targets')
+  @Throttle({
+    short: { limit: 20, ttl: 1_000 },
+    medium: { limit: 500, ttl: 60_000 },
+    long: { limit: 5_000, ttl: 3_600_000 },
+  })
   @ApiOperation({ summary: 'List per-store targets for a job' })
   async getJobTargets(
     @Param('id', ParseUUIDPipe) id: string,

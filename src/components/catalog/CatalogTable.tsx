@@ -23,7 +23,7 @@ interface Props {
   onSelectAll?: (ids: string[]) => void;
 }
 
-const PAGE_SIZE_OPTIONS = [25, 50, 100];
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 500];
 
 function formatPrice(raw: string | null) {
   if (!raw) return '—';

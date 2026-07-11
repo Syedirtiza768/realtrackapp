@@ -142,3 +142,4 @@
 ---
 
 *Reorganized: 2026-06-06.*
+| `EBAY_DAILY_PUBLISH_TARGET_LIMIT` | `5000` | Organization-wide UTC-day quota for durable eBay listing/store publish targets; maximum 5,000 |

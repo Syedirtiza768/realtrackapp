@@ -46,6 +46,9 @@ Four Docker Compose services (`docker-compose.yml`):
 - Postgres seeds from `listingpro.dump` on first volume init (idempotent-ish;
   `pg_restore` warnings on existing objects are tolerated).
 - eBay listing template `.xlsx` files are mounted read-only into the backend.
+- Durable eBay bulk publishing uses the existing Redis/BullMQ service and
+  `ebay_listing_jobs` tables. `EBAY_DAILY_PUBLISH_TARGET_LIMIT` defaults to and
+  is hard-capped at 5,000 listing/store targets per organization per UTC day.
 
 ## Healthchecks
 

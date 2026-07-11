@@ -48,6 +48,31 @@ export interface BatchPublishResult {
   results: PublishResult[];
 }
 
+export interface DurableBulkPublishJob {
+  jobId: string;
+  status: string;
+  targetCount: number;
+  dailyLimit: number;
+  dailyUsed: number;
+  dailyRemaining: number;
+}
+
+export interface DurableBulkPublishTarget {
+  id: string;
+  catalogProductId: string;
+  ebayAccountId: string;
+  marketplaceId: string;
+  storeId: string | null;
+  storeName: string | null;
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'skipped';
+  resultPayload: {
+    sourceListingId?: string;
+    offerId?: string;
+    listingId?: string;
+  } | null;
+  errorPayload: { message?: string; errors?: string[] } | null;
+}
+
 /* ── Endpoints ── */
 
 /**
@@ -80,6 +105,24 @@ export function publishListingIdsToEbay(
   },
 ): Promise<BatchPublishResult[]> {
   return authPost(`${BASE}/publish-by-listings`, { listingIds, storeIds, ...options });
+}
+
+export function createDurableBulkPublishJob(
+  listingIds: string[],
+  storeIds: string[],
+  idempotencyKey: string,
+): Promise<DurableBulkPublishJob> {
+  return authPost('/api/ebay/listings/publish-bulk', {
+    listingIds,
+    storeIds,
+    idempotencyKey,
+  });
+}
+
+export function fetchDurableBulkPublishTargets(
+  jobId: string,
+): Promise<DurableBulkPublishTarget[]> {
+  return fetchWithAuth(`/api/ebay/listing-jobs/${encodeURIComponent(jobId)}/targets`);
 }
 
 /**

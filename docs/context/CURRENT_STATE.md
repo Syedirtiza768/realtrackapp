@@ -66,6 +66,11 @@
 
 ## Latest Session Summary
 
+**2026-07-12** — High-volume catalog publishing:
+- Catalog search/page size supports 500 rows.
+- Bulk eBay publish submits one durable BullMQ job for up to 500 listings and 10 stores, with per-target persistence, concurrency 5, transient retries, and progress polling.
+- Organization quota is 5,000 listing/store publish targets per UTC day; normal application throttles remain unchanged while job-progress polling has scoped higher limits.
+
 **2026-07-11** — Pipeline `1c3a0f2a` two-store publish hardening:
 - Repaired all 903 listing and catalog rows from non-Motors/non-leaf categories to verified eBay Motors leaf `9886` (`Other Car & Truck Parts & Accessories`) and published the complete pipeline to BLACKLINEAUTOPARTS and Primemotive.
 - Catalog bulk publishing now submits five listings per authenticated backend request, retries only transiently failed store/listing pairs, and uses throttle-aware exponential backoff.

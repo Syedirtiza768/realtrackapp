@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsOptional,
@@ -54,6 +56,28 @@ export class EbayPublishJobDto {
   @ValidateNested({ each: true })
   @Type(() => EbayPublishTargetDto)
   targets!: EbayPublishTargetDto[];
+
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
+}
+
+export class EbayBulkPublishJobDto {
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @IsUUID(undefined, { each: true })
+  listingIds!: string[];
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @IsUUID(undefined, { each: true })
+  storeIds!: string[];
 
   @IsOptional()
   @IsString()

@@ -427,6 +427,18 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 
 ## Other Modules
 
+### Durable eBay bulk publishing
+
+| Method | Path | Purpose | Permission |
+|--------|------|---------|------------|
+| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; enforces the 5,000 target/day organization quota | `ebay.publish` |
+| GET | `/api/ebay/listing-jobs/:id` | Read durable publish-job status | `ebay.view` |
+| GET | `/api/ebay/listing-jobs/:id/targets` | Read per-listing/per-store progress and results | `ebay.view` |
+
+Bulk jobs persist in `ebay_listing_jobs` / `ebay_listing_job_targets` and run
+through the `ebay-listing-publish` BullMQ queue at bounded concurrency. The
+submission request is idempotent when `idempotencyKey` is supplied.
+
 ### Automation
 
 **Base**: `/api/automation-rules` | `automation.*`

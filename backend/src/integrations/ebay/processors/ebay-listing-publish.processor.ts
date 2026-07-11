@@ -14,7 +14,23 @@ import { EbayPublishService } from '../../../channels/ebay/ebay-publish.service.
 import { Store } from '../../../channels/entities/store.entity.js';
 import type { PublishErrorPayload } from '../../sellerpundit/sellerpundit.types.js';
 
-@Processor('ebay-listing-publish')
+class RetriablePublishError extends Error {}
+
+function isTransientPublishFailure(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return [
+    'product not found',
+    'core inventory service internal error',
+    'status code 500',
+    'temporarily unavailable',
+    'timed out',
+    'timeout',
+    'rate limit',
+    'too many requests',
+  ].some((marker) => normalized.includes(marker));
+}
+
+@Processor('ebay-listing-publish', { concurrency: 5 })
 export class EbayListingPublishProcessor extends WorkerHost {
   private readonly logger = new Logger(EbayListingPublishProcessor.name);
 
@@ -150,6 +166,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
         await this.targetRepo.update(target.id, {
           status: 'success',
           resultPayload: {
+            ...(target.resultPayload ?? {}),
             offerId: r.offerId,
             listingId: r.listingId,
             warnings: [...v.warnings, ...built.warnings],
@@ -188,19 +205,43 @@ export class EbayListingPublishProcessor extends WorkerHost {
         ch.lastErrorMessage = null;
         await this.channelRepo.save(ch);
       } else {
+        const message = r?.error ?? 'Publish failed';
+        const maxAttempts = job.opts.attempts ?? 1;
+        if (
+          isTransientPublishFailure(message) &&
+          job.attemptsMade + 1 < maxAttempts
+        ) {
+          await this.targetRepo.update(target.id, {
+            status: 'pending',
+            errorPayload: {
+              source: 'ebay',
+              stage: 'bulk_create',
+              message,
+              errors: [message],
+            } satisfies PublishErrorPayload,
+          });
+          await this.refreshJobStatus(listingJob.id);
+          throw new RetriablePublishError(message);
+        }
         await this.targetRepo.update(target.id, {
           status: 'failed',
           errorPayload: {
             source: 'ebay',
             stage: 'bulk_create',
-            message: r?.error ?? 'Publish failed',
-            errors: [r?.error ?? 'Publish failed'],
+            message,
+            errors: [message],
           } satisfies PublishErrorPayload,
         });
       }
 
       await this.refreshJobStatus(listingJob.id);
     } catch (err: unknown) {
+      if (err instanceof RetriablePublishError) {
+        this.logger.warn(
+          `Publish target ${target.id} will retry after transient failure: ${err.message}`,
+        );
+        throw err;
+      }
       this.logger.error(`Publish target ${target.id} crashed`, err);
       await this.targetRepo.update(target.id, {
         status: 'failed',

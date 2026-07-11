@@ -12,8 +12,8 @@ export class SearchQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(200)
-  limit?: number; // default 60, max 200
+  @Max(500)
+  limit?: number; // default 60, max 500
 
   @IsOptional()
   @Type(() => Number)

@@ -103,6 +103,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_DEFAULT_INVENTORY_STATE` | `TX` | Ship-from state/province |
 | `EBAY_DEFAULT_INVENTORY_POSTAL_CODE` | `77001` | Ship-from postal code |
 | `EBAY_DEFAULT_INVENTORY_COUNTRY` | `US` | Ship-from country (ISO) |
+| `EBAY_DAILY_PUBLISH_TARGET_LIMIT` | `5000` | Organization-wide UTC-day quota for listing/store publish targets; hard-capped at 5,000 |
 
 Per-store override: set `stores.config.shipFromAddress` (object with the same
 field names) or `stores.location_key` / `config.locationKey`.

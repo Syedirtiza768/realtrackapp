@@ -109,6 +109,11 @@ docker compose up -d --build
 curl http://localhost:4191/api/health  # verify
 ```
 
+For high-volume eBay publishing, Redis must remain persistent and healthy so
+durable jobs can resume after backend restarts. The optional
+`EBAY_DAILY_PUBLISH_TARGET_LIMIT` setting defaults to 5,000 and cannot raise the
+application maximum above 5,000 targets per organization per UTC day.
+
 ### PM2 Alternative
 
 ```bash

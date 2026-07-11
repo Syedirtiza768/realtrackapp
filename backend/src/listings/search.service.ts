@@ -230,7 +230,7 @@ export class SearchService {
    * ──────────────────────────────────────────────────────── */
   async search(dto: SearchQueryDto, user?: User): Promise<SearchResult> {
     const start = Date.now();
-    const limit = Math.min(Number(dto.limit ?? 60), 200);
+    const limit = Math.min(Number(dto.limit ?? 60), 500);
     const offset = Number(dto.offset ?? 0);
     const q = dto.q?.trim() || '';
     const hasQuery = q.length > 0;

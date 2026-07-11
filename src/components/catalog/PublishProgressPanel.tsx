@@ -4,9 +4,9 @@
  *
  *  Two modes:
  *   • single — one listing → many stores. Animates per store.
- *   • bulk   — many listings → many stores. Client-driven live
- *     loop (concurrency 5) reveals each listing's name, live
- *     "X of N" counter, and per-listing errors as they resolve.
+ *   • bulk   — many listings → many stores. One durable server-side
+ *     BullMQ job survives browser refresh/closure; polling reveals each
+ *     listing's name, live counter, and per-listing errors as targets resolve.
  *
  *  A "View summary" section expands after completion with totals,
  *  a per-store breakdown, and every failed/partial listing.
@@ -27,8 +27,9 @@ import {
   Package,
 } from 'lucide-react';
 import {
+  createDurableBulkPublishJob,
+  fetchDurableBulkPublishTargets,
   publishToEbay,
-  publishListingIdsToEbay,
   type PublishResult,
   type PublishRequest,
 } from '../../lib/publishApi';
@@ -91,26 +92,7 @@ interface Props {
   onDismiss: () => void;
 }
 
-/** Concurrency for the client-driven bulk loop; matches backend batching. */
-const BULK_REQUEST_SIZE = 5;
-const TRANSIENT_PUBLISH_RETRIES = 3;
-
-function isTransientPublishError(error?: string): boolean {
-  if (!error) return false;
-  const message = error.toLowerCase();
-  return [
-    'product not found',
-    'core inventory service internal error',
-    'status code 500',
-    'temporarily unavailable',
-    'timed out',
-    'timeout',
-    'rate limit',
-    'too many requests',
-  ].some((marker) => message.includes(marker));
-}
-
-function waitForRetry(delayMs: number): Promise<void> {
+function waitForPoll(delayMs: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, delayMs));
 }
 
@@ -232,97 +214,81 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
       const ids = job.listingIds ?? [];
       const storeIdArray = job.stores.map((s) => s.id);
       if (!ids.length || !storeIdArray.length) return;
-
-      // Send one backend request per chunk. The backend already processes each
-      // listing with bounded concurrency, so this preserves live chunk updates
-      // without consuming one authenticated HTTP request per listing.
-      for (let i = 0; i < ids.length; i += BULK_REQUEST_SIZE) {
-        if (cancelled) return;
-        const chunk = ids.slice(i, i + BULK_REQUEST_SIZE);
-
-        setListingProgress((prev) =>
-          prev.map((lp) =>
-            chunk.includes(lp.listingId) ? { ...lp, status: 'publishing' } : lp,
-          ),
+      try {
+        const submitted = await createDurableBulkPublishJob(
+          ids,
+          storeIdArray,
+          job.id,
         );
-
-        try {
-          const response = await publishListingIdsToEbay(chunk, storeIdArray);
+        while (!cancelled) {
+          const targets = await fetchDurableBulkPublishTargets(submitted.jobId);
           if (cancelled) return;
+          const byListing = new Map<string, typeof targets>();
+          for (const target of targets) {
+            const sourceId = target.resultPayload?.sourceListingId;
+            if (!sourceId) continue;
+            const rows = byListing.get(sourceId) ?? [];
+            rows.push(target);
+            byListing.set(sourceId, rows);
+          }
 
-          for (const id of chunk) {
-            let results = response.find((item) => item.listingId === id)?.results ?? [];
-
-            // SellerPundit can briefly return Product not found immediately
-            // after inventory creation, or a transient Core Inventory 500.
-            // Retry only failed stores so already-published offers are never
-            // submitted again and cannot be duplicated.
-            for (let attempt = 0; attempt < TRANSIENT_PUBLISH_RETRIES; attempt++) {
-              const retryStoreIds = results
-                .filter((result) => !result.success && isTransientPublishError(result.error))
-                .map((result) => result.storeId);
-              if (!retryStoreIds.length || cancelled) break;
-
-              const isRateLimited = results.some(
-                (result) =>
-                  retryStoreIds.includes(result.storeId) &&
-                  result.error?.toLowerCase().includes('too many requests'),
+          setListingProgress((prev) =>
+            prev.map((lp) => {
+              const rows = byListing.get(lp.listingId) ?? [];
+              if (!rows.length) return lp;
+              const pending = rows.some(
+                (row) => row.status === 'pending' || row.status === 'processing',
               );
-              await waitForRetry((isRateLimited ? 5_000 : 750) * 2 ** attempt);
-              const retryResponse = await publishListingIdsToEbay([id], retryStoreIds);
-              if (cancelled) return;
-              const retryResults = retryResponse[0]?.results ?? [];
-              if (!retryResults.length) break;
-
-              const merged = new Map(results.map((result) => [result.storeId, result]));
-              for (const retryResult of retryResults) {
-                merged.set(retryResult.storeId, retryResult);
-              }
-              results = Array.from(merged.values());
-            }
-
-            const successStores = results.filter((r) => r.success).length;
-            const failedStores = results.length - successStores;
-            const firstErr = results.find((r) => !r.success && r.error)?.error;
-            const status: ListingPublishStatus =
-              results.length === 0
-                ? 'failed'
+              const successStores = rows.filter((row) => row.status === 'success').length;
+              const failedStores = rows.filter(
+                (row) => row.status === 'failed' || row.status === 'skipped',
+              ).length;
+              const storeResults: PublishResult[] = rows
+                .filter((row) => row.status === 'success' || row.status === 'failed')
+                .map((row) => ({
+                  storeId: row.storeId ?? row.ebayAccountId,
+                  storeName: row.storeName ?? row.ebayAccountId,
+                  success: row.status === 'success',
+                  offerId: row.resultPayload?.offerId,
+                  listingId: row.resultPayload?.listingId,
+                  error:
+                    row.errorPayload?.message ?? row.errorPayload?.errors?.join('; '),
+                }));
+              const status: ListingPublishStatus = pending
+                ? 'publishing'
                 : failedStores === 0
                   ? 'success'
                   : successStores === 0
                     ? 'failed'
                     : 'partial';
-            setListingProgress((prev) =>
-              prev.map((lp) =>
-                lp.listingId === id
-                  ? {
-                      ...lp,
-                      status,
-                      successStores,
-                      failedStores,
-                      error: firstErr,
-                      storeResults: results,
-                    }
-                  : lp,
-              ),
-            );
-          }
-        } catch (err: unknown) {
-          if (cancelled) return;
-          const msg = err instanceof Error ? err.message : 'Unknown error';
-          setListingProgress((prev) =>
-            prev.map((lp) =>
-              chunk.includes(lp.listingId)
-                ? {
-                    ...lp,
-                    status: 'failed',
-                    failedStores: storeIdArray.length,
-                    error: msg,
-                  }
-                : lp,
-            ),
+              return {
+                ...lp,
+                status,
+                successStores,
+                failedStores,
+                error: storeResults.find((result) => !result.success)?.error,
+                storeResults,
+              };
+            }),
           );
+
+          const pendingTargets = targets.some(
+            (target) => target.status === 'pending' || target.status === 'processing',
+          );
+          if (!pendingTargets && targets.length >= submitted.targetCount) break;
+          await waitForPoll(3_000);
         }
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        setListingProgress((prev) =>
+          prev.map((lp) => ({
+            ...lp,
+            status: 'failed',
+            failedStores: storeIdArray.length,
+            error: msg,
+          })),
+        );
       }
     };
 

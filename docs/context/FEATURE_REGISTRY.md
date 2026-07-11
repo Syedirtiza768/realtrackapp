@@ -16,7 +16,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | AI listing generation | (in editor) | `listings` (`listing-generation.controller`) | Partial | OpenAI-backed; verify quality/limits |
 | Listings v2 (cached) | — | `listings` (`listings-v2.controller`) | Partial | Redis cache interceptor |
 | Export rules | — | `listings` (`export-rule.controller`) | Partial | Route on `/api/api/export-rules` ⚠️ |
-| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted automotive search; bulk **List on Channels** and **Export Templates** include shipping/return/payment profile dropdowns (fetched per store) |
+| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted search; 25/50/100/500 rows per page; bulk channel/export actions |
 | Catalog CSV/bulk import | `/catalog/import` | `catalog-import` | Implemented | BullMQ; memory-heavy |
 | Motors filters view | `/catalog/motors-filters` | `catalog-import` | Implemented | Motors-specific facets |
 | Compliance audits | (catalog) | `catalog-import` (`compliance.controller`) | Partial | `catalog.compliance` |
@@ -31,7 +31,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Orders | `/orders` | `orders` | Implemented | eBay order import |
 | eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth |
 | eBay store detail / policies | `/settings/integrations/ebay/:id[/policies]` | `integrations/ebay` | Partial | Business-policy mapping/sync |
-| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Partial | Structured fitment is derived centrally, required for compatibility-capable Motors categories, written/read back before offer publish; live multi-store verification remains operationally required |
+| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Implemented | Durable jobs support 500 listings/action and 5,000 listing/store targets/day; bounded concurrency/retries; structured fitment write/readback required |
 | eBay OAuth callback | `/channels/ebay/callback` | `integrations/ebay` | Implemented | Public callback |
 | eBay/marketplace preview | `/preview` | `listings` | Implemented | Listing preview |
 | Channels (multi-marketplace) | — | `channels` | Partial | Shopify/Amazon/Walmart scaffolding |
