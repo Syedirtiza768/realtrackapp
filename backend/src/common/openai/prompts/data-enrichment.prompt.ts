@@ -19,7 +19,7 @@ Never fabricate part numbers or brand names.`,
 
 Fill in any missing fields. For existing fields, validate and improve them if possible.
 
-TITLE RULE: The title MUST reflect the actual condition from rawData.condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used".
+TITLE RULE: The title MUST reflect the actual condition from rawData.condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used". NEVER include VIN numbers, raw OEM part numbers, or duplicate make/model in the title — the title should read naturally: "Year Make Model PartName [Condition]".
 
 Return JSON with these exact keys:
 {

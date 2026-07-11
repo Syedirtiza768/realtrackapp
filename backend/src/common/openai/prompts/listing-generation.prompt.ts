@@ -14,7 +14,7 @@ export const LISTING_GENERATION_PROMPT: PromptTemplate = {
 {{productData}}
 Category: {{categoryName}} | Condition: {{condition}}
 
-TITLE RULE: The title MUST reflect the stated Condition. If Condition is Used/Refurbished, do NOT include "New" in the title. If Condition is New, do NOT include "Used".
+TITLE RULE: The title MUST reflect the stated Condition. If Condition is Used/Refurbished, do NOT include "New" in the title. If Condition is New, do NOT include "Used". NEVER include VIN numbers, raw OEM part numbers, or duplicate make/model in the title — the title should read naturally: "Year Make Model PartName [Condition]".
 
 Return JSON:
 {

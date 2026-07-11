@@ -63,6 +63,12 @@ export class CatalogProductController {
     );
   }
 
+  @Post('sanitize-titles')
+  @RequirePermissions('catalog.update')
+  async sanitizeTitles(@Body() body: { pipelineJobId: string }) {
+    return this.productService.bulkSanitizeTitles(body.pipelineJobId);
+  }
+
   @Post('backfill-categories')
   @RequirePermissions('catalog.update')
   async backfillCategories(

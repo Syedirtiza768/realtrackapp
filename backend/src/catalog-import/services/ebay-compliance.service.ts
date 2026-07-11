@@ -132,6 +132,7 @@ const TITLE_FORBIDDEN_PATTERNS = [
   /\b(L@@K|LOOK|WOW|RARE FIND|MUST SEE|HOT)\b/gi,
   /!{2,}/g,
   /\*{2,}/g,
+  /\b[A-HJ-NPR-Z0-9]{17}\b/g,
 ];
 
 /* ── Condition map ─────────────────────────────────────────── */
@@ -993,11 +994,12 @@ Missing fields: ${missingFields.join(', ')}`,
       const response = await this.openai.chat({
         systemPrompt: `You are an eBay SEO specialist for automotive parts. Generate an optimized listing title following these rules:
 - Max 80 characters
-- Include: Brand, Part Number, Key Fitment, Core Keyword
+- Include: Brand, Part Type, Key Fitment, Core Keyword
 - No spammy phrases (FREE SHIPPING, BEST PRICE, L@@K, etc.)
 - No excessive punctuation or ALL CAPS
 - Natural, professional language
 - TITLE RULE: The title MUST reflect the stated Condition. If Condition is Used/Refurbished, do NOT include "New" in the title. If Condition is New, do NOT include "Used".
+- NEVER include VIN numbers, raw OEM part numbers, or duplicate make/model in the title — the title should read naturally: "Year Make Model PartName [Condition]"
 - Return ONLY the title text, nothing else.`,
         userPrompt: `Generate an optimized eBay title for:
 Brand: ${product.brand || 'N/A'}

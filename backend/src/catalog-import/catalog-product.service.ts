@@ -11,6 +11,7 @@ import {
   applyCatalogProductListFilters,
   type CatalogProductListParams,
 } from './utils/catalog-product-list-query.js';
+import { sanitizeTitle } from '../common/openai/listing-guards.js';
 
 export interface UpdateProductDto {
   title?: string;
@@ -313,5 +314,48 @@ export class CatalogProductService {
     } finally {
       await runner.release();
     }
+  }
+
+  /**
+   * Strip VINs, part numbers, and duplicate make/model from all titles
+   * belonging to a pipeline job.  Uses the same deterministic sanitization
+   * as the post-AI guard so results are identical.
+   */
+  async bulkSanitizeTitles(pipelineJobId: string): Promise<{
+    catalogUpdated: number;
+    listingsUpdated: number;
+  }> {
+    let catalogUpdated = 0;
+    let listingsUpdated = 0;
+
+    const products = await this.productRepo.find({
+      where: { pipelineJobId },
+      select: ['id', 'title'],
+    });
+    for (const p of products) {
+      const cleaned = sanitizeTitle(p.title);
+      if (cleaned !== p.title) {
+        await this.productRepo.update(p.id, { title: cleaned });
+        catalogUpdated++;
+      }
+    }
+
+    const listings = await this.listingRepo.find({
+      where: { pipelineJobId },
+      select: ['id', 'title'],
+    });
+    for (const l of listings) {
+      if (!l.title) continue;
+      const cleaned = sanitizeTitle(l.title);
+      if (cleaned !== l.title) {
+        await this.listingRepo.update(l.id, { title: cleaned });
+        listingsUpdated++;
+      }
+    }
+
+    this.logger.log(
+      `bulkSanitizeTitles(${pipelineJobId}): catalog=${catalogUpdated}, listings=${listingsUpdated}`,
+    );
+    return { catalogUpdated, listingsUpdated };
   }
 }

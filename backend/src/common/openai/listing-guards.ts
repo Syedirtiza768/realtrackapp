@@ -15,6 +15,37 @@ const BRAND_MAP: Record<string, string> = {
 
 const DISCLAIMER = 'Please verify part number compatibility before purchasing';
 
+/**
+ * Patterns for cleaning VINs, part numbers, and duplicate make/model from titles.
+ *
+ * The source spreadsheet "Image URLs" column sometimes includes VINs (17-char
+ * alphanumeric) followed by ", Make, Model, " duplicates.  The enrichment step
+ * may also include OEM part numbers before condition words (OEM/Used/New) or at
+ * the end of the title.  These patterns strip that junk deterministically so
+ * every title reads cleanly:  "Year Make Model Part Name [Condition]".
+ *
+ * Part-number patterns require at least one digit to avoid stripping English
+ * words like "Black", "Chrome", "Satin".
+ */
+const VIN_BLOCK_RE =
+  /\s*[A-HJ-NPR-Z0-9]{17}\s*,\s*[A-Za-z][A-Za-z-]*,\s*[A-Za-z0-9]+,?\s*/g;
+
+const CONDITION_WORDS = /OEM\b|Used\b|New\b|Refurbished\b|Salvage\b/g;
+
+/** qty + PN before condition word (e.g. "2 4L0064180 OEM") */
+const PN_WITH_QTY_BEFORE_COND_RE =
+  /\s+\d{1,3}\s+(?=[A-Z0-9]*\d)[A-Z0-9]{5,15}\s+(?=OEM\b|Used\b|New\b|Refurbished\b|Salvage\b)/gi;
+
+/** standalone PN before condition word (e.g. "03H133185G OEM") */
+const PN_BEFORE_COND_RE =
+  /\s+(?=[A-Z0-9]*\d)[A-Z0-9]{5,15}\s+(?=OEM\b|Used\b|New\b|Refurbished\b|Salvage\b)/gi;
+
+/** trailing qty + PN at end of title (e.g. "Panel 2 4L0064180") */
+const TRAILING_QTY_PN_RE = /\s+\d{1,3}\s+(?=[A-Z0-9]*\d)[A-Z0-9]{5,15}\s*$/gi;
+
+/** trailing PN at end of title (e.g. "Sensor 8E0054635A") */
+const TRAILING_PN_RE = /\s+(?=[A-Z0-9]*\d)[A-Z0-9]{5,15}\s*$/gi;
+
 const USED_CONDITION_RE =
   /\b(used|refurbished|salvage|for.parts|not.working)\b/i;
 
@@ -87,6 +118,33 @@ function stripMismatchedCondition(
       .trim();
   }
   return title;
+}
+
+/**
+ * Strip VIN numbers, OEM part numbers, and duplicate make/model from a title.
+ *
+ * Rules:
+ * 1. VIN block: "Wauay54l98d068586, Audi, Q7, " → removed
+ * 2. Part numbers before condition words (OEM/Used/New/Refurbished/Salvage):
+ *    "Intake Manifold 03H133185G OEM" → "Intake Manifold OEM"
+ * 3. Trailing part numbers without condition word:
+ *    "Wheel Housing Extension 4L0071792" → "Wheel Housing Extension"
+ * 4. Part numbers must contain ≥1 digit to avoid stripping English words
+ */
+export function sanitizeTitle(title: string): string {
+  let t = title;
+  // Strip VIN + trailing ", Make, Model, " duplicates
+  t = t.replace(VIN_BLOCK_RE, ' ');
+  // Strip qty + part_number before condition word
+  t = t.replace(PN_WITH_QTY_BEFORE_COND_RE, ' ');
+  // Strip standalone part_number before condition word
+  t = t.replace(PN_BEFORE_COND_RE, ' ');
+  // Strip trailing qty + part_number at end of title
+  t = t.replace(TRAILING_QTY_PN_RE, '');
+  // Strip trailing part_number at end of title
+  t = t.replace(TRAILING_PN_RE, '');
+  // Clean multi-spaces
+  return t.replace(/\s{2,}/g, ' ').trim();
 }
 
 /**
@@ -169,6 +227,14 @@ export function applyListingGuards(
   out.fitmentType = out.fitmentType || 'Direct Replacement';
 
   let title = String(out.title ?? '');
+
+  // Strip VINs, part numbers, and duplicate make/model BEFORE condition handling
+  const sanitized = sanitizeTitle(title);
+  if (sanitized !== title) {
+    title = sanitized;
+    fixes.push('TITLE_SANITIZED');
+  }
+
   const condition =
     srcPart.condition ?? (out.condition as string | undefined) ?? null;
   const conditionStripped = stripMismatchedCondition(title, condition);
