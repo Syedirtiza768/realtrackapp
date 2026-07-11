@@ -299,6 +299,27 @@ export class EbayPublishService {
       this.compatibilityCategoryCache.set(cacheKey, required);
       return required;
     } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
+
+      // 400 = category doesn't support compatibility at all (e.g. non-P&A categories)
+      if (status === 400) {
+        this.logger.debug(
+          `Category ${normalizedCategory} does not support vehicle compatibility (400) — treating as not required`,
+        );
+        this.compatibilityCategoryCache.set(cacheKey, false);
+        return false;
+      }
+
+      // 429 = rate limited after retries exhausted — assume requires compatibility (safe default for Motors)
+      if (status === 429) {
+        this.logger.warn(
+          `Category ${normalizedCategory} compatibility check rate-limited (429) after retries — assuming compatibility required (safe default)`,
+        );
+        this.compatibilityCategoryCache.set(cacheKey, true);
+        return true;
+      }
+
       throw new BadRequestException(
         `Could not verify whether eBay category ${normalizedCategory} requires vehicle compatibility. Publishing is blocked to prevent a description-only fitment listing. ${err instanceof Error ? err.message : ''}`.trim(),
       );

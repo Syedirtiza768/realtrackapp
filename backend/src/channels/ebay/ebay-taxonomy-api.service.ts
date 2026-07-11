@@ -291,13 +291,18 @@ export class EbayTaxonomyApiService {
     categoryTreeId: string,
     categoryId: string,
   ): Promise<EbayCompatibilityProperty[]> {
-    await this.rateLimiter.acquire();
-    const cfg = await this.appHeaders();
-    const { data } = await this.http.get(
-      `/category_tree/${categoryTreeId}/get_compatibility_properties`,
-      { ...cfg, params: { category_id: categoryId } },
+    return this.withRateLimitRetry(
+      `getCompatibilityProperties(${categoryId})`,
+      async () => {
+        await this.rateLimiter.acquire();
+        const cfg = await this.appHeaders();
+        const { data } = await this.http.get(
+          `/category_tree/${categoryTreeId}/get_compatibility_properties`,
+          { ...cfg, params: { category_id: categoryId } },
+        );
+        return data.compatibilityProperties ?? [];
+      },
     );
-    return data.compatibilityProperties ?? [];
   }
 
   /**
@@ -314,25 +319,30 @@ export class EbayTaxonomyApiService {
   ): Promise<
     { value: string; applicableProperties?: Record<string, string> }[]
   > {
-    await this.rateLimiter.acquire();
-    const cfg = await this.appHeaders();
-    const params: Record<string, string> = {
-      category_id: categoryId,
-      compatibility_property: compatibilityPropertyName,
-    };
+    return this.withRateLimitRetry(
+      `getCompatibilityPropertyValues(${categoryId}/${compatibilityPropertyName})`,
+      async () => {
+        await this.rateLimiter.acquire();
+        const cfg = await this.appHeaders();
+        const params: Record<string, string> = {
+          category_id: categoryId,
+          compatibility_property: compatibilityPropertyName,
+        };
 
-    // Build filter string: {"propertyName":"value","propertyName2":"value2"}
-    if (filter && Object.keys(filter).length > 0) {
-      params.filter = Object.entries(filter)
-        .map(([k, v]) => `${k}:${v}`)
-        .join(',');
-    }
+        // Build filter string: {"propertyName":"value","propertyName2":"value2"}
+        if (filter && Object.keys(filter).length > 0) {
+          params.filter = Object.entries(filter)
+            .map(([k, v]) => `${k}:${v}`)
+            .join(',');
+        }
 
-    const { data } = await this.http.get(
-      `/category_tree/${categoryTreeId}/get_compatibility_property_values`,
-      { ...cfg, params },
+        const { data } = await this.http.get(
+          `/category_tree/${categoryTreeId}/get_compatibility_property_values`,
+          { ...cfg, params },
+        );
+        return data.compatibilityPropertyValues ?? [];
+      },
     );
-    return data.compatibilityPropertyValues ?? [];
   }
 
   // ──────────────────────────── Convenience Methods ───────────────
