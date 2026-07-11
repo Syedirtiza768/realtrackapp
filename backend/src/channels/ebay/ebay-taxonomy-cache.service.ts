@@ -23,6 +23,8 @@ interface SuggestionEntry {
 interface ScopeData {
   suggestions: Record<string, SuggestionEntry>;
   aspects: Record<string, { aspects: unknown; cachedAt: number }>;
+  /** Category compatibility cache: categoryId → requires fitment (true/false) */
+  compatibility: Record<string, { required: boolean; cachedAt: number }>;
   dailyUsage: Record<string, number>;
 }
 
@@ -88,6 +90,7 @@ export class EbayTaxonomyCacheService {
       this.disk.scopes[this.scopeKey] = {
         suggestions: {},
         aspects: {},
+        compatibility: {},
         dailyUsage: {},
       };
     }
@@ -145,6 +148,34 @@ export class EbayTaxonomyCacheService {
   ): void {
     const key = `${treeId}::${this.normQuery(query)}`;
     this.scope().suggestions[key] = { result, cachedAt: Date.now() };
+    this.persist();
+  }
+
+  /** Get cached category compatibility result. Returns undefined if not cached or expired. */
+  getCompatibility(
+    categoryTreeId: string,
+    categoryId: string,
+  ): boolean | undefined {
+    const key = `${categoryTreeId}::${categoryId.trim()}`;
+    const entry = this.scope().compatibility?.[key];
+    if (!entry) return undefined;
+    // Compatibility results are stable — cache for 90 days
+    if (Date.now() - entry.cachedAt > SUGGESTION_TTL_MS) {
+      delete this.scope().compatibility[key];
+      return undefined;
+    }
+    return entry.required;
+  }
+
+  /** Persist a category compatibility result to disk. */
+  setCompatibility(
+    categoryTreeId: string,
+    categoryId: string,
+    required: boolean,
+  ): void {
+    const key = `${categoryTreeId}::${categoryId.trim()}`;
+    if (!this.scope().compatibility) this.scope().compatibility = {};
+    this.scope().compatibility[key] = { required, cachedAt: Date.now() };
     this.persist();
   }
 }

@@ -7,6 +7,7 @@ import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { EbayInventoryApiService } from './ebay-inventory-api.service.js';
 import { EbayTaxonomyApiService } from './ebay-taxonomy-api.service.js';
+import { EbayTaxonomyCacheService } from './ebay-taxonomy-cache.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
 import { EbaySellAccountApiService } from '../../integrations/ebay/services/ebay-sell-account-api.service.js';
 import { EbayPaReturnPolicyService } from '../../integrations/ebay/services/ebay-pa-return-policy.service.js';
@@ -162,6 +163,7 @@ export class EbayPublishService {
     private readonly config: ConfigService,
     private readonly inventoryApi: EbayInventoryApiService,
     private readonly taxonomyApi: EbayTaxonomyApiService,
+    private readonly taxonomyCache: EbayTaxonomyCacheService,
     private readonly auth: EbayAuthService,
     private readonly sellAccount: EbaySellAccountApiService,
     private readonly paReturnPolicy: EbayPaReturnPolicyService,
@@ -281,9 +283,22 @@ export class EbayPublishService {
     const normalizedCategory = categoryId.trim();
     if (!normalizedCategory) return false;
     const cacheKey = `${marketplace.categoryTreeId}:${normalizedCategory}`;
-    const cached = this.compatibilityCategoryCache.get(cacheKey);
-    if (cached !== undefined) return cached;
 
+    // 1. In-memory cache (fast, same process)
+    const memCached = this.compatibilityCategoryCache.get(cacheKey);
+    if (memCached !== undefined) return memCached;
+
+    // 2. Persistent JSON cache (survives restarts)
+    const diskCached = this.taxonomyCache.getCompatibility(
+      marketplace.categoryTreeId,
+      normalizedCategory,
+    );
+    if (diskCached !== undefined) {
+      this.compatibilityCategoryCache.set(cacheKey, diskCached);
+      return diskCached;
+    }
+
+    // 3. eBay Taxonomy API (only on cache miss)
     try {
       const properties = await this.taxonomyApi.getCompatibilityProperties(
         marketplace.categoryTreeId,
@@ -297,6 +312,11 @@ export class EbayPublishService {
       const required =
         names.has('year') && names.has('make') && names.has('model');
       this.compatibilityCategoryCache.set(cacheKey, required);
+      this.taxonomyCache.setCompatibility(
+        marketplace.categoryTreeId,
+        normalizedCategory,
+        required,
+      );
       return required;
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response
@@ -308,6 +328,11 @@ export class EbayPublishService {
           `Category ${normalizedCategory} does not support vehicle compatibility (400) — treating as not required`,
         );
         this.compatibilityCategoryCache.set(cacheKey, false);
+        this.taxonomyCache.setCompatibility(
+          marketplace.categoryTreeId,
+          normalizedCategory,
+          false,
+        );
         return false;
       }
 
@@ -317,6 +342,11 @@ export class EbayPublishService {
           `Category ${normalizedCategory} compatibility check rate-limited (429) after retries — assuming compatibility required (safe default)`,
         );
         this.compatibilityCategoryCache.set(cacheKey, true);
+        this.taxonomyCache.setCompatibility(
+          marketplace.categoryTreeId,
+          normalizedCategory,
+          true,
+        );
         return true;
       }
 
