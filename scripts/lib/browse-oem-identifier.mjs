@@ -169,21 +169,6 @@ export function createOemIdentifier(options) {
     return best;
   }
 
-  /** Top leaf category from the Browse CATEGORY_REFINEMENTS histogram (full result set). */
-  function topCategoryFromRefinements(catDist) {
-    if (!Array.isArray(catDist) || catDist.length === 0) return null;
-    let best = null;
-    for (const c of catDist) {
-      const id = c?.categoryId ? String(c.categoryId) : null;
-      if (!id) continue;
-      const count = Number(c?.matchCount) || 0;
-      if (!best || count > best.count) {
-        best = { categoryId: id, categoryName: c.categoryName || '', count };
-      }
-    }
-    return best;
-  }
-
   /** Top Type value from the Browse ASPECT_REFINEMENTS histogram (gated by minCount). */
   function topTypeFromRefinements(aspectDist, minCount) {
     if (!Array.isArray(aspectDist)) return null;
@@ -232,24 +217,23 @@ export function createOemIdentifier(options) {
       }
 
       try {
-        // Single call: ASPECT + CATEGORY refinements return Type and leaf-category
-        // histograms computed over ALL matching listings — no per-item detail
-        // fetches, and a stronger signal than sampling the top few items.
+        // Single call: ASPECT_REFINEMENTS returns the Type histogram over ALL
+        // matching listings — no per-item detail fetches, stronger than sampling
+        // the top few items.
         const search = await request('/item_summary/search', {
           q: String(partNumber).trim(),
           limit: searchLimit,
-          fieldgroups: 'ASPECT_REFINEMENTS,CATEGORY_REFINEMENTS',
+          fieldgroups: 'ASPECT_REFINEMENTS',
         });
         const summaries = Array.isArray(search?.itemSummaries) ? search.itemSummaries : [];
         const refinement = search?.refinement ?? {};
         const matchCount =
           typeof search?.total === 'number' ? search.total : summaries.length;
 
-        // Category: prefer the refinement histogram; fall back to a majority vote
-        // over the returned summaries if refinements are absent for this query.
-        const best =
-          topCategoryFromRefinements(refinement.categoryDistributions) ||
-          topCategory(summaries);
+        // Leaf category = majority of the item summaries' own leaf category.
+        // The refinement categoryDistributions histogram only returns broad tree
+        // levels ("eBay Motors" root, id 6000) — not the publishable leaf.
+        const best = topCategory(summaries);
 
         if (!best || best.count < minAgreement) {
           const result = { type: null, categoryId: null, categoryName: null, confidence: 'none', matchCount };
