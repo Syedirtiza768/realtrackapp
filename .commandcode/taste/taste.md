@@ -7,5 +7,5 @@
 - Rate limit eBay MVL/Taxonomy API calls to 10 requests per second. Confidence: 0.50
 
 # database
-- Use camelCase column names (e.g., `createdAt`, `updatedAt`, `customLabelSku`) for PostgreSQL tables in this project. Confidence: 0.70
+- Use camelCase column names (e.g., `createdAt`, `updatedAt`, `customLabelSku`) for PostgreSQL tables in this project. Confidence: 0.78
 
