@@ -54,6 +54,9 @@ export class PublishedListingsService {
     if (query.storeId) {
       qb.andWhere('l.storeId = :storeId', { storeId: query.storeId });
     }
+    if (query.offerId) {
+      qb.andWhere('l.offerId = :offerId', { offerId: query.offerId });
+    }
     if (query.marketplaceId) {
       qb.andWhere('l.marketplaceId = :marketplaceId', {
         marketplaceId: query.marketplaceId,

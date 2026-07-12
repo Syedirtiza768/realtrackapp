@@ -27,6 +27,10 @@ export class PublishedListingsQueryDto {
 
   @IsOptional()
   @IsString()
+  offerId?: string;
+
+  @IsOptional()
+  @IsString()
   marketplaceId?: string;
 
   @IsOptional()
