@@ -1,6 +1,8 @@
 export { DATA_ENRICHMENT_PROMPT } from './data-enrichment.prompt.js';
 export { LISTING_GENERATION_PROMPT } from './listing-generation.prompt.js';
 export { LISTING_GENERATION_DE_PROMPT } from './listing-generation-de.prompt.js';
+export { LISTING_GENERATION_BATCH_PROMPT } from './listing-generation-batch.prompt.js';
+export { LISTING_GENERATION_BATCH_DE_PROMPT } from './listing-generation-batch-de.prompt.js';
 export { COMPETITIVE_ANALYSIS_PROMPT } from './competitive-analysis.prompt.js';
 export { CATEGORY_CLASSIFICATION_PROMPT } from './category-classification.prompt.js';
 export { FITMENT_EXTRACTION_PROMPT } from './fitment-extraction.prompt.js';
@@ -16,6 +18,8 @@ import type { PromptTemplate } from '../openai.types.js';
 import { DATA_ENRICHMENT_PROMPT } from './data-enrichment.prompt.js';
 import { LISTING_GENERATION_PROMPT } from './listing-generation.prompt.js';
 import { LISTING_GENERATION_DE_PROMPT } from './listing-generation-de.prompt.js';
+import { LISTING_GENERATION_BATCH_PROMPT } from './listing-generation-batch.prompt.js';
+import { LISTING_GENERATION_BATCH_DE_PROMPT } from './listing-generation-batch-de.prompt.js';
 import { COMPETITIVE_ANALYSIS_PROMPT } from './competitive-analysis.prompt.js';
 import { CATEGORY_CLASSIFICATION_PROMPT } from './category-classification.prompt.js';
 import { FITMENT_EXTRACTION_PROMPT } from './fitment-extraction.prompt.js';
@@ -34,6 +38,8 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
   [DATA_ENRICHMENT_PROMPT.name]: DATA_ENRICHMENT_PROMPT,
   [LISTING_GENERATION_PROMPT.name]: LISTING_GENERATION_PROMPT,
   [LISTING_GENERATION_DE_PROMPT.name]: LISTING_GENERATION_DE_PROMPT,
+  [LISTING_GENERATION_BATCH_PROMPT.name]: LISTING_GENERATION_BATCH_PROMPT,
+  [LISTING_GENERATION_BATCH_DE_PROMPT.name]: LISTING_GENERATION_BATCH_DE_PROMPT,
   [COMPETITIVE_ANALYSIS_PROMPT.name]: COMPETITIVE_ANALYSIS_PROMPT,
   [CATEGORY_CLASSIFICATION_PROMPT.name]: CATEGORY_CLASSIFICATION_PROMPT,
   [FITMENT_EXTRACTION_PROMPT.name]: FITMENT_EXTRACTION_PROMPT,

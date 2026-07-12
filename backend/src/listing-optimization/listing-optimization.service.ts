@@ -7,6 +7,8 @@ import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
 import { EnterpriseListingIntelligenceService } from '../ingestion/enterprise-listing-intelligence.service.js';
 import { FitmentDiscoveryService } from './fitment-discovery.service.js';
+import type { FitmentDiscoveryResult } from './fitment-discovery.service.js';
+import type { EnterpriseListingResult } from '../ingestion/enterprise-listing-intelligence.service.js';
 import { computeSourceDataHash } from './source-data-hash.util.js';
 import type {
   JobOptimizationStatus,
@@ -16,6 +18,15 @@ import type {
 } from './listing-optimization.types.js';
 
 const OPTIMIZATION_VERSION = 1;
+
+type PreparedOptimization =
+  | { skip: true; product: CatalogProduct }
+  | {
+      skip: false;
+      product: CatalogProduct;
+      fitment: FitmentDiscoveryResult;
+      hash: string;
+    };
 
 @Injectable()
 export class ListingOptimizationService {
@@ -108,7 +119,6 @@ export class ListingOptimizationService {
     } as any);
 
     const PRODUCT_TIMEOUT_MS = 60_000;
-    const EXTEND_LOCK_INTERVAL = 10; // extend BullMQ lock every 10 products
     const EXTEND_LOCK_MS = 10 * 60 * 1000; // 10 min extension
     // Each product makes its own OpenAI call (enterprise-listing-intelligence's
     // generateForProduct); processing them one at a time was the real driver
@@ -120,19 +130,36 @@ export class ListingOptimizationService {
       Number(process.env.LISTING_OPTIMIZATION_PRODUCT_CONCURRENCY ?? '5') ||
         5,
     );
+    // Group products into batches that each make ONE OpenAI call (see
+    // ListingGenerationPipeline.generateBatch) instead of one call per
+    // product — this is what actually cuts total LLM round-trips; running
+    // single-item calls concurrently (PRODUCT_CONCURRENCY above) still makes
+    // one call per product, just in parallel.
+    const OPTIMIZATION_BATCH_SIZE = Math.max(
+      1,
+      Number(process.env.LISTING_OPTIMIZATION_BATCH_SIZE ?? '5') || 5,
+    );
+    const EXTEND_LOCK_EVERY_N_CHUNKS = Math.max(
+      1,
+      Math.round(10 / OPTIMIZATION_BATCH_SIZE),
+    );
 
     const startIndex = isRetry ? (existingCounts.processed ?? 0) : 0;
     const remaining = products.slice(startIndex);
+    const chunks: (typeof remaining)[] = [];
+    for (let i = 0; i < remaining.length; i += OPTIMIZATION_BATCH_SIZE) {
+      chunks.push(remaining.slice(i, i + OPTIMIZATION_BATCH_SIZE));
+    }
 
     this.logger.log(
-      `Optimization for job ${jobId} [${marketplace}]: ${products.length} total, starting at index ${startIndex}${isRetry ? ' (retry)' : ''}, concurrency ${PRODUCT_CONCURRENCY}`,
+      `Optimization for job ${jobId} [${marketplace}]: ${products.length} total, starting at index ${startIndex}${isRetry ? ' (retry)' : ''}, ${chunks.length} batches of up to ${OPTIMIZATION_BATCH_SIZE}, concurrency ${PRODUCT_CONCURRENCY}`,
     );
 
     await this.mapWithConcurrency(
-      remaining,
+      chunks,
       PRODUCT_CONCURRENCY,
-      async ({ id }, i) => {
-        if (bullJob && i > 0 && i % EXTEND_LOCK_INTERVAL === 0) {
+      async (chunk, ci) => {
+        if (bullJob && ci > 0 && ci % EXTEND_LOCK_EVERY_N_CHUNKS === 0) {
           try {
             await bullJob.extendLock(bullJob.token!, EXTEND_LOCK_MS);
           } catch (e) {
@@ -140,7 +167,7 @@ export class ListingOptimizationService {
               `Failed to extend lock for job ${jobId} [${marketplace}]: ${String(e)}`,
             );
           }
-          const pct = Math.floor((i / remaining.length) * 100);
+          const pct = Math.floor((ci / chunks.length) * 100);
           try {
             await bullJob.updateProgress(pct);
           } catch {
@@ -148,39 +175,40 @@ export class ListingOptimizationService {
           }
         }
 
+        const chunkTimeoutMs = PRODUCT_TIMEOUT_MS * chunk.length;
         try {
           await Promise.race([
-            this.optimizeProduct(id, marketplace, { force: false }),
+            this.optimizeProductsBatch(
+              chunk.map((p) => p.id),
+              marketplace,
+              { force: false },
+            ),
             new Promise<never>((_, reject) =>
               setTimeout(
                 () =>
                   reject(
                     new Error(
-                      `Product ${id} optimization timed out after ${PRODUCT_TIMEOUT_MS}ms`,
+                      `Batch of ${chunk.length} products timed out after ${chunkTimeoutMs}ms`,
                     ),
                   ),
-                PRODUCT_TIMEOUT_MS,
+                chunkTimeoutMs,
               ),
             ),
           ]);
         } catch (err) {
           this.logger.error(
-            `Optimization failed for product ${id} [${marketplace}]: ${String(err)}`,
+            `Batch optimization failed for ${chunk.length} products [${marketplace}]: ${String(err)}`,
           );
-          // Mark product as failed so it's counted as processed — prevents the
-          // job from getting stuck with processed < total forever.
-          await this.productRepo
-            .update(id, {
-              optimizationStatus: 'failed',
-              optimizationErrors: [
-                {
-                  code: 'OPTIMIZATION_FAILED',
-                  severity: 'error',
-                  message: String(err).substring(0, 500),
-                },
-              ],
-            } as any)
-            .catch(() => {});
+          // Mark every product in the chunk as failed so they're counted as
+          // processed — prevents the job from getting stuck with
+          // processed < total forever. optimizeProductsBatch already isolates
+          // per-product failures internally; this only fires if the whole
+          // chunk call hangs or throws before it can do that itself.
+          await Promise.all(
+            chunk.map((p) =>
+              this.markProductOptimizationFailed(p.id, String(err)),
+            ),
+          );
         }
 
         try {
@@ -191,7 +219,7 @@ export class ListingOptimizationService {
           // count with no path to recovery (see process() catch in the
           // processor for the terminal case). Log and keep going.
           this.logger.error(
-            `refreshJobOptimizationCounts failed for job ${jobId} [${marketplace}] at product ${id}: ${String(err)}`,
+            `refreshJobOptimizationCounts failed for job ${jobId} [${marketplace}] after batch: ${String(err)}`,
           );
         }
       },
@@ -228,6 +256,133 @@ export class ListingOptimizationService {
     marketplace: 'US' | 'DE' | 'AU' = 'US',
     options?: { force?: boolean },
   ): Promise<CatalogProduct> {
+    const prepared = await this.prepareProductForOptimization(
+      productId,
+      marketplace,
+      options,
+    );
+    if (prepared.skip) return prepared.product;
+
+    const listing = await this.enterprise.generateForProduct(productId, {
+      marketplace,
+      listingQualityProfile: 'max_seo_comprehensive',
+    });
+
+    return this.finalizeProductOptimization(
+      productId,
+      marketplace,
+      prepared.product,
+      prepared.fitment,
+      prepared.hash,
+      listing,
+    );
+  }
+
+  /**
+   * Batch variant of optimizeProduct — prepares each product's fitment
+   * individually (that part is DB/local-lookup driven, not the bottleneck),
+   * then makes ONE call to enterprise.generateForProductsBatch covering all
+   * of them instead of one OpenAI call per product. A failure for one
+   * product (prepare, AI, or finalize) is caught and marks just that
+   * product failed, matching the per-product isolation optimizeProduct's
+   * caller previously got from running items one at a time.
+   */
+  async optimizeProductsBatch(
+    productIds: string[],
+    marketplace: 'US' | 'DE' | 'AU' = 'US',
+    options?: { force?: boolean },
+  ): Promise<void> {
+    if (productIds.length === 0) return;
+
+    const prepared: {
+      id: string;
+      result?: PreparedOptimization;
+      error?: unknown;
+    }[] = await Promise.all(
+      productIds.map(async (id) => {
+        try {
+          return {
+            id,
+            result: await this.prepareProductForOptimization(
+              id,
+              marketplace,
+              options,
+            ),
+          };
+        } catch (err) {
+          return { id, error: err };
+        }
+      }),
+    );
+
+    const toGenerate = prepared.filter(
+      (
+        p,
+      ): p is {
+        id: string;
+        result: Extract<PreparedOptimization, { skip: false }>;
+      } => p.result !== undefined && !p.result.skip,
+    );
+
+    const aiResults = await this.enterprise.generateForProductsBatch(
+      toGenerate.map((p) => p.id),
+      { marketplace, listingQualityProfile: 'max_seo_comprehensive' },
+    );
+
+    for (const p of toGenerate) {
+      const listing = aiResults.get(p.id);
+      if (!listing) {
+        await this.markProductOptimizationFailed(
+          p.id,
+          'No AI listing result returned for product in batch',
+        );
+        continue;
+      }
+      try {
+        await this.finalizeProductOptimization(
+          p.id,
+          marketplace,
+          p.result.product,
+          p.result.fitment,
+          p.result.hash,
+          listing,
+        );
+      } catch (err) {
+        await this.markProductOptimizationFailed(p.id, String(err));
+      }
+    }
+
+    for (const p of prepared) {
+      if ('error' in p) {
+        await this.markProductOptimizationFailed(p.id, String(p.error));
+      }
+    }
+  }
+
+  private async markProductOptimizationFailed(
+    productId: string,
+    message: string,
+  ): Promise<void> {
+    await this.productRepo
+      .update(productId, {
+        optimizationStatus: 'failed',
+        optimizationErrors: [
+          {
+            code: 'OPTIMIZATION_FAILED',
+            severity: 'error',
+            message: message.substring(0, 500),
+          },
+        ],
+      } as any)
+      .catch(() => {});
+  }
+
+  /** Fetch + skip-check + running-status + fitment discovery for one product. */
+  private async prepareProductForOptimization(
+    productId: string,
+    marketplace: 'US' | 'DE' | 'AU',
+    options?: { force?: boolean },
+  ): Promise<PreparedOptimization> {
     const product = await this.productRepo.findOneBy({ id: productId });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
 
@@ -237,7 +392,7 @@ export class ListingOptimizationService {
       product.optimizationStatus === 'completed' &&
       product.sourceDataHash === hash
     ) {
-      return product;
+      return { skip: true, product };
     }
 
     await this.productRepo.update(productId, {
@@ -279,12 +434,18 @@ export class ListingOptimizationService {
       donorVinDecoded: fitment.donorVinDecoded,
     } as any);
 
-    const refreshed = await this.productRepo.findOneByOrFail({ id: productId });
-    const listing = await this.enterprise.generateForProduct(productId, {
-      marketplace,
-      listingQualityProfile: 'max_seo_comprehensive',
-    });
+    return { skip: false, product, fitment, hash };
+  }
 
+  /** Post-AI-call status/score computation + persistence for one product. */
+  private async finalizeProductOptimization(
+    productId: string,
+    marketplace: 'US' | 'DE' | 'AU',
+    product: CatalogProduct,
+    fitment: FitmentDiscoveryResult,
+    hash: string,
+    listing: EnterpriseListingResult,
+  ): Promise<CatalogProduct> {
     const errors: OptimizationIssue[] = listing.complianceWarnings
       .filter((w) => w.severity === 'error')
       .map((w) => ({

@@ -285,28 +285,7 @@ export class EnterpriseListingIntelligenceService {
     };
 
     const aiResults = await this.listingPipeline.generateBatch([
-      {
-        productData: {
-          brand: product.brand,
-          mpn: product.mpn,
-          part_type: product.partType,
-          placement: product.placement,
-          material: product.material,
-          features: product.features,
-          fitment: this.normalizeCompatibility(product.fitmentData).filter(
-            (row) => row.source === 'source_data',
-          ),
-        },
-        categoryName: product.categoryName ?? 'eBay Motors Parts & Accessories',
-        condition: product.conditionLabel ?? product.conditionId ?? 'Used',
-        options: {
-          temperature: this.getTemperatureForProfile(
-            options.listingQualityProfile,
-          ),
-          marketplace: options.marketplace,
-          sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
-        },
-      },
+      this.buildAiListingItem(product, options),
     ]);
 
     return this.buildEnterpriseListing(
@@ -314,6 +293,89 @@ export class EnterpriseListingIntelligenceService {
       options.marketplace,
       aiResults[0] ?? null,
     );
+  }
+
+  /**
+   * Batch variant of generateForProduct — makes ONE call to
+   * listingPipeline.generateBatch covering all given products instead of one
+   * call per product, so the OpenAI round-trip is shared across the batch.
+   * Used by bulk listing optimization; single-product re-run still goes
+   * through generateForProduct above.
+   */
+  async generateForProductsBatch(
+    productIds: string[],
+    rawOptions?: Partial<EnterpriseOptions>,
+  ): Promise<Map<string, EnterpriseListingResult>> {
+    if (productIds.length === 0) return new Map();
+
+    const products = await this.productRepo.find({
+      where: { id: In(productIds) },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    // Preserve caller order; skip any id that no longer resolves to a product.
+    const ordered = productIds
+      .map((id) => byId.get(id))
+      .filter((p): p is CatalogProduct => !!p);
+
+    const options: EnterpriseOptions = {
+      marketplace: rawOptions?.marketplace ?? 'US',
+      limit: 1,
+      aiBudgetListings: 1,
+      listingQualityProfile:
+        rawOptions?.listingQualityProfile ?? 'max_seo_comprehensive',
+    };
+
+    const aiResults = await this.listingPipeline.generateBatch(
+      ordered.map((product) => this.buildAiListingItem(product, options)),
+    );
+
+    const results = new Map<string, EnterpriseListingResult>();
+    for (let i = 0; i < ordered.length; i++) {
+      const listing = await this.buildEnterpriseListing(
+        ordered[i],
+        options.marketplace,
+        aiResults[i] ?? null,
+      );
+      results.set(ordered[i].id, listing);
+    }
+    return results;
+  }
+
+  private buildAiListingItem(
+    product: CatalogProduct,
+    options: EnterpriseOptions,
+  ): {
+    productData: Record<string, unknown>;
+    categoryName: string;
+    condition: string;
+    options: {
+      temperature: number;
+      marketplace: Marketplace;
+      sellerCountry: string;
+    };
+  } {
+    return {
+      productData: {
+        brand: product.brand,
+        mpn: product.mpn,
+        part_type: product.partType,
+        placement: product.placement,
+        material: product.material,
+        features: product.features,
+        fitment: this.normalizeCompatibility(product.fitmentData).filter(
+          (row) => row.source === 'source_data',
+        ),
+      },
+      categoryName: product.categoryName ?? 'eBay Motors Parts & Accessories',
+      condition: product.conditionLabel ?? product.conditionId ?? 'Used',
+      options: {
+        temperature: this.getTemperatureForProfile(
+          options.listingQualityProfile,
+        ),
+        marketplace: options.marketplace,
+        sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
+      },
+    };
   }
 
   private async buildEnterpriseListing(
