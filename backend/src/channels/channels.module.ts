@@ -45,6 +45,8 @@ import { SellerpunditModule } from '../integrations/sellerpundit/sellerpundit.mo
 import { EbayMarketplaceConfigService } from '../integrations/ebay/services/ebay-marketplace-config.service.js';
 import { EbaySellAccountApiService } from '../integrations/ebay/services/ebay-sell-account-api.service.js';
 import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa-return-policy.service.js';
+import { EbayCategoryKeywordAuditService } from './ebay/ebay-category-keyword-audit.service.js';
+import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
 
 @Module({
   imports: [
@@ -64,6 +66,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
       EbayAccountMarketplace,
       EbayBusinessPolicy,
       ShippingProfile,
+      EbayCategoryMapping,
     ]),
     SellerpunditModule,
     BullModule.registerQueue({ name: 'channels' }),
@@ -100,6 +103,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     EbayMarketplaceConfigService,
     EbaySellAccountApiService,
     EbayPaReturnPolicyService,
+    EbayCategoryKeywordAuditService,
   ],
   exports: [
     ChannelsService,
@@ -119,6 +123,7 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
     EbayPaReturnPolicyService,
     TokenEncryptionService,
     StoreAccessService,
+    EbayCategoryKeywordAuditService,
   ],
 })
 export class ChannelsModule {}

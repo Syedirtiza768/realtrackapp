@@ -7,6 +7,7 @@ import { PricingIntelligenceModule } from '../../pricing-intelligence/pricing-in
 import { SellerpunditModule } from '../../integrations/sellerpundit/sellerpundit.module.js';
 import { EbayIntegrationsModule } from '../../integrations/ebay/ebay-integrations.module.js';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
+import { ChannelsModule } from '../../channels/channels.module.js';
 
 /**
  * SchedulerModule — Centralized cron-based job scheduling.
@@ -31,6 +32,7 @@ import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected
     PricingIntelligenceModule,
     SellerpunditModule,
     EbayIntegrationsModule,
+    ChannelsModule,
   ],
   providers: [SchedulerLeaderService, SchedulerService],
   exports: [SchedulerLeaderService],

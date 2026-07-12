@@ -20,6 +20,21 @@ const DEFAULT_DAILY_QUOTA = 4800;
 const SUGGESTION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [2000, 5000, 12_000, 30_000, 60_000];
 const MAX_RETRIES = 5;
+/** Once a 429 exhausts retries, stop hitting Taxonomy for this cooldown window
+ * instead of halting for the rest of the run — mirrors the backend circuit
+ * breaker in EbayTaxonomyApiService (same fix, same root problem: this
+ * script used to trip `rateLimitHalted` permanently on one exhausted 429,
+ * which is why categoryConcurrency was pinned to 2 — a long-lived batch
+ * would otherwise silently fall back to AI/keyword classification for every
+ * remaining part the moment eBay throttled once, even after the throttle
+ * cleared). */
+const RATE_LIMIT_COOLDOWN_MS = 60_000;
+/** A cached or freshly-suggested category can go stale if eBay restructures
+ * its tree after the suggestion was cached (90-day TTL) — same class of bug
+ * as the hardcoded "Exterior Mirrors" category (33726) that silently became
+ * "Transmission & Drivetrain" and broke publish for two listings. Verified
+ * per categoryId for the life of the process before trusting any result. */
+const LEAF_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
 
 class TokenBucket {
   constructor(maxPerSecond) {
@@ -98,6 +113,7 @@ export function createTaxonomyClient(options) {
   const fullCachePath = path.resolve(rootDir, cachePath);
   const rateLimiter = new TokenBucket(requestsPerSecond);
   const memoryCache = new Map();
+  const leafCache = new Map(); // categoryId -> { isLeaf, checkedAt }
 
   const stats = {
     suggestionCacheHits: 0,
@@ -106,7 +122,8 @@ export function createTaxonomyClient(options) {
     dailyQuotaSkipped: 0,
     aspectCacheHits: 0,
     aspectApiCalls: 0,
-    rateLimitHalted: false,
+    rateLimitHaltUntil: 0,
+    staleCategoryDrops: 0,
   };
 
   let disk = loadDisk();
@@ -211,7 +228,13 @@ export function createTaxonomyClient(options) {
         lastErr = err;
         const status = err?.response?.status;
         if (status !== 429 || attempt >= MAX_RETRIES - 1) {
-          if (status === 429) stats.rateLimitHalted = true;
+          if (status === 429) {
+            stats.rateLimitHaltUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+            log(
+              'warn',
+              `eBay Taxonomy circuit opened for ${RATE_LIMIT_COOLDOWN_MS}ms after exhausting retries on ${label}`,
+            );
+          }
           throw err;
         }
         const retryAfter = parseRetryAfterMs(err);
@@ -223,13 +246,55 @@ export function createTaxonomyClient(options) {
     throw lastErr;
   }
 
+  /** Verify a category is still a real, currently-publishable leaf on eBay's
+   * live tree before trusting it (fresh suggestion or from the 90-day disk
+   * cache) — categories can be restructured by eBay after being cached. A
+   * lookup failure doesn't block on an unrelated hiccup; it assumes leaf. */
+  async function isCurrentLeafCategory(categoryId, treeId) {
+    if (!categoryId) return false;
+    const cached = leafCache.get(categoryId);
+    if (cached && Date.now() - cached.checkedAt < LEAF_CHECK_TTL_MS) {
+      return cached.isLeaf;
+    }
+    try {
+      const token = await getToken();
+      if (!token) return true;
+      const { data } = await withRetry(`leaf-check(${categoryId})`, () =>
+        axios.get(
+          `${baseUrl}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_subtree`,
+          {
+            params: { category_id: categoryId },
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 15_000,
+          },
+        ),
+      );
+      const isLeaf = Boolean(data?.categorySubtreeNode?.leafCategoryTreeNode);
+      leafCache.set(categoryId, { isLeaf, checkedAt: Date.now() });
+      return isLeaf;
+    } catch {
+      return true;
+    }
+  }
+
   async function suggestCategory(keywords, treeId = MOTORS_CATEGORY_TREE_ID) {
-    if (stats.rateLimitHalted) return null;
+    if (Date.now() < stats.rateLimitHaltUntil) return null;
 
     const cached = getCachedSuggestion(keywords, treeId);
     if (cached !== undefined) {
-      stats.suggestionCacheHits++;
-      return cached;
+      if (cached === null || (await isCurrentLeafCategory(cached.categoryId, treeId))) {
+        stats.suggestionCacheHits++;
+        return cached;
+      }
+      // Cached result has drifted off leaf status since it was saved (eBay
+      // restructured the tree) — drop it and re-resolve fresh below instead
+      // of trusting a suggestion that will fail publish with "not a leaf
+      // category".
+      stats.staleCategoryDrops++;
+      log(
+        'warn',
+        `Cached category ${cached.categoryId} for "${keywords.slice(0, 40)}" is no longer a leaf — re-resolving`,
+      );
     }
 
     if (getDailyUsage() >= dailyQuota) {
@@ -324,7 +389,8 @@ export function createTaxonomyClient(options) {
     suggestCategory,
     getCategoryAspects,
     getDailyUsage,
-    isRateLimited: () => stats.rateLimitHalted || getDailyUsage() >= dailyQuota,
+    isRateLimited: () =>
+      Date.now() < stats.rateLimitHaltUntil || getDailyUsage() >= dailyQuota,
     getStats: () => ({ ...stats, dailyUsage: getDailyUsage(), dailyQuota }),
     cachePath: fullCachePath,
   };

@@ -11,6 +11,7 @@ import { SellerpunditTokenSyncService } from '../../integrations/sellerpundit/se
 import { SellerpunditAuthService } from '../../integrations/sellerpundit/sellerpundit-auth.service.js';
 import { EbayPolicySyncService } from '../../integrations/ebay/services/ebay-policy-sync.service.js';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
+import { EbayCategoryKeywordAuditService } from '../../channels/ebay/ebay-category-keyword-audit.service.js';
 
 /**
  * Centralized scheduler that enqueues jobs to existing BullMQ queues.
@@ -44,9 +45,28 @@ export class SchedulerService {
     private readonly spTokenSync: SellerpunditTokenSyncService,
     private readonly spAuth: SellerpunditAuthService,
     private readonly nativePolicySync: EbayPolicySyncService,
+    private readonly categoryKeywordAudit: EbayCategoryKeywordAuditService,
     @Optional()
     private readonly priceMonitor?: PriceMonitorService,
   ) {}
+
+  /* ─── Category keyword audit: Daily at 5:00 AM ───
+   * Proactively re-verifies every hardcoded CATEGORY_KEYWORD_ROWS ID is
+   * still a valid, currently-publishable leaf category on eBay's live tree.
+   * Catches drift (eBay restructuring a category we depend on) before it
+   * causes a publish failure — see EbayCategoryKeywordAuditService for the
+   * incident that motivated this (category 33726). */
+  @Cron('0 5 * * *', { name: 'category-keyword-audit-daily' })
+  async scheduleCategoryKeywordAudit(): Promise<void> {
+    await this.leader.runIfLeader('category-keyword-audit-daily', 3600, async () => {
+      const findings = await this.categoryKeywordAudit.auditCategoryKeywords();
+      if (findings.length > 0) {
+        this.logger.error(
+          `Category keyword audit found ${findings.length} drifted categor${findings.length === 1 ? 'y' : 'ies'} — see EbayCategoryKeywordAuditService logs above for details.`,
+        );
+      }
+    });
+  }
 
   /* ─── Storage Cleanup: Daily at 3:00 AM ─── */
 
