@@ -110,82 +110,117 @@ export class ListingOptimizationService {
     const PRODUCT_TIMEOUT_MS = 60_000;
     const EXTEND_LOCK_INTERVAL = 10; // extend BullMQ lock every 10 products
     const EXTEND_LOCK_MS = 10 * 60 * 1000; // 10 min extension
-
-    let completedCount = isRetry ? (existingCounts.processed ?? 0) : 0;
-    const startIndex = completedCount;
-
-    this.logger.log(
-      `Optimization for job ${jobId} [${marketplace}]: ${products.length} total, starting at index ${startIndex}${isRetry ? ' (retry)' : ''}`,
+    // Each product makes its own OpenAI call (enterprise-listing-intelligence's
+    // generateForProduct); processing them one at a time was the real driver
+    // of "painfully slow" jobs, not eBay rate limiting. OpenAiService.chat
+    // already backs off on provider rate-limit headers, so it's safe to fan
+    // these out instead of serializing every product in the job.
+    const PRODUCT_CONCURRENCY = Math.max(
+      1,
+      Number(process.env.LISTING_OPTIMIZATION_PRODUCT_CONCURRENCY ?? '5') ||
+        5,
     );
 
-    for (let i = startIndex; i < products.length; i++) {
-      const { id } = products[i];
+    const startIndex = isRetry ? (existingCounts.processed ?? 0) : 0;
+    const remaining = products.slice(startIndex);
 
-      if (bullJob && i > 0 && i % EXTEND_LOCK_INTERVAL === 0) {
+    this.logger.log(
+      `Optimization for job ${jobId} [${marketplace}]: ${products.length} total, starting at index ${startIndex}${isRetry ? ' (retry)' : ''}, concurrency ${PRODUCT_CONCURRENCY}`,
+    );
+
+    await this.mapWithConcurrency(
+      remaining,
+      PRODUCT_CONCURRENCY,
+      async ({ id }, i) => {
+        if (bullJob && i > 0 && i % EXTEND_LOCK_INTERVAL === 0) {
+          try {
+            await bullJob.extendLock(bullJob.token!, EXTEND_LOCK_MS);
+          } catch (e) {
+            this.logger.warn(
+              `Failed to extend lock for job ${jobId} [${marketplace}]: ${String(e)}`,
+            );
+          }
+          const pct = Math.floor((i / remaining.length) * 100);
+          try {
+            await bullJob.updateProgress(pct);
+          } catch {
+            // progress update is best-effort
+          }
+        }
+
         try {
-          await bullJob.extendLock(bullJob.token!, EXTEND_LOCK_MS);
-        } catch (e) {
-          this.logger.warn(
-            `Failed to extend lock for job ${jobId} [${marketplace}]: ${String(e)}`,
+          await Promise.race([
+            this.optimizeProduct(id, marketplace, { force: false }),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      `Product ${id} optimization timed out after ${PRODUCT_TIMEOUT_MS}ms`,
+                    ),
+                  ),
+                PRODUCT_TIMEOUT_MS,
+              ),
+            ),
+          ]);
+        } catch (err) {
+          this.logger.error(
+            `Optimization failed for product ${id} [${marketplace}]: ${String(err)}`,
+          );
+          // Mark product as failed so it's counted as processed — prevents the
+          // job from getting stuck with processed < total forever.
+          await this.productRepo
+            .update(id, {
+              optimizationStatus: 'failed',
+              optimizationErrors: [
+                {
+                  code: 'OPTIMIZATION_FAILED',
+                  severity: 'error',
+                  message: String(err).substring(0, 500),
+                },
+              ],
+            } as any)
+            .catch(() => {});
+        }
+
+        try {
+          await this.refreshJobOptimizationCounts(jobId, marketplace);
+        } catch (err) {
+          // A transient failure here (DB blip, etc.) must not crash the whole
+          // job — that leaves the job permanently stuck at this product's
+          // count with no path to recovery (see process() catch in the
+          // processor for the terminal case). Log and keep going.
+          this.logger.error(
+            `refreshJobOptimizationCounts failed for job ${jobId} [${marketplace}] at product ${id}: ${String(err)}`,
           );
         }
-        const pct = Math.floor((i / products.length) * 100);
-        try {
-          await bullJob.updateProgress(pct);
-        } catch {
-          // progress update is best-effort
-        }
-      }
-
-      try {
-        await Promise.race([
-          this.optimizeProduct(id, marketplace, { force: false }),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    `Product ${id} optimization timed out after ${PRODUCT_TIMEOUT_MS}ms`,
-                  ),
-                ),
-              PRODUCT_TIMEOUT_MS,
-            ),
-          ),
-        ]);
-      } catch (err) {
-        this.logger.error(
-          `Optimization failed for product ${id} [${marketplace}]: ${String(err)}`,
-        );
-        // Mark product as failed so it's counted as processed — prevents the
-        // job from getting stuck with processed < total forever.
-        await this.productRepo
-          .update(id, {
-            optimizationStatus: 'failed',
-            optimizationErrors: [
-              {
-                code: 'OPTIMIZATION_FAILED',
-                severity: 'error',
-                message: String(err).substring(0, 500),
-              },
-            ],
-          } as any)
-          .catch(() => {});
-      }
-      completedCount++;
-      try {
-        await this.refreshJobOptimizationCounts(jobId, marketplace);
-      } catch (err) {
-        // A transient failure here (DB blip, etc.) must not crash the whole
-        // loop — that leaves the job permanently stuck at this product's
-        // count with no path to recovery (see process() catch in the
-        // processor for the terminal case). Log and keep going.
-        this.logger.error(
-          `refreshJobOptimizationCounts failed for job ${jobId} [${marketplace}] at product ${id}: ${String(err)}`,
-        );
-      }
-    }
+      },
+    );
 
     await this.refreshJobOptimizationAggregate(jobId);
+  }
+
+  /** Bounded-concurrency worker pool — mirrors PipelineProcessor.mapWithConcurrency. */
+  private async mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    fn: (item: T, index: number) => Promise<R>,
+  ): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= items.length) return;
+        results[i] = await fn(items[i], i);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, items.length) }, () =>
+        worker(),
+      ),
+    );
+    return results;
   }
 
   async optimizeProduct(

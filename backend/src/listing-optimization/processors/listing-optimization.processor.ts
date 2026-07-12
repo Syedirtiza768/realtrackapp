@@ -8,8 +8,18 @@ export interface ListingOptimizationJobData {
   marketplace?: 'US' | 'DE' | 'AU';
 }
 
+// Multiple pipeline jobs' optimizations can run side by side — each job/
+// marketplace pair is independent, and the OpenAI calls they make already
+// self-throttle on provider rate-limit headers (see OpenAiService.chat).
+// Previously hardcoded to 1, which serialized every job in the system
+// behind whichever one happened to be running.
+const CONCURRENCY = Math.max(
+  1,
+  Number(process.env.LISTING_OPTIMIZATION_CONCURRENCY ?? '3') || 3,
+);
+
 @Processor('listing-optimization', {
-  concurrency: 1,
+  concurrency: CONCURRENCY,
   lockDuration: 120 * 60 * 1000, // 2 hour lock — handles large pipeline jobs with 500+ products
   maxStalledCount: 2,
   stalledInterval: 30_000,
