@@ -164,9 +164,15 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
     name: 'Window Motors, Parts & Accessories',
   },
   {
+    // 33726 was Exterior Mirrors historically but eBay has since renumbered
+    // it to "Transmission & Drivetrain" (now has children, not a leaf) —
+    // confirmed live via Taxonomy API getCategorySubtree, which is also why
+    // publish failed with errorId 25005 "not a leaf category" for two
+    // listings using the stale ID. 262161 "Mirror Assemblies" is the current
+    // leaf category (verified via getCategorySuggestions('exterior mirror')).
     kw: ['mirror', 'side mirror', 'rearview'],
-    id: '33726',
-    name: 'Exterior Mirrors',
+    id: '262161',
+    name: 'Mirror Assemblies',
   },
   {
     kw: ['headlight', 'headlamp'],
