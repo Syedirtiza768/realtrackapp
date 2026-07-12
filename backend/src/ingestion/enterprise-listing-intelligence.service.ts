@@ -161,8 +161,16 @@ export class EnterpriseListingIntelligenceService {
    * a misleading "Seller Provided Title Value is missing" (errorId 25016)
    * because the inventory item's Motors-parts aspects don't match what a
    * Motorcycles-category listing expects. Force re-resolution instead.
+   *
+   * 6024 = Motorcycles. 6126 = Austin (a defunct British car-make category
+   * under eBay's Motors tree) — same job also had 75 products stuck there;
+   * a make-specific category is only valid when it actually matches the
+   * product's make, and this pipeline's product data never involves Austin.
    */
-  private static readonly WRONG_VERTICAL_MOTORS_IDS = new Set(['6024']);
+  private static readonly WRONG_VERTICAL_MOTORS_IDS = new Set([
+    '6024',
+    '6126',
+  ]);
 
   /** Cached fallback leaf category under 6000. */
   private fallbackLeaf: { categoryId: string; categoryName: string } | null =
