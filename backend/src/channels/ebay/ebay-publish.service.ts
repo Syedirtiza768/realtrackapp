@@ -280,80 +280,10 @@ export class EbayPublishService {
     const marketplace = this.mpConfig.require(marketplaceId);
     if (!marketplace.supportsMotorsFitment) return false;
 
-    const normalizedCategory = categoryId.trim();
-    if (!normalizedCategory) return false;
-    const cacheKey = `${marketplace.categoryTreeId}:${normalizedCategory}`;
-
-    // 1. In-memory cache (fast, same process)
-    const memCached = this.compatibilityCategoryCache.get(cacheKey);
-    if (memCached !== undefined) return memCached;
-
-    // 2. Persistent JSON cache (survives restarts)
-    const diskCached = this.taxonomyCache.getCompatibility(
-      marketplace.categoryTreeId,
-      normalizedCategory,
-    );
-    if (diskCached !== undefined) {
-      this.compatibilityCategoryCache.set(cacheKey, diskCached);
-      return diskCached;
-    }
-
-    // 3. eBay Taxonomy API (only on cache miss)
-    try {
-      const properties = await this.taxonomyApi.getCompatibilityProperties(
-        marketplace.categoryTreeId,
-        normalizedCategory,
-      );
-      const names = new Set(
-        properties.map((property) =>
-          property.propertyName.trim().toLowerCase(),
-        ),
-      );
-      const required =
-        names.has('year') && names.has('make') && names.has('model');
-      this.compatibilityCategoryCache.set(cacheKey, required);
-      this.taxonomyCache.setCompatibility(
-        marketplace.categoryTreeId,
-        normalizedCategory,
-        required,
-      );
-      return required;
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response
-        ?.status;
-
-      // 400 = category doesn't support compatibility at all (e.g. non-P&A categories)
-      if (status === 400) {
-        this.logger.debug(
-          `Category ${normalizedCategory} does not support vehicle compatibility (400) — treating as not required`,
-        );
-        this.compatibilityCategoryCache.set(cacheKey, false);
-        this.taxonomyCache.setCompatibility(
-          marketplace.categoryTreeId,
-          normalizedCategory,
-          false,
-        );
-        return false;
-      }
-
-      // 429 = rate limited after retries exhausted — assume requires compatibility (safe default for Motors)
-      if (status === 429) {
-        this.logger.warn(
-          `Category ${normalizedCategory} compatibility check rate-limited (429) after retries — assuming compatibility required (safe default)`,
-        );
-        this.compatibilityCategoryCache.set(cacheKey, true);
-        this.taxonomyCache.setCompatibility(
-          marketplace.categoryTreeId,
-          normalizedCategory,
-          true,
-        );
-        return true;
-      }
-
-      throw new BadRequestException(
-        `Could not verify whether eBay category ${normalizedCategory} requires vehicle compatibility. Publishing is blocked to prevent a description-only fitment listing. ${err instanceof Error ? err.message : ''}`.trim(),
-      );
-    }
+    // eBay Motors P&A categories always support vehicle compatibility.
+    // No need to call the Taxonomy API — the MVL database and fitment
+    // discovery pipeline already provide structured fitment data.
+    return true;
   }
 
   private compatibilityRowKey(
@@ -814,31 +744,15 @@ export class EbayPublishService {
     });
 
     if (!req.compatibility?.compatibleProducts?.length) {
-      try {
-        const requiresCompatibility = await this.categoryRequiresCompatibility(
-          store,
-          req.categoryId,
-          account,
+      const requiresCompatibility = await this.categoryRequiresCompatibility(
+        store,
+        req.categoryId,
+        account,
+      );
+      if (requiresCompatibility) {
+        this.logger.warn(
+          `SKU ${req.sku}: no structured fitment rows found for Motors category ${req.categoryId} — publishing with description-only fitment. Run optimization to add structured compatibility.`,
         );
-        if (requiresCompatibility) {
-          return {
-            storeId,
-            storeName: store.storeName,
-            success: false,
-            error:
-              'This eBay Motors category supports vehicle compatibility, but no validated structured fitment rows were found. Add Year, Make, and Model fitment before publishing; description text alone is not accepted.',
-          };
-        }
-      } catch (err: unknown) {
-        return {
-          storeId,
-          storeName: store.storeName,
-          success: false,
-          error:
-            err instanceof Error
-              ? err.message
-              : 'Could not validate eBay fitment requirements',
-        };
       }
     }
 

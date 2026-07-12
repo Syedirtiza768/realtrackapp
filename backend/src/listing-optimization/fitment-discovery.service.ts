@@ -59,24 +59,10 @@ export class FitmentDiscoveryService {
       options?.categoryId ??
       product.categoryId ??
       EbayMvlService.MOTORS_PARTS_CATEGORY;
+    // eBay Motors P&A categories always support vehicle compatibility.
+    // No need to call the Taxonomy API — the MVL database provides the
+    // authoritative vehicle data and the fitment pipeline uses it directly.
     let categorySupportsCompatibility = true;
-    try {
-      const props = await this.taxonomy.getCompatibilityProperties(
-        treeId,
-        categoryId,
-      );
-      categorySupportsCompatibility = props.length > 0;
-      if (!categorySupportsCompatibility) {
-        manualReviewReasons.push(
-          'Category does not support automotive compatibility',
-        );
-      }
-    } catch {
-      categorySupportsCompatibility = false;
-      manualReviewReasons.push(
-        'Could not verify eBay compatibility support for category',
-      );
-    }
 
     const candidates: FitmentRow[] = [];
 
