@@ -868,6 +868,17 @@ export class EnterpriseListingIntelligenceService {
    * Checks the cached ebay_category_mappings table AND the static
    * keyword-based Motors category IDs. Returns false for categories
    * that are clearly non-automotive (Guitars, LEGO, etc.).
+   *
+   * A category being "recognized" here isn't enough on its own: eBay
+   * periodically restructures its category tree, and a category that was a
+   * valid leaf when hardcoded or cached can later grow children and stop
+   * being publishable — exactly what happened to 33726, hardcoded as
+   * "Exterior Mirrors" but silently turned into "Transmission & Drivetrain"
+   * with several children by eBay at some point, which wasn't caught until
+   * two live publish attempts failed with "not a leaf category". Once a
+   * category is recognized as Motors, isCurrentlyLeafCategory verifies it's
+   * still usable before this returns true, so drift like that self-corrects
+   * (forces re-resolution) instead of silently failing at publish time.
    */
   private async isMotorsCategory(categoryId: string): Promise<boolean> {
     try {
@@ -879,23 +890,59 @@ export class EnterpriseListingIntelligenceService {
         return false;
       }
 
+      let recognizedAsMotors = false;
+
       // Check keyword-mapped IDs first (fast, no DB call)
       if (
         EnterpriseListingIntelligenceService.KEYWORD_MOTORS_IDS.has(categoryId)
       ) {
-        return true;
+        recognizedAsMotors = true;
+      } else {
+        const mapping = await this.categoryMappingRepo.findOne({
+          where: { ebayCategoryId: categoryId },
+        });
+        if (mapping) {
+          if (!mapping.isMotorsCategory) return false;
+          recognizedAsMotors = true;
+        }
       }
-
-      const mapping = await this.categoryMappingRepo.findOne({
-        where: { ebayCategoryId: categoryId },
-      });
-      if (mapping) return mapping.isMotorsCategory;
 
       // Not in mapping table or keyword rows — reject by default.
       // The caller will re-resolve via the taxonomy API.
-      return false;
+      if (!recognizedAsMotors) return false;
+
+      return await this.isCurrentlyLeafCategory(categoryId);
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Verify a category is still a real, currently-publishable leaf on eBay's
+   * live category tree — not just "under the Motors ancestor chain" (that
+   * check alone let both wrong-vertical categories like Motorcycles/Austin
+   * and structurally-stale ones like the ex-mirrors category through
+   * earlier). Cached per instance since the same category ID recurs across
+   * many products in a batch; a lookup failure (rate limit, network) doesn't
+   * block publishing — it assumes leaf rather than forcing needless
+   * re-resolution on an unrelated API hiccup.
+   */
+  private readonly leafCategoryCache = new Map<string, boolean>();
+
+  private async isCurrentlyLeafCategory(categoryId: string): Promise<boolean> {
+    if (this.leafCategoryCache.has(categoryId)) {
+      return this.leafCategoryCache.get(categoryId)!;
+    }
+    try {
+      const subtree = await this.taxonomy.getCategorySubtree(
+        categoryId,
+        EnterpriseListingIntelligenceService.MOTORS_TREE_ID,
+      );
+      const isLeaf = Boolean(subtree.categorySubtreeNode?.leafCategoryTreeNode);
+      this.leafCategoryCache.set(categoryId, isLeaf);
+      return isLeaf;
+    } catch {
+      return true;
     }
   }
 
