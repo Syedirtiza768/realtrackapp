@@ -8,6 +8,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ImageEnrichmentService } from './image-enrichment.service.js';
 
 import { RequirePermissions } from '../../rbac/decorators/require-permissions.decorator.js';
@@ -75,6 +76,7 @@ export class ImageEnrichmentController {
   }
 
   @Get(':jobId/status')
+  @Throttle({ short: { limit: 30, ttl: 1000 } })
   @ApiOperation({ summary: 'Get image enrichment status for a pipeline job' })
   async getStatus(@Param('jobId') jobId: string) {
     const progress =

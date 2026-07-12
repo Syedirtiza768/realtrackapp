@@ -77,6 +77,12 @@ export class PipelineController {
   }
 
   @Get('jobs/:id/optimization')
+  // The pipeline job page polls this every ~1s alongside jobs/:id and the
+  // image-enrichment status endpoint. The default 'short' bucket (10 req/s
+  // per user) is shared across every tab that user has open on any job page
+  // — two or three tabs on the same job legitimately exceeds it, wedging
+  // the page on "Loading job..." forever with a silent 429.
+  @Throttle({ short: { limit: 30, ttl: 1000 } })
   @RequirePermissions('pipeline.view')
   @ApiOperation({
     summary: 'Get mandatory listing optimization status for a pipeline job',
@@ -323,6 +329,7 @@ export class PipelineController {
   }
 
   @Get('jobs/:id')
+  @Throttle({ short: { limit: 30, ttl: 1000 } })
   @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get pipeline job details' })
   async getJob(@Param('id') id: string, @CurrentUser() user: User) {
