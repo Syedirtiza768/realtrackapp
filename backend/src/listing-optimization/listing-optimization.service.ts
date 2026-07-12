@@ -90,9 +90,16 @@ export class ListingOptimizationService {
 
     const marketplaceSkus = new Set(marketplaceListingSkus.map((r) => r.sku));
 
+    // Resume logic below slices this array by position (products.slice(startIndex)).
+    // Without a stable order, Postgres can return rows in a different sequence
+    // across repeated queries (especially with concurrent writes to these same
+    // rows), so "resume from index N" can silently reprocess already-done
+    // products while skipping the ones that were never actually touched —
+    // processed count plateaus even though the job keeps completing runs.
     let products = await this.productRepo.find({
       where: { pipelineJobId: jobId },
       select: ['id', 'sku'],
+      order: { id: 'ASC' },
     });
 
     // Only process products that have a listing_record for this marketplace.
