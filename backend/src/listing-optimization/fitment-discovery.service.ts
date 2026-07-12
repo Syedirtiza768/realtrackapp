@@ -4,8 +4,6 @@ import { MvlFitmentExpanderService } from '../fitment/mvl-fitment-expander.servi
 import type { MvlValidatedRow } from '../fitment/ebay-mvl.service.js';
 import type { ParsedFitmentRow } from '../fitment/fitment-mvl.util.js';
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
-import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
-import { EbayBrowseApiService } from '../channels/ebay/ebay-browse-api.service.js';
 import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
 import { extractMakeModelFromTitle } from '../listings/utils/extract-make-model-from-title.js';
 import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
@@ -37,8 +35,6 @@ export class FitmentDiscoveryService {
     private readonly vinDecode: VinDecodeService,
     private readonly mvl: EbayMvlService,
     private readonly mvlExpander: MvlFitmentExpanderService,
-    private readonly taxonomy: EbayTaxonomyApiService,
-    private readonly browseApi: EbayBrowseApiService,
   ) {}
 
   async discover(

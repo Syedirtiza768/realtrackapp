@@ -9,9 +9,46 @@ import type {
 } from './ebay-api.types.js';
 
 /**
+ * Simple token bucket rate limiter (same as EbayTaxonomyApiService).
+ */
+class TokenBucketRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly maxTokens: number;
+  private readonly refillRate: number;
+
+  constructor(maxPerSecond: number) {
+    this.maxTokens = maxPerSecond;
+    this.tokens = maxPerSecond;
+    this.refillRate = maxPerSecond / 1000;
+    this.lastRefill = Date.now();
+  }
+
+  async acquire(): Promise<void> {
+    this.refill();
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return;
+    }
+    const waitMs = Math.ceil((1 - this.tokens) / this.refillRate);
+    await new Promise((r) => setTimeout(r, waitMs));
+    this.refill();
+    this.tokens -= 1;
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = now - this.lastRefill;
+    this.tokens = Math.min(
+      this.maxTokens,
+      this.tokens + elapsed * this.refillRate,
+    );
+    this.lastRefill = now;
+  }
+}
+
+/**
  * EbayBrowseApiService — Typed client for the eBay Browse API v1.
- *
- * Phase 5 service (stubbed now with core search/item operations).
  *
  * Covers:
  *  - Search items (keyword, category, aspect filter)
@@ -27,6 +64,7 @@ import type {
 export class EbayBrowseApiService {
   private readonly logger = new Logger(EbayBrowseApiService.name);
   private readonly http: AxiosInstance;
+  private readonly rateLimiter: TokenBucketRateLimiter;
 
   constructor(private readonly auth: EbayAuthService) {
     const config = this.auth.getApiConfig();
@@ -38,6 +76,50 @@ export class EbayBrowseApiService {
         Accept: 'application/json',
       },
     });
+    // Default 2 RPS — same as Taxonomy API
+    this.rateLimiter = new TokenBucketRateLimiter(2);
+  }
+
+  /** Retry Browse API calls on 429 rate limits with exponential backoff. */
+  private async withRateLimitRetry<T>(
+    label: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    const delaysMs = [2000, 5000, 12_000, 30_000, 60_000];
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err: unknown) {
+        lastErr = err;
+        const response = (
+          err as {
+            response?: { status?: number; headers?: Record<string, string> };
+          }
+        )?.response;
+        const status = response?.status;
+        if (status !== 429 || attempt >= maxAttempts - 1) throw err;
+
+        const retryAfterHeader = response?.headers?.['retry-after'];
+        let wait = delaysMs[attempt] ?? 25_000;
+        if (retryAfterHeader) {
+          const seconds = Number(retryAfterHeader);
+          if (Number.isFinite(seconds) && seconds > 0) {
+            wait = seconds * 1000;
+          } else {
+            const date = Date.parse(retryAfterHeader);
+            if (Number.isFinite(date)) wait = Math.max(0, date - Date.now());
+          }
+        }
+
+        this.logger.warn(
+          `eBay Browse ${label} rate-limited (429) — retry ${attempt + 1}/${maxAttempts - 1} in ${wait}ms`,
+        );
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+    throw lastErr;
   }
 
   // ──────────────────────────── helpers ────────────────────────────
@@ -77,9 +159,15 @@ export class EbayBrowseApiService {
     if (options.offset) params.offset = options.offset;
     if (options.aspectFilter) params.aspect_filter = options.aspectFilter;
 
-    const { data } = await this.http.get<EbaySearchResult>(
-      '/item_summary/search',
-      { ...cfg, params },
+    const { data } = await this.withRateLimitRetry(
+      `search(${options.q || options.categoryIds || ''})`,
+      async () => {
+        await this.rateLimiter.acquire();
+        return this.http.get<EbaySearchResult>(
+          '/item_summary/search',
+          { ...cfg, params },
+        );
+      },
     );
     return data;
   }
@@ -89,7 +177,13 @@ export class EbayBrowseApiService {
    */
   async getItem(itemId: string): Promise<EbayItem> {
     const cfg = await this.appHeaders();
-    const { data } = await this.http.get<EbayItem>(`/item/${itemId}`, cfg);
+    const { data } = await this.withRateLimitRetry(
+      `getItem(${itemId})`,
+      async () => {
+        await this.rateLimiter.acquire();
+        return this.http.get<EbayItem>(`/item/${itemId}`, cfg);
+      },
+    );
     return data;
   }
 
@@ -98,9 +192,15 @@ export class EbayBrowseApiService {
    */
   async getItemByLegacyId(legacyItemId: string): Promise<EbayItem> {
     const cfg = await this.appHeaders();
-    const { data } = await this.http.get<EbayItem>(
-      `/item/get_item_by_legacy_id`,
-      { ...cfg, params: { legacy_item_id: legacyItemId } },
+    const { data } = await this.withRateLimitRetry(
+      `getItemByLegacyId(${legacyItemId})`,
+      async () => {
+        await this.rateLimiter.acquire();
+        return this.http.get<EbayItem>(
+          `/item/get_item_by_legacy_id`,
+          { ...cfg, params: { legacy_item_id: legacyItemId } },
+        );
+      },
     );
     return data;
   }
