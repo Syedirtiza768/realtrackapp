@@ -833,50 +833,26 @@ export class EnterpriseListingIntelligenceService {
   }
 
   /**
-   * Find a safe leaf category under 6000 via the subtree API.
-   * Uses BFS to find the shallowest leaf. Result is cached for the
-   * lifetime of the service instance.
+   * Last-resort category when neither the keyword fast path nor Taxonomy API
+   * suggestions found a match.
+   *
+   * This used to BFS the category subtree under 6000 for "the shallowest
+   * leaf", on the theory that any leaf under the Motors root is safe. It
+   * isn't: eBay's Motors tree has many small, shallow leaf categories for
+   * specific (often defunct) car makes — Motorcycles (6024), Austin (6126),
+   * Cord (6185) all surfaced this way for Audi parts in the same job,
+   * because they happened to be near the top of the tree. A make-specific
+   * category is only correct when it matches the product's actual make, and
+   * this generic fallback path has no way to know that — so it must never
+   * return anything but the safe, generic, always-applicable catch-all
+   * below. Whack-a-moling individual bad IDs here doesn't scale; there's no
+   * bound on how many obscure makes eBay's tree has near the root.
    */
   private async getFallbackLeafCategory(): Promise<{
     categoryId: string;
     categoryName: string;
   }> {
     if (this.fallbackLeaf) return this.fallbackLeaf;
-
-    try {
-      const subtree = await this.taxonomy.getCategorySubtree(
-        '6000',
-        EnterpriseListingIntelligenceService.MOTORS_TREE_ID,
-      );
-      const queue = [subtree.categorySubtreeNode];
-      while (queue.length > 0) {
-        const node = queue.shift()!;
-        if (
-          EnterpriseListingIntelligenceService.WRONG_VERTICAL_MOTORS_IDS.has(
-            node.category.categoryId,
-          )
-        ) {
-          continue; // e.g. Motorcycles (6024) — wrong vertical, never a valid fallback leaf, and skip its subtree too
-        }
-        if (node.leafCategoryTreeNode) {
-          this.fallbackLeaf = {
-            categoryId: node.category.categoryId,
-            categoryName: node.category.categoryName,
-          };
-          this.logger.log(
-            `Resolved fallback Motors leaf: ${this.fallbackLeaf.categoryId} (${this.fallbackLeaf.categoryName})`,
-          );
-          return this.fallbackLeaf;
-        }
-        if (node.childCategoryTreeNodes) {
-          queue.push(...node.childCategoryTreeNodes);
-        }
-      }
-    } catch (err) {
-      this.logger.warn(
-        `Failed to resolve fallback Motors leaf from subtree: ${(err as Error).message}`,
-      );
-    }
 
     // Hardcoded emergency fallback must itself be a publishable leaf.
     // Category 6000 is the Motors P&A root and eBay Inventory rejects it.
