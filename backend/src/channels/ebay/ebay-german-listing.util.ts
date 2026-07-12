@@ -102,6 +102,13 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
   id: string;
   name: string;
 }> = [
+  // The IDs below were corrected 2026-07-13 after EbayCategoryKeywordAuditService's
+  // first run found eBay had silently reassigned most of these to unrelated
+  // categories (still valid leaves, so the earlier leaf-check alone didn't
+  // catch it — e.g. 33717 used to be "Dashboards & Dashboard Parts" and is
+  // now "Turn Signal Light Assemblies"). Two IDs (old 33695, old 174085) had
+  // been retired outright (410/400 on lookup). All replacements below were
+  // verified live via getCategorySuggestions immediately before this fix.
   {
     kw: [
       'dashboard',
@@ -111,8 +118,8 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
       'dash bezel',
       'armaturenbrett',
     ],
-    id: '33717',
-    name: 'Dashboards & Dashboard Parts',
+    id: '262191',
+    name: 'Dash Panels',
   },
   {
     kw: [
@@ -123,8 +130,8 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
       'inner panel',
       'door finisher',
     ],
-    id: '33695',
-    name: 'Interior Door Panels & Parts',
+    id: '33696',
+    name: 'Door Panels',
   },
   {
     kw: [
@@ -134,13 +141,13 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
       'door trim',
       'innen',
     ],
-    id: '33695',
-    name: 'Interior Door Panels & Parts',
+    id: '33696',
+    name: 'Door Panels',
   },
   {
     kw: ['exterior door panel', 'door skin', 'door shell', 'exterior door'],
-    id: '33697',
-    name: 'Exterior Door Panels & Frames',
+    id: '179850',
+    name: 'Doors & Door Skins',
   },
   {
     kw: [
@@ -150,18 +157,18 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
       "driver's door",
       'door body-in-white',
     ],
-    id: '174105',
-    name: 'Doors & Door Parts',
+    id: '179850',
+    name: 'Doors & Door Skins',
   },
   {
     kw: ['door handle', 'handle strip'],
-    id: '174106',
+    id: '179851',
     name: 'Door Handles',
   },
   {
     kw: ['window regulator', 'window lifter', 'window motor'],
-    id: '174085',
-    name: 'Window Motors, Parts & Accessories',
+    id: '33706',
+    name: 'Window Motors & Regulators',
   },
   {
     // 33726 was Exterior Mirrors historically but eBay has since renumbered
@@ -177,12 +184,12 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
   {
     kw: ['headlight', 'headlamp'],
     id: '33710',
-    name: 'Headlights',
+    name: 'Headlight Assemblies', // eBay renamed this; still the correct leaf ID
   },
   {
     kw: ['center console', 'armrest console'],
-    id: '174090',
-    name: 'Center Consoles',
+    id: '262189',
+    name: 'Center & Overhead Console Parts',
   },
 ];
 

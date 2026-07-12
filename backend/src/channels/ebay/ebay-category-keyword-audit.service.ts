@@ -52,12 +52,11 @@ export class EbayCategoryKeywordAuditService {
         );
         const node = subtree.categorySubtreeNode;
         const isLeaf = Boolean(node?.leafCategoryTreeNode);
-        const nameChanged =
-          node?.category?.categoryName &&
-          node.category.categoryName !== row.name;
+        const liveName = node?.category?.categoryName;
+        const nameChanged = liveName && liveName !== row.name;
 
         if (!isLeaf) {
-          const reason = `No longer a leaf category (now "${node?.category?.categoryName ?? 'unknown'}")`;
+          const reason = `No longer a leaf category (now "${liveName ?? 'unknown'}")`;
           findings.push({
             categoryId: row.id,
             categoryName: row.name,
@@ -67,27 +66,58 @@ export class EbayCategoryKeywordAuditService {
           this.logger.error(
             `CATEGORY_KEYWORD_ROWS drift: ${row.id} ("${row.name}", keywords: ${row.kw.join(', ')}) — ${reason}. Marking inactive in ebay_category_mappings.`,
           );
-          await this.markInactive(row.id, node?.category?.categoryName ?? row.name);
+          await this.markInactive(row.id, liveName ?? row.name);
         } else if (nameChanged) {
-          // Still a leaf, but eBay renamed it — not broken, but worth
-          // knowing about since our hardcoded `name` field is now stale.
-          this.logger.warn(
-            `CATEGORY_KEYWORD_ROWS: ${row.id} is still a valid leaf but eBay now calls it "${node.category.categoryName}" (we have "${row.name}")`,
+          // Still a valid, publishable leaf — but eBay reassigned this ID to
+          // mean something different (e.g. 33717 used to be "Dashboards &
+          // Dashboard Parts", now "Turn Signal Light Assemblies"). Publish
+          // would succeed silently under the wrong category — worse than a
+          // hard failure, since nothing errors. This is a real, actionable
+          // finding requiring a code fix to CATEGORY_KEYWORD_ROWS, but NOT
+          // grounds to mark the ID inactive — it's still valid, just no
+          // longer the right ID for these keywords.
+          const reason = `Still a valid leaf, but eBay renamed it to "${liveName}" — hardcoded mapping may now point to the wrong category for these keywords`;
+          findings.push({
+            categoryId: row.id,
+            categoryName: row.name,
+            keywords: row.kw,
+            reason,
+          });
+          this.logger.error(
+            `CATEGORY_KEYWORD_ROWS drift: ${row.id} ("${row.name}", keywords: ${row.kw.join(', ')}) — ${reason}`,
           );
         }
       } catch (err) {
-        // Don't let one API hiccup block the rest of the audit, and don't
-        // treat a transient failure as a finding — only firm confirmation
-        // of drift is actionable.
-        this.logger.warn(
-          `Category audit could not verify ${row.id} ("${row.name}"): ${(err as Error).message}`,
-        );
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status;
+        if (status === 400 || status === 404 || status === 410) {
+          // Category ID no longer exists at all (retired/merged by eBay) —
+          // definitely actionable, and safe to mark inactive since it can
+          // never resolve to anything valid.
+          const reason = `Category lookup failed with ${status} — likely retired/merged by eBay`;
+          findings.push({
+            categoryId: row.id,
+            categoryName: row.name,
+            keywords: row.kw,
+            reason,
+          });
+          this.logger.error(
+            `CATEGORY_KEYWORD_ROWS drift: ${row.id} ("${row.name}", keywords: ${row.kw.join(', ')}) — ${reason}. Marking inactive in ebay_category_mappings.`,
+          );
+          await this.markInactive(row.id, row.name);
+        } else {
+          // Transient failure (rate limit, network, timeout) — don't treat
+          // as a finding, don't block the rest of the audit.
+          this.logger.warn(
+            `Category audit could not verify ${row.id} ("${row.name}"): ${(err as Error).message}`,
+          );
+        }
       }
     }
 
     if (findings.length === 0) {
       this.logger.log(
-        `Category keyword audit: all ${CATEGORY_KEYWORD_ROWS.length} hardcoded category IDs are still valid leaves.`,
+        `Category keyword audit: all ${CATEGORY_KEYWORD_ROWS.length} hardcoded category IDs are still valid leaves with matching names.`,
       );
     } else {
       this.logger.error(
