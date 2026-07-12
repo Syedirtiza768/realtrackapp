@@ -66,6 +66,7 @@ export class FitmentDiscoveryService {
 
     const candidates: FitmentRow[] = [];
 
+    // ── Source 1: Existing catalog fitment_data (JSONB) ──
     if (Array.isArray(product.fitmentData)) {
       for (const raw of product.fitmentData) {
         const row = this.rowFromRaw(raw, 'catalog_fitment');
@@ -73,88 +74,63 @@ export class FitmentDiscoveryService {
       }
     }
 
-    // ── Source 4: eBay catalog lookup by MPN ──
-    // Searches eBay for existing listings of this part to find category,
-    // EPID, and Year/Make/Model fitment from item specifics.
-    let ebayCatalogCategoryId: string | null = null;
-    let ebayCatalogCategoryName: string | null = null;
-
+    // ── Source 2: Title parsing (local, fast) ──
+    // Titles follow "[Year Range] [Make] [Model] [Part Name] [MPN] [Condition]"
+    // e.g. "2002-2015 Audi Q7 Alternator 021903016KX OEM Used"
+    // This gives us Year/Make/Model to expand via MVL database.
     if (candidates.length === 0) {
-      const searchMpn = product.mpn || product.oemPartNumber;
-      if (searchMpn) {
+      candidates.push(...this.candidatesFromTitle(product));
+    }
+
+    // ── Source 3: MVL expansion from title-derived vehicle ──
+    // If the title gave us Year/Make/Model, expand to all applicable
+    // year/trim/engine combinations using the MVL database (local, no API).
+    if (candidates.length > 0 && this.mvlExpander.getExpansionMode() !== 'ai') {
+      const first = candidates[0];
+      if (first.make && first.model) {
         try {
-          const catalogResult = await this.browseApi.searchByMpn(
-            product.brand ?? '',
-            searchMpn,
-            { categoryIds: EbayMvlService.MOTORS_PARTS_CATEGORY, limit: 5 },
-          );
+          // Parse year range from the first candidate
+          const yearStr = first.year || '';
+          const yearMatch = yearStr.match(/(\d{4})/);
+          const donorYear = yearMatch ? yearMatch[1] : '';
 
-          if (catalogResult.found) {
-            const best = catalogResult.items[0];
-
-            // Use the category from the eBay listing if the product has none
-            if (best.categoryId && !product.categoryId) {
-              ebayCatalogCategoryId = best.categoryId;
-              ebayCatalogCategoryName = best.categoryName;
-            }
-
-            // Extract fitment hints from item aspects
-            for (const item of catalogResult.items) {
-              for (const hint of item.fitmentHints) {
-                if (hint.make && hint.model) {
-                  candidates.push({
-                    year: hint.year || '',
-                    make: hint.make,
-                    model: hint.model,
-                    confidence: 0.7,
-                    source: 'ebay_catalog_lookup',
-                    validationStatus: 'needs_review',
-                    notes: `Fitment from eBay listing ${item.itemId} — verify compatibility`,
-                  });
-                }
-              }
-            }
-
-            // Also try to extract vehicle from the listing title
-            if (candidates.length === 0 && best.title) {
-              const { make, model } = extractMakeModelFromTitle(best.title);
-              if (make && model) {
-                candidates.push({
-                  year: '',
-                  make,
-                  model,
-                  confidence: 0.65,
-                  source: 'ebay_catalog_lookup',
-                  validationStatus: 'needs_review',
-                  notes: `Make/model inferred from eBay listing title — verify compatibility`,
-                });
-              }
-            }
-
-            if (candidates.length > 0) {
-              this.logger.log(
-                `eBay catalog lookup for "${searchMpn}": found ${catalogResult.items.length} items, ` +
-                  `${candidates.length} fitment hint(s), category=${ebayCatalogCategoryId ?? 'n/a'}`,
-              );
-            } else {
-              this.logger.debug(
-                `eBay catalog lookup for "${searchMpn}": found items but no fitment hints`,
-              );
-            }
+          const mvlResult = await this.mvlExpander.expand({
+            donor: {
+              year: donorYear,
+              make: first.make,
+              model: first.model,
+            },
+            partType: product.partType ?? undefined,
+            placement: product.placement ?? undefined,
+            mpn: product.mpn ?? product.oemPartNumber ?? undefined,
+            profile: 'full',
+            marketplace: options?.marketplace,
+            treeId,
+          });
+          for (const row of mvlResult.expandedRows) {
+            candidates.push({
+              year: row.year,
+              make: row.make,
+              model: row.model,
+              trim: row.trim,
+              engine: row.engine,
+              confidence: row.source === 'platform_generation' ? 0.88 : 0.75,
+              source: `mvl_${row.source}`,
+              validationStatus: 'needs_review',
+              notes: row.notes,
+            });
           }
+          manualReviewReasons.push(...mvlResult.manualReviewReasons);
         } catch (err) {
           this.logger.warn(
-            `eBay catalog lookup failed for MPN "${searchMpn}": ${err instanceof Error ? err.message : err}`,
+            `MVL expansion failed for ${first.make}/${first.model}: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
     }
 
-    if (candidates.length === 0) {
-      candidates.push(...this.candidatesFromTitle(product));
-    }
-
-    if (donorVin) {
+    // ── Source 4: Donor VIN decode + MVL expansion (only if no candidates yet) ──
+    if (donorVin && candidates.length === 0) {
       try {
         const decoded = await this.vinDecode.decode(donorVin);
         donorVinDecoded = decoded as unknown as Record<string, unknown>;
@@ -262,8 +238,8 @@ export class FitmentDiscoveryService {
           ...manualReviewReasons,
           'No verified compatibility rows — manual fitment review required',
         ],
-        ebayCatalogCategoryId,
-        ebayCatalogCategoryName,
+        ebayCatalogCategoryId: null,
+        ebayCatalogCategoryName: null,
       };
     }
 
@@ -291,8 +267,8 @@ export class FitmentDiscoveryService {
       donorVin,
       categorySupportsCompatibility,
       manualReviewReasons,
-      ebayCatalogCategoryId,
-      ebayCatalogCategoryName,
+      ebayCatalogCategoryId: null,
+      ebayCatalogCategoryName: null,
     };
   }
 
