@@ -48,6 +48,7 @@ import {
   isEbayPartsAccessoriesReturnPolicyError,
   isEbayRecoverableBusinessPolicyError,
   isEbaySellingLimitError,
+  isEbayTitleMissingTransientError,
 } from './ebay-api-error.util.js';
 import {
   EbayBusinessPolicy,
@@ -1956,6 +1957,43 @@ export class EbayPublishService {
     }
   }
 
+  /**
+   * Publish an offer, retrying on eBay's title-propagation-lag error (25016).
+   * Only seen after updating an existing offer (see resolveOrCreateOfferId)
+   * and publishing it moments later — eBay's publish-validation path
+   * occasionally reads a snapshot that predates our just-written inventory
+   * item title. The title is correct on both our side and the inventory item
+   * we just upserted; waiting briefly and retrying the same publish call
+   * (no data changes needed) resolves it once eBay's backend catches up.
+   */
+  private async publishOfferWithTitlePropagationRetry(
+    storeId: string,
+    offerId: string,
+    maxAttempts = 3,
+  ): Promise<EbayPublishResponse> {
+    const delaysMs = [2000, 4000];
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await this.inventoryApi.publishOffer(storeId, offerId);
+      } catch (err: unknown) {
+        lastErr = err;
+        if (
+          !isEbayTitleMissingTransientError(err) ||
+          attempt >= maxAttempts - 1
+        ) {
+          throw err;
+        }
+        const wait = delaysMs[attempt] ?? 4000;
+        this.logger.warn(
+          `Publish for offer ${offerId} hit eBay title-propagation lag (errorId 25016) — retry ${attempt + 1}/${maxAttempts - 1} in ${wait}ms`,
+        );
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+    throw lastErr;
+  }
+
   private async publishOfferWithRetries(
     storeId: string,
     offerId: string,
@@ -1964,7 +2002,10 @@ export class EbayPublishService {
     req: PublishRequest,
   ): Promise<EbayPublishResponse> {
     try {
-      return await this.inventoryApi.publishOffer(storeId, offerId);
+      return await this.publishOfferWithTitlePropagationRetry(
+        storeId,
+        offerId,
+      );
     } catch (publishErr: unknown) {
       if (!account || !isEbayRecoverableBusinessPolicyError(publishErr)) {
         throw publishErr;

@@ -256,3 +256,32 @@ export function isEbayRecoverableBusinessPolicyError(err: unknown): boolean {
     isEbayPartsAccessoriesReturnPolicyError(err)
   );
 }
+
+/**
+ * True when publish failed because eBay's backend hasn't yet indexed a just-
+ * written inventory item title (errorId 25016). Only seen when an offer
+ * already existed and was updated immediately before publishing — a fresh
+ * offer + publish (no prior existing offer) doesn't hit this. The title is
+ * correct in both our DB and the inventory item we just upserted; this is a
+ * read-after-write propagation lag on eBay's side, not a real data problem —
+ * a short-delay retry resolves it.
+ */
+export function isEbayTitleMissingTransientError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const bodies: unknown[] = [
+    (err as { response?: { data?: unknown } }).response?.data,
+    err,
+  ];
+  for (const body of bodies) {
+    if (!body || typeof body !== 'object') continue;
+    const errors = (body as { errors?: EbayErrorRow[] }).errors;
+    if (!Array.isArray(errors)) continue;
+    for (const e of errors) {
+      if (String(e.errorId) === '25016') return true;
+      const msg = e.longMessage ?? e.message ?? '';
+      if (/seller provided title value is missing/i.test(msg)) return true;
+    }
+  }
+  const formatted = formatEbayApiError(err, '');
+  return /seller provided title value is missing/i.test(formatted);
+}
