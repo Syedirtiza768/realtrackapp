@@ -148,6 +148,22 @@ export class EnterpriseListingIntelligenceService {
     CATEGORY_KEYWORD_ROWS.map((r) => r.id),
   );
 
+  /**
+   * Categories that are technically under the eBay Motors tree (ancestor
+   * chain includes 6000) but are the wrong vertical for a car/truck parts
+   * business — e.g. 6024 "Motorcycles". isMotorsCategory's ancestor-chain
+   * check treats these as valid, so once a product gets stuck on one
+   * (typically via getFallbackLeafCategory's BFS landing on the shallowest
+   * leaf under 6000, without regard for relevance — seen live: 318 of 766
+   * products in job 572e96dd got category 6024 during a Taxonomy API
+   * rate-limiting incident), it never self-corrects: the category "passes"
+   * validation on every later publish attempt, and eBay rejects publish with
+   * a misleading "Seller Provided Title Value is missing" (errorId 25016)
+   * because the inventory item's Motors-parts aspects don't match what a
+   * Motorcycles-category listing expects. Force re-resolution instead.
+   */
+  private static readonly WRONG_VERTICAL_MOTORS_IDS = new Set(['6024']);
+
   /** Cached fallback leaf category under 6000. */
   private fallbackLeaf: { categoryId: string; categoryName: string } | null =
     null;
@@ -827,6 +843,13 @@ export class EnterpriseListingIntelligenceService {
       const queue = [subtree.categorySubtreeNode];
       while (queue.length > 0) {
         const node = queue.shift()!;
+        if (
+          EnterpriseListingIntelligenceService.WRONG_VERTICAL_MOTORS_IDS.has(
+            node.category.categoryId,
+          )
+        ) {
+          continue; // e.g. Motorcycles (6024) — wrong vertical, never a valid fallback leaf, and skip its subtree too
+        }
         if (node.leafCategoryTreeNode) {
           this.fallbackLeaf = {
             categoryId: node.category.categoryId,
@@ -864,6 +887,14 @@ export class EnterpriseListingIntelligenceService {
    */
   private async isMotorsCategory(categoryId: string): Promise<boolean> {
     try {
+      if (
+        EnterpriseListingIntelligenceService.WRONG_VERTICAL_MOTORS_IDS.has(
+          categoryId,
+        )
+      ) {
+        return false;
+      }
+
       // Check keyword-mapped IDs first (fast, no DB call)
       if (
         EnterpriseListingIntelligenceService.KEYWORD_MOTORS_IDS.has(categoryId)
