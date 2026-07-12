@@ -152,6 +152,27 @@ export class EnterpriseListingIntelligenceService {
   private fallbackLeaf: { categoryId: string; categoryName: string } | null =
     null;
 
+  /**
+   * Cache of Taxonomy API category-suggestion results, keyed by normalized
+   * query text. Many products in the same import share a part type (e.g.
+   * "Seal", "Heat Shield") that isn't in the keyword fast path, and each one
+   * used to make its own live Taxonomy API call — under concurrent
+   * processing this hammered eBay's rate limit hard enough to stall an
+   * entire optimization job on repeated 429 backoff (2s→5s→12s→30s, per
+   * query, per product). Caching the resolved result for the lifetime of
+   * this service instance means only the first product with a given query
+   * pays the API cost.
+   */
+  private readonly categorySuggestionCache = new Map<
+    string,
+    { categoryId: string; categoryName: string } | null
+  >();
+  /** In-flight requests, so concurrent products with the same query share one API call instead of each firing their own. */
+  private readonly categorySuggestionInFlight = new Map<
+    string,
+    Promise<{ categoryId: string; categoryName: string } | null>
+  >();
+
   constructor(
     @InjectRepository(PipelineJob)
     private readonly pipelineRepo: Repository<PipelineJob>,
@@ -744,28 +765,47 @@ export class EnterpriseListingIntelligenceService {
   private async findMotorsLeafFromSuggestions(
     query: string,
   ): Promise<{ categoryId: string; categoryName: string } | null> {
-    try {
-      const suggestions = await this.taxonomy.getCategorySuggestions(
-        query,
-        EnterpriseListingIntelligenceService.MOTORS_TREE_ID,
-      );
-      for (const s of suggestions) {
-        const catId = s.category?.categoryId;
-        if (!catId) continue;
-        const underMotors = s.categoryTreeNodeAncestors?.some(
-          (a) => a.categoryId === '6000',
-        );
-        if (underMotors) {
-          return {
-            categoryId: catId,
-            categoryName: s.category.categoryName,
-          };
-        }
-      }
-    } catch {
-      // ignore — caller will try the next query or fallback
+    const cacheKey = query.trim().toLowerCase();
+    if (this.categorySuggestionCache.has(cacheKey)) {
+      return this.categorySuggestionCache.get(cacheKey)!;
     }
-    return null;
+    const inFlight = this.categorySuggestionInFlight.get(cacheKey);
+    if (inFlight) return inFlight;
+
+    const request = (async () => {
+      let result: { categoryId: string; categoryName: string } | null = null;
+      try {
+        const suggestions = await this.taxonomy.getCategorySuggestions(
+          query,
+          EnterpriseListingIntelligenceService.MOTORS_TREE_ID,
+        );
+        for (const s of suggestions) {
+          const catId = s.category?.categoryId;
+          if (!catId) continue;
+          const underMotors = s.categoryTreeNodeAncestors?.some(
+            (a) => a.categoryId === '6000',
+          );
+          if (underMotors) {
+            result = {
+              categoryId: catId,
+              categoryName: s.category.categoryName,
+            };
+            break;
+          }
+        }
+        this.categorySuggestionCache.set(cacheKey, result);
+      } catch {
+        // ignore — caller will try the next query or fallback. Deliberately
+        // NOT cached: a transient rate-limit/network failure shouldn't
+        // permanently poison this query for the rest of the job.
+      } finally {
+        this.categorySuggestionInFlight.delete(cacheKey);
+      }
+      return result;
+    })();
+
+    this.categorySuggestionInFlight.set(cacheKey, request);
+    return request;
   }
 
   /**
