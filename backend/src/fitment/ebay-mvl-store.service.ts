@@ -338,7 +338,9 @@ export class EbayMvlStoreService {
       const models = [...new Set(batch.map((b) => b.model.toLowerCase()))];
       const rows = await this.entryRepo
         .createQueryBuilder('e')
-        .select(['DISTINCT LOWER(e.make)', 'LOWER(e.model)'])
+        .distinct(true)
+        .select('LOWER(e.make)', 'make')
+        .addSelect('LOWER(e.model)', 'model')
         .where('e.release_id = :releaseId', { releaseId })
         .andWhere('e.marketplace = :marketplace', { marketplace })
         .andWhere('LOWER(e.make) IN (:...makes)', { makes })
@@ -386,7 +388,10 @@ export class EbayMvlStoreService {
       const years = [...new Set(batch.map((b) => b.year))];
       const rows = await this.entryRepo
         .createQueryBuilder('e')
-        .select(['DISTINCT LOWER(e.make)', 'LOWER(e.model)', 'e.year'])
+        .distinct(true)
+        .select('LOWER(e.make)', 'make')
+        .addSelect('LOWER(e.model)', 'model')
+        .addSelect('e.year', 'year')
         .where('e.release_id = :releaseId', { releaseId })
         .andWhere('e.marketplace = :marketplace', { marketplace })
         .andWhere('LOWER(e.make) IN (:...makes)', { makes })
