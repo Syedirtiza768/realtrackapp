@@ -172,7 +172,17 @@ export class ListingOptimizationService {
           .catch(() => {});
       }
       completedCount++;
-      await this.refreshJobOptimizationCounts(jobId, marketplace);
+      try {
+        await this.refreshJobOptimizationCounts(jobId, marketplace);
+      } catch (err) {
+        // A transient failure here (DB blip, etc.) must not crash the whole
+        // loop — that leaves the job permanently stuck at this product's
+        // count with no path to recovery (see process() catch in the
+        // processor for the terminal case). Log and keep going.
+        this.logger.error(
+          `refreshJobOptimizationCounts failed for job ${jobId} [${marketplace}] at product ${id}: ${String(err)}`,
+        );
+      }
     }
 
     await this.refreshJobOptimizationAggregate(jobId);
@@ -534,18 +544,26 @@ export class ListingOptimizationService {
     const job = await this.jobRepo.findOneBy({ id: jobId });
 
     if (marketplace) {
-      await this.mergeOptimizationByMarketplace(jobId, marketplace, {
-        status:
-          blockCount > 0 && passCount === 0
+      const total = job?.optimizationTotal ?? 0;
+      // Only finalize a verdict (failed/needs_review/completed) once every
+      // product has actually been processed. Computing it off partial counts
+      // mid-loop (e.g. 1 block out of 4 processed with 762 still pending)
+      // falsely reports "failed" while the job is still actively running.
+      const status =
+        processed < total
+          ? 'running'
+          : blockCount > 0 && passCount === 0
             ? 'failed'
             : reviewCount > 0
               ? 'needs_review'
-              : 'completed',
+              : 'completed';
+      await this.mergeOptimizationByMarketplace(jobId, marketplace, {
+        status,
         passCount,
         reviewCount,
         blockCount,
         processed,
-        total: job?.optimizationTotal ?? 0,
+        total,
       });
     }
 
@@ -569,6 +587,29 @@ export class ListingOptimizationService {
        WHERE id = $1`,
       [jobId, JSON.stringify({ [marketplace]: data })],
     );
+  }
+
+  /**
+   * Called from the BullMQ processor's catch block when enqueueJobOptimization
+   * throws mid-run. Flips the marketplace slice and the job-level aggregate to
+   * 'failed' so the UI stops polling a dead job forever instead of showing
+   * "Optimizing…" indefinitely.
+   */
+  async markJobOptimizationFailed(
+    jobId: string,
+    marketplace: string,
+  ): Promise<void> {
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    if (!job) return;
+
+    const byMkt = (job.optimizationByMarketplace ?? {}) as Record<string, any>;
+    const existing = byMkt[marketplace] ?? {};
+
+    await this.mergeOptimizationByMarketplace(jobId, marketplace, {
+      ...existing,
+      status: 'failed',
+    });
+    await this.refreshJobOptimizationAggregate(jobId);
   }
 
   private async refreshJobOptimizationAggregate(jobId: string): Promise<void> {

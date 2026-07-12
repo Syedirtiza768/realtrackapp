@@ -26,9 +26,22 @@ export class ListingOptimizationProcessor extends WorkerHost {
     this.logger.log(
       `Starting mandatory listing optimization for pipeline job ${jobId} [${marketplace}]`,
     );
-    await this.optimization.enqueueJobOptimization(jobId, marketplace, job);
-    this.logger.log(
-      `Completed listing optimization for pipeline job ${jobId} [${marketplace}]`,
-    );
+    try {
+      await this.optimization.enqueueJobOptimization(jobId, marketplace, job);
+      this.logger.log(
+        `Completed listing optimization for pipeline job ${jobId} [${marketplace}]`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Listing optimization crashed for pipeline job ${jobId} [${marketplace}]: ${String(err)}`,
+      );
+      // Without this, a mid-loop crash leaves optimization_status stuck at
+      // 'running' forever in the DB even though BullMQ has already given up
+      // on the job — the UI polls that field and shows "stuck" indefinitely.
+      await this.optimization
+        .markJobOptimizationFailed(jobId, marketplace)
+        .catch(() => {});
+      throw err;
+    }
   }
 }
