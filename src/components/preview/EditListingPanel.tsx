@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Plus, Trash2, Save, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
+import RichTextDescriptionEditor from '../ui/RichTextDescriptionEditor';
 
 interface EditListingPanelProps {
   listing: EbayListing;
@@ -351,13 +352,14 @@ export default function EditListingPanel({ listing, onSave, onCancel }: EditList
         <div className="border-t border-slate-200 dark:border-slate-700" />
 
         {/* Description */}
-        <SectionHeader title="Description (HTML)" sectionKey="description" />
+        <SectionHeader title="Description" sectionKey="description" />
         {expandedSections.description && (
           <div className="pb-3">
-            <textarea
-              className={inputClasses + ' min-h-[200px] font-mono text-xs'}
+            <RichTextDescriptionEditor
               value={draft.description}
-              onChange={e => updateField('description', e.target.value)}
+              onChange={(html) => updateField('description', html)}
+              minHeight={200}
+              variant="form"
             />
           </div>
         )}

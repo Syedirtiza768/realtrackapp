@@ -113,7 +113,7 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 | ingestion | `ingestion.view`, `ingestion.create`, `ingestion.manage` |
 | pipeline | `pipeline.view`, `pipeline.run`, `pipeline.manage`, `pipeline.review`, `pipeline.export` |
 | catalog | `catalog.view`, `catalog.update`, `catalog.import`, `catalog.clear`, `catalog.export`, `catalog.compliance` |
-| inventory | `inventory.view`, `inventory.adjust`, `inventory.allocate`, `inventory.reconcile` |
+| inventory | `inventory.view`, `inventory.enrich`, `inventory.delete`, `inventory.adjust`, `inventory.allocate`, `inventory.reconcile` |
 | orders | `orders.view`, `orders.update`, `orders.ship`, `orders.refund`, `orders.import` |
 | channels | `channels.view`, `channels.connect`, `channels.publish`, `channels.sync`, `channels.manage` |
 | stores | `stores.view`, `stores.manage` |
@@ -137,6 +137,7 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 |-----------------|---------------|
 | `super_admin` only | `client_settings.*`, `roles.assign_permissions`, `feature_flags.manage` |
 | `admin` and up | `users.*`, `catalog.clear`, `settings.manage`, `inventory.reconcile` |
+| `super_admin` + `admin` (default) | `listings.delete`, `inventory.delete` — soft-delete; reassignable via Roles UI |
 | `manager` and up | `users.view`, `roles.view`, `ingestion.manage`, `pipeline.manage`, `catalog.import`, `inventory.adjust`, `orders.refund` |
 | `read_write` | `listings.create`, `listings.update`, `catalog.update`, `orders.update`, `orders.ship` |
 | `read_only` | All view permissions |

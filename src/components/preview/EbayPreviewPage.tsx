@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Upload, FileText, X, Eye, ChevronLeft, ChevronRight, Search, Image as ImageIcon, AlertTriangle, Pencil, Download, LayoutGrid, List } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import RichTextDescriptionEditor from '../ui/RichTextDescriptionEditor';
 import { parseEbayFileExchangeCsv, generateEbayFileExchangeCsv, type EbayListing, type ParseResult } from '../../lib/ebayFileExchangeParser';
 import EditListingPanel from './EditListingPanel';
 import { fetchWithAuth } from '../../lib/authApi';
@@ -719,19 +720,17 @@ input[type="radio"][name="tab"] {
             </div>
           )}
 
-          {/* ── Item Description — inline editable ── */}
+          {/* ── Item Description — WYSIWYG (Visual) with optional HTML source ── */}
           {editable ? (
             <div style={{ marginBottom: 32 }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#191919', marginBottom: 16 }}>Item description from the seller</h3>
-              <div style={{ border: '1px solid #e5e5e5', borderRadius: 12, overflow: 'hidden', padding: 8 }}>
-                <InlineEditField
-                  value={editedFields?.description ?? sanitizeDescription(listing.description ?? '')}
-                  onChange={(v) => onFieldChange?.('description', v)}
-                  multiline
-                  style={{ width: '100%', minHeight: 400, fontSize: 14, lineHeight: 1.5, fontFamily: 'Arial, sans-serif', padding: 12 }}
-                  placeholder="Enter HTML description..."
-                />
-              </div>
+              <RichTextDescriptionEditor
+                value={editedFields?.description ?? sanitizeDescription(listing.description ?? '')}
+                onChange={(v) => onFieldChange?.('description', v)}
+                placeholder="Write the item description…"
+                minHeight={400}
+                variant="preview"
+              />
             </div>
           ) : safeDescription ? (
             <div style={{ marginBottom: 32 }}>

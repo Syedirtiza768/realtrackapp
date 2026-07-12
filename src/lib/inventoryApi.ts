@@ -415,6 +415,32 @@ export function useSendToCatalog() {
   });
 }
 
+/** Soft-delete a single inventory listing (requires inventory.delete). */
+export function useDeleteInventoryListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (listingId: string) =>
+      fetchWithAuth<{ success: true }>(`${API}/inventory/listings/${listingId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+    },
+  });
+}
+
+/** Soft-delete multiple inventory listings (requires inventory.delete). */
+export function useBulkDeleteInventoryListings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      postJson<{ deleted: number }>('/inventory/listings/bulk-delete', { ids }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+    },
+  });
+}
+
 /* ─── Editor types & hooks ─── */
 
 export interface EditorPolicyOption {

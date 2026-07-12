@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -67,11 +68,30 @@ export class InventoryController {
     return this.workbench.listListings(query);
   }
 
+  @Post('listings/bulk-delete')
+  @RequirePermissions('inventory.delete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Soft-delete multiple inventory listings' })
+  bulkSoftDeleteListings(@Body() body: { ids: string[] }) {
+    return this.workbench.bulkSoftDeleteListings(body.ids ?? []);
+  }
+
   @Get('listings/:listingId/detail')
   @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'Full part detail for inventory workbench modal' })
   getListingDetail(@Param('listingId', ParseUUIDPipe) listingId: string) {
     return this.workbench.getListingDetail(listingId);
+  }
+
+  @Delete('listings/:listingId')
+  @RequirePermissions('inventory.delete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Soft-delete an inventory listing (recoverable via listings restore)',
+  })
+  softDeleteListing(@Param('listingId', ParseUUIDPipe) listingId: string) {
+    return this.workbench.softDeleteListing(listingId);
   }
 
   @Patch('listings/:listingId/images')

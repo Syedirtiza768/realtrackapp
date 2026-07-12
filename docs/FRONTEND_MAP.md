@@ -175,7 +175,8 @@ src/components/
 ├── sku/                # SKU
 │   └── SkuDetailPage.tsx
 ├── preview/            # Preview
-│   └── EbayPreviewPage.tsx
+│   ├── EbayPreviewPage.tsx   # edit mode: RichTextDescriptionEditor for seller description
+│   └── EditListingPanel.tsx
 └── channels/           # Channels
     └── EbayOAuthCallback.tsx
 ```
@@ -221,7 +222,7 @@ src/components/
 | `ingestionAdapters.ts` | Ingestion data adapters |
 | `ingestionPipeline.ts` | Pipeline helpers |
 | `listingsQueryHooks.ts` | React Query hooks for listings |
-| `catalogDestructiveUi.ts` | Catalog UI helpers |
+| `catalogDestructiveUi.ts` | Deprecated; destructive UI uses RBAC (`listings.delete` / `catalog.clear`) |
 | `ebayFileExchangeParser.ts` | eBay file parsing |
 
 ---

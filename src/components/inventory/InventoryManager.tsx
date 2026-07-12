@@ -13,10 +13,10 @@ import {
   ChevronUp,
   Car,
   RefreshCw,
-  Send,
   Calendar,
   BookMarked,
   MapPin,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -27,6 +27,8 @@ import {
   useFilterModels,
   useFilterCategories,
   useSendToCatalog,
+  useDeleteInventoryListing,
+  useBulkDeleteInventoryListings,
   type InventoryListingItem,
   type EnrichmentStatus,
   type InventoryStoreListing,
@@ -137,6 +139,9 @@ export default function InventoryManager() {
   const navigate = useNavigate();
   const { has: canEnrich } = usePermissions();
   const canSendToCatalog = canEnrich('inventory.enrich');
+  const canDeleteInventory = canEnrich('inventory.delete');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -197,12 +202,12 @@ export default function InventoryManager() {
   const { data: categories } = useFilterCategories();
 
   const sendToCatalogMutation = useSendToCatalog();
+  const deleteMutation = useDeleteInventoryListing();
+  const bulkDeleteMutation = useBulkDeleteInventoryListings();
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
-
-  const selectedItems = items.filter((i) => selected.has(i.id));
 
   const handleSendToCatalog = useCallback(async () => {
     if (!canSendToCatalog || selected.size === 0) return;
@@ -221,6 +226,34 @@ export default function InventoryManager() {
       setActionError(err instanceof Error ? err.message : 'Failed to send to catalog');
     }
   }, [canSendToCatalog, selected, sendToCatalogMutation]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirmId || !canDeleteInventory) return;
+    setActionError(null);
+    try {
+      await deleteMutation.mutateAsync(deleteConfirmId);
+      setDeleteConfirmId(null);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteConfirmId);
+        return next;
+      });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete listing');
+    }
+  }, [deleteConfirmId, canDeleteInventory, deleteMutation]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (!canDeleteInventory || selected.size === 0) return;
+    setActionError(null);
+    try {
+      await bulkDeleteMutation.mutateAsync(Array.from(selected));
+      setBulkDeleteConfirm(false);
+      setSelected(new Set());
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete listings');
+    }
+  }, [canDeleteInventory, selected, bulkDeleteMutation]);
 
   const handleSaveLocation = useCallback(async (item: InventoryListingItem) => {
     setLocationSaving(true);
@@ -292,6 +325,17 @@ export default function InventoryManager() {
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+
+          {canDeleteInventory && selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setBulkDeleteConfirm(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-800 text-red-300 text-sm font-medium hover:bg-red-950/50 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete ({selected.size})
+            </button>
+          )}
 
           {canSendToCatalog && selected.size > 0 && (
             <button
@@ -519,7 +563,8 @@ export default function InventoryManager() {
                     <th className="pb-3 pr-3">Validation</th>
                     <th className="pb-3 pr-3">Status</th>
                     <th className="pb-3 pr-3">Enrichment</th>
-                    <th className="pb-3">Catalog</th>
+                    <th className="pb-3 pr-3">Catalog</th>
+                    {canDeleteInventory && <th className="pb-3 w-10"> </th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -697,6 +742,18 @@ export default function InventoryManager() {
                           <span className="text-xs text-slate-500">—</span>
                         )}
                       </td>
+                      {canDeleteInventory && (
+                        <td className="py-3" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            title="Soft-delete listing"
+                            onClick={() => setDeleteConfirmId(item.id)}
+                            className="p-1.5 rounded-md text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -752,6 +809,90 @@ export default function InventoryManager() {
         listingId={detailId}
         onClose={() => setDetailId(null)}
       />
+
+      {canDeleteInventory && deleteConfirmId && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setDeleteConfirmId(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-500/10">
+                <Trash2 size={20} className="text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Delete inventory listing
+              </h3>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              Soft-delete this listing? It will be hidden from inventory and can be restored later by an admin.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canDeleteInventory && bulkDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setBulkDeleteConfirm(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-500/10">
+                <Trash2 size={20} className="text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Delete {selected.size} listings
+              </h3>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              Soft-delete{' '}
+              <span className="font-semibold text-slate-600 dark:text-slate-200">{selected.size}</span>{' '}
+              selected inventory listings? They can be restored later.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setBulkDeleteConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBulkDelete()}
+                disabled={bulkDeleteMutation.isPending}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {bulkDeleteMutation.isPending ? 'Deleting…' : `Delete ${selected.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,14 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Added
+- **WYSIWYG item description editor:** On catalog product edit (`/catalog/products/:id` → Edit), “Item description from the seller” now defaults to a Visual (WYSIWYG) editor with formatting toolbar (bold/italic/underline, headings, lists, links). An **HTML** tab remains available for raw source edits. Same editor is used in the File Exchange edit panel and inventory marketplace version editor (`RichTextDescriptionEditor`).
+- **Responsible soft-delete for inventory & listings (RBAC):** Defaults to `super_admin` + `admin` only; super admin can reassign via Roles UI. New `inventory.delete` permission with `DELETE /api/inventory/listings/:id` and `POST /api/inventory/listings/bulk-delete` (soft-delete). Catalog/listings delete UI gated by `listings.delete` (no longer `VITE_SHOW_CATALOG_DESTRUCTIVE_UI`). Confirmation modals on inventory single/bulk delete and catalog single/bulk delete.
+
+### Changed
+- **`listings.delete` default roles:** Narrowed from manager+ to `super_admin` + `admin` only (non-customized roles re-synced on boot). Managers lose delete unless a customized role grants it.
+- **Clear catalog UI:** Gated by `catalog.clear` permission instead of the env flag.
+
+### Added
 - **`offerId` filter on published-listings endpoints:** `GET /api/published-listings` (and the store-scoped `GET /api/stores/:storeId/listings/published`) now accept an `offerId` query param, matching the existing `storeId`/`ebayAccountId` filters. Added `offerId` to `PublishedListingsQueryDto` and the query builder in `PublishedListingsService.list`.
 - **Published Listings Reader API user — full documentation refresh:** Reset credentials, verified the account's exact permission scope (`published_listings.view` only) against production, and thoroughly tested pagination on all three published-listings query modes (unfiltered, `storeId`, `offerId`) plus 401/403 boundary checks. Documented with real, verified request/response examples and the full connected-store ID list in `docs/operations/api-users.md`.
 

@@ -1776,4 +1776,29 @@ export class InventoryWorkbenchService {
 
     return { results };
   }
+
+  /** Soft-delete a listing from the inventory workbench (recoverable). */
+  async softDeleteListing(listingId: string): Promise<{ success: true }> {
+    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    if (!listing) {
+      throw new NotFoundException(`Listing ${listingId} not found`);
+    }
+    await this.listingRepo.softRemove(listing);
+    return { success: true };
+  }
+
+  /** Soft-delete multiple inventory listings. */
+  async bulkSoftDeleteListings(
+    ids: string[],
+  ): Promise<{ deleted: number }> {
+    if (!ids.length) {
+      throw new BadRequestException('No listing ids provided');
+    }
+    const listings = await this.listingRepo.findBy({ id: In(ids) });
+    if (!listings.length) {
+      throw new NotFoundException('No listings found for given IDs');
+    }
+    await this.listingRepo.softRemove(listings);
+    return { deleted: listings.length };
+  }
 }

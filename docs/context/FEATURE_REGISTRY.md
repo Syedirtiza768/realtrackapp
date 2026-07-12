@@ -29,13 +29,14 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Motors review queue | `/motors/review` | `motors-intelligence` | Partial | Human-in-loop review |
 | Fitment manager (YMMT) | `/fitment` | `fitment` | Implemented | Make/model/year/submodel/engine; per-marketplace tree (US→`0`, AU→`15`, DE→`77`) |
 | VIN listings / lookup | `/fitment/vin` | `fitment` | Partial | `VinCache` |
-| Inventory manager | `/inventory` | `inventory` | Implemented | Ledger, allocations, events, sync |
+| Inventory manager | `/inventory` | `inventory` | Implemented | Soft-delete via `inventory.delete` (admin/super_admin default); ledger, allocations, events, sync |
+| Catalog browse | `/catalog` | `listings` | Implemented | Soft-delete via `listings.delete` (admin/super_admin default); search, publish, bulk ops |
 | Orders | `/orders` | `orders` | Implemented | eBay order import |
 | eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth |
 | eBay store detail / policies | `/settings/integrations/ebay/:id[/policies]` | `integrations/ebay` | Partial | Business-policy mapping/sync |
 | eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Implemented | Durable jobs support 500 listings/action and 5,000 listing/store targets/day; bounded concurrency/retries; structured fitment write/readback required |
 | eBay OAuth callback | `/channels/ebay/callback` | `integrations/ebay` | Implemented | Public callback |
-| eBay/marketplace preview | `/preview` | `listings` | Implemented | Listing preview |
+| eBay/marketplace preview | `/preview`, `/catalog/products/:id` (edit) | `listings` | Implemented | Listing preview; seller description edits use Visual (WYSIWYG) + HTML toggle (`RichTextDescriptionEditor`) |
 | Channels (multi-marketplace) | — | `channels` | Partial | Shopify/Amazon/Walmart scaffolding |
 | AI enhancements (approve/apply) | — | `channels` (`ai-enhancement.controller`) | Partial | |
 | Bulk actions | `/bulk-actions` | `listings` | Partial | `listings.update` |

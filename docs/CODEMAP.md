@@ -104,7 +104,7 @@ src/components/
 | `persistence.ts` | Local storage helpers |
 | `sanitize.ts` | Sanitization utilities |
 | `ebayFileExchangeParser.ts` | eBay file parsing |
-| `catalogDestructiveUi.ts` | Catalog UI helpers |
+| `catalogDestructiveUi.ts` | Deprecated; use RBAC for delete UI |
 | `listingsQueryHooks.ts` | React Query hooks for listings |
 
 ### Contexts (`src/contexts/`)

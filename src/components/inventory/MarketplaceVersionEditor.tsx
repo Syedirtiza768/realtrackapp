@@ -1,4 +1,5 @@
 import type { EditorMarketplaceVersion } from '../../lib/inventoryApi';
+import RichTextDescriptionEditor from '../ui/RichTextDescriptionEditor';
 
 interface MarketplaceVersionEditorProps {
   version: EditorMarketplaceVersion;
@@ -37,11 +38,11 @@ export default function MarketplaceVersionEditor({
         <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
           Description
         </label>
-        <textarea
+        <RichTextDescriptionEditor
           value={version.description}
-          onChange={(e) => update({ description: e.target.value })}
-          rows={10}
-          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-mono resize-y"
+          onChange={(html) => update({ description: html })}
+          minHeight={240}
+          variant="form"
         />
       </div>
 

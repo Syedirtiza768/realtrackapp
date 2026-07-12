@@ -74,6 +74,7 @@ src/components/
 │   ├── Select.tsx
 │   ├── Modal.tsx
 │   ├── Table.tsx
+│   ├── RichTextDescriptionEditor.tsx  # Visual (WYSIWYG) + HTML description editor
 │   └── (other primitives)
 ├── dashboard/          # Dashboard
 │   └── Dashboard.tsx
@@ -134,7 +135,8 @@ src/components/
 ├── sku/                # SKU
 │   └── SkuDetailPage.tsx
 ├── preview/            # Preview
-│   └── EbayPreviewPage.tsx
+│   ├── EbayPreviewPage.tsx   # eBay listing preview; edit mode uses RichTextDescriptionEditor for seller description
+│   └── EditListingPanel.tsx
 └── channels/           # Channels
     ├── PublishModal.tsx        # eBay multi-store publish — store selection only, hands off to PublishProgressPanel
     └── EbayOAuthCallback.tsx
@@ -181,7 +183,7 @@ src/components/
 | `ingestionAdapters.ts` | Ingestion data adapters |
 | `ingestionPipeline.ts` | Pipeline helpers |
 | `listingsQueryHooks.ts` | React Query hooks for listings |
-| `catalogDestructiveUi.ts` | Catalog UI helpers |
+| `catalogDestructiveUi.ts` | Deprecated; use RBAC for delete UI |
 | `ebayFileExchangeParser.ts` | eBay file parsing |
 
 ---

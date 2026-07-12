@@ -30,7 +30,7 @@ import { deleteListing } from '../../lib/listingsApi';
 import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
 import type { SearchItem } from '../../types/search';
 import { authHeaders } from '../../lib/authApi';
-import { showCatalogDestructiveUi } from '../../lib/catalogDestructiveUi';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
 import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
 
@@ -71,6 +71,8 @@ function saveRecent(terms: string[]) {
 
 export default function CatalogManager() {
   const navigate = useNavigate();
+  const { has } = usePermissions();
+  const canDeleteListings = has('listings.delete');
   /* ── State ─────────────────────────────────────────────── */
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -564,7 +566,7 @@ export default function CatalogManager() {
 
         {moreMenuOpen && selectedIds.size > 0 && (
           <div className="mb-3 flex flex-wrap gap-2">
-            {showCatalogDestructiveUi && (
+            {canDeleteListings && (
               <button
                 type="button"
                 onClick={() => setBulkDeleteConfirm(true)}
@@ -588,6 +590,7 @@ export default function CatalogManager() {
           onPageSizeChange={handlePageSizeChange}
           onQuickView={(id, item) => setDetailSelection({ id, item })}
           onPublish={handlePublish}
+          onDelete={canDeleteListings ? handleDelete : undefined}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
           onSelectAll={handleSelectAll}
@@ -617,7 +620,7 @@ export default function CatalogManager() {
       />
 
       {/* Delete confirmation modal */}
-      {showCatalogDestructiveUi && deleteConfirmId && (
+      {canDeleteListings && deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDeleteConfirmId(null)}>
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
@@ -649,7 +652,7 @@ export default function CatalogManager() {
       )}
 
       {/* Bulk delete confirmation modal */}
-      {showCatalogDestructiveUi && bulkDeleteConfirm && (
+      {canDeleteListings && bulkDeleteConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBulkDeleteConfirm(false)}>
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">

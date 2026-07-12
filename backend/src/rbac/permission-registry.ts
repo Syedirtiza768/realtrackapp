@@ -76,6 +76,12 @@ const READ_ONLY: RoleSlug[] = [
 
 const SUPER_ADMIN_ONLY: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN];
 
+/** Admin + super_admin only. Super admin can reassign via Roles UI later. */
+const SUPER_AND_ADMIN: RoleSlug[] = [
+  ROLE_SLUGS.SUPER_ADMIN,
+  ROLE_SLUGS.ADMIN,
+];
+
 function p(
   key: string,
   label: string,
@@ -157,7 +163,13 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
     ROLE_SLUGS.LISTING_USER,
     ROLE_SLUGS.SUPERVISOR,
   ]),
-  p('listings.delete', 'Delete listings', 'listings', MANAGER_UP),
+  p(
+    'listings.delete',
+    'Soft-delete listings (catalog / listings UI)',
+    'listings',
+    SUPER_AND_ADMIN,
+    'Responsible soft-delete; restore via listings.update. Defaults to admin/super_admin; reassignable.',
+  ),
   p('listings.publish', 'Publish listings to channels', 'listings', [
     ROLE_SLUGS.SUPER_ADMIN,
     ROLE_SLUGS.ADMIN,
@@ -233,6 +245,13 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
       ROLE_SLUGS.LISTING_MANAGER,
       ROLE_SLUGS.OPS_USER,
     ],
+  ),
+  p(
+    'inventory.delete',
+    'Soft-delete inventory listings',
+    'inventory',
+    SUPER_AND_ADMIN,
+    'Responsible soft-delete from inventory workbench. Defaults to admin/super_admin; reassignable.',
   ),
   p('inventory.adjust', 'Adjust inventory', 'inventory', MANAGER_UP),
   p('inventory.allocate', 'Allocate inventory', 'inventory', MANAGER_UP),

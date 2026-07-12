@@ -321,6 +321,8 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | GET | `/api/inventory/listings` | List workbench parts — one row per SKU (`page`, `limit`, `status`, `search`, `missingImages`, `dateAddedFrom`, `dateAddedTo`, `brand`, `make`, `model`, `category`) | inventory.view |
 | GET | `/api/inventory/listings/:listingId/detail` | Full part detail for modal (fitments, US/AU/DE variants, pipeline job, enrichmentStage) | inventory.view |
 | GET | `/api/inventory/listings/:listingId/enrichment-status` | Poll enrichment progress — returns `{ status, stage }` with stage like `vision_lookup`, `enrichment`, `generating_us`, etc. | inventory.view |
+| DELETE | `/api/inventory/listings/:listingId` | Soft-delete inventory listing | inventory.delete |
+| POST | `/api/inventory/listings/bulk-delete` | Soft-delete multiple inventory listings (`{ ids }`) | inventory.delete |
 | PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing | listings.update |
 | POST | `/api/inventory/part-lookup` | Vision-first fetch details for one listing (OEM + brand + 2+ photos → title, category, SEO notes) | inventory.enrich |
 | POST | `/api/inventory/part-lookup/bulk` | Vision-first fetch details for multiple listings | inventory.enrich |

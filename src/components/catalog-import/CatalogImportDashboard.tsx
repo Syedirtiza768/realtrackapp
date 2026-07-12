@@ -32,7 +32,7 @@ import {
   useImportStats,
   getCatalogFields,
 } from '../../lib/catalogImportApi';
-import { showCatalogDestructiveUi } from '../../lib/catalogDestructiveUi';
+import Can from '../auth/Can';
 import type {
   CatalogField,
   CatalogImport,
@@ -242,7 +242,7 @@ export default function CatalogImportDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {showCatalogDestructiveUi && (
+          <Can permission="catalog.clear">
             <button
               type="button"
               onClick={openClearCatalogModal}
@@ -250,7 +250,7 @@ export default function CatalogImportDashboard() {
             >
               Clear catalog
             </button>
-          )}
+          </Can>
           {step !== 'upload' && (
             <button
               onClick={handleNewImport}
@@ -481,7 +481,7 @@ export default function CatalogImportDashboard() {
         )}
       </Card>
 
-      {showCatalogDestructiveUi && clearCatalogOpen && (
+      {clearCatalogOpen && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-sm p-4"
           role="dialog"

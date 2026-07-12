@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, ExternalLink, Package, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Package, Search, Trash2 } from 'lucide-react';
 import { sanitizeHighlight } from '../../lib/sanitize';
 import { getFirstImageUrl } from '../../lib/searchApi';
 import type { SearchItem, SortMode } from '../../types/search';
@@ -18,6 +18,7 @@ interface Props {
   onPageSizeChange: (size: number) => void;
   onQuickView: (id: string, item: SearchItem) => void;
   onPublish?: (id: string) => void;
+  onDelete?: (id: string) => void;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onSelectAll?: (ids: string[]) => void;
@@ -56,6 +57,7 @@ export default function CatalogTable({
   onPageSizeChange,
   onQuickView,
   onPublish,
+  onDelete,
   selectedIds,
   onToggleSelect,
   onSelectAll,
@@ -110,6 +112,7 @@ export default function CatalogTable({
               </th>
               <th className="px-3 py-3">Status</th>
               <th className="w-10 px-3 py-3 text-center">eBay</th>
+              {onDelete && <th className="w-10 px-3 py-3 text-center"> </th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -229,6 +232,18 @@ export default function CatalogTable({
                       <span className="text-slate-300 dark:text-slate-700">—</span>
                     )}
                   </td>
+                  {onDelete && (
+                    <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        title="Soft-delete listing"
+                        onClick={() => onDelete(item.id)}
+                        className="inline-flex items-center justify-center rounded-md p-1 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
