@@ -73,6 +73,17 @@ export class EbayTaxonomyApiService {
   private readonly http: AxiosInstance;
   private readonly rateLimiter: TokenBucketRateLimiter;
 
+  // Circuit breaker: once eBay is clearly sustaining a 429 throttle, retrying
+  // every single call (each costing up to ~2s+5s+12s+30s+60s before giving
+  // up) burns minutes per product across a large batch for no benefit. Trip
+  // the circuit after a couple of fully-exhausted retry cascades and fail
+  // fast for a cooldown window so callers fall back immediately instead of
+  // hammering a wall — then probe again once the cooldown passes.
+  private consecutiveRateLimitExhaustions = 0;
+  private circuitOpenUntil = 0;
+  private static readonly CIRCUIT_TRIP_THRESHOLD = 2;
+  private static readonly CIRCUIT_COOLDOWN_MS = 60_000;
+
   /** eBay Motors Parts & Accessories category tree ID (US) */
   static readonly EBAY_US_TREE_ID = '0';
   /** eBay US marketplace ID for taxonomy calls */
@@ -112,11 +123,20 @@ export class EbayTaxonomyApiService {
     fn: () => Promise<T>,
     maxAttempts = 5,
   ): Promise<T> {
+    const now = Date.now();
+    if (now < this.circuitOpenUntil) {
+      throw new Error(
+        `eBay Taxonomy circuit open (sustained 429s) — skipping ${label} for ${this.circuitOpenUntil - now}ms`,
+      );
+    }
+
     const delaysMs = [2000, 5000, 12_000, 30_000, 60_000];
     let lastErr: unknown;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        return await fn();
+        const result = await fn();
+        this.consecutiveRateLimitExhaustions = 0;
+        return result;
       } catch (err: unknown) {
         lastErr = err;
         const response = (
@@ -125,7 +145,11 @@ export class EbayTaxonomyApiService {
           }
         )?.response;
         const status = response?.status;
-        if (status !== 429 || attempt >= maxAttempts - 1) throw err;
+        if (status !== 429) {
+          this.consecutiveRateLimitExhaustions = 0;
+          throw err;
+        }
+        if (attempt >= maxAttempts - 1) break;
 
         const retryAfterHeader = response?.headers?.['retry-after'];
         let wait = delaysMs[attempt] ?? 25_000;
@@ -144,6 +168,17 @@ export class EbayTaxonomyApiService {
         );
         await new Promise((r) => setTimeout(r, wait));
       }
+    }
+
+    this.consecutiveRateLimitExhaustions++;
+    if (
+      this.consecutiveRateLimitExhaustions >=
+      EbayTaxonomyApiService.CIRCUIT_TRIP_THRESHOLD
+    ) {
+      this.circuitOpenUntil = Date.now() + EbayTaxonomyApiService.CIRCUIT_COOLDOWN_MS;
+      this.logger.warn(
+        `eBay Taxonomy circuit opened for ${EbayTaxonomyApiService.CIRCUIT_COOLDOWN_MS}ms after ${this.consecutiveRateLimitExhaustions} consecutive rate-limit exhaustions`,
+      );
     }
     throw lastErr;
   }
