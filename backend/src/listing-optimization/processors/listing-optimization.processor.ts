@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { ListingOptimizationService } from '../listing-optimization.service.js';
@@ -53,5 +53,33 @@ export class ListingOptimizationProcessor extends WorkerHost {
         .catch(() => {});
       throw err;
     }
+  }
+
+  /**
+   * The try/catch in process() only fires when enqueueJobOptimization itself
+   * throws. BullMQ's own stalled-job watchdog can also permanently fail a
+   * job from outside any process() call — e.g. "job stalled more than
+   * allowable limit" once maxStalledCount is exceeded — without ever
+   * re-invoking process(). That path bypasses the try/catch entirely and
+   * left optimization_status stuck at 'running' in production even though
+   * the job was already dead (job 572e96dd, 2026-07-12). This event fires
+   * for every failure path BullMQ has, including that one.
+   */
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job<ListingOptimizationJobData> | undefined): Promise<void> {
+    if (!job) return;
+    // BullMQ emits 'failed' on every failed attempt, not just the final one
+    // — an in-progress retry (attempts remaining) will often succeed moments
+    // later. Only mark the job dead once BullMQ has actually given up.
+    const maxAttempts = job.opts?.attempts ?? 1;
+    if (job.attemptsMade < maxAttempts) return;
+
+    const { jobId, marketplace = 'US' } = job.data;
+    this.logger.error(
+      `Listing optimization for pipeline job ${jobId} [${marketplace}] permanently failed after ${job.attemptsMade} attempts: ${job.failedReason}`,
+    );
+    await this.optimization
+      .markJobOptimizationFailed(jobId, marketplace)
+      .catch(() => {});
   }
 }
