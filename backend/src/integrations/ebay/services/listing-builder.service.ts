@@ -36,7 +36,10 @@ import {
   buildListingAspects,
   isUsedEbayCondition,
 } from '../../../channels/ebay/ebay-listing-aspects.util.js';
-import { fitmentDataToCompatibilityPayload } from '../../../fitment/fitment-mvl.util.js';
+import {
+  fitmentDataToCompatibilityPayload,
+  parseFitmentEntry,
+} from '../../../fitment/fitment-mvl.util.js';
 import type { EbayCompatibilityPayload } from '../../../channels/ebay/ebay-api.types.js';
 
 export interface ListingBuilderResult {
@@ -113,16 +116,40 @@ export class ListingBuilderService {
     const listingRecord = resolved.listingRecord;
     const catalogProduct = resolved.catalogProduct;
 
-    // Structured (deterministic) composition fields — sourced only from stored
-    // catalog/listing columns. Year range and generation are intentionally NOT
-    // derived; pass an explicit yearRange/generation elsewhere to lead with it.
+    // Fitment-derived make/year range. catalog_products.fitmentData resolves
+    // make against the canonical fitment_makes table during enrichment, which
+    // corrects spelling issues that can exist in raw source columns like
+    // listingRecord.cBrand (observed: "Bently" survived uncorrected into a
+    // recomposed title because this call site previously used cBrand
+    // directly and never derived a year range at all). Fitment rows also
+    // give us the actual compatible year span for the composed title.
+    const parsedFitmentRows = (catalogProduct?.fitmentData ?? [])
+      .map((row) => parseFitmentEntry(row))
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+    const fitmentMake = parsedFitmentRows[0]?.make?.trim() || null;
+    const fitmentYears = parsedFitmentRows
+      .map((row) => Number(row.year))
+      .filter((y) => Number.isFinite(y));
+    const fitmentYearRange = fitmentYears.length
+      ? (() => {
+          const min = Math.min(...fitmentYears);
+          const max = Math.max(...fitmentYears);
+          return min === max ? String(min) : `${min}-${max}`;
+        })()
+      : null;
+
+    // Structured (deterministic) composition fields — sourced from stored
+    // catalog/listing columns, preferring fitment-resolved values where
+    // available (see fitmentMake/fitmentYearRange above).
     const structuredMake =
+      fitmentMake ||
       (
         snapshot.brand ??
         listingRecord?.cBrand ??
         listingRecord?.extractedMake ??
         ''
-      ).trim() || null;
+      ).trim() ||
+      null;
     const structuredModel =
       (listingRecord?.extractedModel ?? '').trim() || null;
     const structuredPosition =
@@ -151,6 +178,8 @@ export class ListingBuilderService {
       mpn: snapshot.mpn,
 
       sku,
+
+      yearRange: fitmentYearRange,
 
       make: structuredMake,
 

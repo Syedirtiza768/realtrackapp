@@ -1177,6 +1177,9 @@ export class EbayPublishService {
           persist: true,
           categoryId: req.categoryId,
           condition: req.condition,
+          requestedFulfillmentPolicyName: req.requestedFulfillmentPolicyName,
+          requestedPaymentPolicyName: req.requestedPaymentPolicyName,
+          requestedReturnPolicyName: req.requestedReturnPolicyName,
         })
       : {};
 
@@ -1461,7 +1464,14 @@ export class EbayPublishService {
   private async refreshPoliciesFromEbayApi(
     store: Store,
     account: ConnectedEbayAccount,
-    options?: { persist?: boolean; categoryId?: string; condition?: string },
+    options?: {
+      persist?: boolean;
+      categoryId?: string;
+      condition?: string;
+      requestedFulfillmentPolicyName?: string;
+      requestedPaymentPolicyName?: string;
+      requestedReturnPolicyName?: string;
+    },
   ): Promise<{
     fulfillmentPolicyId?: string;
     paymentPolicyId?: string;
@@ -1498,10 +1508,38 @@ export class EbayPublishService {
           controller.signal,
         ),
       ]);
-      const pick = (items: { ebayPolicyId: string; isDefault: boolean }[]) =>
-        items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId;
-      const fulfillmentPolicyId = coalesceValidPolicyId(pick(fulfill));
-      const paymentPolicyId = coalesceValidPolicyId(pick(payment));
+      // Prefer an exact match on the originally-requested profile name (e.g.
+      // "BLAP shipping policy 3 KG") over eBay's isDefault flag or array order.
+      // Without this, a mid-publish policy rejection (see
+      // publishOfferWithRetries) fell back to whichever policy eBay happened
+      // to list first for the account — on accounts with no isDefault policy
+      // set, that's an arbitrary policy unrelated to what was configured,
+      // silently changing the live listing's shipping/payment/return terms.
+      const pick = (
+        items: { ebayPolicyId: string; isDefault: boolean; name: string }[],
+        requestedName?: string,
+      ) => {
+        const wanted = requestedName?.trim();
+        const named = wanted
+          ? items.find((x) => x.name?.trim() === wanted)
+          : undefined;
+        return (
+          named?.ebayPolicyId ??
+          items.find((x) => x.isDefault)?.ebayPolicyId ??
+          items[0]?.ebayPolicyId
+        );
+      };
+      const fulfillmentPolicyId = coalesceValidPolicyId(
+        pick(fulfill, options?.requestedFulfillmentPolicyName),
+      );
+      const paymentPolicyId = coalesceValidPolicyId(
+        pick(payment, options?.requestedPaymentPolicyName),
+      );
+      // Return policy keeps its existing P&A-compliance-aware selection
+      // unchanged (pickReturnPolicyIdForListing) — narrowing its candidate
+      // pool by name here would risk excluding the only compliant policy for
+      // P&A-required listings. Return policy resolved correctly in the
+      // incident that prompted this fix; only fulfillment/payment did not.
       const returnPolicyId = coalesceValidPolicyId(
         pickReturnPolicyIdForListing(
           ret.map((r) => ({
@@ -2024,6 +2062,9 @@ export class EbayPublishService {
         persist: true,
         categoryId: req.categoryId,
         condition: req.condition,
+        requestedFulfillmentPolicyName: req.requestedFulfillmentPolicyName,
+        requestedPaymentPolicyName: req.requestedPaymentPolicyName,
+        requestedReturnPolicyName: req.requestedReturnPolicyName,
       });
 
       let returnPolicyId: string | undefined;

@@ -151,6 +151,59 @@ describe('ListingBuilderService', () => {
     expect(result.publishRequest.price).toBe(49.99);
   });
 
+  it('prefers fitmentData make/year range over raw source columns when recomposing the title', async () => {
+    // Regression test: production incident where a listing's raw source
+    // column (listingRecord.cBrand) had a misspelled make ("Bently") and no
+    // year was ever passed to the title composer, so the recomposed eBay
+    // title read "Bently Continental Seat Module ... Used" — dropping the
+    // year entirely and publishing a misspelled brand live on eBay.
+    // catalog_products.fitmentData resolves make against the canonical
+    // fitment_makes table (correct spelling) and carries the real
+    // compatible year span, so it should win over the raw column.
+    publishResolver.resolve.mockResolvedValue({
+      snapshot: {
+        catalogProductId: 'cp-1',
+        listingRecordId: 'lr-1',
+        sku: 'BNTLY-7130-Silver-D1-007',
+        title: 'Bently Continental Seat Module 3D0959760C OEM Used',
+        description: '<p>Desc</p>',
+        brand: null,
+        mpn: '3D0959760C',
+        partType: 'Seat Module',
+        price: 199.99,
+        quantity: 1,
+        categoryId: '33701',
+        conditionId: '3000',
+        imageUrls: ['https://img.example.com/1.jpg'],
+      },
+      listingRecord: {
+        cBrand: 'Bently',
+      },
+      catalogProduct: {
+        oemPartNumber: '3D0959760C',
+        fitmentData: [
+          { Make: 'Bentley', Model: 'Continental', Year: '2003' },
+          { Make: 'Bentley', Model: 'Continental', Year: '2008' },
+          { Make: 'Bentley', Model: 'Continental', Year: '2011' },
+        ],
+      },
+      warnings: [],
+    });
+    overrideRepo.findOne = jest.fn().mockResolvedValue(null);
+
+    const result = await svc.build({
+      catalogProductId: 'cp-1',
+      ebayAccountId: 'acct-1',
+      marketplaceId: 'EBAY_US',
+      listingRecordId: 'lr-1',
+      storeId: 'store-1',
+    });
+
+    expect(result.publishRequest.title).toContain('Bentley');
+    expect(result.publishRequest.title).not.toContain('Bently');
+    expect(result.publishRequest.title).toContain('2003-2011');
+  });
+
   it('adds blocking error for missing images', async () => {
     publishResolver.resolve.mockResolvedValue({
       snapshot: {
