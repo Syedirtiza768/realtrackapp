@@ -171,6 +171,29 @@ describe('buildStructuredEbayTitle', () => {
     expect(title.endsWith('OEM Used')).toBe(true);
     expect(title.startsWith('2012-2018 Audi')).toBe(true);
   });
+
+  it('caps a multi-value oemPartNumber to its first entry instead of starving out year/model/part name', () => {
+    // Regression test: production incident where a part with 5 superseding
+    // OEM numbers joined into one comma-separated field ("8K0837440J,
+    // 8K0837440E, 8K0837440D, 8K0837440G, 8K0837440H") consumed nearly the
+    // whole 80-char budget on its own. Because yearRange/make/oemPartNumber
+    // are never dropped (see EBAY_TITLE_DROPPABLE_KEYS), this silently
+    // published a title with no year, model, or part name at all — just
+    // "AUDI 8K0837440J, 8K0837440E, ... OEM Used". Only the first OEM number
+    // is needed for buyer search; the rest belong in item specifics.
+    const title = buildStructuredEbayTitle({
+      yearRange: '2010-2016',
+      make: 'Audi',
+      model: 'A4',
+      partName: 'Window Channel',
+      oemPartNumber:
+        '8K0837440J, 8K0837440E, 8K0837440D, 8K0837440G, 8K0837440H',
+    });
+    expect(title).toBe(
+      '2010-2016 Audi A4 Window Channel 8K0837440J OEM Used',
+    );
+    expect(title.length).toBeLessThanOrEqual(80);
+  });
 });
 
 describe('buildEbayListingTitle structured composition', () => {

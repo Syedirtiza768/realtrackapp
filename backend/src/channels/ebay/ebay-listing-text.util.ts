@@ -125,7 +125,17 @@ export function buildStructuredEbayTitle(
 ): string {
   const segmentsByKey: Record<string, string> = {};
   for (const key of EBAY_TITLE_STRUCTURED_KEYS) {
-    const value = input[key]?.trim();
+    let value = input[key]?.trim();
+    // Parts with multiple superseding/interchange OEM numbers store them as a
+    // single comma/semicolon-joined field (observed: 5 numbers, ~60 chars).
+    // yearRange, make, and oemPartNumber are never dropped below (see
+    // EBAY_TITLE_DROPPABLE_KEYS), so an unbounded oemPartNumber silently
+    // starved out year/model/part name on every over-budget title. eBay
+    // search only needs one identifying number in the title — the rest
+    // belong in the description/item specifics, not here.
+    if (key === 'oemPartNumber' && value) {
+      value = value.split(/[,;]/)[0]?.trim();
+    }
     if (value) segmentsByKey[key] = value;
   }
 

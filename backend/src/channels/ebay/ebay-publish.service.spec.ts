@@ -111,6 +111,7 @@ describe('EbayPublishService', () => {
       mockConfig(),
       inventoryApi as any,
       taxonomyApi as any,
+      {} as any, // taxonomyCache
       auth as any,
       {} as any, // sellAccount
       {
@@ -187,6 +188,49 @@ describe('EbayPublishService', () => {
       expect(inventoryApi.createOrReplaceItem).toHaveBeenCalled();
       expect(inventoryApi.createOffer).toHaveBeenCalled();
       expect(inventoryApi.publishOffer).toHaveBeenCalled();
+    });
+
+    it('prefers fitment-derived make/year over a misspelled raw brand column when composing the title', async () => {
+      // Regression test: production incident where listing_records.cBrand
+      // carried a source-data typo ("Lincon" instead of "Lincoln") and this
+      // publish path (EbayPublishController -> publish(), used by the
+      // catalog page's Publish button) built the structured title's `make`
+      // directly from cBrand with no yearRange at all — so the live eBay
+      // title read "Lincon MKS Wiper Switch SW-7032 OEM Used". catalog_products
+      // .fitmentData resolves make against the canonical fitment_makes table
+      // (correct spelling) and carries the real compatible year, so it must
+      // win over the raw column.
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({
+        cBrand: 'Lincon',
+        cType: 'Wiper Switch',
+        cOeOemPartNumber: 'SW-7032',
+        extractedModel: 'MKS',
+      });
+      catalogRepo.findOne = jest.fn().mockResolvedValue({
+        fitmentData: [
+          { Make: 'Lincoln', Model: 'MKS', Year: '2013' },
+          { Make: 'Lincoln', Model: 'MKS', Year: '2013' },
+        ],
+      });
+
+      const results = await svc.publish(validRequest());
+
+      expect(results[0].success).toBe(true);
+      const itemArg = (inventoryApi.createOrReplaceItem as jest.Mock).mock
+        .calls[0][2];
+      expect(itemArg.product.title).toContain('Lincoln');
+      expect(itemArg.product.title).not.toContain('Lincon');
+      expect(itemArg.product.title).toContain('2013');
     });
 
     it('returns error when store not found', async () => {

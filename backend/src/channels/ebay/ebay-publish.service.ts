@@ -71,7 +71,10 @@ import {
   isUsedEbayCondition,
   localizeAspectsForMarketplace,
 } from './ebay-listing-aspects.util.js';
-import { fitmentDataToCompatibilityPayload } from '../../fitment/fitment-mvl.util.js';
+import {
+  fitmentDataToCompatibilityPayload,
+  parseFitmentEntry,
+} from '../../fitment/fitment-mvl.util.js';
 
 /**
  * Publishing request payload from the frontend / caller.
@@ -534,6 +537,36 @@ export class EbayPublishService {
     });
     const listingOem =
       listing?.cOeOemPartNumber ?? listing?.cManufacturerPartNumber ?? '';
+
+    // Fitment-derived make/year range. catalog_products.fitmentData resolves
+    // make against the canonical fitment_makes table during enrichment,
+    // correcting spelling issues that survive uncorrected in the raw
+    // listing_records column (observed live on eBay: "Bently"/"Lincon"
+    // instead of "Bentley"/"Lincoln", with no year at all since this path
+    // never derived one). This mirrors the same fix already applied to
+    // ListingBuilderService.build() — that fixed the bulk multi-store queue
+    // path (EbayListingPublishProcessor), but this single/catalog-page
+    // publish path (EbayPublishController -> publish()) builds its title
+    // independently via sanitizePublishListingText and was missing it.
+    const catalogForText = await this.resolveCatalogProductForPublish(
+      enriched.listingId,
+      enriched.sku,
+    );
+    const parsedFitmentRows = (catalogForText?.fitmentData ?? [])
+      .map((row) => parseFitmentEntry(row))
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+    const fitmentMake = parsedFitmentRows[0]?.make?.trim() || null;
+    const fitmentYears = parsedFitmentRows
+      .map((row) => Number(row.year))
+      .filter((y) => Number.isFinite(y));
+    const fitmentYearRange = fitmentYears.length
+      ? (() => {
+          const min = Math.min(...fitmentYears);
+          const max = Math.max(...fitmentYears);
+          return min === max ? String(min) : `${min}-${max}`;
+        })()
+      : null;
+
     const sanitized = sanitizePublishListingText({
       title: enriched.title,
       description: enriched.description,
@@ -541,7 +574,11 @@ export class EbayPublishService {
       brand: listing?.cBrand,
       mpn: listing?.cManufacturerPartNumber,
       partType: listing?.cType,
-      make: (listing?.cBrand ?? listing?.extractedMake ?? '').trim() || null,
+      yearRange: fitmentYearRange,
+      make:
+        fitmentMake ||
+        (listing?.cBrand ?? listing?.extractedMake ?? '').trim() ||
+        null,
       model: (listing?.extractedModel ?? '').trim() || null,
       position: (listing?.cPlacement ?? '').trim() || null,
       partName: (listing?.cType ?? '').trim() || null,
