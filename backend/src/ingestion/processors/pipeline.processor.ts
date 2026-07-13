@@ -1781,15 +1781,16 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             const result = await this.listingRepo.query(sql, values);
             insertedCount += result?.length ?? 0;
           } catch (insertErr) {
+            const batchEnd = Math.min(i + CHUNK, rowsToInsert.length);
             this.logger.error(
-              `Job ${jobId} [${marketplace}]: Listing insert failed (offset ${i}, batch size ${batch.length}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
+              `Job ${jobId} [${marketplace}]: Listing insert failed (offset ${i}-${batchEnd} of ${rowsToInsert.length}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
             );
             if (insertErr instanceof Error && insertErr.stack) {
               this.logger.error(`Stack: ${insertErr.stack.slice(0, 500)}`);
             }
             // Log first row of failing batch for diagnosis
-            if (batch.length > 0) {
-              const sample = batch[0];
+            if (rowsToInsert[i]) {
+              const sample = rowsToInsert[i];
               this.logger.error(
                 `Sample row: sku=${sample.customLabelSku}, sourceFileName=${sample.sourceFileName}, sheetName=${sample.sheetName}, sourceRowNumber=${sample.sourceRowNumber}`,
               );

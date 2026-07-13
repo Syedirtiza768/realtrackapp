@@ -882,8 +882,10 @@ export class PipelineService {
     // stuck in output_generation/catalog_import, or marked failed after a
     // worker restart. Also allow re-import for completed jobs whose listing
     // records may have been lost (e.g. silent constraint violations).
-    if (job.status === 'active') {
-      throw new BadRequestException(`Job ${id} is currently active — wait for it to finish`);
+    // Block only jobs that are currently being processed.
+    const ACTIVE_STATUSES = ['uploading', 'vin_decode', 'category_mapping', 'enrichment', 'validation', 'output_generation'];
+    if (ACTIVE_STATUSES.includes(job.status)) {
+      throw new BadRequestException(`Job ${id} is currently active (${job.status}) — wait for it to finish`);
     }
 
     const projectRoot =
