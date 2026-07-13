@@ -258,6 +258,32 @@ export class CatalogPublishResolverService {
       dirty = true;
     }
 
+    // Sync business policy profile names from listing record to catalog.
+    // listing_records is the source of truth for imported/configured profiles;
+    // catalog_products should always reflect the latest values so the UI and
+    // future publish jobs see consistent data.
+    if (
+      listing.shippingProfileName?.trim() &&
+      listing.shippingProfileName.trim() !== (product.shippingProfile ?? '')
+    ) {
+      product.shippingProfile = listing.shippingProfileName.trim();
+      dirty = true;
+    }
+    if (
+      listing.returnProfileName?.trim() &&
+      listing.returnProfileName.trim() !== (product.returnProfile ?? '')
+    ) {
+      product.returnProfile = listing.returnProfileName.trim();
+      dirty = true;
+    }
+    if (
+      listing.paymentProfileName?.trim() &&
+      listing.paymentProfileName.trim() !== (product.paymentProfile ?? '')
+    ) {
+      product.paymentProfile = listing.paymentProfileName.trim();
+      dirty = true;
+    }
+
     return dirty ? this.catalogRepo.save(product) : product;
   }
 }

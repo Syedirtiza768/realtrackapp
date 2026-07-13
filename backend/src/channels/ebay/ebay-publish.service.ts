@@ -634,6 +634,56 @@ export class EbayPublishService {
           `Failed to write publish status for listing ${req.listingId}: ${(writeErr as Error).message}`,
         );
       }
+
+      // Sync profile names from listing_records → catalog_products so the
+      // catalog always reflects the profiles used for the most recent publish.
+      try {
+        const listing = await this.listingRepo.findOne({
+          where: { id: req.listingId },
+        });
+        if (listing?.customLabelSku) {
+          const catalog = await this.catalogRepo.findOne({
+            where: { sku: listing.customLabelSku },
+          });
+          if (catalog) {
+            let dirty = false;
+            if (
+              listing.shippingProfileName?.trim() &&
+              listing.shippingProfileName.trim() !==
+                (catalog.shippingProfile ?? '')
+            ) {
+              catalog.shippingProfile =
+                listing.shippingProfileName.trim();
+              dirty = true;
+            }
+            if (
+              listing.returnProfileName?.trim() &&
+              listing.returnProfileName.trim() !==
+                (catalog.returnProfile ?? '')
+            ) {
+              catalog.returnProfile =
+                listing.returnProfileName.trim();
+              dirty = true;
+            }
+            if (
+              listing.paymentProfileName?.trim() &&
+              listing.paymentProfileName.trim() !==
+                (catalog.paymentProfile ?? '')
+            ) {
+              catalog.paymentProfile =
+                listing.paymentProfileName.trim();
+              dirty = true;
+            }
+            if (dirty) {
+              await this.catalogRepo.save(catalog);
+            }
+          }
+        }
+      } catch (syncErr) {
+        this.logger.warn(
+          `Failed to sync profiles to catalog after publish for listing ${req.listingId}: ${(syncErr as Error).message}`,
+        );
+      }
     }
 
     return results;
