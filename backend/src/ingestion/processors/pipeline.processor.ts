@@ -1680,6 +1680,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           else rowsToInsert.push(lr);
         }
 
+        this.logger.log(
+          `Job ${jobId} [${marketplace}]: listing record routing — ${listingRecords.length} parsed, ${batchSkus.length} unique SKUs, ${existingRows.length} found in DB, ${rowsToUpdate.length} to update, ${rowsToInsert.length} to insert, ${seenSku.size} seen SKUs, ${listingRecords.length - rowsToUpdate.length - rowsToInsert.length} dropped (dupes/no-sku)`,
+        );
+
         // ── UPDATE matched rows in place (type-safe, bounded concurrency) ──
         let updatedCount = 0;
         const UPDATE_CONCURRENCY = 10;
@@ -1778,8 +1782,18 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             insertedCount += result?.length ?? 0;
           } catch (insertErr) {
             this.logger.error(
-              `Job ${jobId} [${marketplace}]: Listing insert failed (offset ${i}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
+              `Job ${jobId} [${marketplace}]: Listing insert failed (offset ${i}, batch size ${batch.length}): ${insertErr instanceof Error ? insertErr.message : insertErr}`,
             );
+            if (insertErr instanceof Error && insertErr.stack) {
+              this.logger.error(`Stack: ${insertErr.stack.slice(0, 500)}`);
+            }
+            // Log first row of failing batch for diagnosis
+            if (batch.length > 0) {
+              const sample = batch[0];
+              this.logger.error(
+                `Sample row: sku=${sample.customLabelSku}, sourceFileName=${sample.sourceFileName}, sheetName=${sample.sheetName}, sourceRowNumber=${sample.sourceRowNumber}`,
+              );
+            }
           }
           this.scheduleCatalogImportProgress(jobId, {
             phase: 'saving',

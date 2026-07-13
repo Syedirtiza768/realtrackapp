@@ -880,9 +880,10 @@ export class PipelineService {
 
     // Allow resume from any non-completed state — the typical case is a job
     // stuck in output_generation/catalog_import, or marked failed after a
-    // worker restart. Guard against double-resume of an already-completed job.
-    if (job.status === 'completed') {
-      throw new BadRequestException(`Job ${id} is already completed`);
+    // worker restart. Also allow re-import for completed jobs whose listing
+    // records may have been lost (e.g. silent constraint violations).
+    if (job.status === 'active') {
+      throw new BadRequestException(`Job ${id} is currently active — wait for it to finish`);
     }
 
     const projectRoot =
