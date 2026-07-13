@@ -34,3 +34,4 @@ test-*.sh
 # Local AI tool config
 .claude/
 .kilo/
+.gstack/

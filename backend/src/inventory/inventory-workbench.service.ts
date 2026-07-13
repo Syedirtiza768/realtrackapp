@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { ImageAsset } from '../storage/entities/image-asset.entity.js';
+import { StorageService } from '../storage/storage.service.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PartFitment } from '../fitment/entities/part-fitment.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
@@ -170,6 +171,7 @@ export class InventoryWorkbenchService {
     private readonly enrichmentPipeline: EnrichmentPipeline,
     private readonly taxonomy: EbayTaxonomyApiService,
     private readonly fitmentDiscovery: FitmentDiscoveryService,
+    private readonly storageService: StorageService,
   ) {}
 
   async listListings(
@@ -1357,10 +1359,18 @@ export class InventoryWorkbenchService {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
 
-    const incoming = imageUrls.map((u) => u.trim()).filter(Boolean);
-    if (incoming.length === 0) {
+    const rawIncoming = imageUrls.map((u) => u.trim()).filter(Boolean);
+    if (rawIncoming.length === 0) {
       throw new BadRequestException('At least one image URL is required');
     }
+
+    // Never let a raw temp/ upload URL land in itemPhotoUrl — it gets purged by
+    // the daily storage-cleanup job within 24h if nothing else confirms it.
+    // mirrorRemoteImageUrls is a no-op for already-durable URLs.
+    const incoming = await this.storageService.mirrorRemoteImageUrls(
+      rawIncoming,
+      `inventory/${listingId}`,
+    );
 
     const existing = parseImageUrls(listing.itemPhotoUrl);
     const merged = [...existing];

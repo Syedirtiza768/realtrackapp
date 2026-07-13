@@ -12,6 +12,7 @@ import {
   type CatalogProductListParams,
 } from './utils/catalog-product-list-query.js';
 import { sanitizeTitle } from '../common/openai/listing-guards.js';
+import { StorageService } from '../storage/storage.service.js';
 
 export interface UpdateProductDto {
   title?: string;
@@ -49,6 +50,7 @@ export class CatalogProductService {
     private readonly productRepo: Repository<CatalogProduct>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    private readonly storageService: StorageService,
   ) {}
 
   async findAll(params: CatalogProductListParams): Promise<{
@@ -189,7 +191,15 @@ export class CatalogProductService {
       product.conditionLabel = dto.conditionLabel;
     if (dto.categoryId !== undefined) product.categoryId = dto.categoryId;
     if (dto.categoryName !== undefined) product.categoryName = dto.categoryName;
-    if (dto.imageUrls !== undefined) product.imageUrls = dto.imageUrls;
+    if (dto.imageUrls !== undefined) {
+      // Never let a raw temp/ upload URL land in image_urls — it gets purged by
+      // the daily storage-cleanup job within 24h if nothing else confirms it.
+      // mirrorRemoteImageUrls is a no-op for already-durable URLs.
+      product.imageUrls = await this.storageService.mirrorRemoteImageUrls(
+        dto.imageUrls,
+        `catalog-product/${product.id}`,
+      );
+    }
     if (dto.location !== undefined) product.location = dto.location;
     if (dto.format !== undefined) product.format = dto.format;
     if (dto.duration !== undefined) product.duration = dto.duration;

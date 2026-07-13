@@ -18,6 +18,7 @@ import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
+import { StorageService } from '../../storage/storage.service.js';
 import {
   ECU_IDENTIFICATION_PROMPT,
   isEcuPartType,
@@ -180,6 +181,7 @@ export class SingleListingFormService {
     private readonly config: ConfigService,
     private readonly mvl: EbayMvlService,
     private readonly visionPipeline: VisionEnrichmentPipeline,
+    private readonly storageService: StorageService,
   ) {}
 
   getLookupPricing(): PartLookupPricingEstimate {
@@ -253,11 +255,22 @@ export class SingleListingFormService {
       throw new BadRequestException('brand is required');
     }
 
-    const imageUrls = (dto.imageUrls ?? [])
+    const rawImageUrls = (dto.imageUrls ?? [])
       .map((u) => u.trim())
       .filter(Boolean);
 
     const sku = dto.sku?.trim() || (await this.allocateSku());
+
+    // Never let a raw temp/ upload URL land in itemPhotoUrl/image_urls — it
+    // gets purged by the daily storage-cleanup job within 24h if nothing else
+    // confirms it. mirrorRemoteImageUrls is a no-op for already-durable URLs.
+    const imageUrls =
+      rawImageUrls.length > 0
+        ? await this.storageService.mirrorRemoteImageUrls(
+            rawImageUrls,
+            `warehouse-intake/${sku}`,
+          )
+        : rawImageUrls;
     const qty = dto.quantity ?? 1;
     const priceNum = dto.price;
     const priceStr = priceNum.toFixed(2);

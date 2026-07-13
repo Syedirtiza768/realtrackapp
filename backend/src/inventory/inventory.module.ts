@@ -29,6 +29,7 @@ import { ChannelsModule } from '../channels/channels.module.js';
 import { EbayIntegrationsModule } from '../integrations/ebay/ebay-integrations.module.js';
 
 import { ListingOptimizationModule } from '../listing-optimization/listing-optimization.module.js';
+import { StorageModule } from '../storage/storage.module.js';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ListingOptimizationModule } from '../listing-optimization/listing-optim
     ChannelsModule,
     EbayIntegrationsModule,
     ListingOptimizationModule,
+    StorageModule,
   ],
   controllers: [InventoryController, InventoryEditorController],
   providers: [
