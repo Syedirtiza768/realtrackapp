@@ -1619,22 +1619,42 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             true,
           );
         }
-        // Re-run safe: the stable part identity within a pipeline job/marketplace
-        // is the SKU (customLabelSku). Match existing rows on it and UPDATE them
-        // in place — preserving row ids and FK links (ai_enhancements,
-        // channel_listings, image_assets) — then insert only genuinely new SKUs.
-        // sourceRowNumber is the XLSX row position, which shifts between runs as
-        // fitment rows change, and uq_listing_source_row (sourceFileName,
-        // sheetName, sourceRowNumber) is date-stamped via the output filename —
-        // so neither is a stable key. The previous ON CONFLICT
-        // ("customLabelSku","marketplace") upsert aborted the whole batch with a
-        // uq_listing_source_row violation whenever an INSERT was attempted, so
-        // re-runs never refreshed titles.
+        // Re-run safe: the stable part identity is the SKU (customLabelSku),
+        // and idx_listing_sku_marketplace_unique_active enforces that SKU+
+        // marketplace is unique DB-wide among non-deleted rows — not just
+        // within one pipeline job. Match existing rows on SKU+marketplace
+        // GLOBALLY (any job) and UPDATE them in place — preserving row ids,
+        // FK links (ai_enhancements, channel_listings, image_assets), and
+        // repointing pipeline_job_id to this run — then insert only
+        // genuinely new SKUs. Scoping this lookup to pipeline_job_id = jobId
+        // (as before) missed rows created by an earlier, different job for
+        // the same donor vehicle/part; the bulk INSERT below then hit
+        // idx_listing_sku_marketplace_unique_active on that row, and since a
+        // single multi-row INSERT aborts entirely on any constraint
+        // violation, the ENTIRE batch — not just the offending row — silently
+        // failed to save (0 inserted, 0 updated), even though the job itself
+        // reported "completed".
+        // sourceRowNumber is the XLSX row position, which shifts between runs
+        // as fitment rows change, and uq_listing_source_row (sourceFileName,
+        // sheetName, sourceRowNumber) is date-stamped via the output filename
+        // — so neither is a stable key. The previous ON CONFLICT
+        // ("customLabelSku","marketplace") upsert aborted the whole batch with
+        // a uq_listing_source_row violation whenever an INSERT was attempted,
+        // so re-runs never refreshed titles.
+        const batchSkus = Array.from(
+          new Set(
+            listingRecords
+              .map((lr) => lr.customLabelSku?.trim())
+              .filter((s): s is string => Boolean(s)),
+          ),
+        );
         const existingRows: Array<{ id: string; customLabelSku: string | null }> =
-          await this.listingRepo.query(
-            `SELECT id, "customLabelSku" FROM "listing_records" WHERE pipeline_job_id = $1 AND "marketplace" = $2`,
-            [jobId, marketplace],
-          );
+          batchSkus.length > 0
+            ? await this.listingRepo.query(
+                `SELECT id, "customLabelSku" FROM "listing_records" WHERE "marketplace" = $1 AND "customLabelSku" = ANY($2) AND "deletedAt" IS NULL`,
+                [marketplace, batchSkus],
+              )
+            : [];
         const existingIdBySku = new Map<string, string>();
         for (const r of existingRows) {
           const s = r.customLabelSku?.trim();
