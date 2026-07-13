@@ -151,6 +151,37 @@ export class PipelineJob {
   @Column({ name: 'optimization_block_count', type: 'integer', default: 0 })
   optimizationBlockCount!: number;
 
+  // ─── Title/part consistency verification (post-optimization, manual trigger) ───
+  @Column({
+    name: 'title_verification_status',
+    type: 'varchar',
+    length: 32,
+    default: 'pending',
+  })
+  titleVerificationStatus!: string;
+
+  @Column({ name: 'title_verification_processed', type: 'integer', default: 0 })
+  titleVerificationProcessed!: number;
+
+  @Column({ name: 'title_verification_total', type: 'integer', default: 0 })
+  titleVerificationTotal!: number;
+
+  @Column({
+    name: 'title_verification_flagged_count',
+    type: 'integer',
+    default: 0,
+  })
+  titleVerificationFlaggedCount!: number;
+
+  @Column({
+    name: 'title_verification_cost_usd',
+    type: 'numeric',
+    precision: 8,
+    scale: 4,
+    default: 0,
+  })
+  titleVerificationCostUsd!: number;
+
   // ─── Per-marketplace optimization tracking (JSONB) ───
   @Column({ name: 'optimization_by_marketplace', type: 'jsonb', default: '{}' })
   optimizationByMarketplace!: Record<

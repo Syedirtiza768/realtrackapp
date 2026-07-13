@@ -20,6 +20,8 @@ import { EnterpriseListingIntelligenceService } from './enterprise-listing-intel
 import type { ListingQualityProfile } from './enterprise-listing-intelligence.service.js';
 import { ListingOptimizationService } from '../listing-optimization/listing-optimization.service.js';
 import type { JobOptimizationStatus } from '../listing-optimization/listing-optimization.types.js';
+import { TitleVerificationService } from '../listing-optimization/title-verification/title-verification.service.js';
+import type { TitleVerificationSummary } from '../listing-optimization/title-verification/title-verification.types.js';
 import {
   applyCreatedByVisibility,
   canViewJob,
@@ -144,6 +146,7 @@ export class PipelineService {
     private readonly featureFlagService: FeatureFlagService,
     private readonly enterpriseListingIntelligence: EnterpriseListingIntelligenceService,
     private readonly listingOptimization: ListingOptimizationService,
+    private readonly titleVerification: TitleVerificationService,
     private readonly heavyJobLimiter: HeavyJobLimiterService,
     private readonly singleListingForm: SingleListingFormService,
     private readonly teamsService: TeamsService,
@@ -1070,6 +1073,10 @@ export class PipelineService {
 
   async markProductManualReview(productId: string, enabled = true) {
     return this.listingOptimization.markManualReview(productId, enabled);
+  }
+
+  async verifyJobTitles(jobId: string): Promise<TitleVerificationSummary> {
+    return this.titleVerification.verifyJob(jobId);
   }
 
   async bypassJobOptimization(jobId: string) {

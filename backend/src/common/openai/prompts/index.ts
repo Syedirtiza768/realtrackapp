@@ -13,6 +13,7 @@ export {
   VIN_PARTS_COMPATIBILITY_PROMPT,
   VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT,
 } from './vin-parts-compatibility.prompt.js';
+export { TITLE_PART_VERIFICATION_PROMPT } from './title-part-verification.prompt.js';
 
 import type { PromptTemplate } from '../openai.types.js';
 import { DATA_ENRICHMENT_PROMPT } from './data-enrichment.prompt.js';
@@ -30,6 +31,7 @@ import {
   VIN_PARTS_COMPATIBILITY_PROMPT,
   VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT,
 } from './vin-parts-compatibility.prompt.js';
+import { TITLE_PART_VERIFICATION_PROMPT } from './title-part-verification.prompt.js';
 
 /**
  * Registry of all prompt templates, keyed by name.
@@ -49,6 +51,7 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
   [VIN_PARTS_COMPATIBILITY_PROMPT.name]: VIN_PARTS_COMPATIBILITY_PROMPT,
   [VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT.name]:
     VIN_PARTS_COMPATIBILITY_COMPACT_PROMPT,
+  [TITLE_PART_VERIFICATION_PROMPT.name]: TITLE_PART_VERIFICATION_PROMPT,
 };
 
 /**

@@ -12,6 +12,7 @@ import { EnterpriseListingIntelligenceService } from '../ingestion/enterprise-li
 import { FitmentDiscoveryService } from './fitment-discovery.service.js';
 import { ListingOptimizationService } from './listing-optimization.service.js';
 import { ListingOptimizationProcessor } from './processors/listing-optimization.processor.js';
+import { TitleVerificationService } from './title-verification/title-verification.service.js';
 
 @Module({
   imports: [
@@ -37,11 +38,13 @@ import { ListingOptimizationProcessor } from './processors/listing-optimization.
     ListingOptimizationService,
     ListingOptimizationProcessor,
     EnterpriseListingIntelligenceService,
+    TitleVerificationService,
   ],
   exports: [
     ListingOptimizationService,
     EnterpriseListingIntelligenceService,
     FitmentDiscoveryService,
+    TitleVerificationService,
   ],
 })
 export class ListingOptimizationModule {}

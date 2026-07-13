@@ -130,6 +130,11 @@ export const OPENAI_PRICING: Record<string, { input: number; output: number }> =
     // Production enrichment lanes (OpenRouter catalog pricing)
     'openai/gpt-4.1-mini': { input: 0.4, output: 1.6 },
     'google/gemini-2.5-flash': { input: 0.3, output: 2.5 },
+    // Title/part verification lane — verify against OpenRouter's live rate
+    // card before relying on this for real budgeting; 3.1 is preview-tier
+    // and may not resolve on OpenRouter yet, hence the 2.5 fallback below.
+    'google/gemini-3.1-flash-lite': { input: 0.25, output: 1.5 },
+    'google/gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
     'deepseek/deepseek-chat-v3-0324': { input: 0.27, output: 1.1 },
     'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
     // MiniMax M3 via OpenRouter (legacy default; vision is ~2x)

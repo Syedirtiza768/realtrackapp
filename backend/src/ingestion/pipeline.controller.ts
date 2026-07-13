@@ -138,6 +138,18 @@ export class PipelineController {
     return { product };
   }
 
+  @Post('jobs/:id/verify-titles')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @RequirePermissions('pipeline.review')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Text-only AI consistency check: does each product title match its identified part (partType/mpn/brand/category)? Flags mismatches for manual review; does not call the eBay Browse API.',
+  })
+  async verifyTitles(@Param('id') id: string) {
+    return this.pipelineService.verifyJobTitles(id);
+  }
+
   @Post('jobs/:id/bypass-optimization')
   @RequirePermissions('pipeline.manage')
   @HttpCode(HttpStatus.OK)
