@@ -27,6 +27,8 @@ import {
 } from './dto/rbac-admin.dto.js';
 import { ROLE_SLUGS } from './permission-registry.js';
 import { RbacService } from './rbac.service.js';
+import { UserOrganizationService } from '../auth/user-organization.service.js';
+import { OrganizationMember } from '../auth/entities/organization-member.entity.js';
 
 const SALT_ROUNDS = 12;
 
@@ -57,9 +59,12 @@ export class RbacAdminController {
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>,
     @InjectRepository(Permission)
     private readonly permissionRepo: Repository<Permission>,
+    @InjectRepository(OrganizationMember)
+    private readonly memberRepo: Repository<OrganizationMember>,
     private readonly rbac: RbacService,
     private readonly auth: AuthService,
     private readonly authAudit: AuthAuditService,
+    private readonly userOrgs: UserOrganizationService,
   ) {}
 
   @Get('permissions')
@@ -112,7 +117,7 @@ export class RbacAdminController {
   @Post('users')
   @RequirePermissions('users.create')
   @ApiOperation({ summary: 'Create user' })
-  async createUser(@Body() body: CreateRbacUserDto) {
+  async createUser(@Body() body: CreateRbacUserDto, @CurrentUser() actor: User) {
     const email = body.email.toLowerCase();
     const existing = await this.userRepo.findOne({ where: { email } });
     if (existing) {
@@ -128,6 +133,27 @@ export class RbacAdminController {
       }),
     );
     await this.rbac.assignPrimaryRole(user.id, body.roleSlug);
+    // Auto-add to the creating admin's organization so the new user can
+    // publish to the same eBay stores.
+    try {
+      const orgs = await this.userOrgs.listForUser(actor.id);
+      if (orgs.length > 0) {
+        const existing = await this.memberRepo.findOne({
+          where: { userId: user.id, organizationId: orgs[0].organizationId },
+        });
+        if (!existing) {
+          await this.memberRepo.save(
+            this.memberRepo.create({
+              userId: user.id,
+              organizationId: orgs[0].organizationId,
+              role: 'editor',
+            }),
+          );
+        }
+      }
+    } catch {
+      // Non-fatal: user can still function without org membership
+    }
     return this.rbac.getAuthProfile(user);
   }
 
@@ -184,5 +210,37 @@ export class RbacAdminController {
       req,
     });
     return { ok: true };
+  }
+
+  @Post('org/add-member')
+  @RequirePermissions('users.create')
+  @ApiOperation({ summary: 'Add a user to an organization (defaults to actor org)' })
+  async addOrgMember(
+    @Body() body: { userId: string; organizationId?: string; role?: string },
+    @CurrentUser() actor: User,
+  ) {
+    const orgs = body.organizationId
+      ? [{ organizationId: body.organizationId }]
+      : await this.userOrgs.listForUser(actor.id);
+    if (orgs.length === 0) {
+      return { error: 'No organization found' };
+    }
+    const orgId = orgs[0].organizationId;
+    const existing = await this.memberRepo.findOne({
+      where: { userId: body.userId, organizationId: orgId },
+    });
+    if (existing) {
+      return { ok: true, message: 'Already a member', memberId: existing.id };
+    }
+    const member = await this.memberRepo.save(
+      this.memberRepo.create({
+        userId: body.userId,
+        organizationId: orgId,
+        role: (['owner', 'admin', 'editor'].includes(body.role ?? '')
+          ? body.role
+          : 'editor') as 'owner' | 'admin' | 'editor' | 'viewer',
+      }),
+    );
+    return { ok: true, memberId: member.id, organizationId: orgId, role: member.role };
   }
 }

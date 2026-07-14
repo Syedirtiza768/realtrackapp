@@ -98,7 +98,6 @@ export default function CatalogTable({
               <th className="px-3 py-3">Team</th>
               <th className="px-3 py-3">Condition</th>
               <th className="px-3 py-3 text-center">Stock</th>
-              <th className="px-3 py-3">Location</th>
               <th className="px-3 py-3 text-right">Price</th>
               <th className="px-3 py-3">
                 <button
@@ -119,7 +118,7 @@ export default function CatalogTable({
             {loading && items.length === 0 &&
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  <td colSpan={12} className="px-3 py-4">
+                  <td colSpan={11} className="px-3 py-4">
                     <div className="h-4 rounded bg-slate-200 dark:bg-slate-800" />
                   </td>
                 </tr>
@@ -127,7 +126,7 @@ export default function CatalogTable({
 
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-6 py-16 text-center">
+                <td colSpan={11} className="px-6 py-16 text-center">
                   <Search className="mx-auto mb-3 text-slate-300 dark:text-slate-600" size={28} />
                   <p className="font-medium text-slate-700 dark:text-slate-200">No results found</p>
                   <p className="mt-1 text-xs text-slate-500">Try adjusting search or filters.</p>
@@ -197,9 +196,6 @@ export default function CatalogTable({
                   </td>
                   <td className="px-3 py-3 text-center text-xs text-slate-600 dark:text-slate-300">
                     {formatStock(item.quantity)}
-                  </td>
-                  <td className="max-w-[8rem] truncate px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
-                    {item.location ?? '—'}
                   </td>
                   <td className="px-3 py-3 text-right font-semibold text-slate-800 dark:text-slate-100">
                     {formatPrice(item.startPrice)}

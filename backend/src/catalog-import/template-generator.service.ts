@@ -132,6 +132,22 @@ export class TemplateGeneratorService {
       'AdditionalPicURL5',
       'AdditionalPicURL6',
       'AdditionalPicURL7',
+      'AdditionalPicURL8',
+      'AdditionalPicURL9',
+      'AdditionalPicURL10',
+      'AdditionalPicURL11',
+      'AdditionalPicURL12',
+      'AdditionalPicURL13',
+      'AdditionalPicURL14',
+      'AdditionalPicURL15',
+      'AdditionalPicURL16',
+      'AdditionalPicURL17',
+      'AdditionalPicURL18',
+      'AdditionalPicURL19',
+      'AdditionalPicURL20',
+      'AdditionalPicURL21',
+      'AdditionalPicURL22',
+      'AdditionalPicURL23',
     ];
 
     const rows: (string | number | null)[][] = [
@@ -270,6 +286,22 @@ export class TemplateGeneratorService {
       'AdditionalPicURL5',
       'AdditionalPicURL6',
       'AdditionalPicURL7',
+      'AdditionalPicURL8',
+      'AdditionalPicURL9',
+      'AdditionalPicURL10',
+      'AdditionalPicURL11',
+      'AdditionalPicURL12',
+      'AdditionalPicURL13',
+      'AdditionalPicURL14',
+      'AdditionalPicURL15',
+      'AdditionalPicURL16',
+      'AdditionalPicURL17',
+      'AdditionalPicURL18',
+      'AdditionalPicURL19',
+      'AdditionalPicURL20',
+      'AdditionalPicURL21',
+      'AdditionalPicURL22',
+      'AdditionalPicURL23',
     ];
 
     const rows: (string | number | null)[][] = [
@@ -405,6 +437,22 @@ export class TemplateGeneratorService {
       'AdditionalPicURL5',
       'AdditionalPicURL6',
       'AdditionalPicURL7',
+      'AdditionalPicURL8',
+      'AdditionalPicURL9',
+      'AdditionalPicURL10',
+      'AdditionalPicURL11',
+      'AdditionalPicURL12',
+      'AdditionalPicURL13',
+      'AdditionalPicURL14',
+      'AdditionalPicURL15',
+      'AdditionalPicURL16',
+      'AdditionalPicURL17',
+      'AdditionalPicURL18',
+      'AdditionalPicURL19',
+      'AdditionalPicURL20',
+      'AdditionalPicURL21',
+      'AdditionalPicURL22',
+      'AdditionalPicURL23',
     ];
 
     const rows: (string | number | null)[][] = [
@@ -498,7 +546,7 @@ export class TemplateGeneratorService {
     set: (col: string, val: string | number | null | undefined) => void,
   ): void {
     if (!p.imageUrls?.length) return;
-    const imgs = p.imageUrls.slice(0, 9);
+    const imgs = p.imageUrls.slice(0, 24);
     set('Item photo URL', imgs[0]);
     if (imgs.length > 1) set('AdditionalPicURL', imgs[1]);
     for (let i = 2; i < imgs.length; i++) {
