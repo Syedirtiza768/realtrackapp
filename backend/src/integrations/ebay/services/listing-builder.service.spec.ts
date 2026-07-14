@@ -204,6 +204,55 @@ describe('ListingBuilderService', () => {
     expect(result.publishRequest.title).toContain('2003-2011');
   });
 
+  it('keeps the raw brand when fitmentData lists a different (platform-sharing) manufacturer', async () => {
+    // Regression test from a DB-wide audit: fitmentData[0].Make is not
+    // always the same manufacturer as the part itself — a Nissan part's
+    // compatible-vehicle fitment rows can legitimately include Infiniti
+    // (shared platform). Overriding "Nissan" with "Infiniti" here would be
+    // a NEW mislabeling bug, not a fix — only same-make typos/formatting
+    // variants (see isSameMakeVariant) should ever override the raw brand.
+    publishResolver.resolve.mockResolvedValue({
+      snapshot: {
+        catalogProductId: 'cp-1',
+        listingRecordId: 'lr-1',
+        sku: 'NISSAN-Q50-042',
+        title: 'Nissan Altima Headlight Assembly',
+        description: '<p>Desc</p>',
+        brand: null,
+        mpn: 'HL-9910',
+        partType: 'Headlight Assembly',
+        price: 89.99,
+        quantity: 1,
+        categoryId: '33710',
+        conditionId: '3000',
+        imageUrls: ['https://img.example.com/1.jpg'],
+      },
+      listingRecord: {
+        cBrand: 'NISSAN',
+      },
+      catalogProduct: {
+        oemPartNumber: 'HL-9910',
+        fitmentData: [
+          { Make: 'Infiniti', Model: 'Q50', Year: '2015' },
+          { Make: 'Nissan', Model: 'Altima', Year: '2015' },
+        ],
+      },
+      warnings: [],
+    });
+    overrideRepo.findOne = jest.fn().mockResolvedValue(null);
+
+    const result = await svc.build({
+      catalogProductId: 'cp-1',
+      ebayAccountId: 'acct-1',
+      marketplaceId: 'EBAY_US',
+      listingRecordId: 'lr-1',
+      storeId: 'store-1',
+    });
+
+    expect(result.publishRequest.title).toContain('NISSAN');
+    expect(result.publishRequest.title).not.toContain('Infiniti');
+  });
+
   it('adds blocking error for missing images', async () => {
     publishResolver.resolve.mockResolvedValue({
       snapshot: {

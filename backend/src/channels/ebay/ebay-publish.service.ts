@@ -73,6 +73,7 @@ import {
 } from './ebay-listing-aspects.util.js';
 import {
   fitmentDataToCompatibilityPayload,
+  isSameMakeVariant,
   parseFitmentEntry,
 } from '../../fitment/fitment-mvl.util.js';
 
@@ -567,6 +568,21 @@ export class EbayPublishService {
         })()
       : null;
 
+    // Fitment data commonly includes legitimate cross-brand platform-sharing
+    // applications (a Nissan part's compatible-vehicle rows can list
+    // Infiniti; a Lincoln part on a Ford platform can list Ford) — those are
+    // a DIFFERENT manufacturer than the part itself, not a typo, and must
+    // not override the raw brand. Only prefer fitmentMake when it's a
+    // typo/formatting variant of the same make (isSameMakeVariant), or as a
+    // fallback when the raw brand is missing entirely.
+    const rawMake = (listing?.cBrand ?? listing?.extractedMake ?? '').trim();
+    const resolvedMake =
+      (rawMake && fitmentMake && isSameMakeVariant(rawMake, fitmentMake)
+        ? fitmentMake
+        : rawMake) ||
+      fitmentMake ||
+      null;
+
     const sanitized = sanitizePublishListingText({
       title: enriched.title,
       description: enriched.description,
@@ -575,10 +591,7 @@ export class EbayPublishService {
       mpn: listing?.cManufacturerPartNumber,
       partType: listing?.cType,
       yearRange: fitmentYearRange,
-      make:
-        fitmentMake ||
-        (listing?.cBrand ?? listing?.extractedMake ?? '').trim() ||
-        null,
+      make: resolvedMake,
       model: (listing?.extractedModel ?? '').trim() || null,
       position: (listing?.cPlacement ?? '').trim() || null,
       partName: (listing?.cType ?? '').trim() || null,

@@ -124,6 +124,60 @@ export function parseFitmentEntry(
   return { year, make, model, trim, engine, submodel, notes };
 }
 
+/** Lowercase and strip non-alphanumerics so "Mercedes-Benz" / "MERCEDES BENZ" /
+ * "mercedes" compare equal, and "Land Rover" / "LandRover" compare equal. */
+function normalizeMakeForComparison(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** Minimal iterative Levenshtein distance (fine for short brand-name strings). */
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = new Array<number>(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] =
+        a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+/**
+ * True when `fitmentMake` looks like a typo, abbreviation, or formatting
+ * variant of `rawBrand` (e.g. "Lincon"/"Lincoln", "MERCEDES"/"Mercedes-Benz",
+ * "LandRover"/"Land Rover") rather than a genuinely different manufacturer.
+ *
+ * Fitment data commonly lists cross-brand platform-sharing applications (a
+ * Nissan part's compatible-vehicle rows can legitimately include Infiniti; a
+ * Lincoln part on a Ford platform can list Ford; Buick/Chevrolet, VW/Audi,
+ * Mini/BMW, Toyota/Lexus behave the same way) — those are NOT the same
+ * manufacturer as the part itself, so callers must not treat fitmentData's
+ * make as authoritative in that case and should keep the original brand.
+ * Only use fitmentMake as a *correction* when this returns true; otherwise
+ * prefer it merely as a fallback when rawBrand is missing entirely.
+ */
+export function isSameMakeVariant(
+  rawBrand: string,
+  fitmentMake: string,
+): boolean {
+  const a = normalizeMakeForComparison(rawBrand);
+  const b = normalizeMakeForComparison(fitmentMake);
+  if (!a || !b) return false;
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+  const maxLen = Math.max(a.length, b.length);
+  return levenshteinDistance(a, b) <= Math.min(3, Math.ceil(maxLen * 0.3));
+}
+
 /** Convert stored fitment rows to eBay Inventory API compatibility payload. */
 export function fitmentDataToCompatibilityPayload(
   fitmentData: Record<string, unknown>[] | null | undefined,

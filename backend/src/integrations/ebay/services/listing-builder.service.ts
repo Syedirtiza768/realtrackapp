@@ -38,6 +38,7 @@ import {
 } from '../../../channels/ebay/ebay-listing-aspects.util.js';
 import {
   fitmentDataToCompatibilityPayload,
+  isSameMakeVariant,
   parseFitmentEntry,
 } from '../../../fitment/fitment-mvl.util.js';
 import type { EbayCompatibilityPayload } from '../../../channels/ebay/ebay-api.types.js';
@@ -140,15 +141,25 @@ export class ListingBuilderService {
 
     // Structured (deterministic) composition fields — sourced from stored
     // catalog/listing columns, preferring fitment-resolved values where
-    // available (see fitmentMake/fitmentYearRange above).
+    // available (see fitmentMake/fitmentYearRange above). Fitment data
+    // commonly includes legitimate cross-brand platform-sharing applications
+    // (a Nissan part's compatible-vehicle rows can list Infiniti; a Lincoln
+    // part on a Ford platform can list Ford) — those are a DIFFERENT
+    // manufacturer than the part itself, not a typo, so fitmentMake only
+    // overrides the raw brand when isSameMakeVariant confirms it's the same
+    // make (a spelling/formatting correction), or as a fallback when the raw
+    // brand is missing entirely.
+    const rawMake = (
+      snapshot.brand ??
+      listingRecord?.cBrand ??
+      listingRecord?.extractedMake ??
+      ''
+    ).trim();
     const structuredMake =
+      (rawMake && fitmentMake && isSameMakeVariant(rawMake, fitmentMake)
+        ? fitmentMake
+        : rawMake) ||
       fitmentMake ||
-      (
-        snapshot.brand ??
-        listingRecord?.cBrand ??
-        listingRecord?.extractedMake ??
-        ''
-      ).trim() ||
       null;
     const structuredModel =
       (listingRecord?.extractedModel ?? '').trim() || null;

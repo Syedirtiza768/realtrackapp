@@ -1,7 +1,34 @@
 import {
   fitmentDataToCompatibilityPayload,
+  isSameMakeVariant,
   parseFitmentEntry,
 } from './fitment-mvl.util.js';
+
+describe('isSameMakeVariant', () => {
+  // Regression coverage for a DB audit run after the "Bently"/"Lincon" title
+  // incidents: fitmentData[0].Make is not always the same manufacturer as
+  // the raw brand — cross-brand platform-sharing is common (a Nissan part's
+  // compatible-vehicle rows can legitimately list Infiniti), and blindly
+  // preferring fitmentData there would mislabel a genuine Nissan part as
+  // Infiniti. Only typos/formatting variants of the SAME make should match.
+  it('recognizes typos and formatting variants as the same make', () => {
+    expect(isSameMakeVariant('Lincon', 'Lincoln')).toBe(true);
+    expect(isSameMakeVariant('CADILAC', 'Cadillac')).toBe(true);
+    expect(isSameMakeVariant('Bently', 'Bentley')).toBe(true);
+    expect(isSameMakeVariant('MERCEDES', 'Mercedes-Benz')).toBe(true);
+    expect(isSameMakeVariant('LandRover', 'Land Rover')).toBe(true);
+    expect(isSameMakeVariant('Audi A4', 'Audi')).toBe(true);
+  });
+
+  it('rejects genuinely different manufacturers even when platforms are shared', () => {
+    expect(isSameMakeVariant('NISSAN', 'INFINITI')).toBe(false);
+    expect(isSameMakeVariant('Lincoln', 'FORD')).toBe(false);
+    expect(isSameMakeVariant('AUDI', 'BMW')).toBe(false);
+    expect(isSameMakeVariant('CHEVROLET', 'Buick')).toBe(false);
+    expect(isSameMakeVariant('MINI', 'BMW')).toBe(false);
+    expect(isSameMakeVariant('Toyota', 'Lexus')).toBe(false);
+  });
+});
 
 describe('fitment-mvl.util', () => {
   it('parseFitmentEntry accepts Make/Model/Year keys', () => {
