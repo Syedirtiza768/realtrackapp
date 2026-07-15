@@ -85,6 +85,7 @@ export default function SingleListingPipeline() {
   });
   const [notes, setNotes] = useState('');
   const [location, setLocation] = useState('');
+  const [weight, setWeight] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [lookupWarning, setLookupWarning] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
@@ -208,6 +209,7 @@ export default function SingleListingPipeline() {
           description: combinedDescription,
           teamId: teamId || undefined,
           location: location.trim() || undefined,
+          weight: weight.trim() ? parseFloat(weight) : undefined,
         });
 
         const savedSku = result.listing.customLabelSku ?? '';
