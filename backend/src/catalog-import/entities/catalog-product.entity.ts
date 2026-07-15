@@ -98,6 +98,9 @@ export class CatalogProduct {
   @Column({ name: 'condition_label', type: 'text', nullable: true })
   conditionLabel!: string | null;
 
+  @Column({ type: 'numeric', precision: 10, scale: 3, nullable: true })
+  weight!: number | null;
+
   /* ── Category ──────────────────────────────────────────── */
 
   @Column({ name: 'category_id', type: 'text', nullable: true })

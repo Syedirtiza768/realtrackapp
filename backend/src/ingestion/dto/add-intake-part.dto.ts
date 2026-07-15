@@ -77,4 +77,10 @@ export class AddIntakePartDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  weight?: number;
 }

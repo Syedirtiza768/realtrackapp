@@ -57,6 +57,7 @@ export class CreateListingDto {
   @IsOptional() @IsString() cItemLength?: string;
   @IsOptional() @IsString() cItemWidth?: string;
   @IsOptional() @IsString() cItemDiameter?: string;
+  @IsOptional() @IsString() weight?: string;
   @IsOptional() @IsString() cFeatures?: string;
   @IsOptional() @IsString() cOperatingMode?: string;
   @IsOptional() @IsString() cFuelType?: string;

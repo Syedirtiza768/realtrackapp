@@ -101,6 +101,8 @@ export interface SearchItem {
   shippingProfileName?: string | null;
   /** eBay item ID (set when listing is published to eBay) */
   ebayListingId?: string | null;
+  /** Part weight in kg (nullable, optional) */
+  weight?: number | null;
 }
 
 /* -- Suggestions ----------------------------------------------------- */

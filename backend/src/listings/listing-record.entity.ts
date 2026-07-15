@@ -314,6 +314,9 @@ export class ListingRecord {
   @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
   shippingService2CostNum: number | null;
 
+  @Column({ type: 'numeric', precision: 10, scale: 3, nullable: true })
+  weight: number | null;
+
   /* ── Pipeline/marketplace linkage ────────────────────────── */
 
   @Column({ name: 'pipeline_job_id', type: 'uuid', nullable: true })

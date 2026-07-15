@@ -728,6 +728,12 @@ export default function CatalogProductDetail() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">Imported</p>
                 <p className="text-xs text-slate-600 dark:text-slate-300">{new Date(listing.importedAt).toLocaleDateString()}</p>
               </div>
+              {listing.weight != null && (
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Weight</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200">{listing.weight} kg</p>
+                </div>
+              )}
             </div>
 
             {/* Category ID override */}

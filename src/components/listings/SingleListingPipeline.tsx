@@ -118,6 +118,7 @@ export default function SingleListingPipeline() {
     setQuantity('1');
     setNotes('');
     setLocation('');
+    setWeight('');
     const prefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
     setPartType(prefs.partType ?? 'OEM');
     setConditionId(prefs.conditionId ?? '3000');
@@ -517,6 +518,20 @@ export default function SingleListingPipeline() {
                     className={inputClassName}
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    placeholder="0.000"
+                    className={inputClassName}
+                  />
+                </div>
               </div>
             </div>
 
@@ -666,6 +681,11 @@ export default function SingleListingPipeline() {
             )}
           </CardContent>
         </Card>
+      </form>
+    </div>
+  );
+}
+       </Card>
       </form>
     </div>
   );

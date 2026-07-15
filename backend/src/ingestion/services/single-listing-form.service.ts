@@ -75,6 +75,7 @@ export interface CreateIntakePartDto {
   description?: string;
   teamId?: string;
   location?: string;
+  weight?: number;
 }
 
 export interface PartLookupPricingEstimate {
@@ -304,6 +305,7 @@ export class SingleListingFormService {
           sourceRowNumber,
           teamId: dto.teamId || null,
           location: dto.location?.trim() || null,
+          weight: dto.weight ?? null,
         }),
       );
     } catch (err) {

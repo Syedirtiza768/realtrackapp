@@ -317,6 +317,7 @@ export function useAddIntakePart() {
       description?: string;
       teamId?: string;
       location?: string;
+      weight?: number;
     }) =>
       postJson<{ listing: { id: string; customLabelSku: string | null } }>(
         '/pipeline/single-listing/add-part',

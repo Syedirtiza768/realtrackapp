@@ -36,6 +36,7 @@ import {
   Package,
   Calendar,
   Car,
+  Scale,
   Image as ImageIcon,
   Loader2,
   Save,
@@ -875,6 +876,13 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                       label="Storage Location"
                       value={displayDraft.location || null}
                     />
+                    {listing.weight != null && (
+                      <DetailField
+                        icon={Scale}
+                        label="Weight"
+                        value={`${listing.weight} kg`}
+                      />
+                    )}
                     <DetailField
                       icon={Calendar}
                       label="Date Added"
