@@ -16,10 +16,13 @@ import type { PublishErrorPayload } from '../../sellerpundit/sellerpundit.types.
 
 class RetriablePublishError extends Error {}
 
-function isTransientPublishFailure(message: string): boolean {
+export function isTransientPublishFailure(message: string): boolean {
   const normalized = message.toLowerCase();
   return [
     'product not found',
+    'availability not found',
+    'cannot revise listing',
+    'try again later',
     'core inventory service internal error',
     'status code 500',
     'temporarily unavailable',
