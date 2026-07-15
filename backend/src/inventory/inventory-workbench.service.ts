@@ -384,8 +384,11 @@ export class InventoryWorkbenchService {
     const skus = [
       ...new Set(listings.map((l) => l.customLabelSku).filter(Boolean)),
     ] as string[];
+    const teamIds = [
+      ...new Set(listings.map((l) => l.teamId).filter(Boolean)),
+    ] as string[];
 
-    const [fitmentRows, siblings, catalogProducts] = await Promise.all([
+    const [fitmentRows, siblings, catalogProducts, teamRows] = await Promise.all([
       this.fitmentRepo
         .createQueryBuilder('f')
         .select('f.listingId', 'listingId')
@@ -412,6 +415,12 @@ export class InventoryWorkbenchService {
             select: ['sku', 'fitmentData'],
           })
         : Promise.resolve([] as CatalogProduct[]),
+      teamIds.length
+        ? this.listingRepo.query(
+            `SELECT id, name, color FROM teams WHERE id = ANY($1)`,
+            [teamIds],
+          )
+        : Promise.resolve([] as Array<{ id: string; name: string; color: string }>),
     ]);
 
     const pipelineJobs = await this.loadPipelineJobsForListings(
@@ -428,6 +437,9 @@ export class InventoryWorkbenchService {
         const count = Array.isArray(p.fitmentData) ? p.fitmentData.length : 0;
         return [p.sku, count] as const;
       }),
+    );
+    const teamById = new Map<string, { name: string; color: string }>(
+      teamRows.map((t) => [t.id, { name: t.name, color: t.color }]),
     );
 
     const siblingsBySku = new Map<string, ListingRecord[]>();
@@ -507,6 +519,8 @@ export class InventoryWorkbenchService {
           : [],
         location: listing.sourceFileName === 'warehouse-intake' ? listing.location ?? undefined : undefined,
         version: listing.version,
+        teamName: listing.teamId ? (teamById.get(listing.teamId)?.name ?? null) : null,
+        teamColor: listing.teamId ? (teamById.get(listing.teamId)?.color ?? null) : null,
         importedAt: listing.importedAt
           ? new Date(listing.importedAt).toISOString()
           : undefined,

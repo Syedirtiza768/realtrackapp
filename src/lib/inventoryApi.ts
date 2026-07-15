@@ -74,6 +74,8 @@ export interface InventoryListingItem {
   location?: string;
   version?: number;
   importedAt?: string;
+  teamName?: string | null;
+  teamColor?: string | null;
 }
 
 export interface InventoryRequeueWarning {

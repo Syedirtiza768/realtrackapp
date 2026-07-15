@@ -31,7 +31,6 @@ import {
   countInventoryActiveFilters,
   type InventoryListingItem,
   type EnrichmentStatus,
-  type InventoryStoreListing,
   type InventoryFilters,
 } from '../../lib/inventoryApi';
 import { fetchWithAuth } from '../../lib/authApi';
@@ -40,6 +39,7 @@ import InventoryDetailModal from './InventoryDetailModal';
 import InventoryFilterBar from './InventoryFilterBar';
 import InventoryFilterSidebar from './InventoryFilterSidebar';
 import { MobileFilterDrawer } from '../catalog/FilterSidebar';
+import TeamBadge from '../catalog/TeamBadge';
 
 function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
   const config: Record<
@@ -77,65 +77,6 @@ function EnrichmentBadge({ status, stage }: { status: EnrichmentStatus; stage?: 
     <Badge variant={cfg.variant} className={cfg.pulse ? 'animate-pulse' : ''}>
       {cfg.label}
     </Badge>
-  );
-}
-
-function MarketplaceSummary({ item }: { item: InventoryListingItem }) {
-  const mkts = (item.marketplaceVariants ?? [])
-    .map((v) => v.marketplace)
-    .filter((m): m is string => Boolean(m));
-  if (mkts.length === 0) return <span className="text-xs text-slate-500">—</span>;
-  return (
-    <span className="text-xs">
-      {mkts.map((m) => (
-        <span key={m} className="inline-block mr-1 px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-300 text-[10px] font-medium">
-          {m}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function marketplaceShort(id: string): string {
-  if (id.includes('AU')) return 'AU';
-  if (id.includes('DE')) return 'DE';
-  return 'US';
-}
-
-function StoreListingsSummary({ listings }: { listings: InventoryStoreListing[] }) {
-  if (!listings.length) {
-    return <span className="text-xs text-slate-500">—</span>;
-  }
-  return (
-    <div className="space-y-1 max-w-[200px]">
-      {listings.map((s) => (
-        <div
-          key={`${s.storeId}-${s.marketplaceId}`}
-          className="text-[10px] leading-tight"
-          title={s.offerId ? `Offer: ${s.offerId}` : undefined}
-        >
-          <span className="text-slate-600 dark:text-slate-300 truncate">{s.storeName}</span>
-          <span className="text-slate-400"> · {marketplaceShort(s.marketplaceId)}</span>
-          {s.price != null && (
-            <span className="text-emerald-500 dark:text-emerald-400"> ${s.price.toFixed(2)}</span>
-          )}
-          {s.quantity != null && (
-            <span className="text-slate-500"> ×{s.quantity}</span>
-          )}
-          <span
-            className={`ml-1 capitalize ${
-              s.status === 'published'
-                ? 'text-emerald-500'
-                : s.status === 'failed'
-                  ? 'text-red-400'
-                  : 'text-slate-400'
-            }`}
-          >
-            {s.status}
-          </span>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -426,8 +367,7 @@ export default function InventoryManager() {
                     <th className="pb-3 pr-3">SKU / Title</th>
                     <th className="pb-3 pr-3">Brand</th>
                     <th className="pb-3 pr-3">Storage Location</th>
-                    <th className="pb-3 pr-3">Marketplaces</th>
-                    <th className="pb-3 pr-3">eBay Stores</th>
+                    <th className="pb-3 pr-3">Team</th>
                     <th className="pb-3 pr-3">
                       <span className="flex items-center gap-1">
                         <Car className="h-3 w-3" /> Fitments
@@ -549,10 +489,7 @@ export default function InventoryManager() {
                         )}
                       </td>
                       <td className="py-3 pr-3">
-                        <MarketplaceSummary item={item} />
-                      </td>
-                      <td className="py-3 pr-3">
-                        <StoreListingsSummary listings={item.storeListings ?? []} />
+                        <TeamBadge name={item.teamName} color={item.teamColor} />
                       </td>
                       <td className="py-3 pr-3">
                         <span
