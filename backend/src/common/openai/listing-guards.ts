@@ -126,6 +126,14 @@ export function trimTitle(title: string, mpn?: string): string {
   let t = normSpaces(title);
   if (t.length <= 80) return t;
 
+  // Preserve "OEM Used" suffix — never truncate it
+  const oemSuffix = 'OEM Used';
+  if (t.endsWith(oemSuffix)) {
+    const core = t.replace(/\s*OEM Used$/, '').trim();
+    const maxCore = 80 - oemSuffix.length - 1;
+    return core.slice(0, maxCore).trim() + ' ' + oemSuffix;
+  }
+
   const mpnSuffix = mpn ? normSpaces(mpn).slice(-12) : '';
   const parts = t.split(/\s+/);
   while (parts.join(' ').length > 80 && parts.length > 4) {

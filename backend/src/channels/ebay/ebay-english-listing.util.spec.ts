@@ -66,7 +66,7 @@ describe('ebay-english-listing.util', () => {
         'Year Range': '2013-2021',
         'Platform/Generation': 'AL20',
       },
-      categoryId: '33717',
+      categoryId: '262191',
       partType: 'Dashboard trim',
       mpn: '1A421-034G',
     });

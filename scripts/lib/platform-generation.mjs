@@ -255,6 +255,8 @@ export function buildPlatformSeoTitle({
       });
 
   const variants = extractFitmentVariantTokens(fitments, 2);
+  // Compact the MPN — guidelines show compact part numbers (e.g. 4G9827279 not 4G9 827 279)
+  const compactMpn = String(mpn || '').replace(/\s+/g, '').trim();
   const segments = [
     aligned.yearRange,
     make,
@@ -263,10 +265,18 @@ export function buildPlatformSeoTitle({
     platform?.code ?? aligned.generation,
     partName,
     placement,
-    mpn,
+    compactMpn,
     'OEM',
     'Used',
   ].filter(Boolean);
 
-  return segments.join(' ').replace(/\s+/g, ' ').slice(0, 80).trim();
+  let result = segments.join(' ').replace(/\s+/g, ' ').trim();
+  // Ensure "OEM Used" suffix is never truncated
+  const suffix = 'OEM Used';
+  if (result.length > 80) {
+    const core = result.replace(/\s*OEM Used$/, '').trim();
+    const maxCore = 80 - suffix.length - 1;
+    result = core.slice(0, maxCore).trim() + ' ' + suffix;
+  }
+  return result;
 }

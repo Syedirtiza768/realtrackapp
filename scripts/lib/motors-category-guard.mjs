@@ -5,12 +5,17 @@
  */
 
 export const MOTORS_CATEGORY_KEYWORDS = [
-  { kw: ['seat', 'seat frame', 'seat cover', 'seat padding', 'backrest', 'headrest', 'lumbar'], id: '40058', name: 'Seats' },
-  { kw: ['seat belt', 'safety belt', 'belt buckle'], id: '40065', name: 'Seat Belts & Parts' },
-  { kw: ['door panel', 'door trim', 'door handle', 'window regulator', 'door lock', 'door shell'], id: '33640', name: 'Interior Door Panels & Parts' },
-  { kw: ['window', 'window seal', 'window slot', 'window aperture', 'weatherstrip'], id: '33642', name: 'Window Motors & Parts' },
-  { kw: ['mirror', 'side mirror', 'door mirror'], id: '33713', name: 'Mirrors' },
-  { kw: ['console', 'armrest', 'center console'], id: '33702', name: 'Consoles & Parts' },
+  { kw: ['door body', 'door shell', 'complete door', 'door assembly'], id: '179850', name: 'Doors & Door Skins' },
+  { kw: ['center console', 'armrest console', 'console lid'], id: '262189', name: 'Center & Overhead Console Parts' },
+  { kw: ['door armrest', 'door finisher', 'inner panel', 'interior door', 'door panel', 'door trim'], id: '33696', name: 'Door Panels' },
+  { kw: ['radiator', 'support radiator'], id: '33602', name: 'Radiators' },
+  { kw: ['fastener', 'hardware', 'bolt', 'screw', 'nut', 'clip', 'rivet'], id: '174907', name: 'Nuts, Bolts & Fasteners' },
+  { kw: ['seat belt', 'safety belt', 'belt buckle'], id: '33725', name: 'Seat Belts & Parts' },
+  { kw: ['seat', 'seat frame', 'seat cover', 'seat padding', 'backrest', 'headrest', 'lumbar'], id: '33701', name: 'Seats' },
+  { kw: ['door handle'], id: '179851', name: 'Door Handles' },
+  { kw: ['window regulator', 'window motor'], id: '33706', name: 'Window Motors & Regulators' },
+  { kw: ['window seal', 'window slot', 'window aperture', 'weatherstrip'], id: '33705', name: 'Trim' },
+  { kw: ['mirror', 'side mirror', 'door mirror'], id: '262161', name: 'Mirror Assemblies' },
   { kw: ['trim', 'pillar trim', 'a-pillar', 'b-pillar', 'c-pillar', 'd-pillar', 'roof trim'], id: '33704', name: 'Interior Trim' },
   { kw: ['dashboard', 'dash panel', 'instrument cluster', 'gauge'], id: '33637', name: 'Gauges' },
   { kw: ['switch', 'button', 'knob', 'control unit', 'control module', 'bcm', 'ecu', 'relay'], id: '33716', name: 'Switches & Controls' },
@@ -45,30 +50,88 @@ export const FALLBACK_MOTORS_CATEGORY = {
   name: 'Other Car & Truck Parts & Accessories',
 };
 
-const BAD_CATEGORY_NAMES = /\b(books|magazines|merchandise|vintage|antique|collectibles|toys|hobbies|coins|slot\s*machines|models?|motorcycles|atv|utv|scooter|boat|marine|aircraft|plane|industrial|business|computer|electronics|clothing|shoes|jewelry|cell\s*phone|camera|pet|baby|health|beauty|home|garden|craft|art|sporting|tickets|travel|gift|collectible|entertainment|musical|instrument|dvd|movie|music|game|video|toy|doll|bear|stamps|coins|pottery|glass|art)\b/i;
+const TRUSTED_KEYWORD_CATEGORY_IDS = new Set([
+  '179850',
+  '262189',
+  '33696',
+  '33602',
+  '174907',
+  '33725',
+  '33701',
+  '179851',
+  '33706',
+  '33705',
+  '262161',
+]);
+
+const BAD_CATEGORY_NAMES = /\b(automotive|books|magazines|merchandise|vintage|antique|collectibles|toys|hobbies|coins|slot\s*machines|models?|motorcycles|atv|utv|scooter|boat|marine|aircraft|plane|industrial|business|computer|electronics|commercial\s+truck|clothing|shoes|jewelry|cell\s*phone|camera|pet|baby|health|beauty|dialysis|medical|home|garden|craft|art|sporting|tickets|travel|gift|collectible|entertainment|musical|instrument|dvd|movie|music|game|video|toy|doll|bear|stamps|coins|pottery|glass|art)\b/i;
+
+const BAD_CATEGORY_IDS = new Set(['6000', '262124', '262320']);
+
+const UNTRUSTED_GENERIC_PART_IDENTITIES = new Set([
+  'automotive',
+  'misc',
+  'miscellaneous',
+  'not specified',
+  'oem part',
+  'other',
+  'part',
+  'parts',
+  'unknown',
+]);
 
 export function isBadCategoryName(name) {
   if (!name) return true;
   return BAD_CATEGORY_NAMES.test(String(name));
 }
 
+export function isUntrustedGenericPartIdentity(partName) {
+  const normalized = String(partName || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  return UNTRUSTED_GENERIC_PART_IDENTITIES.has(normalized);
+}
+
 export function resolveMotorsCategoryFromKeywords(partName, note = '') {
   const text = `${partName || ''} ${note || ''}`.toLowerCase();
   if (!text.trim()) return null;
+  let best = null;
   for (const row of MOTORS_CATEGORY_KEYWORDS) {
-    if (row.kw.some((kw) => text.includes(kw.toLowerCase()))) {
-      return { categoryId: row.id, categoryName: row.name };
+    const matchedKeyword = row.kw.find((kw) => text.includes(kw.toLowerCase()));
+    if (!matchedKeyword) continue;
+    if (!best || matchedKeyword.length > best.keywordLength) {
+      best = {
+        categoryId: row.id,
+        categoryName: row.name,
+        keywordLength: matchedKeyword.length,
+      };
     }
   }
-  return null;
+  return best
+    ? { categoryId: best.categoryId, categoryName: best.categoryName }
+    : null;
 }
 
 export function getSafeMotorsCategory(category, partName, note = '') {
-  if (category && !isBadCategoryName(category.categoryName) && category.categoryId) {
+  const keywordMatch = resolveMotorsCategoryFromKeywords(partName, note);
+  if (
+    keywordMatch &&
+    TRUSTED_KEYWORD_CATEGORY_IDS.has(keywordMatch.categoryId)
+  ) {
+    return { ...keywordMatch, source: 'keyword-guard' };
+  }
+  if (isUntrustedGenericPartIdentity(partName)) {
+    return { ...FALLBACK_MOTORS_CATEGORY, source: 'generic-identity-guard' };
+  }
+  if (
+    category &&
+    !BAD_CATEGORY_IDS.has(String(category.categoryId)) &&
+    !isBadCategoryName(category.categoryName) &&
+    category.categoryId
+  ) {
     return category;
   }
-  const keywordMatch = resolveMotorsCategoryFromKeywords(partName, note);
-  if (keywordMatch) return { ...keywordMatch, source: 'keyword-guard' };
   return { ...FALLBACK_MOTORS_CATEGORY, source: 'fallback' };
 }
 
@@ -76,6 +139,7 @@ export default {
   MOTORS_CATEGORY_KEYWORDS,
   FALLBACK_MOTORS_CATEGORY,
   isBadCategoryName,
+  isUntrustedGenericPartIdentity,
   resolveMotorsCategoryFromKeywords,
   getSafeMotorsCategory,
 };

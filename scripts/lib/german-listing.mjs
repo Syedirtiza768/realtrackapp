@@ -175,21 +175,27 @@ export function buildGermanItemSpecifics({ part, vehicle, partNumber, placement,
 export function resolveMotorsCategoryFromPart(partName, note) {
   const text = `${partName || ''} ${note || ''}`.toLowerCase();
   if (/\b(dashboard|dash panel|instrument panel|dash trim|armaturenbrett)\b/i.test(text)) {
-    return { categoryId: '33717', categoryName: 'Dashboards & Dashboard Parts' };
+    return { categoryId: '262191', categoryName: 'Dash Panels' };
   }
   if (/\b(interior|innen|armrest|armlehne|trim|verkleidung|finisher)\b/i.test(text) && /\bdoor panel\b/i.test(text) && !/\bexterior\b/i.test(text)) {
-    return { categoryId: '33695', categoryName: 'Interior Door Panels & Parts' };
+    return { categoryId: '33696', categoryName: 'Door Panels' };
   }
   const rows = [
-    { kw: ['armrest', 'armlehne', 'türverkleidung', 'door armrest', 'inner panel'], id: '33695', name: 'Interior Door Panels & Parts' },
-    { kw: ['interior door', 'door moulding', 'door trim'], id: '33695', name: 'Interior Door Panels & Parts' },
+    { kw: ['center console', 'armrest console'], id: '262189', name: 'Center & Overhead Console Parts' },
+    { kw: ['armrest', 'armlehne', 'türverkleidung', 'door armrest', 'inner panel'], id: '33696', name: 'Door Panels' },
+    { kw: ['interior door', 'door moulding', 'door trim'], id: '33696', name: 'Door Panels' },
     { kw: ['exterior door panel', 'door skin', 'door shell'], id: '33697', name: 'Exterior Door Panels & Frames' },
     { kw: ['complete door', 'door assembly'], id: '174105', name: 'Doors & Door Parts' },
   ];
+  let best = null;
   for (const row of rows) {
-    if (row.kw.some((kw) => text.includes(kw))) return { categoryId: row.id, categoryName: row.name };
+    const matchedKeyword = row.kw.find((kw) => text.includes(kw));
+    if (!matchedKeyword) continue;
+    if (!best || matchedKeyword.length > best.keywordLength) {
+      best = { categoryId: row.id, categoryName: row.name, keywordLength: matchedKeyword.length };
+    }
   }
-  return null;
+  return best ? { categoryId: best.categoryId, categoryName: best.categoryName } : null;
 }
 
 export function isLikelyGermanText(text) {

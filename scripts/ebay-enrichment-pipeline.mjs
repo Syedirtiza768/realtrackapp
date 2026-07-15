@@ -810,8 +810,8 @@ function fallbackCategoryMatch(partName, note) {
       return { categoryId: entry.id, categoryName: entry.name };
     }
   }
-  // Default: generic auto parts & accessories category (not Doors & Door Parts)
-  return { categoryId: '262124', categoryName: 'Car & Truck Parts & Accessories' };
+  // Default to a publishable catch-all leaf rather than a broad/root category.
+  return { categoryId: '9886', categoryName: 'Other Car & Truck Parts & Accessories' };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3058,6 +3058,7 @@ async function validateAndFix(parts, vinData) {
   for (const part of parts) {
     if (!part._enriched) continue;
     const e = part._enriched;
+    const vehicle = getVehicleInfo(part, vinCache);
 
     // Title length check
     if (e.title.length > 80) {
@@ -3068,7 +3069,6 @@ async function validateAndFix(parts, vinData) {
 
     // Title must not be empty
     if (!e.title) {
-      const vehicle = getVehicleInfo(part, vinCache);
       e.title = `${part.brand} ${part.partName} ${part.partNumber}`.slice(0, 80).trim();
       fixes++;
     }
@@ -3078,6 +3078,26 @@ async function validateAndFix(parts, vinData) {
       e.title = e.title.replace(/\bUsed\s+OEM\b/gi, 'OEM Used');
       REPORT.validationFixes.push({ sku: part.sku, field: 'title', fix: 'swapped Used OEM → OEM Used' });
       fixes++;
+    }
+
+    // Strip parenthetical abbreviations from title (e.g. "Engine Control Unit (Ecu)" → "Engine Control Unit")
+    if (e.title && /\([^)]*\)/.test(e.title)) {
+      e.title = e.title.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      REPORT.validationFixes.push({ sku: part.sku, field: 'title', fix: 'stripped parenthetical text' });
+      fixes++;
+    }
+
+    // Compact spaced/dashed part numbers in title per guidelines (e.g. "3W0 947 141" → "3W0947141", "8A5Z-5423552-A" → "8A5Z5423552A")
+    if (e.title) {
+      let compacted = e.title
+        .replace(/\b(\d{3})\s+(\d{3})\s+(\d{2,3})\b/g, '$1$2$3')
+        .replace(/\b([A-Z0-9]{3})\s+([A-Z0-9]{3})\s+([A-Z0-9]{2,3})(?:\s+([A-Z]))?\b/g, (m, a, b, c, d) => d ? a + b + c + d : a + b + c)
+        .replace(/\b([A-Z][A-Z0-9]{1,4})-([A-Z0-9]{4,8})(?:-([A-Z0-9]{1,3}))?\b/g, (m, a, b, c) => c ? a + b + c : a + b);
+      if (compacted !== e.title) {
+        e.title = compacted;
+        REPORT.validationFixes.push({ sku: part.sku, field: 'title', fix: 'compacted part number in title' });
+        fixes++;
+      }
     }
 
     // Reject bad AI part types (e.g., category names like Vag, Books, Other) and fall back to source part name
@@ -3136,12 +3156,10 @@ async function validateAndFix(parts, vinData) {
 
     // Description: must not be empty
     if (!e.description || e.description.length < 50) {
-      const vehicle = getVehicleInfo(part, vinCache);
       e.description = buildBasicDescription(part, vehicle);
       fixes++;
     }
 
-    const vehicle = getVehicleInfo(part, vinCache);
     const fitments = part._fitments || [];
 
     // US title: fix generation/year mismatch (e.g. AL20 + 2013-2021)

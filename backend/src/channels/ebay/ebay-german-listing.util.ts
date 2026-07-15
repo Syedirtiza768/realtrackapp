@@ -191,6 +191,16 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
     id: '262189',
     name: 'Center & Overhead Console Parts',
   },
+  {
+    kw: ['radiator', 'support radiator'],
+    id: '33602',
+    name: 'Radiators',
+  },
+  {
+    kw: ['fastener', 'hardware', 'bolt', 'screw', 'nut', 'clip', 'rivet'],
+    id: '174907',
+    name: 'Nuts, Bolts & Fasteners',
+  },
 ];
 
 export function translatePartNameToGerman(
@@ -276,17 +286,30 @@ export function resolveMotorsCategoryFromPart(
     !/\bexterior\b/i.test(text)
   ) {
     return {
-      categoryId: '33695',
-      categoryName: 'Interior Door Panels & Parts',
+      categoryId: '33696',
+      categoryName: 'Door Panels',
     };
   }
 
+  let best:
+    | { categoryId: string; categoryName: string; keywordLength: number }
+    | null = null;
   for (const row of CATEGORY_KEYWORD_ROWS) {
-    if (row.kw.some((kw) => text.includes(kw))) {
-      return { categoryId: row.id, categoryName: row.name };
+    const matchedKeyword = row.kw.find((kw) => text.includes(kw));
+    if (
+      matchedKeyword &&
+      (!best || matchedKeyword.length > best.keywordLength)
+    ) {
+      best = {
+        categoryId: row.id,
+        categoryName: row.name,
+        keywordLength: matchedKeyword.length,
+      };
     }
   }
-  return null;
+  return best
+    ? { categoryId: best.categoryId, categoryName: best.categoryName }
+    : null;
 }
 
 function truncateGermanTitle(
@@ -631,8 +654,10 @@ export function validateGermanListing(params: {
 
   const hint = resolveMotorsCategoryFromPart(params.partType, params.placement);
   if (hint && params.categoryId && params.categoryId !== hint.categoryId) {
-    const interiorPart = hint.categoryId === '33695';
-    const exteriorCats = new Set(['33697', '174105']);
+    const interiorPart = new Set(['33696', '262191', '262189']).has(
+      hint.categoryId,
+    );
+    const exteriorCats = new Set(['33697', '174105', '179850']);
     if (interiorPart && exteriorCats.has(params.categoryId)) {
       issues.push({
         code: 'DE_CATEGORY_MISMATCH',

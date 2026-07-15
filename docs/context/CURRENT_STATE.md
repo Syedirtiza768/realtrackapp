@@ -71,6 +71,7 @@
 - Publish now preserves the exact listing row and stored title, resolves each named shipping/payment/return profile independently for every target account, refreshes stale policy caches, blocks absent/incompatible named policies, and leaves marketplace defaults unchanged.
 - Production remediation created the two exact missing Primemotive fulfillment policies, deployed the fix, and republished all 1,960 affected BLACKLINEAUTOPARTS/Primemotive channels. Transient eBay revise/availability failures now retry, and an audit-discovered zero-stock coercion bug was fixed so quantity `0` remains zero.
 - Complete eBay Inventory API readback found every affected inventory item and offer. Titles, categories, prices, quantities, and fulfillment/payment/return policy IDs now match RealTrack; named-profile coverage is complete, marketplace defaults were not mutated, and the final mismatch count is zero.
+- Pipeline `52292964-b8c5-4443-a076-088ed292a5a1` exposed a separate part-identity issue: generic types such as `Part`, `Not Specified`, `Miscellaneous`, and `Automotive` were allowed to keep AI/taxonomy categories like Fuel Injectors, ECUs, Hood Panels, and Liftgates. Added script and backend guards so generic identities fall back to verified leaf `9886` unless a trusted keyword confirms the part family; repaired the production batch across `listing_records` and `catalog_products`, with uncertain rows marked for manual review.
 
 **2026-07-12** — High-volume catalog publishing:
 - Catalog search/page size supports 500 rows.

@@ -41,14 +41,21 @@ export function sanitizeTitle(title) {
 export function trimTitle(title, mpn) {
   let t = title.replace(/\s+/g, ' ').trim();
   if (t.length <= 80) return t;
+  // Preserve "OEM Used" suffix — never truncate it
+  const suffix = 'OEM Used';
+  if (t.endsWith(suffix)) {
+    const core = t.replace(/\s*OEM Used$/, '').trim();
+    const maxCore = 80 - suffix.length - 1;
+    return core.slice(0, maxCore).trim() + ' ' + suffix;
+  }
   const parts = t.split(/\s+/);
   while (parts.join(' ').length > 80 && parts.length > 4) {
     parts.splice(Math.floor(parts.length / 2), 1);
   }
   t = parts.join(' ');
   if (t.length > 80 && mpn) {
-    const suffix = String(mpn).replace(/\s+/g, '').slice(-12);
-    t = `${t.slice(0, 80 - suffix.length - 1).trim()} ${suffix}`.slice(0, 80);
+    const suffix2 = String(mpn).replace(/\s+/g, '').slice(-12);
+    t = `${t.slice(0, 80 - suffix2.length - 1).trim()} ${suffix2}`.slice(0, 80);
   }
   return t.slice(0, 80);
 }

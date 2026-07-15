@@ -32,6 +32,13 @@ export function buildEnglishSeoTitle({ vehicle, part, partNumber, placement, fit
     fitments,
   });
   if (!/used/i.test(title) && title.length + 5 <= 80) title += ' Used';
+  // Ensure "OEM Used" suffix is never truncated
+  const suffix = 'OEM Used';
+  if (title.length > 80 && title.endsWith(suffix)) {
+    const core = title.replace(/\s*OEM Used$/, '').trim();
+    const maxCore = 80 - suffix.length - 1;
+    title = core.slice(0, maxCore).trim() + ' ' + suffix;
+  }
   return title.replace(/\s+/g, ' ').slice(0, 80).trim();
 }
 
@@ -96,10 +103,13 @@ export function buildEnglishItemSpecifics({ part, vehicle, partNumber, placement
 export function resolveMotorsCategoryFromPart(partName, note) {
   const text = `${partName || ''} ${note || ''}`.toLowerCase();
   if (/\b(dashboard|dash panel|instrument panel|dash trim|dash bezel)\b/i.test(text)) {
-    return { categoryId: '33717', categoryName: 'Dashboards & Dashboard Parts' };
+    return { categoryId: '262191', categoryName: 'Dash Panels' };
   }
   if (/\b(interior|armrest|door trim|verkleidung)\b/i.test(text) && /\bdoor panel\b/i.test(text) && !/\bexterior\b/i.test(text)) {
-    return { categoryId: '33695', categoryName: 'Interior Door Panels & Parts' };
+    return { categoryId: '33696', categoryName: 'Door Panels' };
+  }
+  if (/\b(center console|armrest console)\b/i.test(text)) {
+    return { categoryId: '262189', categoryName: 'Center & Overhead Console Parts' };
   }
   return null;
 }

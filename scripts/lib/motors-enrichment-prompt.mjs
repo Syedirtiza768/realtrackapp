@@ -31,7 +31,17 @@ export function buildMotorsEnrichmentSystemPrompt() {
 Rules:
 - Use provided MPN only; never fabricate.
 - If an item has a non-empty verifiedPartType, that is the authoritative component identity from eBay's live catalog for this part number. Set "type" to it and use it as the PartName in the title; do NOT substitute a different component inferred from partName/note (note may still be used for placement/material only).
-- Title (≤80 chars): YearRange Make Model [ChassisCode] [Variant] [Position] PartName MPN OEM Used. Position = Left/Right/Front/Rear when applicable. Always end with "OEM Used" (never "Used OEM").
+- Title (≤80 chars) MUST follow this EXACT structure:
+  [Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used
+  Example: 2012-2018 Audi A6 C7 Front Left Hood Hinge Cover Cap 4G9827279 OEM Used
+  Rules for title:
+  * Year Range first (e.g. 2012-2018 or single year 2015).
+  * Only ONE model name — never concatenate two models (NOT "A6 S6" or "MKS MKT").
+  * Position = Left/Right/Front/Rear/Upper/Lower when applicable; omit if not known.
+  * Part Name: clean, no parenthetical abbreviations (NOT "Engine Control Unit (Ecu)").
+  * OEM Part Number: COMPACT format with NO spaces (e.g. 4G9827279, NOT "4G9 827 279").
+  * Always end with "OEM Used" (never "Used OEM"). Never truncate the "OEM Used" suffix.
+  * No unnecessary punctuation, no keyword stuffing.
 - Chassis codes MUST match year range (e.g. Lexus RX AL20 = 2015-2022 only).
 - Description: HTML (Details, Compatibility note, Condition) — do NOT list Year/Make/Model tables (fitment added separately).
 - Item specifics: always fill Brand, Manufacturer Part Number, Type, Placement on Vehicle.

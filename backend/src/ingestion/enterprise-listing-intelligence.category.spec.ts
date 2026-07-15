@@ -35,6 +35,52 @@ describe('EnterpriseListingIntelligenceService category guard', () => {
     });
   });
 
+  it('overrides a valid but mismatched category with the best deterministic part keyword', async () => {
+    const result = await service.resolvePublishableCategory({
+      sku: 'SKU-1B',
+      title: '2015 Bentley Center Console Armrest 4W0861368 OEM Used',
+      partType: 'Center Console Armrest',
+      placement: null,
+      categoryId: '33696',
+      categoryName: 'Door Panels',
+    } as CatalogProduct);
+    expect(result).toEqual({
+      categoryId: '262189',
+      categoryName: 'Center & Overhead Console Parts',
+      confidence: 0.9,
+    });
+  });
+
+  it('does not keep a specific category when the part identity is generic', async () => {
+    const result = await service.resolvePublishableCategory({
+      sku: 'SKU-1C',
+      title: '2015 Lincoln MKS Not Specified 8G1Z8286B OEM Used',
+      partType: 'Not Specified',
+      categoryId: '33710',
+      categoryName: 'Headlight Assemblies',
+    } as CatalogProduct);
+    expect(result).toEqual({
+      categoryId: '9886',
+      categoryName: 'Other Car & Truck Parts & Accessories',
+      confidence: 0.4,
+    });
+  });
+
+  it('uses deterministic radiator keywords instead of an unrelated valid category', async () => {
+    const result = await service.resolvePublishableCategory({
+      sku: 'SKU-1D',
+      title: '2015 Lincoln MKS Radiator 7T4Z8125A OEM Used',
+      partType: 'Radiator',
+      categoryId: '33647',
+      categoryName: 'Liftgates',
+    } as CatalogProduct);
+    expect(result).toEqual({
+      categoryId: '33602',
+      categoryName: 'Radiators',
+      confidence: 0.85,
+    });
+  });
+
   it('replaces an unrelated category using deterministic part keywords', async () => {
     const result = await service.resolvePublishableCategory({
       sku: 'SKU-2',

@@ -148,6 +148,18 @@ export class EnterpriseListingIntelligenceService {
     CATEGORY_KEYWORD_ROWS.map((r) => r.id),
   );
 
+  private static readonly UNTRUSTED_GENERIC_PART_IDENTITIES = new Set([
+    'automotive',
+    'misc',
+    'miscellaneous',
+    'not specified',
+    'oem part',
+    'other',
+    'part',
+    'parts',
+    'unknown',
+  ]);
+
   /**
    * Categories that are technically under the eBay Motors tree (ancestor
    * chain includes 6000) but are the wrong vertical for a car/truck parts
@@ -162,14 +174,20 @@ export class EnterpriseListingIntelligenceService {
    * because the inventory item's Motors-parts aspects don't match what a
    * Motorcycles-category listing expects. Force re-resolution instead.
    *
+   * 6000/262124/262320 are broad/root categories rather than publishable,
+   * specific car/truck parts leaves for this pipeline.
+   *
    * 6024 = Motorcycles. 6126 = Austin (a defunct British car-make category
    * under eBay's Motors tree) — same job also had 75 products stuck there;
    * a make-specific category is only valid when it actually matches the
    * product's make, and this pipeline's product data never involves Austin.
    */
   private static readonly WRONG_VERTICAL_MOTORS_IDS = new Set([
+    '6000',
     '6024',
     '6126',
+    '262124',
+    '262320',
   ]);
 
   /** Cached fallback leaf category under 6000. */
@@ -516,8 +534,8 @@ export class EnterpriseListingIntelligenceService {
         categoryId &&
         categoryHint.categoryId !== categoryId
       ) {
-        const exteriorIds = new Set(['33697', '174105']);
-        const interiorIds = new Set(['33695', '33717', '174090']);
+        const exteriorIds = new Set(['33697', '174105', '179850']);
+        const interiorIds = new Set(['33696', '262191', '262189']);
         if (
           interiorIds.has(categoryHint.categoryId) &&
           exteriorIds.has(categoryId)
@@ -566,8 +584,8 @@ export class EnterpriseListingIntelligenceService {
         categoryId &&
         categoryHint.categoryId !== categoryId
       ) {
-        const exteriorIds = new Set(['33697', '174105']);
-        const interiorIds = new Set(['33695', '33717', '174090']);
+        const exteriorIds = new Set(['33697', '174105', '179850']);
+        const interiorIds = new Set(['33696', '262191', '262189']);
         if (
           interiorIds.has(categoryHint.categoryId) &&
           exteriorIds.has(categoryId)
@@ -732,10 +750,42 @@ export class EnterpriseListingIntelligenceService {
     categoryName: string | null;
     confidence: number;
   }> {
+    const keywordMatch = resolveMotorsCategoryFromPart(
+      product.partType,
+      product.placement,
+    );
+    const hasUntrustedGenericIdentity =
+      this.isUntrustedGenericPartIdentity(product.partType);
     const candidate = product.categoryId?.trim();
     if (candidate) {
       const isValid = await this.isMotorsCategory(candidate);
       if (isValid) {
+        if (
+          hasUntrustedGenericIdentity &&
+          !keywordMatch &&
+          candidate !== '9886'
+        ) {
+          this.logger.warn(
+            `Category ${candidate} (${product.categoryName ?? '?'}) for SKU ${product.sku ?? '?'} came from generic part identity ${product.partType ?? '?'} — using safe fallback`,
+          );
+          const fallback = await this.getFallbackLeafCategory();
+          return {
+            categoryId: fallback.categoryId,
+            categoryName: fallback.categoryName,
+            confidence: 0.4,
+          };
+        }
+        if (keywordMatch && keywordMatch.categoryId !== candidate) {
+          const keywordIsValid = await this.isMotorsCategory(
+            keywordMatch.categoryId,
+          );
+          if (keywordIsValid) {
+            this.logger.warn(
+              `Category ${candidate} (${product.categoryName ?? '?'}) for SKU ${product.sku ?? '?'} conflicts with deterministic part keyword ${product.partType ?? '?'} -> ${keywordMatch.categoryId} (${keywordMatch.categoryName}) — using keyword category`,
+            );
+            return { ...keywordMatch, confidence: 0.9 };
+          }
+        }
         return {
           categoryId: candidate,
           categoryName: product.categoryName,
@@ -748,12 +798,25 @@ export class EnterpriseListingIntelligenceService {
     }
 
     // Fast path: keyword-based matching (no API call, deterministic)
-    const keywordMatch = resolveMotorsCategoryFromPart(
-      product.partType,
-      product.placement,
-    );
     if (keywordMatch) {
-      return { ...keywordMatch, confidence: 0.85 };
+      const keywordIsValid = await this.isMotorsCategory(
+        keywordMatch.categoryId,
+      );
+      if (keywordIsValid) {
+        return { ...keywordMatch, confidence: 0.85 };
+      }
+      this.logger.warn(
+        `Keyword category ${keywordMatch.categoryId} (${keywordMatch.categoryName}) for SKU ${product.sku ?? '?'} is not currently publishable — will re-resolve`,
+      );
+    }
+
+    if (hasUntrustedGenericIdentity) {
+      const fallback = await this.getFallbackLeafCategory();
+      return {
+        categoryId: fallback.categoryId,
+        categoryName: fallback.categoryName,
+        confidence: 0.35,
+      };
     }
 
     // Taxonomy API: try progressively broader queries; accept only
@@ -830,6 +893,13 @@ export class EnterpriseListingIntelligenceService {
 
     this.categorySuggestionInFlight.set(cacheKey, request);
     return request;
+  }
+
+  private isUntrustedGenericPartIdentity(partType: string | null): boolean {
+    const normalized = (partType ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return EnterpriseListingIntelligenceService.UNTRUSTED_GENERIC_PART_IDENTITIES.has(
+      normalized,
+    );
   }
 
   /**

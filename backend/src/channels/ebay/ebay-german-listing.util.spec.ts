@@ -43,7 +43,18 @@ describe('ebay-german-listing.util', () => {
 
   it('maps door armrest to interior category', () => {
     const cat = resolveMotorsCategoryFromPart('Door Armrest', 'rear left trim');
-    expect(cat?.categoryId).toBe('33695');
+    expect(cat?.categoryId).toBe('33696');
+  });
+
+  it('prefers center console over broad armrest keywords', () => {
+    const cat = resolveMotorsCategoryFromPart(
+      'Center Console Armrest',
+      'front trim',
+    );
+    expect(cat).toEqual({
+      categoryId: '262189',
+      categoryName: 'Center & Overhead Console Parts',
+    });
   });
 
   it('builds a substantive German description with buyer verification', () => {
@@ -94,7 +105,7 @@ describe('ebay-german-listing.util', () => {
         Fahrzeugmarke: 'Lexus',
         Modell: 'RX',
       },
-      categoryId: '33717',
+      categoryId: '262191',
       partType: 'Dashboard trim',
       mpn: '1A421-034G',
     });

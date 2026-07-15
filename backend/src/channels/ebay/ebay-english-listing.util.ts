@@ -317,8 +317,8 @@ export function validateEnglishListing(params: {
 
   const hint = resolveMotorsCategoryFromPart(params.partType, params.placement);
   if (hint && params.categoryId && params.categoryId !== hint.categoryId) {
-    const interiorIds = new Set(['33695', '33717', '174090']);
-    const exteriorIds = new Set(['33697', '174105']);
+    const interiorIds = new Set(['33696', '262191', '262189']);
+    const exteriorIds = new Set(['33697', '174105', '179850']);
     if (
       interiorIds.has(hint.categoryId) &&
       exteriorIds.has(params.categoryId)
