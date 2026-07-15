@@ -685,8 +685,3 @@ export default function SingleListingPipeline() {
     </div>
   );
 }
-       </Card>
-      </form>
-    </div>
-  );
-}
