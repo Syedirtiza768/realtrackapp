@@ -487,6 +487,17 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       });
 
       let stderr = '';
+      let settled = false;
+
+      // Hard timeout: kill the child if it runs too long (default 90 min).
+      const childTimeoutMs = Number(process.env.PIPELINE_CHILD_TIMEOUT_MS) || 90 * 60 * 1000;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        this.logger.error(
+          `Pipeline job=${jobId} child process timed out after ${childTimeoutMs / 1000}s — killing`,
+        );
+        child.kill('SIGTERM');
+      }, childTimeoutMs);
 
       child.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
@@ -503,10 +514,16 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       });
 
       child.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         reject(err);
       });
 
       child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         if (code !== 0 && stderr) {
           this.logger.error(`Pipeline stderr: ${stderr.slice(-500)}`);
         }

@@ -5170,7 +5170,18 @@ async function main() {
   // Anchor each row's part name/type to eBay's live catalog before category
   // mapping + enrichment so both use the verified component, not the noisy
   // supplier description.
-  await identifyPartsByOem(parts);
+  // Guard against indefinite hangs (e.g. DNS resolution stuck inside Docker).
+  const OEM_TIMEOUT_MS = Number(env.PIPELINE_OEM_IDENTIFY_TIMEOUT_MS) || 5 * 60 * 1000;
+  try {
+    await Promise.race([
+      identifyPartsByOem(parts),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`OEM identification timed out after ${OEM_TIMEOUT_MS / 1000}s`)), OEM_TIMEOUT_MS),
+      ),
+    ]);
+  } catch (oemErr) {
+    log.warn(`OEM identification aborted: ${oemErr.message} — continuing with original part names`);
+  }
 
   // ── Step 3: Category Mapping ──
   await mapCategories(parts, vinData);

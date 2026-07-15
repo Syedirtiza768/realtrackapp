@@ -121,7 +121,11 @@ export function createOemIdentifier(options) {
   }
 
   async function request(pathname, params) {
-    const token = await getToken();
+    // Wrap getToken with a timeout to prevent indefinite hangs (e.g. DNS stuck).
+    const token = await Promise.race([
+      getToken(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('eBay token acquisition timed out (30s)')), 30_000)),
+    ]);
     if (!token) throw new Error('No eBay application token');
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       await bucket.acquire();
