@@ -222,6 +222,31 @@ describe('EbayPublishService', () => {
       expect(itemArg.product.title).toBe('Test Brake Pad');
     });
 
+    it('preserves an explicit zero quantity for an out-of-stock listing', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'listing-1',
+        customLabelSku: 'SKU-001',
+        quantity: '0',
+        cBrand: 'TRW',
+      });
+
+      await svc.publish(validRequest({ quantity: 0 }));
+
+      const itemArg = (inventoryApi.createOrReplaceItem as jest.Mock).mock
+        .calls[0][2];
+      expect(itemArg.availability.shipToLocationAvailability.quantity).toBe(0);
+    });
+
     it('returns error when store not found', async () => {
       storeRepo.findOneBy = jest.fn().mockResolvedValue(null);
       listingRepo.findOne = jest.fn().mockResolvedValue(null);

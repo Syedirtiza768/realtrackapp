@@ -428,11 +428,13 @@ export class EbayPublishService {
             ? parsedPrice
             : req.price,
       quantity:
-        req.quantity > 0
+        !looksStub && Number.isFinite(req.quantity) && req.quantity >= 0
           ? req.quantity
-          : Number.isFinite(parsedQty) && parsedQty > 0
+          : Number.isFinite(parsedQty) && parsedQty >= 0
             ? parsedQty
-            : req.quantity || 1,
+            : Number.isFinite(req.quantity) && req.quantity >= 0
+              ? req.quantity
+              : 1,
       requestedFulfillmentPolicyName:
         req.requestedFulfillmentPolicyName?.trim() ||
         listing.shippingProfileName?.trim() ||
