@@ -69,7 +69,8 @@
 **2026-07-15** — eBay listing fidelity hardening:
 - Root-caused title and business-policy mismatches on pipelines `1c3a0f2a`, `5d5c2413`, and `6e30444a`: publish-time title recomposition replaced every reviewed title, durable targets lost the exact source listing identity, row policy names were ignored in favor of target-account defaults, and concurrent publishes wrote their resolved row policies back as new defaults.
 - Publish now preserves the exact listing row and stored title, resolves each named shipping/payment/return profile independently for every target account, refreshes stale policy caches, blocks absent/incompatible named policies, and leaves marketplace defaults unchanged.
-- Production audit found two Primemotive channels whose assigned source shipping policies do not exist on that seller account. Similar policies have different charges, so exact Primemotive equivalents must be created before those two listings can be repaired safely; deployment and live repair require the operational confirmation recorded in the task handoff.
+- Production remediation created the two exact missing Primemotive fulfillment policies, deployed the fix, and republished all 1,960 affected BLACKLINEAUTOPARTS/Primemotive channels. Transient eBay revise/availability failures now retry, and an audit-discovered zero-stock coercion bug was fixed so quantity `0` remains zero.
+- Complete eBay Inventory API readback found every affected inventory item and offer. Titles, categories, prices, quantities, and fulfillment/payment/return policy IDs now match RealTrack; named-profile coverage is complete, marketplace defaults were not mutated, and the final mismatch count is zero.
 
 **2026-07-12** — High-volume catalog publishing:
 - Catalog search/page size supports 500 rows.

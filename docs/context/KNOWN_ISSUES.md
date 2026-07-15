@@ -61,13 +61,13 @@
 
 **Type**: Data-integrity bug
 **Severity**: High
-**Status**: Code resolved; production repair pending (2026-07-15)
+**Status**: Resolved (2026-07-15)
 
 **Description**: Durable bulk targets canonicalized listing IDs to `catalog_products`, and the worker did not retain the exact source listing row. `buildEbayListingTitle` then recomposed every non-empty title from structured fields. `ListingBuilderService` started with marketplace defaults and ignored row-level shipping/payment/return profile names. Finally, `EbayPublishService` persisted the policy IDs resolved for each listing back into `ebay_account_marketplaces.default_*`, so concurrent targets could race and change the defaults used by other listings. Production pipelines `1c3a0f2a`, `5d5c2413`, and `6e30444a` exposed the combined failure.
 
-**Resolution**: Durable targets retain `sourceListingId`; the resolver prefers that exact row; stored titles are authoritative; named profiles resolve per target account and refresh from eBay on cache misses; missing/incompatible names block instead of falling back; and request-scoped resolved policy IDs no longer mutate account defaults. Regression coverage spans title construction, source resolution, durable target identity, listing building, and final policy enrichment.
+**Resolution**: Durable targets retain `sourceListingId`; the resolver prefers that exact row; stored titles are authoritative; named profiles resolve per target account and refresh from eBay on cache misses; missing/incompatible names block instead of falling back; and request-scoped resolved policy IDs no longer mutate account defaults. Explicit zero stock is also preserved instead of being coerced to quantity `1`, and transient eBay revise/availability propagation errors use the durable worker's retry policy. Regression coverage spans title construction, source resolution, durable target identity, listing building, final policy enrichment, transient classification, and zero-stock publishing.
 
-**Operational follow-up**: Republish the affected existing channels after deployment. Two Primemotive listings require exact new fulfillment policies first because the nearest existing policies have different shipping charges.
+**Production remediation**: Created the two exact missing Primemotive fulfillment policies (`331303545021` and `331303546021`), deployed the fix, and republished all 1,960 affected channels across BLACKLINEAUTOPARTS and Primemotive. Two temporary eBay propagation failures succeeded through a targeted retry. A complete live Inventory API readback found all 1,960 inventory items and offers; title, category, price, and all three policy IDs matched. It exposed one additional zero-stock mismatch on two channels, which was fixed and republished; the final targeted live readback reported zero mismatches. Database audit: 1,960 distinct successfully repaired channels, zero unresolved named-profile assignments, zero recomposed-title warnings, and unchanged marketplace defaults.
 
 **Files**: `backend/src/channels/ebay/ebay-listing-text.util.ts`, `backend/src/channels/ebay/ebay-publish.service.ts`, `backend/src/integrations/ebay/services/catalog-publish-resolver.service.ts`, `backend/src/integrations/ebay/services/listing-builder.service.ts`, `backend/src/integrations/ebay/processors/ebay-listing-publish.processor.ts`
 
