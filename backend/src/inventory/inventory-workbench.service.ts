@@ -722,7 +722,7 @@ export class InventoryWorkbenchService {
       itemPhotoUrl: listing.itemPhotoUrl,
       pUpc: listing.pUpc,
       pEpid: listing.pEpid,
-      location: listing.location,
+      location: listing.sourceFileName === 'warehouse-intake' ? listing.location : null,
       format: listing.format,
       sourceFileName: listing.sourceFileName,
       marketplace: listing.marketplace,
