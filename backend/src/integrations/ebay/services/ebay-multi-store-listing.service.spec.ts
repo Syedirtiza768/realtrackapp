@@ -60,7 +60,7 @@ describe('EbayMultiStoreListingService bulk publish', () => {
   }
 
   it('creates one durable target per listing and store', async () => {
-    const { service, publishQueue } = setup();
+    const { service, targetRepo, publishQueue } = setup();
 
     const result = await service.createBulkPublishJob({
       organizationId: 'org-1',
@@ -72,6 +72,12 @@ describe('EbayMultiStoreListingService bulk publish', () => {
 
     expect(result.targetCount).toBe(4);
     expect(result.dailyLimit).toBe(5_000);
+    expect(targetRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        catalogProductId: 'catalog-listing-1',
+        resultPayload: { sourceListingId: 'listing-1' },
+      }),
+    );
     expect(publishQueue.addBulk).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({

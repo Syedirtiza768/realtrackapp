@@ -189,15 +189,13 @@ describe('buildStructuredEbayTitle', () => {
       oemPartNumber:
         '8K0837440J, 8K0837440E, 8K0837440D, 8K0837440G, 8K0837440H',
     });
-    expect(title).toBe(
-      '2010-2016 Audi A4 Window Channel 8K0837440J OEM Used',
-    );
+    expect(title).toBe('2010-2016 Audi A4 Window Channel 8K0837440J OEM Used');
     expect(title.length).toBeLessThanOrEqual(80);
   });
 });
 
 describe('buildEbayListingTitle structured composition', () => {
-  it('composes from structured fields and warns when replacing an existing title', () => {
+  it('preserves the reviewed stored title when structured fields are also present', () => {
     const { title, warnings } = buildEbayListingTitle({
       title: 'Some old free-text title 4G9827279',
       make: 'Audi',
@@ -206,10 +204,8 @@ describe('buildEbayListingTitle structured composition', () => {
       partName: 'Hood Hinge Cover Cap',
       oemPartNumber: '4G9827279',
     });
-    expect(title).toBe(
-      'Audi A6 Front Left Hood Hinge Cover Cap 4G9827279 OEM Used',
-    );
-    expect(warnings.some((w) => w.includes('recomposed'))).toBe(true);
+    expect(title).toBe('Some old free-text title 4G9827279');
+    expect(warnings.some((w) => w.includes('recomposed'))).toBe(false);
   });
 
   it('composes without a warning when no title was present', () => {

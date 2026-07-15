@@ -305,6 +305,7 @@ export class EbayMultiStoreListingService {
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
         status: 'pending',
+        resultPayload: { sourceListingId: input.catalogProductId },
       });
       targets.push(await this.targetRepo.save(row));
     }

@@ -28,6 +28,7 @@ import { mapToEbayConditionEnum } from '../../../channels/ebay/ebay-listing-cond
 import {
   listingRequiresPartsAccessoriesReturnPolicy,
   partsAccessoriesReturnPolicyGuidance,
+  pickPolicyIdForMarketplace,
   pickReturnPolicyIdForListing,
   readPolicyGeoSite,
 } from './ebay-business-policy.util.js';
@@ -76,6 +77,8 @@ export class ListingBuilderService {
   async build(params: {
     catalogProductId: string;
 
+    sourceListingId?: string;
+
     ebayAccountId: string;
 
     marketplaceId: string;
@@ -89,7 +92,7 @@ export class ListingBuilderService {
     const blockingErrors: string[] = [];
 
     const resolved = await this.publishResolver.resolve(
-      params.catalogProductId,
+      params.sourceListingId ?? params.catalogProductId,
     );
 
     if (!resolved) {
@@ -264,6 +267,9 @@ export class ListingBuilderService {
     let merchantLocationKey = mpRow?.defaultInventoryLocationKey ?? undefined;
 
     const po = ov?.policyOverrides;
+    let explicitFulfillmentPolicy = false;
+    let explicitPaymentPolicy = false;
+    let explicitReturnPolicy = false;
 
     if (po && typeof po === 'object') {
       const o = po;
@@ -273,14 +279,17 @@ export class ListingBuilderService {
         o.fulfillmentPolicyId.trim()
       ) {
         fulfillmentPolicyId = o.fulfillmentPolicyId.trim();
+        explicitFulfillmentPolicy = true;
       }
 
       if (typeof o.paymentPolicyId === 'string' && o.paymentPolicyId.trim()) {
         paymentPolicyId = o.paymentPolicyId.trim();
+        explicitPaymentPolicy = true;
       }
 
       if (typeof o.returnPolicyId === 'string' && o.returnPolicyId.trim()) {
         returnPolicyId = o.returnPolicyId.trim();
+        explicitReturnPolicy = true;
       }
 
       if (
@@ -291,21 +300,106 @@ export class ListingBuilderService {
       }
     }
 
-    const returnRows = await this.policyRepo.find({
+    const policyRows = await this.policyRepo.find({
       where: {
         ebayAccountId: params.ebayAccountId,
         marketplaceId: params.marketplaceId,
-        policyType: 'return',
       },
     });
-    if (returnRows.length) {
+
+    const requestedFulfillmentPolicyName =
+      listingRecord?.shippingProfileName?.trim() ||
+      catalogProduct?.shippingProfile?.trim() ||
+      undefined;
+    const requestedReturnPolicyName =
+      listingRecord?.returnProfileName?.trim() ||
+      catalogProduct?.returnProfile?.trim() ||
+      undefined;
+    const requestedPaymentPolicyName =
+      listingRecord?.paymentProfileName?.trim() ||
+      catalogProduct?.paymentProfile?.trim() ||
+      undefined;
+    const normalizedPolicyName = (name: string) => name.trim().toLowerCase();
+    const candidates = (rows: EbayBusinessPolicy[]) =>
+      rows.map((r) => ({
+        ebayPolicyId: r.ebayPolicyId,
+        isDefault: r.isDefault,
+        geoSite: readPolicyGeoSite(r.rawPayload ?? {}),
+        rawPayload: r.rawPayload ?? {},
+      }));
+    const rowsByName = (
+      policyType: EbayBusinessPolicy['policyType'],
+      name: string,
+    ) =>
+      policyRows.filter(
+        (row) =>
+          row.policyType === policyType &&
+          normalizedPolicyName(row.name) === normalizedPolicyName(name),
+      );
+    const resolveNamedPolicy = (
+      policyType: EbayBusinessPolicy['policyType'],
+      name: string,
+    ): string | null => {
+      const matching = rowsByName(policyType, name);
+      if (policyType === 'return') {
+        return pickReturnPolicyIdForListing(
+          candidates(matching),
+          params.marketplaceId,
+          categoryId,
+          condition,
+        );
+      }
+      return pickPolicyIdForMarketplace(
+        candidates(matching),
+        params.marketplaceId,
+      );
+    };
+
+    if (!explicitFulfillmentPolicy && requestedFulfillmentPolicyName) {
+      const resolvedId = resolveNamedPolicy(
+        'fulfillment',
+        requestedFulfillmentPolicyName,
+      );
+      if (resolvedId) fulfillmentPolicyId = resolvedId;
+      else {
+        warnings.push(
+          `Shipping profile "${requestedFulfillmentPolicyName}" is not in the local policy cache; it will be refreshed and verified against eBay before publishing.`,
+        );
+      }
+    }
+    if (!explicitPaymentPolicy && requestedPaymentPolicyName) {
+      const resolvedId = resolveNamedPolicy(
+        'payment',
+        requestedPaymentPolicyName,
+      );
+      if (resolvedId) paymentPolicyId = resolvedId;
+      else {
+        warnings.push(
+          `Payment profile "${requestedPaymentPolicyName}" is not in the local policy cache; it will be refreshed and verified against eBay before publishing.`,
+        );
+      }
+    }
+    if (!explicitReturnPolicy && requestedReturnPolicyName) {
+      const resolvedId = resolveNamedPolicy(
+        'return',
+        requestedReturnPolicyName,
+      );
+      if (resolvedId) returnPolicyId = resolvedId;
+      else {
+        warnings.push(
+          `Return profile "${requestedReturnPolicyName}" is not usable from the local policy cache; it will be refreshed and verified against eBay before publishing.`,
+        );
+      }
+    }
+
+    const returnRows = policyRows.filter((r) => r.policyType === 'return');
+    if (
+      !explicitReturnPolicy &&
+      !requestedReturnPolicyName &&
+      returnRows.length
+    ) {
       const compliantReturnId = pickReturnPolicyIdForListing(
-        returnRows.map((r) => ({
-          ebayPolicyId: r.ebayPolicyId,
-          isDefault: r.isDefault,
-          geoSite: readPolicyGeoSite(r.rawPayload ?? {}),
-          rawPayload: r.rawPayload ?? {},
-        })),
+        candidates(returnRows),
         params.marketplaceId,
         categoryId,
         condition,
@@ -339,7 +433,11 @@ export class ListingBuilderService {
 
     const isSellerpundit = account?.connectionSource === 'sellerpundit';
 
-    if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
+    if (
+      (!fulfillmentPolicyId && !requestedFulfillmentPolicyName) ||
+      (!paymentPolicyId && !requestedPaymentPolicyName) ||
+      (!returnPolicyId && !requestedReturnPolicyName)
+    ) {
       blockingErrors.push(
         isSellerpundit
           ? 'Missing fulfillment, payment, or return policy IDs — sync SellerPundit policies.'
@@ -473,6 +571,30 @@ export class ListingBuilderService {
       paymentPolicyId,
 
       returnPolicyId,
+
+      requestedFulfillmentPolicyName: explicitFulfillmentPolicy
+        ? policyRows.find(
+            (row) =>
+              row.policyType === 'fulfillment' &&
+              row.ebayPolicyId === fulfillmentPolicyId,
+          )?.name
+        : requestedFulfillmentPolicyName,
+
+      requestedReturnPolicyName: explicitReturnPolicy
+        ? policyRows.find(
+            (row) =>
+              row.policyType === 'return' &&
+              row.ebayPolicyId === returnPolicyId,
+          )?.name
+        : requestedReturnPolicyName,
+
+      requestedPaymentPolicyName: explicitPaymentPolicy
+        ? policyRows.find(
+            (row) =>
+              row.policyType === 'payment' &&
+              row.ebayPolicyId === paymentPolicyId,
+          )?.name
+        : requestedPaymentPolicyName,
 
       merchantLocationKey,
     };

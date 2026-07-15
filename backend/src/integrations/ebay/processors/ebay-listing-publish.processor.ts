@@ -138,11 +138,19 @@ export class EbayListingPublishProcessor extends WorkerHost {
       }
 
       const resolved = await this.publishResolver.resolve(catalogProductId);
+      const sourceListingId =
+        typeof target.resultPayload?.sourceListingId === 'string'
+          ? target.resultPayload.sourceListingId
+          : undefined;
       const built = await this.builder.build({
         catalogProductId,
+        sourceListingId,
         ebayAccountId,
         marketplaceId: target.marketplaceId,
-        listingRecordId: resolved?.snapshot.listingRecordId ?? catalogProductId,
+        listingRecordId:
+          sourceListingId ??
+          resolved?.snapshot.listingRecordId ??
+          catalogProductId,
         storeId: account.primaryStoreId,
       });
 

@@ -57,6 +57,7 @@ export class CatalogPublishResolverService {
     let listingRecord = await this.listingRepo.findOne({
       where: { id: productRefId },
     });
+    const resolvedFromListingId = Boolean(listingRecord);
 
     if (!catalogProduct && listingRecord?.customLabelSku) {
       catalogProduct = await this.catalogRepo.findOne({
@@ -94,7 +95,16 @@ export class CatalogPublishResolverService {
       catalogProduct,
       listingRecord,
       warnings,
+      resolvedFromListingId,
     );
+
+    const preferListing = <T>(
+      listingValue: T | null | undefined,
+      catalogValue: T | null | undefined,
+    ): T | null =>
+      resolvedFromListingId
+        ? (listingValue ?? catalogValue ?? null)
+        : (catalogValue ?? listingValue ?? null);
 
     const snapshot: CatalogPublishSnapshot = {
       catalogProductId: catalogProduct!.id,
@@ -104,26 +114,38 @@ export class CatalogPublishResolverService {
         listingRecord?.customLabelSku?.trim() ||
         catalogProduct?.id ||
         listingRecord!.id,
-      title: catalogProduct?.title || listingRecord?.title || '',
-      description:
-        catalogProduct?.description ?? listingRecord?.description ?? null,
-      brand:
-        catalogProduct?.brand ??
-        listingRecord?.cBrand ??
-        listingRecord?.manufacturerName ??
-        null,
-      mpn:
-        catalogProduct?.mpn ?? listingRecord?.cManufacturerPartNumber ?? null,
-      partType: catalogProduct?.partType ?? listingRecord?.cType ?? null,
-      price:
-        catalogProduct?.price != null
-          ? Number(catalogProduct.price)
-          : (listingRecord?.startPriceNum ?? null),
-      quantity: catalogProduct?.quantity ?? listingRecord?.quantityNum ?? null,
-      categoryId:
-        catalogProduct?.categoryId ?? listingRecord?.categoryId ?? null,
-      conditionId:
-        catalogProduct?.conditionId ?? listingRecord?.conditionId ?? null,
+      title:
+        preferListing(listingRecord?.title, catalogProduct?.title)?.trim() ||
+        '',
+      description: preferListing(
+        listingRecord?.description,
+        catalogProduct?.description,
+      ),
+      brand: preferListing(
+        listingRecord?.cBrand ?? listingRecord?.manufacturerName,
+        catalogProduct?.brand,
+      ),
+      mpn: preferListing(
+        listingRecord?.cManufacturerPartNumber,
+        catalogProduct?.mpn,
+      ),
+      partType: preferListing(listingRecord?.cType, catalogProduct?.partType),
+      price: preferListing(
+        listingRecord?.startPriceNum,
+        catalogProduct?.price != null ? Number(catalogProduct.price) : null,
+      ),
+      quantity: preferListing(
+        listingRecord?.quantityNum,
+        catalogProduct?.quantity,
+      ),
+      categoryId: preferListing(
+        listingRecord?.categoryId,
+        catalogProduct?.categoryId,
+      ),
+      conditionId: preferListing(
+        listingRecord?.conditionId,
+        catalogProduct?.conditionId,
+      ),
       conditionLabel: catalogProduct?.conditionLabel ?? null,
       imageUrls,
     };
@@ -135,18 +157,28 @@ export class CatalogPublishResolverService {
     catalogProduct: CatalogProduct | null,
     listingRecord: ListingRecord | null,
     warnings: string[],
+    preferListingRecord = false,
   ): Promise<string[]> {
     const candidates: string[] = [];
 
-    if (catalogProduct?.imageUrls?.length) {
-      candidates.push(...catalogProduct.imageUrls);
-    }
-
-    if (listingRecord?.itemPhotoUrl) {
-      candidates.push(listingRecord.itemPhotoUrl);
-      if (!catalogProduct?.imageUrls?.length) {
-        warnings.push('Using images from listing record itemPhotoUrl');
+    const addListingImages = () => {
+      if (listingRecord?.itemPhotoUrl)
+        candidates.push(listingRecord.itemPhotoUrl);
+    };
+    const addCatalogImages = () => {
+      if (catalogProduct?.imageUrls?.length) {
+        candidates.push(...catalogProduct.imageUrls);
       }
+    };
+    if (preferListingRecord) {
+      addListingImages();
+      addCatalogImages();
+    } else {
+      addCatalogImages();
+      addListingImages();
+    }
+    if (listingRecord?.itemPhotoUrl && !catalogProduct?.imageUrls?.length) {
+      warnings.push('Using images from listing record itemPhotoUrl');
     }
 
     if (listingRecord?.id) {

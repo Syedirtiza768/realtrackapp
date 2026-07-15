@@ -1244,24 +1244,24 @@ export class EbayPublishService {
     );
 
     const resolvedFulfillment = coalesceValidPolicyId(
-      req.fulfillmentPolicyId,
       nameResolvedFulfillment,
+      req.fulfillmentPolicyId,
       synced.fulfillmentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
         ? mpRow?.defaultFulfillmentPolicyId
         : undefined,
     );
     const resolvedPayment = coalesceValidPolicyId(
-      req.paymentPolicyId,
       nameResolvedPayment,
+      req.paymentPolicyId,
       synced.paymentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
         ? mpRow?.defaultPaymentPolicyId
         : undefined,
     );
     const resolvedReturn = coalesceValidPolicyId(
-      req.returnPolicyId,
       nameResolvedReturn,
+      req.returnPolicyId,
       synced.returnPolicyId,
       hasValidDefaultPolicyIds(mpRow)
         ? mpRow?.defaultReturnPolicyId
@@ -1271,7 +1271,10 @@ export class EbayPublishService {
       !resolvedFulfillment ||
       !resolvedPayment ||
       !resolvedReturn ||
-      (paReturnRequired && !resolvedReturn);
+      (paReturnRequired && !resolvedReturn) ||
+      Boolean(req.requestedFulfillmentPolicyName && !nameResolvedFulfillment) ||
+      Boolean(req.requestedPaymentPolicyName && !nameResolvedPayment) ||
+      Boolean(req.requestedReturnPolicyName && !nameResolvedReturn);
     const refreshed = needsAccountApiRefresh
       ? await this.refreshPoliciesFromEbayApi(store, account, {
           persist: true,
@@ -1283,9 +1286,40 @@ export class EbayPublishService {
         })
       : {};
 
+    const effectiveNamedFulfillment =
+      nameResolvedFulfillment ??
+      (req.requestedFulfillmentPolicyName
+        ? refreshed.fulfillmentPolicyId
+        : undefined);
+    const effectiveNamedPayment =
+      nameResolvedPayment ??
+      (req.requestedPaymentPolicyName ? refreshed.paymentPolicyId : undefined);
+    const effectiveNamedReturn =
+      nameResolvedReturn ??
+      (req.requestedReturnPolicyName ? refreshed.returnPolicyId : undefined);
+
+    // A named profile is an explicit listing assignment. Never silently
+    // replace it with a store/marketplace default, because that publishes a
+    // different policy than the user reviewed in RealTrack.
+    if (req.requestedFulfillmentPolicyName && !effectiveNamedFulfillment) {
+      throw new BadRequestException(
+        `Shipping profile "${req.requestedFulfillmentPolicyName}" is not available for "${store.storeName}" on ${marketplaceId}. Sync or create the matching eBay policy before publishing.`,
+      );
+    }
+    if (req.requestedPaymentPolicyName && !effectiveNamedPayment) {
+      throw new BadRequestException(
+        `Payment profile "${req.requestedPaymentPolicyName}" is not available for "${store.storeName}" on ${marketplaceId}. Sync or create the matching eBay policy before publishing.`,
+      );
+    }
+    if (req.requestedReturnPolicyName && !effectiveNamedReturn) {
+      throw new BadRequestException(
+        `Return profile "${req.requestedReturnPolicyName}" is unavailable or incompatible for "${store.storeName}" on ${marketplaceId}. Sync or correct the matching eBay policy before publishing.`,
+      );
+    }
+
     const fulfillmentPolicyId = coalesceValidPolicyId(
+      effectiveNamedFulfillment,
       req.fulfillmentPolicyId,
-      nameResolvedFulfillment,
       refreshed.fulfillmentPolicyId,
       synced.fulfillmentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -1294,8 +1328,8 @@ export class EbayPublishService {
       store.fulfillmentPolicyId,
     );
     const paymentPolicyId = coalesceValidPolicyId(
+      effectiveNamedPayment,
       req.paymentPolicyId,
-      nameResolvedPayment,
       refreshed.paymentPolicyId,
       synced.paymentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -1304,8 +1338,8 @@ export class EbayPublishService {
       store.paymentPolicyId,
     );
     let returnPolicyId = coalesceValidPolicyId(
+      effectiveNamedReturn,
       req.returnPolicyId,
-      nameResolvedReturn,
       refreshed.returnPolicyId,
       synced.returnPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -1343,7 +1377,7 @@ export class EbayPublishService {
     // Log which source provided each policy ID
     const fulfillmentSource = this.policyResolutionSource(
       req.fulfillmentPolicyId,
-      nameResolvedFulfillment,
+      effectiveNamedFulfillment,
       refreshed.fulfillmentPolicyId,
       synced.fulfillmentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -1353,7 +1387,7 @@ export class EbayPublishService {
     );
     const paymentSource = this.policyResolutionSource(
       req.paymentPolicyId,
-      nameResolvedPayment,
+      effectiveNamedPayment,
       refreshed.paymentPolicyId,
       synced.paymentPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -1363,7 +1397,7 @@ export class EbayPublishService {
     );
     const returnSource = this.policyResolutionSource(
       req.returnPolicyId,
-      nameResolvedReturn,
+      effectiveNamedReturn,
       refreshed.returnPolicyId,
       synced.returnPolicyId,
       hasValidDefaultPolicyIds(mpRow)
@@ -1378,51 +1412,9 @@ export class EbayPublishService {
         `return=${returnPolicyId ?? 'NONE'} [${returnSource}]`,
     );
 
-    // Validate: if user selected a profile by name but we couldn't resolve it to an ID, fail loudly
-    if (req.requestedFulfillmentPolicyName && !fulfillmentPolicyId) {
-      throw new BadRequestException(
-        `Shipping profile "${req.requestedFulfillmentPolicyName}" could not be resolved to an eBay fulfillment policy. ` +
-          `Sync eBay policies in Settings → eBay Integrations, then try again.`,
-      );
-    }
-    if (req.requestedPaymentPolicyName && !paymentPolicyId) {
-      throw new BadRequestException(
-        `Payment profile "${req.requestedPaymentPolicyName}" could not be resolved to an eBay payment policy. ` +
-          `Sync eBay policies in Settings → eBay Integrations, then try again.`,
-      );
-    }
-    if (req.requestedReturnPolicyName && !returnPolicyId) {
-      throw new BadRequestException(
-        `Return profile "${req.requestedReturnPolicyName}" could not be resolved to an eBay return policy. ` +
-          `Sync eBay policies in Settings → eBay Integrations, then try again.`,
-      );
-    }
-
     if (mpRow && merchantLocationKey && !mpRow.defaultInventoryLocationKey) {
       mpRow.defaultInventoryLocationKey = merchantLocationKey;
       await this.mpRepo.save(mpRow);
-    }
-
-    if (mpRow) {
-      let mpDirty = false;
-      if (
-        fulfillmentPolicyId &&
-        mpRow.defaultFulfillmentPolicyId !== fulfillmentPolicyId
-      ) {
-        mpRow.defaultFulfillmentPolicyId = fulfillmentPolicyId;
-        mpDirty = true;
-      }
-      if (paymentPolicyId && mpRow.defaultPaymentPolicyId !== paymentPolicyId) {
-        mpRow.defaultPaymentPolicyId = paymentPolicyId;
-        mpDirty = true;
-      }
-      if (returnPolicyId && mpRow.defaultReturnPolicyId !== returnPolicyId) {
-        mpRow.defaultReturnPolicyId = returnPolicyId;
-        mpDirty = true;
-      }
-      if (mpDirty) {
-        mpRow = await this.mpRepo.save(mpRow);
-      }
     }
 
     const currency = this.mpConfig.require(marketplaceId).currency;
@@ -1516,7 +1508,7 @@ export class EbayPublishService {
     });
 
     const candidates = rows
-      .filter((r) => r.name?.trim() === trimmed)
+      .filter((r) => r.name?.trim().toLowerCase() === trimmed.toLowerCase())
       .map((r) => ({
         ebayPolicyId: r.ebayPolicyId,
         isDefault: r.isDefault,
@@ -1527,7 +1519,7 @@ export class EbayPublishService {
     if (!candidates.length) {
       this.logger.warn(
         `Profile name "${trimmed}" (${policyType}) not found in synced policies ` +
-          `for account ${ebayAccountId} / ${marketplaceId}. Falling back to default policy resolution.`,
+          `for account ${ebayAccountId} / ${marketplaceId}. Publishing will be blocked to prevent a profile mismatch.`,
       );
       return undefined;
     }
@@ -1619,14 +1611,13 @@ export class EbayPublishService {
         items: { ebayPolicyId: string; isDefault: boolean; name: string }[],
         requestedName?: string,
       ) => {
-        const wanted = requestedName?.trim();
+        const wanted = requestedName?.trim().toLowerCase();
         const named = wanted
-          ? items.find((x) => x.name?.trim() === wanted)
+          ? items.find((x) => x.name?.trim().toLowerCase() === wanted)
           : undefined;
+        if (wanted) return named?.ebayPolicyId;
         return (
-          named?.ebayPolicyId ??
-          items.find((x) => x.isDefault)?.ebayPolicyId ??
-          items[0]?.ebayPolicyId
+          items.find((x) => x.isDefault)?.ebayPolicyId ?? items[0]?.ebayPolicyId
         );
       };
       const fulfillmentPolicyId = coalesceValidPolicyId(
@@ -1642,12 +1633,19 @@ export class EbayPublishService {
       // incident that prompted this fix; only fulfillment/payment did not.
       const returnPolicyId = coalesceValidPolicyId(
         pickReturnPolicyIdForListing(
-          ret.map((r) => ({
-            ebayPolicyId: r.ebayPolicyId,
-            isDefault: r.isDefault,
-            geoSite: readPolicyGeoSite(r.raw),
-            rawPayload: r.raw,
-          })),
+          ret
+            .filter(
+              (row) =>
+                !options?.requestedReturnPolicyName ||
+                row.name?.trim().toLowerCase() ===
+                  options.requestedReturnPolicyName.trim().toLowerCase(),
+            )
+            .map((r) => ({
+              ebayPolicyId: r.ebayPolicyId,
+              isDefault: r.isDefault,
+              geoSite: readPolicyGeoSite(r.raw),
+              rawPayload: r.raw,
+            })),
           marketplaceId,
           options?.categoryId,
           options?.condition,
@@ -1663,9 +1661,9 @@ export class EbayPublishService {
           marketplaceId,
           { fulfill, payment, ret },
           {
-            fulfillmentPolicyId,
-            paymentPolicyId,
-            returnPolicyId,
+            fulfillmentPolicyId: coalesceValidPolicyId(pick(fulfill)),
+            paymentPolicyId: coalesceValidPolicyId(pick(payment)),
+            returnPolicyId: coalesceValidPolicyId(pick(ret)),
           },
         );
       }
@@ -1699,9 +1697,9 @@ export class EbayPublishService {
     defaultId?: string | null,
     storeId?: string | null,
   ): string {
-    if (reqId && coalesceValidPolicyId(reqId)) return 'user-selected';
     if (nameResolvedId && coalesceValidPolicyId(nameResolvedId))
       return 'profile-name';
+    if (reqId && coalesceValidPolicyId(reqId)) return 'user-selected';
     if (refreshedId && coalesceValidPolicyId(refreshedId))
       return 'ebay-api-refresh';
     if (syncedId && coalesceValidPolicyId(syncedId)) return 'synced-table';

@@ -115,7 +115,7 @@ describe('ListingBuilderService', () => {
     expect(result.publishRequest.title).toContain('Custom Title Override');
   });
 
-  it('falls back to catalog snapshot when no override', async () => {
+  it('preserves the stored catalog title when no override exists', async () => {
     publishResolver.resolve.mockResolvedValue({
       snapshot: {
         catalogProductId: 'cp-1',
@@ -144,28 +144,20 @@ describe('ListingBuilderService', () => {
       storeId: 'store-1',
     });
 
-    expect(result.publishRequest.title).toBe('TRW Brake Pad BP-123 OEM Used');
-    expect(result.warnings).toContainEqual(
+    expect(result.publishRequest.title).toBe('Catalog Title');
+    expect(result.warnings).not.toContainEqual(
       expect.stringContaining('recomposed'),
     );
     expect(result.publishRequest.price).toBe(49.99);
   });
 
-  it('prefers fitmentData make/year range over raw source columns when recomposing the title', async () => {
-    // Regression test: production incident where a listing's raw source
-    // column (listingRecord.cBrand) had a misspelled make ("Bently") and no
-    // year was ever passed to the title composer, so the recomposed eBay
-    // title read "Bently Continental Seat Module ... Used" — dropping the
-    // year entirely and publishing a misspelled brand live on eBay.
-    // catalog_products.fitmentData resolves make against the canonical
-    // fitment_makes table (correct spelling) and carries the real
-    // compatible year span, so it should win over the raw column.
+  it('keeps the reviewed system title instead of recomposing it at publish time', async () => {
     publishResolver.resolve.mockResolvedValue({
       snapshot: {
         catalogProductId: 'cp-1',
         listingRecordId: 'lr-1',
         sku: 'BNTLY-7130-Silver-D1-007',
-        title: 'Bently Continental Seat Module 3D0959760C OEM Used',
+        title: '2003-2011 Bentley Continental Seat Module 3D0959760C OEM Used',
         description: '<p>Desc</p>',
         brand: null,
         mpn: '3D0959760C',
@@ -199,9 +191,9 @@ describe('ListingBuilderService', () => {
       storeId: 'store-1',
     });
 
-    expect(result.publishRequest.title).toContain('Bentley');
-    expect(result.publishRequest.title).not.toContain('Bently');
-    expect(result.publishRequest.title).toContain('2003-2011');
+    expect(result.publishRequest.title).toBe(
+      '2003-2011 Bentley Continental Seat Module 3D0959760C OEM Used',
+    );
   });
 
   it('keeps the raw brand when fitmentData lists a different (platform-sharing) manufacturer', async () => {
@@ -249,8 +241,124 @@ describe('ListingBuilderService', () => {
       storeId: 'store-1',
     });
 
-    expect(result.publishRequest.title).toContain('NISSAN');
+    expect(result.publishRequest.title).toContain('Nissan');
     expect(result.publishRequest.title).not.toContain('Infiniti');
+  });
+
+  it('resolves each listing profile name to the target account policy IDs', async () => {
+    publishResolver.resolve.mockResolvedValue({
+      snapshot: {
+        catalogProductId: 'cp-1',
+        listingRecordId: 'lr-1',
+        sku: 'SKU-001',
+        title: 'Reviewed Listing Title',
+        description: '<p>Desc</p>',
+        brand: 'TRW',
+        price: 49.99,
+        quantity: 1,
+        categoryId: '9886',
+        conditionId: '3000',
+        imageUrls: ['https://img.example.com/1.jpg'],
+      },
+      listingRecord: {
+        shippingProfileName: 'Shipping 4 KG',
+        returnProfileName: 'Returns 30 Days',
+        paymentProfileName: 'Managed Payments',
+      },
+      catalogProduct: {},
+      warnings: [],
+    });
+    mpRepo.findOne = jest.fn().mockResolvedValue({
+      defaultFulfillmentPolicyId: '10000000001',
+      defaultReturnPolicyId: '10000000002',
+      defaultPaymentPolicyId: '10000000003',
+      defaultInventoryLocationKey: 'loc-1',
+    });
+    policyRepo.find = jest.fn().mockResolvedValue([
+      {
+        policyType: 'fulfillment',
+        name: 'Shipping 4 KG',
+        ebayPolicyId: '20000000001',
+        isDefault: false,
+        rawPayload: {},
+      },
+      {
+        policyType: 'return',
+        name: 'Returns 30 Days',
+        ebayPolicyId: '20000000002',
+        isDefault: false,
+        rawPayload: {},
+      },
+      {
+        policyType: 'payment',
+        name: 'Managed Payments',
+        ebayPolicyId: '20000000003',
+        isDefault: false,
+        rawPayload: {},
+      },
+    ]);
+
+    const result = await svc.build({
+      catalogProductId: 'cp-1',
+      sourceListingId: 'lr-1',
+      ebayAccountId: 'acct-1',
+      marketplaceId: 'EBAY_MOTORS_US',
+      listingRecordId: 'lr-1',
+      storeId: 'store-1',
+    });
+
+    expect(publishResolver.resolve).toHaveBeenCalledWith('lr-1');
+    expect(result.publishRequest.fulfillmentPolicyId).toBe('20000000001');
+    expect(result.publishRequest.returnPolicyId).toBe('20000000002');
+    expect(result.publishRequest.paymentPolicyId).toBe('20000000003');
+    expect(result.publishRequest.requestedFulfillmentPolicyName).toBe(
+      'Shipping 4 KG',
+    );
+    expect(result.blockingErrors).toEqual([]);
+  });
+
+  it('forwards a cache-missing profile name for strict eBay refresh', async () => {
+    publishResolver.resolve.mockResolvedValue({
+      snapshot: {
+        catalogProductId: 'cp-1',
+        listingRecordId: 'lr-1',
+        sku: 'SKU-001',
+        title: 'Reviewed Listing Title',
+        description: '<p>Desc</p>',
+        brand: 'TRW',
+        price: 49.99,
+        quantity: 1,
+        categoryId: '9886',
+        conditionId: '3000',
+        imageUrls: ['https://img.example.com/1.jpg'],
+      },
+      listingRecord: { shippingProfileName: 'Missing Shipping Policy' },
+      catalogProduct: {},
+      warnings: [],
+    });
+    mpRepo.findOne = jest.fn().mockResolvedValue({
+      defaultFulfillmentPolicyId: '10000000001',
+      defaultReturnPolicyId: '10000000002',
+      defaultPaymentPolicyId: '10000000003',
+      defaultInventoryLocationKey: 'loc-1',
+    });
+
+    const result = await svc.build({
+      catalogProductId: 'cp-1',
+      ebayAccountId: 'acct-1',
+      marketplaceId: 'EBAY_MOTORS_US',
+      listingRecordId: 'lr-1',
+      storeId: 'store-1',
+    });
+
+    expect(result.publishRequest.requestedFulfillmentPolicyName).toBe(
+      'Missing Shipping Policy',
+    );
+    expect(result.publishRequest.fulfillmentPolicyId).toBe('10000000001');
+    expect(result.warnings).toContainEqual(
+      expect.stringContaining('Missing Shipping Policy'),
+    );
+    expect(result.blockingErrors).toEqual([]);
   });
 
   it('adds blocking error for missing images', async () => {

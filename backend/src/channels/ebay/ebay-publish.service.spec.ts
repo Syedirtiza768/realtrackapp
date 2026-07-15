@@ -190,16 +190,7 @@ describe('EbayPublishService', () => {
       expect(inventoryApi.publishOffer).toHaveBeenCalled();
     });
 
-    it('prefers fitment-derived make/year over a misspelled raw brand column when composing the title', async () => {
-      // Regression test: production incident where listing_records.cBrand
-      // carried a source-data typo ("Lincon" instead of "Lincoln") and this
-      // publish path (EbayPublishController -> publish(), used by the
-      // catalog page's Publish button) built the structured title's `make`
-      // directly from cBrand with no yearRange at all — so the live eBay
-      // title read "Lincon MKS Wiper Switch SW-7032 OEM Used". catalog_products
-      // .fitmentData resolves make against the canonical fitment_makes table
-      // (correct spelling) and carries the real compatible year, so it must
-      // win over the raw column.
+    it('keeps the reviewed request title even when structured fields differ', async () => {
       storeRepo.findOneBy = jest.fn().mockResolvedValue({
         id: 'store-1',
         storeName: 'My Store',
@@ -228,9 +219,7 @@ describe('EbayPublishService', () => {
       expect(results[0].success).toBe(true);
       const itemArg = (inventoryApi.createOrReplaceItem as jest.Mock).mock
         .calls[0][2];
-      expect(itemArg.product.title).toContain('Lincoln');
-      expect(itemArg.product.title).not.toContain('Lincon');
-      expect(itemArg.product.title).toContain('2013');
+      expect(itemArg.product.title).toBe('Test Brake Pad');
     });
 
     it('returns error when store not found', async () => {
@@ -569,6 +558,112 @@ describe('EbayPublishService', () => {
         { storeName: 'Test' },
       );
       expect(error).toBeNull();
+    });
+  });
+
+  describe('business policy resolution', () => {
+    const account = {
+      id: 'acct-1',
+      connectionSource: 'native_oauth',
+      organizationId: 'org-1',
+    };
+    const store = {
+      id: 'store-1',
+      storeName: 'My Store',
+      ebayMarketplaceId: 'EBAY_US',
+      config: { marketplace: 'EBAY_US' },
+      locationKey: 'loc-1',
+    };
+
+    it('prefers exact profile-name matches and does not rewrite store defaults', async () => {
+      mpRepo.findOne = jest.fn().mockResolvedValue({
+        enabled: true,
+        defaultInventoryLocationKey: 'loc-1',
+        defaultFulfillmentPolicyId: '10000000001',
+        defaultPaymentPolicyId: '10000000002',
+        defaultReturnPolicyId: '10000000003',
+      });
+      policyRepo.find = jest.fn().mockResolvedValue([
+        {
+          policyType: 'fulfillment',
+          name: 'Shipping 4 KG',
+          ebayPolicyId: '20000000001',
+          isDefault: false,
+          rawPayload: {},
+        },
+        {
+          policyType: 'payment',
+          name: 'Managed Payments',
+          ebayPolicyId: '20000000002',
+          isDefault: false,
+          rawPayload: {},
+        },
+        {
+          policyType: 'return',
+          name: 'Returns 30 Days',
+          ebayPolicyId: '20000000003',
+          isDefault: false,
+          rawPayload: {},
+        },
+      ]);
+
+      const result = await (svc as any).enrichPoliciesFromMarketplace(
+        account,
+        store,
+        validRequest({
+          fulfillmentPolicyId: '10000000001',
+          paymentPolicyId: '10000000002',
+          returnPolicyId: '10000000003',
+          requestedFulfillmentPolicyName: 'shipping 4 kg',
+          requestedPaymentPolicyName: 'Managed Payments',
+          requestedReturnPolicyName: 'Returns 30 Days',
+          merchantLocationKey: 'loc-1',
+        }),
+      );
+
+      expect(result.fulfillmentPolicyId).toBe('20000000001');
+      expect(result.paymentPolicyId).toBe('20000000002');
+      expect(result.returnPolicyId).toBe('20000000003');
+      expect(mpRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('blocks a missing named profile instead of using the default', async () => {
+      mpRepo.findOne = jest.fn().mockResolvedValue({
+        enabled: true,
+        defaultInventoryLocationKey: 'loc-1',
+        defaultFulfillmentPolicyId: '10000000001',
+        defaultPaymentPolicyId: '10000000002',
+        defaultReturnPolicyId: '10000000003',
+      });
+      policyRepo.find = jest.fn().mockResolvedValue([
+        {
+          policyType: 'payment',
+          name: 'Managed Payments',
+          ebayPolicyId: '20000000002',
+          isDefault: false,
+          rawPayload: {},
+        },
+        {
+          policyType: 'return',
+          name: 'Returns 30 Days',
+          ebayPolicyId: '20000000003',
+          isDefault: false,
+          rawPayload: {},
+        },
+      ]);
+
+      await expect(
+        (svc as any).enrichPoliciesFromMarketplace(
+          account,
+          store,
+          validRequest({
+            requestedFulfillmentPolicyName: 'Missing Shipping Policy',
+            requestedPaymentPolicyName: 'Managed Payments',
+            requestedReturnPolicyName: 'Returns 30 Days',
+            merchantLocationKey: 'loc-1',
+          }),
+        ),
+      ).rejects.toThrow(/Missing Shipping Policy/);
     });
   });
 });

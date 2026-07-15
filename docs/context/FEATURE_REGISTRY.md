@@ -34,7 +34,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Orders | `/orders` | `orders` | Implemented | eBay order import |
 | eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth |
 | eBay store detail / policies | `/settings/integrations/ebay/:id[/policies]` | `integrations/ebay` | Partial | Business-policy mapping/sync |
-| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Implemented | Durable jobs support 500 listings/action and 5,000 listing/store targets/day; bounded concurrency/retries; structured fitment write/readback required |
+| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Implemented | Durable jobs support 500 listings/action and 5,000 listing/store targets/day; exact source listing/title preserved; named row policies resolve per target and fail closed on mismatch; structured fitment write/readback required |
 | eBay OAuth callback | `/channels/ebay/callback` | `integrations/ebay` | Implemented | Public callback |
 | eBay/marketplace preview | `/preview`, `/catalog/products/:id` (edit) | `listings` | Implemented | Listing preview; seller description edits use Visual (WYSIWYG) + HTML toggle (`RichTextDescriptionEditor`) |
 | Channels (multi-marketplace) | — | `channels` | Partial | Shopify/Amazon/Walmart scaffolding |

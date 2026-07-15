@@ -11,9 +11,7 @@ export interface EbayTitleSource {
   partType?: string | null;
   mpn?: string | null;
   sku?: string | null;
-  /** Structured composition fields. When `make` and at least one of
-   * `partName`/`oemPartNumber` are present, the title is assembled
-   * deterministically via buildStructuredEbayTitle instead of using `title`. */
+  /** Structured composition fields used only when no stored title exists. */
   yearRange?: string | null;
   make?: string | null;
   model?: string | null;
@@ -218,6 +216,21 @@ export function buildEbayListingTitle(
     return { title, warnings };
   }
 
+  // The title visible in RealTrack is the source of truth. Re-composing a
+  // non-empty stored title at publish time makes the live eBay listing differ
+  // from the reviewed/approved system record. Structured fields are fallback
+  // inputs only, never an implicit title override.
+  const raw = source.title?.trim() || '';
+  if (raw) {
+    const title = truncateEbayTitle(raw);
+    if (normalizeListingText(raw).length > EBAY_TITLE_MAX_LENGTH) {
+      warnings.push(
+        `Title truncated from ${normalizeListingText(raw).length} to ${EBAY_TITLE_MAX_LENGTH} characters for eBay`,
+      );
+    }
+    return { title, warnings };
+  }
+
   const make = (source.make ?? source.brand)?.trim() || '';
   const partName = (source.partName ?? source.partType)?.trim() || '';
   const oemPartNumber = (source.oemPartNumber ?? source.mpn)?.trim() || '';
@@ -233,28 +246,14 @@ export function buildEbayListingTitle(
       oemPartNumber,
     });
     if (composed) {
-      const hadTitle = Boolean(source.title?.trim());
-      if (hadTitle && normalizeListingText(source.title!) !== composed) {
-        warnings.push(
-          'Listing title recomposed from structured fields (year/make/model/position/part name/OEM number)',
-        );
-      } else if (!hadTitle) {
-        warnings.push(
-          'Title was empty — composed from structured catalog fields',
-        );
-      }
+      warnings.push(
+        'Title was empty — composed from structured catalog fields',
+      );
       return { title: composed, warnings };
     }
   }
 
-  const raw = source.title?.trim() || '';
-  let title = raw ? truncateEbayTitle(raw) : '';
-
-  if (raw && normalizeListingText(raw).length > EBAY_TITLE_MAX_LENGTH) {
-    warnings.push(
-      `Title truncated from ${normalizeListingText(raw).length} to ${EBAY_TITLE_MAX_LENGTH} characters for eBay`,
-    );
-  }
+  let title = '';
 
   if (!title) {
     const parts = [source.brand, source.partType, source.mpn]

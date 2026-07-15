@@ -88,4 +88,25 @@ describe('CatalogPublishResolverService', () => {
     expect(result!.snapshot.imageUrls).toHaveLength(2);
     expect(catalogRepo.save).toHaveBeenCalled();
   });
+
+  it('keeps exact listing-record values when the catalog row differs', async () => {
+    const staleCatalog = {
+      id: catalogId,
+      sku: 'BLA-17856',
+      title: 'Different catalog title',
+      description: 'Different catalog description',
+      price: 55,
+      quantity: 9,
+      imageUrls: ['https://cdn.example.com/catalog.jpg'],
+    } as unknown as CatalogProduct;
+    const { service } = makeService({ catalogProduct: staleCatalog });
+
+    const result = await service.resolve(listingId);
+
+    expect(result!.snapshot.title).toBe('Test Part');
+    expect(result!.snapshot.description).toBe('desc');
+    expect(result!.snapshot.price).toBe(99.99);
+    expect(result!.snapshot.quantity).toBe(1);
+    expect(result!.snapshot.imageUrls[0]).toBe('https://cdn.example.com/a.jpg');
+  });
 });

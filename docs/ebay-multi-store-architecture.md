@@ -48,6 +48,14 @@ Indexes exist on `organization_id`, `ebay_account_id`, `marketplace_id`, `catalo
 3. Worker (`EbayListingPublishProcessor`) re-validates server-side, aligns store marketplace config, calls `ListingBuilderService` → `EbayPublishService`, upserts `ebay_listing_channels`, aggregates job status.
 4. Targets succeed or fail **independently**.
 
+Durable targets keep the submitted listing row ID in
+`result_payload.sourceListingId`; the worker uses that row as the publish source
+even when the target FK points at a canonical catalog product. Stored titles are
+published as reviewed (with only eBay-length truncation). Row shipping, payment,
+and return profile names resolve independently against each target account; an
+unresolved or incompatible explicit profile fails that target instead of using
+an unrelated default.
+
 ## Queue architecture
 
 Registered queues include `ebay-listing-publish` and reserved names for validation, revision, ending, policy sync, order sync, and inventory sync. Workers should be extended to match the full matrix in the product spec.
@@ -63,6 +71,11 @@ Registered queues include `ebay-listing-publish` and reserved names for validati
 - **PATCH** `/api/integrations/ebay/accounts/:id/default-policies?organizationId=` — body includes `marketplaceId` and optional `defaultPaymentPolicyId`, `defaultReturnPolicyId`, `defaultFulfillmentPolicyId`, `defaultInventoryLocationKey`.
 
 Validation treats missing marketplace row, missing fulfillment/payment/return defaults, or missing inventory location key as **blocking errors** (not warnings). `ListingBuilderService` copies those IDs into `PublishRequest` (with optional per-listing `policyOverrides` JSON). `EbayMultiStoreListingService.createPublishJob` validates each target and **only enqueues eligible stores**; blocked combinations are returned as `skippedTargets` (and if none are eligible, the API returns **400** with `failures`).
+
+Named row policies take precedence over configured marketplace defaults and are
+resolved per target account. Cache misses are refreshed through eBay before
+publishing; explicit names never silently fall back. Request-scoped policy IDs
+must not overwrite the marketplace default columns.
 
 ## Inventory sync model (intended)
 

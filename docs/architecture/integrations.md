@@ -21,6 +21,21 @@
 - Multi-store: `ebay-multi-store-listing.service.ts`, `InternalStore`,
   `ListingStoreOverride`, `EbayAccountMarketplace`.
 - API audit/error logging: `EbayApiAuditLog`, `EbayApiError`.
+- Durable publish targets retain the original `listing_records.id` in
+  `result_payload.sourceListingId`. `CatalogPublishResolverService` therefore
+  uses the exact reviewed listing row for title, description, price, quantity,
+  category, condition, and image precedence even when several listing rows map
+  to one canonical catalog product. A non-empty stored title is authoritative;
+  structured title composition is used only when the stored title is empty.
+- Row-level `shippingProfileName`, `paymentProfileName`, and
+  `returnProfileName` assignments are resolved by exact, case-insensitive name
+  against every target eBay account and marketplace. A cache miss triggers an
+  eBay Account API refresh; if the named policy is still absent or a return
+  policy is incompatible with the listing, that target fails closed. Publishing
+  never substitutes an unrelated marketplace default for an explicit name.
+  Resolved row-level IDs are request-scoped and must not be persisted into
+  `ebay_account_marketplaces.default_*`; those columns represent account
+  defaults, not the most recently published listing.
 - Vehicle fitment / compatibility is published as structured data via the
   eBay Inventory API `PUT /inventory_item/{sku}/product_compatibility` after
   the inventory item is created/updated. Source of truth is
