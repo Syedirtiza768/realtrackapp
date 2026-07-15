@@ -513,7 +513,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
 
   const copyImageUrls = () => {
     if (localImages.length === 0) return;
-    navigator.clipboard.writeText(localImages.join('|'));
+    navigator.clipboard.writeText(localImages.join(' | '));
     setCopiedImageUrls(true);
     setTimeout(() => setCopiedImageUrls(false), 1500);
   };
