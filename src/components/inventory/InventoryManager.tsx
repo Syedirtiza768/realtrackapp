@@ -40,6 +40,7 @@ import InventoryFilterBar from './InventoryFilterBar';
 import InventoryFilterSidebar from './InventoryFilterSidebar';
 import { MobileFilterDrawer } from '../catalog/FilterSidebar';
 import TeamBadge from '../catalog/TeamBadge';
+import ImageZoom from '../ui/ImageZoom';
 
 function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
   const config: Record<
@@ -87,6 +88,8 @@ export default function InventoryManager() {
   const canDeleteInventory = canEnrich('inventory.delete');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [zoomImages, setZoomImages] = useState<string[] | null>(null);
+  const [zoomIndex, setZoomIndex] = useState(0);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -400,8 +403,9 @@ export default function InventoryManager() {
                           <img
                             src={item.imageUrl}
                             alt={item.title}
-                            className="w-12 h-12 object-cover rounded border border-slate-200 dark:border-slate-700"
+                            className="w-12 h-12 object-cover rounded border border-slate-200 dark:border-slate-700 cursor-zoom-in"
                             loading="lazy"
+                            onClick={() => { setZoomImages(item.imageUrls.length ? item.imageUrls : [item.imageUrl]); setZoomIndex(0); }}
                           />
                         ) : (
                           <div className="w-12 h-12 rounded border border-amber-600/50 bg-amber-900/20 flex items-center justify-center">
@@ -715,6 +719,13 @@ export default function InventoryManager() {
             </div>
           </div>
         </div>
+      )}
+      {zoomImages && (
+        <ImageZoom
+          images={zoomImages}
+          index={zoomIndex}
+          onClose={() => setZoomImages(null)}
+        />
       )}
     </div>
   );
