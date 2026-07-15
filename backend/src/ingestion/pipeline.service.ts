@@ -866,6 +866,72 @@ export class PipelineService {
   }
 
   /**
+   * Permanently delete a pipeline job, its upload files, and any BullMQ entries.
+   */
+  async deleteJob(
+    id: string,
+    actorId?: string,
+    viewAll = true,
+  ): Promise<void> {
+    const job = await this.getJob(id, actorId, viewAll);
+
+    // Remove any BullMQ entries for this job
+    try {
+      const allJobs = await this.pipelineQueue.getJobs([
+        'wait',
+        'active',
+        'delayed',
+        'paused',
+      ]);
+      for (const entry of allJobs) {
+        if ((entry.data as PipelineJobData).jobId === id) {
+          await entry.remove().catch(() => {});
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not clean BullMQ jobs for ${id}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    // Remove uploaded file from disk
+    try {
+      if (job.storedFilePath && fs.existsSync(job.storedFilePath)) {
+        const dir = path.dirname(job.storedFilePath);
+        fs.rmSync(dir, { recursive: true, force: true });
+        this.logger.log(`Deleted upload dir for job ${id}: ${dir}`);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not delete upload files for ${id}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    // Remove output directory from disk
+    try {
+      const projectRoot =
+        process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+      const outputDir = path.resolve(
+        projectRoot,
+        'output',
+        `pipeline-${id.slice(0, 8)}`,
+      );
+      if (fs.existsSync(outputDir)) {
+        fs.rmSync(outputDir, { recursive: true, force: true });
+        this.logger.log(`Deleted output dir for job ${id}: ${outputDir}`);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not delete output dir for ${id}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    // Delete from database
+    await this.jobRepo.delete(id);
+    this.logger.log(`Deleted pipeline job ${id}`);
+  }
+
+  /**
    * Resume catalog import for a job that finished enrichment + output
    * generation but got stuck during the import phase. Reuses on-disk output
    * XLSX files and runs only the post-enrichment import with the current

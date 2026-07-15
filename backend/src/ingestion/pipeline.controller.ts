@@ -383,6 +383,16 @@ export class PipelineController {
     return { job };
   }
 
+  @Post('jobs/:id/delete')
+  @RequirePermissions('pipeline.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Permanently delete a pipeline job and its uploads' })
+  async deleteJob(@Param('id') id: string, @CurrentUser() user: User) {
+    const viewAll = await this.rbac.userHasPermission(user.id, 'users.view');
+    await this.pipelineService.deleteJob(id, user.id, viewAll);
+    return { deleted: true };
+  }
+
   @Get('stats')
   @RequirePermissions('pipeline.view')
   @ApiOperation({ summary: 'Get pipeline aggregate stats' })
