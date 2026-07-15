@@ -240,6 +240,7 @@ export class InventoryEditorService {
       itemPhotoUrl: primary.itemPhotoUrl,
       location: primary.location,
       pipelineJobId: primary.pipelineJobId,
+      teamId: primary.teamId,
       marketplace,
       status: primary.status ?? 'draft',
     });

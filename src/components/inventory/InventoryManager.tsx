@@ -425,7 +425,7 @@ export default function InventoryManager() {
                     <th className="pb-3 pr-3 w-16">Image</th>
                     <th className="pb-3 pr-3">SKU / Title</th>
                     <th className="pb-3 pr-3">Brand</th>
-                    <th className="pb-3 pr-3">Location</th>
+                    <th className="pb-3 pr-3">Storage Location</th>
                     <th className="pb-3 pr-3">Marketplaces</th>
                     <th className="pb-3 pr-3">eBay Stores</th>
                     <th className="pb-3 pr-3">

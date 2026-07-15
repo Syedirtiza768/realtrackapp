@@ -188,7 +188,7 @@ export default function InventoryFilterSidebar({ facets, filters, onChange, load
 
       {/* Location */}
       <MultiSelectFacet
-        title="Location"
+        title="Storage Location"
         buckets={facets?.locations ?? []}
         selected={filters.locations}
         onChange={(v) => updateArray('locations', v)}

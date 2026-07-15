@@ -1032,6 +1032,7 @@ export class InventoryWorkbenchService {
           cOeOemPartNumber: baseListing.cOeOemPartNumber,
           extractedMake: baseListing.extractedMake,
           extractedModel: baseListing.extractedModel,
+          teamId: baseListing.teamId,
           marketplace: mkt,
           version: 1,
         });
