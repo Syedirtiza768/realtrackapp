@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import ImageZoom from '../ui/ImageZoom';
 import { getAllImageUrls, useListingDetail } from '../../lib/searchApi';
 import { conditionLabel } from '../../types/search';
 import ChannelListingPanel from '../channels/ChannelListingPanel';

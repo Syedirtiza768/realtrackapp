@@ -62,6 +62,7 @@ import {
   type ProfileSelection,
 } from './profileUtils';
 import ImageUploadZone from '../listings/ImageUploadZone';
+import ImageZoom from '../ui/ImageZoom';
 import type { UploadedImage } from '../../lib/storageApi';
 import { usePermissions } from '../../hooks/usePermissions';
 
