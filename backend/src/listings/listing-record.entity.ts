@@ -363,6 +363,24 @@ export class ListingRecord {
   @Index('idx_listing_enrichment_stage')
   enrichmentStage: string | null;
 
+  /* ── Enrichment retry tracking ──────────────────────────── */
+
+  @Column({ type: 'int', default: 0 })
+  enrichmentRetryCount: number;
+
+  @Column({ type: 'text', nullable: true })
+  enrichmentLastFailureReason: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  enrichmentLastFailureAt: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  @Index('idx_listing_enrichment_next_retry', { synchronize: false })
+  enrichmentNextRetryAt: Date | null;
+
+  @Column({ type: 'boolean', default: false })
+  enrichmentPermanentFail: boolean;
+
   /* ── Extracted vehicle make/model (from title) ──────────── */
 
   @Column({ type: 'varchar', length: 100, nullable: true })

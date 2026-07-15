@@ -16,6 +16,7 @@ import { Throttle } from '@nestjs/throttler';
 import { InventoryService } from './inventory.service.js';
 import { InventoryWorkbenchService } from './inventory-workbench.service.js';
 import { InventoryAutoTriggerService } from './inventory-auto-trigger.service.js';
+import { EnrichmentRetryService } from './enrichment-retry.service.js';
 import {
   AdjustInventoryDto,
   ReserveInventoryDto,
@@ -45,6 +46,7 @@ export class InventoryController {
     private readonly inventoryService: InventoryService,
     private readonly workbench: InventoryWorkbenchService,
     private readonly autoTrigger: InventoryAutoTriggerService,
+    private readonly retryService: EnrichmentRetryService,
   ) {}
 
   /* ── Workbench (must be registered before :listingId routes) ── */
@@ -181,6 +183,37 @@ export class InventoryController {
       force: true,
     });
     return { listingId, ...result };
+  }
+
+  @Get('listings/:listingId/enrichment-retry-status')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({
+    summary:
+      'Get enrichment retry status — shows retry count, failure reason, next retry time, and permanent failure flag',
+  })
+  async getEnrichmentRetryStatus(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+  ) {
+    const status = await this.retryService.getRetryStatus(listingId);
+    if (!status) {
+      return { listingId, found: false };
+    }
+    return { listingId, found: true, ...status };
+  }
+
+  @Post('listings/:listingId/reset-enrichment-retry')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @RequirePermissions('inventory.enrich')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Reset a permanently failed enrichment — clears retry count and failure flags, allowing auto-retry to resume',
+  })
+  async resetEnrichmentRetry(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+  ) {
+    const reset = await this.retryService.overridePermanentFailure(listingId);
+    return { listingId, reset };
   }
 
   /* ── Filter metadata ───────────────────────────────────── */

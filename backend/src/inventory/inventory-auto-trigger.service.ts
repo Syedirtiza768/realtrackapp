@@ -5,6 +5,7 @@ import type { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
+import { EnrichmentRetryService } from './enrichment-retry.service.js';
 
 export type EnrichmentStatus =
   | 'idle'
@@ -72,6 +73,7 @@ export class InventoryAutoTriggerService {
     private readonly listingRepo: Repository<ListingRecord>,
     @InjectRepository(PipelineJob)
     private readonly pipelineJobRepo: Repository<PipelineJob>,
+    private readonly retryService: EnrichmentRetryService,
   ) {}
 
   /**
@@ -166,6 +168,9 @@ export class InventoryAutoTriggerService {
    * Enqueue a background auto-enrich job for a listing.
    * Called when the listing meets the trigger criteria (2+ images).
    * Use `force: true` to re-run stuck or needs_review enrichments.
+   *
+   * Respects permanent failure flags — listings marked as permanently failed
+   * are skipped unless `force: true` is passed (which also resets retry state).
    */
   async enqueueAutoEnrich(
     listingId: string,
@@ -188,6 +193,14 @@ export class InventoryAutoTriggerService {
 
     const stage = listing.enrichmentStage;
     const force = options?.force === true;
+
+    // Block permanently failed listings unless force override
+    if (!force && listing.enrichmentPermanentFail) {
+      this.logger.debug(
+        `Auto-enrich skipped for listing ${listingId}: permanently failed (${listing.enrichmentLastFailureReason})`,
+      );
+      return { queued: false, reason: 'permanently_failed' };
+    }
 
     if (!force) {
       if (stage === INLINE_ENRICH_STAGES.COMPLETED) {
@@ -213,6 +226,8 @@ export class InventoryAutoTriggerService {
       await this.listingRepo.update(listingId, {
         enrichmentStage: null,
       } as Partial<ListingRecord>);
+      // Reset retry state on force re-enrich
+      await this.retryService.resetRetryState(listingId);
     }
 
     const pendingJobs = await this.inventoryQueue.getJobs([
@@ -229,12 +244,13 @@ export class InventoryAutoTriggerService {
       return { queued: false, reason: 'already_queued' };
     }
 
+    // Single BullMQ attempt — our own retry scheduler handles re-enqueue
+    // with exponential backoff based on error classification.
     await this.inventoryQueue.add(
       'auto-enrich',
       { listingId, force: force || false },
       {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 15_000 },
+        attempts: 1,
         removeOnComplete: 50,
         removeOnFail: 100,
       },

@@ -20,6 +20,7 @@ import { InventoryWorkbenchService } from './inventory-workbench.service.js';
 import { InventoryAutoTriggerService } from './inventory-auto-trigger.service.js';
 import { InventoryEditorService } from './inventory-editor.service.js';
 import { InventoryPublishService } from './inventory-publish.service.js';
+import { EnrichmentRetryService } from './enrichment-retry.service.js';
 import { InventoryController } from './inventory.controller.js';
 import { InventoryEditorController } from './inventory-editor.controller.js';
 import { InventorySyncProcessor } from './processors/inventory-sync.processor.js';
@@ -65,7 +66,12 @@ import { StorageModule } from '../storage/storage.module.js';
     InventoryEditorService,
     InventoryPublishService,
     InventorySyncProcessor,
+    EnrichmentRetryService,
   ],
-  exports: [InventoryService, InventoryWorkbenchService],
+  exports: [
+    InventoryService,
+    InventoryWorkbenchService,
+    EnrichmentRetryService,
+  ],
 })
 export class InventoryModule {}

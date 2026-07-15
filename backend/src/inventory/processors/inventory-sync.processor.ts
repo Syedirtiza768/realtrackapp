@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InventoryService } from '../inventory.service.js';
 import { InventoryWorkbenchService } from '../inventory-workbench.service.js';
+import { EnrichmentRetryService } from '../enrichment-retry.service.js';
 
 @Processor('inventory', { concurrency: 1 })
 export class InventorySyncProcessor extends WorkerHost {
@@ -13,6 +14,7 @@ export class InventorySyncProcessor extends WorkerHost {
     private readonly inventoryService: InventoryService,
     private readonly eventEmitter: EventEmitter2,
     private readonly workbench: InventoryWorkbenchService,
+    private readonly retryService: EnrichmentRetryService,
   ) {
     super();
   }
@@ -33,6 +35,10 @@ export class InventorySyncProcessor extends WorkerHost {
 
       case 'auto-enrich':
         await this.handleAutoEnrich(job);
+        break;
+
+      case 'enrichment-retry-scan':
+        await this.handleEnrichmentRetryScan(job);
         break;
 
       default:
@@ -91,26 +97,64 @@ export class InventorySyncProcessor extends WorkerHost {
   /**
    * Auto-enrich a single listing: vision lookup → AI marketplace content (US/AU/DE) inline.
    * No pipeline job — all done synchronously right in the modal.
+   *
+   * On failure, classifies the error and records retry state. For transient
+   * errors (rate limits, timeouts), schedules automatic retry with exponential
+   * backoff. For permanent errors (bad data, missing SKU), marks the listing
+   * as permanently failed to stop further retry attempts.
    */
   private async handleAutoEnrich(
-    job: Job<{ listingId: string; force?: boolean }>,
+    job: Job<{ listingId: string; force?: boolean; isAutoRetry?: boolean }>,
   ): Promise<void> {
-    const { listingId } = job.data;
+    const { listingId, isAutoRetry } = job.data;
+    const retryLabel = isAutoRetry ? 'auto-retry' : 'auto-enrich';
     this.logger.log(
-      `Auto-enrich: starting inline enrichment for listing ${listingId}`,
+      `${retryLabel}: starting inline enrichment for listing ${listingId}`,
     );
 
     try {
       await this.workbench.inlineEnrichListing(listingId);
+      await this.retryService.recordSuccess(listingId);
       this.logger.log(
-        `Auto-enrich: inline enrichment completed for listing ${listingId}`,
+        `${retryLabel}: inline enrichment completed for listing ${listingId}`,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Auto-enrich failed for listing ${listingId}: ${message}`,
+        `${retryLabel} failed for listing ${listingId}: ${message}`,
       );
+
+      const { shouldRetry, classification } =
+        await this.retryService.recordFailure(listingId, err);
+
+      if (shouldRetry) {
+        this.logger.log(
+          `${retryLabel}: listing ${listingId} classified as transient — ` +
+            `auto-retry scheduled (will be picked up by retry scanner)`,
+        );
+      } else {
+        this.logger.warn(
+          `${retryLabel}: listing ${listingId} classified as ${classification} — ` +
+            `no further auto-retries`,
+        );
+      }
+
+      // Re-throw so BullMQ marks the job as failed (for observability),
+      // but retry logic is handled by our own scheduler, not BullMQ attempts.
       throw err;
+    }
+  }
+
+  /**
+   * Scan for failed enrichments eligible for auto-retry.
+   * Triggered by the scheduled cron every 5 minutes.
+   */
+  private async handleEnrichmentRetryScan(_job: Job): Promise<void> {
+    const result = await this.retryService.enqueueDueRetries();
+    if (result.scanned > 0) {
+      this.logger.log(
+        `Enrichment retry scan: ${result.scanned} due, ${result.enqueued} enqueued, ${result.skipped} skipped`,
+      );
     }
   }
 }

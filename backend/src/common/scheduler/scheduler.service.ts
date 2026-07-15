@@ -58,14 +58,19 @@ export class SchedulerService {
    * incident that motivated this (category 33726). */
   @Cron('0 5 * * *', { name: 'category-keyword-audit-daily' })
   async scheduleCategoryKeywordAudit(): Promise<void> {
-    await this.leader.runIfLeader('category-keyword-audit-daily', 3600, async () => {
-      const findings = await this.categoryKeywordAudit.auditCategoryKeywords();
-      if (findings.length > 0) {
-        this.logger.error(
-          `Category keyword audit found ${findings.length} drifted categor${findings.length === 1 ? 'y' : 'ies'} — see EbayCategoryKeywordAuditService logs above for details.`,
-        );
-      }
-    });
+    await this.leader.runIfLeader(
+      'category-keyword-audit-daily',
+      3600,
+      async () => {
+        const findings =
+          await this.categoryKeywordAudit.auditCategoryKeywords();
+        if (findings.length > 0) {
+          this.logger.error(
+            `Category keyword audit found ${findings.length} drifted categor${findings.length === 1 ? 'y' : 'ies'} — see EbayCategoryKeywordAuditService logs above for details.`,
+          );
+        }
+      },
+    );
   }
 
   /* ─── Storage Cleanup: Daily at 3:00 AM ─── */
@@ -131,6 +136,28 @@ export class SchedulerService {
         this.logger.log(`Enqueued inventory duplicate scan: ${jobId}`);
       },
     );
+  }
+
+  /* ─── Inventory: Enrichment Retry Scan every 5 minutes ─── */
+  /* Picks up failed enrichments eligible for auto-retry based on
+   * enrichmentNextRetryAt. Transient failures (rate limits, timeouts)
+   * are re-enqueued with exponential backoff. Permanent failures are
+   * skipped. See EnrichmentRetryService for classification logic. */
+
+  @Cron('*/5 * * * *', { name: 'enrichment-retry-scan' })
+  async scheduleEnrichmentRetryScan(): Promise<void> {
+    await this.leader.runIfLeader('enrichment-retry-scan', 240, async () => {
+      const jobId = `enrichment-retry-scan-${Date.now()}`;
+      await this.inventoryQueue.add(
+        'enrichment-retry-scan',
+        {},
+        {
+          jobId,
+          removeOnComplete: 20,
+          removeOnFail: 10,
+        },
+      );
+    });
   }
 
   /* ─── Orders: Import from Channels every 15 minutes ─── */
