@@ -148,6 +148,7 @@ export default function InventoryManager() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<InventoryFilters>({ ...INVENTORY_EMPTY_FILTERS });
@@ -163,7 +164,6 @@ export default function InventoryManager() {
   const [editingLocationValue, setEditingLocationValue] = useState('');
   const [locationSaving, setLocationSaving] = useState(false);
   const qc = useQueryClient();
-  const limit = 25;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -172,7 +172,7 @@ export default function InventoryManager() {
 
   const apiParams = useMemo(
     () => inventoryFiltersToParams(filters, debouncedSearch, page, limit),
-    [filters, debouncedSearch, page],
+    [filters, debouncedSearch, page, limit],
   );
 
   const {
@@ -635,9 +635,20 @@ export default function InventoryManager() {
 
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Page {page} of {totalPages}
-                </span>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={limit}
+                    onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                    className="px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-200 focus:outline-none"
+                  >
+                    <option value={25}>25 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Page {page} of {totalPages}
+                  </span>
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
