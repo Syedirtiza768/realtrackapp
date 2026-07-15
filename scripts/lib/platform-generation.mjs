@@ -265,6 +265,7 @@ export function buildPlatformSeoTitle({
     placement,
     mpn,
     'OEM',
+    'Used',
   ].filter(Boolean);
 
   return segments.join(' ').replace(/\s+/g, ' ').slice(0, 80).trim();

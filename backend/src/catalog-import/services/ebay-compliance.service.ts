@@ -6,6 +6,10 @@ import { OpenAiService } from '../../common/openai/openai.service.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
 import { ComplianceAuditService } from './compliance-audit.service.js';
 import { AiRunLogService } from '../../common/openai/ai-run-log.service.js';
+import {
+  EBAY_TITLE_MAX_LENGTH,
+  matchesStrictEbayTitleStructure,
+} from '../../channels/ebay/ebay-listing-text.util.js';
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -125,7 +129,7 @@ const RECOMMENDED_ITEM_SPECIFICS = [
 
 /* ── Title rules ───────────────────────────────────────────── */
 
-const TITLE_MAX_LENGTH = 80;
+const TITLE_MAX_LENGTH = EBAY_TITLE_MAX_LENGTH;
 const TITLE_FORBIDDEN_PATTERNS = [
   /\b(FREE SHIPPING|FREE S&H|FREE RETURNS)\b/gi,
   /\b(BEST PRICE|LOWEST PRICE|CHEAPEST)\b/gi,
@@ -918,6 +922,19 @@ Missing fields: ${missingFields.join(', ')}`,
           suggestion: 'Remove promotional or spammy text',
         });
       }
+    }
+
+    // Strict eBay Motors title structure check
+    if (!matchesStrictEbayTitleStructure(originalTitle)) {
+      issues.push({
+        code: 'TITLE_STRUCTURE_INVALID',
+        field: 'title',
+        message:
+          'Title does not follow the required structure: [Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used',
+        severity: 'error',
+        suggestion:
+          'Rewrite the title to match the eBay Motors title guideline structure',
+      });
     }
 
     // Duplicate words check

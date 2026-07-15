@@ -4,6 +4,20 @@ export const EBAY_OFFER_DESCRIPTION_MAX_LENGTH = 4000;
 /** @deprecated Use EBAY_OFFER_DESCRIPTION_MAX_LENGTH — kept for imports. */
 export const EBAY_DESCRIPTION_MAX_LENGTH = EBAY_OFFER_DESCRIPTION_MAX_LENGTH;
 
+/** Strict eBay Motors title structure per the listing guidelines doc. */
+export const EBAY_TITLE_STRUCTURE_PATTERN =
+  /^(\d{4}(-\d{4})?)\s+[A-Za-z].*\s+OEM Used$/;
+
+export const EBAY_TITLE_PART_NUMBER_PATTERN =
+  /\b(?:[A-NPR-Z0-9]{1,3}\s+[A-NPR-Z0-9]{1,4}\s+[A-NPR-Z0-9]{1,4}(?:\s+[A-Z])?|[A-NPR-Z0-9]{7,12})\b/;
+
+export function matchesStrictEbayTitleStructure(title: string): boolean {
+  if (!title || title.length > EBAY_TITLE_MAX_LENGTH) return false;
+  if (!EBAY_TITLE_STRUCTURE_PATTERN.test(title)) return false;
+  if (!EBAY_TITLE_PART_NUMBER_PATTERN.test(title)) return false;
+  return true;
+}
+
 export interface EbayTitleSource {
   title?: string | null;
   titleOverride?: string | null;
@@ -227,6 +241,29 @@ export function buildEbayListingTitle(
       warnings.push(
         `Title truncated from ${normalizeListingText(raw).length} to ${EBAY_TITLE_MAX_LENGTH} characters for eBay`,
       );
+    }
+    // STRICT GUARD: enforce the eBay Motors title guideline structure.
+    if (!matchesStrictEbayTitleStructure(title)) {
+      warnings.push(
+        'Stored title does not follow eBay guideline structure — recomposing from structured fields',
+      );
+      const make = (source.make ?? source.brand)?.trim() || '';
+      const partName = (source.partName ?? source.partType)?.trim() || '';
+      const oemPartNumber = (source.oemPartNumber ?? source.mpn)?.trim() || '';
+      if (make && (partName || oemPartNumber)) {
+        const composed = buildStructuredEbayTitle({
+          yearRange: source.yearRange,
+          make,
+          model: source.model,
+          generation: source.generation,
+          position: source.position,
+          partName,
+          oemPartNumber,
+        });
+        if (composed) {
+          return { title: composed, warnings };
+        }
+      }
     }
     return { title, warnings };
   }

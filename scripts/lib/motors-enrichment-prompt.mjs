@@ -31,7 +31,7 @@ export function buildMotorsEnrichmentSystemPrompt() {
 Rules:
 - Use provided MPN only; never fabricate.
 - If an item has a non-empty verifiedPartType, that is the authoritative component identity from eBay's live catalog for this part number. Set "type" to it and use it as the PartName in the title; do NOT substitute a different component inferred from partName/note (note may still be used for placement/material only).
-- Title (≤80 chars): YearRange Make Model [ChassisCode] [Variant] PartName [Placement] MPN Used OEM.
+- Title (≤80 chars): YearRange Make Model [ChassisCode] [Variant] [Position] PartName MPN OEM Used. Position = Left/Right/Front/Rear when applicable. Always end with "OEM Used" (never "Used OEM").
 - Chassis codes MUST match year range (e.g. Lexus RX AL20 = 2015-2022 only).
 - Description: HTML (Details, Compatibility note, Condition) — do NOT list Year/Make/Model tables (fitment added separately).
 - Item specifics: always fill Brand, Manufacturer Part Number, Type, Placement on Vehicle.

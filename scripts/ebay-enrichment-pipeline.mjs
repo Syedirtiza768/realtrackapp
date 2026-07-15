@@ -27,6 +27,15 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import { createModelRouter } from './lib/model-router.mjs';
 import { applyListingGuards, validateListing, sanitizeTitle } from './lib/listing-quality.mjs';
+import {
+  fitsEbayTitleStructure,
+  enforceStrictTitle,
+  isBadPartType,
+  cleanPartDescription,
+  extractPosition,
+  normalizeYearRange,
+  stripBadCategoryWords,
+} from './lib/strict-title.mjs';
 import { createConcurrencyPool, isRateLimitError } from './lib/concurrency-pool.mjs';
 import {
   PROMPT_VERSION as MOTORS_PROMPT_VERSION,
@@ -60,6 +69,7 @@ import {
   buildCategoryKeywords,
   normalizeCategoryResult,
 } from './lib/marketplace-category.mjs';
+import { getSafeMotorsCategory } from './lib/motors-category-guard.mjs';
 import {
   getEnrichmentProfile,
   getLowValueMaxPrice,
@@ -1907,7 +1917,12 @@ async function mapCategoriesForMarketplace(parts, vinData, marketplace, uniqueLo
       bumpCategoryStat(marketplace, 'fallback');
     }
     for (const part of lookup.parts) {
-      setPartCategory(part, marketplace, partTypeCache.get(lookup.partKey));
+      const rawCategory = partTypeCache.get(lookup.partKey);
+      const safeCategory = getSafeMotorsCategory(rawCategory, part.partName, part.note);
+      if (safeCategory !== rawCategory) {
+        log.warn(`[${marketplace}] category guard: ${part.sku || part.partName} — ${rawCategory?.categoryName} → ${safeCategory.categoryName}`);
+      }
+      setPartCategory(part, marketplace, safeCategory);
     }
   }
 
@@ -3055,6 +3070,37 @@ async function validateAndFix(parts, vinData) {
     if (!e.title) {
       const vehicle = getVehicleInfo(part, vinCache);
       e.title = `${part.brand} ${part.partName} ${part.partNumber}`.slice(0, 80).trim();
+      fixes++;
+    }
+
+    // Fix "Used OEM" → "OEM Used" (eBay guidelines require OEM Used at end)
+    if (e.title && /\bUsed\s+OEM\b/i.test(e.title)) {
+      e.title = e.title.replace(/\bUsed\s+OEM\b/gi, 'OEM Used');
+      REPORT.validationFixes.push({ sku: part.sku, field: 'title', fix: 'swapped Used OEM → OEM Used' });
+      fixes++;
+    }
+
+    // Reject bad AI part types (e.g., category names like Vag, Books, Other) and fall back to source part name
+    if (isBadPartType(e.type)) {
+      e.type = cleanPartDescription(part.partName) || 'Part';
+      REPORT.validationFixes.push({ sku: part.sku, field: 'type', fix: `replaced bad part type '${e.type}' with source part name` });
+      fixes++;
+    }
+    e.type = stripBadCategoryWords(e.type) || cleanPartDescription(part.partName) || 'Part';
+
+    // Enforce strict eBay title structure from the guidelines doc
+    if (!fitsEbayTitleStructure(e.title)) {
+      const placement = extractPosition(part.note || '') || e.placement || '';
+      const partName = cleanPartDescription(e.type || part.partName || '') || 'Part';
+      e.title = enforceStrictTitle({
+        yearRange: vehicle.year || part.donorYear || '',
+        make: e.brand || vehicle.make || part.brand || 'OEM',
+        model: vehicle.model || part.model || '',
+        partName,
+        partNumber: normalizePN(part.partNumber),
+        placement,
+      });
+      REPORT.validationFixes.push({ sku: part.sku, field: 'title', fix: 'rewritten to strict eBay title structure' });
       fixes++;
     }
 
