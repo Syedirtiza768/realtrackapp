@@ -68,6 +68,13 @@ export class InventoryController {
     return this.workbench.listListings(query);
   }
 
+  @Get('listings/facets')
+  @RequirePermissions('inventory.view')
+  @ApiOperation({ summary: 'Dynamic facet counts for inventory filters' })
+  listFacets(@Query() query: InventoryListingsQueryDto) {
+    return this.workbench.listFacets(query);
+  }
+
   @Post('listings/bulk-delete')
   @RequirePermissions('inventory.delete')
   @HttpCode(HttpStatus.OK)

@@ -235,6 +235,85 @@ export class InventoryWorkbenchService {
       params.push(`%${query.category.trim()}%`);
     }
 
+    /* ── Multi-select filters ─────────────────────────────── */
+
+    if (query.brands?.trim()) {
+      const vals = query.brands.split(',').map((s) => s.trim()).filter(Boolean);
+      if (vals.length > 0) {
+        whereClauses.push(`l."cBrand" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        params.push(...vals);
+      }
+    }
+
+    if (query.conditions?.trim()) {
+      const vals = query.conditions.split(',').map((s) => s.trim()).filter(Boolean);
+      if (vals.length > 0) {
+        whereClauses.push(`l."conditionId" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        params.push(...vals);
+      }
+    }
+
+    if (query.teamIds?.trim()) {
+      const vals = query.teamIds.split(',').map((s) => s.trim()).filter(Boolean);
+      if (vals.length > 0) {
+        whereClauses.push(`l."team_id" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        params.push(...vals);
+      }
+    }
+
+    if (query.locations?.trim()) {
+      const vals = query.locations.split(',').map((s) => s.trim()).filter(Boolean);
+      if (vals.length > 0) {
+        whereClauses.push(`l."location" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        params.push(...vals);
+      }
+    }
+
+    if (query.marketplaces?.trim()) {
+      const vals = query.marketplaces.split(',').map((s) => s.trim()).filter(Boolean);
+      if (vals.length > 0) {
+        whereClauses.push(`l."marketplace" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        params.push(...vals);
+      }
+    }
+
+    if (query.stockLevel?.trim()) {
+      const vals = query.stockLevel.split(',').map((s) => s.trim()).filter(Boolean);
+      const stockClauses: string[] = [];
+      if (vals.includes('in_stock')) {
+        stockClauses.push(`(l."quantityNum" > 2)`);
+      }
+      if (vals.includes('low_stock')) {
+        stockClauses.push(`(l."quantityNum" >= 1 AND l."quantityNum" <= 2)`);
+      }
+      if (vals.includes('out_of_stock')) {
+        stockClauses.push(`(l."quantityNum" IS NULL OR l."quantityNum" <= 0)`);
+      }
+      if (stockClauses.length > 0) {
+        whereClauses.push(`(${stockClauses.join(' OR ')})`);
+      }
+    }
+
+    if (query.minPrice != null) {
+      whereClauses.push(`l."startPriceNum" >= $${paramIdx++}`);
+      params.push(query.minPrice);
+    }
+
+    if (query.maxPrice != null) {
+      whereClauses.push(`l."startPriceNum" <= $${paramIdx++}`);
+      params.push(query.maxPrice);
+    }
+
+    if (query.minWeight != null) {
+      whereClauses.push(`l."weight" >= $${paramIdx++}`);
+      params.push(query.minWeight);
+    }
+
+    if (query.maxWeight != null) {
+      whereClauses.push(`l."weight" <= $${paramIdx++}`);
+      params.push(query.maxWeight);
+    }
+
     const whereSql = whereClauses.join(' AND ');
 
     const countSql = `
@@ -1669,6 +1748,200 @@ export class InventoryWorkbenchService {
       .orderBy('l."categoryName"', 'ASC')
       .getRawMany<{ category: string }>();
     return rows.map((r) => r.category);
+  }
+
+  /* ── Dynamic Facets ─────────────────────────────────────── */
+
+  async listFacets(query: InventoryListingsQueryDto): Promise<{
+    brands: Array<{ value: string; count: number }>;
+    conditions: Array<{ value: string; count: number }>;
+    locations: Array<{ value: string; count: number }>;
+    marketplaces: Array<{ value: string; count: number }>;
+    makes: Array<{ value: string; count: number }>;
+    models: Array<{ value: string; count: number }>;
+    categories: Array<{ value: string; count: number }>;
+    statuses: Array<{ value: string; count: number }>;
+    teams: Array<{ value: string; count: number; label: string; color: string }>;
+    stockLevels: Array<{ value: string; count: number }>;
+    totalFiltered: number;
+    priceRange: { min: number; max: number };
+    weightRange: { min: number; max: number };
+  }> {
+    // Build WHERE clauses excluding a given dimension
+    const buildWhere = (exclude?: string): { sql: string; params: unknown[] } => {
+      const clauses = ['l."deletedAt" IS NULL'];
+      const params: unknown[] = [];
+      let idx = 1;
+
+      const addParam = (sql: string, val: unknown) => {
+        clauses.push(sql.replace('$?', `$${idx++}`));
+        params.push(val);
+      };
+
+      if (exclude !== 'status' && query.status) addParam('l.status = $?', query.status);
+      if (exclude !== 'search' && query.search?.trim()) {
+        const term = `%${query.search.trim()}%`;
+        clauses.push(`(l."customLabelSku" ILIKE $${idx} OR l.title ILIKE $${idx} OR l."cBrand" ILIKE $${idx} OR l."cOeOemPartNumber" ILIKE $${idx} OR l."cManufacturerPartNumber" ILIKE $${idx})`);
+        params.push(term); idx++;
+      }
+      if (exclude !== 'missingImages' && query.missingImages) {
+        clauses.push(`(l."itemPhotoUrl" IS NULL OR TRIM(l."itemPhotoUrl") = '' OR l."itemPhotoUrl" NOT LIKE '%|%')`);
+      }
+      if (exclude !== 'dateRange' && query.dateAddedFrom) addParam(`l."importedAt" >= $?::timestamptz`, query.dateAddedFrom);
+      if (exclude !== 'dateRange' && query.dateAddedTo) addParam(`l."importedAt" <= $?::timestamptz`, query.dateAddedTo);
+      if (exclude !== 'brand' && query.brand?.trim()) addParam(`l."cBrand" ILIKE $?`, `%${query.brand.trim()}%`);
+      if (exclude !== 'make' && query.make?.trim()) addParam(`l."extractedMake" ILIKE $?`, `%${query.make.trim()}%`);
+      if (exclude !== 'model' && query.model?.trim()) addParam(`l."extractedModel" ILIKE $?`, `%${query.model.trim()}%`);
+      if (exclude !== 'category' && query.category?.trim()) addParam(`l."categoryName" ILIKE $?`, `%${query.category.trim()}%`);
+
+      // Multi-select
+      if (exclude !== 'brands' && query.brands?.trim()) {
+        const vals = query.brands.split(',').map((s) => s.trim()).filter(Boolean);
+        if (vals.length) { clauses.push(`l."cBrand" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+      }
+      if (exclude !== 'conditions' && query.conditions?.trim()) {
+        const vals = query.conditions.split(',').map((s) => s.trim()).filter(Boolean);
+        if (vals.length) { clauses.push(`l."conditionId" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+      }
+      if (exclude !== 'teamIds' && query.teamIds?.trim()) {
+        const vals = query.teamIds.split(',').map((s) => s.trim()).filter(Boolean);
+        if (vals.length) { clauses.push(`l."team_id" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+      }
+      if (exclude !== 'locations' && query.locations?.trim()) {
+        const vals = query.locations.split(',').map((s) => s.trim()).filter(Boolean);
+        if (vals.length) { clauses.push(`l."location" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+      }
+      if (exclude !== 'marketplaces' && query.marketplaces?.trim()) {
+        const vals = query.marketplaces.split(',').map((s) => s.trim()).filter(Boolean);
+        if (vals.length) { clauses.push(`l."marketplace" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+      }
+      if (exclude !== 'stockLevel' && query.stockLevel?.trim()) {
+        const vals = query.stockLevel.split(',').map((s) => s.trim()).filter(Boolean);
+        const sc: string[] = [];
+        if (vals.includes('in_stock')) sc.push(`(l."quantityNum" > 2)`);
+        if (vals.includes('low_stock')) sc.push(`(l."quantityNum" >= 1 AND l."quantityNum" <= 2)`);
+        if (vals.includes('out_of_stock')) sc.push(`(l."quantityNum" IS NULL OR l."quantityNum" <= 0)`);
+        if (sc.length) clauses.push(`(${sc.join(' OR ')})`);
+      }
+      if (exclude !== 'priceRange') {
+        if (query.minPrice != null) addParam(`l."startPriceNum" >= $?`, query.minPrice);
+        if (query.maxPrice != null) addParam(`l."startPriceNum" <= $?`, query.maxPrice);
+      }
+      if (exclude !== 'weightRange') {
+        if (query.minWeight != null) addParam(`l."weight" >= $?`, query.minWeight);
+        if (query.maxWeight != null) addParam(`l."weight" <= $?`, query.maxWeight);
+      }
+
+      return { sql: clauses.join(' AND '), params };
+    };
+
+    // Facet query template: dedup CTE + GROUP BY dimension
+    const facetQuery = async (exclude: string, selectExpr: string, groupCol: string, extraWhere?: string): Promise<Array<{ value: string; count: number }>> => {
+      const { sql, params } = buildWhere(exclude);
+      const ew = extraWhere ? ` AND ${extraWhere}` : '';
+      const fq = `
+        WITH filtered AS (SELECT l.* FROM listing_records l WHERE ${sql}),
+        ranked AS (
+          SELECT f.*, ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(f."customLabelSku", f.id::text)
+            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+                     CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
+          ) AS rn FROM filtered f
+        )
+        SELECT ${selectExpr} AS value, COUNT(*)::int AS count
+        FROM ranked WHERE rn = 1 AND ${groupCol} IS NOT NULL AND TRIM(${groupCol}::text) != '' ${ew}
+        GROUP BY ${groupCol} ORDER BY count DESC LIMIT 100
+      `;
+      return this.listingRepo.query(fq, params);
+    };
+
+    // Team facet with join
+    const teamFacetQuery = async (): Promise<Array<{ value: string; count: number; label: string; color: string }>> => {
+      const { sql, params } = buildWhere('teamIds');
+      const fq = `
+        WITH filtered AS (SELECT l.* FROM listing_records l WHERE ${sql}),
+        ranked AS (
+          SELECT f.*, ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(f."customLabelSku", f.id::text)
+            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+                     CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
+          ) AS rn FROM filtered f
+        )
+        SELECT f."team_id" AS value, COUNT(*)::int AS count, t.name AS label, t.color
+        FROM ranked f LEFT JOIN teams t ON t.id = f."team_id"
+        WHERE rn = 1 AND f."team_id" IS NOT NULL
+        GROUP BY f."team_id", t.name, t.color ORDER BY count DESC LIMIT 100
+      `;
+      return this.listingRepo.query(fq, params);
+    };
+
+    // Stock level facet (derived from quantityNum)
+    const stockFacetQuery = async (): Promise<Array<{ value: string; count: number }>> => {
+      const { sql, params } = buildWhere('stockLevel');
+      const fq = `
+        WITH filtered AS (SELECT l.* FROM listing_records l WHERE ${sql}),
+        ranked AS (
+          SELECT f.*, ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(f."customLabelSku", f.id::text)
+            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+                     CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
+          ) AS rn FROM filtered f
+        )
+        SELECT value, COUNT(*)::int AS count FROM (
+          SELECT CASE
+            WHEN "quantityNum" > 2 THEN 'in_stock'
+            WHEN "quantityNum" >= 1 AND "quantityNum" <= 2 THEN 'low_stock'
+            ELSE 'out_of_stock'
+          END AS value FROM ranked WHERE rn = 1
+        ) sub GROUP BY value
+      `;
+      return this.listingRepo.query(fq, params);
+    };
+
+    // Total count + price/weight ranges
+    const summaryQuery = async (): Promise<{ total: number; minPrice: number; maxPrice: number; minWeight: number; maxWeight: number }> => {
+      const { sql, params } = buildWhere();
+      const sq = `
+        WITH filtered AS (SELECT l.* FROM listing_records l WHERE ${sql}),
+        ranked AS (
+          SELECT f.*, ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(f."customLabelSku", f.id::text)
+            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+                     CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
+          ) AS rn FROM filtered f
+        )
+        SELECT COUNT(*)::int AS total,
+               COALESCE(MIN("startPriceNum"), 0)::float AS "minPrice",
+               COALESCE(MAX("startPriceNum"), 0)::float AS "maxPrice",
+               COALESCE(MIN(weight), 0)::float AS "minWeight",
+               COALESCE(MAX(weight), 0)::float AS "maxWeight"
+        FROM ranked WHERE rn = 1
+      `;
+      const rows = await this.listingRepo.query(sq, params);
+      return rows[0] ?? { total: 0, minPrice: 0, maxPrice: 0, minWeight: 0, maxWeight: 0 };
+    };
+
+    // Run all facet queries in parallel
+    const [brands, conditions, locations, marketplaces, makes, models, categories, statuses, teams, stockLevels, summary] = await Promise.all([
+      facetQuery('brands', 'f."cBrand"', 'f."cBrand"'),
+      facetQuery('conditions', 'f."conditionId"', 'f."conditionId"'),
+      facetQuery('locations', 'f."location"', 'f."location"'),
+      facetQuery('marketplaces', 'f."marketplace"', 'f."marketplace"'),
+      facetQuery('make', 'f."extractedMake"', 'f."extractedMake"'),
+      facetQuery('model', 'f."extractedModel"', 'f."extractedModel"'),
+      facetQuery('category', 'f."categoryName"', 'f."categoryName"'),
+      facetQuery('status', 'f."status"', 'f."status"'),
+      teamFacetQuery(),
+      stockFacetQuery(),
+      summaryQuery(),
+    ]);
+
+    return {
+      brands, conditions, locations, marketplaces, makes, models, categories, statuses, teams, stockLevels,
+      totalFiltered: summary.total,
+      priceRange: { min: summary.minPrice, max: summary.maxPrice },
+      weightRange: { min: summary.minWeight, max: summary.maxWeight },
+    };
   }
 
   /* ── Send to Catalog ─────────────────────────────────────── */

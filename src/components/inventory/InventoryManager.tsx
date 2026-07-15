@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,20 +22,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import {
   useInventoryListings,
-  useFilterBrands,
-  useFilterMakes,
-  useFilterModels,
-  useFilterCategories,
+  useInventoryFacets,
   useSendToCatalog,
   useDeleteInventoryListing,
   useBulkDeleteInventoryListings,
+  inventoryFiltersToParams,
+  INVENTORY_EMPTY_FILTERS,
+  countInventoryActiveFilters,
   type InventoryListingItem,
   type EnrichmentStatus,
   type InventoryStoreListing,
+  type InventoryFilters,
 } from '../../lib/inventoryApi';
 import { fetchWithAuth } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import InventoryDetailModal from './InventoryDetailModal';
+import InventoryFilterBar from './InventoryFilterBar';
+import InventoryFilterSidebar from './InventoryFilterSidebar';
+import { MobileFilterDrawer } from '../catalog/FilterSidebar';
 
 function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
   const config: Record<
@@ -146,17 +150,8 @@ export default function InventoryManager() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [missingImagesFilter, setMissingImagesFilter] = useState(false);
-
-  // Advanced filters
-  const [dateAddedFrom, setDateAddedFrom] = useState('');
-  const [dateAddedTo, setDateAddedTo] = useState('');
-  const [brandFilter, setBrandFilter] = useState('');
-  const [makeFilter, setMakeFilter] = useState('');
-  const [modelFilter, setModelFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filters, setFilters] = useState<InventoryFilters>({ ...INVENTORY_EMPTY_FILTERS });
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
@@ -175,31 +170,20 @@ export default function InventoryManager() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const apiParams = useMemo(
+    () => inventoryFiltersToParams(filters, debouncedSearch, page, limit),
+    [filters, debouncedSearch, page],
+  );
+
   const {
     data,
     isLoading,
     isFetching,
     error: loadError,
     refetch,
-  } = useInventoryListings({
-    page,
-    limit,
-    status: statusFilter || undefined,
-    search: debouncedSearch || undefined,
-    missingImages: missingImagesFilter || undefined,
-    dateAddedFrom: dateAddedFrom || undefined,
-    dateAddedTo: dateAddedTo || undefined,
-    brand: brandFilter || undefined,
-    make: makeFilter || undefined,
-    model: modelFilter || undefined,
-    category: categoryFilter || undefined,
-  });
+  } = useInventoryListings(apiParams);
 
-  // Filter metadata
-  const { data: brands } = useFilterBrands();
-  const { data: makes } = useFilterMakes();
-  const { data: models } = useFilterModels(makeFilter || undefined);
-  const { data: categories } = useFilterCategories();
+  const { data: facets, isLoading: facetsLoading } = useInventoryFacets(apiParams);
 
   const sendToCatalogMutation = useSendToCatalog();
   const deleteMutation = useDeleteInventoryListing();
@@ -291,17 +275,7 @@ export default function InventoryManager() {
     }
   };
 
-  const clearFilters = () => {
-    setDateAddedFrom('');
-    setDateAddedTo('');
-    setBrandFilter('');
-    setMakeFilter('');
-    setModelFilter('');
-    setCategoryFilter('');
-    setPage(1);
-  };
-
-  const hasActiveFilters = dateAddedFrom || dateAddedTo || brandFilter || makeFilter || modelFilter || categoryFilter;
+  const filterCount = countInventoryActiveFilters(filters);
 
   return (
     <div className="space-y-6">
@@ -388,135 +362,34 @@ export default function InventoryManager() {
                 className="w-full pl-9 pr-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
               />
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
+            <InventoryFilterBar
+              facets={facets ?? null}
+              filters={filters}
+              onChange={(updater) => {
+                setFilters(typeof updater === 'function' ? updater : updater);
                 setPage(1);
               }}
-              className="px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-            >
-              <option value="">All Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="ready">Ready</option>
-              <option value="published">Published</option>
-            </select>
-            <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 cursor-pointer whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={missingImagesFilter}
-                onChange={(e) => {
-                  setMissingImagesFilter(e.target.checked);
-                  setPage(1);
-                }}
-                className="rounded border-slate-300 dark:border-slate-600 bg-slate-800 text-blue-500"
-              />
-              <ImageIcon className="h-4 w-4 text-amber-400" />
-              Missing Images
-            </label>
-            <button
-              type="button"
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm border transition-colors ${
-                showAdvancedFilters || hasActiveFilters
-                  ? 'bg-blue-900/30 border-blue-700/50 text-blue-300'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              <Calendar className="h-4 w-4" />
-              Filters
-              {hasActiveFilters && <span className="ml-1 w-2 h-2 rounded-full bg-blue-400" />}
-            </button>
+              onAdvancedClick={() => setShowSidebar((v) => !v)}
+              advancedFilterCount={filterCount}
+              loading={facetsLoading}
+            />
           </div>
-
-          {showAdvancedFilters && (
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Date Added From</label>
-                  <input
-                    type="date"
-                    value={dateAddedFrom}
-                    onChange={(e) => { setDateAddedFrom(e.target.value); setPage(1); }}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Date Added To</label>
-                  <input
-                    type="date"
-                    value={dateAddedTo}
-                    onChange={(e) => { setDateAddedTo(e.target.value); setPage(1); }}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Brand</label>
-                  <select
-                    value={brandFilter}
-                    onChange={(e) => { setBrandFilter(e.target.value); setPage(1); }}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">All Brands</option>
-                    {(brands ?? []).map((b) => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Make</label>
-                  <select
-                    value={makeFilter}
-                    onChange={(e) => { setMakeFilter(e.target.value); setModelFilter(''); setPage(1); }}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">All Makes</option>
-                    {(makes ?? []).map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Model</label>
-                  <select
-                    value={modelFilter}
-                    onChange={(e) => { setModelFilter(e.target.value); setPage(1); }}
-                    disabled={!makeFilter}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 disabled:opacity-40"
-                  >
-                    <option value="">All Models</option>
-                    {(models ?? []).map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Category</label>
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">All Categories</option>
-                    {(categories ?? []).map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="mt-3 text-xs text-blue-400 hover:underline"
-                >
-                  Clear all filters
-                </button>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      <MobileFilterDrawer
+        open={showSidebar}
+        onClose={() => setShowSidebar(false)}
+        filterCount={filterCount}
+        variant="all"
+      >
+        <InventoryFilterSidebar
+          facets={facets ?? null}
+          filters={filters}
+          onChange={(f) => { setFilters(f); setPage(1); }}
+          loading={facetsLoading}
+        />
+      </MobileFilterDrawer>
 
       {isLoading && (
         <div className="flex justify-center py-12">

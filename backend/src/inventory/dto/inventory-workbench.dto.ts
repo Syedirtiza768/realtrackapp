@@ -3,7 +3,9 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -11,6 +13,8 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+export const STOCK_LEVELS = ['in_stock', 'low_stock', 'out_of_stock'] as const;
 
 export class InventoryListingsQueryDto {
   @IsOptional()
@@ -64,6 +68,58 @@ export class InventoryListingsQueryDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  /* ── Multi-select filters (comma-separated values) ────── */
+
+  @IsOptional()
+  @IsString()
+  brands?: string;
+
+  @IsOptional()
+  @IsString()
+  conditions?: string;
+
+  @IsOptional()
+  @IsString()
+  teamIds?: string;
+
+  @IsOptional()
+  @IsString()
+  locations?: string;
+
+  @IsOptional()
+  @IsString()
+  marketplaces?: string;
+
+  @IsOptional()
+  @IsString()
+  stockLevel?: string;
+
+  /* ── Range filters ────────────────────────────────────── */
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minWeight?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxWeight?: number;
 }
 
 export class InventoryPartLookupDto {

@@ -143,11 +143,113 @@ export interface InventoryListingDetail {
   storeListings: InventoryStoreListing[];
 }
 
-export function useInventoryListings(params: {
+export function useInventoryListings(params: InventoryListingsParams) {
+  const qs = buildInventoryQueryString(params);
+
+  return useQuery({
+    queryKey: ['inventory-listings', params],
+    queryFn: ({ signal }) =>
+      fetchJson<{ items: InventoryListingItem[]; total: number }>(
+        `/inventory/listings?${qs}`,
+        signal,
+      ),
+    enabled: params.enabled !== false,
+  });
+}
+
+/* ─── Inventory Filters ─── */
+
+export interface FacetBucket {
+  value: string;
+  count: number;
+  label?: string;
+  color?: string;
+}
+
+export interface InventoryFacets {
+  brands: FacetBucket[];
+  conditions: FacetBucket[];
+  locations: FacetBucket[];
+  marketplaces: FacetBucket[];
+  makes: FacetBucket[];
+  models: FacetBucket[];
+  categories: FacetBucket[];
+  statuses: FacetBucket[];
+  teams: FacetBucket[];
+  stockLevels: FacetBucket[];
+  totalFiltered: number;
+  priceRange: { min: number; max: number };
+  weightRange: { min: number; max: number };
+}
+
+export interface InventoryFilters {
+  brands: string[];
+  conditions: string[];
+  teamIds: string[];
+  locations: string[];
+  marketplaces: string[];
+  stockLevels: string[];
+  minPrice: string;
+  maxPrice: string;
+  minWeight: string;
+  maxWeight: string;
+  // Existing single-select (kept for backward compat)
+  status: string;
+  missingImages: boolean;
+  make: string;
+  model: string;
+  category: string;
+  dateAddedFrom: string;
+  dateAddedTo: string;
+}
+
+export const INVENTORY_EMPTY_FILTERS: InventoryFilters = {
+  brands: [],
+  conditions: [],
+  teamIds: [],
+  locations: [],
+  marketplaces: [],
+  stockLevels: [],
+  minPrice: '',
+  maxPrice: '',
+  minWeight: '',
+  maxWeight: '',
+  status: '',
+  missingImages: false,
+  make: '',
+  model: '',
+  category: '',
+  dateAddedFrom: '',
+  dateAddedTo: '',
+};
+
+export function countInventoryActiveFilters(f: InventoryFilters): number {
+  let count = 0;
+  count += f.brands.length;
+  count += f.conditions.length;
+  count += f.teamIds.length;
+  count += f.locations.length;
+  count += f.marketplaces.length;
+  count += f.stockLevels.length;
+  if (f.minPrice) count++;
+  if (f.maxPrice) count++;
+  if (f.minWeight) count++;
+  if (f.maxWeight) count++;
+  if (f.status) count++;
+  if (f.missingImages) count++;
+  if (f.make) count++;
+  if (f.model) count++;
+  if (f.category) count++;
+  if (f.dateAddedFrom) count++;
+  if (f.dateAddedTo) count++;
+  return count;
+}
+
+export interface InventoryListingsParams {
   page: number;
   limit: number;
-  status?: string;
   search?: string;
+  status?: string;
   missingImages?: boolean;
   dateAddedFrom?: string;
   dateAddedTo?: string;
@@ -155,14 +257,56 @@ export function useInventoryListings(params: {
   make?: string;
   model?: string;
   category?: string;
+  brands?: string;
+  conditions?: string;
+  teamIds?: string;
+  locations?: string;
+  marketplaces?: string;
+  stockLevel?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minWeight?: number;
+  maxWeight?: number;
   enabled?: boolean;
-}) {
+}
+
+export function inventoryFiltersToParams(
+  f: InventoryFilters,
+  search: string,
+  page: number,
+  limit: number,
+): InventoryListingsParams {
+  return {
+    page,
+    limit,
+    search: search || undefined,
+    status: f.status || undefined,
+    missingImages: f.missingImages || undefined,
+    dateAddedFrom: f.dateAddedFrom || undefined,
+    dateAddedTo: f.dateAddedTo || undefined,
+    make: f.make || undefined,
+    model: f.model || undefined,
+    category: f.category || undefined,
+    brands: f.brands.length ? f.brands.join(',') : undefined,
+    conditions: f.conditions.length ? f.conditions.join(',') : undefined,
+    teamIds: f.teamIds.length ? f.teamIds.join(',') : undefined,
+    locations: f.locations.length ? f.locations.join(',') : undefined,
+    marketplaces: f.marketplaces.length ? f.marketplaces.join(',') : undefined,
+    stockLevel: f.stockLevels.length ? f.stockLevels.join(',') : undefined,
+    minPrice: f.minPrice ? parseFloat(f.minPrice) : undefined,
+    maxPrice: f.maxPrice ? parseFloat(f.maxPrice) : undefined,
+    minWeight: f.minWeight ? parseFloat(f.minWeight) : undefined,
+    maxWeight: f.maxWeight ? parseFloat(f.maxWeight) : undefined,
+  };
+}
+
+function buildInventoryQueryString(params: InventoryListingsParams): string {
   const qs = new URLSearchParams({
     page: String(params.page),
     limit: String(params.limit),
   });
-  if (params.status) qs.set('status', params.status);
   if (params.search) qs.set('search', params.search);
+  if (params.status) qs.set('status', params.status);
   if (params.missingImages) qs.set('missingImages', 'true');
   if (params.dateAddedFrom) qs.set('dateAddedFrom', params.dateAddedFrom);
   if (params.dateAddedTo) qs.set('dateAddedTo', params.dateAddedTo);
@@ -170,15 +314,26 @@ export function useInventoryListings(params: {
   if (params.make) qs.set('make', params.make);
   if (params.model) qs.set('model', params.model);
   if (params.category) qs.set('category', params.category);
+  if (params.brands) qs.set('brands', params.brands);
+  if (params.conditions) qs.set('conditions', params.conditions);
+  if (params.teamIds) qs.set('teamIds', params.teamIds);
+  if (params.locations) qs.set('locations', params.locations);
+  if (params.marketplaces) qs.set('marketplaces', params.marketplaces);
+  if (params.stockLevel) qs.set('stockLevel', params.stockLevel);
+  if (params.minPrice != null) qs.set('minPrice', String(params.minPrice));
+  if (params.maxPrice != null) qs.set('maxPrice', String(params.maxPrice));
+  if (params.minWeight != null) qs.set('minWeight', String(params.minWeight));
+  if (params.maxWeight != null) qs.set('maxWeight', String(params.maxWeight));
+  return qs.toString();
+}
 
+export function useInventoryFacets(params: InventoryListingsParams) {
+  const qs = buildInventoryQueryString(params);
   return useQuery({
-    queryKey: ['inventory-listings', params],
+    queryKey: ['inventory-facets', params],
     queryFn: ({ signal }) =>
-      fetchJson<{ items: InventoryListingItem[]; total: number }>(
-        `/inventory/listings?${qs.toString()}`,
-        signal,
-      ),
-    enabled: params.enabled !== false,
+      fetchJson<InventoryFacets>(`/inventory/listings/facets?${qs}`, signal),
+    staleTime: 30_000,
   });
 }
 
