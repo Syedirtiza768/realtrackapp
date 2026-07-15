@@ -326,6 +326,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
   const [localImages, setLocalImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
   const [zoomIndex, setZoomIndex] = useState<number | null>(null);
+  const [copiedImageUrls, setCopiedImageUrls] = useState(false);
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -508,6 +509,13 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
     navigator.clipboard.writeText(sku);
     setCopiedSku(true);
     setTimeout(() => setCopiedSku(false), 1500);
+  };
+
+  const copyImageUrls = () => {
+    if (localImages.length === 0) return;
+    navigator.clipboard.writeText(localImages.join('|'));
+    setCopiedImageUrls(true);
+    setTimeout(() => setCopiedImageUrls(false), 1500);
   };
 
   const persistImages = useCallback(
@@ -994,7 +1002,22 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Product Images ({localImages.length}/24)
                   </p>
-                  {canManageImages && imagesDirty && (
+                  <div className="flex items-center gap-2">
+                    {localImages.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={copyImageUrls}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        {copiedImageUrls ? (
+                          <Check size={12} className="text-emerald-500" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                        {copiedImageUrls ? 'Copied' : 'Copy URLs'}
+                      </button>
+                    )}
+                    {canManageImages && imagesDirty && (
                     <button
                       type="button"
                       onClick={() => void handleSaveImages()}
@@ -1009,6 +1032,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                       Save order
                     </button>
                   )}
+                  </div>
                 </div>
 
                 {canManageImages ? (
