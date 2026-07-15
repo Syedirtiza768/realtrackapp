@@ -1864,7 +1864,7 @@ export class InventoryWorkbenchService {
           ) AS rn FROM filtered f
         )
         SELECT ${selectExpr} AS value, COUNT(*)::int AS count
-        FROM ranked WHERE rn = 1 AND ${groupCol} IS NOT NULL AND TRIM(${groupCol}::text) != '' ${ew}
+        FROM ranked f WHERE rn = 1 AND ${groupCol} IS NOT NULL AND TRIM(${groupCol}::text) != '' ${ew}
         GROUP BY ${groupCol} ORDER BY count DESC LIMIT 100
       `;
       return this.listingRepo.query(fq, params);
@@ -1884,7 +1884,7 @@ export class InventoryWorkbenchService {
         )
         SELECT f."team_id" AS value, COUNT(*)::int AS count, t.name AS label, t.color
         FROM ranked f LEFT JOIN teams t ON t.id = f."team_id"
-        WHERE rn = 1 AND f."team_id" IS NOT NULL
+        WHERE f.rn = 1 AND f."team_id" IS NOT NULL
         GROUP BY f."team_id", t.name, t.color ORDER BY count DESC LIMIT 100
       `;
       return this.listingRepo.query(fq, params);
