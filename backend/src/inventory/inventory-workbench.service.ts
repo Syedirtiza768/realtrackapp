@@ -505,7 +505,7 @@ export class InventoryWorkbenchService {
         storeListings: listing.customLabelSku
           ? (storeListingsBySku.get(listing.customLabelSku) ?? [])
           : [],
-        location: listing.location ?? undefined,
+        location: listing.sourceFileName === 'warehouse-intake' ? listing.location ?? undefined : undefined,
         version: listing.version,
         importedAt: listing.importedAt
           ? new Date(listing.importedAt).toISOString()
