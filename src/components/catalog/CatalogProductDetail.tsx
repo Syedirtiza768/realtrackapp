@@ -12,6 +12,7 @@ import { publishToEbay, type PublishResult } from '../../lib/publishApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
 import type { UploadedImage } from '../../lib/storageApi';
 import ImageUploadZone from '../listings/ImageUploadZone';
+import ImageZoom from '../ui/ImageZoom';
 import ProfileSelectors from './ProfileSelectors';
 import { EMPTY_PROFILE_SELECTION, defaultProfileSelection, type ProfileSelection } from './profileUtils';
 import type { EbayListing } from '../../lib/ebayFileExchangeParser';
@@ -111,9 +112,14 @@ function SortableImage({ id, url, index, onRemove }: SortableImageProps) {
 
   return (
     <div ref={setNodeRef} style={style} className="relative shrink-0 group">
-      <div className="w-16 h-16 rounded border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onZoom(index)}
+        className="block w-16 h-16 overflow-hidden rounded border border-slate-200 dark:border-slate-700"
+        aria-label="Zoom image"
+      >
         <img src={url} alt="" className="w-full h-full object-cover" />
-      </div>
+      </button>
       <button
         type="button"
         className="absolute -top-1 -left-1 p-0.5 rounded bg-slate-700 text-white opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
@@ -169,6 +175,7 @@ export default function CatalogProductDetail() {
   const [orderDirty, setOrderDirty] = useState(false);
   const [savingImages, setSavingImages] = useState(false);
   const [uploadZoneKey, setUploadZoneKey] = useState(0);
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setLocalImages(catalogImages);
@@ -612,6 +619,7 @@ export default function CatalogProductDetail() {
                         url={url}
                         index={i}
                         onRemove={handleRemoveImage}
+                        onZoom={(idx) => setZoomIndex(idx)}
                       />
                     ))}
                   </div>
@@ -788,6 +796,14 @@ export default function CatalogProductDetail() {
           </div>
         </div>
       </div>
+
+      {zoomIndex !== null && (
+        <ImageZoom
+          images={localImages}
+          index={zoomIndex}
+          onClose={() => setZoomIndex(null)}
+        />
+      )}
     </div>
   );
 }

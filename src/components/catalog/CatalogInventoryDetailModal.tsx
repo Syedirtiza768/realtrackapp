@@ -245,9 +245,10 @@ interface SortableImageProps {
   index: number;
   canEdit: boolean;
   onRemove: (index: number) => void;
+  onZoom: (index: number) => void;
 }
 
-function SortableImage({ id, url, index, canEdit, onRemove }: SortableImageProps) {
+function SortableImage({ id, url, index, canEdit, onRemove, onZoom }: SortableImageProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -258,9 +259,14 @@ function SortableImage({ id, url, index, canEdit, onRemove }: SortableImageProps
 
   return (
     <div ref={setNodeRef} style={style} className="relative shrink-0 group">
-      <div className="h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+      <button
+        type="button"
+        onClick={() => onZoom(index)}
+        className="block h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+        aria-label="Zoom image"
+      >
         <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-      </div>
+      </button>
       {canEdit && (
         <>
           <button
@@ -317,6 +323,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
   const [savingImages, setSavingImages] = useState(false);
   const [localImages, setLocalImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -646,7 +653,14 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
               <div className="flex gap-4 border-b border-slate-100 pb-5 dark:border-slate-800">
                 <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
                 {localImages[0] ? (
-                  <img src={localImages[0]} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setZoomIndex(0)}
+                    className="block h-full w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
+                    aria-label="Zoom image"
+                  >
+                    <img src={localImages[0]} alt="" className="h-full w-full object-cover" />
+                  </button>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-slate-400">
                       <Package size={24} />
@@ -1009,6 +1023,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                                 index={i}
                                 canEdit
                                 onRemove={handleRemoveImage}
+                                onZoom={(idx) => setZoomIndex(idx)}
                               />
                             ))}
                           </div>
@@ -1053,7 +1068,14 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                           key={url}
                           className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
                         >
-                          <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          <button
+                            type="button"
+                            onClick={() => setZoomIndex(i)}
+                            className="block h-full w-full"
+                            aria-label="Zoom image"
+                          >
+                            <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          </button>
                           {isLast && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-semibold text-white">
                               +{overflowCount}
@@ -1137,6 +1159,14 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
               </div>
             )}
           </div>
+        )}
+
+        {zoomIndex !== null && (
+          <ImageZoom
+            images={localImages}
+            index={zoomIndex}
+            onClose={() => setZoomIndex(null)}
+          />
         )}
 
         {!isLoading && !listing && (

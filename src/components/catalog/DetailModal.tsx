@@ -40,6 +40,7 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
   const images = data ? getAllImageUrls(data.itemPhotoUrl) : [];
   const [activeImg, setActiveImg] = useState(0);
   const [copiedSku, setCopiedSku] = useState(false);
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
 
   useEffect(() => setActiveImg(0), [data?.id]);
 
@@ -113,7 +114,8 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
                       <img
                         src={images[activeImg] ?? images[0]}
                         alt={data.title ?? ''}
-                        className="w-full h-52 sm:h-64 lg:h-80 object-contain"
+                        onClick={() => setZoomIndex(activeImg)}
+                        className="w-full h-52 sm:h-64 lg:h-80 cursor-zoom-in object-contain"
                       />
                       {/* Nav arrows */}
                       {images.length > 1 && (
@@ -233,6 +235,14 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
           </div>
         )}
       </div>
+
+      {zoomIndex !== null && (
+        <ImageZoom
+          images={images}
+          index={zoomIndex}
+          onClose={() => setZoomIndex(null)}
+        />
+      )}
     </div>
   );
 }
@@ -243,6 +253,10 @@ function DetailRow({ label, value, mono }: { label: string; value: string | null
     <tr>
       <td className="px-3 py-2 text-slate-500 dark:text-slate-400 font-medium w-32 bg-slate-100/30 dark:bg-slate-800/30">{label}</td>
       <td className={`px-3 py-2 text-slate-500 dark:text-slate-300 ${mono ? 'font-mono' : ''}`}>{value}</td>
+    </tr>
+  );
+}
+0 ${mono ? 'font-mono' : ''}`}>{value}</td>
     </tr>
   );
 }
