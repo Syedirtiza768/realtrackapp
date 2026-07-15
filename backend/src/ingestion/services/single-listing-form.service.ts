@@ -359,7 +359,172 @@ export class SingleListingFormService {
       );
     }
 
+    // Auto-enrich: run text-only AI enrichment (no photos required)
+    await this.autoEnrichListing(listing, dto);
+
     return { listing };
+  }
+
+  /**
+   * Auto-enrich a newly created intake listing using text-only AI lookup.
+   * Runs eBay Browse API + OpenAI text enrichment + MVL canonicalization.
+   * Best-effort: failures are logged but don't prevent part creation.
+   * User-provided fields are never overwritten.
+   */
+  private async autoEnrichListing(
+    listing: ListingRecord,
+    dto: CreateIntakePartDto,
+  ): Promise<void> {
+    try {
+      const partNumber = dto.partNumber?.trim();
+      if (!partNumber) return;
+
+      // Step 1: AI text enrichment (no photos required)
+      const oemModel =
+        this.config.get<string>('OPENAI_MODEL_TEXT') ||
+        this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4o-mini');
+
+      const lookupDto: PartLookupDto = {
+        partNumber,
+        brand: dto.brand,
+        partType: dto.partType,
+      };
+
+      let oemResult: Partial<PartLookupResult>;
+      try {
+        const attempt = await this.runOemTextLookup(
+          partNumber,
+          lookupDto,
+          oemModel,
+        );
+        if (!this.isOemLookupUsable(attempt.result)) {
+          this.logger.debug(
+            `Auto-enrich: OEM lookup not usable for ${listing.customLabelSku ?? partNumber}`,
+          );
+          return;
+        }
+        oemResult = attempt.result;
+      } catch {
+        this.logger.debug(
+          `Auto-enrich: OEM lookup failed for ${listing.customLabelSku ?? partNumber}`,
+        );
+        return;
+      }
+
+      // Step 2: MVL canonicalization
+      const finalized = await this.finalizeLookupFields(
+        oemResult,
+        partNumber,
+      );
+
+      // Step 3: Apply results, respecting user overrides
+      const placeholderTitle = `${dto.brand} ${partNumber}`.slice(0, 80);
+      let titleChanged = false;
+
+      // Title: only overwrite if still placeholder
+      if (
+        listing.title === placeholderTitle &&
+        finalized.partName?.trim()
+      ) {
+        listing.title = this.buildSeoTitle(
+          finalized.brand ?? dto.brand,
+          finalized.partName,
+          partNumber,
+        );
+        titleChanged = true;
+      }
+
+      // Brand: only if user didn't provide one
+      if (!dto.brand?.trim() && finalized.brand?.trim()) {
+        listing.cBrand = finalized.brand.trim();
+      }
+
+      // Model: only if empty
+      if (!listing.extractedModel && finalized.model?.trim()) {
+        listing.extractedModel = finalized.model.trim();
+      }
+
+      // Category: only if empty
+      if (!listing.categoryName && finalized.category?.trim()) {
+        listing.categoryName = finalized.category.trim();
+      }
+
+      // Description: merge user notes + AI note
+      if (finalized.note?.trim()) {
+        const userNotes = dto.description?.trim();
+        listing.description =
+          [userNotes, finalized.note.trim()].filter(Boolean).join('\n\n') ||
+          null;
+      }
+
+      // OEM part number: update if AI found a better one
+      if (finalized.partNumber?.trim()) {
+        listing.cOeOemPartNumber = finalized.partNumber.trim();
+        listing.cManufacturerPartNumber = finalized.partNumber.trim();
+      }
+
+      // Step 4: Save listing
+      await this.listingRepo.save(listing);
+
+      // Step 5: Update catalog product
+      if (listing.customLabelSku) {
+        try {
+          const product = await this.catalogProductRepo.findOneBy({
+            sku: listing.customLabelSku,
+          });
+          if (product) {
+            if (titleChanged && listing.title) product.title = listing.title;
+            if (listing.cBrand) product.brand = listing.cBrand;
+            if (listing.categoryName)
+              product.categoryName = listing.categoryName;
+            if (listing.description)
+              product.description = listing.description;
+            await this.catalogProductRepo.save(product);
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Auto-enrich: failed to update catalog product ${listing.customLabelSku}: ${err}`,
+          );
+        }
+      }
+
+      this.logger.log(
+        `Auto-enriched ${listing.customLabelSku}: "${listing.title}" (${finalized.confidence})`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Auto-enrichment failed for ${listing.customLabelSku ?? dto.partNumber}: ${err}`,
+      );
+    }
+  }
+
+  /**
+   * Build an eBay-compliant SEO title (≤80 chars).
+   * Format: [Make] [Part Name] [OEM Part Number] OEM Used
+   */
+  private buildSeoTitle(
+    make: string | null | undefined,
+    partName: string | null | undefined,
+    oemNumber: string | null | undefined,
+  ): string {
+    const parts = [
+      make?.trim(),
+      partName?.trim(),
+      oemNumber?.trim(),
+      'OEM Used',
+    ].filter(Boolean);
+    let title = parts.join(' ');
+    if (title.length > 80) {
+      // Try without "OEM Used" suffix first
+      const withoutSuffix = [make?.trim(), partName?.trim(), oemNumber?.trim()]
+        .filter(Boolean)
+        .join(' ');
+      title =
+        withoutSuffix.length <= 80
+          ? withoutSuffix
+          : withoutSuffix.slice(0, 77) + '...';
+    }
+    return title || `${make ?? ''} ${oemNumber ?? ''}`.trim().slice(0, 80);
   }
 
   async lookupAndApplyToListing(
