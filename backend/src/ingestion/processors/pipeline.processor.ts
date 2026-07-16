@@ -1106,7 +1106,9 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       );
 
       const wb = XLSX.readFile(mktPath);
-      const ws = wb.Sheets['Listings'];
+      // CSV output (used by the fast pipeline to avoid xlsx zip-compression
+      // memory blowup) has no sheet names — SheetJS names it "Sheet1".
+      const ws = wb.Sheets['Listings'] ?? wb.Sheets[wb.SheetNames[0]];
       if (!ws) {
         this.logger.warn(
           `Job ${jobId}: No Listings sheet in ${marketplace} output`,
