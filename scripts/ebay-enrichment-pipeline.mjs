@@ -1,26 +1,24 @@
 #!/usr/bin/env node
 /**
- * ebay-fast-pipeline.mjs
- * Fast reprocessing pipeline — skips VIN decode, Browse API, Taxonomy API.
- * Uses input file data directly (part number, description, make are already known).
- * MVL database for fitment/compatibility. AI only for title+description polish.
+ * ebay-enrichment-pipeline.mjs (fast/deterministic mode)
+ *
+ * Fast reprocessing pipeline — skips VIN decode, Browse API, and live Taxonomy.
+ * Everything is derived from the input sheet + the MVL database:
+ *   - Part number & description come straight from the sheet.
+ *   - Make from the sheet's "Vehicle Make" column; model & year from the
+ *     filename or row description (works for any make, not a fixed list).
+ *   - Title is a deterministic template; the year range comes from MVL.
+ *   - Category from a deterministic keyword table (9886 fallback), no API.
+ *   - Compatibility rows fully populated from MVL (one per fitment).
+ *   - AI (OpenRouter) is used ONLY to polish the description text.
  */
 
 import fs from 'fs';
 import path from 'path';
-import https from 'https';
-import http from 'http';
 import XLSX from 'xlsx';
-import axios from 'axios';
 import OpenAI from 'openai';
 
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
-axios.defaults.httpAgent = httpAgent;
-axios.defaults.httpsAgent = httpsAgent;
-
 // ── Config ──
-const ROOT = process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 const INPUT = process.env.PIPELINE_INPUT_FILE;
 const OUTPUT_DIR = process.env.PIPELINE_OUTPUT_DIR;
 const JOB_ID = process.env.PIPELINE_JOB_ID;
@@ -29,8 +27,6 @@ if (!INPUT || !OUTPUT_DIR || !JOB_ID) {
   console.error('Missing PIPELINE_INPUT_FILE, PIPELINE_OUTPUT_DIR, or PIPELINE_JOB_ID');
   process.exit(1);
 }
-
-// AI DISABLED — descriptions come directly from input file
 
 const CONFIG = {
   location: 'Fort Lauderdale, FL, US',
@@ -120,6 +116,36 @@ function extractVehicleFromFilename(filename) {
     }
   }
   return { year, make, model, vin, rawName: cleaned };
+}
+
+// Extract model + year from free text (filename or a row description) given a
+// known make. Works for ANY make — not just the ones in MAKE_ALIASES — because
+// the make is supplied (from the sheet's "Vehicle Make" column) rather than
+// detected from a hardcoded list. Descriptions reliably start "YEAR MAKE MODEL
+// <part>", so anchoring on the make yields the model.
+const MODEL_STOP_WORDS =
+  /^(front|rear|back|left|right|upper|lower|inner|outer|lh|rh|fr|rr|driver|passenger|used|oem|oe|genuine|with|w\/|for|assembly|complete)$/i;
+
+function extractModelYear(text, make) {
+  const s = String(text || '');
+  const yearMatch = s.match(/\b(19|20)\d{2}\b/);
+  const year = yearMatch ? parseInt(yearMatch[0]) : null;
+  let model = null;
+  if (make) {
+    const mk = make.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = s.match(new RegExp(mk + '\\s+([A-Za-z0-9][A-Za-z0-9\\- ]{0,24})', 'i'));
+    if (m) {
+      const toks = m[1].trim().split(/\s+/);
+      const modelToks = [];
+      for (const t of toks) {
+        if (MODEL_STOP_WORDS.test(t) || /^\d{5,}$/.test(t) || /^[A-HJ-NPR-Z0-9]{17}$/i.test(t)) break;
+        modelToks.push(t);
+        if (modelToks.length >= 2) break;
+      }
+      model = modelToks.join(' ').replace(/[,\.]+$/, '').trim() || null;
+    }
+  }
+  return { year, model };
 }
 
 function extractPosition(desc) {
@@ -480,6 +506,7 @@ async function main() {
       price,
       quantity,
       make: titleCase(make || vehicleInfo.make || ''),
+      rawMake: make || vehicleInfo.make || '',
       sku,
       imageUrls,
       position,
@@ -495,28 +522,23 @@ async function main() {
   console.log(`Parsed ${parts.length} parts from input`);
   progress('enrichment', { processed: 0, total: parts.length });
 
-  // If no model from filename, try extracting from first part's description
-  if (!vehicleInfo.model && parts.length > 0) {
-    const firstDesc = parts[0].rawDesc || '';
-    // Pattern 1: comma-separated "VIN, MAKE, MODEL, part name"
-    const commaMatch = firstDesc.match(/^[A-HJ-NPR-Z0-9]{17}\s*,\s*[^,]+\s*,\s*([^,]+)/i);
-    if (commaMatch) {
-      const candidate = commaMatch[1].trim();
-      if (candidate.length > 1 && candidate.length < 30) {
-        vehicleInfo.model = candidate;
-        console.log(`Extracted model from desc (comma): ${candidate}`);
-      }
+  // Determine the donor make. The sheet's "Vehicle Make" column is
+  // authoritative (present on every real inventory sheet); the filename is a
+  // fallback. This is what makes coverage work for ANY make, not just the ones
+  // in MAKE_ALIASES — MVL's queryMvl canonicalizes it via ILIKE.
+  const donorMake = parts[0]?.rawMake || vehicleInfo.make || '';
+
+  // If the filename didn't yield model/year, derive them from the first row's
+  // description using the donor make (descriptions are "YEAR MAKE MODEL ...").
+  if ((!vehicleInfo.model || !vehicleInfo.year) && parts.length > 0) {
+    const ex = extractModelYear(parts[0].rawDesc || '', donorMake);
+    if (!vehicleInfo.model && ex.model) {
+      vehicleInfo.model = ex.model;
+      console.log(`Extracted model from description: ${ex.model}`);
     }
-    // Pattern 2: "YEAR MAKE MODEL part name" or other patterns
-    if (!vehicleInfo.model) {
-      const descMatch = firstDesc.match(/(?:^|\s|,\s*)([A-Z][A-Za-z0-9\s\-]+?)(?:\s*,|\s+(?:Used|OEM|Front|Rear|Left|Right|Upper|Lower|Inner|Outer|[A-Z]{2,}\d))/i);
-      if (descMatch) {
-        const candidate = descMatch[1].trim();
-        if (candidate.length > 1 && candidate.length < 30 && !/part|gasket|seal|bolt|nut|clip|sensor|module|switch|motor|pump|hose|pipe|bracket|mount|arm|rod|bar|spring|shock|strut|bearing|bushing|gear|sprocket|chain|belt|filter|plug|cap|ring|pin|washer|spacer|adapter|connector|valve|actuator|cylinder|piston|crank|cam|shaft/i.test(candidate)) {
-          vehicleInfo.model = candidate;
-          console.log(`Extracted model from desc (pattern): ${candidate}`);
-        }
-      }
+    if (!vehicleInfo.year && ex.year) {
+      vehicleInfo.year = ex.year;
+      console.log(`Extracted year from description: ${ex.year}`);
     }
   }
 
@@ -525,7 +547,7 @@ async function main() {
   let allFitments = [];
   try {
     allFitments = await queryMvl(
-      vehicleInfo.make || parts[0]?.make || '',
+      donorMake,
       vehicleInfo.model || '',
       vehicleInfo.year,
     );
@@ -595,14 +617,43 @@ async function main() {
     'Relationship', 'Relationship details',
   ];
 
-  // Build output rows
+  // Stream rows straight to the CSV to bound peak memory: a large donor file
+  // is 1000+ parts x dozens of MVL fitments = tens of thousands of rows, and
+  // building the whole array + one giant joined string risks OOM in the
+  // memory-capped container.
   const today = new Date().toISOString().split('T')[0];
-  const outData = [
-    ['#INFO', `Created=${Date.now()}`, null, null, null, null, ' Indicates missing required fields'],
-    ['#INFO', 'Version=1.0', null, 'Template=fx_multi_category_template_EBAY_MOTOR', null, null, ' Indicates missing recommended field'],
-    ['#INFO'],
-    templateHeaders,
-  ];
+  const iRelationship = templateHeaders.indexOf('Relationship');
+  const iRelationshipDetails = templateHeaders.indexOf('Relationship details');
+
+  const serializeRow = (row) =>
+    row
+      .map((cell) => {
+        if (cell == null) return '';
+        const s = String(cell);
+        if (s.includes(',') || s.includes('"') || s.includes('\n'))
+          return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      })
+      .join(',');
+
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  const outFile = path.join(OUTPUT_DIR, `US-Motors-Listings-${today}.csv`);
+  const fd = fs.openSync(outFile, 'w');
+  let writeBuffer = '';
+  let firstLine = true;
+  const writeRow = (row) => {
+    writeBuffer += (firstLine ? '' : '\n') + serializeRow(row);
+    firstLine = false;
+    if (writeBuffer.length > 1 << 20) {
+      fs.writeSync(fd, writeBuffer);
+      writeBuffer = '';
+    }
+  };
+
+  writeRow(['#INFO', `Created=${Date.now()}`, null, null, null, null, ' Indicates missing required fields']);
+  writeRow(['#INFO', 'Version=1.0', null, 'Template=fx_multi_category_template_EBAY_MOTOR', null, null, ' Indicates missing recommended field']);
+  writeRow(['#INFO']);
+  writeRow(templateHeaders);
 
   for (const p of parts) {
     const row = new Array(templateHeaders.length).fill(null);
@@ -650,33 +701,21 @@ async function main() {
     }
     set('fitment_year_range', p.fitmentYearRange);
 
-    outData.push(row);
+    writeRow(row);
 
     // Fully populate eBay Item Compatibility -- one row per MVL fitment entry
     // (no cap), immediately following the product row per File Exchange format.
-    const iRelationship = templateHeaders.indexOf('Relationship');
-    const iRelationshipDetails = templateHeaders.indexOf('Relationship details');
     for (const f of allFitments) {
       const compatRow = new Array(templateHeaders.length).fill(null);
       compatRow[iRelationship] = 'Compatibility';
       compatRow[iRelationshipDetails] =
         `Make=${f.make || ''}|Model=${f.model || ''}|Year=${f.year || ''}|Trim=${f.trim || ''}|Engine=${f.engine || ''}|Submodel=${f.submodel || ''}`;
-      outData.push(compatRow);
+      writeRow(compatRow);
     }
   }
 
-  // Write output as CSV — XLSX zip compression causes OOM in memory-constrained containers
-  // XLSX.readFile parses CSV natively, and saveToCatalog uses XLSX.readFile to parse
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-  const csvLines = outData.map(row => row.map(cell => {
-    if (cell == null) return '';
-    const s = String(cell);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  }).join(','));
-  const outFile = path.join(OUTPUT_DIR, `US-Motors-Listings-${today}.csv`);
-  fs.writeFileSync(outFile, csvLines.join('\n'));
-  outData.length = 0;
+  if (writeBuffer) fs.writeSync(fd, writeBuffer);
+  fs.closeSync(fd);
   console.log(`Output: ${outFile} (${parts.length} listings, ${allFitments.length} fitment entries)`);
 
   // 8. Generate enrichment report

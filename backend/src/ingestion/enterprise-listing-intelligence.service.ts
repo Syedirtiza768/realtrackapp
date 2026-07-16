@@ -819,8 +819,20 @@ export class EnterpriseListingIntelligenceService {
       };
     }
 
+    // Durable cache: has this exact part type been resolved via the API before
+    // (this job, a prior job, or before the last restart)? If so, reuse it and
+    // skip the live Taxonomy call entirely.
+    const cachedByType = await this.lookupCachedCategoryByPartType(
+      product.partType,
+    );
+    if (cachedByType) {
+      return { ...cachedByType, confidence: 0.8 };
+    }
+
     // Taxonomy API: try progressively broader queries; accept only
     // categories whose ancestor chain includes 6000 (Parts & Accessories).
+    // The first successful resolution for this part type is persisted so no
+    // future part of the same type needs the API again.
     const queries = [
       [product.brand, product.partType, product.title]
         .filter(Boolean)
@@ -831,7 +843,14 @@ export class EnterpriseListingIntelligenceService {
 
     for (const query of queries) {
       const match = await this.findMotorsLeafFromSuggestions(query);
-      if (match) return { ...match, confidence: 0.75 };
+      if (match) {
+        await this.cacheCategoryForPartType(
+          product.partType,
+          match.categoryId,
+          match.categoryName,
+        );
+        return { ...match, confidence: 0.75 };
+      }
     }
 
     // Last resort: find a real leaf under 6000 via the subtree API.
@@ -981,9 +1000,106 @@ export class EnterpriseListingIntelligenceService {
       // The caller will re-resolve via the taxonomy API.
       if (!recognizedAsMotors) return false;
 
+      // Curated keyword IDs and the generic fallback are verified-valid leaves
+      // (see CATEGORY_KEYWORD_ROWS, last verified live 2026-07-13). Trust them
+      // without a live getCategorySubtree call — otherwise every distinct
+      // category triggers a Taxonomy API hit on each cold start (the caches are
+      // per-process), which is what stalled catalog imports after restarts.
+      // Drift (eBay renumbering a leaf) is caught at publish time and by the
+      // periodic EbayCategoryKeywordAuditService, not here.
+      if (
+        EnterpriseListingIntelligenceService.KEYWORD_MOTORS_IDS.has(
+          categoryId,
+        ) ||
+        categoryId === '9886'
+      ) {
+        return true;
+      }
+
+      // Non-curated but DB-recognized categories still get a (per-process
+      // cached) live leaf check.
       return await this.isCurrentlyLeafCategory(categoryId);
     } catch {
       return false;
+    }
+  }
+
+  /** Normalize a part type for use as a durable category-cache key. */
+  private normalizePartTypeKey(partType: string | null | undefined): string {
+    return (partType ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  /**
+   * Durable part-type -> category cache backed by ebay_category_mappings.
+   * Lets a part type resolved once via the Taxonomy API be reused forever
+   * (across jobs and restarts) without another live call.
+   */
+  private async lookupCachedCategoryByPartType(
+    partType: string | null | undefined,
+  ): Promise<{ categoryId: string; categoryName: string } | null> {
+    const norm = this.normalizePartTypeKey(partType);
+    if (!norm) return null;
+    try {
+      const row = await this.categoryMappingRepo
+        .createQueryBuilder('m')
+        .where('m.active = true')
+        .andWhere('m."isMotorsCategory" = true')
+        .andWhere('(LOWER(m."productType") = :norm OR :norm = ANY(m.keywords))', {
+          norm,
+        })
+        .getOne();
+      return row
+        ? { categoryId: row.ebayCategoryId, categoryName: row.ebayCategoryName }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Persist a resolved (part type -> category) mapping so future parts of the
+   * same type skip the Taxonomy API entirely. Never called on API failure, so
+   * a transient rate-limit doesn't permanently pin a part type to "Other".
+   */
+  private async cacheCategoryForPartType(
+    partType: string | null | undefined,
+    categoryId: string,
+    categoryName: string,
+  ): Promise<void> {
+    const norm = this.normalizePartTypeKey(partType);
+    if (!norm || !categoryId) return;
+    try {
+      const existing = await this.categoryMappingRepo.findOne({
+        where: { ebayCategoryId: categoryId },
+      });
+      if (existing) {
+        const kws = existing.keywords ?? [];
+        if (!kws.includes(norm)) {
+          kws.push(norm);
+          await this.categoryMappingRepo.update(
+            { ebayCategoryId: categoryId },
+            { keywords: kws, lastSyncedAt: new Date() },
+          );
+        }
+      } else {
+        await this.categoryMappingRepo.save(
+          this.categoryMappingRepo.create({
+            ebayCategoryId: categoryId,
+            ebayCategoryName: categoryName ?? '',
+            isMotorsCategory: true,
+            active: true,
+            productType: norm,
+            keywords: [norm],
+            lastSyncedAt: new Date(),
+          }),
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to cache category ${categoryId} for part type "${norm}": ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
     }
   }
 

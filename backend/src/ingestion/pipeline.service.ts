@@ -367,6 +367,11 @@ export class PipelineService {
           originalFilename,
         },
         {
+          // Deterministic BullMQ id: a duplicate enqueue for the same pipeline
+          // job (double-submit, retry race) is rejected rather than creating a
+          // second entry that competes for the single worker slot and can end
+          // up an orphaned/zombie lock.
+          jobId: `pipeline-${saved.id}`,
           attempts: 2,
           backoff: { type: 'exponential', delay: 60_000 },
           removeOnComplete: 50,
@@ -848,6 +853,18 @@ export class PipelineService {
     job.createdBy = withCreatedByBackfill(job.createdBy, actorId);
     await this.jobRepo.save(job);
 
+    // Remove any prior deterministic-id entry (BullMQ won't re-add an existing
+    // id, and a completed entry is retained by removeOnComplete) so the retry
+    // actually enqueues.
+    try {
+      const existing = await this.pipelineQueue.getJob(`pipeline-${id}`);
+      if (existing) await existing.remove();
+    } catch (err) {
+      this.logger.warn(
+        `Could not clear prior queue entry for retry ${id}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
     await this.pipelineQueue.add(
       'run-pipeline',
       {
@@ -856,6 +873,7 @@ export class PipelineService {
         originalFilename: job.originalFilename,
       },
       {
+        jobId: `pipeline-${id}`,
         attempts: 2,
         backoff: { type: 'exponential', delay: 60_000 },
       },
