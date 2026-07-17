@@ -1080,7 +1080,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       : null;
 
     const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
-    const mktFile = files.find((f) => {
+    const matchesMarketplace = (f: string): boolean => {
       const lower = f.toLowerCase();
       if (marketplace === 'US')
         return lower.includes('us-motors') || lower.includes('us_motors');
@@ -1089,7 +1089,24 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       if (marketplace === 'AU')
         return lower.startsWith('au-') || lower.startsWith('au_');
       return lower.startsWith('de-') || lower.startsWith('de_');
-    });
+    };
+    // outputDir is reused across every rerun of the same job (path is keyed
+    // only on the job id prefix — see `outputDir` in process()), so a stale
+    // dated file from a prior run (e.g. "...-2026-07-16.csv" alongside a
+    // fresh "...-2026-07-17.csv") can still be sitting there. `.find()` used
+    // to return whichever the filesystem listed first — not necessarily the
+    // new one — silently re-importing stale data even after a successful
+    // rerun. Pick the most recently modified matching file instead.
+    const candidates = files.filter(matchesMarketplace);
+    const mktFile =
+      candidates.length > 1
+        ? candidates
+            .map((f) => ({
+              f,
+              mtime: fs.statSync(path.join(outputDir, f)).mtimeMs,
+            }))
+            .sort((a, b) => b.mtime - a.mtime)[0].f
+        : candidates[0];
     if (!mktFile) {
       this.logger.warn(
         `Job ${jobId}: No ${marketplace} output file found for catalog save`,
