@@ -3,6 +3,7 @@ import {
   buildEbayListingTitle,
   buildStructuredEbayTitle,
   stripListingHtmlBoilerplate,
+  stripPartNameNoise,
   truncateEbayDescription,
   truncateEbayTitle,
   sanitizeEbayDescription,
@@ -134,7 +135,7 @@ describe('buildStructuredEbayTitle', () => {
     expect(title.startsWith('2012-2018 Audi')).toBe(true);
   });
 
-  it('drops optional segments down to essentials when the body is very long', () => {
+  it('drops position/generation/model down to essentials when the body is very long, but keeps a truncated part name rather than dropping it entirely', () => {
     const title = buildStructuredEbayTitle({
       yearRange: '2012-2018',
       make: 'Audi',
@@ -144,8 +145,10 @@ describe('buildStructuredEbayTitle', () => {
       partName: 'X'.repeat(70),
       oemPartNumber: '4G9827279',
     });
-    expect(title).toBe('2012-2018 Audi 4G9827279 OEM Used');
     expect(title.length).toBeLessThanOrEqual(80);
+    expect(title.startsWith('2012-2018 Audi X')).toBe(true);
+    expect(title).toContain('4G9827279');
+    expect(title.endsWith('OEM Used')).toBe(true);
   });
 
   it('drops the OEM Used suffix when even essentials barely fit without it', () => {
@@ -170,6 +173,69 @@ describe('buildStructuredEbayTitle', () => {
     expect(title.length).toBeLessThanOrEqual(80);
     expect(title.endsWith('OEM Used')).toBe(true);
     expect(title.startsWith('2012-2018 Audi')).toBe(true);
+  });
+
+  it('strips supplier-catalog noise from the part name via stripPartNameNoise', () => {
+    expect(
+      stripPartNameNoise('Window Regulator Without Motor D >> - 30.09. Left 1', 'Left'),
+    ).toBe('Window Regulator Without Motor');
+    expect(stripPartNameNoise('Operating Lever For Height Adjustment Left 1 Pr:3l3', 'Left')).toBe(
+      'Operating Lever For Height Adjustment',
+    );
+    expect(stripPartNameNoise('Trim For Switch Left Lhd 1', 'Left')).toBe(
+      'Trim For Switch',
+    );
+    expect(
+      stripPartNameNoise(
+        "Alu-Lamin.Insulation (Self-Adhesive) Adhesives And Sealing Compound ,6 1",
+        null,
+      ),
+    ).toBe('Alu-Lamin.Insulation Adhesives And Sealing Compound ,6');
+    expect(
+      stripPartNameNoise(
+        'Control Unit (Bcm) For Convenience System, Gateway And Onboard Power Supply Also To Be Used For: 7e0 937 089',
+        null,
+      ),
+    ).toBe(
+      'Control Unit For Convenience System, Gateway And Onboard Power Supply',
+    );
+  });
+
+  it('regression: a noisy real-world cType (production-break codes, internal reference codes) no longer starves out the OEM number and "OEM Used" suffix', () => {
+    // Real data from a production pipeline run: raw cType was "Window
+    // Regulator Without Motor D >> - 30.09. Left 1" — the catalog noise alone
+    // pushed the composed title to exactly 80 chars with no OEM number or
+    // suffix at all. Cleaning the noise first recovers enough budget to keep
+    // the full guideline structure intact.
+    const title = buildStructuredEbayTitle({
+      yearRange: '1950-2019',
+      make: 'Volkswagen',
+      model: 'Beetle',
+      position: 'Left',
+      partName: 'Window Regulator Without Motor D >> - 30.09. Left 1',
+      oemPartNumber: '5C5 837 461 B',
+    });
+    expect(title.length).toBeLessThanOrEqual(80);
+    expect(title).toContain('5C5 837 461 B');
+    expect(title.endsWith('OEM Used')).toBe(true);
+    expect(title).not.toContain('>>');
+    expect(title).not.toContain('30.09');
+  });
+
+  it('abbreviates an over-long part name before dropping position/generation/model, keeping the full house structure intact', () => {
+    const title = buildStructuredEbayTitle({
+      yearRange: '2012-2018',
+      make: 'Audi',
+      model: 'A6',
+      generation: 'C7',
+      position: 'Front Left',
+      partName: 'Manual Adjustment Reinforcement Assembly Without Regulator',
+      oemPartNumber: '4G9827279',
+    });
+    expect(title).toBe(
+      '2012-2018 Audi A6 C7 Front Left Man Adj Reinf Asm w/o Reg 4G9827279 OEM Used',
+    );
+    expect(title.length).toBeLessThanOrEqual(80);
   });
 
   it('caps a multi-value oemPartNumber to its first entry instead of starving out year/model/part name', () => {

@@ -112,15 +112,99 @@ const EBAY_TITLE_STRUCTURED_KEYS = [
   'oemPartNumber',
 ] as const;
 
-/** Optional segments dropped in priority order (least valuable first) when the
- * composed title exceeds the limit. Year range, make, and OEM part number are
- * always retained because they anchor buyer search. */
-const EBAY_TITLE_DROPPABLE_KEYS = [
-  'position',
-  'generation',
-  'model',
-  'partName',
-] as const;
+/** Optional segments dropped whole, in priority order (least valuable first),
+ * when the composed title exceeds the limit. Year range, make, and OEM part
+ * number are always retained because they anchor buyer search. `partName`
+ * is deliberately excluded — it is never dropped wholesale (see
+ * `compactPartName` / the segment-local truncation in
+ * `buildStructuredEbayTitle`), only cleaned, abbreviated, and — as a last
+ * resort — truncated to whatever budget remains, so a title never publishes
+ * with no part description at all. */
+const EBAY_TITLE_DROPPABLE_KEYS = ['position', 'generation', 'model'] as const;
+
+/** Supplier-catalog noise that can appear anywhere in a raw `cType` part
+ * name — production-break date codes, "used for" catalog notes, and
+ * parenthetical asides. None of this is buyer search intent; stripping it
+ * recovers character budget without losing meaning. */
+const PART_NAME_NOISE_PATTERNS: RegExp[] = [
+  // "Only/Also To Be Used For: ..." catalog notes — drop from the marker on.
+  /\b(?:Only|Also)?\s*To Be Used For\s*:.*$/gi,
+  // Production-break / date-validity codes: "D >> - 30.09.", "D - 01.07.>> - 30.04."
+  /\bD\s*(?:>>)?\s*-?\s*\d{1,2}\.\d{1,2}\.\s*(?:>>)?\s*(?:-\s*\d{1,2}\.\d{1,2}\.)?/gi,
+  // Parenthetical asides, e.g. "(Bcm)", "(Self-Adhesive)"
+  /\([^)]*\)/g,
+];
+
+/** Conservative abbreviations for common overflow terms in automotive part
+ * names — applied only when the cleaned part name still doesn't fit, so
+ * normal short titles stay in plain English (matching the guideline
+ * samples). */
+const PART_NAME_ABBREVIATIONS: Array<[RegExp, string]> = [
+  [/\bAssembly\b/gi, 'Asm'],
+  [/\bWithout\b/gi, 'w/o'],
+  [/\bRegulator\b/gi, 'Reg'],
+  [/\bReinforcement\b/gi, 'Reinf'],
+  [/\bAdjustment\b/gi, 'Adj'],
+  [/\bConvenience\b/gi, 'Conv'],
+  [/\bOccupied\b/gi, 'Occ'],
+  [/\bSupply\b/gi, 'Sply'],
+  [/\bTransverse\b/gi, 'Trans'],
+  [/\bManual\b/gi, 'Man'],
+  [/\bPassenger\b/gi, 'Pass'],
+  [/\bAdhesive\b/gi, 'Adh'],
+  [/\bInsulation\b/gi, 'Insul'],
+  [/\bSectional Part\b/gi, 'Section'],
+  [/\bControl Unit\b/gi, 'Ctrl Unit'],
+];
+
+/** Strip supplier-catalog noise from a raw part name, and any trailing word
+ * that only duplicates the position segment (e.g. partName "...Left" when
+ * position is already "Left"). Deterministic — no AI call needed.
+ *
+ * Trailing tokens (internal reference codes, LHD/RHD market markers, lone
+ * quantity digits, a duplicated position word) stack in varying order at the
+ * end of raw catalog text — e.g. "...Left 1", "...Left Lhd 1", "...1 Pr:3l3"
+ * — so they're stripped in an iterative pass rather than a single fixed-order
+ * regex sweep, which would miss whichever token wasn't already last. */
+export function stripPartNameNoise(
+  raw: string,
+  position?: string | null,
+): string {
+  let s = raw;
+  for (const pattern of PART_NAME_NOISE_PATTERNS) {
+    s = s.replace(pattern, ' ');
+  }
+  s = normalizeListingText(s);
+
+  const positionWords = position?.trim()
+    ? position.trim().split(/\s+/).map((w) => w.toLowerCase())
+    : [];
+
+  for (let i = 0; i < 6; i++) {
+    const before = s;
+    s = s.replace(/\s*\bPr\s*:\s*\w+\s*$/i, ''); // internal ref code, e.g. "Pr:3l3"
+    s = s.replace(/\s*\b[LR]hd\s*$/i, ''); // LHD/RHD market marker
+    s = s.replace(/\s+\d+\s*$/, ''); // trailing lone quantity digit(s)
+    const lastWord = s.match(/\b(\w+)\s*$/);
+    if (lastWord && positionWords.includes(lastWord[1].toLowerCase())) {
+      s = s.slice(0, lastWord.index).trimEnd();
+    }
+    s = s.replace(/[,;:\-–]+\s*$/, '').trim();
+    if (s === before) break;
+  }
+
+  return normalizeListingText(s);
+}
+
+/** Apply the abbreviation dictionary to shrink an over-budget part name
+ * while keeping it readable, rather than truncating it blind. */
+function abbreviatePartName(name: string): string {
+  let s = name;
+  for (const [pattern, replacement] of PART_NAME_ABBREVIATIONS) {
+    s = s.replace(pattern, replacement);
+  }
+  return normalizeListingText(s);
+}
 
 /**
  * Deterministically compose an eBay Motors listing title following the house
@@ -148,6 +232,13 @@ export function buildStructuredEbayTitle(
     if (key === 'oemPartNumber' && value) {
       value = value.split(/[,;]/)[0]?.trim();
     }
+    // Raw supplier `cType` part names carry catalog noise (production-break
+    // date codes, internal reference codes, LHD/RHD market markers) that has
+    // nothing to do with buyer search — strip it before it eats into the
+    // 80-char budget that OEM#/"OEM Used" need.
+    if (key === 'partName' && value) {
+      value = stripPartNameNoise(value, input.position);
+    }
     if (value) segmentsByKey[key] = value;
   }
 
@@ -173,6 +264,18 @@ export function buildStructuredEbayTitle(
     return normalizeListingText(fullWithSuffix);
   }
 
+  // Shrink an over-long part name via the abbreviation dictionary *before*
+  // dropping any structural segment — abbreviating wording is less
+  // destructive than dropping position/generation/model wholesale, so try it
+  // first in case it alone brings the title back under budget.
+  if (segmentsByKey.partName) {
+    segmentsByKey.partName = abbreviatePartName(segmentsByKey.partName);
+    const fullWithSuffixAbbrev = withSuffixOf(noneDropped);
+    if (fullWithSuffixAbbrev.length <= maxLength) {
+      return normalizeListingText(fullWithSuffixAbbrev);
+    }
+  }
+
   // Progressively drop optional segments (least valuable first), preferring a
   // result that keeps the "OEM Used" suffix. Track the least-dropped body
   // that fits without the suffix as a fallback.
@@ -192,6 +295,51 @@ export function buildStructuredEbayTitle(
       bestCoreDropped = next;
     }
     dropped = next;
+  }
+
+  // position/generation/model are all gone; only yearRange/make/partName/
+  // oemPartNumber remain (whichever are present). Never drop partName
+  // wholesale from here — it's already abbreviated above; shrink only that
+  // segment to whatever budget is left, so year/make/OEM#/"OEM Used" are
+  // never sacrificed to an over-long part description.
+  if (segmentsByKey.partName) {
+    const fixedLen = coreOf(new Set([...dropped, 'partName'])).length;
+    const separator = fixedLen > 0 ? 1 : 0;
+    const suffixLen = EBAY_TITLE_SUFFIX.length + 1;
+
+    const budgetWithSuffix = maxLength - fixedLen - separator - suffixLen;
+    if (budgetWithSuffix > 0) {
+      const truncated = truncateAtWord(
+        segmentsByKey.partName,
+        budgetWithSuffix,
+      );
+      if (truncated) {
+        segmentsByKey.partName = truncated;
+        const candidate = withSuffixOf(dropped);
+        if (candidate.length <= maxLength) {
+          return normalizeListingText(candidate);
+        }
+      }
+    }
+
+    const budgetNoSuffix = maxLength - fixedLen - separator;
+    if (budgetNoSuffix > 0) {
+      const truncated = truncateAtWord(
+        segmentsByKey.partName,
+        budgetNoSuffix,
+      );
+      if (truncated) {
+        segmentsByKey.partName = truncated;
+        return normalizeListingText(coreOf(dropped));
+      }
+    }
+
+    // No room even for a single word of the part name — drop it as an
+    // absolute last resort so essentials (year/make/OEM#) still publish.
+    delete segmentsByKey.partName;
+    dropped = new Set([...dropped, 'partName']);
+    bestCoreDropped =
+      bestCoreDropped ?? (coreOf(dropped).length <= maxLength ? new Set(dropped) : null);
   }
 
   // No combination fits with the suffix — use the least-dropped body that fits
