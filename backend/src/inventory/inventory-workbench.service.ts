@@ -882,10 +882,15 @@ export class InventoryWorkbenchService {
           `model=${enrichmentResult.model} score=${enrichmentResult.validationScore}`,
       );
     } catch (err) {
-      this.logger.warn(
+      // Do not swallow this: AI enrichment is what produces the suggested
+      // category, MPN/OEM numbers, and title fields. Continuing silently
+      // let listings reach "completed" with only raw vision data and no
+      // category/fitment, masking real failures from the retry tracker.
+      this.logger.error(
         `Inline enrich [enrichment]: AI enrichment failed for listing ${listingId}: ` +
-          `${err instanceof Error ? err.message : err} — continuing with vision lookup data`,
+          `${err instanceof Error ? err.message : err}`,
       );
+      throw err;
     }
 
     // Save enrichment results to base listing

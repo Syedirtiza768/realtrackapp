@@ -125,7 +125,15 @@ export class OpenAiService implements OnModuleInit {
     );
 
     const latencyMs = Date.now() - startMs;
-    const rawContent = response.choices[0]?.message?.content ?? '';
+    const choice = response.choices?.[0];
+    if (!choice) {
+      const upstreamError = (response as { error?: { message?: string } })
+        ?.error?.message;
+      throw new Error(
+        `AI response missing choices (possible upstream refusal/error): ${upstreamError ?? 'empty choices array'}`,
+      );
+    }
+    const rawContent = choice.message?.content ?? '';
     const usage = response.usage;
 
     const promptTokens = usage?.prompt_tokens ?? 0;
@@ -153,7 +161,7 @@ export class OpenAiService implements OnModuleInit {
       content,
       rawContent,
       model,
-      finishReason: response.choices[0]?.finish_reason ?? 'unknown',
+      finishReason: choice.finish_reason ?? 'unknown',
       usage: { promptTokens, completionTokens, totalTokens },
       latencyMs,
       estimatedCostUsd: cost,

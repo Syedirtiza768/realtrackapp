@@ -53,7 +53,6 @@ const TRANSIENT_MARKERS = [
   '504',
   'overloaded',
   'insufficient_quota',
-  'openai',
   'context_length_exceeded',
   'circuit open',
 ];
@@ -79,6 +78,15 @@ const PERMANENT_MARKERS = [
   'missing required',
   'no images',
   'validation failed',
+  // Image exceeds the AI vision provider's size limit — will never
+  // succeed on blind retry without a resize step upstream.
+  'cannot exceed',
+  // Internal TypeErrors/ReferenceErrors are code bugs, not API conditions;
+  // retrying them blindly just burns 5 attempts (~10hrs) before failing
+  // anyway. Fail fast so they surface for a real code fix.
+  'cannot read propert',
+  'is not a function',
+  'is not defined',
 ];
 
 @Injectable()
@@ -290,22 +298,26 @@ export class EnrichmentRetryService {
       `Enrichment retry scan: found ${dueListings.length} listing(s) due for retry`,
     );
 
+    // Fetch the queue snapshot once per scan instead of once per listing —
+    // this loop previously re-scanned the entire BullMQ queue for every
+    // due listing, turning an O(1) scan into an O(n) Redis hammering.
+    const pendingJobs = await this.inventoryQueue.getJobs([
+      'waiting',
+      'active',
+      'delayed',
+    ]);
+    const queuedListingIds = new Set(
+      pendingJobs
+        .filter((job) => job.name === 'auto-enrich')
+        .map((job) => (job.data as { listingId: string }).listingId),
+    );
+
     let enqueued = 0;
     let skipped = 0;
 
     for (const listing of dueListings) {
       try {
-        // Check no existing job in queue
-        const pendingJobs = await this.inventoryQueue.getJobs([
-          'waiting',
-          'active',
-          'delayed',
-        ]);
-        const alreadyQueued = pendingJobs.some(
-          (job) =>
-            job.name === 'auto-enrich' &&
-            (job.data as { listingId: string }).listingId === listing.id,
-        );
+        const alreadyQueued = queuedListingIds.has(listing.id);
 
         if (alreadyQueued) {
           skipped++;

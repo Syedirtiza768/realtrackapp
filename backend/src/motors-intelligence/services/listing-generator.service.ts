@@ -521,7 +521,15 @@ export class ListingGeneratorService {
       });
 
       const latencyMs = Date.now() - startTime;
-      const rawContent = response.choices[0]?.message?.content || '{}';
+      const choice = response.choices?.[0];
+      if (!choice) {
+        const upstreamError = (response as { error?: { message?: string } })
+          ?.error?.message;
+        throw new Error(
+          `AI listing-generation response missing choices (possible upstream refusal/error): ${upstreamError ?? 'empty choices array'}`,
+        );
+      }
+      const rawContent = choice.message?.content || '{}';
       const parsed = JSON.parse(rawContent);
       const usage = response.usage;
       const promptTokens = usage?.prompt_tokens ?? 0;
