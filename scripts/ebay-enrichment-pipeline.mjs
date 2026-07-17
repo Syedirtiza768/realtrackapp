@@ -167,6 +167,19 @@ function extractPosition(desc) {
 const POSITION_STRIP = /\b(front|fr|rear|rr|left|lh|driver|right|rh|passenger|upper|lower|inner|outer)\b/gi;
 // Listing boilerplate that duplicates the deterministic "OEM Used" title suffix.
 const BOILERPLATE_STRIP = /\b(used|oem|oe|genuine|original)\b/gi;
+// Supplier-catalog noise unrelated to buyer search intent: production-break
+// date-validity codes ("D >> - 30.09."), internal reference codes ("Pr:3l3"),
+// LHD/RHD market markers, parenthetical asides, and "used for" catalog notes.
+// Left uncleaned, this noise ate the character budget that the OEM part
+// number and "OEM Used" suffix need, and buildTitle's old fallback
+// (`substring(0, 77) + '...'`) silently dropped both entirely on overflow.
+const CATALOG_NOISE_STRIP = [
+  /\b(?:Only|Also)?\s*To Be Used For\s*:.*$/gi,
+  /\bD\s*(?:>>)?\s*-?\s*\d{1,2}\.\d{1,2}\.\s*(?:>>)?\s*(?:-\s*\d{1,2}\.\d{1,2}\.)?/gi,
+  /\bPr\s*:\s*\w+\b/gi,
+  /\b[LR]hd\b/gi,
+  /\([^)]*\)/g,
+];
 
 function cleanPartName(desc, make, model) {
   // Strip VIN, year, make, model, position words, and OEM/Used boilerplate so
@@ -176,6 +189,9 @@ function cleanPartName(desc, make, model) {
   let name = String(desc || '');
   name = name.replace(/\b[A-HJ-NPR-Z0-9]{17}\b/gi, ''); // VIN
   name = name.replace(/\bVIN\s*[:.]?\s*/gi, '');
+  for (const pattern of CATALOG_NOISE_STRIP) {
+    name = name.replace(pattern, ' ');
+  }
   name = name.replace(/\b(19|20)\d{2}\b/g, ''); // year
   if (make) {
     const mk = make.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -187,6 +203,11 @@ function cleanPartName(desc, make, model) {
   }
   name = name.replace(POSITION_STRIP, ' ');
   name = name.replace(BOILERPLATE_STRIP, ' ');
+  // Normalize whitespace before the trailing-digit check below — an earlier
+  // replacement (e.g. stripping "Pr:3l3") can leave trailing spaces after a
+  // lone quantity digit, which would otherwise block the \d+$ end anchor.
+  name = name.replace(/\s+/g, ' ').trim();
+  name = name.replace(/\s+\d+$/, ''); // trailing lone quantity/item-count digit(s)
   name = name.replace(/[,\-]+$/g, '').trim();
   name = name.replace(/\s+/g, ' ').trim();
   return name;
@@ -238,28 +259,103 @@ function resolveCategory(partName, rawDesc) {
   return best ? { id: best.id, name: best.name } : FALLBACK_CATEGORY;
 }
 
-// ── Title building per eBay guidelines ──
-function buildTitle(vehicle, partName, partNumber, position) {
-  // Template: [Year Range] [Make] [Model] [Position] [Part Name] [OEM Part#] OEM Used
-  const parts = [];
-  if (vehicle.year) parts.push(String(vehicle.year));
-  if (vehicle.make) parts.push(vehicle.make);
-  if (vehicle.model) parts.push(vehicle.model);
-  if (position) parts.push(position);
-  if (partName) parts.push(titleCase(partName));
-  if (partNumber) parts.push(partNumber);
-  parts.push('OEM Used');
+// Conservative abbreviations for common overflow terms in automotive part
+// names, tried before touching year/make/model/position/OEM# — applied only
+// when the full title doesn't fit, so normal short titles stay plain English.
+const PART_NAME_ABBREVIATIONS = [
+  [/\bAssembly\b/gi, 'Asm'],
+  [/\bWithout\b/gi, 'w/o'],
+  [/\bRegulator\b/gi, 'Reg'],
+  [/\bReinforcement\b/gi, 'Reinf'],
+  [/\bAdjustment\b/gi, 'Adj'],
+  [/\bConvenience\b/gi, 'Conv'],
+  [/\bOccupied\b/gi, 'Occ'],
+  [/\bSupply\b/gi, 'Sply'],
+  [/\bTransverse\b/gi, 'Trans'],
+  [/\bManual\b/gi, 'Man'],
+  [/\bPassenger\b/gi, 'Pass'],
+  [/\bAdhesive\b/gi, 'Adh'],
+  [/\bInsulation\b/gi, 'Insul'],
+  [/\bSectional Part\b/gi, 'Section'],
+  [/\bControl Unit\b/gi, 'Ctrl Unit'],
+];
 
-  let title = parts.filter(Boolean).join(' ');
-  // Enforce 80-char limit
-  if (title.length > 80) {
-    // Try dropping "OEM Used" first
-    title = title.replace(/\s*OEM Used$/, '');
-    if (title.length > 80) {
-      title = title.substring(0, 77) + '...';
+function abbreviatePartName(name) {
+  let s = name;
+  for (const [pattern, replacement] of PART_NAME_ABBREVIATIONS) {
+    s = s.replace(pattern, replacement);
+  }
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+function truncateAtWord(text, maxLength) {
+  const s = String(text || '').trim();
+  if (maxLength <= 0) return '';
+  if (s.length <= maxLength) return s;
+  const cut = s.slice(0, maxLength);
+  const lastSpace = cut.lastIndexOf(' ');
+  return lastSpace > maxLength * 0.5 ? cut.slice(0, lastSpace).trim() : cut.trim();
+}
+
+// ── Title building per eBay guidelines ──
+// Template: [Year Range] [Make] [Model] [Position] [Part Name] [OEM Part#] OEM Used
+//
+// year/make/model/position and the OEM part number anchor buyer search and
+// are never dropped or truncated. When the full title overflows 80 chars,
+// only the part name degrades — first via the abbreviation dictionary, then
+// (if still over budget) truncated at a word boundary to whatever room is
+// left. This replaces the old `substring(0, 77) + '...'` fallback, which
+// blindly sliced the *whole* assembled title and silently dropped the OEM
+// number and "OEM Used" suffix on any sufficiently long part description.
+function buildTitle(vehicle, partName, partNumber, position) {
+  const SUFFIX = 'OEM Used';
+  const fixed = [vehicle.year, vehicle.make, vehicle.model, position]
+    .map((v) => (v ? String(v).trim() : ''))
+    .filter(Boolean);
+  const oem = partNumber ? String(partNumber).trim() : '';
+
+  const compose = (name, includeSuffix) => {
+    const core = [...fixed, name, oem].filter(Boolean).join(' ');
+    return includeSuffix && core ? `${core} ${SUFFIX}` : core;
+  };
+
+  let name = partName ? titleCase(partName) : '';
+
+  let title = compose(name, true);
+  if (title.length <= 80) return title;
+
+  if (name) {
+    name = abbreviatePartName(name);
+    title = compose(name, true);
+    if (title.length <= 80) return title;
+  }
+
+  const fixedCore = [...fixed, oem].filter(Boolean).join(' ');
+  const separator = fixedCore ? 1 : 0;
+  const suffixLen = SUFFIX.length + 1;
+
+  const budgetWithSuffix = 80 - fixedCore.length - separator - suffixLen;
+  if (name && budgetWithSuffix > 0) {
+    const truncated = truncateAtWord(name, budgetWithSuffix);
+    if (truncated) {
+      const candidate = compose(truncated, true);
+      if (candidate.length <= 80) return candidate;
     }
   }
-  return title;
+
+  const budgetNoSuffix = 80 - fixedCore.length - separator;
+  if (name && budgetNoSuffix > 0) {
+    const truncated = truncateAtWord(name, budgetNoSuffix);
+    if (truncated) return compose(truncated, false);
+  }
+
+  // No room even for a sliver of the part name — drop it as an absolute last
+  // resort so essentials (year/make/model/position/OEM#) still publish.
+  title = compose('', true);
+  if (title.length <= 80) return title;
+  title = compose('', false);
+  if (title.length <= 80) return title;
+  return truncateAtWord(fixedCore, 80);
 }
 
 // ── HTML Description builder — minimal inline-styled, no CSS bloat ──
