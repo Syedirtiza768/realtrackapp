@@ -15,12 +15,14 @@ import { EbayAccountMarketplace } from '../integrations/ebay/entities/ebay-accou
 import { EbayBusinessPolicy } from '../integrations/ebay/entities/ebay-business-policy.entity.js';
 import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { ListingStoreOverride } from '../integrations/ebay/entities/listing-store-override.entity.js';
+import { EbayCategory } from '../listings/entities/ebay-category.entity.js';
 import { InventoryService } from './inventory.service.js';
 import { InventoryWorkbenchService } from './inventory-workbench.service.js';
 import { InventoryAutoTriggerService } from './inventory-auto-trigger.service.js';
 import { InventoryEditorService } from './inventory-editor.service.js';
 import { InventoryPublishService } from './inventory-publish.service.js';
 import { EnrichmentRetryService } from './enrichment-retry.service.js';
+import { PartIdentificationService } from './part-identification.service.js';
 import { InventoryController } from './inventory.controller.js';
 import { InventoryEditorController } from './inventory-editor.controller.js';
 import { InventorySyncProcessor } from './processors/inventory-sync.processor.js';
@@ -49,6 +51,7 @@ import { StorageModule } from '../storage/storage.module.js';
       EbayBusinessPolicy,
       EbayListingChannel,
       ListingStoreOverride,
+      EbayCategory,
     ]),
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
@@ -67,6 +70,7 @@ import { StorageModule } from '../storage/storage.module.js';
     InventoryPublishService,
     InventorySyncProcessor,
     EnrichmentRetryService,
+    PartIdentificationService,
   ],
   exports: [
     InventoryService,

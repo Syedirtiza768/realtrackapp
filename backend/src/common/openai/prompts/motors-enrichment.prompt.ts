@@ -8,8 +8,9 @@ const FULL_NOTE = `profile=full: interchangeHints optional (max 3 cross-platform
 
 export const MOTORS_ENRICHMENT_FULL_PROMPT: PromptTemplate = {
   name: 'motors-enrichment-full',
-  systemPrompt: `Automotive parts eBay listing copywriter. Return JSON with title (≤80), HTML description, brand, type, mpn, itemSpecifics, interchangeHints[], technicalNotes.
+  systemPrompt: `Automotive parts eBay listing copywriter. Return JSON with title (≤80), HTML description, brand, type, mpn, placement, itemSpecifics, interchangeHints[], technicalNotes.
 Rules: use provided MPN only; do not emit compatibility[] — fitment expanded from MVL separately.
+placement: the part's physical position on the vehicle when applicable, e.g. "Front Left", "Rear Right", "Front", "Rear" — combine side (Left/Right) and end (Front/Rear) when both apply. Use null if the part has no positional variant (e.g. an ECU or a universal accessory).
 TITLE RULE: The title MUST reflect the actual condition from rawData.condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used". NEVER include VIN numbers or duplicate make/model in the title.
 TITLE STRUCTURE (strictly follow): [Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used
 Example: 2012-2018 Audi A6 C7 Front Left Fog Light 8T0941699E OEM Used
@@ -23,7 +24,8 @@ ${FULL_NOTE}`,
 
 export const MOTORS_ENRICHMENT_COMPACT_PROMPT: PromptTemplate = {
   name: 'motors-enrichment-compact',
-  systemPrompt: `Automotive parts eBay listing copywriter. Return JSON with title (≤80), HTML description, brand, type, mpn, itemSpecifics. interchangeHints MUST be [].
+  systemPrompt: `Automotive parts eBay listing copywriter. Return JSON with title (≤80), HTML description, brand, type, mpn, placement, itemSpecifics. interchangeHints MUST be [].
+placement: the part's physical position on the vehicle when applicable, e.g. "Front Left", "Rear Right", "Front", "Rear" — combine side (Left/Right) and end (Front/Rear) when both apply. Use null if the part has no positional variant (e.g. an ECU or a universal accessory).
 TITLE RULE: The title MUST reflect the actual condition from rawData.condition. If condition is Used/Refurbished, do NOT include "New" in the title — use "Used" or "OEM Used" instead. If condition is New, do NOT include "Used". NEVER include VIN numbers or duplicate make/model in the title.
 TITLE STRUCTURE (strictly follow): [Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used
 Example: 2012-2018 Audi A6 C7 Front Left Fog Light 8T0941699E OEM Used

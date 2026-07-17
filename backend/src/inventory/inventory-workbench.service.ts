@@ -26,7 +26,14 @@ import { FitmentDiscoveryService } from '../listing-optimization/fitment-discove
 import type { InventoryListingsQueryDto } from './dto/inventory-workbench.dto.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import { EnrichmentPipeline } from '../common/openai/pipelines/enrichment.pipeline.js';
+import { ModelRouter } from '../common/openai/model-router.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import { PartIdentificationService } from './part-identification.service.js';
+import { buildStructuredEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
+import {
+  alignGenerationAndYearRange,
+  parseYearRange,
+} from '../fitment/platform-generation.util.js';
 import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
 import {
   translatePartNameToGerman,
@@ -169,7 +176,9 @@ export class InventoryWorkbenchService {
     private readonly autoTrigger: InventoryAutoTriggerService,
     private readonly listingGenPipeline: ListingGenerationPipeline,
     private readonly enrichmentPipeline: EnrichmentPipeline,
+    private readonly modelRouter: ModelRouter,
     private readonly taxonomy: EbayTaxonomyApiService,
+    private readonly partIdentification: PartIdentificationService,
     private readonly fitmentDiscovery: FitmentDiscoveryService,
     private readonly storageService: StorageService,
   ) {}
@@ -823,9 +832,31 @@ export class InventoryWorkbenchService {
 
     const imageUrls = parseImageUrls(baseListing.itemPhotoUrl);
 
+    // Stage 1.5: corroborate the vision/OEM-text identified brand+MPN against
+    // live eBay catalog listings via the Browse API. Evidence, not a gate —
+    // a legitimately rare part can have zero matching listings.
+    this.logger.log(`Inline enrich [browse_identify]: listing ${listingId}`);
+    const browseCorroboration =
+      await this.partIdentification.identifyAndCorroborate({
+        brand: baseListing.cBrand,
+        mpn: baseListing.cManufacturerPartNumber,
+        oemNumber: baseListing.cOeOemPartNumber,
+      });
+    if (browseCorroboration.checked) {
+      this.logger.log(
+        `Inline enrich [browse_identify]: listing ${listingId} — ` +
+          `found=${browseCorroboration.found}` +
+          (browseCorroboration.found
+            ? ` category="${browseCorroboration.categoryName}" (${browseCorroboration.categoryId})`
+            : ''),
+      );
+    }
+
     // Stage 2: Full AI enrichment (EnrichmentPipeline)
     this.logger.log(`Inline enrich [enrichment]: listing ${listingId}`);
     await setStage('enrichment');
+    let enrichmentGateFailReason: string | null = null;
+    let enrichedPlacement: string | null = null;
     try {
       const enrichInput: Record<string, unknown> = {
         sku: baseListing.customLabelSku,
@@ -844,9 +875,34 @@ export class InventoryWorkbenchService {
         donorModel: baseListing.extractedModel,
         imageUrls,
         image_count: imageUrls.length,
+        browseCatalogChecked: browseCorroboration.checked,
+        browseCatalogFound: browseCorroboration.found,
       };
       const enrichmentResult =
         await this.enrichmentPipeline.enrich(enrichInput);
+      enrichedPlacement = enrichmentResult.placement;
+
+      // AI-driven validity check: EnrichmentPipeline already computes a real
+      // score + hard/soft fails via ListingQualityValidator, but nothing
+      // previously acted on it — every result was applied unconditionally.
+      // Gate on it here instead of trusting the AI's output blindly.
+      const autoApproveMinScore =
+        this.modelRouter.getThresholds().autoApproveMinScore;
+      const passedGate = enrichmentResult.passedGate ?? true;
+      const score = enrichmentResult.validationScore ?? 100;
+      if (!passedGate || score < autoApproveMinScore) {
+        const reasons = [
+          ...(enrichmentResult.hardFails ?? []),
+          ...(!passedGate
+            ? []
+            : [`SCORE_BELOW_THRESHOLD:${score}<${autoApproveMinScore}`]),
+        ];
+        enrichmentGateFailReason = `ai_validation_gate: ${reasons.join(', ') || 'unspecified'}`;
+        this.logger.warn(
+          `Inline enrich [enrichment]: listing ${listingId} failed validation gate ` +
+            `(score=${score}, passedGate=${passedGate}) — ${enrichmentGateFailReason}`,
+        );
+      }
 
       // Apply enrichment results back to the base listing
       if (enrichmentResult.title)
@@ -862,7 +918,18 @@ export class InventoryWorkbenchService {
         baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
       if (enrichmentResult.features?.length)
         baseListing.cFeatures = enrichmentResult.features.join(' | ');
-      if (enrichmentResult.suggestedCategory) {
+      if (browseCorroboration.found && browseCorroboration.categoryId) {
+        // Real matching listings already told us the category — more
+        // authoritative than a Taxonomy suggestion guess, and skips that
+        // API call entirely.
+        baseListing.categoryId = browseCorroboration.categoryId;
+        baseListing.categoryName =
+          browseCorroboration.categoryName ?? browseCorroboration.categoryId;
+        this.logger.log(
+          `Category from Browse API corroboration for listing ${listingId}: ` +
+            `"${baseListing.categoryName}" (${baseListing.categoryId})`,
+        );
+      } else if (enrichmentResult.suggestedCategory) {
         baseListing.categoryName = enrichmentResult.suggestedCategory;
         for (const query of this.buildCategoryQueryCandidates(baseListing)) {
           const resolved = await this.resolveCategoryFromQuery(query, 'US');
@@ -875,6 +942,14 @@ export class InventoryWorkbenchService {
             break;
           }
         }
+      }
+
+      if (baseListing.categoryId) {
+        // Fire-and-forget: grows the durable ebay_categories truth table.
+        // The service catches its own errors — never let this block enrichment.
+        void this.partIdentification.ensureCategoryCached(
+          baseListing.categoryId,
+        );
       }
 
       this.logger.log(
@@ -1117,18 +1192,39 @@ export class InventoryWorkbenchService {
     // Upsert the catalog product master row so the catalog detail page has a
     // categoryId / fitmentData source even without a batch pipeline run.
     await this.upsertCatalogProductFromListing(baseListing);
-    const fitmentRowCount = await this.discoverAndPersistFitment(
+    const { count: fitmentRowCount, rows: fitmentRows } =
+      await this.discoverAndPersistFitment(baseListing, listingId);
+
+    // Stage 5: deterministic title composition. Replaces the free-text LLM
+    // title with a guaranteed [Year Range][Make][Model/Generation][Position]
+    // [Part Name][OEM#] "OEM Used" structure, using the now-validated fitment
+    // rows for year range instead of trusting the model to have followed the
+    // prose instruction correctly.
+    const composedTitle = this.composeDeterministicTitle(
       baseListing,
-      listingId,
+      fitmentRows,
+      enrichedPlacement,
     );
+    if (composedTitle) {
+      baseListing.title = composedTitle;
+      await this.listingRepo.update(listingId, { title: composedTitle });
+      this.logger.log(
+        `Inline enrich: deterministic title for listing ${listingId}: "${composedTitle}"`,
+      );
+    }
 
     const hasCategory = anyCategoryResolved || Boolean(baseListing.categoryId);
     const hasFitment = fitmentRowCount > 0;
     const finalStage =
-      hasCategory && hasFitment
+      hasCategory && hasFitment && !enrichmentGateFailReason
         ? INLINE_ENRICH_STAGES.COMPLETED
         : INLINE_ENRICH_STAGES.NEEDS_REVIEW;
     await setStage(finalStage);
+    if (finalStage === INLINE_ENRICH_STAGES.NEEDS_REVIEW && enrichmentGateFailReason) {
+      await this.listingRepo.update(listingId, {
+        enrichmentLastFailureReason: enrichmentGateFailReason,
+      } as Partial<ListingRecord>);
+    }
 
     this.logger.log(
       `Inline enrich [${finalStage}]: listing ${listingId} (SKU ${sku}) — ` +
@@ -1211,16 +1307,58 @@ export class InventoryWorkbenchService {
     return null;
   }
 
+  /**
+   * Deterministically assemble a title from structured fields per the eBay
+   * Motors listing guideline: [Year Range] [Make] [Model/Generation]
+   * [Position] [Part Name] [OEM Part Number] OEM Used. Returns '' when there
+   * aren't enough segments to build anything meaningful, so the caller can
+   * keep the existing (LLM-generated) title as a fallback.
+   */
+  private composeDeterministicTitle(
+    listing: ListingRecord,
+    fitmentRows: Array<Record<string, unknown>>,
+    placement: string | null,
+  ): string {
+    const make = listing.extractedMake?.trim() || listing.cBrand?.trim() || '';
+    const firstRowModel = fitmentRows
+      .map((r) => String(r.Model ?? r.model ?? '').trim())
+      .find(Boolean);
+    const model = listing.extractedModel?.trim() || firstRowModel || '';
+
+    const fitmentYears: number[] = [];
+    for (const row of fitmentRows) {
+      const parsed = parseYearRange(String(row.Year ?? row.year ?? ''));
+      if (parsed) fitmentYears.push(parsed.min, parsed.max);
+    }
+
+    const aligned = alignGenerationAndYearRange({
+      make,
+      model,
+      anchorYear: fitmentYears[0] ?? null,
+      fitmentYears,
+    });
+
+    return buildStructuredEbayTitle({
+      yearRange: aligned.yearRange || null,
+      make: make || null,
+      model: model || null,
+      generation: aligned.generation || null,
+      position: placement,
+      partName: listing.cType,
+      oemPartNumber: listing.cOeOemPartNumber || listing.cManufacturerPartNumber,
+    });
+  }
+
   private async discoverAndPersistFitment(
     listing: ListingRecord,
     listingId: string,
-  ): Promise<number> {
-    if (!listing.customLabelSku) return 0;
+  ): Promise<{ count: number; rows: Array<Record<string, unknown>> }> {
+    if (!listing.customLabelSku) return { count: 0, rows: [] };
     try {
       const product = await this.productRepo.findOne({
         where: { sku: listing.customLabelSku },
       });
-      if (!product) return 0;
+      if (!product) return { count: 0, rows: [] };
 
       if (
         !product.fitmentData &&
@@ -1293,13 +1431,13 @@ export class InventoryWorkbenchService {
         );
       }
 
-      return fitmentJson.length;
+      return { count: fitmentJson.length, rows: fitmentJson };
     } catch (err) {
       this.logger.warn(
         `Fitment discovery failed for listing ${listingId}: ` +
           `${err instanceof Error ? err.message : err}`,
       );
-      return 0;
+      return { count: 0, rows: [] };
     }
   }
 

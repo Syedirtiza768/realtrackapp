@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { OpenAiService } from '../openai.service.js';
 import { ModelRouter, inferPartType } from '../model-router.js';
 import { ListingQualityValidator } from '../listing-quality.validator.js';
-import { applyListingGuards } from '../listing-guards.js';
+import {
+  applyListingGuards,
+  detectHallucinatedPartNumbers,
+} from '../listing-guards.js';
 import { AiRunLogService } from '../ai-run-log.service.js';
 import { ListingGuardAuditService } from '../listing-guard-audit.service.js';
 import { renderPrompt } from '../prompts/index.js';
@@ -14,7 +17,7 @@ import {
 import { EnrichmentCacheService } from '../enrichment-cache.service.js';
 import { compactJson, getEnrichmentProfile } from '../token-optimization.js';
 import type { OpenAiChatResponse } from '../openai.types.js';
-import type { RunMode } from '../ai-routing-policy.types.js';
+import type { RunMode, ValidationResult } from '../ai-routing-policy.types.js';
 
 /**
  * Result from the enrichment pipeline.
@@ -25,6 +28,8 @@ export interface EnrichmentResult {
   mpn: string | null;
   oemNumber: string | null;
   partType: string | null;
+  /** Physical position on the vehicle (e.g. "Front Left"), when applicable. */
+  placement: string | null;
   condition: string | null;
   description: string | null;
   features: string[];
@@ -35,6 +40,8 @@ export interface EnrichmentResult {
   compatibility?: Array<Record<string, unknown>>;
   validationScore?: number;
   passedGate?: boolean;
+  hardFails?: string[];
+  softFails?: string[];
   escalated?: boolean;
   model?: string;
   lane?: string;
@@ -114,18 +121,25 @@ export class EnrichmentPipeline {
           latencyMs: 0,
           estimatedCostUsd: 0,
         },
-        validation: await this.validator.validateWithTaxonomy(
-          cached,
-          {
-            partNumber: partContext.partNumber,
-            donorMake:
-              this.str(rawData.donorMake ?? rawData.brand) ?? 'mercedes',
-          },
-          {
-            compactProfile: profile === 'compact',
-            ebayCategoryId:
-              this.str(rawData.ebayCategoryId ?? rawData.categoryId) ?? null,
-          },
+        validation: this.withBrowseEvidence(
+          this.withHallucinationCheck(
+            await this.validator.validateWithTaxonomy(
+              cached,
+              {
+                partNumber: partContext.partNumber,
+                donorMake:
+                  this.str(rawData.donorMake ?? rawData.brand) ?? 'mercedes',
+              },
+              {
+                compactProfile: profile === 'compact',
+                ebayCategoryId:
+                  this.str(rawData.ebayCategoryId ?? rawData.categoryId) ??
+                  null,
+              },
+            ),
+            cached,
+          ),
+          rawData,
         ),
       });
     }
@@ -192,13 +206,15 @@ export class EnrichmentPipeline {
 
       const ebayCategoryId =
         this.str(rawData.ebayCategoryId ?? rawData.categoryId) ?? undefined;
-      const validation = await this.validator.validateWithTaxonomy(
-        parsed,
-        srcPart,
-        {
-          ebayCategoryId,
-          compactProfile: profile === 'compact',
-        },
+      const validation = this.withBrowseEvidence(
+        this.withHallucinationCheck(
+          await this.validator.validateWithTaxonomy(parsed, srcPart, {
+            ebayCategoryId,
+            compactProfile: profile === 'compact',
+          }),
+          parsed,
+        ),
+        rawData,
       );
       await this.runLogService.logRun({
         sku: partContext.sku ?? null,
@@ -281,7 +297,12 @@ export class EnrichmentPipeline {
       escalated: boolean;
       guardFixes: string[];
       rawResponse: OpenAiChatResponse;
-      validation: { score: number; pass: boolean };
+      validation: {
+        score: number;
+        pass: boolean;
+        hardFails: string[];
+        softFails: string[];
+      };
     },
   ): EnrichmentResult {
     return {
@@ -289,7 +310,13 @@ export class EnrichmentPipeline {
       brand: this.str(parsed.brand),
       mpn: this.str(parsed.mpn),
       oemNumber: this.str(parsed.oemNumber),
-      partType: this.str(parsed.partType) ?? partContext.partType ?? null,
+      // Prompt asks the model for a `type` key (see motors-enrichment.prompt.ts);
+      // `partType` is only ever set by our own pre-inference fallback below.
+      partType:
+        this.str(parsed.partType ?? parsed.type) ??
+        partContext.partType ??
+        null,
+      placement: this.str(parsed.placement),
       condition: this.str(parsed.condition),
       description: this.str(parsed.description),
       features: Array.isArray(parsed.features)
@@ -312,6 +339,8 @@ export class EnrichmentPipeline {
         : undefined,
       validationScore: meta.validation.score,
       passedGate: meta.validation.pass,
+      hardFails: meta.validation.hardFails,
+      softFails: meta.validation.softFails,
       escalated: meta.escalated,
       model: meta.model,
       lane: meta.lane,
@@ -337,5 +366,62 @@ export class EnrichmentPipeline {
 
   private str(val: unknown): string | null {
     return typeof val === 'string' && val.trim().length > 0 ? val.trim() : null;
+  }
+
+  /**
+   * Merge deterministic hallucinated-part-number detection into a validator
+   * result. Was a written, unused export in listing-guards.ts — an LLM
+   * inventing a plausible-looking but wrong-format OEM number is exactly the
+   * kind of confident-but-wrong output this pipeline needs to catch before it
+   * reaches a listing, so it's treated as a hard fail like MPN_MISMATCH.
+   */
+  private withHallucinationCheck(
+    validation: ValidationResult,
+    parsed: Record<string, unknown>,
+  ): ValidationResult {
+    const brand = this.str(parsed.brand);
+    if (!brand) return validation;
+
+    const warnings = detectHallucinatedPartNumbers(
+      [
+        {
+          oemPartNumber: this.str(parsed.oemNumber ?? parsed.mpn) ?? undefined,
+          partName: this.str(parsed.partType ?? parsed.type) ?? undefined,
+        },
+      ],
+      brand,
+    );
+    if (warnings.length === 0) return validation;
+
+    const hardFails = [
+      ...validation.hardFails,
+      ...warnings.map((w) => `HALLUCINATED_PART_NUMBER: ${w}`),
+    ];
+    return {
+      ...validation,
+      hardFails,
+      pass: false,
+      escalate: true,
+    };
+  }
+
+  /**
+   * Merge Browse API corroboration into the validation result. This is soft
+   * evidence, not a hard block — a legitimately rare part can have zero
+   * matching live eBay listings and still be a correct identification — so
+   * it never flips `pass`, only adds a soft-fail flag for review context.
+   */
+  private withBrowseEvidence(
+    validation: ValidationResult,
+    rawData: Record<string, unknown>,
+  ): ValidationResult {
+    const checked = rawData.browseCatalogChecked === true;
+    const found = rawData.browseCatalogFound === true;
+    if (!checked || found) return validation;
+
+    return {
+      ...validation,
+      softFails: [...validation.softFails, 'NOT_FOUND_ON_EBAY_CATALOG'],
+    };
   }
 }
