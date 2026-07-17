@@ -35,6 +35,8 @@ export interface SearchQuery {
   importedFrom?: string;
   importedTo?: string;
   filterMode?: 'and' | 'or';
+  /** '1' = server collapses marketplace/SKU siblings into one row per SKU. */
+  groupBySku?: string;
   sort?: SortMode;
 }
 

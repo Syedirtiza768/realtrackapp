@@ -260,7 +260,8 @@ export class SingleListingFormService {
       .map((u) => u.trim())
       .filter(Boolean);
 
-    const sku = dto.sku?.trim() || (await this.allocateSku());
+    const generatedSku = !dto.sku?.trim();
+    let sku = dto.sku?.trim() || (await this.allocateSku());
 
     // Never let a raw temp/ upload URL land in itemPhotoUrl/image_urls — it
     // gets purged by the daily storage-cleanup job within 24h if nothing else
@@ -277,48 +278,57 @@ export class SingleListingFormService {
     const priceStr = priceNum.toFixed(2);
     const placeholderTitle = `${brand} ${partNumber}`.slice(0, 80);
     const title = dto.title?.trim() || placeholderTitle;
-    const sourceRowNumber = await this.allocateIntakeSourceRow();
-
-    let listing: ListingRecord;
-    try {
-      listing = await this.listingRepo.save(
-        this.listingRepo.create({
-          customLabelSku: sku,
-          cBrand: brand,
-          cType: dto.partType,
-          cOeOemPartNumber: partNumber,
-          cManufacturerPartNumber: partNumber,
-          itemPhotoUrl: imageUrls.length > 0 ? imageUrls.join('|') : null,
-          title,
-          description: dto.description?.trim() || null,
-          categoryName: dto.categoryName?.trim() || null,
-          conditionId: dto.conditionId,
-          extractedMake: dto.vehicleMake?.trim() || null,
-          startPrice: priceStr,
-          startPriceNum: priceNum,
-          quantity: String(qty),
-          quantityNum: qty,
-          status: 'draft',
-          sourceFileName: 'warehouse-intake',
-          sourceFilePath: 'warehouse-intake',
-          sheetName: 'intake',
-          sourceRowNumber,
-          teamId: dto.teamId || null,
-          location: dto.location?.trim() || null,
-          weight: dto.weight ?? null,
-        }),
-      );
-    } catch (err) {
-      if (
-        err instanceof QueryFailedError &&
-        (err as { driverError?: { code?: string } }).driverError?.code ===
-          '23505'
-      ) {
-        throw new ConflictException(
-          'This part could not be saved — duplicate intake row or SKU. Refresh the page to get a new SKU and try again.',
+    let listing: ListingRecord | null = null;
+    let sourceRowNumber = 0;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      sourceRowNumber = await this.allocateIntakeSourceRow();
+      try {
+        listing = await this.listingRepo.save(
+          this.listingRepo.create({
+            customLabelSku: sku,
+            cBrand: brand,
+            cType: dto.partType,
+            cOeOemPartNumber: partNumber,
+            cManufacturerPartNumber: partNumber,
+            itemPhotoUrl: imageUrls.length > 0 ? imageUrls.join('|') : null,
+            title,
+            description: dto.description?.trim() || null,
+            categoryName: dto.categoryName?.trim() || null,
+            conditionId: dto.conditionId,
+            extractedMake: dto.vehicleMake?.trim() || null,
+            startPrice: priceStr,
+            startPriceNum: priceNum,
+            quantity: String(qty),
+            quantityNum: qty,
+            status: 'draft',
+            sourceFileName: 'warehouse-intake',
+            sourceFilePath: 'warehouse-intake',
+            sheetName: 'intake',
+            sourceRowNumber,
+            teamId: dto.teamId || null,
+            location: dto.location?.trim() || null,
+            weight: dto.weight ?? null,
+          }),
         );
+        break;
+      } catch (err) {
+        if (!this.isUniqueViolation(err) || attempt === 3) {
+          if (this.isUniqueViolation(err)) {
+            throw new ConflictException(
+              'This part could not be saved because its generated inventory identifiers collided. Please try again.',
+            );
+          }
+          throw err;
+        }
+        if (generatedSku && this.isSkuUniqueViolation(err)) {
+          sku = await this.allocateSku();
+        }
       }
-      throw err;
+    }
+    if (!listing) {
+      throw new ConflictException(
+        'This part could not be saved because its generated inventory identifiers collided. Please try again.',
+      );
     }
 
     // Create corresponding catalog product so exports and templates work
@@ -914,13 +924,29 @@ export class SingleListingFormService {
 
   /** Next row index for warehouse-intake parts (uq_listing_source_row requires unique triple). */
   private async allocateIntakeSourceRow(): Promise<number> {
-    const result = await this.listingRepo
-      .createQueryBuilder('r')
-      .select('MAX(r.sourceRowNumber)', 'maxRow')
-      .where('r.sourceFileName = :sf', { sf: 'warehouse-intake' })
-      .andWhere('r.sheetName = :sn', { sn: 'intake' })
-      .getRawOne<{ maxRow: string | null }>();
-    return (Number(result?.maxRow) || 0) + 1;
+    const rows = await this.listingRepo.query<{ nextval: string }[]>(
+      `SELECT nextval('warehouse_intake_row_seq') AS nextval`,
+    );
+    return Number(rows[0]?.nextval);
+  }
+
+  private isUniqueViolation(err: unknown): boolean {
+    return (
+      err instanceof QueryFailedError &&
+      (err as QueryFailedError & { driverError?: { code?: string } })
+        .driverError?.code === '23505'
+    );
+  }
+
+  private isSkuUniqueViolation(err: unknown): boolean {
+    if (!this.isUniqueViolation(err)) return false;
+    const driverError = (err as QueryFailedError & {
+      driverError?: { constraint?: string };
+    }).driverError;
+    return (
+      driverError?.constraint === 'idx_listing_sku_marketplace_unique_active' ||
+      driverError?.constraint === 'idx_listing_sku_unique_active'
+    );
   }
 
   private formatSku(num: number): string {

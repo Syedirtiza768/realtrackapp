@@ -72,6 +72,8 @@ export interface SearchItem {
   pEpid: string | null;
   pUpc: string | null;
   marketplace: string | null;
+  /** All marketplaces this SKU appears in (set when groupBySku is on). */
+  marketplaces: string[] | null;
   pipelineJobId: string | null;
   teamId: string | null;
   teamName: string | null;
@@ -179,6 +181,38 @@ const SAFE_QTY = `COALESCE(
   NULLIF(REPLACE(r.quantity, ',', '.'), '')::numeric,
   0
 )`;
+
+/**
+ * Dedup key for SKU grouping: rows sharing a (trimmed) customLabelSku collapse
+ * into one; rows without a SKU key on their own id so they never merge.
+ */
+const DEDUP_KEY = `CASE
+  WHEN btrim(COALESCE(r."customLabelSku", '')) = '' THEN 'ID:' || r.id::text
+  ELSE 'SKU:' || btrim(r."customLabelSku")
+END`;
+
+/**
+ * Which sibling row represents the SKU: prefer the US marketplace, then rows
+ * that actually carry a title / image / marketplace / team, then stable by id.
+ * Mirrors the previous client-side dedup preference.
+ */
+const DEDUP_PREF = `(r.marketplace = 'US') DESC,
+  (NULLIF(r.title, '') IS NOT NULL) DESC,
+  (NULLIF(r."itemPhotoUrl", '') IS NOT NULL) DESC,
+  (NULLIF(r.marketplace, '') IS NOT NULL) DESC,
+  (r.team_id IS NOT NULL) DESC,
+  r.id ASC`;
+
+/** Parse a Postgres text[] of sibling marketplaces into a clean sorted list. */
+function parseSkuMarketplaces(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const cleaned = [
+    ...new Set(
+      v.filter((x): x is string => typeof x === 'string' && x.trim() !== ''),
+    ),
+  ].sort();
+  return cleaned.length ? cleaned : null;
+}
 
 function deriveCatalogStatus(row: {
   status?: string | null;
@@ -389,47 +423,86 @@ export class SearchService {
 
     /* -- Sorting ----------------------------------------------- */
     const sort = dto.sort ?? (hasQuery ? 'relevance' : 'newest');
-    switch (sort) {
-      case 'relevance':
-        if (hasQuery) {
-          qb.orderBy('"skuBoost"', 'DESC');
-          qb.addOrderBy('"relevanceScore"', 'DESC');
-          qb.addOrderBy(`similarity(r.title, :q)`, 'DESC');
-        } else {
+    const groupBySku = dto.groupBySku === '1';
+
+    let raw: Record<string, any>[];
+    let total: number;
+
+    if (groupBySku) {
+      /* -- SKU-grouped path -----------------------------------
+       * Collapse marketplace/SKU siblings into one row so `total`
+       * and pagination reflect unique SKUs, not raw listing rows.
+       * ROW_NUMBER picks the representative sibling; array_agg keeps
+       * every sibling marketplace for the badge. Ordering + paging
+       * happen in an outer query over the deduped set.
+       * ----------------------------------------------------- */
+      qb.addSelect(
+        `ROW_NUMBER() OVER (PARTITION BY ${DEDUP_KEY} ORDER BY ${DEDUP_PREF})`,
+        'rn',
+      );
+      qb.addSelect(
+        `array_agg(r.marketplace) OVER (PARTITION BY ${DEDUP_KEY})`,
+        'skuMarketplaces',
+      );
+      if (hasQuery) {
+        qb.addSelect(`similarity(r.title, :q)`, 'titleSim');
+      }
+
+      const [innerSql, innerParams] = qb.getQueryAndParameters();
+      const orderSql = this.buildDedupOrderSql(sort, hasQuery);
+      const offIdx = innerParams.length + 1;
+      const limIdx = innerParams.length + 2;
+      const outerSql =
+        `SELECT sub.*, COUNT(*) OVER() AS "totalCount" ` +
+        `FROM (${innerSql}) sub ` +
+        `WHERE sub."rn" = 1 ` +
+        `ORDER BY ${orderSql} ` +
+        `OFFSET $${offIdx} LIMIT $${limIdx}`;
+
+      raw = await this.repo.query(outerSql, [...innerParams, offset, limit]);
+      total = raw.length > 0 ? parseInt(raw[0].totalCount, 10) : 0;
+    } else {
+      switch (sort) {
+        case 'relevance':
+          if (hasQuery) {
+            qb.orderBy('"skuBoost"', 'DESC');
+            qb.addOrderBy('"relevanceScore"', 'DESC');
+            qb.addOrderBy(`similarity(r.title, :q)`, 'DESC');
+          } else {
+            qb.orderBy('r.importedAt', 'DESC');
+          }
+          break;
+        case 'price_asc':
+          qb.orderBy(SAFE_PRICE, 'ASC', 'NULLS LAST');
+          break;
+        case 'price_desc':
+          qb.orderBy(SAFE_PRICE, 'DESC', 'NULLS LAST');
+          break;
+        case 'newest':
           qb.orderBy('r.importedAt', 'DESC');
-        }
-        break;
-      case 'price_asc':
-        qb.orderBy(SAFE_PRICE, 'ASC', 'NULLS LAST');
-        break;
-      case 'price_desc':
-        qb.orderBy(SAFE_PRICE, 'DESC', 'NULLS LAST');
-        break;
-      case 'newest':
-        qb.orderBy('r.importedAt', 'DESC');
-        break;
-      case 'title_asc':
-        qb.orderBy('r.title', 'ASC', 'NULLS LAST');
-        break;
-      case 'title_desc':
-        qb.orderBy('r.title', 'DESC', 'NULLS LAST');
-        break;
-      case 'sku_asc':
-        qb.orderBy('r."customLabelSku"', 'ASC', 'NULLS LAST');
-        break;
+          break;
+        case 'title_asc':
+          qb.orderBy('r.title', 'ASC', 'NULLS LAST');
+          break;
+        case 'title_desc':
+          qb.orderBy('r.title', 'DESC', 'NULLS LAST');
+          break;
+        case 'sku_asc':
+          qb.orderBy('r."customLabelSku"', 'ASC', 'NULLS LAST');
+          break;
+      }
+      qb.addOrderBy('r.id', 'ASC'); // stable tie-breaker
+
+      /* -- Pagination -------------------------------------------- */
+      qb.offset(offset).limit(limit);
+
+      /* -- Execute with window-function count -------------------- */
+      // Add COUNT(*) OVER() to get total in the same query — eliminates duplicate count query
+      qb.addSelect('COUNT(*) OVER()', 'totalCount');
+
+      raw = await qb.getRawMany();
+      total = raw.length > 0 ? parseInt(raw[0].totalCount, 10) : 0;
     }
-    qb.addOrderBy('r.id', 'ASC'); // stable tie-breaker
-
-    /* -- Pagination -------------------------------------------- */
-    qb.offset(offset).limit(limit);
-
-    /* -- Execute with window-function count -------------------- */
-    // Add COUNT(*) OVER() to get total in the same query — eliminates duplicate count query
-    qb.addSelect('COUNT(*) OVER()', 'totalCount');
-
-    const raw = await qb.getRawMany();
-
-    const total = raw.length > 0 ? parseInt(raw[0].totalCount, 10) : 0;
 
     // Map raw results into typed items
     const items: SearchItem[] = raw.map((row) => ({
@@ -455,6 +528,7 @@ export class SearchService {
       pEpid: row.r_pEpid ?? null,
       pUpc: row.r_pUpc ?? null,
       marketplace: row.r_marketplace ?? null,
+      marketplaces: parseSkuMarketplaces(row.skuMarketplaces),
       pipelineJobId: row.r_pipelineJobId ?? row.r_pipeline_job_id ?? null,
       teamId: row.r_teamId ?? row.r_team_id ?? null,
       teamName: row.teamName ?? null,
@@ -1257,6 +1331,35 @@ export class SearchService {
       if (clauses.length) {
         qb.andWhere(`(${clauses.join(' OR ')})`);
       }
+    }
+  }
+
+  /**
+   * Build the outer ORDER BY (over the deduped subquery `sub`) for the
+   * SKU-grouped search path. References the raw column aliases TypeORM emits
+   * (`r_importedAt`, `r_startPrice`, …) plus the computed score aliases.
+   */
+  private buildDedupOrderSql(sort: string, hasQuery: boolean): string {
+    const price = `NULLIF(REPLACE(sub."r_startPrice", ',', '.'), '')::numeric`;
+    const tie = `sub."r_id" ASC`;
+    switch (sort) {
+      case 'relevance':
+        return hasQuery
+          ? `sub."skuBoost" DESC, sub."relevanceScore" DESC, sub."titleSim" DESC, ${tie}`
+          : `sub."r_importedAt" DESC, ${tie}`;
+      case 'price_asc':
+        return `${price} ASC NULLS LAST, ${tie}`;
+      case 'price_desc':
+        return `${price} DESC NULLS LAST, ${tie}`;
+      case 'title_asc':
+        return `sub."r_title" ASC NULLS LAST, ${tie}`;
+      case 'title_desc':
+        return `sub."r_title" DESC NULLS LAST, ${tie}`;
+      case 'sku_asc':
+        return `sub."r_customLabelSku" ASC NULLS LAST, ${tie}`;
+      case 'newest':
+      default:
+        return `sub."r_importedAt" DESC, ${tie}`;
     }
   }
 

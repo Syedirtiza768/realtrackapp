@@ -114,7 +114,9 @@ Grouped by module:
 
 **Indexes**: SKU, categoryId, title, brand, condition, type, source file, org, extractedMake, extractedModel, searchVector (GIN).
 
-**SKU generation**: PostgreSQL sequence `sku_seq` (migration `1785200000000`). `allocateSku()` calls `nextval('sku_seq')` and formats as `BLA-XXXXX`. Atomic under concurrency — no application-level locking needed.
+**SKU generation**: PostgreSQL sequence `sku_seq` (migration `1785200000000`). `allocateSku()` calls `nextval('sku_seq')` and formats as `BLA-XXXXX`. Atomic under concurrency; the Add Part intake flow retries generated-SKU conflicts.
+
+**Warehouse intake source rows**: PostgreSQL sequence `warehouse_intake_row_seq` (migration `1789100000000`) allocates `sourceRowNumber` for `/listings/new` Add Part rows. This avoids `MAX(sourceRowNumber)+1` races against `uq_listing_source_row` when multiple users save intake parts at nearly the same time.
 
 #### `listing_revisions` (ListingRevision)
 

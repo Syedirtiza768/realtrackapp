@@ -140,6 +140,9 @@ export default function CatalogManager() {
       offset: page * pageSize,
       q: searchQuery || undefined,
       sort: sortMode,
+      // Collapse marketplace/SKU siblings server-side so total + pagination
+      // reflect unique SKUs (backend aggregates sibling marketplaces).
+      groupBySku: '1',
       ...filtersToQuery(filters),
     }),
     [searchQuery, page, pageSize, sortMode, filters],
@@ -151,45 +154,10 @@ export default function CatalogManager() {
 
   const displayItems = data?.items ?? [];
 
-  // Deduplicate by SKU: group items with the same SKU, show one card per SKU
-  // with aggregated marketplace badges.
-  const dedupedItems = useMemo(() => {
-    const groups = new Map<string, { item: SearchItem; marketplaces: Set<string> }>();
-
-    for (const item of displayItems) {
-      const sku = item.customLabelSku?.trim();
-      if (!sku) {
-        // Items without SKU stay as-is (one card per listing record)
-        groups.set(item.id, { item, marketplaces: new Set(item.marketplace ? [item.marketplace] : []) });
-        continue;
-      }
-
-      if (!groups.has(sku)) {
-        groups.set(sku, { item, marketplaces: new Set() });
-      }
-
-      const group = groups.get(sku)!;
-      if (item.marketplace) group.marketplaces.add(item.marketplace);
-
-      // Prefer items with: US marketplace > title > image > later marketplace > current group
-      const existing = group.item;
-      const preferNew =
-        (item.marketplace === 'US' && existing.marketplace !== 'US') ||
-        (item.marketplace !== 'DE' && existing.marketplace === 'DE' && item.marketplace !== 'US') ||
-        (item.title && !existing.title) ||
-        (item.itemPhotoUrl && !existing.itemPhotoUrl) ||
-        (item.marketplace && !existing.marketplace) ||
-        (item.teamName && !existing.teamName);
-      if (preferNew) {
-        group.item = item;
-      }
-    }
-
-    return Array.from(groups.values()).map(({ item, marketplaces }) => ({
-      ...item,
-      marketplaces: marketplaces.size > 0 ? [...marketplaces].sort() : undefined,
-    }));
-  }, [displayItems]);
+  // The backend collapses marketplace/SKU siblings into one row per SKU (see
+  // groupBySku in apiQuery) and returns aggregated `marketplaces`, so the grid
+  // renders the server rows directly — no client-side dedup needed.
+  const dedupedItems = displayItems;
 
   const { data: publishListingDetail, isLoading: publishListingLoading } =
     useListingDetailQuery(publishModalOpen ? publishTargetId : null);

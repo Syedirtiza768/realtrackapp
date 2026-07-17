@@ -142,6 +142,17 @@ export class SearchQueryDto {
   @IsIn(['and', 'or'])
   filterMode?: 'and' | 'or'; // default 'and'
 
+  /**
+   * '1' = collapse marketplace/SKU siblings into a single row server-side.
+   * One row per customLabelSku (rows without a SKU stay individual), with all
+   * sibling marketplaces aggregated into `marketplaces`. Makes `total` and
+   * pagination reflect unique SKUs instead of raw listing rows. Used by the
+   * catalog grid; other callers omit it and get raw rows unchanged.
+   */
+  @IsOptional()
+  @IsString()
+  groupBySku?: string;
+
   /* -- Sorting -------------------------------------------- */
   @IsOptional()
   @IsIn([
