@@ -10,15 +10,18 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { QueryFailedError } from 'typeorm';
+import * as fs from 'node:fs';
 import { OpenAiService } from '../../common/openai/openai.service.js';
 import { sanitizeJson } from '../../common/openai/json-sanitizer.js';
 import { VisionEnrichmentPipeline } from '../../common/openai/pipelines/vision-enrichment.pipeline.js';
+import type { VisionEnrichmentResult } from '../../common/openai/pipelines/vision-enrichment.pipeline.js';
 import { estimateCost } from '../../common/openai/openai.types.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { StorageService } from '../../storage/storage.service.js';
+import { ImageOptimizerService } from '../image-enrichment/image-optimizer.service.js';
 import {
   ECU_IDENTIFICATION_PROMPT,
   isEcuPartType,
@@ -183,6 +186,7 @@ export class SingleListingFormService {
     private readonly mvl: EbayMvlService,
     private readonly visionPipeline: VisionEnrichmentPipeline,
     private readonly storageService: StorageService,
+    private readonly imageOptimizer: ImageOptimizerService,
   ) {}
 
   getLookupPricing(): PartLookupPricingEstimate {
@@ -751,6 +755,42 @@ export class SingleListingFormService {
     };
   }
 
+  /**
+   * Download, downscale, and re-encode images as base64 data URIs so the
+   * vision provider (which fetches image URLs server-side) never sees the
+   * original oversized file. Skips images that fail to download/decode
+   * rather than failing the whole batch — the caller falls back to the
+   * original error if every image is unusable.
+   */
+  private async resizeImagesForVision(imageUrls: string[]): Promise<string[]> {
+    const optimized = await Promise.all(
+      imageUrls.map((url) =>
+        this.imageOptimizer
+          .downloadAndOptimize(url, {
+            targetFormat: 'jpg',
+            maxWidth: 1600,
+            quality: 80,
+          })
+          .catch(() => null),
+      ),
+    );
+
+    const dataUrls: string[] = [];
+    for (const img of optimized) {
+      if (!img) continue;
+      try {
+        const buffer = fs.readFileSync(img.localPath);
+        const mime = img.format === 'webp' ? 'image/webp' : 'image/jpeg';
+        dataUrls.push(`data:${mime};base64,${buffer.toString('base64')}`);
+      } catch (err) {
+        this.logger.debug(
+          `Could not read optimized image for vision retry: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+    return dataUrls;
+  }
+
   private async runVisionLookup(
     partNumberHint: string,
     imageUrls: string[],
@@ -781,15 +821,39 @@ export class SingleListingFormService {
         partNumberHint,
       ).replace('{brandHint}', brandLine);
     }
-    const visionResult = await this.visionPipeline.analyze(
-      imageUrls,
-      {
-        partNumber: partNumberHint,
-        donorMake: brandHint,
-        partType: useEcuPrompt ? (partType ?? 'ecu') : 'single_listing_form',
-      },
-      prompt,
-    );
+    const visionContext = {
+      partNumber: partNumberHint,
+      donorMake: brandHint,
+      partType: useEcuPrompt ? (partType ?? 'ecu') : 'single_listing_form',
+    };
+    let visionResult: VisionEnrichmentResult;
+    try {
+      visionResult = await this.visionPipeline.analyze(
+        imageUrls,
+        visionContext,
+        prompt,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // The vision provider fetches image URLs server-side and rejects
+      // anything over its own size cap (seen as "cannot exceed 30MB").
+      // Retrying the same oversized URL blindly can never succeed — resize
+      // once locally and retry with a downsized copy instead of burning
+      // repeated retries on a deterministically-doomed call.
+      if (!/cannot exceed/i.test(message)) throw err;
+
+      this.logger.warn(
+        `Vision call failed on oversized image(s), resizing and retrying once: ${message}`,
+      );
+      const resizedUrls = await this.resizeImagesForVision(imageUrls);
+      if (resizedUrls.length === 0) throw err;
+
+      visionResult = await this.visionPipeline.analyze(
+        resizedUrls,
+        visionContext,
+        prompt,
+      );
+    }
 
     const parsed = visionResult.raw;
 

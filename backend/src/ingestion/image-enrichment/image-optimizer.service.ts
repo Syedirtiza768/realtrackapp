@@ -37,7 +37,10 @@ export class ImageOptimizerService {
     const root =
       process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
     this.storageDir = path.resolve(root, 'uploads', 'enriched-images');
-    this.maxDownloadBytes = 20 * 1024 * 1024; // 20 MB max per image
+    // 50 MB — must comfortably exceed the vision provider's 30MB cap so this
+    // service can actually download oversized originals in order to shrink
+    // them (see SingleListingFormService.resizeImagesForVision).
+    this.maxDownloadBytes = 50 * 1024 * 1024;
 
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
