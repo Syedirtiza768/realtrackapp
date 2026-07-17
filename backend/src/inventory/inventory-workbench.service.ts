@@ -1319,11 +1319,23 @@ export class InventoryWorkbenchService {
     fitmentRows: Array<Record<string, unknown>>,
     placement: string | null,
   ): string {
-    const make = listing.extractedMake?.trim() || listing.cBrand?.trim() || '';
     const firstRowModel = fitmentRows
       .map((r) => String(r.Model ?? r.model ?? '').trim())
       .find(Boolean);
     const model = listing.extractedModel?.trim() || firstRowModel || '';
+
+    // Prefer cBrand — it's guard-normalized (applyListingGuards) to a clean
+    // brand name. extractedMake is sometimes "Make Model" concatenated (seen
+    // in prod: extractedMake="AUDI A6" for model "A6"), which would otherwise
+    // duplicate the model segment in the title. Only fall back to it when
+    // cBrand is empty, and strip a trailing duplicate model if present.
+    let make = listing.cBrand?.trim() || listing.extractedMake?.trim() || '';
+    if (
+      model &&
+      make.toLowerCase().endsWith(` ${model.toLowerCase()}`)
+    ) {
+      make = make.slice(0, make.length - model.length).trim();
+    }
 
     const fitmentYears: number[] = [];
     for (const row of fitmentRows) {
