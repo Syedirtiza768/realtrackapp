@@ -43,6 +43,10 @@ import {
   mapPipelineDisplayStatus,
   type PipelineDisplayStatus,
 } from './pipeline.constants.js';
+import {
+  parsePipelineUploadRows,
+  validatePipelineGridxHeaders,
+} from './pipeline-gridx-format.js';
 
 const SINGLE_LISTING_DEFAULT_PRICE = 100;
 const SINGLE_LISTING_DEFAULT_QUANTITY = 1;
@@ -209,6 +213,21 @@ export class PipelineService {
     if (!PIPELINE_CONDITION_OPTIONS[conditionLabel.trim()]) {
       throw new BadRequestException(
         `Invalid conditionLabel. Allowed: ${Object.keys(PIPELINE_CONDITION_OPTIONS).join(', ')}`,
+      );
+    }
+
+    // Reject GridX uploads with missing/corrupted headers before enqueueing
+    // (prevents all-zero prices / empty PicURL from bad Part-2 spreadsheets).
+    try {
+      const rows = parsePipelineUploadRows(fileBuffer);
+      const headerCheck = validatePipelineGridxHeaders(rows);
+      if (!headerCheck.ok) {
+        throw new BadRequestException(headerCheck.message);
+      }
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException(
+        `Could not read upload as CSV/XLSX. Download the GridX sample template from Pipeline. (${err instanceof Error ? err.message : String(err)})`,
       );
     }
     if (userId) {

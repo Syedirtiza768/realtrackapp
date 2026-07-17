@@ -455,19 +455,66 @@ async function main() {
   const headers = rawRows[headerIdx].map((h) => String(h ?? '').trim());
   console.log('Headers:', headers.join(', '));
 
-  const colIdx = (name) => {
-    const norm = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return headers.findIndex((h) => h.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm));
+  // Canonical GridX Connect column order (vin-export / vin-db-export / template).
+  // Used when the header row is missing distinct names (e.g. every cell is
+  // "Part Number" after a bad Excel copy/paste) so price/images are not dropped.
+  const GRIDX_POSITIONAL = {
+    partnumber: 0,
+    price: 1,
+    quantity: 2,
+    vehiclemake: 3,
+    description: 4,
+    imageurls: 5,
+    sku: 6,
+    weightmajor: 7,
   };
 
-  const iPartNum = colIdx('partnumber') >= 0 ? colIdx('partnumber') : colIdx('part');
-  const iPrice = colIdx('price');
-  const iQty = colIdx('quantity');
-  const iMake = colIdx('vehiclemake') >= 0 ? colIdx('vehiclemake') : colIdx('make');
-  const iDesc = colIdx('description');
-  const iImages = colIdx('imageurls') >= 0 ? colIdx('imageurls') : colIdx('image');
-  const iSku = colIdx('sku');
-  const iWeight = colIdx('weightmajor') >= 0 ? colIdx('weightmajor') : colIdx('weight');
+  const uniqueHeaders = new Set(
+    headers.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean),
+  );
+  const looksLikeGridx =
+    /gridx/i.test(String(rawRows[0]?.[0] ?? '')) ||
+    /gridx/i.test(String(rawRows[0]?.[1] ?? ''));
+  const headersCorrupted =
+    headers.filter(Boolean).length >= 4 && uniqueHeaders.size <= 2;
+
+  const colIdx = (name) => {
+    const norm = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return headers.findIndex((h) =>
+      h
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .includes(norm),
+    );
+  };
+
+  const resolveCol = (name, aliases = []) => {
+    for (const key of [name, ...aliases]) {
+      const idx = colIdx(key);
+      if (idx >= 0) return idx;
+    }
+    if ((looksLikeGridx || headersCorrupted) && GRIDX_POSITIONAL[name] != null) {
+      return GRIDX_POSITIONAL[name];
+    }
+    return -1;
+  };
+
+  if (headersCorrupted) {
+    console.warn(
+      'WARNING: GridX header row looks corrupted (duplicate/missing column names). ' +
+        'Falling back to standard GridX positional columns: ' +
+        'Part Number, Price, Quantity, Vehicle Make, Description, Image URLs, SKU, Weight Major',
+    );
+  }
+
+  const iPartNum = resolveCol('partnumber', ['part']);
+  const iPrice = resolveCol('price');
+  const iQty = resolveCol('quantity');
+  const iMake = resolveCol('vehiclemake', ['make']);
+  const iDesc = resolveCol('description');
+  const iImages = resolveCol('imageurls', ['image']);
+  const iSku = resolveCol('sku');
+  const iWeight = resolveCol('weightmajor', ['weight']);
 
   console.log(`Column indices: PartNum=${iPartNum} Price=${iPrice} Qty=${iQty} Make=${iMake} Desc=${iDesc} Images=${iImages} SKU=${iSku}`);
 

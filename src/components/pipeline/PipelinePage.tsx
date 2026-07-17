@@ -20,6 +20,11 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useUploadPipelineFile, type PipelineUploadProfileInput } from '../../lib/pipelineApi';
+import {
+  PIPELINE_GRIDX_REQUIRED_HEADERS,
+  PIPELINE_GRIDX_SAMPLE_PATH,
+  validatePipelineGridxHeaders,
+} from '../../lib/pipelineGridxFormat';
 import { listTeams, PIPELINE_CONDITIONS, type PipelineConditionLabel } from '../../lib/teamsApi';
 import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
 import {
@@ -116,12 +121,12 @@ function PageHeader({
           Upload History
         </button>
         <a
-          href="/pipeline-template.csv"
-          download
+          href={PIPELINE_GRIDX_SAMPLE_PATH}
+          download="pipeline-gridx-sample.xlsx"
           className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           <Download className="h-4 w-4" />
-          Download Template
+          Download Sample Input
         </a>
         <button
           type="button"
@@ -146,6 +151,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
     const [storeId, setStoreId] = useState('');
     const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [formatError, setFormatError] = useState<string | null>(null);
     const { upload, uploading, progress, error } = useUploadPipelineFile();
 
     const { data: teams = [], isLoading: teamsLoading } = useQuery({
@@ -224,13 +230,39 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
       [upload, selectedTeamId, condition, profileInput, canUpload, onJobCreated],
     );
 
-    const handleFile = useCallback((file: File) => {
+    const handleFile = useCallback(async (file: File) => {
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (!ext || !['xlsx', 'xls', 'csv'].includes(ext)) {
-        alert('Please upload a CSV or XLSX file');
+        setPendingFile(null);
+        setFormatError('Please upload a CSV or XLSX file');
         return;
       }
-      setPendingFile(file);
+      try {
+        const XLSX = await import('xlsx');
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const sheetName =
+          wb.SheetNames.find((n) => !/instruction/i.test(n)) || wb.SheetNames[0];
+        const rows = sheetName
+          ? (XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
+              header: 1,
+              defval: '',
+            }) as unknown[][])
+          : [];
+        const check = validatePipelineGridxHeaders(rows);
+        if (!check.ok) {
+          setPendingFile(null);
+          setFormatError(check.message);
+          return;
+        }
+        setFormatError(null);
+        setPendingFile(file);
+      } catch (err) {
+        setPendingFile(null);
+        setFormatError(
+          `Could not read file. Use the GridX sample input. (${err instanceof Error ? err.message : String(err)})`,
+        );
+      }
     }, []);
 
     const startUpload = useCallback(() => {
@@ -349,7 +381,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
               e.preventDefault();
               setDragOver(false);
               const file = e.dataTransfer.files?.[0];
-              if (file) handleFile(file);
+              if (file) void handleFile(file);
             }}
             onClick={() => fileInputRef.current?.click()}
             className={`cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition ${
@@ -365,7 +397,8 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) handleFile(file);
+                if (file) void handleFile(file);
+                e.target.value = '';
               }}
             />
             {uploading ? (
@@ -384,7 +417,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
                     : 'Drag and drop your file here or click to browse'}
                 </p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  CSV or XLSX files up to 50MB
+                  GridX CSV/XLSX up to 50MB — headers must match the sample
                 </p>
               </>
             )}
@@ -393,16 +426,26 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
           <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              The selected team, store, and business profiles apply to every part in this upload.
-              Row-level profile values in the spreadsheet are kept when present; otherwise these defaults are used.
-              Listings are enriched only for the store&apos;s marketplace — no cross-list templates are generated.
+              Use{' '}
+              <a
+                href={PIPELINE_GRIDX_SAMPLE_PATH}
+                download="pipeline-gridx-sample.xlsx"
+                className="font-medium underline underline-offset-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Download Sample Input
+              </a>{' '}
+              and keep these header names unchanged:{' '}
+              {PIPELINE_GRIDX_REQUIRED_HEADERS.join(', ')}. Renaming or duplicating
+              headers (e.g. every column as &quot;Part Number&quot;) will be rejected.
+              Team, store, and business profiles apply to every part in this upload.
             </span>
           </div>
 
-          {error && (
+          {(formatError || error) && (
             <div className="flex items-center gap-2 text-sm text-red-500">
-              <AlertCircle className="h-4 w-4" />
-              {error}
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {formatError || error}
             </div>
           )}
 
