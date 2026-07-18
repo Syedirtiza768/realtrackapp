@@ -166,8 +166,9 @@
 |--------|------|-------|
 | `id` | uuid | Primary key |
 | `organizationId` | uuid | Nullable, multi-tenant |
-| `sourceFileName` | text | Import source |
+| `sourceFileName` | text | Import source (real filename for pipeline imports; sentinel value `'warehouse-intake'`/`'manual'`/`'ai-ingestion'`/etc. for non-file origins — kept for lineage/debugging, no longer the source of truth for origin, see `origin` below) |
 | `sourceFilePath` | text | File path |
+| `origin` | varchar(20) | `'add_part'` \| `'pipeline_import'`. Added by `1789200000000-AddOriginToListingRecords`. Set explicitly at every creation site (single-part form, CSV/catalog import, AI-ingestion review, VIN search cache, marketplace clones — which propagate the source listing's `origin`). Replaces the old `sourceFileName === 'warehouse-intake'` string-comparison pattern used throughout `inventory-workbench.service.ts`. |
 | `sheetName` | text | Default: 'Listings' |
 | `sourceRowNumber` | int | Row in source file |
 | `importedAt` | timestamptz | Auto-generated |
@@ -205,6 +206,7 @@
 - `idx_listing_c_type` (cType)
 - `idx_listing_source_file` (sourceFileName)
 - `idx_listing_records_org` (organizationId)
+- `idx_listing_origin` (origin)
 - `idx_listing_extracted_make` (extractedMake)
 - `idx_listing_extracted_model` (extractedModel)
 

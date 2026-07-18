@@ -2,6 +2,7 @@ import {
   buildEbayListingDescription,
   buildEbayListingTitle,
   buildStructuredEbayTitle,
+  matchesStrictEbayTitleStructure,
   stripListingHtmlBoilerplate,
   stripPartNameNoise,
   truncateEbayDescription,
@@ -313,5 +314,29 @@ describe('buildEbayListingTitle structured composition', () => {
       title: 'Pre-existing Hand-Written Title',
     });
     expect(title).toBe('Pre-existing Hand-Written Title');
+  });
+
+  it('regression: does not recompose a correctly-structured title just because its OEM number is hyphenated', () => {
+    // Production incident: SKU LNCN-AKS-BLACK-FSU28. The reviewed title was
+    // correct, but the raw catalog fields were dirty (cBrand "Lincon",
+    // cType "Kit - Front Suspension Strut" — unrelated to the actual Ford
+    // F-150 part). Because "AST-18204" is hyphenated, the old part-number
+    // regex failed to recognize it, matchesStrictEbayTitleStructure() wrongly
+    // flagged the title as non-conforming, and the guard silently recomposed
+    // it into "Lincon Kit - Front Suspension Strut AST-18204 OEM Used" — a
+    // different vehicle and part than what was reviewed and shown in the app.
+    const storedTitle =
+      '2014-2020 Ford F-150 Shock & Spring Assembly AST-18204 OEM Used';
+    expect(matchesStrictEbayTitleStructure(storedTitle)).toBe(true);
+
+    const { title, warnings } = buildEbayListingTitle({
+      title: storedTitle,
+      brand: 'Lincon',
+      partType: 'Kit - Front Suspension Strut',
+      mpn: 'AST-18204',
+      oemPartNumber: 'AST-18204',
+    });
+    expect(title).toBe(storedTitle);
+    expect(warnings.some((w) => w.includes('recomposing'))).toBe(false);
   });
 });

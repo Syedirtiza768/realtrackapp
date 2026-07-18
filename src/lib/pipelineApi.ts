@@ -239,7 +239,7 @@ export interface PartLookupResult {
   partNumber?: string;
   confidence?: 'high' | 'medium' | 'low';
   mvlMatched?: boolean;
-  source: 'oem_text' | 'vision';
+  source: 'ebay_browse' | 'oem_text' | 'vision';
   aiModel: string;
   visionModel?: string;
   estimatedCostUsd: number;

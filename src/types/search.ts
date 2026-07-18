@@ -176,6 +176,7 @@ export interface ListingDetail {
   cManufacturerPartNumber: string | null;
   cOeOemPartNumber: string | null;
   location: string | null;
+  weight?: number | null;
   format: string | null;
   sourceFileName: string | null;
   importedAt: string;

@@ -58,6 +58,19 @@ function titleCase(s) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// eBay Motors titles reject/penalize symbols beyond basic punctuation, but
+// supplier sheets frequently carry stray characters (®, ™, #, %, quotes, …)
+// straight through the description into the title. Keep letters, digits,
+// spaces, and the punctuation actually meaningful in automotive titles
+// (hyphenated part numbers, "A/C", "w/o") — drop everything else rather than
+// passing supplier noise into the published title.
+function stripTitleSpecialChars(s) {
+  return String(s || '')
+    .replace(/[^A-Za-z0-9\s\-/&.,+]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ── Vehicle info extraction from filename + description ──
 const MAKE_ALIASES = {
   audi: 'Audi', bmw: 'BMW', gmc: 'GMC', vw: 'Volkswagen',
@@ -310,16 +323,16 @@ function truncateAtWord(text, maxLength) {
 function buildTitle(vehicle, partName, partNumber, position) {
   const SUFFIX = 'OEM Used';
   const fixed = [vehicle.year, vehicle.make, vehicle.model, position]
-    .map((v) => (v ? String(v).trim() : ''))
+    .map((v) => (v ? stripTitleSpecialChars(String(v).trim()) : ''))
     .filter(Boolean);
-  const oem = partNumber ? String(partNumber).trim() : '';
+  const oem = partNumber ? stripTitleSpecialChars(String(partNumber).trim()) : '';
 
   const compose = (name, includeSuffix) => {
     const core = [...fixed, name, oem].filter(Boolean).join(' ');
     return includeSuffix && core ? `${core} ${SUFFIX}` : core;
   };
 
-  let name = partName ? titleCase(partName) : '';
+  let name = partName ? stripTitleSpecialChars(titleCase(partName)) : '';
 
   let title = compose(name, true);
   if (title.length <= 80) return title;
@@ -625,7 +638,12 @@ async function main() {
     const row = rawRows[i];
     if (!row || row.length === 0) continue;
 
-    const partNumber = clean(row[iPartNum]);
+    // eBay File Exchange treats "C:Manufacturer Part Number" as a single
+    // token — a raw supplier value with embedded spaces (e.g. "AB 123 456")
+    // gets rejected/mismatched on import, so spaces are stripped once here at
+    // the source; every downstream use (title, compatibility, output CSV
+    // columns) inherits the clean value.
+    const partNumber = clean(row[iPartNum]).replace(/\s+/g, '');
     if (!partNumber) continue;
 
     const rawDesc = clean(row[iDesc]);

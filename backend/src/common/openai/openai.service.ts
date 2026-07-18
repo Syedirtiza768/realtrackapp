@@ -26,6 +26,7 @@ import { estimateCost } from './openai.types.js';
 export class OpenAiService implements OnModuleInit {
   private readonly logger = new Logger(OpenAiService.name);
   private client!: OpenAI;
+  private baseURL!: string;
 
   /** Default models (overridable per-call) */
   private chatModel: string;
@@ -51,19 +52,18 @@ export class OpenAiService implements OnModuleInit {
     );
     const detail = this.config.get<string>('OPENAI_VISION_DETAIL', 'auto');
     this.visionDetail = detail === 'low' || detail === 'high' ? detail : 'auto';
-  }
 
-  onModuleInit() {
+    // Built here, not in onModuleInit(): BullMQ workers can start pulling
+    // queued jobs the moment the process boots, before all onModuleInit
+    // hooks finish. If those jobs call chat() before this ran, this.client
+    // was undefined and the whole request failed with a bare TypeError that
+    // the retry classifier treats as a non-retriable bug (permanent fail,
+    // zero retries) — see PERMANENT_MARKERS in enrichment-retry.service.ts.
     const apiKey = this.config.get<string>('OPENAI_API_KEY', '');
     const baseURL = this.config.get<string>(
       'OPENAI_BASE_URL',
       'https://openrouter.ai/api/v1',
     );
-    if (!apiKey) {
-      this.logger.warn(
-        'OPENAI_API_KEY not set — AI calls will fail. Set the env var to enable AI features.',
-      );
-    }
     this.client = new OpenAI({
       apiKey,
       baseURL,
@@ -74,8 +74,18 @@ export class OpenAiService implements OnModuleInit {
         'X-Title': 'RealTrackApp',
       },
     });
+    this.baseURL = baseURL;
+  }
+
+  onModuleInit() {
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '');
+    if (!apiKey) {
+      this.logger.warn(
+        'OPENAI_API_KEY not set — AI calls will fail. Set the env var to enable AI features.',
+      );
+    }
     this.logger.log(
-      `AI client initialized (baseURL=${baseURL}, chat=${this.chatModel}, embed=${this.embeddingModel})`,
+      `AI client initialized (baseURL=${this.baseURL}, chat=${this.chatModel}, embed=${this.embeddingModel})`,
     );
   }
 

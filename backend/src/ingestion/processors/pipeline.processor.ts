@@ -9,7 +9,10 @@ import {
   PipelineJobStatus,
 } from '../entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
-import { ListingRecord } from '../../listings/listing-record.entity.js';
+import {
+  ListingRecord,
+  ListingOrigin,
+} from '../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
@@ -949,7 +952,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const intakeListings = await this.listingRepo.find({
         where: {
           customLabelSku: In(skus),
-          sourceFileName: 'warehouse-intake',
+          origin: ListingOrigin.ADD_PART,
         },
       });
       for (const intake of intakeListings) {
@@ -1336,6 +1339,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         listingRecords.push({
           sourceFileName: mktFile,
           sourceFilePath: mktPath,
+          origin: ListingOrigin.PIPELINE_IMPORT,
           sheetName: `Pipeline ${jobId.slice(0, 8)}`,
           sourceRowNumber: i,
           action: 'Add',
@@ -1759,6 +1763,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         const PROP_TO_COL: Record<string, string> = {
           sourceFileName: 'sourceFileName',
           sourceFilePath: 'sourceFilePath',
+          origin: 'origin',
           sheetName: 'sheetName',
           sourceRowNumber: 'sourceRowNumber',
           action: 'action',

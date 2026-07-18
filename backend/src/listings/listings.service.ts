@@ -19,7 +19,7 @@ import { ListingsQueryDto } from './dto/listings-query.dto';
 import { PatchStatusDto } from './dto/patch-status.dto';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
-import { ListingRecord } from './listing-record.entity';
+import { ListingRecord, ListingOrigin } from './listing-record.entity';
 import { ListingRevision } from './listing-revision.entity';
 import { extractMakeModelFromTitle } from './utils/extract-make-model-from-title.js';
 
@@ -377,6 +377,7 @@ export class ListingsService {
         status: dto.status ?? 'draft',
         sourceFileName: 'manual',
         sourceFilePath: 'manual',
+        origin: ListingOrigin.ADD_PART,
         sheetName: 'manual',
         sourceRowNumber: 0,
       } as Partial<ListingRecord>);

@@ -257,7 +257,3 @@ function DetailRow({ label, value, mono }: { label: string; value: string | null
     </tr>
   );
 }
-0 ${mono ? 'font-mono' : ''}`}>{value}</td>
-    </tr>
-  );
-}

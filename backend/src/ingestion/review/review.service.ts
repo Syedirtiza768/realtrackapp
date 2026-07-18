@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { IngestionJob } from '../entities/ingestion-job.entity.js';
 import { AiResult } from '../entities/ai-result.entity.js';
-import { ListingRecord } from '../../listings/listing-record.entity.js';
+import {
+  ListingRecord,
+  ListingOrigin,
+} from '../../listings/listing-record.entity.js';
 import type { ReviewDecisionDto } from '../dto/review-decision.dto.js';
 
 @Injectable()
@@ -69,6 +72,7 @@ export class ReviewService {
         status: 'draft',
         sourceFileName: 'ai-ingestion',
         sourceFilePath: 'ai-ingestion',
+        origin: ListingOrigin.PIPELINE_IMPORT,
         sourceRowNumber: 0,
       });
       const savedListing = await manager.save(listing);

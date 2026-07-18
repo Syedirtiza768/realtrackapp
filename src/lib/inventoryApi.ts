@@ -25,6 +25,13 @@ export type EnrichmentStatus =
   | 'needs_review'
   | 'failed';
 
+/**
+ * Bucket for why a `failed` listing failed: `code_bug` needs an engineering
+ * fix, `needs_data` (e.g. a missing required photo) can be self-served by
+ * ops by correcting the listing, `system` is an API/auth/rate-limit issue.
+ */
+export type FailureUiClass = 'code_bug' | 'needs_data' | 'system';
+
 export interface InventoryMarketplaceVariant {
   listingId: string;
   marketplace: string | null;
@@ -68,6 +75,9 @@ export interface InventoryListingItem {
   hasCompletedPipelineJob: boolean;
   enrichmentStatus: EnrichmentStatus;
   enrichmentStage?: string | null;
+  /** Only present when enrichmentStatus === 'failed'. */
+  failureReason?: string;
+  failureClass?: FailureUiClass;
   intakeSource?: boolean;
   marketplaceVariants: InventoryMarketplaceVariant[];
   storeListings: InventoryStoreListing[];
@@ -94,7 +104,7 @@ export interface PartLookupResult {
   partNumber?: string;
   confidence?: 'high' | 'medium' | 'low';
   mvlMatched?: boolean;
-  source: 'oem_text' | 'vision';
+  source: 'ebay_browse' | 'oem_text' | 'vision';
   aiModel: string;
   visionModel?: string;
   estimatedCostUsd: number;

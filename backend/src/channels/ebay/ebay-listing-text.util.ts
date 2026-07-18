@@ -8,8 +8,18 @@ export const EBAY_DESCRIPTION_MAX_LENGTH = EBAY_OFFER_DESCRIPTION_MAX_LENGTH;
 export const EBAY_TITLE_STRUCTURE_PATTERN =
   /^(\d{4}(-\d{4})?)\s+[A-Za-z].*\s+OEM Used$/;
 
+// Third alternative: hyphen-joined OEM/part numbers (e.g. "AST-18204",
+// "1K0-819-644"). Without it, a correctly-structured, reviewed title with a
+// hyphenated part number (very common) fails this check purely because the
+// hyphen breaks the number into pieces too short to match the other two
+// alternatives — matchesStrictEbayTitleStructure() then wrongly reports the
+// title as violating the guideline and buildEbayListingTitle() silently
+// recomposes it from raw catalog fields (cBrand/cType), which can be dirty
+// supplier data unrelated to the reviewed title (observed live: a correct
+// "Ford F-150 ... AST-18204 OEM Used" title replaced by a recomposed
+// "Lincon Kit - Front Suspension Strut AST-18204 OEM Used").
 export const EBAY_TITLE_PART_NUMBER_PATTERN =
-  /\b(?:[A-NPR-Z0-9]{1,3}\s+[A-NPR-Z0-9]{1,4}\s+[A-NPR-Z0-9]{1,4}(?:\s+[A-Z])?|[A-NPR-Z0-9]{7,12})\b/;
+  /\b(?:[A-NPR-Z0-9]{1,3}\s+[A-NPR-Z0-9]{1,4}\s+[A-NPR-Z0-9]{1,4}(?:\s+[A-Z])?|[A-NPR-Z0-9]{2,6}(?:-[A-NPR-Z0-9]{2,6}){1,3}|[A-NPR-Z0-9]{7,12})\b/;
 
 export function matchesStrictEbayTitleStructure(title: string): boolean {
   if (!title || title.length > EBAY_TITLE_MAX_LENGTH) return false;

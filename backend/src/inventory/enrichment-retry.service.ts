@@ -89,6 +89,51 @@ const PERMANENT_MARKERS = [
   'is not defined',
 ];
 
+/** UI-facing bucket for a failed listing's `enrichmentLastFailureReason`. */
+export type FailureUiClass = 'code_bug' | 'needs_data' | 'system';
+
+/**
+ * Markers within a `permanent_*`/`client_error_*` reason string that mean
+ * "the submitted data was incomplete/invalid," not "the code broke." Lets
+ * the inventory UI tell ops "add the missing photo" apart from "file an
+ * engineering ticket" without a human reading the raw reason string.
+ */
+const DATA_GAP_REASON_MARKERS = [
+  'client_error_400',
+  'client_error_422',
+  'missing_required',
+  'no_images',
+  'listing_has_no_sku',
+  'cannot_enrich',
+  'validation_failed',
+  'cannot_exceed',
+];
+
+/**
+ * Classify a stored `enrichmentLastFailureReason` for display: a code bug
+ * (TypeError/ReferenceError — see `cannot read propert`/`is not a
+ * function`/`is not defined` in PERMANENT_MARKERS) needs an engineering
+ * fix; a data gap (missing photo, bad SKU, etc.) is something ops can fix
+ * themselves by correcting the listing; anything else (auth, rate limits,
+ * exhausted retries on a transient error) is a system/API issue.
+ */
+export function classifyFailureForUi(
+  reason: string | null | undefined,
+): FailureUiClass | null {
+  if (!reason) return null;
+  if (
+    reason.startsWith('permanent_cannot_read_propert') ||
+    reason.startsWith('permanent_is_not_a_function') ||
+    reason.startsWith('permanent_is_not_defined')
+  ) {
+    return 'code_bug';
+  }
+  if (DATA_GAP_REASON_MARKERS.some((marker) => reason.includes(marker))) {
+    return 'needs_data';
+  }
+  return 'system';
+}
+
 @Injectable()
 export class EnrichmentRetryService {
   private readonly logger = new Logger(EnrichmentRetryService.name);

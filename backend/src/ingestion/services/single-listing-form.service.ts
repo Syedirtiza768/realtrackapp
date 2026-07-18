@@ -17,7 +17,10 @@ import { VisionEnrichmentPipeline } from '../../common/openai/pipelines/vision-e
 import type { VisionEnrichmentResult } from '../../common/openai/pipelines/vision-enrichment.pipeline.js';
 import { estimateCost } from '../../common/openai/openai.types.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
-import { ListingRecord } from '../../listings/listing-record.entity.js';
+import {
+  ListingRecord,
+  ListingOrigin,
+} from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { StorageService } from '../../storage/storage.service.js';
@@ -30,6 +33,7 @@ import {
   AUTOMOTIVE_OEM_BRANDS,
   SKU_PREFIX,
 } from '../constants/automotive-oem-brands.js';
+import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
 
 /** Minimum uploaded images required before vision fallback (label + overall). */
 export const PART_LOOKUP_MIN_VISION_IMAGES = 2;
@@ -44,7 +48,7 @@ export interface PartLookupResult {
   partNumber?: string;
   confidence?: 'high' | 'medium' | 'low';
   mvlMatched?: boolean;
-  source: 'oem_text' | 'vision';
+  source: 'ebay_browse' | 'oem_text' | 'vision';
   /** OpenRouter model slug used for the successful lookup */
   aiModel: string;
   visionModel?: string;
@@ -187,6 +191,7 @@ export class SingleListingFormService {
     private readonly visionPipeline: VisionEnrichmentPipeline,
     private readonly storageService: StorageService,
     private readonly imageOptimizer: ImageOptimizerService,
+    private readonly browseApi: EbayBrowseApiService,
   ) {}
 
   getLookupPricing(): PartLookupPricingEstimate {
@@ -251,7 +256,7 @@ export class SingleListingFormService {
   async createIntakePart(
     dto: CreateIntakePartDto,
   ): Promise<{ listing: ListingRecord }> {
-    const partNumber = dto.partNumber?.trim();
+    const partNumber = this.sanitizePartNumber(dto.partNumber);
     const brand = dto.brand?.trim();
     if (!partNumber) {
       throw new BadRequestException('partNumber is required');
@@ -263,6 +268,17 @@ export class SingleListingFormService {
     const rawImageUrls = (dto.imageUrls ?? [])
       .map((u) => u.trim())
       .filter(Boolean);
+
+    // Photos are still required to CREATE a part because eBay listings
+    // can't publish without them — but part IDENTIFICATION no longer
+    // depends on images: lookupPart/autoEnrichListing identify via the
+    // eBay Browse API by OEM/MPN first, with vision only as a fallback,
+    // so inadequate photo coverage no longer permanently fails enrichment.
+    if (rawImageUrls.length < PART_LOOKUP_MIN_VISION_IMAGES) {
+      throw new BadRequestException(
+        `At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos are required — upload a label/part-number close-up and an overall part shot, then try again.`,
+      );
+    }
 
     const generatedSku = !dto.sku?.trim();
     let sku = dto.sku?.trim() || (await this.allocateSku());
@@ -280,7 +296,9 @@ export class SingleListingFormService {
     const qty = dto.quantity ?? 1;
     const priceNum = dto.price;
     const priceStr = priceNum.toFixed(2);
-    const placeholderTitle = `${brand} ${partNumber}`.slice(0, 80);
+    const placeholderTitle = this.stripTitleSpecialChars(
+      `${brand} ${partNumber}`,
+    ).slice(0, 80);
     const title = dto.title?.trim() || placeholderTitle;
     let listing: ListingRecord | null = null;
     let sourceRowNumber = 0;
@@ -307,6 +325,7 @@ export class SingleListingFormService {
             status: 'draft',
             sourceFileName: 'warehouse-intake',
             sourceFilePath: 'warehouse-intake',
+            origin: ListingOrigin.ADD_PART,
             sheetName: 'intake',
             sourceRowNumber,
             teamId: dto.teamId || null,
@@ -380,8 +399,9 @@ export class SingleListingFormService {
   }
 
   /**
-   * Auto-enrich a newly created intake listing using text-only AI lookup.
-   * Runs eBay Browse API + OpenAI text enrichment + MVL canonicalization.
+   * Auto-enrich a newly created intake listing without photos:
+   * eBay Browse API identification (primary) → OpenAI text lookup
+   * (fallback) → MVL canonicalization.
    * Best-effort: failures are logged but don't prevent part creation.
    * User-provided fields are never overwritten.
    */
@@ -390,49 +410,60 @@ export class SingleListingFormService {
     dto: CreateIntakePartDto,
   ): Promise<void> {
     try {
-      const partNumber = dto.partNumber?.trim();
+      const partNumber = this.sanitizePartNumber(dto.partNumber);
       if (!partNumber) return;
 
-      // Step 1: AI text enrichment (no photos required)
-      const oemModel =
-        this.config.get<string>('OPENAI_MODEL_TEXT') ||
-        this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4o-mini');
+      let oemResult: Partial<PartLookupResult> | null = null;
 
-      const lookupDto: PartLookupDto = {
-        partNumber,
-        brand: dto.brand,
-        partType: dto.partType,
-      };
+      // Step 1: eBay Browse identification (deterministic, no AI, no photos)
+      const browseAttempt = await this.runBrowseLookup(partNumber, dto.brand);
+      if (browseAttempt && this.isOemLookupUsable(browseAttempt.result)) {
+        oemResult = browseAttempt.result;
+      }
 
-      let oemResult: Partial<PartLookupResult>;
-      try {
-        const attempt = await this.runOemTextLookup(
+      // Step 2 (fallback): AI text enrichment (no photos required)
+      if (!oemResult) {
+        const oemModel =
+          this.config.get<string>('OPENAI_MODEL_TEXT') ||
+          this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4o-mini');
+
+        const lookupDto: PartLookupDto = {
           partNumber,
-          lookupDto,
-          oemModel,
-        );
-        if (!this.isOemLookupUsable(attempt.result)) {
+          brand: dto.brand,
+          partType: dto.partType,
+        };
+
+        try {
+          const attempt = await this.runOemTextLookup(
+            partNumber,
+            lookupDto,
+            oemModel,
+          );
+          if (!this.isOemLookupUsable(attempt.result)) {
+            this.logger.debug(
+              `Auto-enrich: OEM lookup not usable for ${listing.customLabelSku ?? partNumber}`,
+            );
+            return;
+          }
+          oemResult = attempt.result;
+        } catch {
           this.logger.debug(
-            `Auto-enrich: OEM lookup not usable for ${listing.customLabelSku ?? partNumber}`,
+            `Auto-enrich: OEM lookup failed for ${listing.customLabelSku ?? partNumber}`,
           );
           return;
         }
-        oemResult = attempt.result;
-      } catch {
-        this.logger.debug(
-          `Auto-enrich: OEM lookup failed for ${listing.customLabelSku ?? partNumber}`,
-        );
-        return;
       }
 
-      // Step 2: MVL canonicalization
+      // Step 3: MVL canonicalization
       const finalized = await this.finalizeLookupFields(
         oemResult,
         partNumber,
       );
 
-      // Step 3: Apply results, respecting user overrides
-      const placeholderTitle = `${dto.brand} ${partNumber}`.slice(0, 80);
+      // Step 4: Apply results, respecting user overrides
+      const placeholderTitle = this.stripTitleSpecialChars(
+        `${dto.brand} ${partNumber}`,
+      ).slice(0, 80);
       let titleChanged = false;
 
       // Title: only overwrite if still placeholder
@@ -473,14 +504,15 @@ export class SingleListingFormService {
 
       // OEM part number: update if AI found a better one
       if (finalized.partNumber?.trim()) {
-        listing.cOeOemPartNumber = finalized.partNumber.trim();
-        listing.cManufacturerPartNumber = finalized.partNumber.trim();
+        const cleanedPn = this.sanitizePartNumber(finalized.partNumber);
+        listing.cOeOemPartNumber = cleanedPn;
+        listing.cManufacturerPartNumber = cleanedPn;
       }
 
-      // Step 4: Save listing
+      // Step 5: Save listing
       await this.listingRepo.save(listing);
 
-      // Step 5: Update catalog product
+      // Step 6: Update catalog product
       if (listing.customLabelSku) {
         try {
           const product = await this.catalogProductRepo.findOneBy({
@@ -521,16 +553,17 @@ export class SingleListingFormService {
     partName: string | null | undefined,
     oemNumber: string | null | undefined,
   ): string {
+    const cleanedOem = this.sanitizePartNumber(oemNumber);
     const parts = [
       make?.trim(),
       partName?.trim(),
-      oemNumber?.trim(),
+      cleanedOem,
       'OEM Used',
     ].filter(Boolean);
     let title = parts.join(' ');
     if (title.length > 80) {
       // Try without "OEM Used" suffix first
-      const withoutSuffix = [make?.trim(), partName?.trim(), oemNumber?.trim()]
+      const withoutSuffix = [make?.trim(), partName?.trim(), cleanedOem]
         .filter(Boolean)
         .join(' ');
       title =
@@ -538,7 +571,9 @@ export class SingleListingFormService {
           ? withoutSuffix
           : withoutSuffix.slice(0, 77) + '...';
     }
-    return title || `${make ?? ''} ${oemNumber ?? ''}`.trim().slice(0, 80);
+    return this.stripTitleSpecialChars(
+      title || `${make ?? ''} ${cleanedOem}`.trim(),
+    ).slice(0, 80);
   }
 
   async lookupAndApplyToListing(
@@ -551,9 +586,9 @@ export class SingleListingFormService {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
 
-    const partNumber =
-      listing.cOeOemPartNumber?.trim() ||
-      listing.cManufacturerPartNumber?.trim();
+    const partNumber = this.sanitizePartNumber(
+      listing.cOeOemPartNumber || listing.cManufacturerPartNumber,
+    );
     if (!partNumber) {
       throw new BadRequestException('Listing has no OEM/part number');
     }
@@ -563,12 +598,9 @@ export class SingleListingFormService {
       .map((u) => u.trim())
       .filter(Boolean);
 
-    if (imageUrls.length < PART_LOOKUP_MIN_VISION_IMAGES) {
-      throw new BadRequestException(
-        `Fetch details requires at least ${PART_LOOKUP_MIN_VISION_IMAGES} photos (label close-up + overall part shot).`,
-      );
-    }
-
+    // No photo-count gate here: lookupPart identifies the part from the
+    // eBay Browse API by OEM/MPN first, so detection no longer depends on
+    // images. Photos, when present, only feed the vision fallback.
     const lookup = await this.lookupPart({
       partNumber,
       brand: listing.cBrand?.trim() || undefined,
@@ -577,7 +609,10 @@ export class SingleListingFormService {
     });
 
     if (lookup.partName?.trim()) {
-      listing.title = lookup.partName.trim().slice(0, 80);
+      listing.title = this.stripTitleSpecialChars(lookup.partName).slice(
+        0,
+        80,
+      );
     }
     if (lookup.brand?.trim()) {
       listing.cBrand = lookup.brand.trim();
@@ -592,8 +627,9 @@ export class SingleListingFormService {
       listing.description = lookup.note.trim();
     }
     if (lookup.partNumber?.trim()) {
-      listing.cOeOemPartNumber = lookup.partNumber.trim();
-      listing.cManufacturerPartNumber = lookup.partNumber.trim();
+      const cleanedPn = this.sanitizePartNumber(lookup.partNumber);
+      listing.cOeOemPartNumber = cleanedPn;
+      listing.cManufacturerPartNumber = cleanedPn;
     }
 
     const saved = await this.listingRepo.save(listing);
@@ -631,18 +667,36 @@ export class SingleListingFormService {
   }
 
   async lookupPart(dto: PartLookupDto): Promise<PartLookupResult> {
-    const partNumber = dto.partNumber?.trim();
+    const partNumber = this.sanitizePartNumber(dto.partNumber);
     if (!partNumber) {
       throw new BadRequestException('partNumber is required');
     }
-
-    this.assertAiConfigured();
 
     const imageUrls = (dto.imageUrls ?? [])
       .map((u) => u.trim())
       .filter(Boolean);
 
-    // Vision-first when photos are available: OEM + brand + images together
+    // eBay-Browse-first: identify the part from live eBay listings that
+    // carry the same OEM/MPN. Deterministic, photo-independent, and free —
+    // no AI call and no dependency on image quality/coverage.
+    const browseAttempt = await this.runBrowseLookup(partNumber, dto.brand);
+    if (browseAttempt && this.isOemLookupUsable(browseAttempt.result)) {
+      return {
+        ...(await this.finalizeLookupFields(
+          browseAttempt.result,
+          partNumber,
+          true,
+        )),
+        source: 'ebay_browse',
+        aiModel: 'ebay-browse-api',
+        estimatedCostUsd: 0,
+        fallbackUsed: false,
+      };
+    }
+
+    this.assertAiConfigured();
+
+    // Vision fallback when photos are available: OEM + brand + images together
     if (imageUrls.length >= PART_LOOKUP_MIN_VISION_IMAGES) {
       const visionAttempt = await this.runVisionLookup(
         partNumber,
@@ -661,7 +715,7 @@ export class SingleListingFormService {
         aiModel: visionAttempt.visionModel,
         visionModel: visionAttempt.visionModel,
         estimatedCostUsd: visionAttempt.costUsd,
-        fallbackUsed: false,
+        fallbackUsed: true,
       };
     }
 
@@ -673,7 +727,7 @@ export class SingleListingFormService {
     const oemAttempt = await this.runOemTextLookup(partNumber, dto, oemModel);
     if (!this.isOemLookupUsable(oemAttempt.result)) {
       throw new BadRequestException(
-        `At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos are required — upload a label close-up and an overall part shot, then try again.`,
+        `Could not identify part ${partNumber}: no matching eBay listings found and the AI text lookup was inconclusive. Add photos (label close-up + overall shot) or verify the part number, then try again.`,
       );
     }
 
@@ -686,7 +740,7 @@ export class SingleListingFormService {
       source: 'oem_text',
       aiModel: oemModel,
       estimatedCostUsd: oemAttempt.costUsd,
-      fallbackUsed: false,
+      fallbackUsed: true,
     };
   }
 
@@ -713,6 +767,159 @@ export class SingleListingFormService {
     if (result.confidence === 'medium' && !brand && !category) return false;
 
     return true;
+  }
+
+  /**
+   * Identify a part from live eBay listings carrying the same OEM/MPN via
+   * the Browse API. Deterministic and photo-independent — this is the
+   * primary detection path so part identification never depends on image
+   * quality or coverage. Returns null when eBay has no matching listings
+   * (legitimately rare parts) or the API call fails; callers fall back to
+   * vision / AI text lookup.
+   */
+  private async runBrowseLookup(
+    partNumber: string,
+    brandHint?: string,
+  ): Promise<{ result: Partial<PartLookupResult> } | null> {
+    try {
+      let lookup = await this.browseApi.searchByMpn(
+        brandHint ?? '',
+        partNumber,
+        { limit: 10 },
+      );
+      // Brand hints can be mistyped/noisy — retry with the bare part number
+      // so a wrong brand doesn't block identification.
+      if ((!lookup.found || lookup.items.length === 0) && brandHint?.trim()) {
+        lookup = await this.browseApi.searchByMpn('', partNumber, {
+          limit: 10,
+        });
+      }
+      if (!lookup.found || lookup.items.length === 0) return null;
+
+      const normalize = (v: string | null | undefined) =>
+        (v ?? '').toLowerCase().replace(/[\s\-]/g, '');
+      const target = normalize(partNumber);
+
+      const detailed = lookup.items.filter(
+        (i) => i.title && (Object.keys(i.aspects).length > 0 || i.brand),
+      );
+      const exactMpn = detailed.filter(
+        (i) =>
+          normalize(i.mpn) === target ||
+          Object.values(i.aspects).some((vals) =>
+            vals.some((v) => normalize(v) === target),
+          ),
+      );
+      const pool =
+        exactMpn.length > 0
+          ? exactMpn
+          : detailed.length > 0
+            ? detailed
+            : lookup.items;
+      const best =
+        pool.find((i) => i.epid && i.categoryId) ??
+        pool.find((i) => i.categoryId) ??
+        pool[0];
+      if (!best) return null;
+
+      const partName =
+        this.str(best.aspects['Type']?.[0]) ??
+        this.derivePartNameFromTitle(
+          best.title,
+          partNumber,
+          brandHint ?? best.brand ?? undefined,
+        );
+      if (!partName) return null;
+
+      const brand =
+        this.str(best.brand) ??
+        this.str(best.aspects['Brand']?.[0]) ??
+        this.str(brandHint);
+      const model = this.str(
+        best.fitmentHints?.find((h) => h.model)?.model,
+      );
+      const category = this.str(best.categoryName);
+
+      const fitmentSummary = (best.fitmentHints ?? [])
+        .slice(0, 4)
+        .map((h) => [h.year, h.make, h.model].filter(Boolean).join(' '))
+        .filter(Boolean)
+        .join('; ');
+      const noteParts = [
+        `Identified from live eBay listings matching OEM/MPN ${partNumber}.`,
+        best.epid ? `eBay catalog EPID ${best.epid}.` : '',
+        fitmentSummary ? `Reported fitment: ${fitmentSummary}.` : '',
+        'Used OEM part — verify the part number against your vehicle before purchase.',
+      ].filter(Boolean);
+
+      this.logger.log(
+        `Browse part lookup identified ${partNumber}: "${partName}" ` +
+          `(category="${category ?? ''}", exactMpnMatch=${exactMpn.length > 0})`,
+      );
+
+      return {
+        result: {
+          partName,
+          brand,
+          model,
+          category,
+          note: noteParts.join(' '),
+          partNumber: best.mpn
+            ? this.sanitizePartNumber(best.mpn)
+            : partNumber,
+          confidence: exactMpn.length > 0 ? 'high' : 'medium',
+        },
+      };
+    } catch (err) {
+      this.logger.warn(
+        `Browse part lookup failed for ${partNumber}: ${err instanceof Error ? err.message : err}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Derive a listing-ready part name from another seller's title by
+   * stripping the part number, brand tokens, year ranges, and condition
+   * boilerplate.
+   */
+  private derivePartNameFromTitle(
+    title: string | null | undefined,
+    partNumber: string,
+    brand?: string | null,
+  ): string | undefined {
+    if (!title?.trim()) return undefined;
+    const stopWords = new Set(
+      ['oem', 'genuine', 'used', 'new', 'original', 'factory', 'oe', 'fits'].map(
+        (w) => w,
+      ),
+    );
+    const brandTokens = new Set(
+      (brand ?? '')
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    const normalize = (v: string) => v.toLowerCase().replace(/[\s\-]/g, '');
+    const targetPn = normalize(partNumber);
+
+    const words = this.stripTitleSpecialChars(title)
+      .split(/\s+/)
+      .filter((w) => {
+        const lower = w.toLowerCase();
+        if (stopWords.has(lower)) return false;
+        if (brandTokens.has(lower)) return false;
+        // Drop the part number itself (with or without dashes/spaces)
+        if (targetPn && normalize(w) === targetPn) return false;
+        // Drop long alphanumeric codes that look like part numbers
+        if (/^[a-z0-9\-]{8,}$/i.test(w) && /\d/.test(w)) return false;
+        // Drop years / year ranges
+        if (/^(19|20)\d{2}([-/](19|20)?\d{2})?$/.test(w)) return false;
+        return true;
+      });
+
+    const name = words.join(' ').replace(/\s+/g, ' ').trim();
+    return name.length >= 3 ? name.slice(0, 65) : undefined;
   }
 
   private async runOemTextLookup(
@@ -895,10 +1102,25 @@ export class SingleListingFormService {
       | undefined;
     const hasLabelShot = coverage?.hasLabelShot === true;
     const hasOverallShot = coverage?.hasOverallShot === true;
+    const coverageIncomplete = !hasLabelShot || !hasOverallShot;
 
-    if (!hasLabelShot || !hasOverallShot) {
+    // Vision runs as a fallback after the eBay Browse lookup, so incomplete
+    // photo coverage is no longer a hard failure: if the model still
+    // produced a usable identification, use it (capped at medium
+    // confidence). Only reject when coverage is incomplete AND the model
+    // couldn't name the part — that combination is genuinely unusable.
+    if (
+      coverageIncomplete &&
+      !this.str(parsed.partName) &&
+      !this.str(parsed.title)
+    ) {
       throw new BadRequestException(
         'Photos must include both a label/part-number close-up and an overall part shot. Add the missing photo type and try again.',
+      );
+    }
+    if (coverageIncomplete) {
+      this.logger.warn(
+        `Vision lookup: incomplete photo coverage (label=${hasLabelShot}, overall=${hasOverallShot}) — using result at reduced confidence`,
       );
     }
 
@@ -927,11 +1149,18 @@ export class SingleListingFormService {
         model: this.str(parsed.model) ?? this.str(fitment?.model),
         category: this.str(parsed.category) ?? this.str(parsed.partType),
         note,
-        partNumber:
-          this.str(parsed.partNumber) ??
-          this.str(parsed.mpn) ??
-          this.str(parsed.oemNumber),
-        confidence: this.normalizeConfidence(confidenceLevel),
+        partNumber: this.str(
+          this.sanitizePartNumber(
+            this.str(parsed.partNumber) ??
+              this.str(parsed.mpn) ??
+              this.str(parsed.oemNumber),
+          ),
+        ),
+        confidence:
+          coverageIncomplete &&
+          this.normalizeConfidence(confidenceLevel) === 'high'
+            ? 'medium'
+            : this.normalizeConfidence(confidenceLevel),
       },
       costUsd: visionResult.estimatedCostUsd,
       visionModel: visionResult.model,
@@ -1021,6 +1250,22 @@ export class SingleListingFormService {
     if (value == null) return undefined;
     const s = String(value).trim();
     return s || undefined;
+  }
+
+  /** Strip embedded whitespace from a part/OEM number — user-typed and
+   * AI-vision-read values sometimes carry spaces (e.g. "5C5 881 106") that
+   * eBay File Exchange and search treat as a single token. */
+  private sanitizePartNumber(value: string | null | undefined): string {
+    return (value ?? '').trim().replace(/\s+/g, '');
+  }
+
+  /** Strip characters outside the allowlist used across every title builder
+   * in this codebase (letters/digits/spaces/-/&./,+). */
+  private stripTitleSpecialChars(value: string | null | undefined): string {
+    return (value ?? '')
+      .replace(/[^A-Za-z0-9\s\-/&.,+]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private normalizeConfidence(value: unknown): PartLookupResult['confidence'] {

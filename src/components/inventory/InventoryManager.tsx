@@ -31,6 +31,7 @@ import {
   countInventoryActiveFilters,
   type InventoryListingItem,
   type EnrichmentStatus,
+  type FailureUiClass,
   type InventoryFilters,
 } from '../../lib/inventoryApi';
 import { fetchWithAuth } from '../../lib/authApi';
@@ -57,7 +58,17 @@ function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
   return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
 }
 
-function EnrichmentBadge({ status, stage }: { status: EnrichmentStatus; stage?: string | null }) {
+function EnrichmentBadge({
+  status,
+  stage,
+  failureClass,
+  failureReason,
+}: {
+  status: EnrichmentStatus;
+  stage?: string | null;
+  failureClass?: FailureUiClass;
+  failureReason?: string;
+}) {
   const stageHint = stage
     ? { vision_lookup: 'Vision...', enrichment: 'Enrich...', generating_us: 'US...', generating_au: 'AU...', generating_de: 'DE...' }[stage] ?? stage
     : undefined;
@@ -74,9 +85,19 @@ function EnrichmentBadge({ status, stage }: { status: EnrichmentStatus; stage?: 
     failed: { variant: 'destructive', label: 'Failed' },
   };
   const cfg = config[status] ?? { variant: 'outline', label: status };
+  // needs_data failures (e.g. a missing required photo) are self-serve —
+  // ops can fix the listing directly, no engineering ticket needed.
+  const label =
+    status === 'failed' && failureClass === 'needs_data' ? 'Needs photo' : cfg.label;
+  const title =
+    status === 'failed' && failureReason
+      ? failureClass === 'needs_data'
+        ? 'Missing a required photo — add the label close-up and overall shot, then it will auto-retry.'
+        : `Enrichment failed: ${failureReason}`
+      : undefined;
   return (
-    <Badge variant={cfg.variant} className={cfg.pulse ? 'animate-pulse' : ''}>
-      {cfg.label}
+    <Badge variant={cfg.variant} className={cfg.pulse ? 'animate-pulse' : ''} title={title}>
+      {label}
     </Badge>
   );
 }
@@ -544,7 +565,12 @@ export default function InventoryManager() {
                         <StatusBadge status={item.status} />
                       </td>
                       <td className="py-3 pr-3">
-                        <EnrichmentBadge status={item.enrichmentStatus} stage={item.enrichmentStage} />
+                        <EnrichmentBadge
+                          status={item.enrichmentStatus}
+                          stage={item.enrichmentStage}
+                          failureClass={item.failureClass}
+                          failureReason={item.failureReason}
+                        />
                       </td>
                       <td className="py-3" onClick={(e) => e.stopPropagation()}>
                         {item.enrichmentStatus === 'completed' ? (

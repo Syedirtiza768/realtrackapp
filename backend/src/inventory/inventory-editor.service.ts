@@ -220,6 +220,7 @@ export class InventoryEditorService {
       organizationId: primary.organizationId,
       sourceFileName: primary.sourceFileName ?? 'warehouse-intake',
       sourceFilePath: primary.sourceFilePath ?? 'warehouse-intake',
+      origin: primary.origin,
       sheetName: primary.sheetName ?? 'Listings',
       sourceRowNumber: row,
       customLabelSku: primary.customLabelSku,

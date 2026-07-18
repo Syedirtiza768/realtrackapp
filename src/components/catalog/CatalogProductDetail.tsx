@@ -99,9 +99,10 @@ interface SortableImageProps {
   url: string;
   index: number;
   onRemove: (index: number) => void;
+  onZoom: (index: number) => void;
 }
 
-function SortableImage({ id, url, index, onRemove }: SortableImageProps) {
+function SortableImage({ id, url, index, onRemove, onZoom }: SortableImageProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),

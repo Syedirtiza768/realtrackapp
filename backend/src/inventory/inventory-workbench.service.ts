@@ -8,7 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { ImageAsset } from '../storage/entities/image-asset.entity.js';
 import { StorageService } from '../storage/storage.service.js';
-import { ListingRecord } from '../listings/listing-record.entity.js';
+import {
+  ListingRecord,
+  ListingOrigin,
+} from '../listings/listing-record.entity.js';
 import { PartFitment } from '../fitment/entities/part-fitment.entity.js';
 import { PipelineJob } from '../ingestion/entities/pipeline-job.entity.js';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
@@ -22,6 +25,7 @@ import {
   INLINE_ENRICH_STAGES,
   InventoryAutoTriggerService,
 } from './inventory-auto-trigger.service.js';
+import { classifyFailureForUi } from './enrichment-retry.service.js';
 import { FitmentDiscoveryService } from '../listing-optimization/fitment-discovery.service.js';
 import type { InventoryListingsQueryDto } from './dto/inventory-workbench.dto.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
@@ -336,7 +340,7 @@ export class InventoryWorkbenchService {
           ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
             ORDER BY
-              CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+              CASE WHEN f."origin" = 'add_part' THEN 0 ELSE 1 END,
               CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END,
               f."importedAt" DESC
           ) AS rn
@@ -363,7 +367,7 @@ export class InventoryWorkbenchService {
           ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
             ORDER BY
-              CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+              CASE WHEN f."origin" = 'add_part' THEN 0 ELSE 1 END,
               CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END,
               f."importedAt" DESC
           ) AS rn
@@ -521,12 +525,20 @@ export class InventoryWorkbenchService {
         pipelineJobStatus: primaryJob?.status,
         hasCompletedPipelineJob,
         enrichmentStatus,
-        intakeSource: listing.sourceFileName === 'warehouse-intake',
+        ...(enrichmentStatus === 'failed'
+          ? {
+              failureReason: listing.enrichmentLastFailureReason ?? undefined,
+              failureClass:
+                classifyFailureForUi(listing.enrichmentLastFailureReason) ??
+                undefined,
+            }
+          : {}),
+        intakeSource: listing.origin === ListingOrigin.ADD_PART,
         marketplaceVariants,
         storeListings: listing.customLabelSku
           ? (storeListingsBySku.get(listing.customLabelSku) ?? [])
           : [],
-        location: listing.sourceFileName === 'warehouse-intake' ? listing.location ?? undefined : undefined,
+        location: listing.origin === ListingOrigin.ADD_PART ? listing.location ?? undefined : undefined,
         version: listing.version,
         teamName: listing.teamId ? (teamById.get(listing.teamId)?.name ?? null) : null,
         teamColor: listing.teamId ? (teamById.get(listing.teamId)?.color ?? null) : null,
@@ -745,7 +757,7 @@ export class InventoryWorkbenchService {
       itemPhotoUrl: listing.itemPhotoUrl,
       pUpc: listing.pUpc,
       pEpid: listing.pEpid,
-      location: listing.sourceFileName === 'warehouse-intake' ? listing.location : null,
+      location: listing.origin === ListingOrigin.ADD_PART ? listing.location : null,
       format: listing.format,
       sourceFileName: listing.sourceFileName,
       marketplace: listing.marketplace,
@@ -755,6 +767,11 @@ export class InventoryWorkbenchService {
       extractedMake: listing.extractedMake,
       extractedModel: listing.extractedModel,
       enrichmentStage: listing.enrichmentStage,
+      enrichmentPermanentFail: listing.enrichmentPermanentFail,
+      failureReason: listing.enrichmentLastFailureReason ?? undefined,
+      failureClass:
+        classifyFailureForUi(listing.enrichmentLastFailureReason) ??
+        undefined,
       importedAt: listing.importedAt,
       updatedAt: listing.updatedAt,
       publishedAt: listing.publishedAt,
@@ -1099,6 +1116,7 @@ export class InventoryWorkbenchService {
         const newListing = this.listingRepo.create({
           sourceFileName: `inline-enrich-${mkt.toLowerCase()}`,
           sourceFilePath: `inline-enrich:${listingId}/${mkt}`,
+          origin: baseListing.origin,
           sheetName: `Inline Enrich ${mkt}`,
           sourceRowNumber: baseListing.sourceRowNumber,
           action: 'Add',
@@ -1147,6 +1165,7 @@ export class InventoryWorkbenchService {
         const fallbackListing = this.listingRepo.create({
           sourceFileName: `inline-enrich-${mkt.toLowerCase()}`,
           sourceFilePath: `inline-enrich:${listingId}/${mkt}`,
+          origin: baseListing.origin,
           sheetName: `Inline Enrich ${mkt}`,
           sourceRowNumber: baseListing.sourceRowNumber,
           action: 'Add',
@@ -1648,7 +1667,14 @@ export class InventoryWorkbenchService {
         stage === INLINE_ENRICH_STAGES.NEEDS_REVIEW ||
         stage === INLINE_ENRICH_STAGES.VISION_LOOKUP;
       if (mayEnqueue) {
-        await this.autoTrigger.enqueueAutoEnrich(listingId);
+        // enqueueAutoEnrich silently no-ops on a permanently-failed listing
+        // unless forced — without this, correcting the photos that caused
+        // the failure (e.g. adding the missing label close-up) never
+        // actually resumed enrichment; it just sat "failed" forever until
+        // someone hit the manual reset-enrichment-retry endpoint.
+        await this.autoTrigger.enqueueAutoEnrich(listingId, {
+          force: listing.enrichmentPermanentFail,
+        });
       }
     }
 
@@ -2014,7 +2040,7 @@ export class InventoryWorkbenchService {
         ranked AS (
           SELECT f.*, ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
-            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+            ORDER BY CASE WHEN f."origin" = 'add_part' THEN 0 ELSE 1 END,
                      CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
           ) AS rn FROM filtered f
         )
@@ -2033,7 +2059,7 @@ export class InventoryWorkbenchService {
         ranked AS (
           SELECT f.*, ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
-            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+            ORDER BY CASE WHEN f."origin" = 'add_part' THEN 0 ELSE 1 END,
                      CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
           ) AS rn FROM filtered f
         )
@@ -2053,7 +2079,7 @@ export class InventoryWorkbenchService {
         ranked AS (
           SELECT f.*, ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
-            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+            ORDER BY CASE WHEN f."origin" = 'add_part' THEN 0 ELSE 1 END,
                      CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
           ) AS rn FROM filtered f
         )
@@ -2076,7 +2102,7 @@ export class InventoryWorkbenchService {
         ranked AS (
           SELECT f.*, ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
-            ORDER BY CASE WHEN f."sourceFileName" = 'warehouse-intake' THEN 0 ELSE 1 END,
+            ORDER BY CASE WHEN f."origin" = 'add_part' THEN 0 ELSE 1 END,
                      CASE WHEN f.marketplace IS NULL THEN 0 ELSE 1 END, f."importedAt" DESC
           ) AS rn FROM filtered f
         )

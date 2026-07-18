@@ -9,7 +9,10 @@ import * as fs from 'fs';
 import { CatalogImport } from '../entities/catalog-import.entity.js';
 import { CatalogImportRow } from '../entities/catalog-import-row.entity.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
-import { ListingRecord } from '../../listings/listing-record.entity.js';
+import {
+  ListingRecord,
+  ListingOrigin,
+} from '../../listings/listing-record.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { StorageService } from '../../storage/storage.service.js';
 import { DuplicateDetectionService } from '../services/duplicate-detection.service.js';
@@ -1152,6 +1155,7 @@ export class CsvImportProcessor extends WorkerHost {
       organizationId: null,
       sourceFileName,
       sourceFilePath,
+      origin: ListingOrigin.PIPELINE_IMPORT,
       sheetName,
       sourceRowNumber: rowNumber,
       action: data['action'] || 'Add',

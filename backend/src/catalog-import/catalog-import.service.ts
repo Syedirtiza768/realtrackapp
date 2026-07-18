@@ -16,7 +16,10 @@ import * as XLSX from 'xlsx';
 import { CatalogImport } from './entities/catalog-import.entity.js';
 import { CatalogImportRow } from './entities/catalog-import-row.entity.js';
 import { CatalogProduct } from './entities/catalog-product.entity.js';
-import { ListingRecord } from '../listings/listing-record.entity.js';
+import {
+  ListingRecord,
+  ListingOrigin,
+} from '../listings/listing-record.entity.js';
 import type { CsvImportJobData } from './processors/csv-import.processor.js';
 import {
   applyCreatedByVisibility,
@@ -919,6 +922,7 @@ export class CatalogImportService {
       organizationId: null,
       sourceFileName,
       sourceFilePath: sourceFilePath ?? '',
+      origin: ListingOrigin.PIPELINE_IMPORT,
       sheetName,
       sourceRowNumber: rowNumber,
       action: 'Add',

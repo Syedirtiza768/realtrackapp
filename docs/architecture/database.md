@@ -70,6 +70,13 @@ Phased history (chronological by timestamp prefix):
 | `ListingOptimizationPipeline` | Optimization pipeline tables |
 | `RbacFoundation` | Roles/permissions tables |
 | `ClientSettings` | White-label client settings |
+| `AddOriginToListingRecords` (1789200000000) | Adds `listing_records.origin` (`add_part`/`pipeline_import`), replacing the `sourceFileName === 'warehouse-intake'` sentinel-string pattern |
+
+Note: this table was last reconciled before several later migrations (e.g.
+`AddWeightToListingRecord`, `BackfillTeamIdOnListingRecords`,
+`AddEnrichmentRetryTrackingToListingRecords`,
+`CreateWarehouseIntakeRowSequence`) — treat `backend/src/migrations/` as the
+source of truth for the full list.
 
 Commands (run from `backend/`):
 

@@ -627,6 +627,20 @@ export class EnterpriseListingIntelligenceService {
       );
     }
 
+    // Final guard, regardless of which branch above produced optimizedTitle
+    // (AI path, deterministic fallback, or a marketplace rebuild): the AI
+    // title generator and the deterministic builders both sometimes emit the
+    // OEM/manufacturer part number with stray spaces between characters
+    // (e.g. "5C5 881 106" instead of "5C5881106"), and occasional special
+    // characters. Observed live on GridX pipeline jobs feeding this service —
+    // fixing only the upstream pipeline script didn't catch AI-authored
+    // titles that reformat the part number themselves.
+    optimizedTitle = this.sanitizeOptimizedTitle(
+      optimizedTitle,
+      product,
+      marketplace,
+    );
+
     const imageAnalysis = this.evaluateImages(product.imageUrls);
     const complianceWarnings = this.buildComplianceWarnings({
       title: optimizedTitle,
@@ -1573,6 +1587,37 @@ export class EnterpriseListingIntelligenceService {
     const normalized = title.replace(/\s+/g, ' ').trim();
     const local = this.localizeText(normalized, marketplace);
     return local.slice(0, 80);
+  }
+
+  /** Collapse a spaced-out occurrence of the product's own OEM/part number
+   * back into a single token, and (US/AU only — German legitimately uses
+   * umlauts/ß) strip characters outside the allowlist used across the title
+   * builders. Guarded to part numbers >=5 chars to avoid false-positive
+   * matches on short values. */
+  private sanitizeOptimizedTitle(
+    title: string,
+    product: CatalogProduct,
+    marketplace: Marketplace,
+  ): string {
+    let result = title;
+    const pn = (product.oemPartNumber ?? product.mpn ?? '')?.trim();
+    if (pn && pn.length >= 5) {
+      const escaped = pn
+        .split('')
+        .map((ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const pattern = new RegExp(escaped.join('\\s*'), 'i');
+      const match = result.match(pattern);
+      if (match && match[0].length <= pn.length + 12) {
+        result = result.replace(pattern, pn);
+      }
+    }
+    if (marketplace !== 'DE') {
+      result = result
+        .replace(/[^A-Za-z0-9\s\-/&.,+]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    return result;
   }
 
   private cleanDescription(

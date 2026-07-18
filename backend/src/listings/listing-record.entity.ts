@@ -10,6 +10,16 @@ import {
   VersionColumn,
 } from 'typeorm';
 
+/**
+ * Where a listing_record was created from. `ADD_PART` is the manual
+ * single-part intake form; `PIPELINE_IMPORT` is the automated
+ * Excel/CSV catalog-import pipeline.
+ */
+export enum ListingOrigin {
+  ADD_PART = 'add_part',
+  PIPELINE_IMPORT = 'pipeline_import',
+}
+
 @Entity({ name: 'listing_records' })
 @Unique('uq_listing_source_row', [
   'sourceFileName',
@@ -24,6 +34,7 @@ import {
 @Index('idx_listing_c_type', ['cType'])
 @Index('idx_listing_source_file', ['sourceFileName'])
 @Index('idx_listing_records_org', ['organizationId'])
+@Index('idx_listing_origin', ['origin'])
 export class ListingRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -45,6 +56,9 @@ export class ListingRecord {
 
   @Column({ type: 'int' })
   sourceRowNumber: number;
+
+  @Column({ type: 'varchar', length: 20 })
+  origin: ListingOrigin;
 
   @CreateDateColumn({ type: 'timestamptz' })
   importedAt: Date;

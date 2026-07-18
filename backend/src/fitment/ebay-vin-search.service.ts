@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import { ListingRecord } from '../listings/listing-record.entity.js';
+import {
+  ListingRecord,
+  ListingOrigin,
+} from '../listings/listing-record.entity.js';
 import { EbayBrowseApiService } from '../channels/ebay/ebay-browse-api.service.js';
 import type { VinDecodeResult } from './vin-decode.service.js';
 
@@ -83,6 +86,7 @@ export class EbayVinSearchService {
       const records: Partial<ListingRecord>[] = items.map((item, idx) => ({
         sourceFileName: SOURCE_FILE,
         sourceFilePath: `ebay://item/${item.itemId}`,
+        origin: ListingOrigin.PIPELINE_IMPORT,
         sheetName,
         sourceRowNumber: idx + 1,
         action: 'Add',
