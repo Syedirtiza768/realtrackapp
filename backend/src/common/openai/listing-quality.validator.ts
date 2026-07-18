@@ -15,6 +15,16 @@ const REQUIRED_SPECIFICS = [
   'Placement on Vehicle',
 ];
 
+/** Specifics that many parts legitimately lack (an intake manifold or ECU has
+ * no placement) — missing values are review context, not a hard block. */
+const SOFT_SPECIFICS = new Set(['Placement on Vehicle']);
+
+/** Any recognized vehicle make in the title earns the make point — the old
+ * mercedes|bmw|toyota|ford|honda list came from the Mercedes model-comparison
+ * harness and silently penalized every Audi/Lexus/VW/Jaguar listing. */
+const TITLE_MAKE_PATTERN =
+  /mercedes|bmw|toyota|lexus|ford|lincoln|honda|acura|audi|volkswagen|vw|porsche|jaguar|land\s*rover|range\s*rover|nissan|infiniti|chevrolet|chevy|gmc|cadillac|buick|dodge|chrysler|jeep|ram|hyundai|kia|genesis|mazda|subaru|mitsubishi|volvo|mini|bentley|tesla|fiat|alfa\s*romeo|maserati|smart|saab|suzuki|isuzu/i;
+
 export interface ItemScore {
   composite: number;
   titleWithinLimit: boolean;
@@ -34,7 +44,7 @@ export function scoreItem(
   const titleScore = [
     titleWithinLimit,
     /\b(19|20)\d{2}\b/.test(title),
-    /mercedes|bmw|toyota|ford|honda/i.test(title),
+    TITLE_MAKE_PATTERN.test(title),
     /\bOEM\b|\bGenuine\b|\bUsed\b/i.test(title),
   ].filter(Boolean).length;
 
@@ -100,11 +110,18 @@ export function scoreItem(
       (descScore / 5) * 20 +
       (requiredSpecificsFilled / 4) * 20 +
       (Math.min(fitmentRows, 12) / 12) * 20 +
+      // Chassis-code bonus, or an equivalent structure signal (year range +
+      // recognized make) for the many makes whose listings never carry
+      // Mercedes/BMW-style chassis codes — without this alternative the 10
+      // points were unreachable for them and the 85 auto-approve threshold
+      // was mathematically impossible.
       (compat.some((c) =>
         /w20[0-9]|al\d{2}|xv\d{2}|xe\d{2}|xu\d{2}|f\d{1,2}x|e\d{2}/i.test(
           String(c.chassisCode || c.submodel || c.model || ''),
         ),
-      ) || /w20[0-9]|al\d{2}|xv\d{2}/i.test(title)
+      ) ||
+      /w20[0-9]|al\d{2}|xv\d{2}/i.test(title) ||
+      (/\b(19|20)\d{2}\b/.test(title) && TITLE_MAKE_PATTERN.test(title))
         ? 10
         : 0) +
       (mpnMatchesProvided ? 5 : 0),
@@ -234,7 +251,11 @@ export class ListingQualityValidator {
 
     for (const key of REQUIRED_SPECIFICS) {
       if (!sp[key] || !String(sp[key]).trim()) {
-        hardFails.push(`MISSING_SPECIFIC:${key}`);
+        if (SOFT_SPECIFICS.has(key)) {
+          softFails.push(`MISSING_SPECIFIC:${key}`);
+        } else {
+          hardFails.push(`MISSING_SPECIFIC:${key}`);
+        }
       }
     }
 

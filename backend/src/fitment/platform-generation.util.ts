@@ -237,7 +237,10 @@ export function alignGenerationAndYearRange(input: {
     if (parsed) {
       yearStart = parsed.min;
       yearEnd = parsed.max;
-    } else if (Number.isFinite(anchor)) {
+    } else if (Number.isFinite(anchor) && anchor >= 1900) {
+      // Number(null) === 0 is finite — without the >=1900 guard a missing
+      // anchor year produced yearRange "0" (observed live: "0 Jaguar Column
+      // Switch ... OEM Used" titles).
       yearStart = anchor;
       yearEnd = anchor;
     }

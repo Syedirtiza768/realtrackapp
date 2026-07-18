@@ -262,7 +262,10 @@ describe('buildStructuredEbayTitle', () => {
 });
 
 describe('buildEbayListingTitle structured composition', () => {
-  it('preserves the reviewed stored title when structured fields are also present', () => {
+  it('recomposes a stored title that violates the guideline structure', () => {
+    // The strict guard recomposes any stored title that doesn't follow
+    // "[Year Range] ... OEM Used" from structured fields (stale test updated:
+    // it previously asserted the pre-guard behavior of preserving free text).
     const { title, warnings } = buildEbayListingTitle({
       title: 'Some old free-text title 4G9827279',
       make: 'Audi',
@@ -271,8 +274,23 @@ describe('buildEbayListingTitle structured composition', () => {
       partName: 'Hood Hinge Cover Cap',
       oemPartNumber: '4G9827279',
     });
-    expect(title).toBe('Some old free-text title 4G9827279');
-    expect(warnings.some((w) => w.includes('recomposed'))).toBe(false);
+    expect(title).toBe(
+      'Audi A6 Front Left Hood Hinge Cover Cap 4G9827279 OEM Used',
+    );
+    expect(warnings.some((w) => w.includes('recomposing'))).toBe(true);
+  });
+
+  it('preserves a stored title that already follows the guideline structure', () => {
+    const stored = '2011-2018 Audi A6 Front Left Hood Hinge 4G9827279 OEM Used';
+    const { title, warnings } = buildEbayListingTitle({
+      title: stored,
+      make: 'Audi',
+      model: 'A6',
+      partName: 'Hood Hinge',
+      oemPartNumber: '4G9827279',
+    });
+    expect(title).toBe(stored);
+    expect(warnings.some((w) => w.includes('recomposing'))).toBe(false);
   });
 
   it('composes without a warning when no title was present', () => {

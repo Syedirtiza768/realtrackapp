@@ -907,17 +907,25 @@ export class InventoryWorkbenchService {
         this.modelRouter.getThresholds().autoApproveMinScore;
       const passedGate = enrichmentResult.passedGate ?? true;
       const score = enrichmentResult.validationScore ?? 100;
-      if (!passedGate || score < autoApproveMinScore) {
-        const reasons = [
-          ...(enrichmentResult.hardFails ?? []),
-          ...(!passedGate
-            ? []
-            : [`SCORE_BELOW_THRESHOLD:${score}<${autoApproveMinScore}`]),
-        ];
+      if (!passedGate) {
+        // Hard fails (MPN mismatch, cross-make fitment, hallucinated part
+        // number, missing Brand/MPN/Type) block completion — these are real
+        // correctness problems.
+        const reasons = enrichmentResult.hardFails ?? [];
         enrichmentGateFailReason = `ai_validation_gate: ${reasons.join(', ') || 'unspecified'}`;
         this.logger.warn(
           `Inline enrich [enrichment]: listing ${listingId} failed validation gate ` +
-            `(score=${score}, passedGate=${passedGate}) — ${enrichmentGateFailReason}`,
+            `(score=${score}) — ${enrichmentGateFailReason}`,
+        );
+      } else if (score < autoApproveMinScore) {
+        // A score shortfall alone is advisory: the composite score measures
+        // the LLM's free-text output, but the deterministic steps below
+        // (category resolution, MVL fitment discovery, structured title
+        // composition) replace exactly those weak parts. Completion is still
+        // gated on category + fitment succeeding.
+        this.logger.warn(
+          `Inline enrich [enrichment]: listing ${listingId} scored ${score}<${autoApproveMinScore} ` +
+            `(no hard fails) — continuing; deterministic post-steps decide final stage`,
         );
       }
 
@@ -1341,7 +1349,7 @@ export class InventoryWorkbenchService {
     const firstRowModel = fitmentRows
       .map((r) => String(r.Model ?? r.model ?? '').trim())
       .find(Boolean);
-    const model = listing.extractedModel?.trim() || firstRowModel || '';
+    let model = listing.extractedModel?.trim() || firstRowModel || '';
 
     // Prefer cBrand — it's guard-normalized (applyListingGuards) to a clean
     // brand name. extractedMake is sometimes "Make Model" concatenated (seen
@@ -1354,6 +1362,12 @@ export class InventoryWorkbenchService {
       make.toLowerCase().endsWith(` ${model.toLowerCase()}`)
     ) {
       make = make.slice(0, make.length - model.length).trim();
+    }
+    // The reverse concatenation also occurs: model="AUDI Q7" with make="Audi"
+    // composed as "Audi AUDI Q7 ..." (observed live). Strip a leading
+    // duplicate make token from the model segment.
+    if (make && model.toLowerCase().startsWith(`${make.toLowerCase()} `)) {
+      model = model.slice(make.length).trim();
     }
 
     const fitmentYears: number[] = [];
@@ -1369,15 +1383,70 @@ export class InventoryWorkbenchService {
       fitmentYears,
     });
 
+    // cType carries raw supplier/AI text that is sometimes a non-descriptive
+    // filler ("OEM", "general", "Salvage") or an eBay category bucket ("Other
+    // Exterior Parts & Accessories") — neither describes the part. Prefer a
+    // real category name over nothing, but never publish filler as the part
+    // name (observed live: "2009-2016 Ford MKS OEM 8A5Z-14B512-AA OEM Used").
+    const partName =
+      this.cleanTitlePartName(listing.cType) ??
+      this.cleanTitlePartName(listing.categoryName) ??
+      null;
+
+    // Guard against corrupt OEM fields: a bare year ("2012") or a token too
+    // short to be a real part number (observed live: "... Belt Tensioner 2012
+    // OEM Used" where cOeOemPartNumber was "2012").
+    const oemCandidate = (
+      listing.cOeOemPartNumber ||
+      listing.cManufacturerPartNumber ||
+      ''
+    ).trim();
+    const oemPartNumber =
+      oemCandidate && !/^(19|20)\d{2}$/.test(oemCandidate) && oemCandidate.length >= 4
+        ? oemCandidate
+        : null;
+
     return buildStructuredEbayTitle({
       yearRange: aligned.yearRange || null,
       make: make || null,
       model: model || null,
       generation: aligned.generation || null,
       position: placement,
-      partName: listing.cType,
-      oemPartNumber: listing.cOeOemPartNumber || listing.cManufacturerPartNumber,
+      partName,
+      oemPartNumber,
     });
+  }
+
+  /** Non-descriptive filler values that must never be published as a part
+   * name — condition/part-type qualifiers and catch-all category buckets. */
+  private static readonly TITLE_PART_NAME_JUNK = new Set([
+    'oem', 'aftermarket', 'salvage', 'used', 'new', 'genuine',
+    'general', 'unknown', 'other', 'misc', 'miscellaneous',
+    'part', 'parts', 'n/a', 'na', 'none',
+  ]);
+
+  /** Return a title-worthy part name, or null when the raw value is filler.
+   * Also strips leading/trailing OEM/Used/Genuine qualifiers that would
+   * duplicate the structural "OEM Used" suffix (observed live: "Rear Center
+   * Console OEM ... OEM Used"). */
+  private cleanTitlePartName(raw: string | null | undefined): string | null {
+    let s = (raw ?? '').replace(/\s+/g, ' ').trim();
+    if (!s) return null;
+    for (let i = 0; i < 4; i++) {
+      const before = s;
+      s = s.replace(/^(?:OEM|Genuine|Used|New|Original)\b\s*/i, '');
+      s = s.replace(/\s*\b(?:OEM|Genuine|Used|New|Original)$/i, '');
+      s = s.trim();
+      if (s === before) break;
+    }
+    if (!s) return null;
+    if (InventoryWorkbenchService.TITLE_PART_NAME_JUNK.has(s.toLowerCase())) {
+      return null;
+    }
+    // eBay catch-all category buckets ("Other Exterior Parts & Accessories",
+    // "Other Interior Parts and Accessories") aren't part names.
+    if (/^other\b.*\b(parts|accessories)$/i.test(s)) return null;
+    return s;
   }
 
   private async discoverAndPersistFitment(

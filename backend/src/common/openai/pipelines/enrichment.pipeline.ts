@@ -138,6 +138,7 @@ export class EnrichmentPipeline {
               },
             ),
             cached,
+            partContext.partNumber,
           ),
           rawData,
         ),
@@ -213,6 +214,7 @@ export class EnrichmentPipeline {
             compactProfile: profile === 'compact',
           }),
           parsed,
+          partContext.partNumber,
         ),
         rawData,
       );
@@ -378,9 +380,26 @@ export class EnrichmentPipeline {
   private withHallucinationCheck(
     validation: ValidationResult,
     parsed: Record<string, unknown>,
+    providedPartNumber?: string,
   ): ValidationResult {
     const brand = this.str(parsed.brand);
     if (!brand) return validation;
+
+    // The detector validates number *format* per brand convention. When the
+    // output number is exactly what the operator typed in at intake, it is by
+    // definition not an LLM hallucination — flagging it hard-failed real
+    // parts whose numbers don't match the brand's usual pattern (observed
+    // live: BMW "9112730", a genuine short-form number).
+    const normalize = (v: string | null | undefined) =>
+      (v ?? '').toLowerCase().replace(/[\s\-]/g, '');
+    const outputNumber = this.str(parsed.oemNumber ?? parsed.mpn);
+    if (
+      providedPartNumber &&
+      outputNumber &&
+      normalize(outputNumber) === normalize(providedPartNumber)
+    ) {
+      return validation;
+    }
 
     const warnings = detectHallucinatedPartNumbers(
       [
