@@ -183,12 +183,15 @@ export class InventoryAutoTriggerService {
       return { queued: false, reason: 'listing_not_found' };
     }
 
+    // Photos are still required at intake creation for publish readiness,
+    // but part identification is now eBay-Browse-first and no longer needs
+    // images. Do not block auto-enrich enqueue on image count — vision is
+    // only a fallback inside lookupPart when Browse finds nothing.
     const imageCount = this.parseImageUrls(listing.itemPhotoUrl).length;
     if (imageCount < 2) {
       this.logger.debug(
-        `Auto-enrich skipped for listing ${listingId}: images=${imageCount}`,
+        `Auto-enrich for listing ${listingId}: images=${imageCount} (Browse-first; proceeding without vision photos)`,
       );
-      return { queued: false, reason: 'insufficient_images' };
     }
 
     const stage = listing.enrichmentStage;
