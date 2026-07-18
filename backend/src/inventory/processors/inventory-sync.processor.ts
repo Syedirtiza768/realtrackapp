@@ -6,7 +6,10 @@ import { InventoryService } from '../inventory.service.js';
 import { InventoryWorkbenchService } from '../inventory-workbench.service.js';
 import { EnrichmentRetryService } from '../enrichment-retry.service.js';
 
-@Processor('inventory', { concurrency: 1 })
+// Concurrency 2: warehouse-intake catch-up re-enrich of hundreds of listings
+// is otherwise multi-hour at 1. Browse/OpenAI rate limits are still the
+// practical ceiling — raise further only after watching 429s.
+@Processor('inventory', { concurrency: 2 })
 export class InventorySyncProcessor extends WorkerHost {
   private readonly logger = new Logger(InventorySyncProcessor.name);
 

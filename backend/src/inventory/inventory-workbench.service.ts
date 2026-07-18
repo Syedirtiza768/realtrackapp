@@ -1386,6 +1386,11 @@ export class InventoryWorkbenchService {
     if (make && model.toLowerCase().startsWith(`${make.toLowerCase()} `)) {
       model = model.slice(make.length).trim();
     }
+    // AI/Browse sometimes returns literal "Unknown" as the model
+    // (observed live: "2014-2016 Cadillac Unknown ABS …").
+    if (/^(unknown|n\/?a|none|other)$/i.test(model)) {
+      model = '';
+    }
 
     const fitmentYears: number[] = [];
     for (const row of fitmentRows) {
@@ -1405,10 +1410,19 @@ export class InventoryWorkbenchService {
     // Exterior Parts & Accessories") — neither describes the part. Prefer a
     // real category name over nothing, but never publish filler as the part
     // name (observed live: "2009-2016 Ford MKS OEM 8A5Z-14B512-AA OEM Used").
-    const partName =
+    let partName =
       this.cleanTitlePartName(listing.cType) ??
       this.cleanTitlePartName(listing.categoryName) ??
       null;
+    // Drop a leading position word that duplicates the position segment
+    // (observed live: position="Rear" + partName="Rear View Mirror" →
+    // "… Rear Rear View Mirror …").
+    if (partName && placement?.trim()) {
+      const pos = placement.trim().toLowerCase();
+      if (partName.toLowerCase().startsWith(`${pos} `)) {
+        partName = partName.slice(placement.trim().length).trim() || partName;
+      }
+    }
 
     // Guard against corrupt OEM fields: a bare year ("2012") or a token too
     // short to be a real part number (observed live: "... Belt Tensioner 2012
@@ -1462,11 +1476,13 @@ export class InventoryWorkbenchService {
     }
     // eBay catch-all / category-tree buckets aren't part names
     // ("Other Exterior Parts & Accessories", "Exterior, Grilles & Body Parts",
-    // "Shocks, Struts & Assemblies").
+    // "Hood Latches & Parts", "Shocks, Struts & Assemblies").
+    // Note: do NOT use \b around '&' — '&' is a non-word char so \b&\b never
+    // matches "Latches & Parts" (observed live).
     if (
       /^other\b.*\b(parts|accessories)$/i.test(s) ||
-      /\b(parts|assemblies|accessories)\b.*&\b/i.test(s) ||
-      /\b&\b.*\b(parts|assemblies|accessories)\b/i.test(s) ||
+      /\b(parts|assemblies|accessories)\b.*&/i.test(s) ||
+      /&.*\b(parts|assemblies|accessories)\b/i.test(s) ||
       /,.*(parts|assemblies|accessories)$/i.test(s)
     ) {
       return null;
