@@ -826,10 +826,11 @@ export class InventoryWorkbenchService {
       title: string;
     }>;
   }> {
-    // Stage 1: Vision part lookup (identifies part from images)
+    // Stage 1: Part identification (Browse-first, then vision/text fallback)
     this.logger.log(`Inline enrich [vision_lookup]: listing ${listingId}`);
     await setStage('vision_lookup');
-    await this.singleListingForm.lookupAndApplyToListing(listingId);
+    const { lookup: partLookup } =
+      await this.singleListingForm.lookupAndApplyToListing(listingId);
 
     // Read the updated base listing
     const baseListing = await this.listingRepo.findOne({
@@ -1219,6 +1220,22 @@ export class InventoryWorkbenchService {
     // Upsert the catalog product master row so the catalog detail page has a
     // categoryId / fitmentData source even without a batch pipeline run.
     await this.upsertCatalogProductFromListing(baseListing);
+
+    // Seed year/make/model from Browse identification BEFORE fitment
+    // discovery — otherwise MVL expansion starts from an empty Year and
+    // titles publish with no year range when discovery finds nothing.
+    if (
+      partLookup.year &&
+      (partLookup.make || partLookup.brand) &&
+      partLookup.model
+    ) {
+      await this.seedBrowseFitment(sku, {
+        year: partLookup.year,
+        make: (partLookup.make || partLookup.brand)!,
+        model: partLookup.model,
+      });
+    }
+
     const { count: fitmentRowCount, rows: fitmentRows } =
       await this.discoverAndPersistFitment(baseListing, listingId);
 
@@ -1443,10 +1460,62 @@ export class InventoryWorkbenchService {
     if (InventoryWorkbenchService.TITLE_PART_NAME_JUNK.has(s.toLowerCase())) {
       return null;
     }
-    // eBay catch-all category buckets ("Other Exterior Parts & Accessories",
-    // "Other Interior Parts and Accessories") aren't part names.
-    if (/^other\b.*\b(parts|accessories)$/i.test(s)) return null;
+    // eBay catch-all / category-tree buckets aren't part names
+    // ("Other Exterior Parts & Accessories", "Exterior, Grilles & Body Parts",
+    // "Shocks, Struts & Assemblies").
+    if (
+      /^other\b.*\b(parts|accessories)$/i.test(s) ||
+      /\b(parts|assemblies|accessories)\b.*&\b/i.test(s) ||
+      /\b&\b.*\b(parts|assemblies|accessories)\b/i.test(s) ||
+      /,.*(parts|assemblies|accessories)$/i.test(s)
+    ) {
+      return null;
+    }
     return s;
+  }
+
+  /** Persist a Browse-identified year/make/model onto the catalog product so
+   * MVL expansion and the deterministic title have a real year to work with. */
+  private async seedBrowseFitment(
+    sku: string,
+    vehicle: { year: string; make: string; model: string },
+  ): Promise<void> {
+    try {
+      const product = await this.productRepo.findOne({ where: { sku } });
+      if (!product) return;
+      const existing = Array.isArray(product.fitmentData)
+        ? product.fitmentData
+        : [];
+      const hasYear = existing.some((r) => {
+        const y = String(
+          (r as Record<string, unknown>).Year ??
+            (r as Record<string, unknown>).year ??
+            '',
+        );
+        return /^(19|20)\d{2}/.test(y);
+      });
+      if (hasYear) return;
+      await this.productRepo.update(product.id, {
+        fitmentData: [
+          {
+            Year: vehicle.year,
+            Make: vehicle.make,
+            Model: vehicle.model,
+            Source: 'ebay_browse',
+          },
+          ...existing,
+        ],
+      } as any);
+      this.logger.log(
+        `Seeded Browse fitment for SKU ${sku}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to seed Browse fitment for SKU ${sku}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
   }
 
   private async discoverAndPersistFitment(
@@ -1469,10 +1538,14 @@ export class InventoryWorkbenchService {
           .split(/[,/]/)
           .map((m) => m.trim())
           .filter(Boolean);
+        // Prefer a real year from the listing title ("2015-2025 Audi…") so
+        // MVL expansion isn't started from an empty donor year.
+        const titleYear =
+          String(listing.title ?? '').match(/\b((?:19|20)\d{2})\b/)?.[1] ?? '';
         product.fitmentData = models.map((model) => ({
           Make: listing.extractedMake,
           Model: model,
-          Year: '',
+          Year: titleYear,
           Source: 'extracted_vehicle',
         }));
       }

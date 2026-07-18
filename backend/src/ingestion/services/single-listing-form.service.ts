@@ -43,6 +43,10 @@ export interface PartLookupResult {
   brand?: string;
   /** Vehicle model line (e.g. Camry) — not the AI model slug */
   model?: string;
+  /** Vehicle make from live eBay fitment (e.g. Audi) — distinct from brand */
+  make?: string;
+  /** Donor / fitment year (or start of a year range) from live eBay listings */
+  year?: string;
   category?: string;
   note?: string;
   partNumber?: string;
@@ -613,9 +617,33 @@ export class SingleListingFormService {
         0,
         80,
       );
+      // Prefer a real part name over intake filler ("OEM"/"Salvage"/etc.)
+      // so the deterministic title composer has something usable in cType.
+      const existingType = (listing.cType ?? '').trim().toLowerCase();
+      const fillerTypes = new Set([
+        'oem',
+        'aftermarket',
+        'salvage',
+        'used',
+        'new',
+        'general',
+        'unknown',
+        'other',
+      ]);
+      if (!listing.cType?.trim() || fillerTypes.has(existingType)) {
+        listing.cType = this.stripTitleSpecialChars(lookup.partName).slice(
+          0,
+          80,
+        );
+      }
     }
     if (lookup.brand?.trim()) {
       listing.cBrand = lookup.brand.trim();
+    }
+    if (lookup.make?.trim()) {
+      listing.extractedMake = lookup.make.trim();
+    } else if (lookup.brand?.trim() && !listing.extractedMake?.trim()) {
+      listing.extractedMake = lookup.brand.trim();
     }
     if (lookup.model?.trim()) {
       listing.extractedModel = lookup.model.trim();
@@ -633,7 +661,63 @@ export class SingleListingFormService {
     }
 
     const saved = await this.listingRepo.save(listing);
+
+    // Seed catalog fitment with the Browse-reported year/make/model so the
+    // later MVL expansion and deterministic title have a real year to work
+    // with — without this, titles publish as "Volkswagen Rear Exterior…"
+    // with no year when MVL finds nothing for a sparse seed.
+    if (
+      saved.customLabelSku &&
+      lookup.year &&
+      (lookup.make || lookup.brand) &&
+      lookup.model
+    ) {
+      await this.seedCatalogFitmentFromBrowse(saved.customLabelSku, {
+        year: lookup.year,
+        make: (lookup.make || lookup.brand)!,
+        model: lookup.model,
+      });
+    }
+
     return { listing: saved, lookup };
+  }
+
+  private async seedCatalogFitmentFromBrowse(
+    sku: string,
+    vehicle: { year: string; make: string; model: string },
+  ): Promise<void> {
+    try {
+      const product = await this.catalogProductRepo.findOne({ where: { sku } });
+      if (!product) return;
+      const existing = Array.isArray(product.fitmentData)
+        ? product.fitmentData
+        : [];
+      const hasYear = existing.some((r) => {
+        const y = String(
+          (r as Record<string, unknown>).Year ??
+            (r as Record<string, unknown>).year ??
+            '',
+        );
+        return /^(19|20)\d{2}/.test(y);
+      });
+      if (hasYear) return;
+      const seed = {
+        Year: vehicle.year,
+        Make: vehicle.make,
+        Model: vehicle.model,
+        Source: 'ebay_browse',
+      };
+      await this.catalogProductRepo.update(product.id, {
+        fitmentData: [seed, ...existing],
+      } as any);
+      this.logger.log(
+        `Seeded Browse fitment for SKU ${sku}: ${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to seed Browse fitment for SKU ${sku}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   async listBrands(query?: string): Promise<{ brands: string[] }> {
@@ -835,9 +919,17 @@ export class SingleListingFormService {
         this.str(best.brand) ??
         this.str(best.aspects['Brand']?.[0]) ??
         this.str(brandHint);
-      const model = this.str(
-        best.fitmentHints?.find((h) => h.model)?.model,
-      );
+      // Prefer a fitment hint that has year+make+model so the title gets a
+      // real year range even when MVL expansion later finds nothing.
+      const bestHint =
+        (best.fitmentHints ?? []).find((h) => h.year && h.make && h.model) ??
+        (best.fitmentHints ?? []).find((h) => h.make && h.model) ??
+        (best.fitmentHints ?? [])[0];
+      const model = this.str(bestHint?.model);
+      const make = this.str(bestHint?.make) ?? this.str(brand);
+      const yearRaw = this.str(bestHint?.year);
+      const yearMatch = yearRaw?.match(/(19|20)\d{2}/);
+      const year = yearMatch ? yearMatch[0] : undefined;
       const category = this.str(best.categoryName);
 
       const fitmentSummary = (best.fitmentHints ?? [])
@@ -854,14 +946,17 @@ export class SingleListingFormService {
 
       this.logger.log(
         `Browse part lookup identified ${partNumber}: "${partName}" ` +
-          `(category="${category ?? ''}", exactMpnMatch=${exactMpn.length > 0})`,
+          `(category="${category ?? ''}", year=${year ?? ''}, make=${make ?? ''}, ` +
+          `model=${model ?? ''}, exactMpnMatch=${exactMpn.length > 0})`,
       );
 
       return {
         result: {
           partName,
           brand,
+          make,
           model,
+          year,
           category,
           note: noteParts.join(' '),
           partNumber: best.mpn
