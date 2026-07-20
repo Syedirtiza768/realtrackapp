@@ -6,7 +6,12 @@ import {
   type PublishedListingsSyncJobPayload,
 } from '../services/published-listings-sync.service.js';
 
-@Processor('published-listings-sync')
+@Processor('published-listings-sync', {
+  concurrency: 1,
+  // Full SellerList sync for large stores (40k+) can run for a long time.
+  // Default BullMQ lock is 30s and stalls these jobs before prune/hard-gate finish.
+  lockDuration: 120 * 60 * 1000,
+})
 export class PublishedListingsSyncProcessor extends WorkerHost {
   private readonly logger = new Logger(PublishedListingsSyncProcessor.name);
 
