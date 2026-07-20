@@ -188,6 +188,8 @@ export class PublishedListingsSyncService {
     let created = 0;
     let updated = 0;
     let failed = 0;
+    /** Only advance lastSuccessfulSyncAt when we have a trustworthy live set. */
+    let advanceSyncWatermark = Boolean(payload.listingIds?.length);
 
     const channelLinks = await this.channelRepo.find({
       where: {
@@ -240,6 +242,7 @@ export class PublishedListingsSyncService {
             });
           }
         }
+        advanceSyncWatermark = true;
       } else {
         const tradingResult = await this.syncFromTradingApi(
           account,
@@ -253,35 +256,49 @@ export class PublishedListingsSyncService {
         updated += tradingResult.updated;
         failed += tradingResult.failed;
         warnings.push(...tradingResult.warnings);
+        advanceSyncWatermark = tradingResult.liveFetchOk;
 
-        const endedCount = await this.markUnseenActiveAsEnded(
-          account.id,
-          accountMarketplaceId,
-          seenKeys,
-        );
-        if (endedCount > 0) {
-          this.logger.log(
-            `Marked ${endedCount} previously-active listing(s) as ended for ${account.accountDisplayName}`,
-          );
-        }
-
-        const liveCount = seenKeys.size;
-        const remainingActive = await this.listingRepo.count({
-          where: {
-            ebayAccountId: account.id,
-            marketplaceId: accountMarketplaceId,
-            listingStatus: 'active',
-          },
-        });
-        if (remainingActive > liveCount) {
-          // Hard gate: never leave more actives than the live Trading set.
-          const extra = await this.markUnseenActiveAsEnded(
+        // Never prune (or advance the live watermark) when Trading failed —
+        // rate-limit / auth errors return 0 items and would wipe every active row.
+        if (tradingResult.liveFetchOk) {
+          const endedCount = await this.markUnseenActiveAsEnded(
             account.id,
             accountMarketplaceId,
             seenKeys,
           );
+          if (endedCount > 0) {
+            this.logger.log(
+              `Marked ${endedCount} previously-active listing(s) as ended for ${account.accountDisplayName}`,
+            );
+          }
+
+          const liveCount = seenKeys.size;
+          const remainingActive = await this.listingRepo.count({
+            where: {
+              ebayAccountId: account.id,
+              marketplaceId: accountMarketplaceId,
+              listingStatus: 'active',
+            },
+          });
+          if (remainingActive > liveCount) {
+            const extra = await this.markUnseenActiveAsEnded(
+              account.id,
+              accountMarketplaceId,
+              seenKeys,
+            );
+            this.logger.warn(
+              `Hard-gate prune for ${account.accountDisplayName}: DB had ${remainingActive} active vs ${liveCount} live; ended ${extra} more`,
+            );
+          }
+        } else {
+          failed += 1;
+          errors.push({
+            source: 'trading_api',
+            message:
+              'Live Trading fetch failed — skipped ActiveList prune and sync watermark update',
+          });
           this.logger.warn(
-            `Hard-gate prune for ${account.accountDisplayName}: DB had ${remainingActive} active vs ${liveCount} live; ended ${extra} more`,
+            `Skipping ActiveList prune for ${account.accountDisplayName}: Trading live fetch failed`,
           );
         }
 
@@ -359,15 +376,26 @@ export class PublishedListingsSyncService {
         }
       }
 
-      await this.accountRepo.update(account.id, {
-        lastSuccessfulSyncAt: new Date(),
-        lastListingsFetchedCount: payload.listingIds?.length
-          ? processed
-          : Math.max(processed, seenKeys.size),
-      });
+      if (advanceSyncWatermark) {
+        await this.accountRepo.update(account.id, {
+          lastSuccessfulSyncAt: new Date(),
+          lastListingsFetchedCount: payload.listingIds?.length
+            ? processed
+            : Math.max(processed, seenKeys.size),
+        });
+      } else {
+        this.logger.warn(
+          `Not advancing sync watermark for ${account.accountDisplayName}: no trustworthy live Trading set`,
+        );
+      }
 
       if (syncLog) {
-        syncLog.status = failed > 0 && processed === 0 ? 'failed' : 'completed';
+        syncLog.status =
+          !advanceSyncWatermark && !payload.listingIds?.length
+            ? 'failed'
+            : failed > 0 && processed === 0
+              ? 'failed'
+              : 'completed';
         syncLog.completedAt = new Date();
         syncLog.itemsProcessed = processed;
         syncLog.itemsCreated = created;
@@ -569,12 +597,15 @@ export class PublishedListingsSyncService {
     updated: number;
     failed: number;
     warnings: Record<string, unknown>[];
+    /** False when Trading API threw (rate limit / auth) — never prune or advance sync watermark. */
+    liveFetchOk: boolean;
   }> {
     let processed = 0;
     let created = 0;
     let updated = 0;
     let failed = 0;
     const warnings: Record<string, unknown>[] = [];
+    let liveFetchOk = false;
     const enrichBudget = Math.max(
       0,
       Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '150') || 150,
@@ -586,6 +617,9 @@ export class PublishedListingsSyncService {
         storeId,
         marketplaceId,
       );
+      // Successful Trading response (including a legitimately empty seller) —
+      // safe to prune unseen actives and advance lastSuccessfulSyncAt.
+      liveFetchOk = true;
       const mp = marketplaceId ?? 'EBAY_US';
 
       for (const item of items) {
@@ -647,7 +681,7 @@ export class PublishedListingsSyncService {
       );
     }
 
-    return { processed, created, updated, failed, warnings };
+    return { processed, created, updated, failed, warnings, liveFetchOk };
   }
 
   private async upsertFromTradingItem(
