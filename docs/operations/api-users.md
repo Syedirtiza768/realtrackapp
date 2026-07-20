@@ -20,7 +20,7 @@ eBay by `PublishedListingsSyncService`). Nothing else.
 | Password | `Ebay$321` |
 | Role | `api_published_listings_reader` (custom, non-system) |
 | Permissions | `published_listings.view` only — confirmed via `GET /api/auth/me` |
-| Store scope | `storeAccessAll = true` — all 11 connected stores (list below) |
+| Store scope | **Default API results: Blackline + Salvage only** (active, `quantityAvailable > 0`). Pass `storeSlug=all` or an explicit `storeId` to override. Account still has `storeAccessAll = true`. |
 | Workspace | Member of the primary RealTrack organization (`3ed54be6-7138-4264-bd8b-73dfa9336245`) |
 
 Rotate this password with `PATCH /api/rbac/users/:id/reset-password` (requires
@@ -106,10 +106,15 @@ All three support the same filters/pagination — `page` (default 1), `limit` (d
 200), plus `storeId`, `offerId`, `ebayAccountId`, `marketplaceId`, `status`, `search`, etc.
 (full filter list in `PublishedListingsQueryDto`).
 
-> Default behavior: if you omit `status`, the API now returns only `listingStatus = active`
-> rows that were present in the **latest successful live Trading sync** for an **active**
-> eBay connection (hard gate — the API will not return more rows than SellerList/ActiveList
-> wrote). Pass `status=all` to include ended / out-of-stock / stale mirror rows.
+> Default behavior: if you omit filters, the API returns only:
+> - **Stores:** [salvagea](https://www.ebay.com/str/salvagea) + [blacklineusedautoparts](https://www.ebay.com/str/blacklineusedautoparts)
+>   (`storeSlug` defaults to `salvagea,blackline`; override with `?storeSlug=all` or `?storeId=…`)
+> - **Status:** `listingStatus = active` from the latest successful live Trading sync
+>   on an **active** eBay connection (hard gate)
+> - **Quantity:** `quantityAvailable > 0` (buyable / in-stock only)
+>
+> Pass `status=all` to include ended / out-of-stock / stale mirror rows.
+> Pass `quantityMin=0` (or `lowStock=out`) if you need zero-quantity actives.
 >
 > Filter by eBay storefront slug (multi-store):
 > `?storeSlug=salvagea,blackline` or `?storeSlug=salvagea,blacklineusedautoparts`
@@ -152,7 +157,10 @@ Verified response (production, 2026-07-20 — **active** total ≈ 421,561; `sta
       "quantityAvailable": 1,
       "listingStatus": "active",
       "listingUrl": "https://www.ebay.com/itm/.../398098611417",
-      "imageUrls": ["https://i.ebayimg.com/images/g/.../s-l140.jpg"],
+      "imageUrls": [
+        "https://i.ebayimg.com/images/g/.../s-l1600.jpg",
+        "https://i.ebayimg.com/images/g/.../s-l1600.jpg"
+      ],
       "compatibility": {
         "compatibleProducts": [
           {
@@ -172,7 +180,7 @@ Verified response (production, 2026-07-20 — **active** total ≈ 421,561; `sta
 }
 ```
 
-> `compatibility` may be `null` until enrichment finishes for that row; `imageUrls` may briefly hold only a gallery thumbnail before GetItem/Browse backfill completes.
+> `compatibility` may be `null` until enrichment finishes for that row. `imageUrls` is the **full gallery** once GetItem/Browse backfill has run for that listing; until then it may briefly hold only the Trading `GalleryURL` thumbnail. Sync never shrinks a multi-image gallery back to one URL.
 
 `page=2&limit=3` returns the next 3 distinct rows (verified — no overlap with page 1).
 

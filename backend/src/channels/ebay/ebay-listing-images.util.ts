@@ -55,6 +55,21 @@ export interface EbayImageUrlsResult {
   warnings: string[];
 }
 
+/**
+ * Prefer the richer gallery when merging sync sources.
+ * Never shrink a previously-enriched multi-image set down to a single GalleryURL.
+ */
+export function preferRicherImageUrls(
+  primary: string[] | null | undefined,
+  secondary: string[] | null | undefined,
+): string[] {
+  const a = sanitizeEbayImageUrls(primary).imageUrls;
+  const b = sanitizeEbayImageUrls(secondary).imageUrls;
+  if (a.length > b.length) return a;
+  if (b.length > a.length) return b;
+  return a.length > 0 ? a : b;
+}
+
 /** Normalize, dedupe, and cap listing images for eBay / SellerPundit publish. */
 export function sanitizeEbayImageUrls(
   urls: string[] | null | undefined,

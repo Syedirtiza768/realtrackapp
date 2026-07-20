@@ -28,6 +28,7 @@ export class PublishedListingsQueryDto {
   /**
    * Comma-separated eBay storefront slugs, e.g. `salvagea,blackline`
    * or `salvagea,blacklineusedautoparts`. Resolves to RealTrack store IDs.
+   * Omit to default to Blackline + Salvage; use `all` for every connected store.
    */
   @IsOptional()
   @IsString()

@@ -11,6 +11,18 @@ export const EBAY_STORE_SLUG_ALIASES: Record<string, string[]> = {
   blackline: ['d16199c4-55b5-429e-ad27-892bed94e00d'],
 };
 
+/**
+ * Default published-listings reader scope when no storeId/storeSlug is provided.
+ * Override with PUBLISHED_LISTINGS_DEFAULT_STORE_SLUGS, or pass storeSlug=all for every store.
+ */
+export const DEFAULT_PUBLISHED_LISTINGS_STORE_SLUGS = 'salvagea,blackline';
+
+export function resolveDefaultPublishedListingsStoreSlugs(): string {
+  const fromEnv = process.env.PUBLISHED_LISTINGS_DEFAULT_STORE_SLUGS?.trim();
+  if (fromEnv === '' || fromEnv === 'all' || fromEnv === '*') return '';
+  return fromEnv || DEFAULT_PUBLISHED_LISTINGS_STORE_SLUGS;
+}
+
 export function normalizeStoreSlug(raw: string): string {
   return raw
     .trim()
@@ -22,6 +34,8 @@ export function normalizeStoreSlug(raw: string): string {
 
 export function parseStoreSlugQuery(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'all' || normalized === '*') return [];
   return [
     ...new Set(
       raw
@@ -30,4 +44,10 @@ export function parseStoreSlugQuery(raw: string | undefined): string[] {
         .filter(Boolean),
     ),
   ];
+}
+
+/** True when the caller explicitly asked for every store (no slug filter). */
+export function isAllStoresSlugQuery(raw: string | undefined): boolean {
+  const normalized = raw?.trim().toLowerCase();
+  return normalized === 'all' || normalized === '*';
 }

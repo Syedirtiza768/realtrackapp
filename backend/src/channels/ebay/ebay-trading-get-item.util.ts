@@ -15,16 +15,21 @@ function tagValue(block: string, tag: string): string | null {
   return raw.replace(/^<!\[CDATA\[|\]\]>$/g, '');
 }
 
-function parsePictureUrls(itemBlock: string): string[] {
+/** Extract all PictureURL values (and optional GalleryURL) from a Trading Item XML block. */
+export function parsePictureUrls(itemBlock: string): string[] {
   const section =
     itemBlock.match(/<PictureDetails>[\s\S]*?<\/PictureDetails>/i)?.[0] ??
     itemBlock;
   const urls: string[] = [];
-  const matches = section.matchAll(/<PictureURL[^>]*>([\s\S]*?)<\/PictureURL>/gi);
+  const matches = section.matchAll(
+    /<PictureURL[^>]*>([\s\S]*?)<\/PictureURL>/gi,
+  );
   for (const m of matches) {
     const url = m[1]?.trim().replace(/^<!\[CDATA\[|\]\]>$/g, '');
     if (url) urls.push(url);
   }
+  const gallery = tagValue(section, 'GalleryURL');
+  if (gallery) urls.push(gallery);
   return [...new Set(urls)];
 }
 

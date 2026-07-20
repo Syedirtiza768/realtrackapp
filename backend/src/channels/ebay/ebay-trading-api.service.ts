@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import axios, { type AxiosInstance } from 'axios';
 import { EbayAuthService } from './ebay-auth.service.js';
 import {
+  parsePictureUrls,
   parseTradingGetItemResponse,
   type TradingItemDetails,
 } from './ebay-trading-get-item.util.js';
@@ -18,7 +19,10 @@ export interface TradingSellerListItem {
   listingFormat: string;
   condition: string | null;
   categoryId: string | null;
+  /** First gallery/thumbnail URL (legacy). Prefer imageUrls. */
   imageUrl: string | null;
+  /** Full gallery when PictureURL[] is present in the Trading XML. */
+  imageUrls: string[];
   viewCount: number | null;
   watchCount: number | null;
   startTime: string | null;
@@ -70,7 +74,8 @@ function parseItems(xml: string): TradingSellerListItem[] {
     const listingStatus = tagValue(block, 'ListingStatus') ?? 'Active';
     const condition = tagValue(block, 'ConditionDisplayName');
     const categoryId = tagValue(block, 'PrimaryCategoryID');
-    const galleryUrl = tagValue(block, 'GalleryURL');
+    const imageUrls = parsePictureUrls(block);
+    const galleryUrl = imageUrls[0] ?? tagValue(block, 'GalleryURL');
     const viewCount = Number(tagValue(block, 'HitCount') ?? '');
     const watchCount = Number(tagValue(block, 'WatchCount') ?? '');
     const startTime = tagValue(block, 'StartTime');
@@ -92,6 +97,7 @@ function parseItems(xml: string): TradingSellerListItem[] {
       condition,
       categoryId,
       imageUrl: galleryUrl,
+      imageUrls,
       viewCount: Number.isFinite(viewCount) ? viewCount : null,
       watchCount: Number.isFinite(watchCount) ? watchCount : null,
       startTime,

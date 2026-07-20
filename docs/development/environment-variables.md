@@ -97,15 +97,16 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
 | `EBAY_REDIRECT_URI` | — | OAuth redirect/RuName |
-| `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `default` | Key used when auto-provisioning an inventory location |
-| `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Primary Warehouse` | Ship-from line 1 for auto-created locations |
-| `EBAY_DEFAULT_INVENTORY_CITY` | `Houston` | Ship-from city |
-| `EBAY_DEFAULT_INVENTORY_STATE` | `TX` | Ship-from state/province |
-| `EBAY_DEFAULT_INVENTORY_POSTAL_CODE` | `77001` | Ship-from postal code |
-| `EBAY_DEFAULT_INVENTORY_COUNTRY` | `US` | Ship-from country (ISO) |
+| `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `AE_Dubai` | Key used when auto-provisioning an inventory location |
+| `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Dubai Warehouse` | Ship-from line 1 for auto-created locations |
+| `EBAY_DEFAULT_INVENTORY_CITY` | `Dubai` | Ship-from city |
+| `EBAY_DEFAULT_INVENTORY_STATE` | _(empty)_ | Ship-from state/province (optional; unused for AE) |
+| `EBAY_DEFAULT_INVENTORY_POSTAL_CODE` | _(empty)_ | Ship-from postal code (optional; unused for AE) |
+| `EBAY_DEFAULT_INVENTORY_COUNTRY` | `AE` | Ship-from country (ISO) |
 | `EBAY_DAILY_PUBLISH_TARGET_LIMIT` | `5000` | Organization-wide UTC-day quota for listing/store publish targets; hard-capped at 5,000 |
 | `PUBLISHED_LISTINGS_SYNC_CRON` | `*/15 * * * *` | Cron for scheduled published-listings mirror refresh; defaults to every 15 minutes for near-real-time API consumers |
-| `PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC` | `50` | Max Trading/Browse legacy-listing enrichments per sync run (images + compatibility backfill). Keep low so full SellerList sync can finish and hard-gate prune can run. |
+| `PUBLISHED_LISTINGS_DEFAULT_STORE_SLUGS` | `salvagea,blackline` | Default `storeSlug` scope for `GET /published-listings` when neither `storeId` nor `storeSlug` is provided. Set to `all` (or empty) to disable. |
+| `PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC` | `150` | Max Trading GetItem / Browse legacy-listing enrichments per sync run (full `imageUrls[]` + compatibility backfill). Leftover budget after the live-list upsert pass is spent on active rows that still have ≤1 image. Keep bounded so SellerList sync + hard-gate prune can finish. |
 
 Per-store override: set `stores.config.shipFromAddress` (object with the same
 field names) or `stores.location_key` / `config.locationKey`.

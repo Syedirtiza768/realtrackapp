@@ -109,6 +109,9 @@ export default function PublishedListingsPage() {
       search: debouncedSearch || undefined,
       ebayAccountId: ebayAccountId || undefined,
       storeId: storeId || undefined,
+      // App UI browses every connected store; API readers omit this and get
+      // the default Blackline + Salvage scope.
+      storeSlug: storeId ? undefined : 'all',
       status: statusFilter || undefined,
       sortBy,
       sortDir: 'desc' as const,

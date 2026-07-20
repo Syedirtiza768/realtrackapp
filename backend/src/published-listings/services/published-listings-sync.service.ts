@@ -21,6 +21,7 @@ import type {
 } from '../../channels/ebay/ebay-api.types.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import { EbayPublishedListingSyncLog } from '../entities/ebay-published-listing-sync-log.entity.js';
+import { preferRicherImageUrls } from '../../channels/ebay/ebay-listing-images.util.js';
 import { PublishedListingsHealthService } from './published-listings-health.service.js';
 import { PublishedListingsEnrichmentService } from './published-listings-enrichment.service.js';
 
@@ -466,10 +467,14 @@ export class PublishedListingsSyncService {
       (offer.offerId ? channelByOffer.get(offer.offerId) : undefined) ??
       (offer.listingId ? channelByListing.get(offer.listingId) : undefined);
 
+    const imageUrls = preferRicherImageUrls(
+      extracted.imageUrls,
+      existing?.imageUrls,
+    );
     const listingStatus = this.health.mapOfferStatus(offer);
     const healthFlags = this.health.computeHealthFlags({
       title: extracted.title,
-      imageUrls: extracted.imageUrls,
+      imageUrls,
       itemSpecifics: extracted.itemSpecifics,
       compatibility,
       quantityAvailable: offer.availableQuantity ?? extracted.quantityAvailable,
@@ -501,7 +506,7 @@ export class PublishedListingsSyncService {
         offer.marketplaceId,
         account.environment,
       ),
-      imageUrls: extracted.imageUrls,
+      imageUrls,
       itemSpecifics: extracted.itemSpecifics,
       listingPolicies:
         (offer.listingPolicies as Record<string, unknown> | undefined) ?? null,
@@ -572,7 +577,7 @@ export class PublishedListingsSyncService {
     const warnings: Record<string, unknown>[] = [];
     const enrichBudget = Math.max(
       0,
-      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '50') || 50,
+      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '150') || 150,
     );
     let enrichUsed = 0;
 
@@ -609,9 +614,25 @@ export class PublishedListingsSyncService {
         }
       }
 
+      // Spend any leftover enrich budget on active rows that still have ≤1 image
+      // (Trading list responses usually only carry GalleryURL).
+      if (enrichUsed < enrichBudget) {
+        const backfilled = await this.enrichSparseImageListings(
+          account,
+          mp,
+          enrichBudget - enrichUsed,
+        );
+        enrichUsed += backfilled;
+        if (backfilled > 0) {
+          this.logger.log(
+            `Backfilled full image galleries for ${backfilled} listing(s) on ${account.accountDisplayName}`,
+          );
+        }
+      }
+
       if (items.length > 0) {
         this.logger.log(
-          `Trading live list for ${account.accountDisplayName}: ${items.length} active, ${created} new, ${updated} updated`,
+          `Trading live list for ${account.accountDisplayName}: ${items.length} active, ${created} new, ${updated} updated, enriched=${enrichUsed}/${enrichBudget}`,
         );
       }
     } catch (e) {
@@ -652,7 +673,15 @@ export class PublishedListingsSyncService {
       },
     });
 
-    let imageUrls = item.imageUrl ? [item.imageUrl] : [];
+    // Trading ActiveList/SellerList often only returns GalleryURL (1 thumb).
+    // Never wipe a previously enriched multi-image gallery down to that single URL.
+    const tradingImages =
+      item.imageUrls?.length > 0
+        ? item.imageUrls
+        : item.imageUrl
+          ? [item.imageUrl]
+          : [];
+    let imageUrls = preferRicherImageUrls(row?.imageUrls, tradingImages);
     let compatibility: Record<string, unknown> | null =
       row?.compatibility ?? null;
     let enriched = false;
@@ -672,9 +701,12 @@ export class PublishedListingsSyncService {
       this.enrichment.needsEnrichment(enrichmentInput)
     ) {
       const result = await this.enrichment.enrichListing(enrichmentInput);
-      imageUrls = result.imageUrls;
-      compatibility = result.compatibility;
-      enriched = result.sources.length > 0;
+      imageUrls = preferRicherImageUrls(result.imageUrls, imageUrls);
+      compatibility = result.compatibility ?? compatibility;
+      enriched =
+        result.sources.length > 0 &&
+        (result.imageUrls.length > tradingImages.length ||
+          result.compatibility != null);
     }
 
     const performanceMetrics: Record<string, unknown> = {};
@@ -741,6 +773,95 @@ export class PublishedListingsSyncService {
     const created = this.listingRepo.create(data as EbayPublishedListing);
     await this.listingRepo.save(created);
     return { created: true, enriched };
+  }
+
+  /**
+   * Backfill full galleries for active rows that still only have a Trading
+   * GalleryURL thumbnail (≤1 image). Uses GetItem / Browse via enrichment.
+   */
+  private async enrichSparseImageListings(
+    account: ConnectedEbayAccount,
+    marketplaceId: string,
+    budget: number,
+  ): Promise<number> {
+    if (budget <= 0) return 0;
+
+    const sparse = await this.listingRepo
+      .createQueryBuilder('l')
+      .where('l.ebayAccountId = :ebayAccountId', {
+        ebayAccountId: account.id,
+      })
+      .andWhere('l.marketplaceId = :marketplaceId', { marketplaceId })
+      .andWhere("l.listingStatus = 'active'")
+      .andWhere('l.ebayItemId IS NOT NULL')
+      .andWhere(
+        `jsonb_array_length(COALESCE(l.image_urls, '[]'::jsonb)) <= 1`,
+      )
+      .orderBy('l.lastSyncedAt', 'ASC')
+      .take(budget)
+      .getMany();
+
+    let enriched = 0;
+    for (const row of sparse) {
+      if (!row.ebayItemId) continue;
+      try {
+        const result = await this.enrichment.enrichListing({
+          storeId: account.primaryStoreId,
+          ebayItemId: row.ebayItemId,
+          sku: row.sku,
+          marketplaceId,
+          imageUrls: row.imageUrls ?? [],
+          compatibility: row.compatibility,
+        });
+        const nextImages = preferRicherImageUrls(
+          result.imageUrls,
+          row.imageUrls,
+        );
+        const imagesImproved = nextImages.length > (row.imageUrls?.length ?? 0);
+        const compatImproved =
+          result.compatibility != null &&
+          Array.isArray(
+            (result.compatibility as { compatibleProducts?: unknown })
+              .compatibleProducts,
+          ) &&
+          !(
+            row.compatibility != null &&
+            Array.isArray(
+              (row.compatibility as { compatibleProducts?: unknown })
+                .compatibleProducts,
+            )
+          );
+
+        if (!imagesImproved && !compatImproved && result.sources.length === 0) {
+          continue;
+        }
+
+        row.imageUrls = nextImages;
+        if (result.compatibility != null) {
+          row.compatibility = result.compatibility;
+        }
+        row.healthFlags = this.health.computeHealthFlags({
+          title: row.title,
+          imageUrls: nextImages,
+          itemSpecifics: row.itemSpecifics ?? {},
+          compatibility: row.compatibility,
+          quantityAvailable: row.quantityAvailable,
+          quantitySold: row.quantitySold,
+          performanceMetrics: row.performanceMetrics ?? {},
+          categoryId: row.categoryId,
+          price: row.price,
+        });
+        await this.listingRepo.save(row);
+        enriched += 1;
+      } catch (e) {
+        this.logger.debug(
+          `Sparse image enrich skipped for ${row.ebayItemId}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+    }
+    return enriched;
   }
 
   private async markUnseenActiveAsEnded(

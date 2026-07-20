@@ -14,7 +14,9 @@ import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.
 import type { PublishedListingsQueryDto } from '../dto/published-listings.dto.js';
 import {
   EBAY_STORE_SLUG_ALIASES,
+  isAllStoresSlugQuery,
   parseStoreSlugQuery,
+  resolveDefaultPublishedListingsStoreSlugs,
 } from '../store-slug.util.js';
 
 /** Listings older than this relative to the account's last successful sync are not "live". */
@@ -72,9 +74,10 @@ export class PublishedListingsService {
       qb.andWhere('l.storeId = :storeId', { storeId: query.storeId });
     }
 
+    // Default scope: Blackline + Salvage only (unless storeId / storeSlug=all / explicit slug).
     const slugStoreIds = await this.resolveStoreSlugIds(
       organizationId,
-      query.storeSlug,
+      this.resolveListStoreSlugFilter(query),
     );
     if (slugStoreIds) {
       if (slugStoreIds.length === 0) {
@@ -106,6 +109,10 @@ export class PublishedListingsService {
       qb.andWhere(
         `l.lastSyncedAt >= cea.lastSuccessfulSyncAt - INTERVAL '${LIVE_SYNC_SKEW_MS / 1000} seconds'`,
       );
+      // Buyable only: active + non-zero quantity (unless caller sets quantityMin / lowStock=out).
+      if (query.quantityMin == null && query.lowStock !== 'out') {
+        qb.andWhere('l.quantityAvailable > 0');
+      }
     }
 
     if (query.format) {
@@ -188,6 +195,23 @@ export class PublishedListingsService {
   }
 
   /**
+   * Resolve which storeSlug string to apply for list filtering.
+   * - Explicit storeId → no slug filter (storeId already scopes)
+   * - storeSlug=all|* → no slug filter
+   * - Explicit storeSlug → that value
+   * - Otherwise → default Blackline + Salvage
+   */
+  private resolveListStoreSlugFilter(
+    query: PublishedListingsQueryDto,
+  ): string | undefined {
+    if (query.storeId) return undefined;
+    if (isAllStoresSlugQuery(query.storeSlug)) return undefined;
+    if (query.storeSlug?.trim()) return query.storeSlug;
+    const defaults = resolveDefaultPublishedListingsStoreSlugs();
+    return defaults || undefined;
+  }
+
+  /**
    * Resolve ?storeSlug=salvagea,blackline to store UUIDs.
    * Returns null when the filter is absent; [] when no stores match.
    */
@@ -195,6 +219,7 @@ export class PublishedListingsService {
     organizationId: string,
     storeSlug: string | undefined,
   ): Promise<string[] | null> {
+    if (isAllStoresSlugQuery(storeSlug)) return null;
     const slugs = parseStoreSlugQuery(storeSlug);
     if (slugs.length === 0) return null;
 

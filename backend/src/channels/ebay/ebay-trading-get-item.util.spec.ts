@@ -36,6 +36,21 @@ describe('ebay-trading-get-item.util', () => {
     ]);
   });
 
+  it('falls back to GalleryURL when PictureURL is absent', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<GetItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Item>
+    <PictureDetails>
+      <GalleryURL>https://i.ebayimg.com/images/g/thumb/s-l140.jpg</GalleryURL>
+    </PictureDetails>
+  </Item>
+</GetItemResponse>`;
+    const parsed = parseTradingGetItemResponse(xml);
+    expect(parsed.imageUrls).toEqual([
+      'https://i.ebayimg.com/images/g/thumb/s-l140.jpg',
+    ]);
+  });
+
   it('parses compatibility rows with notes', () => {
     const compat = parseTradingItemCompatibility(sampleXml);
     expect(compat?.compatibleProducts).toHaveLength(2);

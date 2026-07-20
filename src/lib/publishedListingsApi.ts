@@ -61,6 +61,8 @@ export interface PublishedListingsQuery {
   organizationId?: string;
   ebayAccountId?: string;
   storeId?: string;
+  /** eBay storefront slug(s), e.g. salvagea,blackline — or `all` for every store */
+  storeSlug?: string;
   marketplaceId?: string;
   status?: string;
   format?: string;
@@ -69,6 +71,7 @@ export interface PublishedListingsQuery {
   sortDir?: 'asc' | 'desc';
   priceMin?: number;
   priceMax?: number;
+  quantityMin?: number;
   lowStock?: string;
   page?: number;
   limit?: number;
