@@ -24,6 +24,7 @@ import { PublishedListingsSyncProcessor } from './processors/published-listings-
 import { PublishedListingsBulkProcessor } from './processors/published-listings-bulk.processor.js';
 import { PublishedListingsPricingService } from './services/published-listings-pricing.service.js';
 import { PublishedListingsSchedulerService } from './services/published-listings-scheduler.service.js';
+import { PublishedListingsEnrichmentService } from './services/published-listings-enrichment.service.js';
 import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
 
 @Module({
@@ -54,6 +55,7 @@ import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
     PublishedListingsActionService,
     PublishedListingsBulkService,
     PublishedListingsHealthService,
+    PublishedListingsEnrichmentService,
     PublishedListingsAuditService,
     PublishedListingsPricingService,
     PublishedListingsSyncProcessor,

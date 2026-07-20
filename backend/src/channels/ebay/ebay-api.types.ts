@@ -337,6 +337,8 @@ export interface EbayItem extends EbayItemSummary {
     name: string;
     value: string;
   }>;
+  additionalImages?: Array<{ imageUrl: string }>;
+  compatibleProducts?: EbayCompatibleProduct[];
   quantityLimitPerBuyer?: number;
   estimatedAvailabilities?: Array<{
     estimatedAvailableQuantity: number;

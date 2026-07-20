@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios, { type AxiosInstance } from 'axios';
 import { EbayAuthService } from './ebay-auth.service.js';
+import {
+  parseTradingGetItemResponse,
+  type TradingItemDetails,
+} from './ebay-trading-get-item.util.js';
 
 export interface TradingSellerListItem {
   itemId: string;
@@ -278,6 +282,40 @@ export class EbayTradingApiService {
       page,
       hasMore: page < totalPages,
     };
+  }
+
+  /**
+   * Trading API GetItem — full gallery images and ItemCompatibilityList for a
+   * seller-owned listing (requires store OAuth token).
+   */
+  async getItemDetails(
+    storeId: string,
+    itemId: string,
+    marketplaceId?: string | null,
+  ): Promise<TradingItemDetails> {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <ItemID>${itemId}</ItemID>
+  <DetailLevel>ReturnAll</DetailLevel>
+  <IncludeItemCompatibilityList>true</IncludeItemCompatibilityList>
+  <IncludeItemSpecifics>true</IncludeItemSpecifics>
+</GetItemRequest>`;
+
+    const xml = await this.postTradingRequest(
+      storeId,
+      'GetItem',
+      body,
+      marketplaceId,
+    );
+
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const err = tagValue(xml, 'LongMessage') ?? 'GetItem failed';
+      throw new Error(err);
+    }
+
+    return parseTradingGetItemResponse(xml);
   }
 
   /** Paginate all active seller listings via Trading API (GetMyeBaySelling ActiveList). */

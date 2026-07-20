@@ -106,6 +106,10 @@ All three support the same filters/pagination — `page` (default 1), `limit` (d
 200), plus `storeId`, `offerId`, `ebayAccountId`, `marketplaceId`, `status`, `search`, etc.
 (full filter list in `PublishedListingsQueryDto`).
 
+> Default behavior: if you omit `status`, the API now returns only `listingStatus = active`
+> rows. Pass `status=all` to include ended / out-of-stock mirror rows, or an explicit
+> `status=ended` / `status=out_of_stock` filter if needed.
+
 ### 1. List published listings, paginated
 
 ```

@@ -17,12 +17,15 @@ export class PublishedListingsSchedulerService {
     private readonly leader: SchedulerLeaderService,
   ) {}
 
-  /** Sync published listings from all active eBay accounts every 6 hours. */
-  @Cron('0 */6 * * *', { name: 'published-listings-sync' })
+  /** Sync published listings from all active eBay accounts every 15 minutes. */
+  @Cron(
+    process.env.PUBLISHED_LISTINGS_SYNC_CRON ?? '*/15 * * * *',
+    { name: 'published-listings-sync' },
+  )
   async schedulePublishedListingsSync(): Promise<void> {
     await this.leader.runIfLeader(
       'published-listings-sync',
-      21_000,
+      12 * 60_000,
       async () => {
         const accounts = await this.accountRepo.find({
           where: { connectionStatus: 'active' },

@@ -22,6 +22,7 @@ import type {
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import { EbayPublishedListingSyncLog } from '../entities/ebay-published-listing-sync-log.entity.js';
 import { PublishedListingsHealthService } from './published-listings-health.service.js';
+import { PublishedListingsEnrichmentService } from './published-listings-enrichment.service.js';
 
 export interface PublishedListingsSyncJobPayload {
   organizationId: string;
@@ -51,6 +52,7 @@ export class PublishedListingsSyncService {
     private readonly inventoryApi: EbayInventoryApiService,
     private readonly tradingApi: EbayTradingApiService,
     private readonly health: PublishedListingsHealthService,
+    private readonly enrichment: PublishedListingsEnrichmentService,
     @InjectQueue('published-listings-sync')
     private readonly syncQueue: Queue<PublishedListingsSyncJobPayload>,
   ) {}
@@ -250,6 +252,17 @@ export class PublishedListingsSyncService {
         updated += tradingResult.updated;
         failed += tradingResult.failed;
         warnings.push(...tradingResult.warnings);
+
+        const endedCount = await this.markUnseenActiveAsEnded(
+          account.id,
+          accountMarketplaceId,
+          seenKeys,
+        );
+        if (endedCount > 0) {
+          this.logger.log(
+            `Marked ${endedCount} previously-active listing(s) as ended for ${account.accountDisplayName}`,
+          );
+        }
 
         // Optional Inventory API pass — disabled by default on full sync because it
         // issues one offer lookup per SKU and stalls large stores (6000+ listings).
@@ -535,6 +548,11 @@ export class PublishedListingsSyncService {
     let updated = 0;
     let failed = 0;
     const warnings: Record<string, unknown>[] = [];
+    const enrichBudget = Math.max(
+      0,
+      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500') || 500,
+    );
+    let enrichUsed = 0;
 
     try {
       const items = await this.tradingApi.getAllActiveListings(
@@ -554,7 +572,9 @@ export class PublishedListingsSyncService {
             item,
             mp,
             channelByListing,
+            enrichUsed < enrichBudget,
           );
+          if (result.enriched) enrichUsed += 1;
           if (result.created) created += 1;
           else updated += 1;
           seenKeys.add(key);
@@ -592,7 +612,8 @@ export class PublishedListingsSyncService {
     item: TradingSellerListItem,
     marketplaceId: string,
     channelByListing: Map<string, EbayListingChannel>,
-  ): Promise<{ created: boolean }> {
+    allowEnrichment = true,
+  ): Promise<{ created: boolean; enriched: boolean }> {
     const channel = channelByListing.get(item.itemId);
     const listingStatus =
       item.listingStatus.toLowerCase() !== 'active'
@@ -601,6 +622,39 @@ export class PublishedListingsSyncService {
           ? 'out_of_stock'
           : 'active';
 
+    const row = await this.listingRepo.findOne({
+      where: {
+        ebayAccountId: account.id,
+        marketplaceId,
+        ebayItemId: item.itemId,
+      },
+    });
+
+    let imageUrls = item.imageUrl ? [item.imageUrl] : [];
+    let compatibility: Record<string, unknown> | null =
+      row?.compatibility ?? null;
+    let enriched = false;
+
+    const enrichmentInput = {
+      storeId: account.primaryStoreId,
+      ebayItemId: item.itemId,
+      sku: item.sku,
+      marketplaceId,
+      imageUrls,
+      compatibility,
+    };
+
+    if (
+      allowEnrichment &&
+      listingStatus === 'active' &&
+      this.enrichment.needsEnrichment(enrichmentInput)
+    ) {
+      const result = await this.enrichment.enrichListing(enrichmentInput);
+      imageUrls = result.imageUrls;
+      compatibility = result.compatibility;
+      enriched = result.sources.length > 0;
+    }
+
     const performanceMetrics: Record<string, unknown> = {};
     if (item.viewCount != null) performanceMetrics.viewCount = item.viewCount;
     if (item.watchCount != null)
@@ -608,9 +662,9 @@ export class PublishedListingsSyncService {
 
     const healthFlags = this.health.computeHealthFlags({
       title: item.title,
-      imageUrls: item.imageUrl ? [item.imageUrl] : [],
-      itemSpecifics: {},
-      compatibility: null,
+      imageUrls,
+      itemSpecifics: row?.itemSpecifics ?? {},
+      compatibility,
       quantityAvailable: item.quantityAvailable,
       quantitySold: item.quantitySold,
       performanceMetrics,
@@ -643,7 +697,8 @@ export class PublishedListingsSyncService {
           marketplaceId,
           account.environment,
         ),
-      imageUrls: item.imageUrl ? [item.imageUrl] : [],
+      imageUrls,
+      compatibility,
       performanceMetrics,
       healthFlags,
       accountDisplayName: account.accountDisplayName,
@@ -655,23 +710,47 @@ export class PublishedListingsSyncService {
       rawEbayResponse: { syncSource: 'trading_api', item },
     };
 
-    const row = await this.listingRepo.findOne({
-      where: {
-        ebayAccountId: account.id,
-        marketplaceId,
-        ebayItemId: item.itemId,
-      },
-    });
-
     if (row) {
       Object.assign(row, data);
       await this.listingRepo.save(row);
-      return { created: false };
+      return { created: false, enriched };
     }
 
     const created = this.listingRepo.create(data as EbayPublishedListing);
     await this.listingRepo.save(created);
-    return { created: true };
+    return { created: true, enriched };
+  }
+
+  private async markUnseenActiveAsEnded(
+    ebayAccountId: string,
+    marketplaceId: string,
+    seenKeys: Set<string>,
+  ): Promise<number> {
+    const activeRows = await this.listingRepo.find({
+      where: {
+        ebayAccountId,
+        marketplaceId,
+        listingStatus: 'active',
+      },
+      select: ['id', 'ebayItemId', 'marketplaceId'],
+    });
+
+    const toEnd = activeRows.filter((row) => {
+      if (!row.ebayItemId) return false;
+      const key = `${row.marketplaceId}:${row.ebayItemId}`;
+      return !seenKeys.has(key);
+    });
+
+    if (toEnd.length === 0) return 0;
+
+    await this.listingRepo.update(
+      { id: In(toEnd.map((r) => r.id)) },
+      {
+        listingStatus: 'ended',
+        lastSyncedAt: new Date(),
+      },
+    );
+    return toEnd.length;
   }
 
   private async resolveAccounts(

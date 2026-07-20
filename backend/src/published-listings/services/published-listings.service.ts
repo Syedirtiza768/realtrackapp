@@ -63,7 +63,11 @@ export class PublishedListingsService {
       });
     }
     if (query.status) {
-      qb.andWhere('l.listingStatus = :status', { status: query.status });
+      if (query.status !== 'all') {
+        qb.andWhere('l.listingStatus = :status', { status: query.status });
+      }
+    } else {
+      qb.andWhere("l.listingStatus = 'active'");
     }
     if (query.format) {
       qb.andWhere('l.listingFormat = :format', { format: query.format });
