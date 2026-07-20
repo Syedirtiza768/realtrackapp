@@ -264,6 +264,26 @@ export class PublishedListingsSyncService {
           );
         }
 
+        const liveCount = seenKeys.size;
+        const remainingActive = await this.listingRepo.count({
+          where: {
+            ebayAccountId: account.id,
+            marketplaceId: accountMarketplaceId,
+            listingStatus: 'active',
+          },
+        });
+        if (remainingActive > liveCount) {
+          // Hard gate: never leave more actives than the live Trading set.
+          const extra = await this.markUnseenActiveAsEnded(
+            account.id,
+            accountMarketplaceId,
+            seenKeys,
+          );
+          this.logger.warn(
+            `Hard-gate prune for ${account.accountDisplayName}: DB had ${remainingActive} active vs ${liveCount} live; ended ${extra} more`,
+          );
+        }
+
         // Optional Inventory API pass — disabled by default on full sync because it
         // issues one offer lookup per SKU and stalls large stores (6000+ listings).
         if (process.env.PUBLISHED_LISTINGS_INVENTORY_ENRICH === '1') {
@@ -340,7 +360,9 @@ export class PublishedListingsSyncService {
 
       await this.accountRepo.update(account.id, {
         lastSuccessfulSyncAt: new Date(),
-        lastListingsFetchedCount: processed,
+        lastListingsFetchedCount: payload.listingIds?.length
+          ? processed
+          : Math.max(processed, seenKeys.size),
       });
 
       if (syncLog) {
@@ -550,12 +572,12 @@ export class PublishedListingsSyncService {
     const warnings: Record<string, unknown>[] = [];
     const enrichBudget = Math.max(
       0,
-      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500') || 500,
+      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '50') || 50,
     );
     let enrichUsed = 0;
 
     try {
-      const items = await this.tradingApi.getAllActiveListings(
+      const items = await this.tradingApi.getAllLiveListings(
         storeId,
         marketplaceId,
       );
@@ -589,7 +611,7 @@ export class PublishedListingsSyncService {
 
       if (items.length > 0) {
         this.logger.log(
-          `Trading API ActiveList for ${account.accountDisplayName}: ${items.length} active, ${created} new, ${updated} updated`,
+          `Trading live list for ${account.accountDisplayName}: ${items.length} active, ${created} new, ${updated} updated`,
         );
       }
     } catch (e) {

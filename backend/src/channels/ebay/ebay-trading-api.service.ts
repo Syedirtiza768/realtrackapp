@@ -347,4 +347,90 @@ export class EbayTradingApiService {
     }
     return all;
   }
+
+  /**
+   * Full live seller inventory via GetSellerList (EndTime window).
+   * Prefer this over ActiveList for large stores — ActiveList is hard-capped
+   * around 25,000 items and under-counts storefronts like salvagea / blackline.
+   */
+  async getAllSellerListListings(
+    storeId: string,
+    marketplaceId?: string | null,
+  ): Promise<TradingSellerListItem[]> {
+    const byId = new Map<string, TradingSellerListItem>();
+    let page = 1;
+    for (;;) {
+      const result = await this.getSellerList(storeId, {
+        page,
+        entriesPerPage: 200,
+        marketplaceId,
+      });
+      for (const item of result.items) {
+        if (item.listingStatus.toLowerCase() !== 'active') continue;
+        byId.set(item.itemId, item);
+      }
+      if (!result.hasMore) break;
+      page += 1;
+      if (page > 1000) {
+        this.logger.warn(
+          `Trading API GetSellerList pagination capped at page 1000 for store ${storeId}`,
+        );
+        break;
+      }
+    }
+    return [...byId.values()];
+  }
+
+  /**
+   * Canonical live listing set for published-listings sync.
+   * Uses GetSellerList for completeness; merges ActiveList when it adds IDs
+   * (small stores / race coverage). Never treats ActiveList alone as complete
+   * for hard-gate count matching against eBay storefronts.
+   */
+  async getAllLiveListings(
+    storeId: string,
+    marketplaceId?: string | null,
+  ): Promise<TradingSellerListItem[]> {
+    const byId = new Map<string, TradingSellerListItem>();
+
+    try {
+      const sellerList = await this.getAllSellerListListings(
+        storeId,
+        marketplaceId,
+      );
+      for (const item of sellerList) byId.set(item.itemId, item);
+      this.logger.log(
+        `GetSellerList returned ${sellerList.length} active listing(s) for store ${storeId}`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `GetSellerList failed for store ${storeId}: ${
+          e instanceof Error ? e.message : String(e)
+        } — falling back to ActiveList only`,
+      );
+    }
+
+    try {
+      const activeList = await this.getAllActiveListings(storeId, marketplaceId);
+      let added = 0;
+      for (const item of activeList) {
+        if (!byId.has(item.itemId)) {
+          byId.set(item.itemId, item);
+          added += 1;
+        }
+      }
+      this.logger.log(
+        `ActiveList returned ${activeList.length} active listing(s) for store ${storeId} (${added} new after merge)`,
+      );
+    } catch (e) {
+      if (byId.size === 0) throw e;
+      this.logger.warn(
+        `ActiveList merge skipped for store ${storeId}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+
+    return [...byId.values()];
+  }
 }

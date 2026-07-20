@@ -25,6 +25,14 @@ export class PublishedListingsQueryDto {
   @IsUUID()
   storeId?: string;
 
+  /**
+   * Comma-separated eBay storefront slugs, e.g. `salvagea,blackline`
+   * or `salvagea,blacklineusedautoparts`. Resolves to RealTrack store IDs.
+   */
+  @IsOptional()
+  @IsString()
+  storeSlug?: string;
+
   @IsOptional()
   @IsString()
   offerId?: string;

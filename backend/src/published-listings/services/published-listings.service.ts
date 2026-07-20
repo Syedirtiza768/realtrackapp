@@ -2,19 +2,31 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
+import { Store } from '../../channels/entities/store.entity.js';
 import { StoreAccessService } from '../../channels/store-access.service.js';
+import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import type { PublishedListingsQueryDto } from '../dto/published-listings.dto.js';
+import {
+  EBAY_STORE_SLUG_ALIASES,
+  parseStoreSlugQuery,
+} from '../store-slug.util.js';
+
+/** Listings older than this relative to the account's last successful sync are not "live". */
+const LIVE_SYNC_SKEW_MS = 6 * 60 * 60 * 1000;
 
 @Injectable()
 export class PublishedListingsService {
   constructor(
     @InjectRepository(EbayPublishedListing)
     private readonly listingRepo: Repository<EbayPublishedListing>,
+    @InjectRepository(Store)
+    private readonly storeRepo: Repository<Store>,
     private readonly storeAccess: StoreAccessService,
   ) {}
 
@@ -35,6 +47,11 @@ export class PublishedListingsService {
 
     const qb = this.listingRepo
       .createQueryBuilder('l')
+      .innerJoin(
+        ConnectedEbayAccount,
+        'cea',
+        'cea.id = l.ebayAccountId',
+      )
       .where('l.organizationId = :organizationId', { organizationId });
 
     if (!user.storeAccessAll) {
@@ -54,6 +71,18 @@ export class PublishedListingsService {
     if (query.storeId) {
       qb.andWhere('l.storeId = :storeId', { storeId: query.storeId });
     }
+
+    const slugStoreIds = await this.resolveStoreSlugIds(
+      organizationId,
+      query.storeSlug,
+    );
+    if (slugStoreIds) {
+      if (slugStoreIds.length === 0) {
+        return { items: [], total: 0, page, limit };
+      }
+      qb.andWhere('l.storeId IN (:...slugStoreIds)', { slugStoreIds });
+    }
+
     if (query.offerId) {
       qb.andWhere('l.offerId = :offerId', { offerId: query.offerId });
     }
@@ -62,13 +91,23 @@ export class PublishedListingsService {
         marketplaceId: query.marketplaceId,
       });
     }
-    if (query.status) {
-      if (query.status !== 'all') {
-        qb.andWhere('l.listingStatus = :status', { status: query.status });
-      }
-    } else {
-      qb.andWhere("l.listingStatus = 'active'");
+
+    const status = query.status ?? 'active';
+    if (status !== 'all') {
+      qb.andWhere('l.listingStatus = :status', { status });
     }
+
+    // Hard gate: active results only include rows from the latest live Trading
+    // sync on an active eBay connection — never more than SellerList/ActiveList.
+    if (status === 'active') {
+      qb.andWhere("cea.connectionStatus = 'active'");
+      qb.andWhere('cea.lastSuccessfulSyncAt IS NOT NULL');
+      qb.andWhere('l.lastSyncedAt IS NOT NULL');
+      qb.andWhere(
+        `l.lastSyncedAt >= cea.lastSuccessfulSyncAt - INTERVAL '${LIVE_SYNC_SKEW_MS / 1000} seconds'`,
+      );
+    }
+
     if (query.format) {
       qb.andWhere('l.listingFormat = :format', { format: query.format });
     }
@@ -146,6 +185,58 @@ export class PublishedListingsService {
 
     const [items, total] = await qb.skip(offset).take(limit).getManyAndCount();
     return { items, total, page, limit };
+  }
+
+  /**
+   * Resolve ?storeSlug=salvagea,blackline to store UUIDs.
+   * Returns null when the filter is absent; [] when no stores match.
+   */
+  private async resolveStoreSlugIds(
+    organizationId: string,
+    storeSlug: string | undefined,
+  ): Promise<string[] | null> {
+    const slugs = parseStoreSlugQuery(storeSlug);
+    if (slugs.length === 0) return null;
+
+    const ids = new Set<string>();
+
+    for (const slug of slugs) {
+      for (const id of EBAY_STORE_SLUG_ALIASES[slug] ?? []) {
+        ids.add(id);
+      }
+    }
+
+    const stores = await this.storeRepo
+      .createQueryBuilder('s')
+      .where('s.organization_id = :organizationId', { organizationId })
+      .andWhere(
+        new Brackets((sub) => {
+          sub
+            .where(
+              `LOWER(COALESCE(s.config->>'storeSlug', '')) IN (:...slugs)`,
+              { slugs },
+            )
+            .orWhere(
+              `LOWER(COALESCE(s.store_url, '')) LIKE ANY(ARRAY[:...urlPatterns])`,
+              {
+                urlPatterns: slugs.map((s) => `%/str/${s}%`),
+              },
+            );
+        }),
+      )
+      .getMany();
+
+    for (const store of stores) {
+      ids.add(store.id);
+    }
+
+    if (ids.size === 0) {
+      throw new BadRequestException(
+        `No stores matched storeSlug="${slugs.join(',')}"`,
+      );
+    }
+
+    return [...ids];
   }
 
   async getById(

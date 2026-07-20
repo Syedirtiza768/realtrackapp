@@ -105,7 +105,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_DEFAULT_INVENTORY_COUNTRY` | `US` | Ship-from country (ISO) |
 | `EBAY_DAILY_PUBLISH_TARGET_LIMIT` | `5000` | Organization-wide UTC-day quota for listing/store publish targets; hard-capped at 5,000 |
 | `PUBLISHED_LISTINGS_SYNC_CRON` | `*/15 * * * *` | Cron for scheduled published-listings mirror refresh; defaults to every 15 minutes for near-real-time API consumers |
-| `PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC` | `500` | Max Trading/Browse legacy-listing enrichments per sync run to cap extra API load while backfilling full image galleries and compatibility |
+| `PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC` | `50` | Max Trading/Browse legacy-listing enrichments per sync run (images + compatibility backfill). Keep low so full SellerList sync can finish and hard-gate prune can run. |
 
 Per-store override: set `stores.config.shipFromAddress` (object with the same
 field names) or `stores.location_key` / `config.locationKey`.

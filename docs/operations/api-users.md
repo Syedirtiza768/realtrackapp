@@ -107,8 +107,20 @@ All three support the same filters/pagination — `page` (default 1), `limit` (d
 (full filter list in `PublishedListingsQueryDto`).
 
 > Default behavior: if you omit `status`, the API now returns only `listingStatus = active`
-> rows. Pass `status=all` to include ended / out-of-stock mirror rows, or an explicit
-> `status=ended` / `status=out_of_stock` filter if needed.
+> rows that were present in the **latest successful live Trading sync** for an **active**
+> eBay connection (hard gate — the API will not return more rows than SellerList/ActiveList
+> wrote). Pass `status=all` to include ended / out-of-stock / stale mirror rows.
+>
+> Filter by eBay storefront slug (multi-store):
+> `?storeSlug=salvagea,blackline` or `?storeSlug=salvagea,blacklineusedautoparts`
+>
+> | storeSlug | RealTrack store | eBay storefront |
+> |---|---|---|
+> | `salvagea` / `salvage` | `3b84b063-3811-481f-a61d-f7846a03558f` (active K. Salvage Auto Parts) | https://www.ebay.com/str/salvagea |
+> | `blackline` / `blacklineusedautoparts` | `d16199c4-55b5-429e-ad27-892bed94e00d` (BLACKLINEAUTOPARTS) | https://www.ebay.com/str/blacklineusedautoparts |
+>
+> Do **not** use storeId `eed3dbd6-…` for Salvage — that row belongs to a **disabled**
+> duplicate connection and is excluded by the active-connection hard gate.
 
 ### 1. List published listings, paginated
 
@@ -121,34 +133,46 @@ curl -s "https://mhn.realtrackapp.com/api/published-listings?page=1&limit=3" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Verified response (production, live data — 314,076 published listings total):
+Verified response (production, 2026-07-20 — **active** total ≈ 421,561; `status=all` ≈ 442,125):
 
 ```json
 {
   "items": [
     {
-      "id": "f88fe2d2-38dd-4fd2-8624-771e48214cbc",
+      "id": "4f7c7812-dfa4-46a2-8439-1019280a6b4d",
       "organizationId": "3ed54be6-7138-4264-bd8b-73dfa9336245",
-      "storeId": "fa528c8a-f249-4816-94f6-f2ce8b932449",
+      "storeId": "fd26d027-2de7-473f-b521-8e34eed346ef",
       "marketplaceId": "EBAY_MOTORS_US",
-      "ebayItemId": "287416311728",
+      "ebayItemId": "398098611417",
       "offerId": null,
-      "sku": "KIA-1278-DGray-s-Engine-242",
-      "title": "2026 Kia Carnival Auto Trans Differentialträger Lagerscheibe 458493B628",
-      "price": "83.38",
-      "currency": "EUR",
+      "sku": "BMW-35i-2687-AI-K",
+      "title": "BMW 335i Heater Duct 51477133720 OEM Used",
+      "price": "154.99",
+      "currency": "USD",
       "quantityAvailable": 1,
       "listingStatus": "active",
-      "listingUrl": "https://www.ebay.de/itm/...-/287416311728",
-      "imageUrls": ["https://images.gridxconnect.io/gxc/..."],
-      "healthFlags": [{ "code": "weak_images", "severity": "warning", "message": "Fewer than 3 images — add more for better conversion" }]
+      "listingUrl": "https://www.ebay.com/itm/.../398098611417",
+      "imageUrls": ["https://i.ebayimg.com/images/g/.../s-l140.jpg"],
+      "compatibility": {
+        "compatibleProducts": [
+          {
+            "compatibilityProperties": [
+              { "name": "Year", "value": "2011" },
+              { "name": "Make", "value": "BMW" },
+              { "name": "Model", "value": "335i" }
+            ]
+          }
+        ]
+      }
     }
   ],
-  "total": 314076,
+  "total": 421561,
   "page": 1,
   "limit": 3
 }
 ```
+
+> `compatibility` may be `null` until enrichment finishes for that row; `imageUrls` may briefly hold only a gallery thumbnail before GetItem/Browse backfill completes.
 
 `page=2&limit=3` returns the next 3 distinct rows (verified — no overlap with page 1).
 
@@ -164,15 +188,15 @@ curl -s "https://mhn.realtrackapp.com/api/published-listings?storeId=eed3dbd6-99
 ```
 
 Verified: every returned item's `storeId` matches the filter (K. Salvage Auto Parts,
-71,512 listings on that store):
+active total ≈ 79,805 on 2026-07-20):
 
 ```json
 {
   "items": [
-    { "id": "...", "storeId": "eed3dbd6-9967-43ac-ad4e-6d5081cfb9b0", "title": "..." },
+    { "id": "...", "storeId": "eed3dbd6-9967-43ac-ad4e-6d5081cfb9b0", "listingStatus": "active", "title": "..." },
     { "...": "2 more, same storeId" }
   ],
-  "total": 71512,
+  "total": 79805,
   "page": 1,
   "limit": 3
 }
@@ -185,7 +209,7 @@ instead of query param:
 GET /api/stores/{storeId}/listings/published?page={page}&limit={limit}
 ```
 
-Identical result shape and totals — verified against the same store above (`total: 71512`).
+Identical result shape and totals — verified against the same store above (`total: 79805`).
 It additionally 404s if you request `GET /api/stores/{storeId}/listings/published/{id}` for
 an `id` that belongs to a *different* store, as a safety check.
 
