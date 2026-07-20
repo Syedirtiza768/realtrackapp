@@ -273,17 +273,6 @@ export class SingleListingFormService {
       .map((u) => u.trim())
       .filter(Boolean);
 
-    // Photos are still required to CREATE a part because eBay listings
-    // can't publish without them — but part IDENTIFICATION no longer
-    // depends on images: lookupPart/autoEnrichListing identify via the
-    // eBay Browse API by OEM/MPN first, with vision only as a fallback,
-    // so inadequate photo coverage no longer permanently fails enrichment.
-    if (rawImageUrls.length < PART_LOOKUP_MIN_VISION_IMAGES) {
-      throw new BadRequestException(
-        `At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos are required — upload a label/part-number close-up and an overall part shot, then try again.`,
-      );
-    }
-
     const generatedSku = !dto.sku?.trim();
     let sku = dto.sku?.trim() || (await this.allocateSku());
 

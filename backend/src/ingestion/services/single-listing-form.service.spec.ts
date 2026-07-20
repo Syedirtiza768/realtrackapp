@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import {
   SingleListingFormService,
   PART_LOOKUP_MIN_VISION_IMAGES,
@@ -6,18 +5,12 @@ import {
 } from './single-listing-form.service.js';
 
 /**
- * Focused test for the photo-count gate at submission time
- * (createIntakePart). Photos are still required to CREATE a part because
- * eBay listings can't publish without them — but part identification no
- * longer depends on images (eBay Browse API by OEM/MPN is the primary
- * detector, vision is a fallback), so inadequate photo coverage no longer
- * permanently fails enrichment.
- *
- * The gate runs before any repository/AI dependency is touched, so the
- * service can be constructed with stub dependencies rather than a full
- * NestJS TestingModule.
+ * createIntakePart no longer requires photos at submission time — parts
+ * save to inventory as drafts and can be enriched from OEM/MPN via the
+ * eBay Browse API. Photos remain optional at intake and can be added on
+ * Inventory before publish.
  */
-describe('SingleListingFormService.createIntakePart — photo gate', () => {
+describe('SingleListingFormService.createIntakePart — photos optional', () => {
   function buildService(): SingleListingFormService {
     const stub = {} as never;
     return new SingleListingFormService(
@@ -34,7 +27,7 @@ describe('SingleListingFormService.createIntakePart — photo gate', () => {
     );
   }
 
-  function baseDto(imageUrls: string[]): CreateIntakePartDto {
+  function baseDto(imageUrls: string[] = []): CreateIntakePartDto {
     return {
       partNumber: 'ABC123',
       brand: 'Toyota',
@@ -45,31 +38,17 @@ describe('SingleListingFormService.createIntakePart — photo gate', () => {
     };
   }
 
-  it('rejects a submission with zero photos', async () => {
+  it('does not reject a submission with zero photos on the photo-count gate', async () => {
     const service = buildService();
-    await expect(service.createIntakePart(baseDto([]))).rejects.toThrow(
-      BadRequestException,
-    );
-  });
-
-  it('rejects a submission with only one photo', async () => {
-    const service = buildService();
-    await expect(
-      service.createIntakePart(baseDto(['https://cdn.example.com/a.jpg'])),
-    ).rejects.toThrow(
+    await expect(service.createIntakePart(baseDto([]))).rejects.not.toThrow(
       new RegExp(`At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos`),
     );
   });
 
-  it('does not reject on the photo-count gate once the minimum is met', async () => {
+  it('does not reject a submission with only one photo on the photo-count gate', async () => {
     const service = buildService();
     await expect(
-      service.createIntakePart(
-        baseDto([
-          'https://cdn.example.com/label.jpg',
-          'https://cdn.example.com/overall.jpg',
-        ]),
-      ),
+      service.createIntakePart(baseDto(['https://cdn.example.com/a.jpg'])),
     ).rejects.not.toThrow(
       new RegExp(`At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos`),
     );
