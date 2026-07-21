@@ -266,6 +266,22 @@ describe('FitmentDiscoveryService', () => {
       const json = svc.toFitmentDataJson(rows);
       expect(json).toHaveLength(1);
       expect(json[0].Make).toBe('Toyota');
+      expect(json[0].MvlStatus).toBe('valid');
+      expect(json[0].validationStatus).toBe('valid');
+    });
+
+    it('excludes needs_review rows from fitment_data', () => {
+      const rows = [
+        {
+          year: '2008',
+          make: 'Mercedes-Benz',
+          model: '170',
+          confidence: 0.5,
+          source: 'title_parse',
+          validationStatus: 'needs_review' as const,
+        },
+      ];
+      expect(svc.toFitmentDataJson(rows)).toEqual([]);
     });
   });
 });

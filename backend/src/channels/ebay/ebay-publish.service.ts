@@ -75,6 +75,7 @@ import {
   fitmentDataToCompatibilityPayload,
   isSameMakeVariant,
   parseFitmentEntry,
+  selectPublishFitmentSource,
 } from '../../fitment/fitment-mvl.util.js';
 
 /**
@@ -259,17 +260,18 @@ export class EbayPublishService {
     catalog: CatalogProduct | null,
   ): EbayCompatibilityPayload | undefined {
     if (!catalog) return undefined;
-    const source =
-      Array.isArray(catalog.fitmentData) && catalog.fitmentData.length > 0
-        ? catalog.fitmentData
-        : Array.isArray(catalog.fitmentRows) && catalog.fitmentRows.length > 0
-          ? catalog.fitmentRows
-          : undefined;
+    const source = selectPublishFitmentSource(
+      catalog.fitmentData as Record<string, unknown>[] | null | undefined,
+      catalog.fitmentRows as Record<string, unknown>[] | null | undefined,
+    );
     const compatibility = fitmentDataToCompatibilityPayload(source);
-    if (source?.length && !compatibility) {
-      throw new BadRequestException(
-        'Structured fitment rows exist but none contain a valid Year, Make, and Model. Correct or validate fitment before publishing.',
-      );
+    if (
+      (Array.isArray(catalog.fitmentData) && catalog.fitmentData.length > 0) ||
+      (Array.isArray(catalog.fitmentRows) && catalog.fitmentRows.length > 0)
+    ) {
+      // Structured rows exist but none are publishable (all needs_review/rejected,
+      // or missing Year/Make/Model). Omit compatibility — empty Motors fitment is allowed.
+      if (!compatibility) return undefined;
     }
     return compatibility;
   }

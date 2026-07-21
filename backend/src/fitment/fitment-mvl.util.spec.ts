@@ -2,6 +2,8 @@ import {
   fitmentDataToCompatibilityPayload,
   isSameMakeVariant,
   parseFitmentEntry,
+  pickCanonicalPropertyValue,
+  selectPublishFitmentSource,
 } from './fitment-mvl.util.js';
 
 describe('isSameMakeVariant', () => {
@@ -95,6 +97,77 @@ describe('fitment-mvl.util', () => {
         { name: 'Year', value: '2021' },
       ]),
     );
+  });
+
+  it('skips needs_review rows so soft-invalid fitment never reaches eBay', () => {
+    const payload = fitmentDataToCompatibilityPayload([
+      {
+        Make: 'Mercedes-Benz',
+        Model: '170',
+        Year: '2008',
+        MvlStatus: 'needs_review',
+      },
+      {
+        Make: 'Mercedes-Benz',
+        Model: 'C-Class',
+        Year: '2008',
+        validationStatus: 'valid',
+      },
+    ]);
+
+    expect(payload?.compatibleProducts).toHaveLength(1);
+    expect(payload?.compatibleProducts[0].compatibilityProperties).toEqual(
+      expect.arrayContaining([
+        { name: 'Make', value: 'Mercedes-Benz' },
+        { name: 'Model', value: 'C-Class' },
+        { name: 'Year', value: '2008' },
+      ]),
+    );
+  });
+
+  it('selectPublishFitmentSource prefers valid fitmentRows over status-blind fitmentData', () => {
+    const source = selectPublishFitmentSource(
+      [{ Make: 'Mercedes-Benz', Model: '170', Year: '2008' }],
+      [
+        {
+          make: 'Mercedes-Benz',
+          model: 'C-Class',
+          year: '2008',
+          validationStatus: 'valid',
+        },
+      ],
+    );
+    expect(source).toHaveLength(1);
+    expect(source?.[0].model).toBe('C-Class');
+  });
+
+  it('selectPublishFitmentSource omits when rows are only needs_review (no fitmentData fallback)', () => {
+    const source = selectPublishFitmentSource(
+      [{ Make: 'Mercedes-Benz', Model: '170', Year: '2008' }],
+      [
+        {
+          make: 'Mercedes-Benz',
+          model: '170',
+          year: '2008',
+          validationStatus: 'needs_review',
+        },
+      ],
+    );
+    expect(source).toBeUndefined();
+  });
+
+  it('pickCanonicalPropertyValue refuses short fuzzy matches like s→S-Class or 17→170', () => {
+    const options = [
+      { value: '170' },
+      { value: 'C-Class' },
+      { value: 'S-Class' },
+      { value: 'X5' },
+    ];
+    expect(pickCanonicalPropertyValue(options, 's')).toBeUndefined();
+    expect(pickCanonicalPropertyValue(options, '1')).toBeUndefined();
+    expect(pickCanonicalPropertyValue(options, '17')).toBeUndefined();
+    expect(pickCanonicalPropertyValue(options, 'X5')).toBe('X5');
+    expect(pickCanonicalPropertyValue(options, 'C-Class')).toBe('C-Class');
   });
 
   it('expands yearStart/yearEnd ranges into per-year compatibility rows', () => {

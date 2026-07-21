@@ -11,6 +11,7 @@ import {
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
 import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
 import { extractMakeModelFromTitle } from '../listings/utils/extract-make-model-from-title.js';
+import { normalizePlatformModel } from '../fitment/platform-generation.util.js';
 import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import type {
   FitmentRow,
@@ -288,14 +289,32 @@ export class FitmentDiscoveryService {
 
   /** Parse year/make/model from listing title when pipeline fitment rows were not persisted. */
   private candidatesFromTitle(product: CatalogProduct): FitmentRow[] {
-    // Prefer optimized title when present — source titles often prepend a
-    // mistyped brand (e.g. "Chevorlet") ahead of the real Make/Model tokens.
-    const title =
-      product.optimizedTitle?.trim() || product.title?.trim() || '';
+    // Prefer the source title for Y/M/M. Optimized titles are composed from prior
+    // fitment and can lock in corruption (e.g. C350 → "170"). Brand typos like
+    // "Chevorlet" are normalized inside extractMakeModelFromTitle.
+    const sourceTitle = product.title?.trim() || '';
+    const optimizedTitle = product.optimizedTitle?.trim() || '';
+
+    let rows = this.candidatesFromTitleText(sourceTitle);
+    if (
+      rows.length === 0 &&
+      optimizedTitle &&
+      optimizedTitle !== sourceTitle
+    ) {
+      rows = this.candidatesFromTitleText(optimizedTitle);
+    }
+    return rows;
+  }
+
+  private candidatesFromTitleText(title: string): FitmentRow[] {
     if (!title) return [];
 
-    const { make, model } = extractMakeModelFromTitle(title);
-    if (!make || !model) return [];
+    const extracted = extractMakeModelFromTitle(title);
+    if (!extracted.make || !extracted.model) return [];
+
+    const make = extracted.make;
+    const model =
+      normalizePlatformModel(make, extracted.model) || extracted.model;
 
     const yearPrefix = title.match(/^(\d{4})(?:\s*-\s*(\d{4}))?\s+/);
     const rows: FitmentRow[] = [];
@@ -502,7 +521,7 @@ export class FitmentDiscoveryService {
 
   toFitmentDataJson(rows: FitmentRow[]): Record<string, unknown>[] {
     return rows
-      .filter((r) => r.validationStatus !== 'rejected')
+      .filter((r) => r.validationStatus === 'valid')
       .map((r) => ({
         Year: r.year,
         Make: r.make,
@@ -512,6 +531,8 @@ export class FitmentDiscoveryService {
         ...(r.notes ? { Notes: r.notes } : {}),
         Source: r.source,
         Confidence: r.confidence,
+        MvlStatus: 'valid',
+        validationStatus: 'valid',
       }));
   }
 }

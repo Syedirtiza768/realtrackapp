@@ -31,15 +31,86 @@ function getString(raw: Record<string, unknown>, keys: string[]): string {
   return '';
 }
 
-/** Determine whether a fitment row is marked rejected. */
-function isRejectedFitmentRow(raw: Record<string, unknown>): boolean {
-  const status = getString(raw, [
+/** Read MVL / discovery validation status from either column naming style. */
+export function getFitmentValidationStatus(
+  raw: Record<string, unknown>,
+): string {
+  return getString(raw, [
     'MvlStatus',
     'mvlStatus',
     'validationStatus',
     'ValidationStatus',
   ]).toLowerCase();
-  return status === 'rejected';
+}
+
+/**
+ * Soft-invalid (`needs_review`) and hard-rejected rows must not be sent to eBay.
+ * Untagged legacy rows (no status) are left alone so previously working publishes keep working.
+ */
+export function isUnpublishableFitmentRow(
+  raw: Record<string, unknown>,
+): boolean {
+  const status = getFitmentValidationStatus(raw);
+  return status === 'rejected' || status === 'needs_review';
+}
+
+/**
+ * Choose fitment source for publish payloads.
+ * Prefer explicitly `valid` fitment_rows; if rows are status-tagged but none are valid,
+ * omit compatibility rather than falling back to status-blind fitment_data.
+ * Untagged legacy data still uses fitment_data → fitment_rows as before.
+ */
+export function selectPublishFitmentSource(
+  fitmentData: Record<string, unknown>[] | null | undefined,
+  fitmentRows: Record<string, unknown>[] | null | undefined,
+): Record<string, unknown>[] | undefined {
+  const rows = Array.isArray(fitmentRows) ? fitmentRows : [];
+  const data = Array.isArray(fitmentData) ? fitmentData : [];
+
+  const validRows = rows.filter(
+    (row) => getFitmentValidationStatus(row) === 'valid',
+  );
+  if (validRows.length > 0) return validRows;
+
+  const hasStatusTaggedRows = rows.some((row) =>
+    Boolean(getFitmentValidationStatus(row)),
+  );
+  if (hasStatusTaggedRows) {
+    // All tagged rows are needs_review/rejected — do not resurrect them via fitment_data.
+    return undefined;
+  }
+
+  if (data.length > 0) return data;
+  if (rows.length > 0) return rows;
+  return undefined;
+}
+
+/**
+ * Fuzzy-match an MVL property value. Short queries are exact-only so tokens like
+ * "s" / "1" / "17" cannot collapse onto S-Class or classic Mercedes "170".
+ */
+export function pickCanonicalPropertyValue(
+  options: Array<{ value: string }>,
+  query: string,
+): string | undefined {
+  const q = query.trim().toLowerCase();
+  if (!q || options.length === 0) return undefined;
+
+  const exact = options.find((o) => o.value.toLowerCase() === q);
+  if (exact) return exact.value;
+
+  // Length < 3: exact match only (X5 / RX / M3 already match exactly above).
+  if (q.length < 3) return undefined;
+
+  const prefix = options.find((o) => o.value.toLowerCase().startsWith(q));
+  if (prefix) return prefix.value;
+
+  // Contains matching only for longer queries (avoids "17" → "170").
+  if (q.length >= 4) {
+    const contains = options.find((o) => o.value.toLowerCase().includes(q));
+    return contains?.value;
+  }
+  return undefined;
 }
 
 /**
@@ -181,17 +252,19 @@ export function isSameMakeVariant(
 /** Convert stored fitment rows to eBay Inventory API compatibility payload. */
 export function fitmentDataToCompatibilityPayload(
   fitmentData: Record<string, unknown>[] | null | undefined,
-  options?: { excludeRejected?: boolean },
+  options?: { excludeRejected?: boolean; excludeNeedsReview?: boolean },
 ): EbayCompatibilityPayload | undefined {
   if (!Array.isArray(fitmentData) || fitmentData.length === 0) return undefined;
 
   const compatibleProducts: EbayCompatibilityPayload['compatibleProducts'] = [];
   const seenRows = new Set<string>();
+  const excludeRejected = options?.excludeRejected !== false;
+  const excludeNeedsReview = options?.excludeNeedsReview !== false;
 
   for (const raw of fitmentData) {
-    if (options?.excludeRejected !== false && isRejectedFitmentRow(raw)) {
-      continue;
-    }
+    const status = getFitmentValidationStatus(raw);
+    if (excludeRejected && status === 'rejected') continue;
+    if (excludeNeedsReview && status === 'needs_review') continue;
 
     const make = getString(raw, ['Make', 'make']);
     const model = getString(raw, ['Model', 'model']);

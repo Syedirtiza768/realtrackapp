@@ -28,7 +28,7 @@
 - **Dashboard** with KPI aggregation
 - **Listing editor** with AI assistance, revision history
 - **Catalog import** (CSV/bulk, BullMQ processing, motors filters)
-- **eBay multi-store** (OAuth, sync, publish, multi-account). Inventory location defaults are **Dubai / `AE_Dubai`** (not Houston/`US_77001`); policy sync prefers AE warehouse keys. Publish sanitizes item-specific values to eBay's 65-char aspect limit (fixes Type-too-long rejects on long OEM descriptions). Pipeline MVL fitment is **donor-year scoped** (±5/±8) and refuses full make/model dumps when year is missing. Pipeline / enterprise US-AU titles use Gemini 3.1 Flash Lite **only** for Position + Part Name slots; the rest of the house title structure stays deterministic.
+- **eBay multi-store** (OAuth, sync, publish, multi-account). Inventory location defaults are **Dubai / `AE_Dubai`** (not Houston/`US_77001`); policy sync prefers AE warehouse keys. Publish sanitizes item-specific values to eBay's 65-char aspect limit (fixes Type-too-long rejects on long OEM descriptions). Pipeline MVL fitment is **donor-year scoped** (±5/±8) and refuses full make/model dumps when year is missing. Publish sends only **MVL-valid** compatibility rows (`needs_review`/`rejected` omitted; empty fitment still allowed). Title/make-model parsing skips junk tokens and maps Mercedes series codes (`C350`→`C-Class`) so optimizers cannot lock in corrupted models like `170`. Pipeline / enterprise US-AU titles use Gemini 3.1 Flash Lite **only** for Position + Part Name slots; the rest of the house title structure stays deterministic.
 - **Inventory management** (ledger, allocations, events)
 - **Order import** from eBay
 - **Notifications** (in-app + WebSocket)

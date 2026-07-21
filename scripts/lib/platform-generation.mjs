@@ -22,6 +22,35 @@ const MODEL_ALIASES = {
   '5-series': '5 Series',
   'c-class': 'C-Class',
   'e-class': 'E-Class',
+  c350: 'C-Class',
+  'c-350': 'C-Class',
+  c300: 'C-Class',
+  e350: 'E-Class',
+  e550: 'E-Class',
+  s550: 'S-Class',
+  ml350: 'M-Class',
+  glc300: 'GLC',
+  gle350: 'GLE',
+};
+
+const MERCEDES_SERIES_TO_CLASS = {
+  A: 'A-Class',
+  B: 'B-Class',
+  C: 'C-Class',
+  E: 'E-Class',
+  S: 'S-Class',
+  CLA: 'CLA-Class',
+  CLS: 'CLS-Class',
+  GLK: 'GLK-Class',
+  GLC: 'GLC',
+  GLE: 'GLE',
+  GLS: 'GLS',
+  GL: 'GL-Class',
+  ML: 'M-Class',
+  SLK: 'SLK-Class',
+  SL: 'SL-Class',
+  CLK: 'CLK-Class',
+  G: 'G-Class',
 };
 
 const BRAND_ALIASES = {
@@ -51,6 +80,17 @@ export function normalizePlatformModel(make, model) {
   if (/^gx\d/i.test(raw)) return 'GX';
   if (/^es\d/i.test(raw)) return 'ES';
   if (/^is\d/i.test(raw)) return 'IS';
+
+  const platformMake = normalizePlatformMake(make).toLowerCase();
+  if (platformMake === 'mercedes-benz' || platformMake === 'mercedes') {
+    const series = raw.match(/^([A-Za-z]{1,3})[-\s]?(\d{2,3})[A-Za-z]{0,2}$/);
+    if (series) {
+      const prefix = series[1].toUpperCase();
+      if (MERCEDES_SERIES_TO_CLASS[prefix]) {
+        return MERCEDES_SERIES_TO_CLASS[prefix];
+      }
+    }
+  }
   return raw;
 }
 

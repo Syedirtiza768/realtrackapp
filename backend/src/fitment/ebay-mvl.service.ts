@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
 import {
   parseFitmentEntry,
+  pickCanonicalPropertyValue,
   serializeValidatedFitmentRow,
   type ParsedFitmentRow,
 } from './fitment-mvl.util.js';
@@ -1008,12 +1009,6 @@ export class EbayMvlService {
     options: PropertyValueOption[],
     query: string,
   ): string | undefined {
-    const q = query.toLowerCase();
-    const exact = options.find((o) => o.value.toLowerCase() === q);
-    if (exact) return exact.value;
-    const prefix = options.find((o) => o.value.toLowerCase().startsWith(q));
-    if (prefix) return prefix.value;
-    const contains = options.find((o) => o.value.toLowerCase().includes(q));
-    return contains?.value;
+    return pickCanonicalPropertyValue(options, query);
   }
 }

@@ -40,6 +40,31 @@ const MODEL_ALIASES: Record<string, string> = {
   'gle-class': 'GLE',
   'glc-class': 'GLC',
   'a-class': 'A-Class',
+  // Mercedes series codes commonly appear in GridX titles (C350, E550, …)
+  c350: 'C-Class',
+  'c-350': 'C-Class',
+  c300: 'C-Class',
+  'c-300': 'C-Class',
+  c250: 'C-Class',
+  c230: 'C-Class',
+  c280: 'C-Class',
+  c320: 'C-Class',
+  c400: 'C-Class',
+  c43: 'C-Class',
+  c63: 'C-Class',
+  e350: 'E-Class',
+  'e-350': 'E-Class',
+  e550: 'E-Class',
+  e63: 'E-Class',
+  s550: 'S-Class',
+  s63: 'S-Class',
+  a250: 'A-Class',
+  cla250: 'CLA-Class',
+  glc300: 'GLC',
+  gle350: 'GLE',
+  ml350: 'M-Class',
+  glk350: 'GLK-Class',
+  slk350: 'SLK-Class',
 };
 
 const BRAND_ALIASES: Record<string, string> = {
@@ -60,6 +85,26 @@ export function normalizePlatformMake(make: string | null | undefined): string {
   return BRAND_ALIASES[key] ?? raw.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const MERCEDES_SERIES_TO_CLASS: Record<string, string> = {
+  A: 'A-Class',
+  B: 'B-Class',
+  C: 'C-Class',
+  E: 'E-Class',
+  S: 'S-Class',
+  CLA: 'CLA-Class',
+  CLS: 'CLS-Class',
+  GLK: 'GLK-Class',
+  GLC: 'GLC',
+  GLE: 'GLE',
+  GLS: 'GLS',
+  GL: 'GL-Class',
+  ML: 'M-Class',
+  SLK: 'SLK-Class',
+  SL: 'SL-Class',
+  CLK: 'CLK-Class',
+  G: 'G-Class',
+};
+
 export function normalizePlatformModel(
   make: string | null | undefined,
   model: string | null | undefined,
@@ -74,6 +119,18 @@ export function normalizePlatformModel(
   if (/^gx\d/i.test(raw)) return 'GX';
   if (/^es\d/i.test(raw)) return 'ES';
   if (/^is\d/i.test(raw)) return 'IS';
+
+  const platformMake = normalizePlatformMake(make).toLowerCase();
+  if (platformMake === 'mercedes-benz' || platformMake === 'mercedes') {
+    // C350 / C-350 / C 350 → C-Class (never leave numeric chassis like "170")
+    const series = raw.match(/^([A-Za-z]{1,3})[-\s]?(\d{2,3})[A-Za-z]{0,2}$/);
+    if (series) {
+      const prefix = series[1].toUpperCase();
+      if (MERCEDES_SERIES_TO_CLASS[prefix]) {
+        return MERCEDES_SERIES_TO_CLASS[prefix];
+      }
+    }
+  }
   return raw;
 }
 

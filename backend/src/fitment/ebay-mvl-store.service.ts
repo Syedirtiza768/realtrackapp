@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { PropertyValueOption } from './ebay-mvl.service.js';
+import { pickCanonicalPropertyValue } from './fitment-mvl.util.js';
 import type { ParsedFitmentRow } from './fitment-mvl.util.js';
 import { EbayMvlEntry } from './entities/ebay-mvl-entry.entity.js';
 import {
@@ -571,13 +572,7 @@ export class EbayMvlStoreService {
     options: PropertyValueOption[],
     query: string,
   ): string | undefined {
-    const q = query.toLowerCase();
-    const exact = options.find((o) => o.value.toLowerCase() === q);
-    if (exact) return exact.value;
-    const prefix = options.find((o) => o.value.toLowerCase().startsWith(q));
-    if (prefix) return prefix.value;
-    const contains = options.find((o) => o.value.toLowerCase().includes(q));
-    return contains?.value;
+    return pickCanonicalPropertyValue(options, query);
   }
 
   async markReleaseStatus(

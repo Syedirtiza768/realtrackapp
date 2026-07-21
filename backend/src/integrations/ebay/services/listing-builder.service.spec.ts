@@ -520,6 +520,99 @@ describe('ListingBuilderService', () => {
     expect(result.publishRequest.compatibility).toBeUndefined();
   });
 
+  it('omits needs_review fitment instead of sending invalid eBay compatibility', async () => {
+    publishResolver.resolve.mockResolvedValue({
+      snapshot: {
+        catalogProductId: 'cp-1',
+        listingRecordId: 'lr-1',
+        sku: 'SKU-001',
+        title: 'Brake Pad',
+        description: '<p>Desc</p>',
+        brand: 'Mercedes-Benz',
+        price: 49.99,
+        quantity: 5,
+        categoryId: '6028',
+        imageUrls: ['https://img.example.com/1.jpg'],
+      },
+      catalogProduct: {
+        fitmentData: [
+          { Make: 'Mercedes-Benz', Model: '170', Year: '2008' },
+        ],
+        fitmentRows: [
+          {
+            year: '2008',
+            make: 'Mercedes-Benz',
+            model: '170',
+            validationStatus: 'needs_review',
+          },
+        ],
+      },
+      warnings: [],
+    });
+    overrideRepo.findOne = jest.fn().mockResolvedValue(null);
+
+    const result = await svc.build({
+      catalogProductId: 'cp-1',
+      ebayAccountId: 'acct-1',
+      marketplaceId: 'EBAY_MOTORS_US',
+      listingRecordId: 'lr-1',
+      storeId: 'store-1',
+    });
+
+    expect(result.publishRequest.compatibility).toBeUndefined();
+  });
+
+  it('prefers valid fitmentRows over status-blind fitmentData', async () => {
+    publishResolver.resolve.mockResolvedValue({
+      snapshot: {
+        catalogProductId: 'cp-1',
+        listingRecordId: 'lr-1',
+        sku: 'SKU-001',
+        title: 'Brake Pad',
+        description: '<p>Desc</p>',
+        brand: 'Mercedes-Benz',
+        price: 49.99,
+        quantity: 5,
+        categoryId: '6028',
+        imageUrls: ['https://img.example.com/1.jpg'],
+      },
+      catalogProduct: {
+        fitmentData: [
+          { Make: 'Mercedes-Benz', Model: '170', Year: '2008' },
+        ],
+        fitmentRows: [
+          {
+            year: '2008',
+            make: 'Mercedes-Benz',
+            model: 'C-Class',
+            validationStatus: 'valid',
+          },
+        ],
+      },
+      warnings: [],
+    });
+    overrideRepo.findOne = jest.fn().mockResolvedValue(null);
+
+    const result = await svc.build({
+      catalogProductId: 'cp-1',
+      ebayAccountId: 'acct-1',
+      marketplaceId: 'EBAY_MOTORS_US',
+      listingRecordId: 'lr-1',
+      storeId: 'store-1',
+    });
+
+    const props =
+      result.publishRequest.compatibility?.compatibleProducts?.[0]
+        ?.compatibilityProperties;
+    expect(props).toEqual(
+      expect.arrayContaining([
+        { name: 'Make', value: 'Mercedes-Benz' },
+        { name: 'Model', value: 'C-Class' },
+        { name: 'Year', value: '2008' },
+      ]),
+    );
+  });
+
   it('uses GTC listing duration', async () => {
     publishResolver.resolve.mockResolvedValue({
       snapshot: {

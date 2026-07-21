@@ -41,6 +41,7 @@ import {
   fitmentDataToCompatibilityPayload,
   isSameMakeVariant,
   parseFitmentEntry,
+  selectPublishFitmentSource,
 } from '../../../fitment/fitment-mvl.util.js';
 import type { EbayCompatibilityPayload } from '../../../channels/ebay/ebay-api.types.js';
 
@@ -504,9 +505,16 @@ export class ListingBuilderService {
     const fitmentSource =
       Array.isArray(fitmentOverride) && fitmentOverride.length > 0
         ? (fitmentOverride as Record<string, unknown>[])
-        : (resolved.catalogProduct?.fitmentData ??
-          resolved.catalogProduct?.fitmentRows ??
-          undefined);
+        : selectPublishFitmentSource(
+            resolved.catalogProduct?.fitmentData as
+              | Record<string, unknown>[]
+              | null
+              | undefined,
+            resolved.catalogProduct?.fitmentRows as
+              | Record<string, unknown>[]
+              | null
+              | undefined,
+          );
 
     compatibility = fitmentDataToCompatibilityPayload(fitmentSource);
 

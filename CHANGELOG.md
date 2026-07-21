@@ -10,6 +10,9 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Fixed
+- **Mercedes C350 title/fitment corruption → eBay "All compatibilities are invalid" (pipeline `7b7cb423`):** Source titles like `Mercedes-Benz s C350` were parsed as model `s`, then loose MVL `pickCanonical` / sibling expansion rewrote the model to classic numeric `170`, which structured title composition wrote into `optimized_title`. Fitment discovery preferred that optimized title, locking the loop; publish preferred status-blind `fitment_data` that still carried soft-invalid rows, so eBay rejected every compatibility PUT. Fix: harden `extractMakeModelFromTitle` (skip junk tokens, prefer series codes), require exact-only canonicalization for short MVL queries, map Mercedes series codes (`C350`→`C-Class`), prefer source titles for discovery, write only `valid` rows into `fitment_data` with status tags, and select publish fitment from valid `fitment_rows` (omit `needs_review`/`rejected`; empty fitment still allowed). Production pipeline repaired to 2008 Mercedes-Benz C-Class (264/264 valid). Files: `extract-make-model-from-title.ts`, `fitment-mvl.util.ts`, `platform-generation.util.ts`, `ebay-mvl*.ts`, `fitment-discovery.service.ts`, `listing-builder.service.ts`, `ebay-publish.service.ts`, `scripts/lib/platform-generation.mjs`.
+
 ### Added
 - **Gemini title slots for Position + Part Name:** Pipeline GridX titles still follow `[Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used`, but **Position** and **Part Name** are now batched through OpenRouter `google/gemini-3.1-flash-lite` (heuristic `extractPosition` / `cleanPartName` remain fallbacks). Enterprise US/AU optimization uses the same lane via `TitlePositionPartNamePipeline` and assembles titles with `buildStructuredEbayTitle`. Year/Make/Model/OEM/`OEM Used` stay deterministic. Env: `PIPELINE_TITLE_SLOT_*`, `TITLE_POSITION_PART_NAME_*`.
 
