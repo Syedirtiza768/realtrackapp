@@ -122,7 +122,9 @@ export function normalizePlatformModel(
 
   const platformMake = normalizePlatformMake(make).toLowerCase();
   if (platformMake === 'mercedes-benz' || platformMake === 'mercedes') {
-    // C350 / C-350 / C 350 → C-Class (never leave numeric chassis like "170")
+    // Platform-range keys use Class names (Mercedes-Benz|C-Class → W204).
+    // Do NOT use this result as an eBay Motors US compatibility Model —
+    // US MVL lists series codes (C350, C300) as the Model value.
     const series = raw.match(/^([A-Za-z]{1,3})[-\s]?(\d{2,3})[A-Za-z]{0,2}$/);
     if (series) {
       const prefix = series[1].toUpperCase();

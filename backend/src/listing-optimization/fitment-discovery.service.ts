@@ -11,7 +11,6 @@ import {
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
 import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
 import { extractMakeModelFromTitle } from '../listings/utils/extract-make-model-from-title.js';
-import { normalizePlatformModel } from '../fitment/platform-generation.util.js';
 import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import type {
   FitmentRow,
@@ -312,9 +311,11 @@ export class FitmentDiscoveryService {
     const extracted = extractMakeModelFromTitle(title);
     if (!extracted.make || !extracted.model) return [];
 
+    // Keep the extracted series code as-is (e.g. US Motors MVL model is "C350",
+    // not European "C-Class"). Platform/chassis aliasing belongs in
+    // normalizePlatformModel / buildPlatformKey, not in publish fitment rows.
     const make = extracted.make;
-    const model =
-      normalizePlatformModel(make, extracted.model) || extracted.model;
+    const model = extracted.model;
 
     const yearPrefix = title.match(/^(\d{4})(?:\s*-\s*(\d{4}))?\s+/);
     const rows: FitmentRow[] = [];
