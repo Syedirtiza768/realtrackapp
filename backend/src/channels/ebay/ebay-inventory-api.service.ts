@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 import {
   buildDefaultInventoryLocationPayload,
+  pickPreferredInventoryLocationKey,
   resolvePreferredMerchantLocationKey,
 } from './ebay-inventory-location.util.js';
 import { Store } from '../entities/store.entity.js';
@@ -437,8 +438,8 @@ export class EbayInventoryApiService {
 
       const { locations } = await this.getLocations(storeId);
       if (locations.length) {
-        const match = locations.find((l) => l.merchantLocationKey === keyHint);
-        return (match ?? locations[0]).merchantLocationKey;
+        const preferred = pickPreferredInventoryLocationKey(locations, keyHint);
+        if (preferred) return preferred;
       }
 
       const payload = buildDefaultInventoryLocationPayload(

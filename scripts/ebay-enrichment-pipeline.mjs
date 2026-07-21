@@ -29,7 +29,8 @@ if (!INPUT || !OUTPUT_DIR || !JOB_ID) {
 }
 
 const CONFIG = {
-  location: 'Fort Lauderdale, FL, US',
+  // Item/store location shown on eBay (NOT warehouse bin / storage location).
+  location: 'Dubai, AE',
   defaultConditionId: '3000',
   defaultFormat: 'FixedPrice',
   defaultDuration: 'GTC',
@@ -44,6 +45,20 @@ const CONFIG = {
 // ── Helpers ──
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const clean = (v) => (v == null ? '' : String(v).trim());
+
+/** Strip Excel-quoted / multiline junk from SKUs (e.g. `"VW-0643-FS-SEATMH\n"`). */
+function cleanSku(v) {
+  let s = clean(v);
+  if (!s) return '';
+  // Unwrap a single pair of wrapping quotes when the cell was Excel-escaped.
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1);
+  }
+  return s.replace(/[\r\n\t]+/g, '').replace(/\s+/g, '').trim();
+}
 
 function progress(stage, data = {}) {
   const pairs = Object.entries({ stage, ...data })
@@ -440,25 +455,30 @@ async function queryMvl(vehicleMake, vehicleModel, donorYear) {
       display_name: r.display_name || '', epid: r.epid || '',
     }));
 
-    if (!donorYear || all.length === 0) return all;
-
-    // Scope to donor year ± 5 years to find the correct generation
-    const scoped = all.filter((r) => Math.abs(r.year - donorYear) <= 5);
-    // If scoped results are too few (< 3), widen to ±8
-    if (scoped.length < 3) {
-      const wider = all.filter((r) => Math.abs(r.year - donorYear) <= 8);
-      return wider.length > 0 ? wider : all;
+    // NEVER return the full make/model history when donor year is missing —
+    // that produced "1980-2027 Volkswagen Jetta" dumps (entire MVL table).
+    const { scopeMvlRowsByDonorYear } = await import('./lib/mvl-donor-scope.mjs');
+    const scoped = scopeMvlRowsByDonorYear(all, donorYear);
+    if (!scoped.scoped || scoped.rows.length === 0) {
+      console.warn(
+        `MVL scope refused full dump for ${canonicalMake}/${canonicalModel}: reason=${scoped.reason} donorYear=${donorYear ?? 'none'} unscopedCandidates=${all.length}`,
+      );
+      return [];
     }
-    return scoped;
+    console.log(
+      `MVL scoped ${scoped.rows.length}/${all.length} rows for ${canonicalMake}/${canonicalModel} (${scoped.reason}, donorYear=${donorYear})`,
+    );
+    return scoped.rows;
   } finally {
     await pool.end();
   }
 }
 
 // ── Build compatibility string for eBay File Exchange — limit to 20 entries per cell ──
-// AI description enhancement -- title/category/compatibility stay fully
-// deterministic; AI is used only to polish the listing description text,
-// grounded in the supplier's original description (no fabricated specs).
+// AI description enhancement -- title year/make/model/OEM stay fully
+// deterministic; Position + Part Name are refined via Gemini Flash Lite
+// (see resolvePositionPartNamesBatch) with regex heuristics as fallback;
+// AI is also used to polish the listing description text.
 const AI_MODEL = process.env.PIPELINE_DESCRIPTION_AI_MODEL || process.env.OPENAI_CHAT_MODEL || 'openai/gpt-4o-mini';
 const AI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
 const AI_CONCURRENCY = Math.max(1, Number(process.env.PIPELINE_AI_CONCURRENCY || '5') || 5);
@@ -529,13 +549,32 @@ async function main() {
   await sleep(100);
   progress('enrichment', { message: 'Starting fast enrichment pipeline' });
 
-  // 1. Parse input XLSX
+  // 1. Parse input XLSX — skip Excel-hidden rows (soft-deleted / Hide Rows).
+  // SheetJS still returns hidden row cell values; operators who "deleted" rows
+  // via hide or filter-hide leave them in the file and we must not import them.
   console.log(`Reading input: ${INPUT}`);
-  const wb = XLSX.readFile(INPUT);
+  const wb = XLSX.readFile(INPUT, { cellStyles: true });
   const sheetName = wb.SheetNames.find((n) => !/instruction/i.test(n)) || wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
-  const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  console.log(`Sheet: ${sheetName}, ${rawRows.length} rows`);
+  const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const rowMeta = ws['!rows'] || [];
+  let hiddenDataRows = 0;
+  const rawRows = allRows.filter((row, index) => {
+    if (!rowMeta[index]?.hidden) return true;
+    const hasData = Array.isArray(row) && row.some((c) => String(c ?? '').trim() !== '');
+    if (hasData) hiddenDataRows++;
+    return false;
+  });
+  console.log(
+    `Sheet: ${sheetName}, ${rawRows.length} visible rows` +
+      (hiddenDataRows > 0 ? ` (skipped ${hiddenDataRows} Excel-hidden data row(s))` : ''),
+  );
+  if (hiddenDataRows > 0) {
+    progress('enrichment', {
+      message: `Skipped ${hiddenDataRows} Excel-hidden row(s); using visible rows only`,
+      hiddenRowsSkipped: hiddenDataRows,
+    });
+  }
 
   // Find data start (GridX format has info row at 0, headers at 1, data at 2+)
   let headerIdx = -1;
@@ -650,7 +689,7 @@ async function main() {
     const price = parseFloat(clean(row[iPrice])) || 0;
     const quantity = parseInt(clean(row[iQty])) || CONFIG.defaultQuantity;
     const make = clean(row[iMake]) || vehicleInfo.make || '';
-    const sku = clean(row[iSku]) || '';
+    const sku = cleanSku(row[iSku]) || '';
     const imageUrls = clean(row[iImages])
       .split(/[\n|]/)
       .map((u) => u.trim())
@@ -689,18 +728,28 @@ async function main() {
   // in MAKE_ALIASES — MVL's queryMvl canonicalizes it via ILIKE.
   const donorMake = parts[0]?.rawMake || vehicleInfo.make || '';
 
-  // If the filename didn't yield model/year, derive them from the first row's
-  // description using the donor make (descriptions are "YEAR MAKE MODEL ...").
+  // If the filename didn't yield model/year, derive them from row descriptions
+  // using the donor make (descriptions are "YEAR MAKE MODEL <part>"). Scan
+  // several rows — the first data row is sometimes noise / missing a year.
   if ((!vehicleInfo.model || !vehicleInfo.year) && parts.length > 0) {
-    const ex = extractModelYear(parts[0].rawDesc || '', donorMake);
-    if (!vehicleInfo.model && ex.model) {
-      vehicleInfo.model = ex.model;
-      console.log(`Extracted model from description: ${ex.model}`);
+    for (const p of parts.slice(0, 25)) {
+      const ex = extractModelYear(p.rawDesc || '', donorMake);
+      if (!vehicleInfo.model && ex.model) {
+        vehicleInfo.model = ex.model;
+        console.log(`Extracted model from description: ${ex.model}`);
+      }
+      if (!vehicleInfo.year && ex.year) {
+        vehicleInfo.year = ex.year;
+        console.log(`Extracted year from description: ${ex.year}`);
+      }
+      if (vehicleInfo.model && vehicleInfo.year) break;
     }
-    if (!vehicleInfo.year && ex.year) {
-      vehicleInfo.year = ex.year;
-      console.log(`Extracted year from description: ${ex.year}`);
-    }
+  }
+
+  if (!vehicleInfo.year) {
+    console.warn(
+      'No donor year resolved (filename/descriptions) — MVL fitment will be empty rather than dumping the full make/model history. Titles will omit a fabricated year range.',
+    );
   }
 
   // 4. MVL lookup for fitment
@@ -717,18 +766,51 @@ async function main() {
     console.log(`MVL query failed: ${err.message}`);
   }
 
-  // Build year range from MVL data — scoped to donor year ±5yr
-  const mvlYears = allFitments.map((f) => f.year).filter(Boolean);
-  const yearMin = mvlYears.length ? Math.min(...mvlYears) : vehicleInfo.year;
-  const yearMax = mvlYears.length ? Math.max(...mvlYears) : vehicleInfo.year;
-  const yearRange = yearMin === yearMax ? String(yearMin) : `${yearMin}-${yearMax}`;
+  // Build year range from scoped MVL data only — never invent a multi-decade range.
+  const { yearRangeFromRows } = await import('./lib/mvl-donor-scope.mjs');
+  const yearRange = yearRangeFromRows(allFitments, vehicleInfo.year);
   // Use MVL canonical model name when available
   const mvlModel = allFitments.length > 0 ? allFitments[0].model : (vehicleInfo.model || '');
   const mvlMake = allFitments.length > 0 ? allFitments[0].make : (vehicleInfo.make || '');
-  console.log(`MVL year range: ${yearRange}, make=${mvlMake}, model=${mvlModel}, fitment entries=${allFitments.length}`);
+  console.log(`MVL year range: ${yearRange || '(none)'}, make=${mvlMake}, model=${mvlModel}, fitment entries=${allFitments.length}`);
+
+  // 5a. Gemini Flash Lite batch: refine Position + Part Name only.
+  // Year / Make / Model / OEM / "OEM Used" stay deterministic in buildTitle().
+  const { resolvePositionPartNamesBatch } = await import(
+    './lib/title-position-part-name.mjs'
+  );
+  const titleSlotClient = getOpenAI();
+  console.log(
+    `Resolving position/partName via Gemini for ${parts.length} parts (model=${process.env.PIPELINE_TITLE_SLOT_MODEL || 'google/gemini-3.1-flash-lite'})...`,
+  );
+  const titleSlots = await resolvePositionPartNamesBatch({
+    items: parts.map((p, idx) => ({
+      id: String(idx),
+      rawDesc: p.rawDesc,
+      partNumber: p.partNumber,
+      make: titleCase(mvlMake || p.make),
+      model: mvlModel || p.model,
+      year: yearRange || p.year || '',
+      fallbackPosition: p.position,
+      fallbackPartName: p.partName,
+    })),
+    client: titleSlotClient,
+    options: { mapWithConcurrency },
+  });
+  let geminiSlotCount = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const slot = titleSlots.get(String(i));
+    if (!slot) continue;
+    if (slot.position) parts[i].position = slot.position;
+    if (slot.partName) parts[i].partName = slot.partName;
+    if (slot.source === 'gemini') geminiSlotCount++;
+  }
+  console.log(
+    `Title slots: ${geminiSlotCount}/${parts.length} from Gemini, ${parts.length - geminiSlotCount} heuristic fallback`,
+  );
 
   // 5. Build deterministic titles using MVL data (year always comes from MVL's
-  // donor-year-scoped range, never guessed)
+  // donor-year-scoped range, never guessed) + Gemini Position/Part Name when available
   for (const p of parts) {
     p.title = buildTitle(
       { year: yearRange, make: titleCase(mvlMake || p.make), model: mvlModel || p.model },

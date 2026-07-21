@@ -11,6 +11,8 @@ const BRAND_MAP: Record<string, string> = {
   bmw: 'BMW',
   vw: 'Volkswagen',
   chevy: 'Chevrolet',
+  // Common spreadsheet typo seen in GridX imports (e.g. Camaro jobs)
+  chevorlet: 'Chevrolet',
 };
 
 const DISCLAIMER = 'Please verify part number compatibility before purchasing';

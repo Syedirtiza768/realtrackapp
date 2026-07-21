@@ -1114,7 +1114,7 @@ export class InventoryWorkbenchService {
       }
 
       try {
-        const sellerCountry = mkt === 'DE' ? 'DE' : 'US';
+        const sellerCountry = mkt === 'DE' ? 'DE' : mkt === 'AU' ? 'AE' : 'AE';
         const aiResult = await this.listingGenPipeline.generate(
           productData,
           baseListing.categoryName ?? 'eBay Motors Parts & Accessories',

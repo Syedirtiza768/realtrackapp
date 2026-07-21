@@ -352,9 +352,19 @@ export default function CatalogProductDetail() {
     }
     setSaving(true);
     try {
-      // Shared fields → catalog product
+      // Shared fields → catalog product (include title so catalog stays in sync)
       const sharedFields: Record<string, string> = {};
-      const sharedKeys = ['brand', 'mpn', 'oemPartNumber', 'partType', 'placement', 'material', 'features', 'countryOfOrigin'];
+      const sharedKeys = [
+        'title',
+        'brand',
+        'mpn',
+        'oemPartNumber',
+        'partType',
+        'placement',
+        'material',
+        'features',
+        'countryOfOrigin',
+      ];
       for (const k of sharedKeys) {
         if (editedFields[k] !== undefined) sharedFields[k] = editedFields[k];
       }

@@ -1,4 +1,5 @@
 import { EBAY_TITLE_MAX_LENGTH } from './ebay-listing-text.util.js';
+import { truncateEbayAspectValue } from './ebay-listing-aspects.util.js';
 import {
   alignGenerationAndYearRange,
   buildPlatformSeoTitle,
@@ -127,12 +128,27 @@ function buildShippingSection(
   sellerCountry: string | null | undefined,
   marketplace: EnglishMarketplace,
 ): string {
-  const country = (sellerCountry ?? 'US').trim().toUpperCase();
+  const country = (sellerCountry ?? 'AE').trim().toUpperCase();
   if (marketplace === 'AU') {
+    const from =
+      country === 'AU'
+        ? 'Australia'
+        : country === 'AE'
+          ? 'Dubai, AE'
+          : country === 'US'
+            ? 'United States'
+            : country;
     return `<h3>Shipping &amp; Returns</h3>
 <ul>
-  <li><strong>Item location:</strong> ${country === 'AU' ? 'Australia' : 'United States'} — international shipping to Australia may apply.</li>
+  <li><strong>Item location:</strong> ${from} — international shipping to Australia may apply.</li>
   <li>Delivery times vary; import duties and GST may apply for international orders.</li>
+  <li>Returns per eBay policy and the return profile on this listing.</li>
+</ul>`;
+  }
+  if (country === 'AE') {
+    return `<h3>Shipping &amp; Returns</h3>
+<ul>
+  <li><strong>Item location:</strong> Dubai, AE</li>
   <li>Returns per eBay policy and the return profile on this listing.</li>
 </ul>`;
   }
@@ -145,7 +161,7 @@ function buildShippingSection(
   }
   return `<h3>Shipping &amp; Returns</h3>
 <ul>
-  <li>Ships from the United States unless otherwise stated.</li>
+  <li><strong>Item location:</strong> Dubai, AE</li>
   <li>Returns per eBay Motors policy and the return profile on this listing.</li>
 </ul>`;
 }
@@ -192,7 +208,9 @@ export function buildEnglishItemSpecifics(
 ): Record<string, string> {
   const specifics: Record<string, string> = {};
   const set = (key: string, value: string | null | undefined) => {
-    const v = value?.trim();
+    // eBay aspect values max out at 65 chars (Type especially — long OEM
+    // descriptions trigger Inventory API error 25002).
+    const v = truncateEbayAspectValue(value ?? '');
     if (v) specifics[key] = v;
   };
 

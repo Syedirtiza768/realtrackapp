@@ -1,8 +1,11 @@
 import {
   buildListingAspects,
+  EBAY_ASPECT_VALUE_MAX_LENGTH,
   isUsedEbayCondition,
   localizeAspectsForMarketplace,
   localizeAspectName,
+  sanitizeListingAspects,
+  truncateEbayAspectValue,
 } from './ebay-listing-aspects.util.js';
 
 describe('ebay-listing-aspects.util', () => {
@@ -23,6 +26,32 @@ describe('ebay-listing-aspects.util', () => {
       existing: { Brand: ['OEM'] },
     });
     expect(aspects.Brand).toEqual(['OEM']);
+  });
+
+  it('truncates Type (and existing aspects) to eBay 65-char limit', () => {
+    const longType =
+      'Flat Contact Housing With Contact Locking Mechanism For Models With Seat Occupied Indicator';
+    expect(longType.length).toBeGreaterThan(EBAY_ASPECT_VALUE_MAX_LENGTH);
+
+    const fromPartType = buildListingAspects({ partType: longType });
+    expect(fromPartType.Type![0].length).toBeLessThanOrEqual(
+      EBAY_ASPECT_VALUE_MAX_LENGTH,
+    );
+    expect(fromPartType.Type![0]).toMatch(/Flat Contact Housing/);
+
+    const fromExisting = buildListingAspects({
+      existing: { Type: [longType] },
+    });
+    expect(fromExisting.Type![0].length).toBeLessThanOrEqual(
+      EBAY_ASPECT_VALUE_MAX_LENGTH,
+    );
+
+    expect(
+      truncateEbayAspectValue(longType).length,
+    ).toBeLessThanOrEqual(EBAY_ASPECT_VALUE_MAX_LENGTH);
+    expect(
+      sanitizeListingAspects({ Type: [longType] }).Type![0].length,
+    ).toBeLessThanOrEqual(EBAY_ASPECT_VALUE_MAX_LENGTH);
   });
 
   it('detects used conditions', () => {

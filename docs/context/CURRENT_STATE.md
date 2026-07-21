@@ -28,7 +28,7 @@
 - **Dashboard** with KPI aggregation
 - **Listing editor** with AI assistance, revision history
 - **Catalog import** (CSV/bulk, BullMQ processing, motors filters)
-- **eBay multi-store** (OAuth, sync, publish, multi-account)
+- **eBay multi-store** (OAuth, sync, publish, multi-account). Inventory location defaults are **Dubai / `AE_Dubai`** (not Houston/`US_77001`); policy sync prefers AE warehouse keys. Publish sanitizes item-specific values to eBay's 65-char aspect limit (fixes Type-too-long rejects on long OEM descriptions). Pipeline MVL fitment is **donor-year scoped** (±5/±8) and refuses full make/model dumps when year is missing. Pipeline / enterprise US-AU titles use Gemini 3.1 Flash Lite **only** for Position + Part Name slots; the rest of the house title structure stays deterministic.
 - **Inventory management** (ledger, allocations, events)
 - **Order import** from eBay
 - **Notifications** (in-app + WebSocket)
@@ -66,6 +66,10 @@
 
 ## Latest Session Summary
 
+**2026-07-22** — Manual title edits no longer revert after save:
+- Root cause: `CatalogProductService.syncToListingRecord` always copied `catalog_products.title` onto every matching listing on *any* catalog PATCH (brand, images, country, etc.). Editors saved corrected titles only to `listing_records`, so the next shared-field save resurrected the stale catalog title (and could also fail the listing PUT on a bumped `@VersionColumn`).
+- Fix: sync only DTO-present fields via `listingRepo.update` (no version bump); inventory/catalog detail editors also write title to the catalog product when the title changes.
+
 **2026-07-15** — eBay listing fidelity hardening:
 - Root-caused title and business-policy mismatches on pipelines `1c3a0f2a`, `5d5c2413`, and `6e30444a`: publish-time title recomposition replaced every reviewed title, durable targets lost the exact source listing identity, row policy names were ignored in favor of target-account defaults, and concurrent publishes wrote their resolved row policies back as new defaults.
 - Publish now preserves the exact listing row and stored title, resolves each named shipping/payment/return profile independently for every target account, refreshes stale policy caches, blocks absent/incompatible named policies, and leaves marketplace defaults unchanged.
@@ -87,6 +91,8 @@
 - Root cause: `ebay_category_mappings` table empty (seed migration `1709769600000-MotorsIntelligenceSystem` never run on prod) + `isMotorsCategory()` returned `true` for unmapped categories → AI taxonomy suggestions returned non-Motors categories (31373 "Lincoln Memorial", 2518 "Other Educational Toys", 11774 "Other Welding Equipment", 34 others) → stored in `listing_records.categoryId` → eBay rejected with errorId 25005.
 - Fix: (1) `isMotorsCategory()` in `enterprise-listing-intelligence.service.ts` now returns `false` for unmapped categories (was `true`), forcing taxonomy re-resolution. (2) Seeded `ebay_category_mappings` with 15 known Motors categories. (3) The emergency fallback was initially `6000`, but production follow-up on 2026-07-11 proved that eBay rejects this root as non-leaf; the emergency fallback is now leaf `9886` (`Other Car & Truck Parts & Accessories`). (4) Affected records must be repaired in both `listing_records` and `catalog_products` before retrying publish.
 - See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) R16.
+
+**2026-07-20** — Pipeline now skips Excel-hidden rows on GridX/XLSX upload and enrichment (`sheetToVisibleAoa` + `ebay-enrichment-pipeline.mjs`). Soft-deleted / Hide Rows content is no longer imported. Bulk `propagateSourceImages` is per-SKU only. Job `1d561867` (VW Jetta) cleaned: 323 hidden Bentley listings soft-deleted; Bentley catalog restored from prior Bentley-branded listings.
 
 **2026-07-01 (continued)** — Inventory pipeline hardening:
 - Auto-enrich now triggers on **2+ images only** (vision lookup runs inside the job; no longer requires part#/brand upfront).

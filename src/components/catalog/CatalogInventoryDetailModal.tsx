@@ -450,6 +450,9 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
 
       if (canEditCatalog && catalogProduct?.id) {
         const catalogPatches: Record<string, string> = {};
+        // Keep catalog_products.title in lockstep with listing title so a later
+        // brand/image PATCH cannot resurrect a stale catalog title via sync.
+        if (draft.title !== base.title) catalogPatches.title = draft.title;
         if (draft.brand !== base.brand) catalogPatches.brand = draft.brand;
         if (draft.partType !== base.partType) catalogPatches.partType = draft.partType;
         if (draft.countryOfOrigin !== base.countryOfOrigin) {

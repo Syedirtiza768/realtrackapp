@@ -21,6 +21,7 @@ function normalizeMakeToken(raw: string): string {
     VW: 'Volkswagen',
     VOLKSWAGEN: 'Volkswagen',
     CHEVY: 'Chevrolet',
+    CHEVORLET: 'Chevrolet', // common GridX/spreadsheet typo
     MERCEDES: 'Mercedes-Benz',
   };
   return map[upper] ?? t;

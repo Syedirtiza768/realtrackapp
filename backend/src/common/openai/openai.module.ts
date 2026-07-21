@@ -9,6 +9,7 @@ import {
 import { EnrichmentPipeline } from './pipelines/enrichment.pipeline.js';
 import { VisionEnrichmentPipeline } from './pipelines/vision-enrichment.pipeline.js';
 import { ListingGenerationPipeline } from './pipelines/listing-generation.pipeline.js';
+import { TitlePositionPartNamePipeline } from './pipelines/title-position-part-name.pipeline.js';
 import { CompetitiveAnalysisPipeline } from './pipelines/competitive-analysis.pipeline.js';
 import { CrossReferencePipeline } from './pipelines/cross-reference.pipeline.js';
 import { PricingAnalysisPipeline } from './pipelines/pricing-analysis.pipeline.js';
@@ -56,6 +57,7 @@ import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
     EnrichmentPipeline,
     VisionEnrichmentPipeline,
     ListingGenerationPipeline,
+    TitlePositionPartNamePipeline,
     CompetitiveAnalysisPipeline,
     CrossReferencePipeline,
     PricingAnalysisPipeline,
@@ -71,6 +73,7 @@ import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
     EnrichmentPipeline,
     VisionEnrichmentPipeline,
     ListingGenerationPipeline,
+    TitlePositionPartNamePipeline,
     CompetitiveAnalysisPipeline,
     CrossReferencePipeline,
     PricingAnalysisPipeline,

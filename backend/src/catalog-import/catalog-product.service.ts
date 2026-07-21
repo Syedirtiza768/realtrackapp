@@ -213,8 +213,10 @@ export class CatalogProductService {
 
     const saved = await this.productRepo.save(product);
 
-    // Sync changes to all corresponding listing_records (matched by SKU)
-    await this.syncToListingRecord(saved);
+    // Sync only fields present in this PATCH — never stomp listing titles
+    // (or other listing-only edits) with stale catalog values when the DTO
+    // did not include those fields.
+    await this.syncToListingRecord(saved, dto);
 
     return saved;
   }
@@ -232,8 +234,19 @@ export class CatalogProductService {
   /**
    * Sync catalog product changes to ALL listing_records matching this SKU.
    * Shared field edits propagate to every marketplace variant (US, AU, DE).
+   *
+   * Only fields present on `changed` are written. A brand/image/country
+   * PATCH must not overwrite a manually corrected listing title with a
+   * stale catalog_products.title.
+   *
+   * Uses Repository.update (not save) so listing @VersionColumn is not
+   * bumped — callers often follow with a listing PUT that still holds
+   * the pre-sync version.
    */
-  private async syncToListingRecord(product: CatalogProduct): Promise<void> {
+  private async syncToListingRecord(
+    product: CatalogProduct,
+    changed: UpdateProductDto,
+  ): Promise<void> {
     if (!product.sku) return;
 
     const listings = await this.listingRepo.findBy({
@@ -241,38 +254,56 @@ export class CatalogProductService {
     });
     if (!listings.length) return;
 
-    for (const listing of listings) {
-      listing.title = product.title;
-      listing.description = product.description;
-      listing.startPrice = product.price != null ? String(product.price) : null;
-      listing.startPriceNum = product.price;
-      listing.quantity =
+    const patch: Partial<ListingRecord> = {};
+    if (changed.title !== undefined) patch.title = product.title;
+    if (changed.description !== undefined)
+      patch.description = product.description;
+    if (changed.price !== undefined) {
+      patch.startPrice = product.price != null ? String(product.price) : null;
+      patch.startPriceNum = product.price;
+    }
+    if (changed.quantity !== undefined) {
+      patch.quantity =
         product.quantity != null ? String(product.quantity) : null;
-      listing.quantityNum = product.quantity;
-      listing.itemPhotoUrl = product.imageUrls?.length
+      patch.quantityNum = product.quantity;
+    }
+    if (changed.imageUrls !== undefined) {
+      patch.itemPhotoUrl = product.imageUrls?.length
         ? product.imageUrls.join('|')
         : null;
-      listing.conditionId = product.conditionId;
-      listing.conditionLabel = product.conditionLabel;
-      listing.categoryId = product.categoryId;
-      listing.categoryName = product.categoryName;
-      listing.format = product.format;
-      listing.duration = product.duration;
-      listing.location = product.location;
-      listing.shippingProfileName = product.shippingProfile;
-      listing.returnProfileName = product.returnProfile;
-      listing.paymentProfileName = product.paymentProfile;
-      listing.cBrand = product.brand;
-      listing.cType = product.partType;
-      listing.cFeatures = product.features;
-      listing.cManufacturerPartNumber = product.mpn;
-      listing.cOeOemPartNumber = product.oemPartNumber;
-      listing.cMaterial = product.material;
-      listing.cPlacement = product.placement;
-      listing.countryOfOrigin = product.countryOfOrigin;
     }
+    if (changed.conditionId !== undefined)
+      patch.conditionId = product.conditionId;
+    if (changed.conditionLabel !== undefined)
+      patch.conditionLabel = product.conditionLabel;
+    if (changed.categoryId !== undefined)
+      patch.categoryId = product.categoryId;
+    if (changed.categoryName !== undefined)
+      patch.categoryName = product.categoryName;
+    if (changed.format !== undefined) patch.format = product.format;
+    if (changed.duration !== undefined) patch.duration = product.duration;
+    if (changed.location !== undefined) patch.location = product.location;
+    if (changed.shippingProfile !== undefined)
+      patch.shippingProfileName = product.shippingProfile;
+    if (changed.returnProfile !== undefined)
+      patch.returnProfileName = product.returnProfile;
+    if (changed.paymentProfile !== undefined)
+      patch.paymentProfileName = product.paymentProfile;
+    if (changed.brand !== undefined) patch.cBrand = product.brand;
+    if (changed.partType !== undefined) patch.cType = product.partType;
+    if (changed.features !== undefined) patch.cFeatures = product.features;
+    if (changed.mpn !== undefined)
+      patch.cManufacturerPartNumber = product.mpn;
+    if (changed.oemPartNumber !== undefined)
+      patch.cOeOemPartNumber = product.oemPartNumber;
+    if (changed.material !== undefined) patch.cMaterial = product.material;
+    if (changed.placement !== undefined) patch.cPlacement = product.placement;
+    if (changed.countryOfOrigin !== undefined)
+      patch.countryOfOrigin = product.countryOfOrigin;
 
-    await this.listingRepo.save(listings);
+    if (Object.keys(patch).length === 0) return;
+
+    await this.listingRepo.update({ customLabelSku: product.sku }, patch);
   }
 
   async bulkFixConditionMismatchTitles(pipelineJobId: string): Promise<{

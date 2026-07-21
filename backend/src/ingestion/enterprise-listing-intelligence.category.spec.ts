@@ -12,6 +12,7 @@ describe('EnterpriseListingIntelligenceService category guard', () => {
     {} as never,
     categoryMappingRepo as never,
     {} as never,
+    {} as never,
     taxonomy as never,
   );
 

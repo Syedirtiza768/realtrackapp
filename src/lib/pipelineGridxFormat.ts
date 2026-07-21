@@ -2,6 +2,10 @@
  * GridX Connect input format for /pipeline bulk upload.
  * Keep in sync with backend/src/ingestion/pipeline-gridx-format.ts
  * and public/pipeline-gridx-sample.xlsx.
+ *
+ * Note: the backend enrichment path skips Excel-hidden rows
+ * (`sheet['!rows'][i].hidden`) so soft-deleted / Hide Rows content is not
+ * imported. Client-side validation only checks headers on the upload buffer.
  */
 
 export const PIPELINE_GRIDX_SAMPLE_PATH = '/pipeline-gridx-sample.xlsx';

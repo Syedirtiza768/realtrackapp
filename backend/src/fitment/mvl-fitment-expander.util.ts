@@ -62,6 +62,7 @@ const BRAND_MAP: Record<string, string> = {
   mb: 'Mercedes-Benz',
   vw: 'Volkswagen',
   chevy: 'Chevrolet',
+  chevorlet: 'Chevrolet', // common GridX/spreadsheet typo
 };
 
 const BODY_RE =

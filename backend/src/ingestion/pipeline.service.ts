@@ -44,6 +44,7 @@ import {
   type PipelineDisplayStatus,
 } from './pipeline.constants.js';
 import {
+  countHiddenDataRowsInUpload,
   parsePipelineUploadRows,
   validatePipelineGridxHeaders,
 } from './pipeline-gridx-format.js';
@@ -218,11 +219,20 @@ export class PipelineService {
 
     // Reject GridX uploads with missing/corrupted headers before enqueueing
     // (prevents all-zero prices / empty PicURL from bad Part-2 spreadsheets).
+    // parsePipelineUploadRows already drops Excel-hidden rows so soft-deleted
+    // / Hide Rows content cannot pass validation as if it were live inventory.
+    let hiddenRowsSkipped = 0;
     try {
+      hiddenRowsSkipped = countHiddenDataRowsInUpload(fileBuffer);
       const rows = parsePipelineUploadRows(fileBuffer);
       const headerCheck = validatePipelineGridxHeaders(rows);
       if (!headerCheck.ok) {
         throw new BadRequestException(headerCheck.message);
+      }
+      if (hiddenRowsSkipped > 0) {
+        this.logger.warn(
+          `Pipeline upload "${originalFilename}": skipping ${hiddenRowsSkipped} Excel-hidden data row(s); only visible rows will be processed`,
+        );
       }
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
@@ -312,6 +322,14 @@ export class PipelineService {
         paymentPolicyId: paymentPolicyId?.trim() || null,
         returnPolicyId: returnPolicyId?.trim() || null,
         uploadCode,
+        ...(hiddenRowsSkipped > 0
+          ? {
+              stageDetails: {
+                hiddenRowsSkipped,
+                note: 'Excel-hidden rows were detected at upload and will be ignored during enrichment',
+              },
+            }
+          : {}),
       }),
     );
 

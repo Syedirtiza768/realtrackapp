@@ -15,6 +15,7 @@ import {
 } from '../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
+import { normalizeBrand } from '../../common/openai/listing-guards.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
 import { EnterpriseListingIntelligenceService } from '../enterprise-listing-intelligence.service.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
@@ -892,8 +893,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   }
 
   /**
-   * Copy warehouse-intake / upload photos onto catalog_products.image_urls and every
-   * marketplace listing_records.itemPhotoUrl for this job when pipeline output omitted them.
+   * Copy warehouse-intake / upload photos onto catalog_products.image_urls and
+   * listing_records.itemPhotoUrl when pipeline output omitted them.
+   *
+   * Shared (job-wide) image stamping is ONLY used for explicit single-source
+   * uploads (`sourceListingIds` / `uploadedAssetIds`). Bulk GridX jobs apply
+   * images per-SKU from matching warehouse-intake rows — never broadcast one
+   * part's photos onto every other SKU in the job.
    */
   private async propagateSourceImages(jobId: string): Promise<void> {
     const job = await this.jobRepo.findOneBy({ id: jobId });
@@ -905,102 +911,154 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       | string[]
       | undefined;
 
-    const imageUrlSet = new Set<string>();
-
-    const addUrls = (pipe: string | null | undefined): void => {
-      for (const url of (pipe ?? '')
+    const parseUrls = (pipe: string | null | undefined): string[] =>
+      (pipe ?? '')
         .split('|')
         .map((u) => u.trim())
-        .filter(Boolean)) {
-        if (url.startsWith('http')) imageUrlSet.add(url);
-      }
-    };
-
-    if (sourceListingIds?.length) {
-      const sources = await this.listingRepo.find({
-        where: { id: In(sourceListingIds) },
-      });
-      for (const source of sources) {
-        addUrls(source.itemPhotoUrl);
-      }
-    }
-
-    if (uploadedAssetIds?.length) {
-      const assets = await this.imageAssetRepo.find({
-        where: { id: In(uploadedAssetIds) },
-      });
-      for (const asset of assets) {
-        if (asset.cdnUrl?.startsWith('http')) imageUrlSet.add(asset.cdnUrl);
-      }
-    }
+        .filter((url) => url.startsWith('http'));
 
     const pipelineListings = await this.listingRepo.find({
       where: { pipelineJobId: jobId },
     });
-    for (const listing of pipelineListings) {
-      addUrls(listing.itemPhotoUrl);
+
+    const hasExplicitSharedSource = Boolean(
+      sourceListingIds?.length || uploadedAssetIds?.length,
+    );
+
+    if (hasExplicitSharedSource) {
+      const imageUrlSet = new Set<string>();
+      if (sourceListingIds?.length) {
+        const sources = await this.listingRepo.find({
+          where: { id: In(sourceListingIds) },
+        });
+        for (const source of sources) {
+          for (const url of parseUrls(source.itemPhotoUrl)) imageUrlSet.add(url);
+        }
+      }
+      if (uploadedAssetIds?.length) {
+        const assets = await this.imageAssetRepo.find({
+          where: { id: In(uploadedAssetIds) },
+        });
+        for (const asset of assets) {
+          if (asset.cdnUrl?.startsWith('http')) imageUrlSet.add(asset.cdnUrl);
+        }
+      }
+
+      const imageUrls = [...imageUrlSet].slice(0, 24);
+      if (imageUrls.length === 0) {
+        this.logger.log(`Job ${jobId}: No source/upload images to propagate`);
+        return;
+      }
+
+      const photoPipe = imageUrls.join('|');
+      let catalogUpdated = 0;
+      let listingsUpdated = 0;
+
+      const products = await this.productRepo.find({
+        where: { pipelineJobId: jobId },
+      });
+      for (const product of products) {
+        if (!product.imageUrls?.length) {
+          product.imageUrls = imageUrls;
+          await this.productRepo.save(product);
+          catalogUpdated++;
+        }
+      }
+
+      for (const listing of pipelineListings) {
+        if (!listing.itemPhotoUrl?.trim()) {
+          listing.itemPhotoUrl = photoPipe;
+          await this.listingRepo.save(listing);
+          listingsUpdated++;
+        }
+      }
+
+      this.logger.log(
+        `Job ${jobId}: Propagated ${imageUrls.length} shared source image(s) to ${catalogUpdated} catalog product(s) and ${listingsUpdated} listing row(s)`,
+      );
+      return;
     }
 
-    const skus = [
+    // Bulk GridX: fill missing photos per-SKU from warehouse intake only.
+    const skusNeedingImages = [
       ...new Set(
         pipelineListings
+          .filter((l) => !l.itemPhotoUrl?.trim())
           .map((l) => l.customLabelSku?.trim())
           .filter((s): s is string => Boolean(s)),
       ),
     ];
-    if (skus.length) {
-      const intakeListings = await this.listingRepo.find({
-        where: {
-          customLabelSku: In(skus),
-          origin: ListingOrigin.ADD_PART,
-        },
-      });
-      for (const intake of intakeListings) {
-        addUrls(intake.itemPhotoUrl);
-      }
-
-      const intakeIds = intakeListings.map((l) => l.id);
-      if (intakeIds.length) {
-        const linkedAssets = await this.imageAssetRepo.find({
-          where: { listingId: In(intakeIds) },
-        });
-        for (const asset of linkedAssets) {
-          if (asset.cdnUrl?.startsWith('http')) imageUrlSet.add(asset.cdnUrl);
-        }
-      }
-    }
-
-    const imageUrls = [...imageUrlSet].slice(0, 24);
-    if (imageUrls.length === 0) {
-      this.logger.log(`Job ${jobId}: No source/upload images to propagate`);
+    if (skusNeedingImages.length === 0) {
+      this.logger.log(
+        `Job ${jobId}: No listing rows missing images; skipping intake image propagation`,
+      );
       return;
     }
 
-    const photoPipe = imageUrls.join('|');
+    const intakeListings = await this.listingRepo.find({
+      where: {
+        customLabelSku: In(skusNeedingImages),
+        origin: ListingOrigin.ADD_PART,
+      },
+    });
+    const intakeBySku = new Map<string, string[]>();
+    for (const intake of intakeListings) {
+      const sku = intake.customLabelSku?.trim();
+      if (!sku) continue;
+      const urls = parseUrls(intake.itemPhotoUrl);
+      if (urls.length) intakeBySku.set(sku, urls.slice(0, 24));
+    }
+
+    const intakeIds = intakeListings.map((l) => l.id);
+    if (intakeIds.length) {
+      const linkedAssets = await this.imageAssetRepo.find({
+        where: { listingId: In(intakeIds) },
+      });
+      const assetsByListing = new Map<string, string[]>();
+      for (const asset of linkedAssets) {
+        if (!asset.listingId || !asset.cdnUrl?.startsWith('http')) continue;
+        const list = assetsByListing.get(asset.listingId) ?? [];
+        list.push(asset.cdnUrl);
+        assetsByListing.set(asset.listingId, list);
+      }
+      for (const intake of intakeListings) {
+        const sku = intake.customLabelSku?.trim();
+        if (!sku || intakeBySku.has(sku)) continue;
+        const urls = assetsByListing.get(intake.id)?.slice(0, 24);
+        if (urls?.length) intakeBySku.set(sku, urls);
+      }
+    }
+
     let catalogUpdated = 0;
     let listingsUpdated = 0;
+
+    for (const listing of pipelineListings) {
+      if (listing.itemPhotoUrl?.trim()) continue;
+      const sku = listing.customLabelSku?.trim();
+      if (!sku) continue;
+      const urls = intakeBySku.get(sku);
+      if (!urls?.length) continue;
+      listing.itemPhotoUrl = urls.join('|');
+      await this.listingRepo.save(listing);
+      listingsUpdated++;
+    }
 
     const products = await this.productRepo.find({
       where: { pipelineJobId: jobId },
     });
     for (const product of products) {
-      if (!product.imageUrls?.length) {
-        product.imageUrls = imageUrls;
-        await this.productRepo.save(product);
-        catalogUpdated++;
-      }
-    }
-
-    for (const listing of pipelineListings) {
-      if (!listing.itemPhotoUrl?.trim()) {
-        listing.itemPhotoUrl = photoPipe;
-        await this.listingRepo.save(listing);
-        listingsUpdated++;
-      }
+      if (product.imageUrls?.length) continue;
+      const sku = product.sku?.trim();
+      if (!sku) continue;
+      const urls = intakeBySku.get(sku);
+      if (!urls?.length) continue;
+      product.imageUrls = urls;
+      await this.productRepo.save(product);
+      catalogUpdated++;
     }
 
     this.logger.log(
-      `Job ${jobId}: Propagated ${imageUrls.length} source image(s) to ${catalogUpdated} catalog product(s) and ${listingsUpdated} listing row(s)`,
+      `Job ${jobId}: Propagated per-SKU intake image(s) to ${catalogUpdated} catalog product(s) and ${listingsUpdated} listing row(s)`,
     );
   }
 
@@ -1221,6 +1279,19 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       const get = (row: string[], idx: number): string =>
         idx >= 0 && row[idx] != null ? String(row[idx]).trim() : '';
 
+      /** Strip Excel-quoted / multiline junk from SKUs (e.g. `"VW-…\n"`). */
+      const sanitizeSku = (raw: string): string => {
+        let s = raw.trim();
+        if (!s) return '';
+        if (
+          (s.startsWith('"') && s.endsWith('"')) ||
+          (s.startsWith("'") && s.endsWith("'"))
+        ) {
+          s = s.slice(1, -1);
+        }
+        return s.replace(/[\r\n\t]+/g, '').replace(/\s+/g, '').trim();
+      };
+
       const products: Partial<CatalogProduct>[] = [];
       const listingRecords: Partial<ListingRecord>[] = [];
       const compatibilities = new Map<number, Record<string, unknown>[]>();
@@ -1266,7 +1337,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         const title = get(row, iTitle);
         if (!title) continue;
 
-        const sku = get(row, iSku);
+        const sku = sanitizeSku(get(row, iSku));
         const priceStr = get(row, iPrice);
         const price = priceStr ? parseFloat(priceStr) : null;
         const qtyStr = get(row, iQty);
@@ -1283,7 +1354,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           }
         }
 
-        const brand = get(row, iBrand);
+        const brandRaw = get(row, iBrand);
+        const brand = brandRaw ? normalizeBrand(brandRaw) : '';
         const mpn = get(row, iMpn);
 
         const { make: extractedMake, model: extractedModel } =

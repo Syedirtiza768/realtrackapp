@@ -3,6 +3,11 @@ import { EbayMvlService } from '../fitment/ebay-mvl.service.js';
 import { MvlFitmentExpanderService } from '../fitment/mvl-fitment-expander.service.js';
 import type { MvlValidatedRow } from '../fitment/ebay-mvl.service.js';
 import type { ParsedFitmentRow } from '../fitment/fitment-mvl.util.js';
+import {
+  isOverExpandedFitment,
+  MAX_FITMENT_YEAR_SPAN,
+  pickDonorYear,
+} from '../fitment/mvl-donor-scope.util.js';
 import { VinDecodeService } from '../fitment/vin-decode.service.js';
 import { resolveCategoryTreeId } from '../channels/ebay/ebay-marketplace-tree.util.js';
 import { extractMakeModelFromTitle } from '../listings/utils/extract-make-model-from-title.js';
@@ -63,10 +68,21 @@ export class FitmentDiscoveryService {
     const candidates: FitmentRow[] = [];
 
     // ── Source 1: Existing catalog fitment_data (JSONB) ──
+    // Reject unscoped full-model MVL dumps (e.g. every Jetta 1980–2027).
     if (Array.isArray(product.fitmentData)) {
-      for (const raw of product.fitmentData) {
-        const row = this.rowFromRaw(raw, 'catalog_fitment');
-        if (row) candidates.push(row);
+      const rawRows = product.fitmentData as Array<Record<string, unknown>>;
+      if (isOverExpandedFitment(rawRows)) {
+        manualReviewReasons.push(
+          `Existing catalog fitment looks over-expanded (span > ${MAX_FITMENT_YEAR_SPAN}yr or huge row count) — ignoring and rediscovering`,
+        );
+        this.logger.warn(
+          `Discarding over-expanded catalog fitment for ${product.sku ?? product.id}: ${rawRows.length} rows`,
+        );
+      } else {
+        for (const raw of rawRows) {
+          const row = this.rowFromRaw(raw, 'catalog_fitment');
+          if (row) candidates.push(row);
+        }
       }
     }
 
@@ -78,21 +94,19 @@ export class FitmentDiscoveryService {
       candidates.push(...this.candidatesFromTitle(product));
     }
 
-    // ── Source 3: MVL expansion from title-derived vehicle ──
-    // If the title gave us Year/Make/Model, expand to all applicable
-    // year/trim/engine combinations using the MVL database (local, no API).
+    // ── Source 3: MVL expansion from a credible donor year ──
+    // Require a donor year — expanding make/model alone dumps the entire MVL.
     if (candidates.length > 0 && this.mvlExpander.getExpansionMode() !== 'ai') {
       const first = candidates[0];
-      if (first.make && first.model) {
+      const donorYear = pickDonorYear([
+        first.year,
+        ...candidates.slice(0, 5).map((c) => c.year),
+      ]);
+      if (first.make && first.model && donorYear) {
         try {
-          // Parse year range from the first candidate
-          const yearStr = first.year || '';
-          const yearMatch = yearStr.match(/(\d{4})/);
-          const donorYear = yearMatch ? yearMatch[1] : '';
-
           const mvlResult = await this.mvlExpander.expand({
             donor: {
-              year: donorYear,
+              year: String(donorYear),
               make: first.make,
               model: first.model,
             },
@@ -122,6 +136,10 @@ export class FitmentDiscoveryService {
             `MVL expansion failed for ${first.make}/${first.model}: ${err instanceof Error ? err.message : err}`,
           );
         }
+      } else if (first.make && first.model && !donorYear) {
+        manualReviewReasons.push(
+          'Make/model known but donor year missing — skipped full-model MVL expansion',
+        );
       }
     }
 
@@ -270,7 +288,10 @@ export class FitmentDiscoveryService {
 
   /** Parse year/make/model from listing title when pipeline fitment rows were not persisted. */
   private candidatesFromTitle(product: CatalogProduct): FitmentRow[] {
-    const title = product.title?.trim();
+    // Prefer optimized title when present — source titles often prepend a
+    // mistyped brand (e.g. "Chevorlet") ahead of the real Make/Model tokens.
+    const title =
+      product.optimizedTitle?.trim() || product.title?.trim() || '';
     if (!title) return [];
 
     const { make, model } = extractMakeModelFromTitle(title);
@@ -282,11 +303,12 @@ export class FitmentDiscoveryService {
     if (yearPrefix) {
       const start = parseInt(yearPrefix[1], 10);
       const end = yearPrefix[2] ? parseInt(yearPrefix[2], 10) : start;
+      // Cap span — titles like "1980-2027" are over-expanded MVL dumps, not real fitment.
       if (
         Number.isFinite(start) &&
         Number.isFinite(end) &&
         end >= start &&
-        end - start <= 35
+        end - start <= MAX_FITMENT_YEAR_SPAN
       ) {
         for (let y = start; y <= end; y++) {
           rows.push({
@@ -300,6 +322,20 @@ export class FitmentDiscoveryService {
               'Derived from listing title year range — verify compatibility',
           });
         }
+        return rows;
+      }
+      // Over-wide title range: keep only the start year as a donor hint.
+      if (Number.isFinite(start) && end - start > MAX_FITMENT_YEAR_SPAN) {
+        rows.push({
+          year: String(start),
+          make,
+          model,
+          confidence: 0.35,
+          source: 'title_parse',
+          validationStatus: 'needs_review',
+          notes:
+            'Title year range was over-wide (likely unscoped MVL dump) — using start year only',
+        });
         return rows;
       }
     }

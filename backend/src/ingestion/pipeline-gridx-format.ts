@@ -4,6 +4,8 @@
  * and public/pipeline-gridx-sample.xlsx.
  */
 
+import type { WorkSheet } from 'xlsx';
+
 export const PIPELINE_GRIDX_REQUIRED_HEADERS = [
   'Part Number',
   'Price',
@@ -96,15 +98,70 @@ export function validatePipelineGridxHeaders(
   return { ok: true, headers };
 }
 
-/** Parse an uploaded CSV/XLSX buffer into raw row arrays for header validation. */
+/**
+ * Convert a worksheet to an array-of-arrays, dropping Excel-hidden rows.
+ *
+ * Soft-deleted / Hide Rows in Excel keep cell values in the file with
+ * `hidden: true` on `sheet['!rows'][i]`. SheetJS still returns those rows via
+ * `sheet_to_json`, which previously caused pipeline jobs to re-import
+ * cross-vehicle junk the operator thought they had deleted.
+ */
+export function sheetToVisibleAoa(ws: WorkSheet): unknown[][] {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const XLSX = require('xlsx') as typeof import('xlsx');
+  const rows = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: '',
+  }) as unknown[][];
+  const rowMeta = ws['!rows'] ?? [];
+  if (!rowMeta.length) return rows;
+  return rows.filter((_, index) => !rowMeta[index]?.hidden);
+}
+
+/** Count how many data-bearing rows were skipped because they are Excel-hidden. */
+export function countHiddenDataRows(ws: WorkSheet): number {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const XLSX = require('xlsx') as typeof import('xlsx');
+  const rows = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: '',
+  }) as unknown[][];
+  const rowMeta = ws['!rows'] ?? [];
+  if (!rowMeta.length) return 0;
+  let skipped = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (!rowMeta[i]?.hidden) continue;
+    const row = rows[i];
+    if (!row) continue;
+    const hasData = row.some((c) => String(c ?? '').trim() !== '');
+    if (hasData) skipped++;
+  }
+  return skipped;
+}
+
+/** Parse an uploaded CSV/XLSX buffer into visible row arrays for header validation. */
 export function parsePipelineUploadRows(fileBuffer: Buffer): unknown[][] {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const XLSX = require('xlsx') as typeof import('xlsx');
-  const wb = XLSX.read(fileBuffer, { type: 'buffer' });
+  // cellStyles helps preserve row hidden flags from xlsx row XML.
+  const wb = XLSX.read(fileBuffer, { type: 'buffer', cellStyles: true });
   const sheetName =
     wb.SheetNames.find((n) => !/instruction/i.test(n)) || wb.SheetNames[0];
   if (!sheetName) return [];
   const ws = wb.Sheets[sheetName];
   if (!ws) return [];
-  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][];
+  return sheetToVisibleAoa(ws);
+}
+
+/** Inspect an upload buffer for Excel-hidden data rows (pre-enqueue warning). */
+export function countHiddenDataRowsInUpload(fileBuffer: Buffer): number {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const XLSX = require('xlsx') as typeof import('xlsx');
+  const wb = XLSX.read(fileBuffer, { type: 'buffer', cellStyles: true });
+  const sheetName =
+    wb.SheetNames.find((n) => !/instruction/i.test(n)) || wb.SheetNames[0];
+  if (!sheetName) return 0;
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return 0;
+  return countHiddenDataRows(ws);
 }

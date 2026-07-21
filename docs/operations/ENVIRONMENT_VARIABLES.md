@@ -79,12 +79,12 @@
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
 | `EBAY_REDIRECT_URI` | — | OAuth redirect/RuName |
-| `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `default` | Auto-provisioned inventory location key |
-| `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Primary Warehouse` | Ship-from line 1 |
-| `EBAY_DEFAULT_INVENTORY_CITY` | `Houston` | Ship-from city |
-| `EBAY_DEFAULT_INVENTORY_STATE` | `TX` | Ship-from state |
-| `EBAY_DEFAULT_INVENTORY_POSTAL_CODE` | `77001` | Ship-from postal code |
-| `EBAY_DEFAULT_INVENTORY_COUNTRY` | `US` | Ship-from country (ISO) |
+| `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `AE_Dubai` | Auto-provisioned inventory location key |
+| `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Dubai Warehouse` | Ship-from line 1 |
+| `EBAY_DEFAULT_INVENTORY_CITY` | `Dubai` | Ship-from city |
+| `EBAY_DEFAULT_INVENTORY_STATE` | _(empty)_ | Ship-from state (optional) |
+| `EBAY_DEFAULT_INVENTORY_POSTAL_CODE` | _(empty)_ | Ship-from postal code (optional) |
+| `EBAY_DEFAULT_INVENTORY_COUNTRY` | `AE` | Ship-from country (ISO) |
 
 ## SellerPundit
 
@@ -126,6 +126,12 @@
 | `PIPELINE_CATEGORY_CONCURRENCY` | `2` | Parallel eBay taxonomy lookups |
 | `PIPELINE_VIN_BATCH_CONCURRENCY` | `3` | Parallel NHTSA VIN decode batches |
 | `PIPELINE_IMAGE_SKU_CONCURRENCY` | `2` | S3 image mirror per SKU |
+| `PIPELINE_TITLE_SLOT_MODEL` | `google/gemini-3.1-flash-lite` | OpenRouter model for pipeline title Position + Part Name slots only |
+| `PIPELINE_TITLE_SLOT_BATCH_SIZE` | `25` | Parts per Gemini title-slot batch in `ebay-enrichment-pipeline.mjs` |
+| `PIPELINE_TITLE_SLOT_CONCURRENCY` | `5` | Parallel Gemini title-slot batches |
+| `TITLE_POSITION_PART_NAME_MODEL` | `google/gemini-3.1-flash-lite` | Same lane for enterprise US/AU listing optimization titles |
+| `TITLE_POSITION_PART_NAME_BATCH_SIZE` | `25` | Products per title-slot batch in Nest |
+| `TITLE_POSITION_PART_NAME_CONCURRENCY` | `5` | Parallel Nest title-slot batches |
 | `CATALOG_IMPORT_EBAY_BROWSE_CONCURRENCY` | `2` | eBay browse during CSV import |
 | `CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY` | `2` | Image mirror during CSV import |
 

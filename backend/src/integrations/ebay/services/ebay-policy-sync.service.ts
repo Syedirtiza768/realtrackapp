@@ -13,6 +13,7 @@ import { ListingActionLogWriterService } from './listing-action-log-writer.servi
 import { SellerpunditPolicySyncService } from '../../sellerpundit/sellerpundit-policy-sync.service.js';
 import { EbayInventoryApiService } from '../../../channels/ebay/ebay-inventory-api.service.js';
 import { EbayAuthService } from '../../../channels/ebay/ebay-auth.service.js';
+import { pickPreferredInventoryLocationKey } from '../../../channels/ebay/ebay-inventory-location.util.js';
 import {
   coalesceValidPolicyId,
   isLikelyEbayRestPolicyId,
@@ -239,7 +240,9 @@ export class EbayPolicySyncService {
         mp.defaultReturnPolicyId = pick(ret);
       }
       if (!mp.defaultInventoryLocationKey && locations.length) {
-        mp.defaultInventoryLocationKey = locations[0].merchantLocationKey;
+        mp.defaultInventoryLocationKey =
+          pickPreferredInventoryLocationKey(locations) ??
+          locations[0].merchantLocationKey;
       }
       await this.mpRepo.save(mp);
     }

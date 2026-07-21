@@ -2,6 +2,11 @@ export { EnrichmentPipeline } from './enrichment.pipeline.js';
 export type { EnrichmentResult } from './enrichment.pipeline.js';
 export { ListingGenerationPipeline } from './listing-generation.pipeline.js';
 export type { ListingGenerationResult } from './listing-generation.pipeline.js';
+export { TitlePositionPartNamePipeline } from './title-position-part-name.pipeline.js';
+export type {
+  TitlePositionPartNameItem,
+  TitlePositionPartNameResult,
+} from './title-position-part-name.pipeline.js';
 export { CompetitiveAnalysisPipeline } from './competitive-analysis.pipeline.js';
 export type { CompetitiveAnalysisResult } from './competitive-analysis.pipeline.js';
 export { CrossReferencePipeline } from './cross-reference.pipeline.js';

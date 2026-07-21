@@ -6,6 +6,10 @@ import { CatalogProduct } from '../catalog-import/entities/catalog-product.entit
 import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
 import type { ListingGenerationResult } from '../common/openai/pipelines/listing-generation.pipeline.js';
+import {
+  TitlePositionPartNamePipeline,
+  type TitlePositionPartNameResult,
+} from '../common/openai/pipelines/title-position-part-name.pipeline.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
 import {
   buildGermanItemSpecifics,
@@ -27,10 +31,30 @@ import {
   shouldRebuildEnglishTitle,
   validateEnglishListing,
 } from '../channels/ebay/ebay-english-listing.util.js';
+import { buildStructuredEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
 import {
   alignGenerationAndYearRange,
   resolvePlatformGeneration,
 } from '../fitment/platform-generation.util.js';
+
+/** Item/store country for listing HTML — Dubai-based sellers default to AE. */
+function resolveSellerCountryFromLocation(
+  location: string | null | undefined,
+): string {
+  const loc = (location ?? '').toUpperCase();
+  if (loc.includes('DE') || loc.includes('GERMANY')) return 'DE';
+  if (loc.includes('AU') || loc.includes('AUSTRALIA')) return 'AU';
+  if (
+    loc.includes('AE') ||
+    loc.includes('DUBAI') ||
+    loc.includes('UAE') ||
+    loc.includes('UNITED ARAB')
+  ) {
+    return 'AE';
+  }
+  // RealTrack warehouses ship from Dubai even when marketplace is US/AU.
+  return 'AE';
+}
 
 export type Marketplace = 'US' | 'DE' | 'AU';
 export type ListingQualityProfile =
@@ -223,6 +247,7 @@ export class EnterpriseListingIntelligenceService {
     @InjectRepository(EbayCategoryMapping)
     private readonly categoryMappingRepo: Repository<EbayCategoryMapping>,
     private readonly listingPipeline: ListingGenerationPipeline,
+    private readonly titlePositionPartName: TitlePositionPartNamePipeline,
     private readonly taxonomy: EbayTaxonomyApiService,
   ) {}
 
@@ -276,7 +301,7 @@ export class EnterpriseListingIntelligenceService {
                 options.listingQualityProfile,
               ),
               marketplace: options.marketplace,
-              sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
+              sellerCountry: resolveSellerCountryFromLocation(product.location),
             },
           })),
         )
@@ -288,12 +313,18 @@ export class EnterpriseListingIntelligenceService {
       if (ai) aiByProductId.set(aiProducts[i].id, ai);
     }
 
+    const titleSlotsByProductId = await this.resolveTitleSlots(
+      products,
+      options.marketplace,
+    );
+
     const listings: EnterpriseListingResult[] = [];
     for (const product of products) {
       const listing = await this.buildEnterpriseListing(
         product,
         options.marketplace,
         aiByProductId.get(product.id) ?? null,
+        titleSlotsByProductId.get(product.id) ?? null,
       );
       listings.push(listing);
     }
@@ -351,10 +382,16 @@ export class EnterpriseListingIntelligenceService {
       this.buildAiListingItem(product, options),
     ]);
 
+    const titleSlotsByProductId = await this.resolveTitleSlots(
+      [product],
+      options.marketplace,
+    );
+
     return this.buildEnterpriseListing(
       product,
       options.marketplace,
       aiResults[0] ?? null,
+      titleSlotsByProductId.get(product.id) ?? null,
     );
   }
 
@@ -392,16 +429,54 @@ export class EnterpriseListingIntelligenceService {
       ordered.map((product) => this.buildAiListingItem(product, options)),
     );
 
+    const titleSlotsByProductId = await this.resolveTitleSlots(
+      ordered,
+      options.marketplace,
+    );
+
     const results = new Map<string, EnterpriseListingResult>();
     for (let i = 0; i < ordered.length; i++) {
       const listing = await this.buildEnterpriseListing(
         ordered[i],
         options.marketplace,
         aiResults[i] ?? null,
+        titleSlotsByProductId.get(ordered[i].id) ?? null,
       );
       results.set(ordered[i].id, listing);
     }
     return results;
+  }
+
+  private async resolveTitleSlots(
+    products: CatalogProduct[],
+    marketplace: Marketplace,
+  ): Promise<Map<string, TitlePositionPartNameResult>> {
+    if (marketplace !== 'US' && marketplace !== 'AU') {
+      return new Map();
+    }
+    if (products.length === 0) return new Map();
+
+    return this.titlePositionPartName.resolveBatch(
+      products.map((product) => {
+        const donorYear = product.donorVinDecoded?.['year']
+          ? String(product.donorVinDecoded['year'])
+          : undefined;
+        const donorModel = product.donorVinDecoded?.['model']
+          ? String(product.donorVinDecoded['model'])
+          : undefined;
+        return {
+          id: product.id,
+          rawDesc: product.description ?? product.title,
+          partNumber: product.oemPartNumber ?? product.mpn,
+          make: product.brand,
+          model: donorModel,
+          year: donorYear,
+          categoryName: product.categoryName,
+          fallbackPosition: product.placement,
+          fallbackPartName: product.partType,
+        };
+      }),
+    );
   }
 
   private buildAiListingItem(
@@ -436,7 +511,7 @@ export class EnterpriseListingIntelligenceService {
           options.listingQualityProfile,
         ),
         marketplace: options.marketplace,
-        sellerCountry: product.location?.includes('DE') ? 'DE' : 'US',
+        sellerCountry: resolveSellerCountryFromLocation(product.location),
       },
     };
   }
@@ -445,6 +520,7 @@ export class EnterpriseListingIntelligenceService {
     product: CatalogProduct,
     marketplace: Marketplace,
     aiListing: ListingGenerationResult | null,
+    titleSlots: TitlePositionPartNameResult | null = null,
   ): Promise<EnterpriseListingResult> {
     const baseSpecifics = this.extractBaseSpecifics(product);
     const category = await this.resolvePublishableCategory(product);
@@ -488,7 +564,13 @@ export class EnterpriseListingIntelligenceService {
 
     if (aiListing) {
       try {
-        optimizedTitle = this.cleanTitle(aiListing.title, marketplace);
+        // US/AU titles are assembled from structured slots below (Gemini
+        // Position/Part Name + deterministic Year/Make/Model/OEM). Keep the
+        // AI title only as a temporary seed for other marketplaces / fallbacks.
+        if (marketplace !== 'US' && marketplace !== 'AU') {
+          optimizedTitle = this.cleanTitle(aiListing.title, marketplace);
+          aiTitleConfidence = 0.85;
+        }
         subtitle =
           typeof aiListing.subtitle === 'string'
             ? aiListing.subtitle.slice(0, 55)
@@ -511,7 +593,6 @@ export class EnterpriseListingIntelligenceService {
           mergedSpecifics,
           requiredSpecificNames,
         );
-        aiTitleConfidence = 0.85;
         aiDescriptionConfidence = 0.82;
       } catch (error) {
         this.logger.warn(
@@ -575,9 +656,15 @@ export class EnterpriseListingIntelligenceService {
         product,
         compatibilityValidRows,
       );
+      if (titleSlots?.position) {
+        englishInput.placement = titleSlots.position;
+      }
+      if (titleSlots?.partName) {
+        englishInput.partType = titleSlots.partName;
+      }
       const categoryHint = resolveEnglishCategory(
-        product.partType,
-        product.placement,
+        englishInput.partType,
+        englishInput.placement,
       );
       if (
         categoryHint &&
@@ -595,7 +682,22 @@ export class EnterpriseListingIntelligenceService {
         }
       }
 
-      if (
+      const structuredTitle = buildStructuredEbayTitle({
+        yearRange: englishInput.yearRange,
+        make: englishInput.brand,
+        model: englishInput.model,
+        generation: englishInput.generation,
+        position: englishInput.placement,
+        partName: englishInput.partType,
+        oemPartNumber: englishInput.oemPartNumber ?? englishInput.mpn,
+      });
+      if (structuredTitle) {
+        optimizedTitle = structuredTitle;
+        aiTitleConfidence =
+          titleSlots?.source === 'gemini'
+            ? 0.92
+            : Math.max(aiTitleConfidence, 0.88);
+      } else if (
         shouldRebuildEnglishTitle(optimizedTitle, englishInput) ||
         optimizedTitle.length < 24
       ) {
@@ -1558,9 +1660,7 @@ export class EnterpriseListingIntelligenceService {
         fitmentRows.length > 0 &&
         product.fitmentConfidence != null &&
         Number(product.fitmentConfidence) >= 0.85,
-      sellerCountry: product.location?.toUpperCase().includes('DE')
-        ? 'DE'
-        : 'US',
+      sellerCountry: resolveSellerCountryFromLocation(product.location),
       categoryId: product.categoryId,
       categoryName: product.categoryName,
     };
