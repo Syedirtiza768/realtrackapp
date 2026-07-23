@@ -231,7 +231,7 @@ export class EbaySyncService {
       await this.syncLogRepo.save(logRow);
 
       await this.accountRepo.update(account.id, {
-        lastSuccessfulSyncAt: new Date(),
+        // Do NOT stamp lastSuccessfulSyncAt — reserved for published-listings Trading watermark.
         lastListingsFetchedCount: totalOffers,
         lastErrorMessage:
           status === 'failed'
@@ -305,7 +305,7 @@ export class EbaySyncService {
     );
 
     await this.accountRepo.update(payload.ebayAccountId, {
-      lastSuccessfulSyncAt: new Date(),
+      // Do NOT stamp lastSuccessfulSyncAt — reserved for published-listings Trading watermark.
       lastErrorMessage:
         result.errors > 0 ? `${result.errors} order(s) failed to import` : null,
     });
@@ -335,7 +335,7 @@ export class EbaySyncService {
     if (result.ok) {
       await this.accountRepo.update(ebayAccountId, {
         lastPoliciesFetchedCount: result.synced,
-        lastSuccessfulSyncAt: new Date(),
+        // Do NOT stamp lastSuccessfulSyncAt — reserved for published-listings Trading watermark.
       });
     }
     return result;

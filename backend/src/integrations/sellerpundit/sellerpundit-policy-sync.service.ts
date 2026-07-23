@@ -229,9 +229,9 @@ export class SellerpunditPolicySyncService {
     }
 
     account.lastPoliciesFetchedCount = synced;
-    account.lastSuccessfulSyncAt = new Date();
     account.sellerpunditLastPolicySyncAt = new Date();
     account.lastVerifiedAt = new Date();
+    // Do NOT stamp lastSuccessfulSyncAt — reserved for published-listings Trading watermark.
     await this.accountRepo.save(account);
 
     await this.logWriter.write({

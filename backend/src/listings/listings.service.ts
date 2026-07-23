@@ -493,16 +493,37 @@ export class ListingsService {
 
       const oldStatus = listing.status;
       const beforeSnapshot = { ...listing } as Record<string, unknown>;
+      const oldSku = listing.customLabelSku?.trim() || null;
       const { version: _v, ...rawChanges } = dto;
       // Strip undefined values so optional DTO fields don't overwrite
       // existing entity values (e.g. status becoming undefined).
       const changes = Object.fromEntries(
         Object.entries(rawChanges).filter(([, v]) => v !== undefined),
       );
+      if (
+        changes.customLabelSku !== undefined &&
+        typeof changes.customLabelSku === 'string'
+      ) {
+        const trimmed = changes.customLabelSku.trim();
+        changes.customLabelSku = trimmed.length > 0 ? trimmed : null;
+      }
+
+      await this.assertSkuRenameAllowed(em, listing.id, oldSku, changes);
+
       Object.assign(listing, changes);
+      // Keep numeric mirrors in lockstep in-memory (DB trigger also syncs on
+      // write). Needed so revision snapshots and same-request reads are correct.
+      this.applyDerivedNumericFields(listing, changes);
       if (user) listing.updatedBy = user.id;
 
       const saved = await em.save(ListingRecord, listing);
+
+      // SKU rename must keep catalog_products + marketplace siblings aligned.
+      await this.syncSkuRenameToCatalogAndSiblings(em, saved, oldSku, changes);
+
+      // Catalog detail edits one listing row; workbench/publish often read
+      // catalog_products.price or US/AU/DE siblings. Propagate shared price/qty.
+      await this.syncSharedPriceQuantityToCatalogAndSiblings(em, saved, changes);
 
       const afterSnapshot = { ...saved } as Record<string, unknown>;
 
@@ -613,6 +634,8 @@ export class ListingsService {
   }
 
   async softDelete(id: string) {
+    // Soft-delete hides this listing instance. Same-SKU donor re-import may
+    // create a NEW active row; this row stays deleted unless restore() is used.
     const listing = await this.listingRepo.findOne({ where: { id } });
     if (!listing) throw new NotFoundException(`Listing ${id} not found`);
     await this.listingRepo.softRemove(listing);
@@ -1182,6 +1205,189 @@ export class ListingsService {
       return null;
     }
     return str;
+  }
+
+  private parseMoney(raw: string | null | undefined): number | null {
+    if (raw == null || String(raw).trim() === '') return null;
+    const cleaned = String(raw)
+      .replace(/,/g, '.')
+      .replace(/[^0-9.]/g, '');
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+  }
+
+  private parseQty(raw: string | null | undefined): number | null {
+    if (raw == null || String(raw).trim() === '') return null;
+    const n = Number(String(raw).replace(/[^\d]/g, ''));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  /**
+   * Mirror text price/qty columns onto their numeric counterparts so
+   * revision snapshots and in-request reads stay consistent with the
+   * BEFORE UPDATE DB trigger (trg_sync_listing_prices).
+   */
+  private applyDerivedNumericFields(
+    listing: ListingRecord,
+    changes: Record<string, unknown>,
+  ): void {
+    if (changes.startPrice !== undefined) {
+      listing.startPriceNum = this.parseMoney(listing.startPrice);
+    }
+    if (changes.quantity !== undefined) {
+      listing.quantityNum = this.parseQty(listing.quantity);
+    }
+    if (changes.buyItNowPrice !== undefined) {
+      listing.buyItNowPriceNum = this.parseMoney(listing.buyItNowPrice);
+    }
+    if (changes.bestOfferAutoAcceptPrice !== undefined) {
+      listing.bestOfferAutoAcceptPriceNum = this.parseMoney(
+        listing.bestOfferAutoAcceptPrice,
+      );
+    }
+    if (changes.minimumBestOfferPrice !== undefined) {
+      listing.minimumBestOfferPriceNum = this.parseMoney(
+        listing.minimumBestOfferPrice,
+      );
+    }
+    if (changes.shippingService1Cost !== undefined) {
+      listing.shippingService1CostNum = this.parseMoney(
+        listing.shippingService1Cost,
+      );
+    }
+    if (changes.shippingService2Cost !== undefined) {
+      listing.shippingService2CostNum = this.parseMoney(
+        listing.shippingService2Cost,
+      );
+    }
+  }
+
+  /**
+   * Reject SKU renames that would collide with an existing catalog product or
+   * another active listing outside this row.
+   */
+  private async assertSkuRenameAllowed(
+    em: DataSource['manager'],
+    listingId: string,
+    oldSku: string | null,
+    changes: Record<string, unknown>,
+  ): Promise<void> {
+    if (changes.customLabelSku === undefined) return;
+    const newSku =
+      typeof changes.customLabelSku === 'string'
+        ? changes.customLabelSku.trim() || null
+        : (changes.customLabelSku as string | null);
+    if (!newSku || newSku === oldSku) return;
+
+    const conflictingProduct = await em.findOne(CatalogProduct, {
+      where: { sku: newSku },
+    });
+    if (conflictingProduct) {
+      throw new ConflictException(
+        `SKU "${newSku}" is already used by another catalog product.`,
+      );
+    }
+
+    const conflictingListing = await em
+      .createQueryBuilder(ListingRecord, 'l')
+      .where('l.customLabelSku = :sku', { sku: newSku })
+      .andWhere('l.deletedAt IS NULL')
+      .andWhere('l.id != :id', { id: listingId })
+      .getOne();
+    if (conflictingListing) {
+      throw new ConflictException(
+        `SKU "${newSku}" is already used by another listing.`,
+      );
+    }
+  }
+
+  /**
+   * Renaming customLabelSku on one listing must also rename the linked
+   * catalog_products.sku and every sibling listing_records row that shared
+   * the previous SKU (US/AU/DE). Otherwise catalog join-by-SKU breaks.
+   */
+  private async syncSkuRenameToCatalogAndSiblings(
+    em: {
+      update: (
+        entity: typeof ListingRecord | typeof CatalogProduct,
+        criteria: Record<string, unknown>,
+        partial: Record<string, unknown>,
+      ) => Promise<unknown>;
+    },
+    saved: ListingRecord,
+    oldSku: string | null,
+    changes: Record<string, unknown>,
+  ): Promise<void> {
+    if (changes.customLabelSku === undefined) return;
+
+    const newSku = saved.customLabelSku?.trim() || null;
+    if (!oldSku || oldSku === newSku) return;
+
+    if (newSku) {
+      await em.update(CatalogProduct, { sku: oldSku }, { sku: newSku });
+    }
+    // Current row already has newSku; siblings still on oldSku.
+    await em.update(
+      ListingRecord,
+      { customLabelSku: oldSku },
+      { customLabelSku: newSku },
+    );
+  }
+
+  /**
+   * Catalog inventory edits one listing_records row, but workbench / publish
+   * and marketplace siblings (US/AU/DE) often read catalog_products.price or
+   * another sibling. Keep shared price/qty aligned across the SKU.
+   */
+  private async syncSharedPriceQuantityToCatalogAndSiblings(
+    em: {
+      update: (
+        entity: typeof ListingRecord | typeof CatalogProduct,
+        criteria: Record<string, unknown>,
+        partial: Record<string, unknown>,
+      ) => Promise<unknown>;
+    },
+    saved: ListingRecord,
+    changes: Record<string, unknown>,
+  ): Promise<void> {
+    const sku = saved.customLabelSku;
+    if (!sku) return;
+
+    const priceChanged = changes.startPrice !== undefined;
+    const qtyChanged = changes.quantity !== undefined;
+    if (!priceChanged && !qtyChanged) return;
+
+    if (priceChanged) {
+      await em.update(
+        CatalogProduct,
+        { sku },
+        { price: saved.startPriceNum },
+      );
+      await em.update(
+        ListingRecord,
+        { customLabelSku: sku },
+        {
+          startPrice: saved.startPrice,
+          startPriceNum: saved.startPriceNum,
+        },
+      );
+    }
+
+    if (qtyChanged) {
+      await em.update(
+        CatalogProduct,
+        { sku },
+        { quantity: saved.quantityNum },
+      );
+      await em.update(
+        ListingRecord,
+        { customLabelSku: sku },
+        {
+          quantity: saved.quantity,
+          quantityNum: saved.quantityNum,
+        },
+      );
+    }
   }
 
   /** Compute field-level diff between two snapshots for audit logging */

@@ -17,12 +17,19 @@ export class PublishedListingsSchedulerService {
     private readonly leader: SchedulerLeaderService,
   ) {}
 
-  /** Sync published listings from all active eBay accounts every 15 minutes. */
+  /** Sync published listings from all active eBay accounts (default every 15 minutes). */
   @Cron(
     process.env.PUBLISHED_LISTINGS_SYNC_CRON ?? '*/15 * * * *',
     { name: 'published-listings-sync' },
   )
   async schedulePublishedListingsSync(): Promise<void> {
+    if (
+      process.env.PUBLISHED_LISTINGS_SYNC_DISABLED === '1' ||
+      process.env.PUBLISHED_LISTINGS_SYNC_DISABLED === 'true'
+    ) {
+      this.logger.debug('Published listings sync cron disabled via env');
+      return;
+    }
     await this.leader.runIfLeader(
       'published-listings-sync',
       12 * 60_000,

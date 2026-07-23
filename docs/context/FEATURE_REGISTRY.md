@@ -18,7 +18,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | AI listing generation | (in editor) | `listings` (`listing-generation.controller`) | Partial | OpenAI-backed; verify quality/limits |
 | Listings v2 (cached) | — | `listings` (`listings-v2.controller`) | Partial | Redis cache interceptor |
 | Export rules | — | `listings` (`export-rule.controller`) | Partial | Route on `/api/api/export-rules` ⚠️ |
-| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted search; 25/50/100/500 rows per page; bulk channel/export actions |
+| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted search; 25/50/100/500 rows per page; continuous `#` serial column across pages; bulk channel/export actions; detail modal SKU editable |
 | Catalog CSV/bulk import | `/catalog/import` | `catalog-import` | Implemented | BullMQ; memory-heavy |
 | Motors filters view | `/catalog/motors-filters` | `catalog-import` | Implemented | Motors-specific facets |
 | Compliance audits | (catalog) | `catalog-import` (`compliance.controller`) | Partial | `catalog.compliance` |
@@ -29,7 +29,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Motors review queue | `/motors/review` | `motors-intelligence` | Partial | Human-in-loop review |
 | Fitment manager (YMMT) | `/fitment` | `fitment` | Implemented | Make/model/year/submodel/engine; per-marketplace tree (US→`0`, AU→`15`, DE→`77`) |
 | VIN listings / lookup | `/fitment/vin` | `fitment` | Partial | `VinCache` |
-| Inventory manager | `/inventory` | `inventory` | Implemented | Soft-delete via `inventory.delete` (admin/super_admin default); ledger, allocations, events, sync |
+| Inventory manager | `/inventory` | `inventory` | Implemented | Soft-delete via `inventory.delete` (admin/super_admin default); ledger, allocations, events, sync; detail modal SKU inline-editable |
 | Catalog browse | `/catalog` | `listings` | Implemented | Soft-delete via `listings.delete` (admin/super_admin default); search, publish, bulk ops |
 | Orders | `/orders` | `orders` | Implemented | eBay order import |
 | eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth |

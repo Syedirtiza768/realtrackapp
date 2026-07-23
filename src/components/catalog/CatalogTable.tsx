@@ -67,6 +67,8 @@ export default function CatalogTable({
   const to = Math.min(total, (page + 1) * pageSize);
   const allSelected = items.length > 0 && items.every((i) => selectedIds?.has(i.id));
   const someSelected = !allSelected && items.some((i) => selectedIds?.has(i.id));
+  const colCount =
+    11 + (onToggleSelect ? 1 : 0) + (onDelete ? 1 : 0); // includes serial #
 
   const toggleDateSort = () => {
     onSortChange(sortMode === 'newest' ? 'title_asc' : 'newest');
@@ -92,6 +94,7 @@ export default function CatalogTable({
                   />
                 </th>
               )}
+              <th className="w-12 px-3 py-3 text-center">#</th>
               <th className="px-3 py-3">SKU / Identifier</th>
               <th className="w-16 px-3 py-3">Image</th>
               <th className="px-3 py-3">Title</th>
@@ -118,7 +121,7 @@ export default function CatalogTable({
             {loading && items.length === 0 &&
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  <td colSpan={11} className="px-3 py-4">
+                  <td colSpan={colCount} className="px-3 py-4">
                     <div className="h-4 rounded bg-slate-200 dark:bg-slate-800" />
                   </td>
                 </tr>
@@ -126,7 +129,7 @@ export default function CatalogTable({
 
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-6 py-16 text-center">
+                <td colSpan={colCount} className="px-6 py-16 text-center">
                   <Search className="mx-auto mb-3 text-slate-300 dark:text-slate-600" size={28} />
                   <p className="font-medium text-slate-700 dark:text-slate-200">No results found</p>
                   <p className="mt-1 text-xs text-slate-500">Try adjusting search or filters.</p>
@@ -134,9 +137,10 @@ export default function CatalogTable({
               </tr>
             )}
 
-            {items.map((item) => {
+            {items.map((item, index) => {
               const imageUrl = getFirstImageUrl(item.itemPhotoUrl);
               const isSelected = selectedIds?.has(item.id) ?? false;
+              const serial = page * pageSize + index + 1;
               return (
                 <tr
                   key={item.id}
@@ -154,6 +158,9 @@ export default function CatalogTable({
                       />
                     </td>
                   )}
+                  <td className="px-3 py-3 text-center text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                    {serial}
+                  </td>
                   <td className="px-3 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">
                     {item.customLabelSku ?? '—'}
                   </td>

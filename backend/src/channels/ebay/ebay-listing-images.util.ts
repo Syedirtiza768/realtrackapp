@@ -55,16 +55,28 @@ export interface EbayImageUrlsResult {
   warnings: string[];
 }
 
+/** Prefer large eBay CDN sizes for marketplace consumers (s-l1600). */
+export function preferLargeEbayImageUrl(url: string): string {
+  return url
+    .replace(/\/s-l(64|96|140|225|300|400|500)\./gi, '/s-l1600.')
+    .replace(/([?&]s-l)(64|96|140|225|300|400|500)(?=\D|$)/gi, '$11600');
+}
+
 /**
  * Prefer the richer gallery when merging sync sources.
  * Never shrink a previously-enriched multi-image set down to a single GalleryURL.
+ * When counts tie, prefer URLs already upgraded to large eBay sizes.
  */
 export function preferRicherImageUrls(
   primary: string[] | null | undefined,
   secondary: string[] | null | undefined,
 ): string[] {
-  const a = sanitizeEbayImageUrls(primary).imageUrls;
-  const b = sanitizeEbayImageUrls(secondary).imageUrls;
+  const a = sanitizeEbayImageUrls(
+    (primary ?? []).map((u) => preferLargeEbayImageUrl(u)),
+  ).imageUrls;
+  const b = sanitizeEbayImageUrls(
+    (secondary ?? []).map((u) => preferLargeEbayImageUrl(u)),
+  ).imageUrls;
   if (a.length > b.length) return a;
   if (b.length > a.length) return b;
   return a.length > 0 ? a : b;

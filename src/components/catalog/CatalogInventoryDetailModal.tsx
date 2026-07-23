@@ -83,6 +83,7 @@ interface ListingDetailResponse {
 }
 
 interface EditDraft {
+  customLabelSku: string;
   title: string;
   brand: string;
   partType: string;
@@ -97,6 +98,7 @@ interface Props {
   id: string | null;
   searchItem?: SearchItem | null;
   onClose: () => void;
+  onSaved?: () => void;
 }
 
 const inputClass =
@@ -162,6 +164,7 @@ function buildDraft(
   searchItem?: SearchItem | null,
 ): EditDraft {
   return {
+    customLabelSku: listing.customLabelSku ?? searchItem?.customLabelSku ?? '',
     title: listing.title ?? '',
     brand: catalogProduct?.brand ?? listing.cBrand ?? searchItem?.cBrand ?? '',
     partType: catalogProduct?.partType ?? listing.cType ?? searchItem?.cType ?? '',
@@ -299,7 +302,7 @@ function SortableImage({ id, url, index, canEdit, onRemove, onZoom }: SortableIm
   );
 }
 
-export default function CatalogInventoryDetailModal({ id, searchItem, onClose }: Props) {
+export default function CatalogInventoryDetailModal({ id, searchItem, onClose, onSaved }: Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { has: hasPermission } = usePermissions();
@@ -449,7 +452,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
       const base = buildDraft(listing, catalogProduct, searchItem);
 
       if (canEditCatalog && catalogProduct?.id) {
-        const catalogPatches: Record<string, string> = {};
+        const catalogPatches: Record<string, string | number> = {};
         // Keep catalog_products.title in lockstep with listing title so a later
         // brand/image PATCH cannot resurrect a stale catalog title via sync.
         if (draft.title !== base.title) catalogPatches.title = draft.title;
@@ -457,6 +460,16 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
         if (draft.partType !== base.partType) catalogPatches.partType = draft.partType;
         if (draft.countryOfOrigin !== base.countryOfOrigin) {
           catalogPatches.countryOfOrigin = draft.countryOfOrigin;
+        }
+        // Price/qty must update catalog too — otherwise US/AU/DE siblings and
+        // workbench views keep showing the stale catalog_products.price.
+        if (draft.startPrice !== base.startPrice) {
+          const parsed = parseFloat(draft.startPrice.replace(',', '.'));
+          if (Number.isFinite(parsed)) catalogPatches.price = parsed;
+        }
+        if (draft.quantity !== base.quantity) {
+          const parsedQty = parseInt(draft.quantity.replace(/[^\d]/g, ''), 10);
+          if (Number.isFinite(parsedQty)) catalogPatches.quantity = parsedQty;
         }
         if (Object.keys(catalogPatches).length > 0) {
           await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
@@ -467,7 +480,14 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
       }
 
       if (canEditListing) {
-        const listingUpdates: Record<string, string | number> = { version: listing.version };
+        const listingUpdates: Record<string, string | number | null> = { version: listing.version };
+        if (draft.customLabelSku !== base.customLabelSku) {
+          const nextSku = draft.customLabelSku.trim();
+          if (!nextSku) {
+            throw new Error('SKU cannot be empty');
+          }
+          listingUpdates.customLabelSku = nextSku;
+        }
         if (draft.title !== base.title) listingUpdates.title = draft.title;
         if (draft.startPrice !== base.startPrice) listingUpdates.startPrice = draft.startPrice;
         if (draft.quantity !== base.quantity) listingUpdates.quantity = draft.quantity;
@@ -496,6 +516,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
 
       await qc.invalidateQueries({ queryKey: ['catalog-listing-detail', id] });
       await qc.invalidateQueries({ queryKey: ['listing', id] });
+      onSaved?.();
       setEditMode(false);
       setDraft(null);
       setSelectedStoreId('');
@@ -703,26 +724,41 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose }:
                       {listing.title ?? 'Untitled'}
                     </button>
                   )}
-                  {(listing.customLabelSku ?? searchItem?.customLabelSku) && (
+                  {((listing.customLabelSku ?? searchItem?.customLabelSku) || editMode) && (
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <span>
-                        SKU:{' '}
-                        <span className="font-mono text-slate-700 dark:text-slate-300">
-                          {listing.customLabelSku ?? searchItem?.customLabelSku}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={copySku}
-                        className="rounded p-0.5 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        aria-label="Copy SKU"
-                      >
-                        {copiedSku ? (
-                          <Check size={12} className="text-emerald-500" />
-                        ) : (
-                          <Copy size={12} />
-                        )}
-                      </button>
+                      {editMode && displayDraft ? (
+                        <div className="flex w-full max-w-xs items-center gap-1.5">
+                          <span className="shrink-0">SKU:</span>
+                          <input
+                            type="text"
+                            value={displayDraft.customLabelSku}
+                            onChange={(e) => updateDraft('customLabelSku', e.target.value)}
+                            className={`${inputClass} mt-0 font-mono`}
+                            placeholder="Custom label / SKU"
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <span>
+                            SKU:{' '}
+                            <span className="font-mono text-slate-700 dark:text-slate-300">
+                              {listing.customLabelSku ?? searchItem?.customLabelSku}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={copySku}
+                            className="rounded p-0.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            aria-label="Copy SKU"
+                          >
+                            {copiedSku ? (
+                              <Check size={12} className="text-emerald-500" />
+                            ) : (
+                              <Copy size={12} />
+                            )}
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

@@ -23,6 +23,9 @@ export class PublishedListingsHealthService {
     performanceMetrics: Record<string, unknown>;
     categoryId: string | null;
     price?: string | null;
+    description?: string | null;
+    lastSyncedAt?: Date | string | null;
+    syncStaleAfterMs?: number;
     competitorPricing?: {
       medianPrice?: number | null;
       avgPrice?: number | null;
@@ -52,6 +55,14 @@ export class PublishedListingsHealthService {
         code: 'missing_item_specifics',
         severity: 'warning',
         message: 'No item specifics defined',
+      });
+    }
+
+    if (!input.description?.trim()) {
+      flags.push({
+        code: 'missing_description',
+        severity: 'warning',
+        message: 'Listing description is empty',
       });
     }
 
@@ -111,6 +122,18 @@ export class PublishedListingsHealthService {
         severity: 'info',
         message: 'Has views but no sales yet',
       });
+    }
+
+    const staleAfterMs = input.syncStaleAfterMs ?? 24 * 60 * 60 * 1000;
+    if (input.lastSyncedAt) {
+      const syncedAt = new Date(input.lastSyncedAt).getTime();
+      if (Number.isFinite(syncedAt) && Date.now() - syncedAt > staleAfterMs) {
+        flags.push({
+          code: 'sync_stale',
+          severity: 'warning',
+          message: 'Listing sync is older than the freshness threshold',
+        });
+      }
     }
 
     const cp = input.competitorPricing;

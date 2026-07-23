@@ -2416,6 +2416,8 @@ export class InventoryWorkbenchService {
 
   /** Soft-delete a listing from the inventory workbench (recoverable). */
   async softDeleteListing(listingId: string): Promise<{ success: true }> {
+    // Hides this listing instance only. Re-importing the same donor SKU
+    // creates a new listing; this soft-deleted row is not recovered by pipeline.
     const listing = await this.listingRepo.findOne({ where: { id: listingId } });
     if (!listing) {
       throw new NotFoundException(`Listing ${listingId} not found`);

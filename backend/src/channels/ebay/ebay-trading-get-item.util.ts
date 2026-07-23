@@ -4,6 +4,7 @@ export interface TradingItemDetails {
   imageUrls: string[];
   compatibility: EbayCompatibilityPayload | null;
   description: string | null;
+  itemSpecifics: Record<string, string[]>;
 }
 
 function tagValue(block: string, tag: string): string | null {
@@ -65,11 +66,41 @@ export function parseTradingItemCompatibility(
   return compatibleProducts.length > 0 ? { compatibleProducts } : null;
 }
 
+/** Parse ItemSpecifics NameValueList blocks into a Name → values[] map. */
+export function parseTradingItemSpecifics(
+  itemBlock: string,
+): Record<string, string[]> {
+  const section =
+    itemBlock.match(/<ItemSpecifics>[\s\S]*?<\/ItemSpecifics>/i)?.[0] ?? '';
+  if (!section) return {};
+
+  const out: Record<string, string[]> = {};
+  const nvlBlocks =
+    section.match(/<NameValueList>[\s\S]*?<\/NameValueList>/gi) ?? [];
+  for (const nvl of nvlBlocks) {
+    const name = tagValue(nvl, 'Name');
+    if (!name) continue;
+    const values: string[] = [];
+    const valueMatches = nvl.matchAll(
+      /<Value(?:\s[^>]*)?>([\s\S]*?)<\/Value>/gi,
+    );
+    for (const m of valueMatches) {
+      const raw = m[1]?.trim().replace(/^<!\[CDATA\[|\]\]>$/g, '');
+      if (raw) values.push(raw);
+    }
+    if (values.length === 0) continue;
+    const existing = out[name] ?? [];
+    out[name] = [...new Set([...existing, ...values])];
+  }
+  return out;
+}
+
 export function parseTradingGetItemResponse(xml: string): TradingItemDetails {
   const itemBlock = xml.match(/<Item>[\s\S]*?<\/Item>/i)?.[0] ?? xml;
   return {
     imageUrls: parsePictureUrls(itemBlock),
     compatibility: parseTradingItemCompatibility(itemBlock),
     description: tagValue(itemBlock, 'Description'),
+    itemSpecifics: parseTradingItemSpecifics(itemBlock),
   };
 }

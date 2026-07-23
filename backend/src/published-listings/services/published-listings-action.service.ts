@@ -10,6 +10,7 @@ import { User } from '../../auth/entities/user.entity.js';
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
 import { EbayPublishService } from '../../channels/ebay/ebay-publish.service.js';
 import { ListingActionLogWriterService } from '../../integrations/ebay/services/listing-action-log-writer.service.js';
+import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import type {
   RevisePublishedListingDto,
@@ -26,6 +27,8 @@ export class PublishedListingsActionService {
   constructor(
     @InjectRepository(EbayPublishedListing)
     private readonly listingRepo: Repository<EbayPublishedListing>,
+    @InjectRepository(EbayListingChannel)
+    private readonly channelRepo: Repository<EbayListingChannel>,
     private readonly inventoryApi: EbayInventoryApiService,
     private readonly ebayPublish: EbayPublishService,
     private readonly health: PublishedListingsHealthService,
@@ -33,6 +36,79 @@ export class PublishedListingsActionService {
     private readonly actionLog: ListingActionLogWriterService,
     private readonly sync: PublishedListingsSyncService,
   ) {}
+
+  /**
+   * Trading SellerList sync historically stored offerId=null. Resolve a live
+   * Inventory offer id from the channel row or getOffersBySku before price/qty
+   * revise, and persist it so subsequent revises skip the lookup.
+   */
+  private async resolveOfferId(
+    listing: EbayPublishedListing,
+  ): Promise<string | null> {
+    if (listing.offerId) return listing.offerId;
+
+    if (listing.ebayListingChannelId) {
+      const linked = await this.channelRepo.findOne({
+        where: { id: listing.ebayListingChannelId },
+      });
+      if (linked?.offerId) {
+        listing.offerId = linked.offerId;
+        await this.listingRepo.update(listing.id, { offerId: linked.offerId });
+        return linked.offerId;
+      }
+    }
+
+    if (listing.ebayItemId) {
+      const byItem = await this.channelRepo.findOne({
+        where: {
+          ebayAccountId: listing.ebayAccountId,
+          listingId: listing.ebayItemId,
+        },
+      });
+      if (byItem?.offerId) {
+        const channelPatch: {
+          offerId: string;
+          ebayListingChannelId?: string;
+        } = { offerId: byItem.offerId };
+        listing.offerId = byItem.offerId;
+        if (byItem.id && !listing.ebayListingChannelId) {
+          listing.ebayListingChannelId = byItem.id;
+          channelPatch.ebayListingChannelId = byItem.id;
+        }
+        await this.listingRepo.update(listing.id, channelPatch);
+        return byItem.offerId;
+      }
+    }
+
+    if (listing.sku && listing.storeId) {
+      try {
+        const { offers } = await this.inventoryApi.getOffersBySku(
+          listing.storeId,
+          listing.sku,
+        );
+        const match =
+          offers?.find(
+            (o) =>
+              o.listingId === listing.ebayItemId || o.status === 'PUBLISHED',
+          ) ?? offers?.[0];
+        if (match?.offerId) {
+          listing.offerId = match.offerId;
+          await this.listingRepo.update(listing.id, {
+            offerId: match.offerId,
+          });
+          return match.offerId;
+        }
+      } catch (err) {
+        this.logger.warn(
+          `getOffersBySku failed for ${listing.sku}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    return null;
+  }
 
   async revise(
     id: string,
@@ -88,16 +164,17 @@ export class PublishedListingsActionService {
     }
 
     if (dto.price != null || dto.quantity != null) {
-      if (!listing.offerId) {
+      const offerId = await this.resolveOfferId(listing);
+      if (!offerId) {
         throw new BadRequestException(
-          'Listing has no offer ID for price/qty update',
+          'Listing has no offer ID for price/qty update — sync Inventory offers for this SKU first',
         );
       }
       await this.inventoryApi.bulkUpdatePriceQuantity(storeId, [
         {
           offers: [
             {
-              offerId: listing.offerId,
+              offerId,
               ...(dto.price != null
                 ? {
                     price: {

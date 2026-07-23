@@ -42,6 +42,15 @@ export class PublishedListingsQueryDto {
   @IsString()
   marketplaceId?: string;
 
+  /**
+   * Listing status filter (case-sensitive lowercase).
+   * - Default: `active` — buyable inventory (`quantityAvailable > 0`) from the
+   *   latest successful live Trading sync on an active eBay connection
+   * - `ended` — ended retention rows (reconciliation)
+   * - `out_of_stock` — live offers with qty 0
+   * - `unknown` — unclassified mirror rows
+   * - `all` — no status filter (includes ended / out_of_stock / stale)
+   */
   @IsOptional()
   @IsString()
   status?: string;

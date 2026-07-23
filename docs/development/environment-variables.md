@@ -106,7 +106,14 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_DAILY_PUBLISH_TARGET_LIMIT` | `5000` | Organization-wide UTC-day quota for listing/store publish targets; hard-capped at 5,000 |
 | `PUBLISHED_LISTINGS_SYNC_CRON` | `*/15 * * * *` | Cron for scheduled published-listings mirror refresh; defaults to every 15 minutes for near-real-time API consumers |
 | `PUBLISHED_LISTINGS_DEFAULT_STORE_SLUGS` | `salvagea,blackline` | Default `storeSlug` scope for `GET /published-listings` when neither `storeId` nor `storeSlug` is provided. Set to `all` (or empty) to disable. |
-| `PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC` | `150` | Max Trading GetItem / Browse legacy-listing enrichments per sync run (full `imageUrls[]` + compatibility backfill). Leftover budget after the live-list upsert pass is spent on active rows that still have ≤1 image. Keep bounded so SellerList sync + hard-gate prune can finish. |
+| `PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC` | `500` | Max enrichments per sync run (Browse / optional scrape / optional Trading GetItem). Leftover budget after the live-list upsert pass is spent on thin active rows. |
+| `PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH` | `0` | When `1`, enrichment skips Trading GetItem (use while SellerList usage limits are exhausted). Browse + optional page scrape still run. |
+| `PUBLISHED_LISTINGS_SCRAPE_ENRICH` | `0` | When `1`, last-resort fetch of the public `listingUrl` HTML to backfill gallery / description / specifics / fitment. Bounded by `PUBLISHED_LISTINGS_SCRAPE_RPS` (default `0.5`). |
+| `PUBLISHED_LISTINGS_ON_DEMAND_ENRICH` | `0` | When `1`, `GET /published-listings/:id` (and store-scoped detail) backfills thin rows via Browse + scrape (no Trading) and persists the result. |
+| `PUBLISHED_LISTINGS_SCRAPE_RPS` | `0.5` | Max public-page fetches per second when scrape enrich is enabled. |
+| `PUBLISHED_LISTINGS_SCRAPE_TIMEOUT_MS` | `15000` | HTTP timeout for listing-page scrape. |
+| `PUBLISHED_LISTINGS_SYNC_CRON` | `*/15 * * * *` | Cron for full Trading mirror sync. Use a slower schedule when eBay usage limits are hot. |
+| `PUBLISHED_LISTINGS_SYNC_DISABLED` | `0` | When `1`, cron still registers but the job body no-ops. |
 
 Per-store override: set `stores.config.shipFromAddress` (object with the same
 field names) or `stores.location_key` / `config.locationKey`.

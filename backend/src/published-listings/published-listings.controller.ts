@@ -69,6 +69,33 @@ export class PublishedListingsController {
     return this.listings.getSummary(orgId, user, ebayAccountId);
   }
 
+  @Get('stores')
+  @ApiOperation({
+    summary:
+      'Discover connected stores with published-listing counts (reader-safe)',
+  })
+  async stores(
+    @Query('organizationId') organizationId: string | undefined,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
+    return this.listings.listStores(orgId, user);
+  }
+
+  @Get('sync-status')
+  @ApiOperation({
+    summary: 'Per-store published-listings sync health for marketplace readers',
+  })
+  async syncStatus(
+    @Query('organizationId') organizationId: string | undefined,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
+    return this.listings.getSyncStatus(orgId, user);
+  }
+
   @Get('sync-logs')
   @ApiOperation({ summary: 'Recent published listing sync logs' })
   async syncLogs(

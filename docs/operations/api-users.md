@@ -20,7 +20,7 @@ eBay by `PublishedListingsSyncService`). Nothing else.
 | Password | `Ebay$321` |
 | Role | `api_published_listings_reader` (custom, non-system) |
 | Permissions | `published_listings.view` only — confirmed via `GET /api/auth/me` |
-| Store scope | **Default API results: Blackline + Salvage only** (active, `quantityAvailable > 0`). Pass `storeSlug=all` or an explicit `storeId` to override. Account still has `storeAccessAll = true`. |
+| Store scope | **Default API results: Blackline + Salvage only** (`listingStatus=active` and `quantityAvailable > 0` — hard rule). Pass `storeSlug=all` or an explicit `storeId` to override stores. Account still has `storeAccessAll = true`. |
 | Workspace | Member of the primary RealTrack organization (`3ed54be6-7138-4264-bd8b-73dfa9336245`) |
 
 Rotate this password with `PATCH /api/rbac/users/:id/reset-password` (requires
@@ -80,41 +80,68 @@ Every request below carries `-H "Authorization: Bearer $TOKEN"`.
 
 ## Connected stores (storeId values)
 
-From `GET /api/stores` / the `stores` table, at time of writing:
+Prefer **`GET /api/published-listings/stores`** (reader-safe) for live discovery.
+Static reference table (also includes stores that still need `stores.view` via
+`GET /api/stores`):
 
-| storeId | Store name |
-|---|---|
-| `79f249a5-31e0-42a8-978c-a99b0665c61b` | All About Mercedes |
-| `fa528c8a-f249-4816-94f6-f2ce8b932449` | B.JLRWORLD |
-| `d16199c4-55b5-429e-ad27-892bed94e00d` | BLACKLINEAUTOPARTS |
-| `5fc75f19-31f3-44e4-b1ae-6545055f7945` | K. Brit Auto Depot - UK |
-| `65aff8ec-21ee-460f-af17-20daa0b843c1` | K. Euro Japan Auto Parts |
-| `eed3dbd6-9967-43ac-ad4e-6d5081cfb9b0` | K. Salvage Auto Parts |
-| `cc658cc0-ab21-4519-9f06-4aea8ff6a809` | K. Salvage Dismantlers - DE |
-| `7658e52e-4dd6-48a7-ad78-6933630bdac7` | K. Southern Cross Auto Parts - AU |
-| `cfcc4a9c-c41b-4166-ab41-989c00a6fad1` | Primemotive |
-| `8d7d8b23-d769-4ed5-91e2-e26d14a45215` | VW & RR |
-| `70ad5c44-6424-4998-815c-99adf28c2487` | eBay store |
+| storeId | Store name | Notes |
+|---|---|---|
+| `d16199c4-55b5-429e-ad27-892bed94e00d` | BLACKLINEAUTOPARTS | Marketplace priority (`storeSlug=blackline`) |
+| `3b84b063-3811-481f-a61d-f7846a03558f` | US SalvageA / K. Salvage Auto Parts (active) | Marketplace priority (`storeSlug=salvagea`) |
+| `eed3dbd6-9967-43ac-ad4e-6d5081cfb9b0` | K. Salvage Auto Parts (legacy duplicate) | **Disabled** connection — do not use |
+| `79f249a5-31e0-42a8-978c-a99b0665c61b` | All About Mercedes | |
+| `fa528c8a-f249-4816-94f6-f2ce8b932449` | B.JLRWORLD | |
+| `5fc75f19-31f3-44e4-b1ae-6545055f7945` | K. Brit Auto Depot - UK | |
+| `65aff8ec-21ee-460f-af17-20daa0b843c1` | K. Euro Japan Auto Parts | |
+| `cc658cc0-ab21-4519-9f06-4aea8ff6a809` | K. Salvage Dismantlers - DE | |
+| `7658e52e-4dd6-48a7-ad78-6933630bdac7` | K. Southern Cross Auto Parts - AU | |
+| `cfcc4a9c-c41b-4166-ab41-989c00a6fad1` | Primemotive | |
+| `8d7d8b23-d769-4ed5-91e2-e26d14a45215` | VW & RR | |
+| `70ad5c44-6424-4998-815c-99adf28c2487` | eBay store | |
 
-This account cannot call `GET /api/stores` itself (needs `stores.view`, which it doesn't
-have) — the table above is provided here as reference since it can't discover store IDs on
-its own. Use `storeId` from this table with the endpoints below.
+`storeAccessAll = true` on the reader account — store scoping is by query filters,
+not by assignment rows.
 
 ## Endpoints
 
-All three support the same filters/pagination — `page` (default 1), `limit` (default 50, max
+### 0. Store discovery + sync health (reader-safe)
+
+```
+GET /api/published-listings/stores
+GET /api/published-listings/sync-status
+```
+
+```bash
+curl -s "https://mhn.realtrackapp.com/api/published-listings/stores" \
+  -H "Authorization: Bearer $TOKEN"
+curl -s "https://mhn.realtrackapp.com/api/published-listings/sync-status" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+`stores` returns `{ items: [{ storeId, storeSlug, name, activeListingCount, endedListingCount, lastSyncedAt, syncStatus, … }] }`.
+`sync-status` returns org-wide `globalActiveCount` plus per-store
+`activeCount` / `endedCount` / `lastSuccessAt` / `lastError` / `healthFlags`
+(`store_sync_failed`, `sync_stale`, `empty_active_mirror`).
+
+List + detail endpoints support the same filters/pagination — `page` (default 1), `limit` (default 50, max
 200), plus `storeId`, `offerId`, `ebayAccountId`, `marketplaceId`, `status`, `search`, etc.
 (full filter list in `PublishedListingsQueryDto`).
+
+> **Status enum (lowercase, case-sensitive):** `active` (default) | `ended` |
+> `out_of_stock` | `unknown` | `all`. Pagination is stable (`sort` + `id` tie-break).
+> Max `limit` is **200**. Sustained detail fetching for catalog seed is expected;
+> respect HTTP **429** with backoff.
 
 > Default behavior: if you omit filters, the API returns only:
 > - **Stores:** [salvagea](https://www.ebay.com/str/salvagea) + [blacklineusedautoparts](https://www.ebay.com/str/blacklineusedautoparts)
 >   (`storeSlug` defaults to `salvagea,blackline`; override with `?storeSlug=all` or `?storeId=…`)
 > - **Status:** `listingStatus = active` from the latest successful live Trading sync
 >   on an **active** eBay connection (hard gate)
-> - **Quantity:** `quantityAvailable > 0` (buyable / in-stock only)
+> - **Quantity:** `quantityAvailable > 0` (buyable / in-stock only) — **hard rule** for
+>   `status=active` (default). `quantityMin=0` / `lowStock=out` cannot override this.
 >
-> Pass `status=all` to include ended / out-of-stock / stale mirror rows.
-> Pass `quantityMin=0` (or `lowStock=out`) if you need zero-quantity actives.
+> Pass `status=out_of_stock` for zero-quantity live offers, or `status=all` for ended /
+> out-of-stock / stale mirror rows.
 >
 > Filter by eBay storefront slug (multi-store):
 > `?storeSlug=salvagea,blackline` or `?storeSlug=salvagea,blacklineusedautoparts`
@@ -181,6 +208,21 @@ Verified response (production, 2026-07-20 — **active** total ≈ 421,561; `sta
 ```
 
 > `compatibility` may be `null` until enrichment finishes for that row. `imageUrls` is the **full gallery** once GetItem/Browse backfill has run for that listing; until then it may briefly hold only the Trading `GalleryURL` thumbnail. Sync never shrinks a multi-image gallery back to one URL.
+> Detail responses (`GET /api/published-listings/:id` and store-scoped detail) also include
+> `descriptionHtml` / `descriptionText`, ordered `images[]`, `brand` / `mpn` / `oeNumbers`,
+> and optional `salvageDetails` derived from item specifics.
+>
+> When `PUBLISHED_LISTINGS_ON_DEMAND_ENRICH=1` is enabled on the API, thin detail rows are
+> backfilled from Browse (+ optional public `listingUrl` scrape if
+> `PUBLISHED_LISTINGS_SCRAPE_ENRICH=1`) and persisted — without Trading GetItem. List endpoints
+> stay slim and do not scrape. Rows whose `listingUrl` is on a non-English host
+> (`ebay.de` / `ebay.fr` / …) are also treated as thin: enrichment rewrites title,
+> description, and `listingUrl` to the English `ebay.com` view.
+>
+> **Bulk English backfill (list API):** `scripts/backfill-published-listings-english.cjs`
+> (run inside the backend container) converts remaining EU-host rows for SalvageA then
+> Blackline so PartsBazar360 list results are English without waiting on detail fetches.
+> Check progress: `docker exec realtrackapp-backend-1 tail -f /tmp/english-backfill.log`.
 
 `page=2&limit=3` returns the next 3 distinct rows (verified — no overlap with page 1).
 
@@ -191,24 +233,29 @@ GET /api/published-listings?storeId={storeId}&page={page}&limit={limit}
 ```
 
 ```bash
-curl -s "https://mhn.realtrackapp.com/api/published-listings?storeId=eed3dbd6-9967-43ac-ad4e-6d5081cfb9b0&page=1&limit=3" \
+curl -s "https://mhn.realtrackapp.com/api/published-listings?storeId=3b84b063-3811-481f-a61d-f7846a03558f&page=1&limit=3" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Verified: every returned item's `storeId` matches the filter (K. Salvage Auto Parts,
-active total ≈ 79,805 on 2026-07-20):
+Verified: every returned item's `storeId` matches the filter (US SalvageA /
+`3b84b063-…`). Prefer this storeId over the disabled legacy Salvage duplicate
+(`eed3dbd6-…`).
 
 ```json
 {
   "items": [
-    { "id": "...", "storeId": "eed3dbd6-9967-43ac-ad4e-6d5081cfb9b0", "listingStatus": "active", "title": "..." },
+    { "id": "...", "storeId": "3b84b063-3811-481f-a61d-f7846a03558f", "listingStatus": "active", "title": "..." },
     { "...": "2 more, same storeId" }
   ],
-  "total": 79805,
+  "total": 0,
   "page": 1,
   "limit": 3
 }
 ```
+
+> `total` is the live hard-gated active count for that store. Use
+> `GET /api/published-listings/sync-status` when a marketplace store unexpectedly
+> returns `0` — look for `empty_active_mirror` / `store_sync_failed`.
 
 There's also a store-first route with the same filtering/pagination, scoped by path segment
 instead of query param:
@@ -217,7 +264,7 @@ instead of query param:
 GET /api/stores/{storeId}/listings/published?page={page}&limit={limit}
 ```
 
-Identical result shape and totals — verified against the same store above (`total: 79805`).
+Identical result shape and totals — scoped by path `storeId`.
 It additionally 404s if you request `GET /api/stores/{storeId}/listings/published/{id}` for
 an `id` that belongs to a *different* store, as a safety check.
 

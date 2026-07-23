@@ -1,6 +1,7 @@
 import {
   parseTradingGetItemResponse,
   parseTradingItemCompatibility,
+  parseTradingItemSpecifics,
 } from '../../channels/ebay/ebay-trading-get-item.util.js';
 
 describe('ebay-trading-get-item.util', () => {
@@ -11,6 +12,15 @@ describe('ebay-trading-get-item.util', () => {
       <PictureURL>https://i.ebayimg.com/images/g/a1/s-l1600.jpg</PictureURL>
       <PictureURL>https://i.ebayimg.com/images/g/a2/s-l1600.jpg</PictureURL>
     </PictureDetails>
+    <ItemSpecifics>
+      <NameValueList><Name>Brand</Name><Value>Jeep</Value></NameValueList>
+      <NameValueList>
+        <Name>Manufacturer Part Number</Name>
+        <Value>MPN-1</Value>
+        <Value>MPN-2</Value>
+      </NameValueList>
+      <NameValueList><Name>OE/OEM Number</Name><Value>OEM-9</Value></NameValueList>
+    </ItemSpecifics>
     <ItemCompatibilityList>
       <Compatibility>
         <NameValueList><Name>Year</Name><Value>2015</Value></NameValueList>
@@ -67,5 +77,17 @@ describe('ebay-trading-get-item.util', () => {
   it('returns empty compatibility when section is missing', () => {
     const compat = parseTradingItemCompatibility('<Item><Title>x</Title></Item>');
     expect(compat).toBeNull();
+  });
+
+  it('parses item specifics including multi-value names', () => {
+    const specifics = parseTradingItemSpecifics(sampleXml);
+    expect(specifics).toEqual({
+      Brand: ['Jeep'],
+      'Manufacturer Part Number': ['MPN-1', 'MPN-2'],
+      'OE/OEM Number': ['OEM-9'],
+    });
+    const parsed = parseTradingGetItemResponse(sampleXml);
+    expect(parsed.description).toBe('<p>Test part</p>');
+    expect(parsed.itemSpecifics.Brand).toEqual(['Jeep']);
   });
 });

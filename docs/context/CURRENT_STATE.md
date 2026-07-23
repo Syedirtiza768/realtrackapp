@@ -26,7 +26,7 @@
 
 - **Auth + RBAC** (login, register, permissions, roles, registry-driven)
 - **Dashboard** with KPI aggregation
-- **Listing editor** with AI assistance, revision history
+- **Listing editor** with AI assistance, revision history. Catalog inventory price/qty edits now sync to `catalog_products` and US/AU/DE sibling `listing_records` (not only the opened row). SKU renames from inventory/catalog detail modals update `customLabelSku`, linked `catalog_products.sku`, and siblings (collision-checked). Published-listing price revise resolves Inventory `offerId` when Trading sync left it null.
 - **Catalog import** (CSV/bulk, BullMQ processing, motors filters)
 - **eBay multi-store** (OAuth, sync, publish, multi-account). Inventory location defaults are **Dubai / `AE_Dubai`** (not Houston/`US_77001`); policy sync prefers AE warehouse keys. Publish sanitizes item-specific values to eBay's 65-char aspect limit (fixes Type-too-long rejects on long OEM descriptions). Pipeline MVL fitment is **donor-year scoped** (±5/±8) and refuses full make/model dumps when year is missing. Publish sends only **MVL-valid** compatibility rows (`needs_review`/`rejected` omitted; empty fitment still allowed). Title/make-model parsing skips junk tokens and maps Mercedes series codes (`C350`→`C-Class`) so optimizers cannot lock in corrupted models like `170`. Pipeline / enterprise US-AU titles use Gemini 3.1 Flash Lite **only** for Position + Part Name slots; the rest of the house title structure stays deterministic.
 - **Inventory management** (ledger, allocations, events)
@@ -65,6 +65,35 @@
 - **Branding inconsistency** — "RealTrackApp" (shell) vs "ListingPro" (login/DB)
 
 ## Latest Session Summary
+
+**2026-07-23** — PartsBazar360 English list backfill running on prod:
+- Script `scripts/backfill-published-listings-english.cjs` (Browse US) converting EU-host `listing_url` rows to English title + `ebay.com` URL.
+- Order: SalvageA (~11k) then Blackline (~40k); ~300ms/row. Log: container `/tmp/english-backfill.log`. Resume-safe.
+- Detail on-demand enrich already rewrites locale; this backfill makes **list** English without per-item waits.
+
+**2026-07-23** — PartsBazar360 published-listings ops + watermark root cause:
+- Production Blackline/SalvageA mirrors were **not empty** (83,986 / 24,899 active rows) but reader API returned `total: 0` because `lastSuccessfulSyncAt` was stamped ahead of every listing by **policy sync** (shared watermark field).
+- Rolled watermarks back → reader totals restored: Blackline **83,986**, SalvageA **24,899**, default **108,885**.
+- Code: stop non-Trading writers from touching `lastSuccessfulSyncAt`; hard-gate self-heals on watermark drift; optional `PUBLISHED_LISTINGS_SYNC_DISABLED`.
+- Ops: Trading API usage limit exceeded — published-listings cron reduced to weekly (`0 3 * * 0`) until limits recover. New reader endpoints / enrichment payload still need image rebuild+deploy.
+- Enrichment fill still thin on prod (description/specifics ~0%; multi-image ~500/150) until GetItem enrich runs after deploy + rate-limit recovery.
+- **Follow-up:** bounded public `listingUrl` scrape enrich (`PUBLISHED_LISTINGS_SCRAPE_ENRICH`) + on-demand detail enrich (`PUBLISHED_LISTINGS_ON_DEMAND_ENRICH`) + skip Trading enrich flag — Browse/scrape fill thin payloads without burning GetItem quota.
+
+**2026-07-23** — PartsBazar360 published-listings API contract:
+- Reader discovery: `GET /api/published-listings/stores` + `GET /api/published-listings/sync-status` (works with `published_listings.view` only).
+- Detail enrichment fields: `descriptionHtml`/`descriptionText`, large ordered `imageUrls`/`images[]`, `brand`/`mpn`/`oeNumbers`, `salvageDetails`.
+- Trading GetItem now persists description + item specifics; enrich budget default 500/sync; health flags `missing_description` + `sync_stale`.
+- Ops still: confirm Blackline + SalvageA full Trading sync + tokens after deploy (empty mirrors show as `empty_active_mirror` on sync-status).
+
+**2026-07-22** — Published-listings reader feed restored on production:
+- Default `GET /api/published-listings` had dropped to total `0` because `lastSuccessfulSyncAt` was ahead of almost every row’s `lastSyncedAt` (hard-gate).
+- Rolled watermarks back to `MIN(active last_synced_at)` per active eBay account; default Blackline+Salvage feed returned ~108,885 again.
+- Code: targeted `listingIds` syncs no longer advance the live sync watermark.
+
+**2026-07-22** — Soft-delete + donor re-import contract locked in:
+- Soft-delete hides that listing instance; it stays deleted.
+- Same donor re-upload with no active SKU creates a **new** listing row; pipeline never recovers soft-deleted rows.
+- Routing helper + regression tests: `pipeline-listing-routing.util.ts`.
 
 **2026-07-22** — Manual title edits no longer revert after save:
 - Root cause: `CatalogProductService.syncToListingRecord` always copied `catalog_products.title` onto every matching listing on *any* catalog PATCH (brand, images, country, etc.). Editors saved corrected titles only to `listing_records`, so the next shared-field save resurrected the stale catalog title (and could also fail the listing PUT on a bumped `@VersionColumn`).

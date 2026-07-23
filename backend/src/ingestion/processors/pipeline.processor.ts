@@ -28,6 +28,10 @@ import {
   shouldApplyJobProfilesToOutput,
   type PipelineMarketplaceCode,
 } from '../../common/marketplaces/pipeline-marketplaces.js';
+import {
+  buildActiveIdBySku,
+  routePipelineListingRecords,
+} from '../utils/pipeline-listing-routing.util.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -1731,28 +1735,17 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             true,
           );
         }
-        // Re-run safe: the stable part identity is the SKU (customLabelSku),
-        // and idx_listing_sku_marketplace_unique_active enforces that SKU+
-        // marketplace is unique DB-wide among non-deleted rows — not just
-        // within one pipeline job. Match existing rows on SKU+marketplace
-        // GLOBALLY (any job) and UPDATE them in place — preserving row ids,
-        // FK links (ai_enhancements, channel_listings, image_assets), and
-        // repointing pipeline_job_id to this run — then insert only
-        // genuinely new SKUs. Scoping this lookup to pipeline_job_id = jobId
-        // (as before) missed rows created by an earlier, different job for
-        // the same donor vehicle/part; the bulk INSERT below then hit
-        // idx_listing_sku_marketplace_unique_active on that row, and since a
-        // single multi-row INSERT aborts entirely on any constraint
-        // violation, the ENTIRE batch — not just the offending row — silently
-        // failed to save (0 inserted, 0 updated), even though the job itself
-        // reported "completed".
-        // sourceRowNumber is the XLSX row position, which shifts between runs
-        // as fitment rows change, and uq_listing_source_row (sourceFileName,
-        // sheetName, sourceRowNumber) is date-stamped via the output filename
-        // — so neither is a stable key. The previous ON CONFLICT
-        // ("customLabelSku","marketplace") upsert aborted the whole batch with
-        // a uq_listing_source_row violation whenever an INSERT was attempted,
-        // so re-runs never refreshed titles.
+        // Re-run safe + simple-delete contract:
+        // - Stable identity is SKU+marketplace among ACTIVE rows only
+        //   (idx_listing_sku_marketplace_unique_active excludes soft-deleted).
+        // - Soft-delete hides that listing instance; it stays deleted.
+        // - Same donor re-upload with no active SKU → INSERT a NEW listing.
+        //   Pipeline never recover()s soft-deleted rows.
+        // - Active SKU match → UPDATE in place (preserve id / FKs).
+        // Match globally (any pipeline_job_id): scoping to jobId missed rows
+        // from earlier jobs and caused whole-batch insert failures on the
+        // unique index. sourceFileName/sheetName/sourceRowNumber are not
+        // stable keys across runs (dated output names, shifting XLSX rows).
         const batchSkus = Array.from(
           new Set(
             listingRecords
@@ -1767,33 +1760,12 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
                 [marketplace, batchSkus],
               )
             : [];
-        const existingIdBySku = new Map<string, string>();
-        for (const r of existingRows) {
-          const s = r.customLabelSku?.trim();
-          if (s) existingIdBySku.set(s, r.id);
-        }
-
-        const rowsToUpdate: Array<{
-          id: string;
-          lr: (typeof listingRecords)[0];
-        }> = [];
-        const rowsToInsert: typeof listingRecords = [];
-        const seenSku = new Set<string>();
-        for (const lr of listingRecords) {
-          const sku = lr.customLabelSku?.trim();
-          if (!sku) {
-            rowsToInsert.push(lr);
-            continue;
-          }
-          if (seenSku.has(sku)) continue; // guard intra-file duplicate SKUs
-          seenSku.add(sku);
-          const existingId = existingIdBySku.get(sku);
-          if (existingId) rowsToUpdate.push({ id: existingId, lr });
-          else rowsToInsert.push(lr);
-        }
+        const activeIdBySku = buildActiveIdBySku(existingRows);
+        const { rowsToUpdate, rowsToInsert, droppedDuplicates } =
+          routePipelineListingRecords(listingRecords, activeIdBySku);
 
         this.logger.log(
-          `Job ${jobId} [${marketplace}]: listing record routing — ${listingRecords.length} parsed, ${batchSkus.length} unique SKUs, ${existingRows.length} found in DB, ${rowsToUpdate.length} to update, ${rowsToInsert.length} to insert, ${seenSku.size} seen SKUs, ${listingRecords.length - rowsToUpdate.length - rowsToInsert.length} dropped (dupes/no-sku)`,
+          `Job ${jobId} [${marketplace}]: listing record routing — ${listingRecords.length} parsed, ${batchSkus.length} unique SKUs, ${existingRows.length} active in DB, ${rowsToUpdate.length} to update, ${rowsToInsert.length} to insert (new or after soft-delete), ${droppedDuplicates} dropped (dupes)`,
         );
 
         // ── UPDATE matched rows in place (type-safe, bounded concurrency) ──

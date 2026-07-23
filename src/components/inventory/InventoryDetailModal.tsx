@@ -168,7 +168,13 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const [locationValue, setLocationValue] = useState('');
   const [locationSaving, setLocationSaving] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  const [editingSku, setEditingSku] = useState(false);
+  const [skuValue, setSkuValue] = useState('');
+  const [skuSaving, setSkuSaving] = useState(false);
+  const [skuError, setSkuError] = useState<string | null>(null);
   const qc = useQueryClient();
+  const canEditListing = hasPermission('listings.update');
 
   // Local image order state for drag-and-drop reordering
   const [localImages, setLocalImages] = useState<string[]>([]);
@@ -259,6 +265,13 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
   useEffect(() => setActiveImg(0), [listingId]);
 
   useEffect(() => {
+    setEditingSku(false);
+    setSkuError(null);
+    setEditingLocation(false);
+    setLocationError(null);
+  }, [listingId]);
+
+  useEffect(() => {
     setStagedImages([]);
     setUploadZoneKey((k) => k + 1);
     setUploadError(null);
@@ -317,6 +330,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
         }),
       });
       await qc.invalidateQueries({ queryKey: ['inventory-detail', listingId] });
+      await qc.invalidateQueries({ queryKey: ['inventory-listings'] });
       setEditingLocation(false);
     } catch (err) {
       setLocationError(err instanceof Error ? err.message : 'Failed to save location');
@@ -324,6 +338,33 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
       setLocationSaving(false);
     }
   }, [listingId, listing, locationValue, qc]);
+
+  const handleSaveSku = useCallback(async () => {
+    if (!listingId || !listing) return;
+    const nextSku = skuValue.trim();
+    if (!nextSku) {
+      setSkuError('SKU cannot be empty');
+      return;
+    }
+    setSkuSaving(true);
+    setSkuError(null);
+    try {
+      await fetchWithAuth(`/api/listings/${listingId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          version: listing.version,
+          customLabelSku: nextSku,
+        }),
+      });
+      await qc.invalidateQueries({ queryKey: ['inventory-detail', listingId] });
+      await qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+      setEditingSku(false);
+    } catch (err) {
+      setSkuError(err instanceof Error ? err.message : 'Failed to save SKU');
+    } finally {
+      setSkuSaving(false);
+    }
+  }, [listingId, listing, skuValue, qc]);
 
   if (!listingId) return null;
 
@@ -356,7 +397,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm shrink-0">
               Part Detail
             </h3>
-            {listing?.customLabelSku && (
+            {listing?.customLabelSku && !editingSku && (
               <button
                 type="button"
                 onClick={copySku}
@@ -595,7 +636,67 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                 <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden overflow-x-auto">
                   <table className="w-full text-xs min-w-[280px]">
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                      <DetailRow label="SKU" value={listing?.customLabelSku} mono />
+                      <tr>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          SKU
+                        </td>
+                        <td className="px-3 py-2">
+                          {editingSku ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={skuValue}
+                                onChange={(e) => setSkuValue(e.target.value)}
+                                placeholder="e.g. BLA-18699"
+                                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 font-mono text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void handleSaveSku();
+                                  if (e.key === 'Escape') setEditingSku(false);
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveSku()}
+                                disabled={skuSaving}
+                                className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+                              >
+                                {skuSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingSku(false)}
+                                className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : canEditListing ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSkuValue(listing?.customLabelSku ?? '');
+                                setEditingSku(true);
+                                setSkuError(null);
+                              }}
+                              className="font-mono text-xs text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 text-left"
+                            >
+                              {listing?.customLabelSku || (
+                                <span className="text-slate-400 dark:text-slate-500 italic font-sans">
+                                  Click to set SKU
+                                </span>
+                              )}
+                            </button>
+                          ) : (
+                            <span className="font-mono text-xs text-slate-800 dark:text-slate-200">
+                              {listing?.customLabelSku || '—'}
+                            </span>
+                          )}
+                          {skuError && (
+                            <p className="text-[11px] text-red-400 mt-1">{skuError}</p>
+                          )}
+                        </td>
+                      </tr>
                       <DetailRow label="Brand" value={listing?.cBrand} />
                       <DetailRow label="Type" value={listing?.cType} />
                       <DetailRow label="MPN" value={listing?.cManufacturerPartNumber} mono />

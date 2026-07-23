@@ -249,7 +249,8 @@ export class EbayPolicySyncService {
 
     account.lastVerifiedAt = new Date();
     account.lastPoliciesFetchedCount = synced;
-    account.lastSuccessfulSyncAt = new Date();
+    // Do NOT stamp lastSuccessfulSyncAt here — that field is the published-listings
+    // live hard-gate watermark. Policy sync must not hide the SellerList mirror.
     await this.accountRepo.save(account);
 
     await this.logWriter.write({

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Brackets } from 'typeorm';
 import type { Queue } from 'bullmq';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
@@ -188,8 +188,8 @@ export class PublishedListingsSyncService {
     let created = 0;
     let updated = 0;
     let failed = 0;
-    /** Only advance lastSuccessfulSyncAt when we have a trustworthy live set. */
-    let advanceSyncWatermark = Boolean(payload.listingIds?.length);
+    /** Only advance lastSuccessfulSyncAt after a trustworthy *full* live Trading fetch. */
+    let advanceSyncWatermark = false;
 
     const channelLinks = await this.channelRepo.find({
       where: {
@@ -242,7 +242,10 @@ export class PublishedListingsSyncService {
             });
           }
         }
-        advanceSyncWatermark = true;
+        // Targeted listingIds syncs must NOT advance lastSuccessfulSyncAt —
+        // the API hard-gate treats that watermark as "full live set freshness".
+        // Advancing it here hides every active row that was not in listingIds.
+        advanceSyncWatermark = false;
       } else {
         const tradingResult = await this.syncFromTradingApi(
           account,
@@ -608,7 +611,7 @@ export class PublishedListingsSyncService {
     let liveFetchOk = false;
     const enrichBudget = Math.max(
       0,
-      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '150') || 150,
+      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500') || 500,
     );
     let enrichUsed = 0;
 
@@ -718,16 +721,36 @@ export class PublishedListingsSyncService {
     let imageUrls = preferRicherImageUrls(row?.imageUrls, tradingImages);
     let compatibility: Record<string, unknown> | null =
       row?.compatibility ?? null;
+    let description = row?.description ?? null;
+    let itemSpecifics: Record<string, string[]> = {
+      ...(row?.itemSpecifics ?? {}),
+    };
     let enriched = false;
+    let rawGetItem: Record<string, unknown> | undefined;
 
     const enrichmentInput = {
       storeId: account.primaryStoreId,
       ebayItemId: item.itemId,
       sku: item.sku,
       marketplaceId,
+      listingUrl: item.listingUrl ?? row?.listingUrl ?? null,
+      title: item.title ?? row?.title ?? null,
       imageUrls,
       compatibility,
+      description,
+      itemSpecifics,
+      skipTrading:
+        (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
+          .toLowerCase() === '1' ||
+        (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
+          .toLowerCase() === 'true',
     };
+
+    let enrichedTitle = item.title;
+    let enrichedListingUrl =
+      item.listingUrl ??
+      row?.listingUrl ??
+      null;
 
     if (
       allowEnrichment &&
@@ -737,10 +760,23 @@ export class PublishedListingsSyncService {
       const result = await this.enrichment.enrichListing(enrichmentInput);
       imageUrls = preferRicherImageUrls(result.imageUrls, imageUrls);
       compatibility = result.compatibility ?? compatibility;
+      if (result.description?.trim()) description = result.description;
+      if (result.title?.trim()) enrichedTitle = result.title.trim();
+      if (result.listingUrl?.trim()) enrichedListingUrl = result.listingUrl.trim();
+      if (Object.keys(result.itemSpecifics ?? {}).length > 0) {
+        itemSpecifics = result.itemSpecifics;
+      }
+      if (result.rawGetItem) {
+        rawGetItem = result.rawGetItem as unknown as Record<string, unknown>;
+      }
       enriched =
         result.sources.length > 0 &&
         (result.imageUrls.length > tradingImages.length ||
-          result.compatibility != null);
+          result.compatibility != null ||
+          Boolean(result.description?.trim()) ||
+          Boolean(result.title?.trim()) ||
+          Boolean(result.listingUrl?.trim()) ||
+          Object.keys(result.itemSpecifics ?? {}).length > 0);
     }
 
     const performanceMetrics: Record<string, unknown> = {};
@@ -749,15 +785,17 @@ export class PublishedListingsSyncService {
       performanceMetrics.watchCount = item.watchCount;
 
     const healthFlags = this.health.computeHealthFlags({
-      title: item.title,
+      title: enrichedTitle,
       imageUrls,
-      itemSpecifics: row?.itemSpecifics ?? {},
+      itemSpecifics,
       compatibility,
       quantityAvailable: item.quantityAvailable,
       quantitySold: item.quantitySold,
       performanceMetrics,
       categoryId: item.categoryId,
       price: item.price != null ? String(item.price) : null,
+      description,
+      lastSyncedAt: new Date(),
     });
 
     const data: Partial<EbayPublishedListing> = {
@@ -766,9 +804,12 @@ export class PublishedListingsSyncService {
       storeId: account.primaryStoreId,
       marketplaceId,
       ebayItemId: item.itemId,
-      offerId: null,
+      // Preserve an existing Inventory offerId (or one from the channel map).
+      // Trading SellerList does not return offer ids — never wipe a known one.
+      offerId: row?.offerId ?? channel?.offerId ?? null,
       sku: item.sku,
-      title: item.title,
+      title: enrichedTitle,
+      description,
       categoryId: item.categoryId,
       price: item.price != null ? String(item.price) : null,
       currency: item.currency,
@@ -779,13 +820,14 @@ export class PublishedListingsSyncService {
         item.listingFormat === 'auction' ? 'auction' : 'fixed_price',
       condition: item.condition,
       listingUrl:
-        item.listingUrl ??
+        enrichedListingUrl ??
         this.health.buildListingUrl(
           item.itemId,
           marketplaceId,
           account.environment,
         ),
       imageUrls,
+      itemSpecifics,
       compatibility,
       performanceMetrics,
       healthFlags,
@@ -794,8 +836,12 @@ export class PublishedListingsSyncService {
       ebayEndTime: item.endTime ? new Date(item.endTime) : null,
       lastSyncedAt: new Date(),
       catalogProductId: channel?.catalogProductId ?? null,
-      ebayListingChannelId: channel?.id ?? null,
-      rawEbayResponse: { syncSource: 'trading_api', item },
+      ebayListingChannelId: channel?.id ?? row?.ebayListingChannelId ?? null,
+      rawEbayResponse: {
+        syncSource: 'trading_api',
+        item,
+        ...(rawGetItem ? { getItem: rawGetItem } : {}),
+      },
     };
 
     if (row) {
@@ -810,8 +856,8 @@ export class PublishedListingsSyncService {
   }
 
   /**
-   * Backfill full galleries for active rows that still only have a Trading
-   * GalleryURL thumbnail (≤1 image). Uses GetItem / Browse via enrichment.
+   * Backfill gallery / description / item specifics / compatibility for active
+   * rows that still look thin after Trading SellerList sync.
    */
   private async enrichSparseImageListings(
     account: ConnectedEbayAccount,
@@ -829,7 +875,20 @@ export class PublishedListingsSyncService {
       .andWhere("l.listingStatus = 'active'")
       .andWhere('l.ebayItemId IS NOT NULL')
       .andWhere(
-        `jsonb_array_length(COALESCE(l.image_urls, '[]'::jsonb)) <= 1`,
+        new Brackets((sub) => {
+          sub
+            .where(
+              `jsonb_array_length(COALESCE(l.image_urls, '[]'::jsonb)) <= 1`,
+            )
+            .orWhere(`COALESCE(l.description, '') = ''`)
+            .orWhere(
+              `COALESCE(l.item_specifics, '{}'::jsonb) = '{}'::jsonb`,
+            )
+            .orWhere('l.compatibility IS NULL')
+            .orWhere(
+              `l.listing_url ~* 'ebay\\.(de|fr|it|es|nl|be|at|ch|pl|ie|com\\.br)'`,
+            );
+        }),
       )
       .orderBy('l.lastSyncedAt', 'ASC')
       .take(budget)
@@ -844,8 +903,17 @@ export class PublishedListingsSyncService {
           ebayItemId: row.ebayItemId,
           sku: row.sku,
           marketplaceId,
+          listingUrl: row.listingUrl,
+          title: row.title,
           imageUrls: row.imageUrls ?? [],
           compatibility: row.compatibility,
+          description: row.description,
+          itemSpecifics: row.itemSpecifics ?? {},
+          skipTrading:
+            (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
+              .toLowerCase() === '1' ||
+            (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
+              .toLowerCase() === 'true',
         });
         const nextImages = preferRicherImageUrls(
           result.imageUrls,
@@ -865,14 +933,52 @@ export class PublishedListingsSyncService {
                 .compatibleProducts,
             )
           );
+        const descriptionImproved =
+          Boolean(result.description?.trim()) &&
+          result.description?.trim() !== row.description?.trim();
+        const titleImproved =
+          Boolean(result.title?.trim()) &&
+          result.title?.trim() !== row.title?.trim();
+        const listingUrlImproved =
+          Boolean(result.listingUrl?.trim()) &&
+          result.listingUrl?.trim() !== row.listingUrl?.trim();
+        const specificsImproved =
+          Object.keys(result.itemSpecifics ?? {}).length >
+          Object.keys(row.itemSpecifics ?? {}).length;
 
-        if (!imagesImproved && !compatImproved && result.sources.length === 0) {
+        if (
+          !imagesImproved &&
+          !compatImproved &&
+          !descriptionImproved &&
+          !titleImproved &&
+          !listingUrlImproved &&
+          !specificsImproved &&
+          result.sources.length === 0
+        ) {
           continue;
         }
 
         row.imageUrls = nextImages;
+        if (result.title?.trim()) {
+          row.title = result.title.trim();
+        }
+        if (result.listingUrl?.trim()) {
+          row.listingUrl = result.listingUrl.trim();
+        }
         if (result.compatibility != null) {
           row.compatibility = result.compatibility;
+        }
+        if (result.description?.trim()) {
+          row.description = result.description;
+        }
+        if (Object.keys(result.itemSpecifics ?? {}).length > 0) {
+          row.itemSpecifics = result.itemSpecifics;
+        }
+        if (result.rawGetItem) {
+          row.rawEbayResponse = {
+            ...(row.rawEbayResponse ?? {}),
+            getItem: result.rawGetItem,
+          };
         }
         row.healthFlags = this.health.computeHealthFlags({
           title: row.title,
@@ -884,12 +990,14 @@ export class PublishedListingsSyncService {
           performanceMetrics: row.performanceMetrics ?? {},
           categoryId: row.categoryId,
           price: row.price,
+          description: row.description,
+          lastSyncedAt: row.lastSyncedAt,
         });
         await this.listingRepo.save(row);
         enriched += 1;
       } catch (e) {
         this.logger.debug(
-          `Sparse image enrich skipped for ${row.ebayItemId}: ${
+          `Sparse enrich skipped for ${row.ebayItemId}: ${
             e instanceof Error ? e.message : String(e)
           }`,
         );

@@ -585,6 +585,7 @@ export default function CatalogManager() {
         id={detailSelection?.id ?? null}
         searchItem={detailSelection?.item ?? null}
         onClose={() => setDetailSelection(null)}
+        onSaved={() => refetch()}
       />
 
       {/* Delete confirmation modal */}

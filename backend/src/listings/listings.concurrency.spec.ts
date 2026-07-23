@@ -8,6 +8,8 @@ import { ListingRevision } from './listing-revision.entity.js';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { StoreAccessService } from '../channels/store-access.service.js';
+import { TeamsService } from '../teams/teams.service.js';
 
 const mockUser = {
   id: 'user-1',
@@ -62,6 +64,7 @@ describe('ListingsService concurrency', () => {
               fn({
                 findOne,
                 save,
+                update: jest.fn().mockResolvedValue({ affected: 1 }),
                 create: jest.fn((_entity, data) => data),
               }),
             ),
@@ -82,6 +85,14 @@ describe('ListingsService concurrency', () => {
               ),
             userHasPermission: jest.fn().mockResolvedValue(true),
           },
+        },
+        {
+          provide: StoreAccessService,
+          useValue: { getAccessibleStoreIds: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: TeamsService,
+          useValue: { getUserTeamIds: jest.fn().mockResolvedValue([]) },
         },
       ],
     }).compile();
@@ -150,5 +161,61 @@ describe('ListingsService concurrency', () => {
         mockUser as any,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('update syncs startPriceNum and propagates price to catalog + siblings', async () => {
+    const update = jest.fn().mockResolvedValue({ affected: 1 });
+    const dataSource = {
+      transaction: jest.fn(async (fn: (em: unknown) => Promise<unknown>) =>
+        fn({
+          findOne,
+          save,
+          update,
+          create: jest.fn((_entity: unknown, data: unknown) => data),
+        }),
+      ),
+    };
+    (service as unknown as { dataSource: typeof dataSource }).dataSource =
+      dataSource as never;
+
+    findOne
+      .mockResolvedValueOnce({
+        id: 'listing-base',
+        status: 'draft',
+        version: 3,
+        customLabelSku: 'BLA-18699',
+        startPrice: '100.00',
+        startPriceNum: 100,
+        quantity: '1',
+        quantityNum: 1,
+        organizationId: null,
+      })
+      .mockResolvedValueOnce(null); // no existing revision
+
+    save.mockImplementation((_entity, data) =>
+      Promise.resolve({
+        ...data,
+        version: 4,
+      }),
+    );
+
+    const result = await service.update(
+      'listing-base',
+      { version: 3, startPrice: '59' },
+      mockUser as any,
+    );
+
+    expect(result.listing.startPrice).toBe('59');
+    expect(result.listing.startPriceNum).toBe(59);
+    expect(update).toHaveBeenCalledWith(
+      CatalogProduct,
+      { sku: 'BLA-18699' },
+      { price: 59 },
+    );
+    expect(update).toHaveBeenCalledWith(
+      ListingRecord,
+      { customLabelSku: 'BLA-18699' },
+      { startPrice: '59', startPriceNum: 59 },
+    );
   });
 });
