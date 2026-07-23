@@ -452,7 +452,8 @@ export class ListingsService {
 
       if (listing.version !== dto.version) {
         throw new ConflictException({
-          message: 'This listing was modified since you loaded it.',
+          message:
+            'This listing changed while you were editing. Please save again.',
           currentVersion: listing.version,
           yourVersion: dto.version,
         });
@@ -571,7 +572,8 @@ export class ListingsService {
 
       if (listing.version !== dto.version) {
         throw new ConflictException({
-          message: 'This listing was modified since you loaded it.',
+          message:
+            'This listing changed while you were editing. Please save again.',
           currentVersion: listing.version,
           yourVersion: dto.version,
         });
@@ -670,7 +672,8 @@ export class ListingsService {
             listing.version !== expectedVersion
           ) {
             throw new ConflictException({
-              message: 'This listing was modified since you loaded it.',
+              message:
+                'This listing changed while you were editing. Please save again.',
               currentVersion: listing.version,
               yourVersion: expectedVersion,
             });

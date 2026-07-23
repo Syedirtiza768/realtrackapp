@@ -3,7 +3,7 @@
  *  eBay policies load after store selection (ProfileSelectors).
  * ────────────────────────────────────────────────────────── */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -323,6 +323,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [copiedSku, setCopiedSku] = useState(false);
   const [uploadZoneKey, setUploadZoneKey] = useState(0);
   const [savingImages, setSavingImages] = useState(false);
@@ -380,6 +381,10 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
     catalogProduct?.categoryName ?? listing?.categoryName,
   );
 
+  // Track which store we already seeded defaults for so a profiles refetch
+  // cannot clobber a user's shipping/return/payment picks mid-edit.
+  const seededStoreDefaultsForRef = useRef<string | null>(null);
+
   useEffect(() => {
     setEditMode(false);
     setDraft(null);
@@ -387,28 +392,23 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
     setProfiles(EMPTY_PROFILE_SELECTION);
     setInitialProfiles(EMPTY_PROFILE_SELECTION);
     setSaveError(null);
+    setSaveNotice(null);
+    seededStoreDefaultsForRef.current = null;
   }, [id]);
 
+  // Seed store policy defaults once per selected store. Keep initialProfiles as
+  // the listing's originals so applying a store default counts as a real change.
+  // Do NOT reset the field draft here — selecting a store used to wipe price/qty
+  // edits (users saved shipping, refreshed, price still $100).
   useEffect(() => {
-    if (!listing || !editMode) return;
-    setDraft(buildDraft(listing, catalogProduct, searchItem));
-    const fromListing: ProfileSelection = {
-      shippingProfileName: listing.shippingProfileName ?? '',
-      returnProfileName: listing.returnProfileName ?? '',
-      paymentProfileName: listing.paymentProfileName ?? '',
-    };
-    if (!selectedStoreId) {
-      setProfiles(fromListing);
-      setInitialProfiles(fromListing);
+    if (!editMode || !selectedStoreId || !storeProfiles || !selectedStore || !listing) {
+      if (!selectedStoreId) seededStoreDefaultsForRef.current = null;
+      return;
     }
-  }, [listing, catalogProduct, searchItem, editMode, selectedStoreId]);
-
-  useEffect(() => {
-    if (!editMode || !storeProfiles || !selectedStore || !listing) return;
-    const next = defaultProfileSelection(storeProfiles, selectedStore, listing);
-    setProfiles(next);
-    setInitialProfiles(next);
-  }, [storeProfiles, selectedStore, listing, editMode]);
+    if (seededStoreDefaultsForRef.current === selectedStoreId) return;
+    seededStoreDefaultsForRef.current = selectedStoreId;
+    setProfiles(defaultProfileSelection(storeProfiles, selectedStore, listing));
+  }, [editMode, selectedStoreId, storeProfiles, selectedStore, listing]);
 
   const isDirty = useMemo(() => {
     if (!editMode || !draft || !listing) return false;
@@ -434,8 +434,24 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
       setProfiles(EMPTY_PROFILE_SELECTION);
       setInitialProfiles(EMPTY_PROFILE_SELECTION);
       setSaveError(null);
+      setSaveNotice(null);
+      seededStoreDefaultsForRef.current = null;
       setEditMode(false);
-    } else {
+    } else if (listing) {
+      // Initialize draft once on enter — never re-seed from listing while editing
+      // (store select / react-query refetch must not discard in-progress price edits).
+      const nextDraft = buildDraft(listing, catalogProduct, searchItem);
+      const fromListing: ProfileSelection = {
+        shippingProfileName: listing.shippingProfileName ?? '',
+        returnProfileName: listing.returnProfileName ?? '',
+        paymentProfileName: listing.paymentProfileName ?? '',
+      };
+      setDraft(nextDraft);
+      setProfiles(fromListing);
+      setInitialProfiles(fromListing);
+      seededStoreDefaultsForRef.current = null;
+      setSaveError(null);
+      setSaveNotice(null);
       setEditMode(true);
     }
   };
@@ -448,11 +464,12 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
     if (!id || !listing || !draft) return;
     setSaving(true);
     setSaveError(null);
+    setSaveNotice(null);
     try {
       const base = buildDraft(listing, catalogProduct, searchItem);
 
+      const catalogPatches: Record<string, string | number> = {};
       if (canEditCatalog && catalogProduct?.id) {
-        const catalogPatches: Record<string, string | number> = {};
         // Keep catalog_products.title in lockstep with listing title so a later
         // brand/image PATCH cannot resurrect a stale catalog title via sync.
         if (draft.title !== base.title) catalogPatches.title = draft.title;
@@ -471,16 +488,21 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
           const parsedQty = parseInt(draft.quantity.replace(/[^\d]/g, ''), 10);
           if (Number.isFinite(parsedQty)) catalogPatches.quantity = parsedQty;
         }
-        if (Object.keys(catalogPatches).length > 0) {
-          await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(catalogPatches),
-          });
+        // Keep catalog policy names in lockstep with listing edits (bulk policy
+        // apply already does this; single-item edit previously left catalog empty).
+        if (profiles.shippingProfileName !== initialProfiles.shippingProfileName) {
+          catalogPatches.shippingProfile = profiles.shippingProfileName || '';
+        }
+        if (profiles.returnProfileName !== initialProfiles.returnProfileName) {
+          catalogPatches.returnProfile = profiles.returnProfileName || '';
+        }
+        if (profiles.paymentProfileName !== initialProfiles.paymentProfileName) {
+          catalogPatches.paymentProfile = profiles.paymentProfileName || '';
         }
       }
 
+      const listingUpdates: Record<string, string | number | null> = {};
       if (canEditListing) {
-        const listingUpdates: Record<string, string | number | null> = { version: listing.version };
         if (draft.customLabelSku !== base.customLabelSku) {
           const nextSku = draft.customLabelSku.trim();
           if (!nextSku) {
@@ -505,13 +527,42 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
         if (profiles.paymentProfileName !== initialProfiles.paymentProfileName) {
           listingUpdates.paymentProfileName = profiles.paymentProfileName;
         }
+      }
 
-        if (Object.keys(listingUpdates).length > 1) {
-          await fetchWithAuth(`/api/listings/${id}`, {
+      // Listing PUT first (optimistic lock). Catalog PATCH used to run first and
+      // sync fields onto listing_records — a following PUT with a stale version
+      // then showed a scary red "modified since you loaded it" conflict.
+      if (canEditListing && Object.keys(listingUpdates).length > 0) {
+        const putListing = async (version: number) =>
+          fetchWithAuth(`/api/listings/${id}`, {
             method: 'PUT',
-            body: JSON.stringify(listingUpdates),
+            body: JSON.stringify({ ...listingUpdates, version }),
           });
+
+        try {
+          await putListing(listing.version);
+        } catch (err) {
+          const status = (err as { status?: number } | null)?.status;
+          const msg = err instanceof Error ? err.message : '';
+          const isVersionConflict =
+            status === 409 ||
+            /modified since you loaded it|changed while you were editing/i.test(msg);
+          if (!isVersionConflict) throw err;
+
+          // Quiet refresh + one retry — this is expected if policies/price
+          // synced elsewhere while the modal was open.
+          const fresh = await fetchWithAuth<ListingDetailResponse>(`/api/listings/${id}`);
+          const freshVersion = fresh.listing?.version;
+          if (typeof freshVersion !== 'number') throw err;
+          await putListing(freshVersion);
         }
+      }
+
+      if (canEditCatalog && catalogProduct?.id && Object.keys(catalogPatches).length > 0) {
+        await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(catalogPatches),
+        });
       }
 
       await qc.invalidateQueries({ queryKey: ['catalog-listing-detail', id] });
@@ -520,8 +571,25 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
       setEditMode(false);
       setDraft(null);
       setSelectedStoreId('');
+      setProfiles(EMPTY_PROFILE_SELECTION);
+      setInitialProfiles(EMPTY_PROFILE_SELECTION);
+      seededStoreDefaultsForRef.current = null;
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save changes');
+      const status = (err as { status?: number } | null)?.status;
+      const msg = err instanceof Error ? err.message : 'Failed to save changes';
+      const isVersionConflict =
+        status === 409 ||
+        /modified since you loaded it|changed while you were editing/i.test(msg);
+      if (isVersionConflict) {
+        setSaveError(null);
+        setSaveNotice(
+          'This listing changed while you were editing. Your edits are still here — tap Save again to apply them.',
+        );
+        await qc.invalidateQueries({ queryKey: ['catalog-listing-detail', id] });
+      } else {
+        setSaveNotice(null);
+        setSaveError(msg);
+      }
     } finally {
       setSaving(false);
     }
@@ -1202,8 +1270,15 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
             {/* Save bar */}
             {editMode && (
               <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-3 dark:border-slate-800 dark:bg-slate-900/95">
+                {saveNotice && (
+                  <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-200">
+                    {saveNotice}
+                  </p>
+                )}
                 {saveError && (
-                  <p className="mb-2 text-xs text-red-500">{saveError}</p>
+                  <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                    {saveError}
+                  </p>
                 )}
                 <div className="flex items-center justify-end gap-2">
                   <button

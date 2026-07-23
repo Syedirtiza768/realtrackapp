@@ -12,3 +12,6 @@
 # database
 - Use camelCase column names (e.g., `createdAt`, `updatedAt`, `customLabelSku`) for PostgreSQL tables in this project. Confidence: 0.78
 
+# pipeline
+- Prefer deterministic offline approaches (input XLSX data + local MVL database) over API calls (Browse API, AI API, Taxonomy API) for pipeline processing to keep it fast and avoid redundant lookups. Confidence: 0.60
+

@@ -375,11 +375,24 @@ export default function CatalogProductDetail() {
         });
       }
 
-      // Marketplace fields → listing record
-      const mktFields: Record<string, any> = {};
-      const mktKeys = ['title', 'description', 'price', 'quantity', 'shippingProfileName', 'returnProfileName', 'paymentProfileName'];
+      // Marketplace fields → listing record (API expects startPrice, not price)
+      const mktFields: Record<string, unknown> = {};
+      const mktKeys = [
+        'title',
+        'description',
+        'quantity',
+        'shippingProfileName',
+        'returnProfileName',
+        'paymentProfileName',
+      ] as const;
       for (const k of mktKeys) {
         if (editedFields[k] !== undefined) mktFields[k] = editedFields[k];
+      }
+      if (editedFields.price !== undefined) {
+        mktFields.startPrice = editedFields.price;
+      }
+      if (editedFields.startPrice !== undefined) {
+        mktFields.startPrice = editedFields.startPrice;
       }
       if (Object.keys(mktFields).length > 0) {
         const targetId = mktData?.listingIds?.[selectedMktTab] ?? id;

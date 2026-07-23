@@ -168,8 +168,8 @@ export function useListingDetail(id: string | null) {
     if (!id) { setData(null); return; }
     let cancelled = false;
     setLoading(true);
-    fetchJson<ListingDetail>(`/listings/${id}`)
-      .then((json) => { if (!cancelled) setData(json); })
+    fetchJson<{ listing: ListingDetail; catalogProduct: unknown }>(`/listings/${id}`)
+      .then((json) => { if (!cancelled) setData(json.listing); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
