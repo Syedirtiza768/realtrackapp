@@ -497,7 +497,7 @@ export class ListingsService {
       const { version: _v, ...rawChanges } = dto;
       // Strip undefined values so optional DTO fields don't overwrite
       // existing entity values (e.g. status becoming undefined).
-      const changes = Object.fromEntries(
+      const changes: Record<string, unknown> = Object.fromEntries(
         Object.entries(rawChanges).filter(([, v]) => v !== undefined),
       );
       if (
