@@ -525,6 +525,15 @@ export class ListingOptimizationService {
     const seoScore = listing.confidenceScores.overall;
     const readinessScore = listing.uploadReadinessScore;
 
+    // optimizedTitle previously sat unused in its own column — /catalog,
+    // /inventory, and eBay publish all read title/listing_records.title
+    // directly and never looked at optimizedTitle. Write it through to the
+    // fields those surfaces actually use so the title-guideline work is
+    // visible instead of silently computed and discarded. This will
+    // overwrite a title a user hand-edited after a prior optimization run
+    // if the product's source data changes enough to trigger re-optimization.
+    const appliedTitle = listing.optimizedTitle?.trim() || undefined;
+
     await this.productRepo.update(productId, {
       optimizationStatus,
       optimizationVersion: OPTIMIZATION_VERSION,
@@ -539,11 +548,14 @@ export class ListingOptimizationService {
       seoScore,
       readinessScore,
       manualReview,
+      ...(appliedTitle ? { title: appliedTitle } : {}),
     } as any);
 
-    // Persist the resolved eBay category back to the marketplace-specific
-    // listing record so publish paths use a validated Motors category instead
-    // of the raw source categoryId.
+    // Persist the resolved eBay category + optimized title back to the
+    // marketplace-specific listing record so publish paths (which read
+    // listing_records.title, not catalog_products.optimizedTitle) and
+    // /catalog and /inventory (which also read listing_records.title) pick
+    // up the guideline-compliant title.
     if (product.sku) {
       const mktListing = await this.listingRepo.findOne({
         where: {
@@ -552,10 +564,15 @@ export class ListingOptimizationService {
           deletedAt: IsNull(),
         },
       });
-      if (mktListing && listing.categoryId) {
-        mktListing.categoryId = listing.categoryId;
-        if (listing.categoryName) {
-          mktListing.categoryName = listing.categoryName;
+      if (mktListing) {
+        if (listing.categoryId) {
+          mktListing.categoryId = listing.categoryId;
+          if (listing.categoryName) {
+            mktListing.categoryName = listing.categoryName;
+          }
+        }
+        if (appliedTitle) {
+          mktListing.title = appliedTitle;
         }
         await this.listingRepo.save(mktListing);
       }

@@ -515,6 +515,31 @@ export class SingleListingFormService {
         listing.categoryName = finalized.category.trim();
       }
 
+      // cType: intake creates this as the part-source dropdown value
+      // (OEM/Aftermarket/Salvage), but publish-time title composition
+      // (listing-builder.service.ts) reads cType as the descriptive part
+      // name. Replace the filler value once we have a real part name —
+      // mirrors the same fillerTypes check in lookupAndApplyToListing.
+      const existingCType = (listing.cType ?? '').trim().toLowerCase();
+      const fillerCTypes = new Set([
+        'oem',
+        'aftermarket',
+        'salvage',
+        'used',
+        'new',
+        'general',
+        'unknown',
+        'other',
+      ]);
+      if (
+        finalized.partName?.trim() &&
+        (!listing.cType?.trim() || fillerCTypes.has(existingCType))
+      ) {
+        listing.cType = this.stripTitleSpecialChars(
+          finalized.partName,
+        ).slice(0, 80);
+      }
+
       // Description: merge user notes + AI note
       if (finalized.note?.trim()) {
         const userNotes = dto.description?.trim();
