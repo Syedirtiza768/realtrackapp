@@ -465,9 +465,16 @@ export class EnterpriseListingIntelligenceService {
         const donorModel = product.donorVinDecoded?.['model']
           ? String(product.donorVinDecoded['model'])
           : undefined;
+        // Warehouse-intake descriptions can be AI-hallucinated from thin
+        // signal (no photos, just brand + part number) — don't feed that
+        // to the title-slot model as if it were reliable; the title itself
+        // is deterministic/user-anchored and far more trustworthy here.
+        const rawDesc = this.hasUntrustedPartType(product)
+          ? product.title
+          : (product.description ?? product.title);
         return {
           id: product.id,
-          rawDesc: product.description ?? product.title,
+          rawDesc,
           partNumber: product.oemPartNumber ?? product.mpn,
           make: product.brand,
           model: donorModel,
@@ -517,6 +524,32 @@ export class EnterpriseListingIntelligenceService {
     };
   }
 
+  private static readonly NON_DESCRIPTIVE_PART_TYPES = new Set([
+    'oem',
+    'aftermarket',
+    'salvage',
+    'used',
+    'new',
+    'refurbished',
+    'general',
+    'unknown',
+    'other',
+  ]);
+
+  /**
+   * True when part_type holds the intake form's source/condition dropdown
+   * value ("OEM"/"Aftermarket"/"Salvage") rather than a real part descriptor
+   * — signals that product.description is also untrustworthy for this row:
+   * warehouse-intake parts with no photos get their description from a
+   * text-only AI OEM lookup that hallucinates confident-sounding but wrong
+   * part identities (e.g. "This Engine Control Module (ECM) is...") when
+   * given only a brand + part number to go on.
+   */
+  private hasUntrustedPartType(product: CatalogProduct): boolean {
+    const raw = product.partType?.trim().toLowerCase();
+    return !raw || EnterpriseListingIntelligenceService.NON_DESCRIPTIVE_PART_TYPES.has(raw);
+  }
+
   /**
    * catalog_products.part_type holds a real part descriptor ("Window Motor")
    * for pipeline-imported rows, but for warehouse-intake rows it holds the
@@ -529,18 +562,7 @@ export class EnterpriseListingIntelligenceService {
    */
   private resolveDescriptivePartType(product: CatalogProduct): string | null {
     const raw = product.partType?.trim();
-    const nonDescriptive = new Set([
-      'oem',
-      'aftermarket',
-      'salvage',
-      'used',
-      'new',
-      'refurbished',
-      'general',
-      'unknown',
-      'other',
-    ]);
-    if (raw && !nonDescriptive.has(raw.toLowerCase())) {
+    if (raw && !this.hasUntrustedPartType(product)) {
       return raw;
     }
     const derived = derivePartNameFromTitle(
