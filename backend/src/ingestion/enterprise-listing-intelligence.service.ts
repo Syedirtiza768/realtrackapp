@@ -1655,15 +1655,63 @@ export class EnterpriseListingIntelligenceService {
     };
   }
 
+  /**
+   * catalog_products.brand is the intake form's free-choice "what's stamped
+   * on this part" field — it legitimately holds parts-manufacturer brands
+   * (Delphi, Bosch, ACDelco, Continental...) as often as real vehicle
+   * makes, since that dropdown intentionally mixes both. Using it unchecked
+   * as the title's [Make] slot produced titles like "Delphi Alarm Siren
+   * Horn..." or "Genuine Tire Pressure Monitoring System..." with no
+   * vehicle identity at all. Prefer a validated fitment-derived make when
+   * the stored brand is a known non-vehicle value.
+   */
+  private static readonly NON_VEHICLE_BRANDS = new Set([
+    'acdelco',
+    'bosch',
+    'continental',
+    'delphi',
+    'denso',
+    'genuine oem',
+    'genuine',
+    'mopar',
+    'motorcraft',
+    'valeo',
+    'unbranded',
+    'oem',
+    'aftermarket',
+    'n/a',
+    'na',
+    'unknown',
+    'none',
+    'generic',
+  ]);
+
+  private resolveVehicleMake(
+    product: CatalogProduct,
+    fitmentRows: CompatibilityRow[],
+  ): string | null {
+    const raw = product.brand?.trim();
+    if (
+      raw &&
+      !EnterpriseListingIntelligenceService.NON_VEHICLE_BRANDS.has(
+        raw.toLowerCase(),
+      )
+    ) {
+      return raw;
+    }
+    return fitmentRows[0]?.make || null;
+  }
+
   private toGermanListingInput(
     product: CatalogProduct,
     fitmentRows: CompatibilityRow[],
   ): GermanListingInput {
     const decoded = product.donorVinDecoded;
     const donorYear = decoded?.['year'] ? String(decoded['year']) : '';
+    const resolvedMake = this.resolveVehicleMake(product, fitmentRows);
     const donorMake = decoded?.['make']
       ? String(decoded['make'])
-      : (product.brand ?? '');
+      : (resolvedMake ?? '');
     const donorModel = decoded?.['model'] ? String(decoded['model']) : '';
     const donorVehicle =
       [donorYear, donorMake, donorModel].filter(Boolean).join(' ').trim() ||
@@ -1689,14 +1737,14 @@ export class EnterpriseListingIntelligenceService {
     const aligned = alignGenerationAndYearRange({
       generation: platform?.code,
       yearRange: yearRangeFromFitment,
-      make: donorMake || product.brand,
+      make: donorMake || resolvedMake,
       model: donorModel || fitmentRows[0]?.model,
       anchorYear: donorYear,
       fitmentYears: fitmentRows.map((r) => r.year),
     });
 
     return {
-      brand: product.brand,
+      brand: resolvedMake,
       model: donorModel || fitmentRows[0]?.model || undefined,
       partType: this.resolveDescriptivePartType(product) ?? undefined,
       placement: product.placement,

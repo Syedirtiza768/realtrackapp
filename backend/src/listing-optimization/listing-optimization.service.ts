@@ -433,8 +433,28 @@ export class ListingOptimizationService {
     });
     const fitmentJson = this.fitmentDiscovery.toFitmentDataJson(fitment.rows);
 
+    // Only fall back to the pre-existing fitment_data when fresh discovery
+    // found nothing AND the existing data is itself usable (has a real
+    // year). Some rows come from a bulk "extracted vehicle" seed
+    // (inventory-workbench.service.ts) with Year: "" and typo'd makes —
+    // FitmentDiscoveryService already rejects those during discovery
+    // (rowFromRaw requires year/make/model), but blindly preserving
+    // product.fitmentData here undid that rejection by keeping the junk
+    // around whenever the fresh result was empty.
+    const existingFitmentUsable =
+      Array.isArray(product.fitmentData) &&
+      product.fitmentData.some((row) => {
+        const r = row as Record<string, unknown>;
+        return String(r['Year'] ?? r['year'] ?? '').trim().length > 0;
+      });
+
     await this.productRepo.update(productId, {
-      fitmentData: fitmentJson.length > 0 ? fitmentJson : product.fitmentData,
+      fitmentData:
+        fitmentJson.length > 0
+          ? fitmentJson
+          : existingFitmentUsable
+            ? product.fitmentData
+            : fitmentJson,
       fitmentRows: fitment.rows as unknown as Record<string, unknown>[],
       fitmentStatus: fitment.status,
       fitmentConfidence: fitment.confidence,
