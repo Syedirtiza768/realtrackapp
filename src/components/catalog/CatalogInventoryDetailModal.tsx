@@ -47,6 +47,7 @@ import {
 import { fetchWithAuth } from '../../lib/authApi';
 import { getAllImageUrls } from '../../lib/searchApi';
 import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
+import { useUpdateDonorVehicle } from '../../lib/inventoryApi';
 import {
   CONDITION_MAP,
   conditionLabel,
@@ -75,6 +76,10 @@ interface CatalogProductSummary {
   countryOfOrigin?: string | null;
   fitmentData?: Record<string, unknown>[] | null;
   categoryName?: string | null;
+  donorVin?: string | null;
+  donorYear?: string | null;
+  donorMake?: string | null;
+  donorModel?: string | null;
 }
 
 interface ListingDetailResponse {
@@ -331,6 +336,14 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
   const [imageError, setImageError] = useState<string | null>(null);
   const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const [copiedImageUrls, setCopiedImageUrls] = useState(false);
+
+  const [editingDonorVehicle, setEditingDonorVehicle] = useState(false);
+  const [donorVinValue, setDonorVinValue] = useState('');
+  const [donorYearValue, setDonorYearValue] = useState('');
+  const [donorMakeValue, setDonorMakeValue] = useState('');
+  const [donorModelValue, setDonorModelValue] = useState('');
+  const [donorVehicleError, setDonorVehicleError] = useState<string | null>(null);
+  const updateDonorVehicle = useUpdateDonorVehicle();
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -592,6 +605,26 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveDonorVehicle = async () => {
+    if (!id) return;
+    setDonorVehicleError(null);
+    try {
+      await updateDonorVehicle.mutateAsync({
+        listingId: id,
+        donorVin: donorVinValue.trim(),
+        donorYear: donorYearValue.trim(),
+        donorMake: donorMakeValue.trim(),
+        donorModel: donorModelValue.trim(),
+      });
+      await qc.invalidateQueries({ queryKey: ['catalog-listing-detail', id] });
+      setEditingDonorVehicle(false);
+    } catch (err) {
+      setDonorVehicleError(
+        err instanceof Error ? err.message : 'Failed to save donor vehicle',
+      );
     }
   };
 
@@ -1253,6 +1286,111 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
                   </div>
                 </div>
               )}
+
+              {/* Donor Vehicle */}
+              <div className="py-4">
+                <p className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <Car size={14} />
+                  Donor Vehicle
+                </p>
+                {editingDonorVehicle ? (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="text"
+                      value={donorVinValue}
+                      onChange={(e) => setDonorVinValue(e.target.value)}
+                      placeholder="VIN (17 characters)"
+                      maxLength={17}
+                      className={inputClass}
+                      autoFocus
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        value={donorYearValue}
+                        onChange={(e) => setDonorYearValue(e.target.value)}
+                        placeholder="Year"
+                        className={inputClass}
+                      />
+                      <input
+                        type="text"
+                        value={donorMakeValue}
+                        onChange={(e) => setDonorMakeValue(e.target.value)}
+                        placeholder="Make"
+                        className={inputClass}
+                      />
+                      <input
+                        type="text"
+                        value={donorModelValue}
+                        onChange={(e) => setDonorModelValue(e.target.value)}
+                        placeholder="Model"
+                        className={inputClass}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      A VIN fills in blank Year/Make/Model on save — it won't overwrite values typed here.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveDonorVehicle()}
+                        disabled={updateDonorVehicle.isPending}
+                        className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        {updateDonorVehicle.isPending ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Check size={14} />
+                        )}
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingDonorVehicle(false)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDonorVinValue(catalogProduct?.donorVin ?? '');
+                      setDonorYearValue(catalogProduct?.donorYear ?? '');
+                      setDonorMakeValue(catalogProduct?.donorMake ?? '');
+                      setDonorModelValue(catalogProduct?.donorModel ?? '');
+                      setEditingDonorVehicle(true);
+                      setDonorVehicleError(null);
+                    }}
+                    className="text-left text-sm text-slate-800 hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-400"
+                  >
+                    {catalogProduct?.donorVin ||
+                    catalogProduct?.donorYear ||
+                    catalogProduct?.donorMake ||
+                    catalogProduct?.donorModel ? (
+                      <span>
+                        {[
+                          catalogProduct?.donorVin,
+                          [catalogProduct?.donorYear, catalogProduct?.donorMake, catalogProduct?.donorModel]
+                            .filter(Boolean)
+                            .join(' '),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    ) : (
+                      <span className="italic text-slate-400 dark:text-slate-500">
+                        Click to set VIN / Year / Make / Model
+                      </span>
+                    )}
+                  </button>
+                )}
+                {donorVehicleError && (
+                  <p className="mt-1 text-[11px] text-red-400">{donorVehicleError}</p>
+                )}
+              </div>
 
               {!editMode && (
                 <div className="pt-2">
