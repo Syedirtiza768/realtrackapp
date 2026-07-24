@@ -45,10 +45,23 @@ async function main() {
     // createIntakePart() now sets on new rows, so the optimization job's
     // category-writeback (which matches on customLabelSku + marketplace)
     // can find them.
+    // Skip SKUs that already have another active 'US' row (e.g. a later
+    // pipeline re-enrichment of the same part) — setting marketplace='US'
+    // on the intake row too would collide with
+    // idx_listing_sku_marketplace_unique_active ("customLabelSku", marketplace).
     const marketplaceBackfill = await pg.query(
-      `UPDATE listing_records
+      `UPDATE listing_records lr
        SET marketplace = 'US'
-       WHERE origin = 'add_part' AND marketplace IS NULL AND "deletedAt" IS NULL`,
+       WHERE lr.origin = 'add_part'
+         AND lr.marketplace IS NULL
+         AND lr."deletedAt" IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM listing_records lr2
+           WHERE lr2."customLabelSku" = lr."customLabelSku"
+             AND lr2.marketplace = 'US'
+             AND lr2."deletedAt" IS NULL
+             AND lr2.id <> lr.id
+         )`,
     );
     console.log(
       `${DRY_RUN ? '[DRY RUN would update] ' : ''}Backfilled marketplace='US' on ${marketplaceBackfill.rowCount} intake listing_record row(s).`,
