@@ -113,6 +113,12 @@ export interface PartLookupResult {
 
 export interface InventoryListingDetail {
   listing: Record<string, unknown>;
+  donorVehicle: {
+    vin: string | null;
+    year: string | null;
+    make: string | null;
+    model: string | null;
+  };
   fitments: Array<{
     id: string;
     make: string | null;
@@ -514,6 +520,55 @@ export function useReorderInventoryImages() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageUrls: input.imageUrls }),
+        },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['inventory-listings'] });
+      qc.invalidateQueries({ queryKey: ['inventory-detail', vars.listingId] });
+    },
+  });
+}
+
+export interface DonorVehicleInput {
+  listingId: string;
+  donorVin?: string;
+  donorYear?: string;
+  donorMake?: string;
+  donorModel?: string;
+}
+
+export interface DonorVehicleResult {
+  donorVin: string | null;
+  donorYear: string | null;
+  donorMake: string | null;
+  donorModel: string | null;
+}
+
+/**
+ * Saves the donor vehicle (VIN/Year/Make/Model) for a listing's catalog
+ * product. The backend decodes the VIN (filling blank fields only, never
+ * overwriting a value already present) and re-runs fitment discovery +
+ * title optimization in the background — the response reflects the saved
+ * values immediately, but the refreshed title/compatibility rows land a
+ * few seconds later, so callers should re-fetch inventory-detail shortly
+ * after (already handled by the query invalidation below plus normal
+ * polling if the detail view has any).
+ */
+export function useUpdateDonorVehicle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DonorVehicleInput) =>
+      fetchWithAuth<DonorVehicleResult>(
+        `${API}/inventory/listings/${input.listingId}/donor-vehicle`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            donorVin: input.donorVin,
+            donorYear: input.donorYear,
+            donorMake: input.donorMake,
+            donorModel: input.donorModel,
+          }),
         },
       ),
     onSuccess: (_data, vars) => {

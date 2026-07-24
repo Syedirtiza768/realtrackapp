@@ -1,10 +1,14 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Job } from 'bullmq';
+import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InventoryService } from '../inventory.service.js';
 import { InventoryWorkbenchService } from '../inventory-workbench.service.js';
 import { EnrichmentRetryService } from '../enrichment-retry.service.js';
+import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
+import { ListingOptimizationService } from '../../listing-optimization/listing-optimization.service.js';
 
 // Concurrency 2: warehouse-intake catch-up re-enrich of hundreds of listings
 // is otherwise multi-hour at 1. Browse/OpenAI rate limits are still the
@@ -18,6 +22,9 @@ export class InventorySyncProcessor extends WorkerHost {
     private readonly eventEmitter: EventEmitter2,
     private readonly workbench: InventoryWorkbenchService,
     private readonly retryService: EnrichmentRetryService,
+    private readonly listingOptimization: ListingOptimizationService,
+    @InjectRepository(CatalogProduct)
+    private readonly catalogProductRepo: Repository<CatalogProduct>,
   ) {
     super();
   }
@@ -116,11 +123,32 @@ export class InventorySyncProcessor extends WorkerHost {
     );
 
     try {
-      await this.workbench.inlineEnrichListing(listingId);
+      const { baseListing } = await this.workbench.inlineEnrichListing(listingId);
       await this.retryService.recordSuccess(listingId);
       this.logger.log(
         `${retryLabel}: inline enrichment completed for listing ${listingId}`,
       );
+
+      // Chain the SEO title-guideline + MVL compatibility-rows pass after
+      // vision enrichment, so it runs on the improved title/brand/model
+      // instead of the pre-enrichment data. Best-effort: a failure here
+      // must not flip this (successful) vision-enrichment job to failed —
+      // that would misclassify it as a vision/OEM-lookup retry candidate.
+      const sku = baseListing.customLabelSku?.trim();
+      if (sku) {
+        try {
+          const product = await this.catalogProductRepo.findOneBy({ sku });
+          if (product) {
+            await this.listingOptimization.optimizeProduct(product.id, 'US', {
+              force: false,
+            });
+          }
+        } catch (optErr) {
+          this.logger.warn(
+            `${retryLabel}: post-enrichment listing optimization failed for ${listingId} (sku=${sku}): ${optErr instanceof Error ? optErr.message : optErr}`,
+          );
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(

@@ -32,6 +32,7 @@ import {
   InventoryEnrichDto,
   UpdateListingImagesDto,
   ReorderImagesDto,
+  UpdateDonorVehicleDto,
   InventoryInlineEnrichDto,
   InventorySendToCatalogDto,
 } from './dto/inventory-workbench.dto.js';
@@ -130,6 +131,19 @@ export class InventoryController {
     @Body() dto: ReorderImagesDto,
   ) {
     return this.workbench.reorderListingImages(listingId, dto.imageUrls);
+  }
+
+  @Patch('listings/:listingId/donor-vehicle')
+  @RequirePermissions('listings.update')
+  @ApiOperation({
+    summary:
+      'Set the donor vehicle (VIN/Year/Make/Model) for a listing and re-run fitment + title optimization',
+  })
+  updateDonorVehicle(
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+    @Body() dto: UpdateDonorVehicleDto,
+  ) {
+    return this.workbench.updateDonorVehicle(listingId, dto);
   }
 
   @Post('part-lookup')

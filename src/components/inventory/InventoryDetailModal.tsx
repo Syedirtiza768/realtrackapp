@@ -35,7 +35,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Badge } from '../ui/badge';
-import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment, useReorderInventoryImages } from '../../lib/inventoryApi';
+import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment, useReorderInventoryImages, useUpdateDonorVehicle } from '../../lib/inventoryApi';
 import { fetchWithAuth } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import ImageUploadZone from '../listings/ImageUploadZone';
@@ -153,6 +153,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const retryEnrich = useRetryInventoryEnrichment();
   const updateImages = useUpdateInventoryImages();
   const reorderImages = useReorderInventoryImages();
+  const updateDonorVehicle = useUpdateDonorVehicle();
   const { has: hasPermission } = usePermissions();
   const canUploadImages = hasPermission('listings.update');
 
@@ -173,6 +174,14 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const [skuValue, setSkuValue] = useState('');
   const [skuSaving, setSkuSaving] = useState(false);
   const [skuError, setSkuError] = useState<string | null>(null);
+
+  const [editingDonorVehicle, setEditingDonorVehicle] = useState(false);
+  const [donorVinValue, setDonorVinValue] = useState('');
+  const [donorYearValue, setDonorYearValue] = useState('');
+  const [donorMakeValue, setDonorMakeValue] = useState('');
+  const [donorModelValue, setDonorModelValue] = useState('');
+  const [donorVehicleError, setDonorVehicleError] = useState<string | null>(null);
+
   const qc = useQueryClient();
   const canEditListing = hasPermission('listings.update');
 
@@ -365,6 +374,25 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
       setSkuSaving(false);
     }
   }, [listingId, listing, skuValue, qc]);
+
+  const handleSaveDonorVehicle = useCallback(async () => {
+    if (!listingId) return;
+    setDonorVehicleError(null);
+    try {
+      await updateDonorVehicle.mutateAsync({
+        listingId,
+        donorVin: donorVinValue.trim(),
+        donorYear: donorYearValue.trim(),
+        donorMake: donorMakeValue.trim(),
+        donorModel: donorModelValue.trim(),
+      });
+      setEditingDonorVehicle(false);
+    } catch (err) {
+      setDonorVehicleError(
+        err instanceof Error ? err.message : 'Failed to save donor vehicle',
+      );
+    }
+  }, [listingId, donorVinValue, donorYearValue, donorMakeValue, donorModelValue, updateDonorVehicle]);
 
   if (!listingId) return null;
 
@@ -778,6 +806,117 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                       <DetailRow label="Format" value={listing?.format} />
                       <DetailRow label="Extracted Make" value={listing?.extractedMake} />
                       <DetailRow label="Extracted Model" value={listing?.extractedModel} />
+                      <tr>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap align-top">
+                          <span className="flex items-center gap-1.5">
+                            <Car size={12} />
+                            Donor Vehicle
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {editingDonorVehicle ? (
+                            <div className="flex flex-col gap-2">
+                              <input
+                                type="text"
+                                value={donorVinValue}
+                                onChange={(e) => setDonorVinValue(e.target.value)}
+                                placeholder="VIN (17 characters)"
+                                maxLength={17}
+                                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                autoFocus
+                              />
+                              <div className="grid grid-cols-3 gap-2">
+                                <input
+                                  type="text"
+                                  value={donorYearValue}
+                                  onChange={(e) => setDonorYearValue(e.target.value)}
+                                  placeholder="Year"
+                                  className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                <input
+                                  type="text"
+                                  value={donorMakeValue}
+                                  onChange={(e) => setDonorMakeValue(e.target.value)}
+                                  placeholder="Make"
+                                  className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                <input
+                                  type="text"
+                                  value={donorModelValue}
+                                  onChange={(e) => setDonorModelValue(e.target.value)}
+                                  placeholder="Model"
+                                  className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                              <p className="text-[11px] text-slate-400">
+                                A VIN fills in blank Year/Make/Model on save — it won't overwrite values typed here.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSaveDonorVehicle()}
+                                  disabled={updateDonorVehicle.isPending}
+                                  className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 text-xs"
+                                >
+                                  {updateDonorVehicle.isPending ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                  ) : (
+                                    <Check size={14} />
+                                  )}
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingDonorVehicle(false)}
+                                  className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDonorVinValue(data?.donorVehicle?.vin ?? '');
+                                setDonorYearValue(data?.donorVehicle?.year ?? '');
+                                setDonorMakeValue(data?.donorVehicle?.make ?? '');
+                                setDonorModelValue(data?.donorVehicle?.model ?? '');
+                                setEditingDonorVehicle(true);
+                                setDonorVehicleError(null);
+                              }}
+                              className="text-sm text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 text-left"
+                            >
+                              {data?.donorVehicle?.vin ||
+                              data?.donorVehicle?.year ||
+                              data?.donorVehicle?.make ||
+                              data?.donorVehicle?.model ? (
+                                <span>
+                                  {[
+                                    data?.donorVehicle?.vin,
+                                    [
+                                      data?.donorVehicle?.year,
+                                      data?.donorVehicle?.make,
+                                      data?.donorVehicle?.model,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' '),
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 dark:text-slate-500 italic">
+                                  Click to set VIN / Year / Make / Model
+                                </span>
+                              )}
+                            </button>
+                          )}
+                          {donorVehicleError && (
+                            <p className="text-[11px] text-red-400 mt-1">{donorVehicleError}</p>
+                          )}
+                        </td>
+                      </tr>
                       <DetailRow label="Source File" value={listing?.sourceFileName} />
                       <DetailRow
                         label="Imported"

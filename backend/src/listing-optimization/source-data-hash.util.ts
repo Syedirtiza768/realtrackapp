@@ -21,6 +21,9 @@ export function computeSourceDataHash(product: CatalogProduct): string {
     quantity: product.quantity,
     conditionId: product.conditionId,
     donorVin: product.donorVin,
+    donorYear: product.donorYear,
+    donorMake: product.donorMake,
+    donorModel: product.donorModel,
   };
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }

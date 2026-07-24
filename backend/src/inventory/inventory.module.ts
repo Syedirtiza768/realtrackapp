@@ -33,6 +33,7 @@ import { EbayIntegrationsModule } from '../integrations/ebay/ebay-integrations.m
 
 import { ListingOptimizationModule } from '../listing-optimization/listing-optimization.module.js';
 import { StorageModule } from '../storage/storage.module.js';
+import { FitmentModule } from '../fitment/fitment.module.js';
 
 @Module({
   imports: [
@@ -54,12 +55,20 @@ import { StorageModule } from '../storage/storage.module.js';
       EbayCategory,
     ]),
     BullModule.registerQueue({ name: 'inventory' }),
+    BullModule.registerQueue({
+      name: 'listing-optimization',
+      defaultJobOptions: {
+        removeOnComplete: { count: 50 },
+        removeOnFail: { count: 100 },
+      },
+    }),
     FeatureFlagModule,
     IngestionModule,
     ChannelsModule,
     EbayIntegrationsModule,
     ListingOptimizationModule,
     StorageModule,
+    FitmentModule,
   ],
   controllers: [InventoryController, InventoryEditorController],
   providers: [

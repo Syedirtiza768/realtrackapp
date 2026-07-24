@@ -211,6 +211,16 @@ export class CatalogProduct {
   @Column({ name: 'donor_vin', type: 'text', nullable: true })
   donorVin!: string | null;
 
+  /** User-entered donor vehicle — independent of donorVinDecoded (VIN-derived). */
+  @Column({ name: 'donor_year', type: 'text', nullable: true })
+  donorYear!: string | null;
+
+  @Column({ name: 'donor_make', type: 'text', nullable: true })
+  donorMake!: string | null;
+
+  @Column({ name: 'donor_model', type: 'text', nullable: true })
+  donorModel!: string | null;
+
   @Column({
     name: 'seo_score',
     type: 'numeric',

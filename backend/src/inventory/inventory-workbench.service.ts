@@ -4,8 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { Queue } from 'bullmq';
 import { In, IsNull, Repository } from 'typeorm';
+import { VinDecodeService } from '../fitment/vin-decode.service.js';
 import { ImageAsset } from '../storage/entities/image-asset.entity.js';
 import { StorageService } from '../storage/storage.service.js';
 import {
@@ -185,6 +188,9 @@ export class InventoryWorkbenchService {
     private readonly partIdentification: PartIdentificationService,
     private readonly fitmentDiscovery: FitmentDiscoveryService,
     private readonly storageService: StorageService,
+    private readonly vinDecode: VinDecodeService,
+    @InjectQueue('listing-optimization')
+    private readonly listingOptimizationQueue: Queue,
   ) {}
 
   async listListings(
@@ -571,7 +577,7 @@ export class InventoryWorkbenchService {
     const listing = await this.getListingOrThrow(listingId);
     const sku = listing.customLabelSku;
 
-    const [fitments, siblings, pipelineJob] = await Promise.all([
+    const [fitments, siblings, pipelineJob, catalogProduct] = await Promise.all([
       this.fitmentRepo.find({
         where: { listingId },
         relations: ['make', 'model', 'submodel', 'engine'],
@@ -585,6 +591,9 @@ export class InventoryWorkbenchService {
       listing.pipelineJobId
         ? this.pipelineJobRepo.findOne({ where: { id: listing.pipelineJobId } })
         : Promise.resolve(null),
+      sku
+        ? this.productRepo.findOne({ where: { sku } })
+        : Promise.resolve(null),
     ]);
 
     const priorJobs = await this.getCompletedJobsForSku(sku, listing.id);
@@ -594,6 +603,12 @@ export class InventoryWorkbenchService {
 
     return {
       listing: this.serializeListing(listing),
+      donorVehicle: {
+        vin: catalogProduct?.donorVin ?? null,
+        year: catalogProduct?.donorYear ?? null,
+        make: catalogProduct?.donorMake ?? null,
+        model: catalogProduct?.donorModel ?? null,
+      },
       fitments: fitments.map((f) => ({
         id: f.id,
         make: f.make?.name ?? null,
@@ -1837,6 +1852,96 @@ export class InventoryWorkbenchService {
     }
 
     return detail;
+  }
+
+  /**
+   * Update the donor vehicle (VIN / Year / Make / Model) for a listing's
+   * catalog product, then re-run fitment discovery + SEO title
+   * optimization in the background. A VIN decode only fills fields the
+   * user left blank — it never overwrites a value already present
+   * (typed by the user or from an earlier save).
+   */
+  async updateDonorVehicle(
+    listingId: string,
+    dto: {
+      donorVin?: string;
+      donorYear?: string;
+      donorMake?: string;
+      donorModel?: string;
+    },
+  ): Promise<{ donorVin: string | null; donorYear: string | null; donorMake: string | null; donorModel: string | null }> {
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
+    if (!listing || listing.deletedAt) {
+      throw new NotFoundException(`Listing ${listingId} not found`);
+    }
+
+    const sku = listing.customLabelSku?.trim();
+    if (!sku) {
+      throw new BadRequestException('Listing has no SKU to link a catalog product');
+    }
+
+    const product = await this.productRepo.findOne({ where: { sku } });
+    if (!product) {
+      throw new NotFoundException(`No catalog product found for SKU ${sku}`);
+    }
+
+    const nextVin = dto.donorVin?.trim().toUpperCase() || null;
+    let decoded: { year?: string; make?: string; model?: string } | null = null;
+    if (nextVin && nextVin !== (product.donorVin ?? '').toUpperCase()) {
+      try {
+        decoded = await this.vinDecode.decode(nextVin);
+      } catch (err) {
+        this.logger.warn(
+          `VIN decode failed for ${nextVin} (listing ${listingId}): ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    const resolveField = (
+      requestValue: string | undefined,
+      existingValue: string | null,
+      decodedValue: string | undefined,
+    ): string | null => {
+      const explicit = requestValue?.trim();
+      if (explicit) return explicit;
+      const existing = existingValue?.trim();
+      if (existing) return existing;
+      return decodedValue?.trim() || null;
+    };
+
+    if (dto.donorVin !== undefined) {
+      product.donorVin = nextVin;
+    }
+    product.donorYear = resolveField(dto.donorYear, product.donorYear, decoded?.year);
+    product.donorMake = resolveField(dto.donorMake, product.donorMake, decoded?.make);
+    product.donorModel = resolveField(dto.donorModel, product.donorModel, decoded?.model);
+
+    await this.productRepo.save(product);
+
+    try {
+      await this.listingOptimizationQueue.add(
+        'optimize-product',
+        { productId: product.id, marketplace: 'US' },
+        {
+          jobId: `donor-vehicle-${product.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+        },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to enqueue listing optimization after donor vehicle update for ${listingId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    return {
+      donorVin: product.donorVin,
+      donorYear: product.donorYear,
+      donorMake: product.donorMake,
+      donorModel: product.donorModel,
+    };
   }
 
   /**

@@ -159,6 +159,24 @@ export class ReorderImagesDto {
   imageUrls!: string[];
 }
 
+export class UpdateDonorVehicleDto {
+  @IsOptional()
+  @IsString()
+  donorVin?: string;
+
+  @IsOptional()
+  @IsString()
+  donorYear?: string;
+
+  @IsOptional()
+  @IsString()
+  donorMake?: string;
+
+  @IsOptional()
+  @IsString()
+  donorModel?: string;
+}
+
 export class InventoryInlineEnrichDto {
   @IsUUID()
   listingId!: string;

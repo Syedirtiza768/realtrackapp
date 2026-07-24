@@ -67,6 +67,26 @@ export class FitmentDiscoveryService {
 
     const candidates: FitmentRow[] = [];
 
+    // ── Source 0: User-entered donor vehicle (highest priority) ──
+    // Explicit Year/Make/Model typed by a user is more reliable than
+    // anything inferred, so it's pushed first — candidates[0] drives which
+    // donor year/make/model Source 3's MVL expansion uses below.
+    if (
+      product.donorYear?.trim() &&
+      product.donorMake?.trim() &&
+      product.donorModel?.trim()
+    ) {
+      candidates.push({
+        year: product.donorYear.trim(),
+        make: product.donorMake.trim(),
+        model: product.donorModel.trim(),
+        confidence: 0.95,
+        source: 'user_donor_vehicle',
+        validationStatus: 'needs_review',
+        notes: 'User-entered donor vehicle',
+      });
+    }
+
     // ── Source 1: Existing catalog fitment_data (JSONB) ──
     // Reject unscoped full-model MVL dumps (e.g. every Jetta 1980–2027).
     if (Array.isArray(product.fitmentData)) {
