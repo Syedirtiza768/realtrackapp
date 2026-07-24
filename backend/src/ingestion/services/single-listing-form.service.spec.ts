@@ -24,6 +24,7 @@ describe('SingleListingFormService.createIntakePart — photos optional', () => 
       stub,
       stub,
       stub,
+      stub,
     );
   }
 
@@ -78,6 +79,7 @@ describe('SingleListingFormService.lookupPart — eBay Browse primary', () => {
       stub,
       stub,
       (overrides.browseApi ?? stub) as never,
+      stub,
     );
   }
 

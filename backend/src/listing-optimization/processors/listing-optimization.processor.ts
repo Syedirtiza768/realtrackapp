@@ -4,7 +4,10 @@ import type { Job } from 'bullmq';
 import { ListingOptimizationService } from '../listing-optimization.service.js';
 
 export interface ListingOptimizationJobData {
-  jobId: string;
+  /** Pipeline-job-scoped optimization: optimizes every product in the job. */
+  jobId?: string;
+  /** Single-product optimization (e.g. warehouse-intake parts, which have no pipelineJobId). */
+  productId?: string;
   marketplace?: 'US' | 'DE' | 'AU';
 }
 
@@ -32,7 +35,40 @@ export class ListingOptimizationProcessor extends WorkerHost {
   }
 
   async process(job: Job<ListingOptimizationJobData>): Promise<void> {
-    const { jobId, marketplace = 'US' } = job.data;
+    const { jobId, productId, marketplace = 'US' } = job.data;
+
+    if (productId) {
+      this.logger.log(
+        `Starting single-product listing optimization for product ${productId} [${marketplace}]`,
+      );
+      try {
+        await this.optimization.optimizeProduct(productId, marketplace, {
+          force: false,
+        });
+        this.logger.log(
+          `Completed listing optimization for product ${productId} [${marketplace}]`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Listing optimization crashed for product ${productId} [${marketplace}]: ${String(err)}`,
+        );
+        // Same rationale as the job-scoped path below: without this, a crash
+        // leaves optimization_status stuck at 'running' forever.
+        await this.optimization
+          .markProductOptimizationFailed(productId, String(err))
+          .catch(() => {});
+        throw err;
+      }
+      return;
+    }
+
+    if (!jobId) {
+      this.logger.error(
+        `Listing optimization job has neither jobId nor productId: ${JSON.stringify(job.data)}`,
+      );
+      return;
+    }
+
     this.logger.log(
       `Starting mandatory listing optimization for pipeline job ${jobId} [${marketplace}]`,
     );
@@ -74,7 +110,23 @@ export class ListingOptimizationProcessor extends WorkerHost {
     const maxAttempts = job.opts?.attempts ?? 1;
     if (job.attemptsMade < maxAttempts) return;
 
-    const { jobId, marketplace = 'US' } = job.data;
+    const { jobId, productId, marketplace = 'US' } = job.data;
+
+    if (productId) {
+      this.logger.error(
+        `Listing optimization for product ${productId} [${marketplace}] permanently failed after ${job.attemptsMade} attempts: ${job.failedReason}`,
+      );
+      await this.optimization
+        .markProductOptimizationFailed(
+          productId,
+          job.failedReason ?? 'Optimization failed',
+        )
+        .catch(() => {});
+      return;
+    }
+
+    if (!jobId) return;
+
     this.logger.error(
       `Listing optimization for pipeline job ${jobId} [${marketplace}] permanently failed after ${job.attemptsMade} attempts: ${job.failedReason}`,
     );

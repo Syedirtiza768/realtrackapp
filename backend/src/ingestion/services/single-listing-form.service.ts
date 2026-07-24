@@ -7,7 +7,9 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { Queue } from 'bullmq';
 import { In, Repository } from 'typeorm';
 import { QueryFailedError } from 'typeorm';
 import * as fs from 'node:fs';
@@ -196,6 +198,8 @@ export class SingleListingFormService {
     private readonly storageService: StorageService,
     private readonly imageOptimizer: ImageOptimizerService,
     private readonly browseApi: EbayBrowseApiService,
+    @InjectQueue('listing-optimization')
+    private readonly listingOptimizationQueue: Queue,
   ) {}
 
   getLookupPricing(): PartLookupPricingEstimate {
@@ -321,6 +325,7 @@ export class SingleListingFormService {
             origin: ListingOrigin.ADD_PART,
             sheetName: 'intake',
             sourceRowNumber,
+            marketplace: 'US',
             teamId: dto.teamId || null,
             location: dto.location?.trim() || null,
             weight: dto.weight ?? null,
@@ -348,8 +353,9 @@ export class SingleListingFormService {
     }
 
     // Create corresponding catalog product so exports and templates work
+    let catalogProduct: CatalogProduct | null = null;
     try {
-      await this.catalogProductRepo.save(
+      catalogProduct = await this.catalogProductRepo.save(
         this.catalogProductRepo.create({
           sku,
           title,
@@ -387,6 +393,27 @@ export class SingleListingFormService {
 
     // Auto-enrich: run text-only AI enrichment (no photos required)
     await this.autoEnrichListing(listing, dto);
+
+    // Mandatory listing optimization — same title-guideline SEO title and
+    // MVL-expanded compatibility rows that pipeline-imported listings get.
+    // Best-effort: the part is already usable in draft form without it.
+    if (catalogProduct) {
+      try {
+        await this.listingOptimizationQueue.add(
+          'optimize-product',
+          { productId: catalogProduct.id, marketplace: 'US' },
+          {
+            jobId: `intake-optimization-${sku}`,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 30_000 },
+          },
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Failed to enqueue listing optimization for SKU ${sku}: ${err}`,
+        );
+      }
+    }
 
     return { listing };
   }

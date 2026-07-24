@@ -366,7 +366,8 @@ export class ListingOptimizationService {
     }
   }
 
-  private async markProductOptimizationFailed(
+  /** Public: also called by the processor for single-product (non-job) optimization jobs. */
+  async markProductOptimizationFailed(
     productId: string,
     message: string,
   ): Promise<void> {
