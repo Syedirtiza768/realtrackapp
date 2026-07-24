@@ -36,6 +36,7 @@ import {
   alignGenerationAndYearRange,
   resolvePlatformGeneration,
 } from '../fitment/platform-generation.util.js';
+import { derivePartNameFromTitle } from '../listings/utils/derive-part-name-from-title.js';
 
 /** Item/store country for listing HTML — Dubai-based sellers default to AE. */
 function resolveSellerCountryFromLocation(
@@ -473,7 +474,7 @@ export class EnterpriseListingIntelligenceService {
           year: donorYear,
           categoryName: product.categoryName,
           fallbackPosition: product.placement,
-          fallbackPartName: product.partType,
+          fallbackPartName: this.resolveDescriptivePartType(product),
         };
       }),
     );
@@ -496,7 +497,7 @@ export class EnterpriseListingIntelligenceService {
       productData: {
         brand: product.brand,
         mpn: product.mpn,
-        part_type: product.partType,
+        part_type: this.resolveDescriptivePartType(product),
         placement: product.placement,
         material: product.material,
         features: product.features,
@@ -514,6 +515,40 @@ export class EnterpriseListingIntelligenceService {
         sellerCountry: resolveSellerCountryFromLocation(product.location),
       },
     };
+  }
+
+  /**
+   * catalog_products.part_type holds a real part descriptor ("Window Motor")
+   * for pipeline-imported rows, but for warehouse-intake rows it holds the
+   * intake form's source/condition dropdown value ("OEM"/"Aftermarket"/
+   * "Salvage") — a completely different meaning stored in the same column.
+   * Sending that straight to the AI as "part_type" starved it of any real
+   * signal about what the part is, which produced hallucinated generic
+   * titles (e.g. unrelated parts all coming back "Engine Control Module").
+   * Fall back to a descriptor derived from the source title in that case.
+   */
+  private resolveDescriptivePartType(product: CatalogProduct): string | null {
+    const raw = product.partType?.trim();
+    const nonDescriptive = new Set([
+      'oem',
+      'aftermarket',
+      'salvage',
+      'used',
+      'new',
+      'refurbished',
+      'general',
+      'unknown',
+      'other',
+    ]);
+    if (raw && !nonDescriptive.has(raw.toLowerCase())) {
+      return raw;
+    }
+    const derived = derivePartNameFromTitle(
+      product.title,
+      product.oemPartNumber ?? product.mpn,
+      product.brand,
+    );
+    return derived ?? raw ?? null;
   }
 
   private async buildEnterpriseListing(
@@ -1641,7 +1676,7 @@ export class EnterpriseListingIntelligenceService {
     return {
       brand: product.brand,
       model: donorModel || fitmentRows[0]?.model || undefined,
-      partType: product.partType,
+      partType: this.resolveDescriptivePartType(product) ?? undefined,
       placement: product.placement,
       mpn: product.mpn,
       oemPartNumber: product.oemPartNumber ?? product.mpn,

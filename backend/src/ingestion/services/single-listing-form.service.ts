@@ -36,6 +36,7 @@ import {
   SKU_PREFIX,
 } from '../constants/automotive-oem-brands.js';
 import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
+import { derivePartNameFromTitle } from '../../listings/utils/derive-part-name-from-title.js';
 
 /** Minimum uploaded images required before vision fallback (label + overall). */
 export const PART_LOOKUP_MIN_VISION_IMAGES = 2;
@@ -999,38 +1000,7 @@ export class SingleListingFormService {
     partNumber: string,
     brand?: string | null,
   ): string | undefined {
-    if (!title?.trim()) return undefined;
-    const stopWords = new Set(
-      ['oem', 'genuine', 'used', 'new', 'original', 'factory', 'oe', 'fits'].map(
-        (w) => w,
-      ),
-    );
-    const brandTokens = new Set(
-      (brand ?? '')
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(Boolean),
-    );
-    const normalize = (v: string) => v.toLowerCase().replace(/[\s\-]/g, '');
-    const targetPn = normalize(partNumber);
-
-    const words = this.stripTitleSpecialChars(title)
-      .split(/\s+/)
-      .filter((w) => {
-        const lower = w.toLowerCase();
-        if (stopWords.has(lower)) return false;
-        if (brandTokens.has(lower)) return false;
-        // Drop the part number itself (with or without dashes/spaces)
-        if (targetPn && normalize(w) === targetPn) return false;
-        // Drop long alphanumeric codes that look like part numbers
-        if (/^[a-z0-9\-]{8,}$/i.test(w) && /\d/.test(w)) return false;
-        // Drop years / year ranges
-        if (/^(19|20)\d{2}([-/](19|20)?\d{2})?$/.test(w)) return false;
-        return true;
-      });
-
-    const name = words.join(' ').replace(/\s+/g, ' ').trim();
-    return name.length >= 3 ? name.slice(0, 65) : undefined;
+    return derivePartNameFromTitle(title, partNumber, brand);
   }
 
   private async runOemTextLookup(
