@@ -16,7 +16,9 @@
  *   docker compose exec backend node scripts/backfill-warehouse-intake-optimization.cjs
  *
  * Env:
- *   DRY_RUN=1   list matching products only, do not enqueue or touch the DB
+ *   DRY_RUN=1   list matching products only — no marketplace UPDATE, no enqueue
+ *   FORCE=1     regenerate every product even if already optimizationStatus='completed'
+ *               (uses a unique job id suffix so BullMQ dedup can't skip a re-run)
  *   BATCH_MS    delay between enqueues in ms (default 50)
  */
 const { Client } = require('pg');
@@ -24,6 +26,7 @@ const { Queue } = require('bullmq');
 const IORedis = require('ioredis');
 
 const DRY_RUN = process.env.DRY_RUN === '1';
+const FORCE = process.env.FORCE === '1';
 const BATCH_MS = Number(process.env.BATCH_MS || 50);
 
 function sleep(ms) {
@@ -49,23 +52,42 @@ async function main() {
     // pipeline re-enrichment of the same part) — setting marketplace='US'
     // on the intake row too would collide with
     // idx_listing_sku_marketplace_unique_active ("customLabelSku", marketplace).
-    const marketplaceBackfill = await pg.query(
-      `UPDATE listing_records lr
-       SET marketplace = 'US'
-       WHERE lr.origin = 'add_part'
-         AND lr.marketplace IS NULL
-         AND lr."deletedAt" IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM listing_records lr2
-           WHERE lr2."customLabelSku" = lr."customLabelSku"
-             AND lr2.marketplace = 'US'
-             AND lr2."deletedAt" IS NULL
-             AND lr2.id <> lr.id
-         )`,
-    );
-    console.log(
-      `${DRY_RUN ? '[DRY RUN would update] ' : ''}Backfilled marketplace='US' on ${marketplaceBackfill.rowCount} intake listing_record row(s).`,
-    );
+    if (DRY_RUN) {
+      const { rows: previewRows } = await pg.query(
+        `SELECT count(*)::int AS n FROM listing_records lr
+         WHERE lr.origin = 'add_part'
+           AND lr.marketplace IS NULL
+           AND lr."deletedAt" IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM listing_records lr2
+             WHERE lr2."customLabelSku" = lr."customLabelSku"
+               AND lr2.marketplace = 'US'
+               AND lr2."deletedAt" IS NULL
+               AND lr2.id <> lr.id
+           )`,
+      );
+      console.log(
+        `[DRY RUN] Would backfill marketplace='US' on ${previewRows[0].n} intake listing_record row(s).`,
+      );
+    } else {
+      const marketplaceBackfill = await pg.query(
+        `UPDATE listing_records lr
+         SET marketplace = 'US'
+         WHERE lr.origin = 'add_part'
+           AND lr.marketplace IS NULL
+           AND lr."deletedAt" IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM listing_records lr2
+             WHERE lr2."customLabelSku" = lr."customLabelSku"
+               AND lr2.marketplace = 'US'
+               AND lr2."deletedAt" IS NULL
+               AND lr2.id <> lr.id
+           )`,
+      );
+      console.log(
+        `Backfilled marketplace='US' on ${marketplaceBackfill.rowCount} intake listing_record row(s).`,
+      );
+    }
 
     const { rows } = await pg.query(
       `SELECT id, sku FROM catalog_products WHERE source_file = 'warehouse-intake' ORDER BY id ASC`,
@@ -91,14 +113,15 @@ async function main() {
     const queue = new Queue('listing-optimization', { connection });
 
     let queued = 0;
+    const runTag = FORCE ? `-force-${Date.now()}` : '';
     for (let i = 0; i < rows.length; i++) {
       const { id, sku } = rows[i];
       try {
         await queue.add(
           'optimize-product',
-          { productId: id, marketplace: 'US' },
+          { productId: id, marketplace: 'US', force: FORCE },
           {
-            jobId: `intake-optimization-${sku}`,
+            jobId: `intake-optimization-${sku}${runTag}`,
             attempts: 3,
             backoff: { type: 'exponential', delay: 30_000 },
           },

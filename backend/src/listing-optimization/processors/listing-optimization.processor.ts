@@ -9,6 +9,8 @@ export interface ListingOptimizationJobData {
   /** Single-product optimization (e.g. warehouse-intake parts, which have no pipelineJobId). */
   productId?: string;
   marketplace?: 'US' | 'DE' | 'AU';
+  /** Regenerate even if already optimizationStatus='completed' with a matching source data hash. */
+  force?: boolean;
 }
 
 // Multiple pipeline jobs' optimizations can run side by side — each job/
@@ -35,15 +37,15 @@ export class ListingOptimizationProcessor extends WorkerHost {
   }
 
   async process(job: Job<ListingOptimizationJobData>): Promise<void> {
-    const { jobId, productId, marketplace = 'US' } = job.data;
+    const { jobId, productId, marketplace = 'US', force = false } = job.data;
 
     if (productId) {
       this.logger.log(
-        `Starting single-product listing optimization for product ${productId} [${marketplace}]`,
+        `Starting single-product listing optimization for product ${productId} [${marketplace}]${force ? ' (force)' : ''}`,
       );
       try {
         await this.optimization.optimizeProduct(productId, marketplace, {
-          force: false,
+          force,
         });
         this.logger.log(
           `Completed listing optimization for product ${productId} [${marketplace}]`,
