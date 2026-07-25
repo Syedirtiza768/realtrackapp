@@ -802,7 +802,9 @@ export class InventoryWorkbenchService {
 
   /**
    * Inline enrichment: full pipeline-grade enrichment with stage tracking.
-   * Stages: vision_lookup → enrichment → generating_us → generating_au → generating_de → completed|needs_review
+   * Stages: vision_lookup → enrichment → generating_us → completed|needs_review
+   * (AU/DE generation is disabled — MARKETPLACES below is US-only until those
+   * marketplaces are re-enabled.)
    */
   async inlineEnrichListing(listingId: string): Promise<{
     baseListing: ListingRecord;
@@ -1056,7 +1058,7 @@ export class InventoryWorkbenchService {
       listingId: string;
       title: string;
     }> = [];
-    const MARKETPLACES: Array<'US' | 'AU' | 'DE'> = ['US', 'AU', 'DE'];
+    const MARKETPLACES: Array<'US' | 'AU' | 'DE'> = ['US'];
     let anyCategoryResolved = Boolean(baseListing.categoryId);
 
     for (const mkt of MARKETPLACES) {
