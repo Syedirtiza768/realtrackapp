@@ -2336,6 +2336,22 @@ export class InventoryWorkbenchService {
       return this.listingRepo.query(fq, params);
     };
 
+    // Marketplace facet: unlike team/brand/category, marketplace is NOT invariant
+    // across a SKU's sibling rows (a SKU can have US/AU/DE variant rows). Counting
+    // via the one-representative-per-SKU dedup (like facetQuery) undercounts every
+    // bucket, since most SKUs' representative row is the marketplace=NULL add_part
+    // row. Count distinct SKUs per marketplace directly instead.
+    const marketplaceFacetQuery = async (): Promise<Array<{ value: string; count: number }>> => {
+      const { sql, params } = buildWhere('marketplaces');
+      const fq = `
+        SELECT l."marketplace" AS value, COUNT(DISTINCT COALESCE(l."customLabelSku", l.id::text))::int AS count
+        FROM listing_records l
+        WHERE ${sql} AND l."marketplace" IS NOT NULL AND TRIM(l."marketplace") != ''
+        GROUP BY l."marketplace" ORDER BY count DESC LIMIT 100
+      `;
+      return this.listingRepo.query(fq, params);
+    };
+
     // Stock level facet (derived from quantityNum)
     const stockFacetQuery = async (): Promise<Array<{ value: string; count: number }>> => {
       const { sql, params } = buildWhere('stockLevel');
@@ -2387,7 +2403,7 @@ export class InventoryWorkbenchService {
       facetQuery('brands', 'f."cBrand"', 'f."cBrand"'),
       facetQuery('conditions', 'f."conditionId"', 'f."conditionId"'),
       facetQuery('locations', 'f."location"', 'f."location"'),
-      facetQuery('marketplaces', 'f."marketplace"', 'f."marketplace"'),
+      marketplaceFacetQuery(),
       facetQuery('make', 'f."extractedMake"', 'f."extractedMake"'),
       facetQuery('model', 'f."extractedModel"', 'f."extractedModel"'),
       facetQuery('category', 'f."categoryName"', 'f."categoryName"'),
