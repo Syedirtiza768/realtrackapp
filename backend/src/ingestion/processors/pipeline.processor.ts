@@ -1891,6 +1891,25 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         this.logger.log(
           `Job ${jobId} [${marketplace}]: listing records — updated ${updatedCount}, inserted ${insertedCount} (of ${listingRecords.length})`,
         );
+
+        // Team ownership is a part-level concept, not a per-marketplace one —
+        // this job only touched `marketplace`, so propagate any team change
+        // to the SKU's active rows in other marketplaces too. Without this,
+        // a single-marketplace reimport that reassigns a team silently forks
+        // ownership across a SKU's marketplace-variant rows.
+        if (jobTeamId && batchSkus.length > 0) {
+          const synced: Array<{ id: string }> = await this.listingRepo.query(
+            `UPDATE "listing_records" SET team_id = $1
+             WHERE "customLabelSku" = ANY($2) AND "deletedAt" IS NULL AND team_id IS DISTINCT FROM $1
+             RETURNING id`,
+            [jobTeamId, batchSkus],
+          );
+          if (synced?.length) {
+            this.logger.log(
+              `Job ${jobId} [${marketplace}]: synced team_id to ${synced.length} sibling row(s) across other marketplaces`,
+            );
+          }
+        }
       } else {
         this.logger.warn(
           `Job ${jobId} [${marketplace}]: No listing records to insert (0 valid rows parsed)`,

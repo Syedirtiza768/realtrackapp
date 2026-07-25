@@ -34,6 +34,7 @@ import { EbayIntegrationsModule } from '../integrations/ebay/ebay-integrations.m
 import { ListingOptimizationModule } from '../listing-optimization/listing-optimization.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { FitmentModule } from '../fitment/fitment.module.js';
+import { TeamsModule } from '../teams/teams.module.js';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     ListingOptimizationModule,
     StorageModule,
     FitmentModule,
+    TeamsModule,
   ],
   controllers: [InventoryController, InventoryEditorController],
   providers: [

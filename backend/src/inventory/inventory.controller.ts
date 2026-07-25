@@ -67,15 +67,21 @@ export class InventoryController {
   @Get('listings')
   @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'List catalog listings for inventory workbench' })
-  listWorkbenchListings(@Query() query: InventoryListingsQueryDto) {
-    return this.workbench.listListings(query);
+  listWorkbenchListings(
+    @Query() query: InventoryListingsQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.workbench.listListings(query, user);
   }
 
   @Get('listings/facets')
   @RequirePermissions('inventory.view')
   @ApiOperation({ summary: 'Dynamic facet counts for inventory filters' })
-  listFacets(@Query() query: InventoryListingsQueryDto) {
-    return this.workbench.listFacets(query);
+  listFacets(
+    @Query() query: InventoryListingsQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.workbench.listFacets(query, user);
   }
 
   @Post('listings/bulk-delete')

@@ -46,6 +46,9 @@ import {
   translatePartNameToGerman,
   formatGermanPlacement,
 } from '../channels/ebay/ebay-german-listing.util.js';
+import { TeamsService } from '../teams/teams.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
+import type { User } from '../auth/entities/user.entity.js';
 
 export interface InventoryMarketplaceVariant {
   listingId: string;
@@ -191,10 +194,42 @@ export class InventoryWorkbenchService {
     private readonly vinDecode: VinDecodeService,
     @InjectQueue('listing-optimization')
     private readonly listingOptimizationQueue: Queue,
+    private readonly teamsService: TeamsService,
+    private readonly rbac: RbacService,
   ) {}
+
+  /**
+   * Mirrors search.service.ts's resolveTeamScopeIds: null = unrestricted
+   * (manageAll, no explicit filter), [] = deny-all, otherwise restrict to
+   * these team ids. Requested ids narrow the scope but never widen it.
+   */
+  private async resolveTeamScopeIds(
+    user: User | undefined,
+    requestedTeamIds: string | undefined,
+  ): Promise<string[] | null> {
+    if (!user) return null;
+    const manageAll = await this.rbac.userHasPermission(
+      user.id,
+      'teams.manage',
+    );
+    const requested =
+      requestedTeamIds
+        ?.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean) ?? [];
+    if (manageAll) {
+      return requested.length ? requested : null;
+    }
+    const userTeams = await this.teamsService.getUserTeamIds(user.id);
+    if (requested.length) {
+      return requested.filter((id) => userTeams.includes(id));
+    }
+    return userTeams;
+  }
 
   async listListings(
     query: InventoryListingsQueryDto,
+    user?: User,
   ): Promise<{ items: InventoryListingItem[]; total: number }> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 25;
@@ -203,6 +238,18 @@ export class InventoryWorkbenchService {
     const params: unknown[] = [];
     let paramIdx = 1;
     const whereClauses = ['l."deletedAt" IS NULL'];
+
+    const teamScopeIds = await this.resolveTeamScopeIds(user, query.teamIds);
+    if (teamScopeIds !== null) {
+      if (teamScopeIds.length === 0) {
+        whereClauses.push('1 = 0');
+      } else {
+        whereClauses.push(
+          `l."team_id" IN (${teamScopeIds.map(() => `$${paramIdx++}`).join(',')})`,
+        );
+        params.push(...teamScopeIds);
+      }
+    }
 
     if (query.status) {
       whereClauses.push(`l.status = $${paramIdx++}`);
@@ -2213,7 +2260,10 @@ export class InventoryWorkbenchService {
 
   /* ── Dynamic Facets ─────────────────────────────────────── */
 
-  async listFacets(query: InventoryListingsQueryDto): Promise<{
+  async listFacets(
+    query: InventoryListingsQueryDto,
+    user?: User,
+  ): Promise<{
     brands: Array<{ value: string; count: number }>;
     conditions: Array<{ value: string; count: number }>;
     locations: Array<{ value: string; count: number }>;
@@ -2228,6 +2278,9 @@ export class InventoryWorkbenchService {
     priceRange: { min: number; max: number };
     weightRange: { min: number; max: number };
   }> {
+    // Security scope (not a facet dimension — always applied, never excluded)
+    const teamScopeIds = await this.resolveTeamScopeIds(user, query.teamIds);
+
     // Build WHERE clauses excluding a given dimension
     const buildWhere = (exclude?: string): { sql: string; params: unknown[] } => {
       const clauses = ['l."deletedAt" IS NULL'];
@@ -2238,6 +2291,15 @@ export class InventoryWorkbenchService {
         clauses.push(sql.replace('$?', `$${idx++}`));
         params.push(val);
       };
+
+      if (teamScopeIds !== null) {
+        if (teamScopeIds.length === 0) {
+          clauses.push('1 = 0');
+        } else {
+          clauses.push(`l."team_id" IN (${teamScopeIds.map(() => `$${idx++}`).join(',')})`);
+          params.push(...teamScopeIds);
+        }
+      }
 
       if (exclude !== 'status' && query.status) addParam('l.status = $?', query.status);
       if (exclude !== 'search' && query.search?.trim()) {
