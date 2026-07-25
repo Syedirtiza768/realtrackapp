@@ -192,9 +192,8 @@ export class CatalogProductService {
     if (dto.categoryId !== undefined) product.categoryId = dto.categoryId;
     if (dto.categoryName !== undefined) product.categoryName = dto.categoryName;
     if (dto.imageUrls !== undefined) {
-      // Never let a raw temp/ upload URL land in image_urls — it gets purged by
-      // the daily storage-cleanup job within 24h if nothing else confirms it.
-      // mirrorRemoteImageUrls is a no-op for already-durable URLs.
+      // Promote temp/ upload URLs to durable catalog-images/ keys (source-hash,
+      // not array index). Already-durable URLs are a no-op.
       product.imageUrls = await this.storageService.mirrorRemoteImageUrls(
         dto.imageUrls,
         `catalog-product/${product.id}`,

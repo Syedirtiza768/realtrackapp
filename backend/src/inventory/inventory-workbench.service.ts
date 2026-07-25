@@ -1854,9 +1854,10 @@ export class InventoryWorkbenchService {
       throw new BadRequestException('At least one image URL is required');
     }
 
-    // Never let a raw temp/ upload URL land in itemPhotoUrl — it gets purged by
-    // the daily storage-cleanup job within 24h if nothing else confirms it.
-    // mirrorRemoteImageUrls is a no-op for already-durable URLs.
+    // Promote temp/ upload URLs to durable catalog-images/ keys (source-hash,
+    // not array index — otherwise a corrected re-upload reuses the same CDN
+    // URL and gets dropped by the dedupe below). Already-durable URLs are a
+    // no-op.
     const incoming = await this.storageService.mirrorRemoteImageUrls(
       rawIncoming,
       `inventory/${listingId}`,

@@ -8,7 +8,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 export interface PresignedUploadResult {
   uploadUrl: string;
@@ -220,9 +220,13 @@ export class StorageService {
       .replace(/\/+/g, '/');
     const out: MirroredRemoteImage[] = new Array(urls.length);
     const conc = Math.max(1, Math.min(16, parallel));
-    // Idempotency: on a re-run the same (namespace, index) maps to the same
-    // deterministic key, so skip the re-download + re-upload when the object is
-    // already present. Disable with PIPELINE_MIRROR_SKIP_EXISTING=false.
+    // Idempotency: on a re-run the same (namespace, source URL) maps to the
+    // same deterministic key, so skip the re-download + re-upload when the
+    // object is already present. Keys are hashed from the *source identity*,
+    // not the array index — index-based keys caused corrected inventory /
+    // catalog photo updates to overwrite the same CDN URL, then get dropped
+    // by URL dedupe (`if (!merged.includes(url))`). Disable with
+    // PIPELINE_MIRROR_SKIP_EXISTING=false.
     const skipExisting = !/^(0|false|no|off)$/i.test(
       String(
         this.config.get<string>('PIPELINE_MIRROR_SKIP_EXISTING', 'true'),
@@ -260,9 +264,9 @@ export class StorageService {
               const buf = await this.getObjectBuffer(srcKey);
               const ext =
                 srcKey.slice(srcKey.lastIndexOf('.')).toLowerCase() || '.jpg';
-              const key = this.withKeyPrefix(
-                `catalog-images/${sanitizedNs}/${String(i).padStart(3, '0')}${ext}`,
-              );
+              // Hash the temp source key so a corrected re-upload (new temp
+              // object at the same array index) gets a distinct durable URL.
+              const key = this.mirroredObjectKey(sanitizedNs, srcKey, ext);
               await this.putObject(key, buf, this.mimeFromExt(ext));
               out[i] = { url: this.getCdnUrl(key), s3Key: key };
               return;
@@ -277,19 +281,22 @@ export class StorageService {
         out[i] = { url: u, s3Key: existingKey };
         return;
       }
-      // Skip the fetch + upload if this row/index was already mirrored on a
-      // prior run. The upload key is deterministic per (namespace, index); the
-      // extension isn't known without fetching, so probe the URL's extension
-      // first, then the common variants (uploads are often converted to .webp).
+      // Skip the fetch + upload if this source URL was already mirrored on a
+      // prior run. Key is deterministic per (namespace, source URL); extension
+      // isn't known without fetching, so probe the URL extension then common
+      // variants (uploads are often converted to .webp).
       if (skipExisting) {
-        const idxPart = String(i).padStart(3, '0');
         const candidateExts = [
-          ...new Set([this.extFromUrlOrMime(u, ''), '.webp', '.jpg', '.png', '.jpeg']),
+          ...new Set([
+            this.extFromUrlOrMime(u, ''),
+            '.webp',
+            '.jpg',
+            '.png',
+            '.jpeg',
+          ]),
         ];
         for (const ext of candidateExts) {
-          const key = this.withKeyPrefix(
-            `catalog-images/${sanitizedNs}/${idxPart}${ext}`,
-          );
+          const key = this.mirroredObjectKey(sanitizedNs, u, ext);
           if (await this.objectExists(key)) {
             out[i] = { url: this.getCdnUrl(key), s3Key: key };
             return;
@@ -317,9 +324,7 @@ export class StorageService {
           res.headers.get('content-type')?.split(';')[0]?.trim() ||
           'application/octet-stream';
         const ext = this.extFromUrlOrMime(u, contentType);
-        const key = this.withKeyPrefix(
-          `catalog-images/${sanitizedNs}/${String(i).padStart(3, '0')}${ext}`,
-        );
+        const key = this.mirroredObjectKey(sanitizedNs, u, ext);
         await this.putObject(key, buf, contentType);
         out[i] = { url: this.getCdnUrl(key), s3Key: key };
       } catch (e) {
@@ -433,6 +438,21 @@ export class StorageService {
   private withKeyPrefix(relativeKey: string): string {
     if (!this.keyPrefix) return relativeKey;
     return `${this.keyPrefix}${relativeKey}`;
+  }
+
+  /**
+   * Durable mirror key for a source identity (remote URL or temp S3 key).
+   * Stable across pipeline re-runs of the same source; unique when the source
+   * changes — even if it lands at the same array index as a prior image.
+   * Exported for unit tests via the public wrapper below.
+   */
+  mirroredObjectKey(namespace: string, sourceIdentity: string, ext: string): string {
+    const digest = createHash('sha256')
+      .update(sourceIdentity.trim())
+      .digest('hex')
+      .slice(0, 20);
+    const safeExt = ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
+    return this.withKeyPrefix(`catalog-images/${namespace}/${digest}${safeExt}`);
   }
 
   private relativeKey(fullKey: string): string {
