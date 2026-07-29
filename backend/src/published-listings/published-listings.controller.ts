@@ -26,6 +26,7 @@ import { PublishedListingsActionService } from './services/published-listings-ac
 import { PublishedListingsBulkService } from './services/published-listings-bulk.service.js';
 import { PublishedListingsAuditService } from './services/published-listings-audit.service.js';
 import { PublishedListingsPricingService } from './services/published-listings-pricing.service.js';
+import { PublishedListingsTradingEnrichmentService } from './services/published-listings-trading-enrichment.service.js';
 
 @ApiTags('published-listings')
 @ApiBearerAuth()
@@ -40,6 +41,7 @@ export class PublishedListingsController {
     private readonly audit: PublishedListingsAuditService,
     private readonly pricing: PublishedListingsPricingService,
     private readonly permissions: EbayIntegrationPermissionsService,
+    private readonly tradingEnrichment: PublishedListingsTradingEnrichmentService,
   ) {}
 
   @Get()
@@ -177,6 +179,34 @@ export class PublishedListingsController {
     return this.bulk.getJob(jobId, orgId);
   }
 
+  @Get('trading-enrichment/budget')
+  @ApiOperation({
+    summary: 'Check Trading API enrichment rate-limit budget status',
+  })
+  async tradingEnrichmentBudget() {
+    return this.tradingEnrichment.getBudgetStatus();
+  }
+
+  @Post('trading-enrichment/batch')
+  @RequirePermissions('published_listings.sync')
+  @ApiOperation({
+    summary:
+      'Pre-enrich a batch of listings via Trading API. ' +
+      'Call with listing IDs to warm the cache before PartsBazar360 traffic.',
+  })
+  async batchTradingEnrichment(
+    @Body() dto: { listingIds: string[]; force?: boolean },
+    @Query('organizationId') organizationId: string | undefined,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
+    const listings = await this.listings.getByIdsRaw(dto.listingIds, orgId, user);
+    return this.tradingEnrichment.preEnrichBatch(listings, {
+      force: dto.force,
+    });
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get published listing detail' })
   async getOne(
@@ -187,6 +217,27 @@ export class PublishedListingsController {
     const { organizationId: orgId } =
       await this.permissions.resolveOrganization(user.id, organizationId);
     return this.listings.getById(id, orgId, user);
+  }
+
+  @Get(':id/trading-enrichment')
+  @ApiOperation({
+    summary:
+      'Fetch Trading API enrichment for a listing (images, compatibility, description, item specifics). ' +
+      'Returns cached data when fresh (<7 days); fetches from eBay Trading API on cache miss. ' +
+      'Rate-limited to ~4,500 calls/day across all listings.',
+  })
+  async getTradingEnrichment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('organizationId') organizationId: string | undefined,
+    @Query('force') force: string | undefined,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId: orgId } =
+      await this.permissions.resolveOrganization(user.id, organizationId);
+    const listing = await this.listings.getByIdRaw(id, orgId, user);
+    return this.tradingEnrichment.enrich(listing, {
+      force: force === 'true' || force === '1',
+    });
   }
 
   @Get(':id/revisions')

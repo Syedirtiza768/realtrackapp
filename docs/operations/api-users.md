@@ -305,6 +305,83 @@ Verified — exact match, `total: 1`:
 `services/published-listings.service.ts`) — it didn't exist before; `storeId` filtering was
 added in an earlier session. Both are deployed and live as of this writing.
 
+### 4. Trading API enrichment (on-demand)
+
+Fetches full eBay Trading API data for a listing — all gallery images, complete vehicle
+compatibility, styled HTML description, and item specifics (MPN, OE/OEM). Returns cached
+data (<7 days) or calls eBay Trading API on cache miss (~1.7s). Budget: 4,500 calls/day.
+
+```
+GET /api/published-listings/:id/trading-enrichment
+```
+
+Query params: `force=true` to bypass cache.
+
+```bash
+curl -s "https://mhn.realtrackapp.com/api/published-listings/$LISTING_ID/trading-enrichment" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response (verified 2026-07-29):
+
+```json
+{
+  "data": {
+    "enrichedAt": "2026-07-28T23:32:23.960Z",
+    "source": "trading_api",
+    "imageUrls": ["https://images.gridxconnect.io/.../10_81fc922b.jpg", "..."],
+    "compatibility": {
+      "compatibleProducts": [
+        {
+          "compatibilityProperties": [
+            { "name": "Year", "value": "2007" },
+            { "name": "Make", "value": "Mercedes-Benz" },
+            { "name": "Model", "value": "C350" },
+            { "name": "Trim", "value": "4Matic Sedan 4-Door" },
+            { "name": "Engine", "value": "3.5L 3498CC V6 GAS DOHC Naturally Aspirated" }
+          ]
+        }
+      ]
+    },
+    "description": "<style>:root{--primary-black:...</style><div class=\"wrapper\">...</div>",
+    "itemSpecifics": {
+      "Brand": ["Mercedes-Benz"],
+      "Manufacturer Part Number": ["A2045461243"],
+      "OE/OEM Part Number": ["A2045461243"],
+      "Type": ["Abs Sensor Bracket"],
+      "Placement on Vehicle": ["Rear Right"]
+    }
+  },
+  "cached": true,
+  "budget": { "used": 41, "remaining": 4459, "limit": 4500, "resetDate": "2026-07-28" }
+}
+```
+
+### 5. Trading enrichment budget check
+
+```bash
+curl -s "https://mhn.realtrackapp.com/api/published-listings/trading-enrichment/budget" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Returns `{ "used": 41, "remaining": 4459, "limit": 4500, "resetDate": "2026-07-28" }`.
+
+### 6. Batch pre-enrichment (requires `published_listings.sync`)
+
+```bash
+curl -s -X POST "https://mhn.realtrackapp.com/api/published-listings/trading-enrichment/batch" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"listingIds": ["uuid-1", "uuid-2"], "force": false}'
+```
+
+Returns `{ "enriched": 2, "skipped": 0, "failed": 0 }`.
+
+> The service account (`api_published_listings_reader` role) has `published_listings.view`
+> only — single-listing enrichment and budget check work. Batch pre-enrichment requires
+> `published_listings.sync` (grant via `POST /api/rbac/roles/:id/permissions` if needed).
+> Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
+
 ## What it cannot do (verified)
 
 | Call | Result |

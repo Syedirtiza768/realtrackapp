@@ -220,6 +220,28 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
           storeIdArray,
           job.id,
         );
+
+        // Listings the server couldn't resolve to a catalog product (e.g. deleted)
+        // never got a target row — mark them failed individually instead of
+        // leaving them stuck "pending" or letting them get conflated with the rest.
+        if (submitted.skipped?.length) {
+          const skippedReasons = new Map(
+            submitted.skipped.map((s) => [s.listingId, s.reason]),
+          );
+          setListingProgress((prev) =>
+            prev.map((lp) =>
+              skippedReasons.has(lp.listingId)
+                ? {
+                    ...lp,
+                    status: 'failed',
+                    failedStores: storeIdArray.length,
+                    error: skippedReasons.get(lp.listingId),
+                  }
+                : lp,
+            ),
+          );
+        }
+
         while (!cancelled) {
           const targets = await fetchDurableBulkPublishTargets(submitted.jobId);
           if (cancelled) return;
@@ -280,13 +302,17 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
         }
       } catch (err: unknown) {
         if (cancelled) return;
+        // The whole bulk-publish request failed before any per-listing targets
+        // were created (e.g. permissions, daily limit, network) — this genuinely
+        // applies to every listing, unlike a single unresolvable listing (handled
+        // via `submitted.skipped` above), so it's fine to mark all rows here.
         const msg = err instanceof Error ? err.message : 'Unknown error';
         setListingProgress((prev) =>
           prev.map((lp) => ({
             ...lp,
             status: 'failed',
             failedStores: storeIdArray.length,
-            error: msg,
+            error: `Bulk publish request failed: ${msg}`,
           })),
         );
       }

@@ -100,6 +100,7 @@ export class EbayMultiStoreController {
       dailyLimit: result.dailyLimit,
       dailyUsed: result.dailyUsed,
       dailyRemaining: Math.max(0, result.dailyLimit - result.dailyUsed),
+      skipped: result.skipped,
     };
   }
 

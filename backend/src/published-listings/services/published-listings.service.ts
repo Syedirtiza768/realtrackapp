@@ -334,6 +334,49 @@ export class PublishedListingsService {
   }
 
   /**
+   * Return the raw entity (no API transform) for enrichment consumers.
+   * Same access checks as getById.
+   */
+  async getByIdRaw(
+    id: string,
+    organizationId: string,
+    user: User,
+  ): Promise<EbayPublishedListing> {
+    const listing = await this.listingRepo.findOne({
+      where: { id, organizationId },
+    });
+    if (!listing) throw new NotFoundException('Published listing not found');
+    await this.assertListingAccess(user, listing.storeId);
+    return listing;
+  }
+
+  /**
+   * Return multiple raw entities for batch enrichment.
+   * Same access checks — throws if any listing is missing or inaccessible.
+   */
+  async getByIdsRaw(
+    ids: string[],
+    organizationId: string,
+    user: User,
+  ): Promise<EbayPublishedListing[]> {
+    if (ids.length === 0) return [];
+    const listings = await this.listingRepo.find({
+      where: { id: In(ids), organizationId },
+    });
+    if (listings.length !== ids.length) {
+      const found = new Set(listings.map((l) => l.id));
+      const missing = ids.filter((id) => !found.has(id));
+      throw new NotFoundException(
+        `Listings not found: ${missing.join(', ')}`,
+      );
+    }
+    for (const listing of listings) {
+      await this.assertListingAccess(user, listing.storeId);
+    }
+    return listings;
+  }
+
+  /**
    * When detail is thin, backfill via Browse + optional public-page scrape
    * (no Trading GetItem by default while usage limits are hot).
    * Enable with PUBLISHED_LISTINGS_ON_DEMAND_ENRICH=1.

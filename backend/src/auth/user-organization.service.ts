@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -99,12 +95,6 @@ export class UserOrganizationService {
     }
 
     const orgs = await this.listForUser(userId);
-    if (orgs.length === 1) {
-      const member = await this.memberRepo.findOneOrFail({
-        where: { userId, organizationId: orgs[0].organizationId },
-      });
-      return { organizationId: orgs[0].organizationId, member };
-    }
     if (orgs.length === 0) {
       const created = await this.ensureDefaultForUser(userId);
       const member = await this.memberRepo.findOneOrFail({
@@ -113,11 +103,12 @@ export class UserOrganizationService {
       return { organizationId: created.organizationId, member };
     }
 
-    throw new BadRequestException({
-      message:
-        'You belong to multiple workspaces. Pass organizationId or select a workspace in the UI.',
-      organizations: orgs,
+    // Single org or multiple orgs without explicit selection — use the first
+    // (the frontend workspace picker lets the user switch active org).
+    const member = await this.memberRepo.findOneOrFail({
+      where: { userId, organizationId: orgs[0].organizationId },
     });
+    return { organizationId: orgs[0].organizationId, member };
   }
 
   async getWorkspaceContext(userId: string): Promise<{

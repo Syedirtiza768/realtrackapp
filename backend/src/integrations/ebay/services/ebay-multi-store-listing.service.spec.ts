@@ -88,6 +88,51 @@ describe('EbayMultiStoreListingService bulk publish', () => {
     );
   });
 
+  it('skips unresolvable listings but still publishes the rest', async () => {
+    const { service, targetRepo } = setup();
+    (service as any).publishResolver.resolve = jest.fn(
+      async (id: string) =>
+        id === 'listing-bad'
+          ? null
+          : { snapshot: { catalogProductId: `catalog-${id}` } },
+    );
+
+    const result = await service.createBulkPublishJob({
+      organizationId: 'org-1',
+      requestedByUserId: 'user-1',
+      listingIds: ['listing-1', 'listing-bad', 'listing-2'],
+      storeIds: ['store-1', 'store-2'],
+    });
+
+    expect(result.targetCount).toBe(4); // 2 resolvable listings x 2 stores
+    expect(result.skipped).toEqual([
+      {
+        listingId: 'listing-bad',
+        reason:
+          'Catalog product or listing record listing-bad was not found',
+      },
+    ]);
+    expect(targetRepo.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ catalogProductId: 'catalog-listing-bad' }),
+    );
+  });
+
+  it('throws when none of the listings can be resolved', async () => {
+    const { service } = setup();
+    (service as any).publishResolver.resolve = jest
+      .fn()
+      .mockResolvedValue(null);
+
+    await expect(
+      service.createBulkPublishJob({
+        organizationId: 'org-1',
+        requestedByUserId: 'user-1',
+        listingIds: ['listing-1', 'listing-2'],
+        storeIds: ['store-1'],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('enforces the 5,000 daily listing/store target quota', async () => {
     const { service } = setup(4_999);
 

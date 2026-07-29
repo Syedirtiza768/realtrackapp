@@ -274,15 +274,57 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | GET | `/api/published-listings` | List/filter published listings | published_listings.view |
 | GET | `/api/published-listings/summary` | Dashboard counts | published_listings.view |
 | GET | `/api/published-listings/sync-logs` | Sync job history | published_listings.view |
+| GET | `/api/published-listings/stores` | Connected stores with listing counts | published_listings.view |
+| GET | `/api/published-listings/sync-status` | Per-store sync health | published_listings.view |
 | POST | `/api/published-listings/sync` | Enqueue store sync from eBay | published_listings.sync |
+| GET | `/api/published-listings/trading-enrichment/budget` | Trading API rate-limit budget status | published_listings.view |
+| POST | `/api/published-listings/trading-enrichment/batch` | Pre-enrich listings via Trading API (warm cache) | published_listings.sync |
 | GET | `/api/published-listings/:id` | Listing detail (+ raw eBay payload) | published_listings.view |
+| GET | `/api/published-listings/:id/trading-enrichment` | Trading API enrichment (images, compatibility, description, item specifics). Returns cached data (<7 days) or fetches from eBay. ~1.7s on cache miss, <10ms on hit. | published_listings.view |
 | GET | `/api/published-listings/:id/revisions` | Audit/revision history | published_listings.view |
 | PATCH | `/api/published-listings/:id` | Revise title/price/qty/images | published_listings.manage |
 | POST | `/api/published-listings/:id/end` | End listing on eBay | published_listings.manage |
 | POST | `/api/published-listings/:id/relist` | Relist ended offer | published_listings.manage |
 | POST | `/api/published-listings/:id/refresh` | Re-sync single listing | published_listings.sync |
+| POST | `/api/published-listings/:id/competitor-pricing` | Refresh competitor pricing for one listing | published_listings.sync |
 | POST | `/api/published-listings/bulk` | Bulk price/qty/end/sync | published_listings.bulk |
 | GET | `/api/published-listings/bulk/:jobId` | Bulk job status | published_listings.view |
+
+### Trading API Enrichment (PartsBazar360 integration)
+
+Fetches full eBay Trading API data for a listing — all gallery images, complete
+vehicle compatibility (130+ rows), styled HTML description, and item specifics
+(MPN, OE/OEM). Cached in DB for 7 days. Rate-limited to ~4,500 calls/day.
+
+**`GET /api/published-listings/:id/trading-enrichment`**
+
+Query params: `force` (`true` to bypass cache)
+
+```json
+{
+  "data": {
+    "enrichedAt": "2026-07-29T03:30:00.000Z",
+    "source": "trading_api",
+    "imageUrls": ["https://i.ebayimg.com/..."],
+    "compatibility": { "compatibleProducts": [{"compatibilityProperties": [{"name":"Year","value":"2020"},{"name":"Make","value":"Cadillac"},...]}] },
+    "description": "<style>...</style><div>...</div>",
+    "itemSpecifics": { "Brand": ["Cadillac"], "Manufacturer Part Number": ["9597375"] }
+  },
+  "cached": true,
+  "budget": { "used": 42, "remaining": 4458, "limit": 4500, "resetDate": "2026-07-29" }
+}
+```
+
+**`POST /api/published-listings/trading-enrichment/batch`**
+
+Body: `{ "listingIds": ["uuid-1", "uuid-2"], "force": false }`
+Response: `{ "enriched": 2, "skipped": 0, "failed": 0 }`
+
+**`GET /api/published-listings/trading-enrichment/budget`**
+
+Response: `{ "used": 42, "remaining": 4458, "limit": 4500, "resetDate": "2026-07-29" }`
+
+Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
@@ -511,4 +553,4 @@ Located in `src/lib/`:
 
 ---
 
-*Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-07-29.*

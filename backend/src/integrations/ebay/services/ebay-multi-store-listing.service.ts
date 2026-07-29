@@ -66,6 +66,7 @@ export class EbayMultiStoreListingService {
     targetCount: number;
     dailyLimit: number;
     dailyUsed: number;
+    skipped: Array<{ listingId: string; reason: string }>;
   }> {
     const listingIds = [...new Set(input.listingIds)];
     const storeIds = [...new Set(input.storeIds)];
@@ -97,6 +98,7 @@ export class EbayMultiStoreListingService {
           targetCount,
           dailyLimit: this.dailyTargetLimit(),
           dailyUsed,
+          skipped: [],
         };
       }
     }
@@ -123,17 +125,26 @@ export class EbayMultiStoreListingService {
       sourceListingId: string;
       catalogProductId: string;
     }> = [];
+    const skipped: Array<{ listingId: string; reason: string }> = [];
     for (const listingId of listingIds) {
       const resolved = await this.publishResolver.resolve(listingId);
       if (!resolved) {
-        throw new BadRequestException(
-          `Catalog product or listing record ${listingId} was not found`,
-        );
+        skipped.push({
+          listingId,
+          reason: `Catalog product or listing record ${listingId} was not found`,
+        });
+        continue;
       }
       resolvedProducts.push({
         sourceListingId: listingId,
         catalogProductId: resolved.snapshot.catalogProductId,
       });
+    }
+
+    if (!resolvedProducts.length) {
+      throw new BadRequestException(
+        `None of the ${listingIds.length} selected listing(s) could be resolved to a catalog product`,
+      );
     }
 
     const requestedTargets = resolvedProducts.length * accounts.length;
@@ -190,6 +201,7 @@ export class EbayMultiStoreListingService {
       targetCount: savedTargets.length,
       dailyLimit,
       dailyUsed: dailyUsed + savedTargets.length,
+      skipped,
     };
   }
 

@@ -271,6 +271,7 @@ export class SearchService {
 
     const qb = this.repo.createQueryBuilder('r');
     qb.leftJoin('teams', 'tm', 'tm.id = r.team_id');
+    qb.where('r."deletedAt" IS NULL');
 
     /* -- Select columns ---------------------------------------- */
     qb.select([
@@ -354,7 +355,7 @@ export class SearchService {
 
       // FTS + fuzzy + substring fallback (NULL searchVector: catalog CSV imports before DB trigger)
       const qContains = `%${escapeForLike(q)}%`;
-      qb.where(
+      qb.andWhere(
         `(
           r."searchVector" @@ websearch_to_tsquery('english', :q)
           OR r."searchVector" @@ to_tsquery('english', :prefixQ)
@@ -762,6 +763,7 @@ export class SearchService {
     // Build base WHERE — same text-match rules as SearchService.search (FTS + SKU + ILIKE when vector null)
     const buildBaseQb = () => {
       const base = this.repo.createQueryBuilder('r');
+      base.where('r."deletedAt" IS NULL');
       if (hasQuery) {
         const prefixTerms = q
           .replace(/[^\w\s-]/g, '')
@@ -772,7 +774,7 @@ export class SearchService {
 
         // Match main search: FTS + SKU + ILIKE when searchVector is NULL (imported rows)
         const qContains = `%${escapeForLike(q)}%`;
-        base.where(
+        base.andWhere(
           `(
             r."searchVector" @@ websearch_to_tsquery('english', :q)
             OR r."searchVector" @@ to_tsquery('english', :prefixQ)

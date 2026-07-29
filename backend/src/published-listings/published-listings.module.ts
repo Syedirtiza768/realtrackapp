@@ -25,6 +25,7 @@ import { PublishedListingsBulkProcessor } from './processors/published-listings-
 import { PublishedListingsPricingService } from './services/published-listings-pricing.service.js';
 import { PublishedListingsSchedulerService } from './services/published-listings-scheduler.service.js';
 import { PublishedListingsEnrichmentService } from './services/published-listings-enrichment.service.js';
+import { PublishedListingsTradingEnrichmentService } from './services/published-listings-trading-enrichment.service.js';
 import { EbayListingPageScrapeService } from '../channels/ebay/ebay-listing-page-scrape.service.js';
 import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
 
@@ -57,6 +58,7 @@ import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
     PublishedListingsBulkService,
     PublishedListingsHealthService,
     PublishedListingsEnrichmentService,
+    PublishedListingsTradingEnrichmentService,
     EbayListingPageScrapeService,
     PublishedListingsAuditService,
     PublishedListingsPricingService,

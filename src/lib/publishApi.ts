@@ -55,6 +55,8 @@ export interface DurableBulkPublishJob {
   dailyLimit: number;
   dailyUsed: number;
   dailyRemaining: number;
+  /** Listings that couldn't be resolved to a catalog product and were excluded from the job. */
+  skipped: Array<{ listingId: string; reason: string }>;
 }
 
 export interface DurableBulkPublishTarget {
