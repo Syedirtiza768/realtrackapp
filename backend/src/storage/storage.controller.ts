@@ -5,10 +5,12 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   NotFoundException,
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,6 +19,7 @@ import type { Queue } from 'bullmq';
 import { IsNull, Not, Repository } from 'typeorm';
 import { ImageAsset } from './entities/image-asset.entity.js';
 import { StorageService } from './storage.service.js';
+import { ImageDriveService } from './image-drive.service.js';
 import {
   BulkRequestUploadDto,
   RequestUploadDto,
@@ -24,15 +27,21 @@ import {
 import { UpdateAssetDto } from './dto/image-transform.dto.js';
 import type { ThumbnailJobData } from './processors/thumbnail.processor.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 
 @ApiTags('Storage')
 @Controller('storage')
 @RequirePermissions('storage.view')
 export class StorageController {
+  private readonly logger = new Logger(StorageController.name);
+
   constructor(
     private readonly storageService: StorageService,
+    private readonly imageDriveService: ImageDriveService,
     @InjectRepository(ImageAsset)
     private readonly assetRepo: Repository<ImageAsset>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
     @InjectQueue('storage-thumbnails')
     private readonly thumbnailQueue: Queue<ThumbnailJobData>,
   ) {}
@@ -102,6 +111,15 @@ export class StorageController {
         backoff: { type: 'exponential', delay: 5000 },
       },
     );
+
+    // Record to Image Drive if linked to a listing with a part number
+    if (asset.listingId) {
+      this.imageDriveService.recordFromListing(asset.listingId).catch((err) =>
+        this.logger.warn(
+          `Image Drive record failed for listing ${asset.listingId}: ${err instanceof Error ? err.message : err}`,
+        ),
+      );
+    }
 
     return { asset };
   }
@@ -190,5 +208,89 @@ export class StorageController {
     await this.assetRepo.save(assets);
 
     return { uploads: results };
+  }
+
+  /**
+   * Backfill responsive variants for existing images.
+   * Finds images missing s3_key_medium (pre-optimization) and re-queues
+   * them for variant generation. Runs in batches to avoid queue flooding.
+   *
+   * POST /storage/backfill-variants?batchSize=50
+   */
+  @Post('backfill-variants')
+  @RequirePermissions('storage.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Backfill responsive variants for existing images',
+  })
+  async backfillVariants(
+    @Query('batchSize') batchSizeParam?: string,
+  ) {
+    const batchSize = Math.min(
+      Math.max(parseInt(batchSizeParam ?? '50', 10) || 50, 1),
+      500,
+    );
+
+    // Find active images missing the medium variant key
+    const candidates = await this.assetRepo
+      .createQueryBuilder('a')
+      .where('a.deleted_at IS NULL')
+      .andWhere('a.s3_key IS NOT NULL')
+      .andWhere('a.s3_key_medium IS NULL')
+      .andWhere('a.s3_key NOT LIKE :temp', { temp: '%temp/%' })
+      .orderBy('a.uploaded_at', 'DESC')
+      .limit(batchSize)
+      .getMany();
+
+    if (candidates.length === 0) {
+      return {
+        queued: 0,
+        remaining: 0,
+        message: 'All images already have responsive variants',
+      };
+    }
+
+    let queued = 0;
+    for (const asset of candidates) {
+      try {
+        await this.thumbnailQueue.add(
+          'generate',
+          { assetId: asset.id, s3Key: asset.s3Key },
+          {
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 5000 },
+            // Deduplicate: skip if a job for this asset is already queued
+            jobId: `backfill-${asset.id}`,
+          },
+        );
+        queued++;
+      } catch (err) {
+        this.logger.warn(
+          `Failed to queue backfill for asset ${asset.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    // Count remaining
+    const remaining = await this.assetRepo
+      .createQueryBuilder('a')
+      .where('a.deleted_at IS NULL')
+      .andWhere('a.s3_key IS NOT NULL')
+      .andWhere('a.s3_key_medium IS NULL')
+      .andWhere('a.s3_key NOT LIKE :temp', { temp: '%temp/%' })
+      .getCount();
+
+    this.logger.log(
+      `Backfill: queued ${queued} images for reprocessing, ${remaining} remaining`,
+    );
+
+    return {
+      queued,
+      remaining,
+      message:
+        remaining > 0
+          ? `${remaining} images still need processing. Call again to continue.`
+          : 'All images queued for processing',
+    };
   }
 }

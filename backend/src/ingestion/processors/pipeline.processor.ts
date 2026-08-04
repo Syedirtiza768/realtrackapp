@@ -14,6 +14,7 @@ import {
   ListingOrigin,
 } from '../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
+import { ImageDriveService } from '../../storage/image-drive.service.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { normalizeBrand } from '../../common/openai/listing-guards.js';
 import { PipelineOutputImageService } from '../services/pipeline-output-image.service.js';
@@ -118,6 +119,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     private readonly mvlService: EbayMvlService,
     private readonly mvlStore: EbayMvlStoreService,
     private readonly enterpriseListingIntelligence: EnterpriseListingIntelligenceService,
+    private readonly imageDriveService: ImageDriveService,
   ) {
     super();
   }
@@ -1064,6 +1066,53 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     this.logger.log(
       `Job ${jobId}: Propagated per-SKU intake image(s) to ${catalogUpdated} catalog product(s) and ${listingsUpdated} listing row(s)`,
     );
+
+    // Image Drive fallback: fill remaining missing images from the drive
+    const stillMissingListings = pipelineListings.filter(
+      (l) => !l.itemPhotoUrl?.trim(),
+    );
+    if (stillMissingListings.length > 0) {
+      const partNumbersNeeded = stillMissingListings
+        .map(
+          (l) =>
+            l.cManufacturerPartNumber?.trim() || l.cOeOemPartNumber?.trim(),
+        )
+        .filter((pn): pn is string => Boolean(pn));
+
+      if (partNumbersNeeded.length > 0) {
+        try {
+          const driveResults =
+            await this.imageDriveService.findByPartNumbers(partNumbersNeeded);
+          let driveLinked = 0;
+
+          for (const listing of stillMissingListings) {
+            if (listing.itemPhotoUrl?.trim()) continue;
+            const pn =
+              listing.cManufacturerPartNumber?.trim() ||
+              listing.cOeOemPartNumber?.trim();
+            if (!pn) continue;
+            const normalized =
+              ImageDriveService.normalizePartNumber(pn);
+            const images = driveResults[normalized];
+            if (!images?.length) continue;
+            const urls = images.map((img) => img.cdnUrl).slice(0, 24);
+            listing.itemPhotoUrl = urls.join('|');
+            await this.listingRepo.save(listing);
+            driveLinked++;
+          }
+
+          if (driveLinked > 0) {
+            this.logger.log(
+              `Job ${jobId}: Image Drive auto-attached images to ${driveLinked} listing(s)`,
+            );
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Job ${jobId}: Image Drive lookup failed: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+    }
   }
 
   /**

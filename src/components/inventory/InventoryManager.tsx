@@ -42,6 +42,7 @@ import InventoryFilterSidebar from './InventoryFilterSidebar';
 import { MobileFilterDrawer } from '../catalog/FilterSidebar';
 import TeamBadge from '../catalog/TeamBadge';
 import ImageZoom from '../ui/ImageZoom';
+import OptimizedImage from '../ui/OptimizedImage';
 
 function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
   const config: Record<
@@ -421,11 +422,12 @@ export default function InventoryManager() {
                       </td>
                       <td className="py-3 pr-3">
                         {item.imageUrl ? (
-                          <img
+                          <OptimizedImage
                             src={item.imageUrl}
                             alt={item.title}
-                            className="w-12 h-12 object-cover rounded border border-slate-200 dark:border-slate-700 cursor-zoom-in"
-                            loading="lazy"
+                            variant="thumb"
+                            aspectRatio="1/1"
+                            className="w-12 h-12 rounded border border-slate-200 dark:border-slate-700 cursor-zoom-in"
                             onClick={() => { setZoomImages(item.imageUrls.length ? item.imageUrls : [item.imageUrl]); setZoomIndex(0); }}
                           />
                         ) : (

@@ -11,6 +11,7 @@ import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
 import { publishToEbay, type PublishResult } from '../../lib/publishApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
 import type { UploadedImage } from '../../lib/storageApi';
+import OptimizedImage from '../ui/OptimizedImage';
 import ImageUploadZone from '../listings/ImageUploadZone';
 import ImageZoom from '../ui/ImageZoom';
 import ProfileSelectors from './ProfileSelectors';
@@ -119,7 +120,7 @@ function SortableImage({ id, url, index, onRemove, onZoom }: SortableImageProps)
         className="block w-16 h-16 overflow-hidden rounded border border-slate-200 dark:border-slate-700"
         aria-label="Zoom image"
       >
-        <img src={url} alt="" className="w-full h-full object-cover" />
+        <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" className="w-full h-full" />
       </button>
       <button
         type="button"

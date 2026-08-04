@@ -28,6 +28,7 @@ import {
 import { listEbayAccounts, getEbayWorkspace } from '../../lib/ebayIntegrationsApi';
 import { getStores } from '../../lib/multiStoreApi';
 import { usePermissions } from '../../hooks/usePermissions';
+import OptimizedImage from '../ui/OptimizedImage';
 import { useQuery } from '@tanstack/react-query';
 
 function StatusBadge({ status }: { status: string }) {
@@ -352,10 +353,12 @@ export default function PublishedListingsPage() {
                       )}
                       <td className="p-3">
                         {item.imageUrls?.[0] ? (
-                          <img
+                          <OptimizedImage
                             src={item.imageUrls[0]}
                             alt=""
-                            className="w-10 h-10 object-cover rounded border border-slate-200 dark:border-slate-700"
+                            variant="thumb"
+                            aspectRatio="1/1"
+                            className="w-10 h-10 rounded border border-slate-200 dark:border-slate-700"
                           />
                         ) : (
                           <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center">

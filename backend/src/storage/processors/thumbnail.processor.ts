@@ -34,6 +34,7 @@ export class ThumbnailProcessor extends WorkerHost {
 
       await this.assetRepo.update(assetId, {
         s3KeyThumb: result.thumbnailKey,
+        s3KeyMedium: result.mediumKey,
         cdnUrl: this.storageService.getCdnUrl(s3Key),
         width: result.width,
         height: result.height,

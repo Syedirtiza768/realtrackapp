@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { bulkUpdateListings } from '../../lib/listingsApi';
 import { authPost, fetchWithAuth } from '../../lib/authApi';
+import OptimizedImage from '../ui/OptimizedImage';
 
 const API = '/api';
 
@@ -190,10 +191,12 @@ export default function BulkActionsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {listing.itemPhotoUrl ? (
-                        <img
+                        <OptimizedImage
                           src={listing.itemPhotoUrl.split('|')[0]}
                           alt=""
-                          className="w-10 h-10 rounded object-cover bg-slate-100"
+                          variant="thumb"
+                          aspectRatio="1/1"
+                          className="w-10 h-10 rounded"
                         />
                       ) : (
                         <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center">

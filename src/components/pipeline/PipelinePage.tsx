@@ -41,6 +41,7 @@ import {
 import type { Store } from '../../types/multiStore';
 import { ProcessingStep } from './PipelineWizard';
 import PipelineQueue from './PipelineQueue';
+import ImageDrivePanel from '../image-drive/ImageDrivePanel';
 
 export interface BulkUploadHandle {
   startUpload: () => void;
@@ -152,6 +153,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
     const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
     const [formatError, setFormatError] = useState<string | null>(null);
+    const [extractedPartNumbers, setExtractedPartNumbers] = useState<string[]>([]);
     const { upload, uploading, progress, error } = useUploadPipelineFile();
 
     const { data: teams = [], isLoading: teamsLoading } = useQuery({
@@ -257,6 +259,23 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
         }
         setFormatError(null);
         setPendingFile(file);
+
+        // Extract part numbers for Image Drive lookup
+        const headerRow = rows[check.headers.length > 0 ? 0 : 0] as string[];
+        const pnIdx = headerRow?.findIndex(
+          (h: unknown) => /part\s*number/i.test(String(h ?? '')),
+        );
+        if (pnIdx !== undefined && pnIdx >= 0) {
+          const partNums: string[] = [];
+          for (let r = 1; r < rows.length; r++) {
+            const row = rows[r] as unknown[];
+            const pn = row?.[pnIdx] ? String(row[pnIdx]).trim() : '';
+            if (pn && pn.toLowerCase() !== 'part number') partNums.push(pn);
+          }
+          setExtractedPartNumbers([...new Set(partNums)]);
+        } else {
+          setExtractedPartNumbers([]);
+        }
       } catch (err) {
         setPendingFile(null);
         setFormatError(
@@ -441,6 +460,13 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
               Team, store, and business profiles apply to every part in this upload.
             </span>
           </div>
+
+          {extractedPartNumbers.length > 0 && !uploading && (
+            <ImageDrivePanel
+              partNumbers={extractedPartNumbers}
+              compact={false}
+            />
+          )}
 
           {(formatError || error) && (
             <div className="flex items-center gap-2 text-sm text-red-500">

@@ -348,6 +348,11 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('storage.upload', 'Upload storage assets', 'storage', READ_WRITE),
   p('storage.manage', 'Manage storage assets', 'storage', MANAGER_UP),
 
+  // ── Image Drive ──
+  p('image_drive.view', 'View Image Drive', 'image_drive', READ_ONLY),
+  p('image_drive.upload', 'Upload to Image Drive', 'image_drive', READ_WRITE),
+  p('image_drive.manage', 'Manage Image Drive assets', 'image_drive', MANAGER_UP),
+
   // ── Pricing ──
   p('pricing.view', 'View pricing intelligence', 'pricing', READ_ONLY),
   p('pricing.manage', 'Manage pricing rules', 'pricing', MANAGER_UP),
@@ -464,4 +469,5 @@ export const SIDEBAR_MODULE_PERMISSIONS: Record<string, string> = {
   'settings/client': 'client_settings.view',
   'settings/integrations/ebay': 'ebay.view',
   'settings/ai-routing': 'ai.routing.view',
+  'image-drive': 'image_drive.view',
 };

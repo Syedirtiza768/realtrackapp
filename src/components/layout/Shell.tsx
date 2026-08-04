@@ -24,6 +24,7 @@ import {
   Filter,
   ShoppingBag,
   ListChecks,
+  HardDrive,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -129,6 +130,13 @@ const NAV_ITEMS: NavItem[] = [
     path: "/pipeline",
     permission: "pipeline.view",
     moduleKey: "pipeline",
+  },
+  {
+    icon: HardDrive,
+    label: "Image Drive",
+    path: "/image-drive",
+    permission: "image_drive.view",
+    moduleKey: "image-drive",
   },
   {
     icon: Eye,

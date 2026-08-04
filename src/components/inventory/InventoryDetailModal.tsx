@@ -40,6 +40,7 @@ import { fetchWithAuth } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import ImageUploadZone from '../listings/ImageUploadZone';
 import type { UploadedImage } from '../../lib/storageApi';
+import OptimizedImage from '../ui/OptimizedImage';
 
 interface Props {
   listingId: string | null;
@@ -117,7 +118,7 @@ function SortableImage({ id, url, index, isActive, canEdit, onSelect, onRemove }
             : 'border-slate-200 dark:border-slate-700'
         }`}
       >
-        <img src={url} alt="" className="w-full h-full object-cover" />
+        <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" className="w-full h-full" />
       </button>
       {canEdit && (
         <>
@@ -516,10 +517,13 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                 {localImages.length > 0 ? (
                   <div className="space-y-3">
                     <div className="relative aspect-square bg-slate-50 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                      <img
+                      <OptimizedImage
                         src={localImages[activeImg]}
                         alt={listing?.title ?? 'Part'}
-                        className="w-full h-full object-contain"
+                        variant="large"
+                        priority={true}
+                        className="w-full h-full"
+                        objectFit="contain"
                       />
                       {localImages.length > 1 && (
                         <>

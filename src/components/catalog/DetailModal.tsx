@@ -16,8 +16,10 @@ import {
 import { Badge } from '../ui/badge';
 import ImageZoom from '../ui/ImageZoom';
 import { getAllImageUrls, useListingDetail } from '../../lib/searchApi';
+import { getMediumUrl, handleThumbError } from '../../lib/imageUrl';
 import { conditionLabel } from '../../types/search';
 import ChannelListingPanel from '../channels/ChannelListingPanel';
+import OptimizedImage from '../ui/OptimizedImage';
 
 interface Props {
   id: string | null;
@@ -113,10 +115,11 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
                   <>
                     <div className="relative">
                       <img
-                        src={images[activeImg] ?? images[0]}
+                        src={getMediumUrl(images[activeImg] ?? images[0])}
                         alt={data.title ?? ''}
                         onClick={() => setZoomIndex(activeImg)}
                         className="w-full h-52 sm:h-64 lg:h-80 cursor-zoom-in object-contain"
+                        onError={(e) => handleThumbError(e, images[activeImg] ?? images[0])}
                       />
                       {/* Nav arrows */}
                       {images.length > 1 && (
@@ -158,7 +161,7 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
                                 : 'border-slate-200 dark:border-slate-700 hover:border-slate-500 opacity-70 hover:opacity-100'
                             }`}
                           >
-                            <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" className="w-full h-full" />
                           </button>
                         ))}
                       </div>

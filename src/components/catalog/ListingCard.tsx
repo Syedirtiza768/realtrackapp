@@ -4,7 +4,6 @@
  *  condition badge, price display, lazy loading.
  * ────────────────────────────────────────────────────────── */
 
-import { useState } from 'react';
 import { Eye, Image as ImageIcon, Pencil, Send, Trash2, Car } from 'lucide-react';
 import { sanitizeHighlight } from '../../lib/sanitize';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,6 +11,7 @@ import { Badge } from '../ui/badge';
 import { getFirstImageUrl } from '../../lib/searchApi';
 import type { SearchItem } from '../../types/search';
 import { conditionLabel } from '../../types/search';
+import OptimizedImage from '../ui/OptimizedImage';
 
 interface Props {
   item: SearchItem;
@@ -29,20 +29,19 @@ const formatPrice = (raw: string | null) => {
 export default function ListingCard({ item, onQuickView, onDelete, onPublish }: Props) {
   const imageUrl = getFirstImageUrl(item.itemPhotoUrl);
   const price = formatPrice(item.startPrice);
-  const [imgErr, setImgErr] = useState(false);
   const navigate = useNavigate();
 
   return (
     <article className="border border-slate-200/60 dark:border-slate-700/60 rounded-xl bg-white/50 dark:bg-slate-900/50 overflow-hidden flex flex-col group hover:border-slate-300 dark:border-slate-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200">
       {/* Image */}
       <div className="relative aspect-[4/3] bg-slate-800 overflow-hidden">
-        {imageUrl && !imgErr ? (
-          <img
+        {imageUrl ? (
+          <OptimizedImage
             src={imageUrl}
             alt={item.title ?? 'Product image'}
-            loading="lazy"
-            onError={() => setImgErr(true)}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            variant="medium"
+            priority={false}
+            className="h-full w-full transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-slate-600 dark:text-slate-700">

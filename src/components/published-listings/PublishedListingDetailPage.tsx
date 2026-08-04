@@ -23,6 +23,8 @@ import {
 import { getEbayWorkspace } from '../../lib/ebayIntegrationsApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getThumbUrl, getMediumUrl, handleThumbError } from '../../lib/imageUrl';
+import OptimizedImage from '../ui/OptimizedImage';
 
 export default function PublishedListingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -128,11 +130,13 @@ export default function PublishedListingDetailPage() {
         <div className="flex-shrink-0 space-y-2">
           {(listing.imageUrls ?? []).length > 0 ? (
             listing.imageUrls.map((url, i) => (
-              <img
+              <OptimizedImage
                 key={url}
                 src={url}
                 alt=""
-                className={`rounded-lg border border-slate-200 dark:border-slate-700 object-cover ${
+                variant={i === 0 ? 'medium' : 'thumb'}
+                aspectRatio="1/1"
+                className={`rounded-lg border border-slate-200 dark:border-slate-700 ${
                   i === 0 ? 'w-48 h-48' : 'w-20 h-20'
                 }`}
               />

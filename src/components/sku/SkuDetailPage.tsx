@@ -24,6 +24,8 @@ import InventoryPanel from './InventoryPanel';
 import AiEnhancementsPanel from './AiEnhancementsPanel';
 import { fetchWithAuth } from '../../lib/authApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
+import { getThumbUrl, getMediumUrl, handleThumbError } from '../../lib/imageUrl';
+import OptimizedImage from '../ui/OptimizedImage';
 
 interface ListingDetail {
   id: string;
@@ -229,20 +231,24 @@ function OverviewTab({
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
           {imageUrl ? (
             <>
-              <img
+              <OptimizedImage
                 src={imageUrl}
                 alt={listing.title}
-                className="w-full h-64 object-contain bg-slate-50"
-                onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" x="25" font-size="40">📦</text></svg>'; }}
+                variant="large"
+                aspectRatio="4/3"
+                objectFit="contain"
+                className="w-full h-64 bg-slate-50"
               />
               {imageUrls.length > 1 && (
                 <div className="flex gap-2 p-3 border-t border-slate-100 overflow-x-auto">
                   {imageUrls.slice(0, 8).map((url) => (
-                    <img
+                    <OptimizedImage
                       key={url}
                       src={url}
                       alt=""
-                      className="w-14 h-14 object-cover rounded border border-slate-200 flex-shrink-0"
+                      variant="thumb"
+                      aspectRatio="1/1"
+                      className="w-14 h-14 rounded border border-slate-200 flex-shrink-0"
                     />
                   ))}
                 </div>

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '../ui/card';
+import OptimizedImage from '../ui/OptimizedImage';
 import { Badge } from '../ui/badge';
 import { loadJson, saveJson, STORAGE_KEYS } from '../../lib/persistence';
 import {
@@ -427,7 +428,7 @@ export default function ListingEditor() {
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                     {galleryImages.slice(0, 4).map((image, index) => (
                                         <div key={image.id} className={`aspect-square rounded-lg overflow-hidden relative ${index === 0 ? 'border-2 border-blue-500' : 'border border-slate-200 dark:border-slate-700'}`}>
-                                            <img src={image.uri} alt={image.angle ?? 'Part image'} className="w-full h-full object-cover" />
+                                            <OptimizedImage src={image.uri} alt={image.angle ?? 'Part image'} variant="medium" aspectRatio="1/1" className="w-full h-full" />
                                             {index === 0 && <div className="absolute top-2 right-2 bg-blue-600/80 text-white text-[10px] px-1.5 rounded">AI Validated</div>}
                                         </div>
                                     ))}

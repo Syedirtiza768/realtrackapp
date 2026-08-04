@@ -25,6 +25,7 @@ import {
 } from '../../lib/motorsApi';
 import type { MotorsProductStatus, MotorsProduct, MotorsProductQuery } from '../../types/motors';
 import { Link } from 'react-router-dom';
+import OptimizedImage from '../ui/OptimizedImage';
 
 /* ── Status config ────────────────────────────────────────── */
 
@@ -132,10 +133,12 @@ function ProductRow({ product }: { product: MotorsProduct }) {
       <td className="px-4 py-3">
         <Link to={`/motors/${product.id}`} className="flex items-center gap-3 group">
           {product.imageUrls?.[0] ? (
-            <img
+            <OptimizedImage
               src={product.imageUrls[0]}
               alt=""
-              className="w-10 h-10 rounded object-cover bg-gray-100"
+              variant="thumb"
+              aspectRatio="1/1"
+              className="w-10 h-10 rounded"
             />
           ) : (
             <div className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center">

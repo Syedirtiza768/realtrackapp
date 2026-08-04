@@ -67,6 +67,7 @@ import ImageUploadZone from '../listings/ImageUploadZone';
 import ImageZoom from '../ui/ImageZoom';
 import type { UploadedImage } from '../../lib/storageApi';
 import { usePermissions } from '../../hooks/usePermissions';
+import OptimizedImage from '../ui/OptimizedImage';
 
 interface CatalogProductSummary {
   id: string;
@@ -275,7 +276,7 @@ function SortableImage({ id, url, index, canEdit, onRemove, onZoom }: SortableIm
         className="block h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
         aria-label="Zoom image"
       >
-        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                            <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" className="h-full w-full" />
       </button>
       {canEdit && (
         <>
@@ -794,7 +795,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
                     className="block h-full w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
                     aria-label="Zoom image"
                   >
-                    <img src={localImages[0]} alt="" className="h-full w-full object-cover" />
+                    <OptimizedImage src={localImages[0]} alt="" variant="medium" aspectRatio="1/1" className="h-full w-full" />
                   </button>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-slate-400">
@@ -1247,7 +1248,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
                             className="block h-full w-full"
                             aria-label="Zoom image"
                           >
-                            <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+        <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" className="h-full w-full" />
                           </button>
                           {isLast && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-semibold text-white">

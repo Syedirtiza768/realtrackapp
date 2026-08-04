@@ -52,6 +52,7 @@ import PermissionsPage from './components/settings/PermissionsPage';
 import AiRoutingDashboardPage from './components/settings/AiRoutingDashboardPage';
 import PublishedListingsPage from './components/published-listings/PublishedListingsPage';
 import PublishedListingDetailPage from './components/published-listings/PublishedListingDetailPage';
+import ImageDrivePage from './components/image-drive/ImageDrivePage';
 
 
 function App() {
@@ -110,6 +111,7 @@ function App() {
                             <Route path="/motors/review" element={<ProtectedRoute permissions={['motors.review']}><ReviewQueue /></ProtectedRoute>} />
                             <Route path="/motors/:id" element={<ProtectedRoute permissions={['motors.view']}><MotorsProductDetail /></ProtectedRoute>} />
                             <Route path="/pipeline" element={<ProtectedRoute permissions={['pipeline.view']}><PipelinePage /></ProtectedRoute>} />
+                            <Route path="/image-drive" element={<ProtectedRoute permissions={['image_drive.view']}><ImageDrivePage /></ProtectedRoute>} />
                             <Route path="/preview" element={<ProtectedRoute permissions={['listings.view']}><EbayPreviewPage /></ProtectedRoute>} />
                             <Route path="*" element={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Page not found</div>} />
                         </Routes>

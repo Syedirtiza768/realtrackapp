@@ -6,6 +6,7 @@ import RichTextDescriptionEditor from '../ui/RichTextDescriptionEditor';
 import { parseEbayFileExchangeCsv, generateEbayFileExchangeCsv, type EbayListing, type ParseResult } from '../../lib/ebayFileExchangeParser';
 import EditListingPanel from './EditListingPanel';
 import { fetchWithAuth } from '../../lib/authApi';
+import OptimizedImage from '../ui/OptimizedImage';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -406,7 +407,7 @@ input[type="radio"][name="tab"] {
                     onMouseEnter={() => setSelectedImage(i)}
                   >
                     {!imgErrors.has(i) ? (
-                      <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }} onError={() => handleImgError(i)} />
+                      <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" objectFit="cover" className="rounded" style={{ width: '100%', height: '100%' }} />
                     ) : (
                       <ImageIcon style={{ width: 20, height: 20, color: '#ccc' }} />
                     )}
@@ -420,11 +421,14 @@ input[type="radio"][name="tab"] {
               display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative'
             }}>
               {listing.imageUrls[selectedImage] && !imgErrors.has(selectedImage) ? (
-                <img
+                <OptimizedImage
                   src={listing.imageUrls[selectedImage]}
                   alt={listing.title}
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                  onError={() => handleImgError(selectedImage)}
+                  variant="large"
+                  aspectRatio="1/1"
+                  objectFit="contain"
+                  className="w-full h-full"
+                  style={{ maxWidth: '100%', maxHeight: '100%' }}
                 />
               ) : (
                 <div style={{ textAlign: 'center', color: '#ccc' }}>
@@ -1224,7 +1228,7 @@ export default function EbayPreviewPage() {
             >
               <div className="h-28 bg-gray-50 flex items-center justify-center overflow-hidden">
                 {listing.imageUrls[0] ? (
-                  <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
+                  <OptimizedImage src={listing.imageUrls[0]} alt={listing.title} variant="thumb" aspectRatio="1/1" className="w-full h-full" />
                 ) : (
                   <ImageIcon className="w-8 h-8 text-gray-300" />
                 )}
@@ -1276,7 +1280,7 @@ export default function EbayPreviewPage() {
               {/* Thumb */}
               <div className="w-10 h-10 rounded overflow-hidden bg-slate-700 flex items-center justify-center flex-shrink-0">
                 {listing.imageUrls[0] ? (
-                  <img src={listing.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                  <OptimizedImage src={listing.imageUrls[0]} alt="" variant="thumb" aspectRatio="1/1" className="w-full h-full" />
                 ) : (
                   <ImageIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 )}

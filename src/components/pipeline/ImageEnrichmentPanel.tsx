@@ -17,6 +17,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import OptimizedImage from '../ui/OptimizedImage';
 import { Badge } from '../ui/badge';
 import { authPost, fetchWithAuth } from '../../lib/authApi';
 
@@ -324,11 +325,12 @@ export default function ImageEnrichmentPanel({
           onClick={() => setPreviewUrl(null)}
         >
           <div className="max-w-4xl max-h-[90vh] p-4">
-            <img
+            <OptimizedImage
               src={previewUrl}
               alt="Preview"
-              className="max-w-full max-h-[80vh] object-contain rounded-lg"
-              onError={(e) => { (e.target as HTMLImageElement).src = ''; setPreviewUrl(null); }}
+              variant="large"
+              objectFit="contain"
+              className="max-w-full max-h-[80vh] rounded-lg"
             />
           </div>
         </div>

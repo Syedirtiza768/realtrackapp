@@ -26,6 +26,7 @@ import {
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ImageAsset } from '../../storage/entities/image-asset.entity.js';
 import { StorageService } from '../../storage/storage.service.js';
+import { ImageDriveService } from '../../storage/image-drive.service.js';
 import { ImageOptimizerService } from '../image-enrichment/image-optimizer.service.js';
 import {
   ECU_IDENTIFICATION_PROMPT,
@@ -197,6 +198,7 @@ export class SingleListingFormService {
     private readonly mvl: EbayMvlService,
     private readonly visionPipeline: VisionEnrichmentPipeline,
     private readonly storageService: StorageService,
+    private readonly imageDriveService: ImageDriveService,
     private readonly imageOptimizer: ImageOptimizerService,
     private readonly browseApi: EbayBrowseApiService,
     @InjectQueue('listing-optimization')
@@ -390,6 +392,40 @@ export class SingleListingFormService {
         { id: In(dto.uploadedAssetIds) },
         { listingId: listing.id },
       );
+
+      // Record uploaded images to Image Drive for future auto-attach
+      this.imageDriveService
+        .recordFromPartNumber(partNumber, dto.uploadedAssetIds)
+        .catch((err) =>
+          this.logger.warn(
+            `Image Drive record failed for ${partNumber}: ${err instanceof Error ? err.message : err}`,
+          ),
+        );
+    }
+
+    // Pull existing images from Image Drive if listing has none
+    if (!listing.itemPhotoUrl?.trim()) {
+      try {
+        const driveImages =
+          await this.imageDriveService.findByPartNumber(partNumber);
+        if (driveImages.length > 0) {
+          const urls = driveImages.map((img) => img.cdnUrl).slice(0, 24);
+          listing.itemPhotoUrl = urls.join('|');
+          await this.listingRepo.save(listing);
+          this.logger.log(
+            `Auto-attached ${urls.length} image(s) from Image Drive for part ${partNumber}`,
+          );
+
+          if (catalogProduct) {
+            catalogProduct.imageUrls = urls;
+            await this.catalogProductRepo.save(catalogProduct);
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Image Drive lookup failed for ${partNumber}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
 
     // Auto-enrich: run text-only AI enrichment (no photos required)

@@ -5,6 +5,7 @@ import type { SearchItem, SortMode } from '../../types/search';
 import { conditionLabel } from '../../types/search';
 import TeamBadge from './TeamBadge';
 import ListingStatusCell from './ListingStatusCell';
+import OptimizedImage from '../ui/OptimizedImage';
 
 interface Props {
   items: SearchItem[];
@@ -166,12 +167,7 @@ export default function CatalogTable({
                   </td>
                   <td className="px-3 py-3">
                     {imageUrl ? (
-                      <img
-                        src={imageUrl}
-                        alt=""
-                        loading="lazy"
-                        className="h-11 w-11 rounded-lg object-cover"
-                      />
+                      <OptimizedImage src={imageUrl} alt="" variant="thumb" aspectRatio="1/1" className="h-11 w-11 rounded-lg" />
                     ) : (
                       <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800">
                         <Package size={16} />

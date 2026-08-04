@@ -22,6 +22,7 @@ import {
 import ListingCard from './ListingCard';
 import { getFirstImageUrl } from '../../lib/searchApi';
 import type { SearchItem } from '../../types/search';
+import OptimizedImage from '../ui/OptimizedImage';
 
 
 type ViewMode = 'grid' | 'list';
@@ -216,7 +217,7 @@ export default function ResultsGrid({
                     )}
                     <td className="p-3">
                       {imageUrl ? (
-                        <img src={imageUrl} alt="" loading="lazy" className="w-12 h-12 object-cover rounded-lg" />
+                        <OptimizedImage src={imageUrl} alt="" variant="thumb" aspectRatio="1/1" className="w-12 h-12 rounded-lg" />
                       ) : (
                         <div className="w-12 h-12 flex items-center justify-center text-slate-600 dark:text-slate-700 bg-slate-800 rounded-lg">
                           <Package size={16} />

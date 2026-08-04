@@ -23,6 +23,7 @@ import {
   subscribePipelineProgress,
   useMotorsProduct,
 } from '../../lib/motorsApi';
+import OptimizedImage from '../ui/OptimizedImage';
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -427,7 +428,7 @@ function UploadStep({
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {files.map((f, i) => (
             <div key={i} className="relative group rounded-lg overflow-hidden border bg-white">
-              <img src={f.preview} alt={f.file.name} className="w-full h-32 object-cover" />
+              <OptimizedImage src={f.preview} alt={f.file.name} variant="medium" aspectRatio="16/10" className="w-full h-32" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
               <button
                 onClick={(e) => { e.stopPropagation(); onRemoveFile(i); }}
@@ -550,7 +551,7 @@ function UploadingStep({ files }: { files: UploadFileState[] }) {
       <div className="space-y-2">
         {files.map((f, i) => (
           <div key={i} className="flex items-center gap-3 bg-white rounded-lg border px-3 py-2">
-            <img src={f.preview} alt="" className="w-8 h-8 rounded object-cover" />
+            <OptimizedImage src={f.preview} alt="" variant="thumb" aspectRatio="1/1" className="w-8 h-8 rounded" />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-gray-700 truncate">{f.file.name}</p>
               <div className="mt-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -751,7 +752,7 @@ function ResultsStep({
           <div className="px-5 py-4 border-b bg-gray-50">
             <div className="flex items-center gap-3">
               {product.imageUrls?.[0] && (
-                <img src={product.imageUrls[0]} alt="" className="w-12 h-12 rounded object-cover border" />
+                <OptimizedImage src={product.imageUrls[0]} alt="" variant="thumb" aspectRatio="1/1" className="w-12 h-12 rounded border" />
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-gray-900 truncate">

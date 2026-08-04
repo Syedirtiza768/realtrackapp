@@ -43,6 +43,14 @@ export class ImageAsset {
   })
   s3KeyThumb!: string | null;
 
+  @Column({
+    name: 's3_key_medium',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  s3KeyMedium!: string | null;
+
   @Column({ name: 'cdn_url', type: 'text', nullable: true })
   cdnUrl!: string | null;
 
