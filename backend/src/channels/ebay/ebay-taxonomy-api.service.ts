@@ -84,8 +84,10 @@ export class EbayTaxonomyApiService {
   private static readonly CIRCUIT_TRIP_THRESHOLD = 2;
   private static readonly CIRCUIT_COOLDOWN_MS = 60_000;
 
-  /** eBay Motors Parts & Accessories category tree ID (US) */
+  /** eBay US default category tree ID (all categories) */
   static readonly EBAY_US_TREE_ID = '0';
+  /** eBay Motors US category tree ID (Parts & Accessories only) */
+  static readonly EBAY_MOTORS_TREE_ID = '100';
   /** eBay US marketplace ID for taxonomy calls */
   static readonly EBAY_US_MARKETPLACE = 'EBAY_US';
 

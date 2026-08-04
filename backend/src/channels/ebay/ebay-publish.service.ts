@@ -43,6 +43,7 @@ import {
   formatEbayApiError,
   isEbayInvalidAccessTokenError,
   isEbayInvalidCategoryError,
+  isEbayInvalidCompatibilitiesError,
   isEbayInvalidItemConditionError,
   isEbayOfferAlreadyExistsError,
   isEbayPartsAccessoriesReturnPolicyError,
@@ -73,10 +74,12 @@ import {
 } from './ebay-listing-aspects.util.js';
 import {
   fitmentDataToCompatibilityPayload,
+  getFitmentValidationStatus,
   isSameMakeVariant,
   parseFitmentEntry,
   selectPublishFitmentSource,
 } from '../../fitment/fitment-mvl.util.js';
+import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 
 /**
  * Publishing request payload from the frontend / caller.
@@ -178,6 +181,7 @@ export class EbayPublishService {
     private readonly sellerpunditTokens: SellerpunditTokenSyncService,
     private readonly sellerpunditRegistry: SellerpunditMarketplaceRegistry,
     private readonly mpConfig: EbayMarketplaceConfigService,
+    private readonly mvlService: EbayMvlService,
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
     @InjectRepository(ConnectedEbayAccount)
@@ -256,24 +260,136 @@ export class EbayPublishService {
     return this.catalogRepo.findOne({ where: { sku: normalizedSku } });
   }
 
-  private compatibilityFromCatalog(
+  private async compatibilityFromCatalog(
     catalog: CatalogProduct | null,
-  ): EbayCompatibilityPayload | undefined {
+  ): Promise<EbayCompatibilityPayload | undefined> {
     if (!catalog) return undefined;
     const source = selectPublishFitmentSource(
       catalog.fitmentData as Record<string, unknown>[] | null | undefined,
       catalog.fitmentRows as Record<string, unknown>[] | null | undefined,
     );
     const compatibility = fitmentDataToCompatibilityPayload(source);
-    if (
-      (Array.isArray(catalog.fitmentData) && catalog.fitmentData.length > 0) ||
-      (Array.isArray(catalog.fitmentRows) && catalog.fitmentRows.length > 0)
-    ) {
-      // Structured rows exist but none are publishable (all needs_review/rejected,
-      // or missing Year/Make/Model). Omit compatibility — empty Motors fitment is allowed.
-      if (!compatibility) return undefined;
+    if (compatibility) return compatibility;
+
+    // No publishable rows from the normal path.  If structured fitment rows
+    // exist but were all needs_review, attempt MVL re-validation to promote
+    // rows whose Make/Model/Year are valid in the eBay MVL DB.
+    const rows = Array.isArray(catalog.fitmentRows) ? catalog.fitmentRows : [];
+    const needsReviewRows = rows.filter(
+      (r) =>
+        typeof r === 'object' &&
+        r !== null &&
+        getFitmentValidationStatus(r) === 'needs_review',
+    );
+    if (needsReviewRows.length === 0) return undefined;
+
+    return this.promoteAndBuildCompatibility(catalog, needsReviewRows);
+  }
+
+  /**
+   * Re-validate needs_review fitment rows against the MVL DB. Rows whose
+   * Make/Model/Year are confirmed valid are promoted and used to build
+   * eBay compatibility data.  Updated rows are persisted so subsequent
+   * publishes skip this step.
+   */
+  private async promoteAndBuildCompatibility(
+    catalog: CatalogProduct,
+    needsReviewRows: Record<string, unknown>[],
+  ): Promise<EbayCompatibilityPayload | undefined> {
+    try {
+      // Expand year ranges into individual year rows because
+      // validateFitmentData → parseFitmentEntry only handles single Year.
+      const expanded: Record<string, unknown>[] = [];
+      for (const row of needsReviewRows) {
+        const make = (row as Record<string, unknown>).make ??
+          (row as Record<string, unknown>).Make;
+        const model = (row as Record<string, unknown>).model ??
+          (row as Record<string, unknown>).Model;
+        if (!make || !model) continue;
+
+        const yearStart = (row as Record<string, unknown>).yearStart ??
+          (row as Record<string, unknown>).YearStart;
+        const yearEnd = (row as Record<string, unknown>).yearEnd ??
+          (row as Record<string, unknown>).YearEnd;
+        const singleYear = (row as Record<string, unknown>).year ??
+          (row as Record<string, unknown>).Year;
+
+        if (singleYear) {
+          expanded.push({ ...row, Year: singleYear, year: singleYear });
+        } else if (yearStart != null && yearEnd != null) {
+          const start = Number(yearStart);
+          const end = Number(yearEnd);
+          if (Number.isFinite(start) && Number.isFinite(end)) {
+            for (let y = start; y <= end; y++) {
+              expanded.push({
+                ...row,
+                Year: String(y),
+                year: String(y),
+                yearStart: undefined,
+                yearEnd: undefined,
+              });
+            }
+          }
+        }
+      }
+
+      if (expanded.length === 0) return undefined;
+
+      const result = await this.mvlService.validateFitmentData(
+        expanded,
+        catalog.categoryId ?? '',
+        { keepNeedsReview: false },
+      );
+
+      if (result.validCount === 0) {
+        this.logger.debug(
+          `MVL re-validation for SKU ${catalog.sku}: 0/${expanded.length} rows promoted`,
+        );
+        return undefined;
+      }
+
+      // Build compatibility from the promoted valid rows
+      const promoted = fitmentDataToCompatibilityPayload(result.accepted);
+
+      // Persist promoted rows back to the original year-range format
+      const existingRows = Array.isArray(catalog.fitmentRows)
+        ? ([...catalog.fitmentRows] as Record<string, unknown>[])
+        : [];
+      // Update the MvlStatus on matching original rows
+      for (const row of existingRows) {
+        const r = row as Record<string, unknown>;
+        const rMake = r.make ?? r.Make;
+        const rModel = r.model ?? r.Model;
+        if (!rMake || !rModel) continue;
+        // Check if any accepted row matches this original row's make/model
+        const matchingAccepted = result.accepted.filter(
+          (a) =>
+            ((a as Record<string, unknown>).Make ?? (a as Record<string, unknown>).make) === rMake &&
+            ((a as Record<string, unknown>).Model ?? (a as Record<string, unknown>).model) === rModel,
+        );
+        if (matchingAccepted.length > 0) {
+          r.MvlStatus = 'valid';
+          r.fitmentValidationStatus = 'valid';
+        }
+      }
+
+      await this.catalogRepo.update(catalog.id, {
+        fitmentRows: existingRows as any,
+        fitmentData: result.accepted as any,
+        fitmentStatus: 'valid',
+      } as any);
+
+      this.logger.log(
+        `MVL re-validation for SKU ${catalog.sku}: promoted ${result.validCount}/${expanded.length} year-rows — compatibility data ready`,
+      );
+
+      return promoted ?? undefined;
+    } catch (err) {
+      this.logger.warn(
+        `MVL re-validation for SKU ${catalog.sku} failed: ${err instanceof Error ? err.message : err}`,
+      );
+      return undefined;
     }
-    return compatibility;
   }
 
   private async categoryRequiresCompatibility(
@@ -374,7 +490,7 @@ export class EbayPublishService {
     const catalog = await this.resolveCatalogProductForPublish(listing.id, sku);
     const compatibility = req.compatibility?.compatibleProducts?.length
       ? req.compatibility
-      : this.compatibilityFromCatalog(catalog);
+      : await this.compatibilityFromCatalog(catalog);
 
     const parsedPrice = parseFloat(listing.startPrice ?? '');
     const parsedQty = parseInt(listing.quantity ?? '', 10);
@@ -412,12 +528,61 @@ export class EbayPublishService {
       (listing.duration?.trim().toUpperCase() === 'GTC' ? 'GTC' : undefined) ||
       'GTC';
 
+    let categoryId = req.categoryId?.trim() || listing.categoryId?.trim() || '';
+
+    // When categoryId is empty, try to resolve from catalog product's categoryName
+    // via the eBay Taxonomy API category suggestions. Use the Motors tree (100)
+    // to avoid matching non-automotive categories (e.g. "Lawn Mower Parts" or
+    // "Gas/Nitro Engines" from the default US tree).
+    if (!categoryId && catalog) {
+      const categoryName = catalog.categoryName;
+      if (categoryName?.trim()) {
+        try {
+          const suggestions = await this.taxonomyApi.getCategorySuggestions(
+            categoryName.trim(),
+            EbayTaxonomyApiService.EBAY_MOTORS_TREE_ID,
+          );
+          // Pick the first suggestion whose ancestor chain includes 6000
+          // (Parts & Accessories) — guarantees a valid Motors leaf category.
+          const motorsMatch = suggestions.find((s) =>
+            s.categoryTreeNodeAncestors?.some((a) => a.categoryId === '6000'),
+          );
+          const match = motorsMatch ?? suggestions[0];
+          if (match?.category?.categoryId) {
+            categoryId = match.category.categoryId;
+            const underMotors =
+              motorsMatch != null ||
+              match.categoryTreeNodeAncestors?.some(
+                (a) => a.categoryId === '6000',
+              );
+            this.logger.log(
+              `Resolved eBay category for SKU ${sku}: "${categoryName}" → ${categoryId} (${match.category.categoryName}) [Motors=${underMotors}]`,
+            );
+            if (!underMotors) {
+              this.logger.warn(
+                `Category ${categoryId} (${match.category.categoryName}) for SKU ${sku} is NOT under Motors tree 6000 — may be invalid for eBay Motors listings`,
+              );
+            }
+            // Persist the resolved category back to the catalog product
+            await this.catalogRepo.update(catalog.id, {
+              categoryId,
+              categoryName: match.category.categoryName ?? categoryName,
+            } as any);
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Failed to resolve eBay category from "${categoryName}" for SKU ${sku}: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+    }
+
     return {
       ...req,
       sku,
       title,
       description: desc.description,
-      categoryId: req.categoryId?.trim() || listing.categoryId?.trim() || '',
+      categoryId,
       condition: mappedCondition,
       conditionDescription,
       listingDuration,
@@ -933,6 +1098,18 @@ export class EbayPublishService {
           req.compatibility,
           persistedCompatibility,
         );
+      } else {
+        // Clear stale compatibility from previous publishes to prevent
+        // eBay error 25002 ("All compatibilities are invalid") when
+        // fitment data is missing or marked needs_review/rejected.
+        try {
+          await this.inventoryApi.deleteCompatibility(storeId, req.sku);
+          this.logger.debug(
+            `Cleared stale compatibility for SKU ${req.sku} before publishing without fitment`,
+          );
+        } catch {
+          // No existing compatibility — safe to ignore
+        }
       }
 
       const offer = this.buildOffer(req, store);
@@ -2147,6 +2324,20 @@ export class EbayPublishService {
         offerId,
       );
     } catch (publishErr: unknown) {
+      // Handle "All compatibilities are invalid" (error 25002) by clearing
+      // stale compatibility from the inventory item and retrying once.
+      if (isEbayInvalidCompatibilitiesError(publishErr)) {
+        this.logger.warn(
+          `Publish for offer ${offerId} (SKU ${req.sku}) rejected due to invalid compatibilities — clearing and retrying`,
+        );
+        try {
+          await this.inventoryApi.deleteCompatibility(storeId, req.sku);
+        } catch {
+          // Best-effort cleanup
+        }
+        return this.publishOfferWithTitlePropagationRetry(storeId, offerId);
+      }
+
       if (!account || !isEbayRecoverableBusinessPolicyError(publishErr)) {
         throw publishErr;
       }

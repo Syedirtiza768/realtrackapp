@@ -201,6 +201,18 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
     id: '174907',
     name: 'Nuts, Bolts & Fasteners',
   },
+  {
+    kw: [
+      'engine',
+      'complete engine',
+      'motor assembly',
+      'engine assembly',
+      'motor block',
+      'engine block',
+    ],
+    id: '33626',
+    name: 'Engines & Components',
+  },
 ];
 
 export function translatePartNameToGerman(
