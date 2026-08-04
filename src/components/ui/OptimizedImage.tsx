@@ -126,13 +126,14 @@ export default function OptimizedImage({
   // Determine the actual image URL to display
   const getDisplayUrl = (): string => {
     if (!src) return '';
-    if (!isOurCdnUrl(src)) return src;
-    const variantUrl = VARIANT_URL_MAP[variant]?.(src) ?? src;
-    return toProxyUrl(variantUrl);
+    // Always proxy our S3/CDN URLs; external URLs pass through as-is
+    return toProxyUrl(src);
   };
 
   const displayUrl = getDisplayUrl();
-  const srcSet = priority ? undefined : buildSrcSet(src);
+  // Skip srcSet — variant files (_sm/_medium/_lg.webp) don't exist for most
+  // S3 images. The proxy handles caching; just serve the original.
+  const srcSet = undefined;
   const resolvedSizes = sizes ?? DEFAULT_SIZES[variant];
   const hasBlurhash = !!blurhash && blurhash.startsWith('data:');
 
