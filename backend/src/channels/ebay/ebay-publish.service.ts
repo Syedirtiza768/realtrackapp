@@ -1176,6 +1176,29 @@ export class EbayPublishService {
           } else {
             throw publishErr;
           }
+        } else if (isEbayInvalidCategoryError(publishErr)) {
+          this.logger.warn(
+            `Publish for SKU ${req.sku} failed with invalid category — purging stale offer ${offerId} and retrying`,
+          );
+          await this.purgeStaleEbayInventory(
+            storeId,
+            req.sku,
+            offerId,
+            inventoryItem,
+          );
+          const freshOfferId = await this.resolveOrCreateOfferId(
+            storeId,
+            offer,
+            store,
+            inventoryItem,
+          );
+          publishResult = await this.publishOfferWithRetries(
+            storeId,
+            freshOfferId,
+            store,
+            account,
+            req,
+          );
         } else {
           throw publishErr;
         }
