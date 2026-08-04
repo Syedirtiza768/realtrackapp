@@ -22,6 +22,7 @@ import {
   buildSrcSet,
   isOurCdnUrl,
   handleImageError,
+  toProxyUrl,
 } from '../../lib/imageUrl';
 
 export type ImageVariant = 'thumb' | 'small' | 'medium' | 'large' | 'original';
@@ -109,9 +110,10 @@ export default function OptimizedImage({
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
       // Try falling back to original URL if we were showing a variant
-      if (src && isOurCdnUrl(src) && img.src !== src) {
+      const proxyOriginal = toProxyUrl(src);
+      if (src && isOurCdnUrl(src) && img.src !== proxyOriginal && proxyOriginal) {
         img.onerror = null;
-        img.src = src;
+        img.src = proxyOriginal;
         return;
       }
       setStatus('error');
@@ -125,7 +127,8 @@ export default function OptimizedImage({
   const getDisplayUrl = (): string => {
     if (!src) return '';
     if (!isOurCdnUrl(src)) return src;
-    return VARIANT_URL_MAP[variant]?.(src) ?? src;
+    const variantUrl = VARIANT_URL_MAP[variant]?.(src) ?? src;
+    return toProxyUrl(variantUrl);
   };
 
   const displayUrl = getDisplayUrl();

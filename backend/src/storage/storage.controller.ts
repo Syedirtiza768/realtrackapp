@@ -11,7 +11,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -27,6 +29,7 @@ import {
 import { UpdateAssetDto } from './dto/image-transform.dto.js';
 import type { ThumbnailJobData } from './processors/thumbnail.processor.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
+import { Public } from '../auth/decorators/public.decorator.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
 
 @ApiTags('Storage')
@@ -292,5 +295,61 @@ export class StorageController {
           ? `${remaining} images still need processing. Call again to continue.`
           : 'All images queued for processing',
     };
+  }
+
+  /**
+   * Public image proxy — streams S3 objects to the browser with proper
+   * Content-Type and long-lived cache headers. No auth required so <img> tags
+   * can use this directly.
+   *
+   * GET /storage/serve/mhn/catalog-images/uuid/part/000.jpg
+   * GET /storage/serve/mhn/catalog-images/uuid/part/000_medium.webp
+   */
+  @Get('serve/*key')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  async serve(
+    @Param('key') key: string,
+    @Res() res: Response,
+  ) {
+    // NestJS wildcard param includes the leading segment separator — strip it
+    const s3Key = key.replace(/^\//, '');
+    if (!s3Key) {
+      throw new NotFoundException('Missing S3 key');
+    }
+
+    try {
+      const { stream, contentType, contentLength, etag } =
+        await this.storageService.getObjectStream(s3Key);
+
+      res.set({
+        'Content-Type': contentType,
+        ...(contentLength ? { 'Content-Length': String(contentLength) } : {}),
+        ...(etag ? { ETag: etag } : {}),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      // The S3 SDK returns a Node.js Readable stream — pipe it directly
+      // to the Express response for zero-copy streaming.
+      const body = stream as any;
+      if (typeof body?.pipe === 'function') {
+        body.pipe(res);
+      } else {
+        // Fallback: buffer and send (shouldn't happen with S3 GetObject)
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) {
+          chunks.push(Buffer.from(chunk as Uint8Array));
+        }
+        res.send(Buffer.concat(chunks));
+      }
+    } catch (err: any) {
+      const code = err?.$metadata?.httpStatusCode;
+      if (code === 404 || err?.name === 'NoSuchKey') {
+        throw new NotFoundException(`Image not found: ${s3Key}`);
+      }
+      this.logger.warn(`S3 serve failed for key=${s3Key}: ${err?.message}`);
+      throw new NotFoundException(`Image not found: ${s3Key}`);
+    }
   }
 }

@@ -14,6 +14,25 @@
  *   getLargeUrl  → `https://cdn.example.com/path/photo_lg.webp`
  */
 
+/**
+ * Rewrite an S3 / CDN URL to go through the backend image proxy.
+ *   https://bucket.s3.amazonaws.com/mhn/path/photo.jpg
+ *   → /api/storage/serve/mhn/path/photo.jpg
+ *
+ * External URLs (eBay, etc.) are returned as-is.
+ */
+export function toProxyUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (!isOurCdnUrl(url)) return url;
+  try {
+    const parsed = new URL(url);
+    // pathname starts with / — strip the leading slash for the key
+    return `/api/storage/serve${parsed.pathname}`;
+  } catch {
+    return url;
+  }
+}
+
 export function getVariantUrl(
   url: string | null | undefined,
   suffix: string,
@@ -49,9 +68,9 @@ export function buildSrcSet(url: string | null | undefined): string {
   if (!isOurCdnUrl(url)) return '';
 
   const entries = [
-    `${getSmallUrl(url)} 320w`,
-    `${getMediumUrl(url)} 800w`,
-    `${getLargeUrl(url)} 1200w`,
+    `${toProxyUrl(getSmallUrl(url))} 320w`,
+    `${toProxyUrl(getMediumUrl(url))} 800w`,
+    `${toProxyUrl(getLargeUrl(url))} 1200w`,
   ];
   return entries.join(', ');
 }

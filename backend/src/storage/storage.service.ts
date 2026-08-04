@@ -137,6 +137,29 @@ export class StorageService {
   }
 
   /**
+   * Stream an object from S3. Returns the response metadata + readable stream.
+   * Caller is responsible for piping the stream and destroying on error.
+   */
+  async getObjectStream(key: string): Promise<{
+    stream: NodeJS.ReadableStream;
+    contentType: string;
+    contentLength: number | undefined;
+    etag: string | undefined;
+  }> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    const response = await this.s3.send(command);
+    return {
+      stream: response.Body as NodeJS.ReadableStream,
+      contentType: response.ContentType ?? 'application/octet-stream',
+      contentLength: response.ContentLength,
+      etag: response.ETag,
+    };
+  }
+
+  /**
    * Put a processed buffer back to S3.
    */
   async putObject(
