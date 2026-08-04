@@ -23,6 +23,7 @@ import {
   isOurCdnUrl,
   handleImageError,
   toProxyUrl,
+  isCatalogImageUrl,
 } from '../../lib/imageUrl';
 
 export type ImageVariant = 'thumb' | 'small' | 'medium' | 'large' | 'original';
@@ -110,8 +111,8 @@ export default function OptimizedImage({
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
       // Fall back to the original (non-variant) URL if a variant failed.
-      // e.g. _thumb.webp 404 → try the original .jpg/.png instead.
-      if (src && isOurCdnUrl(src) && img.src !== toProxyUrl(src)) {
+      // Skip for catalog images since they don't have variants.
+      if (src && isOurCdnUrl(src) && !isCatalogImageUrl(src) && img.src !== toProxyUrl(src)) {
         img.onerror = null;
         img.src = toProxyUrl(src);
         return;
@@ -126,6 +127,8 @@ export default function OptimizedImage({
   // Determine the actual image URL to display
   const getDisplayUrl = (): string => {
     if (!src) return '';
+    // Catalog images don't have responsive variants — use original URL directly.
+    if (isCatalogImageUrl(src)) return toProxyUrl(src);
     // Apply the responsive variant suffix for our CDN/S3 URLs;
     // external URLs pass through unchanged.
     const variantFn = VARIANT_URL_MAP[variant] ?? VARIANT_URL_MAP.original;

@@ -19,9 +19,24 @@
  * S3 bucket is public-read for the mhn/ prefix, so images load directly
  * from S3 without proxying through the backend.
  * External URLs (eBay, etc.) are returned as-is.
+ *
+ * Catalog images (mhn/catalog-images/...) don't have responsive variants,
+ * so we return the original URL unchanged to avoid 404s.
  */
 export function toProxyUrl(url: string | null | undefined): string {
   return url ?? '';
+}
+
+/**
+ * Check if a URL is a catalog image (no responsive variants available).
+ */
+export function isCatalogImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    return new URL(url).pathname.includes('/catalog-images/');
+  } catch {
+    return false;
+  }
 }
 
 export function getVariantUrl(
