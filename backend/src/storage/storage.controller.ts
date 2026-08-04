@@ -320,7 +320,7 @@ export class StorageController {
     const idx = fullPath.indexOf(prefix);
     const s3Key = idx >= 0
       ? fullPath.substring(idx + prefix.length)
-      : req.params['key']?.replace(/,/g, '/').replace(/^\//, '');
+      : String(req.params['key'] ?? '').replace(/,/g, '/').replace(/^\//, '');
 
     if (!s3Key) {
       throw new NotFoundException('Missing S3 key');
