@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
@@ -181,7 +181,7 @@ export class EbayPublishService {
     private readonly sellerpunditTokens: SellerpunditTokenSyncService,
     private readonly sellerpunditRegistry: SellerpunditMarketplaceRegistry,
     private readonly mpConfig: EbayMarketplaceConfigService,
-    private readonly mvlService: EbayMvlService,
+    @Optional() private readonly mvlService: EbayMvlService,
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
     @InjectRepository(ConnectedEbayAccount)
