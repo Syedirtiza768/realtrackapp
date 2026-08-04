@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { ChannelConnection } from './entities/channel-connection.entity.js';
@@ -47,6 +47,7 @@ import { EbaySellAccountApiService } from '../integrations/ebay/services/ebay-se
 import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa-return-policy.service.js';
 import { EbayCategoryKeywordAuditService } from './ebay/ebay-category-keyword-audit.service.js';
 import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
+import { FitmentModule } from '../fitment/fitment.module.js';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-catego
     BullModule.registerQueue({ name: 'channels' }),
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
+    forwardRef(() => FitmentModule),
   ],
   controllers: [
     ChannelsController,

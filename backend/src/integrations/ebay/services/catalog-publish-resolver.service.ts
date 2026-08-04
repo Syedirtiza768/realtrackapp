@@ -181,7 +181,7 @@ export class CatalogPublishResolverService {
       warnings.push('Using images from listing record itemPhotoUrl');
     }
 
-    if (listingRecord?.id) {
+    if (listingRecord?.id && !candidates.length) {
       const assets = await this.assetRepo.find({
         where: { listingId: listingRecord.id },
         order: { sortOrder: 'ASC', uploadedAt: 'ASC' },
@@ -189,7 +189,7 @@ export class CatalogPublishResolverService {
       for (const asset of assets) {
         if (asset.cdnUrl) candidates.push(asset.cdnUrl);
       }
-      if (assets.length && !candidates.length) {
+      if (assets.length) {
         warnings.push('Using images from linked image_assets records');
       }
     }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { FitmentMake } from './entities/fitment-make.entity.js';
@@ -42,7 +42,7 @@ import { ChannelsModule } from '../channels/channels.module.js';
       EbayMvlEntry,
     ]),
     BullModule.registerQueue({ name: 'fitment' }),
-    ChannelsModule,
+    forwardRef(() => ChannelsModule),
   ],
   controllers: [FitmentController],
   providers: [

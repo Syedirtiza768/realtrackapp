@@ -142,6 +142,7 @@ describe('EbayPublishService', () => {
           supportsMotorsFitment: true,
         }),
       } as any,
+      {} as any, // mvlService
       storeRepo,
       connectedAccountRepo,
       mpRepo,
