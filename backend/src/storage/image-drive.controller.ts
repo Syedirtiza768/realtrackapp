@@ -29,7 +29,7 @@ import {
 
 @ApiTags('Image Drive')
 @Controller('image-drive')
-@RequirePermissions('storage.view')
+@RequirePermissions('image_drive.view')
 export class ImageDriveController {
   constructor(
     private readonly imageDriveService: ImageDriveService,
@@ -39,7 +39,7 @@ export class ImageDriveController {
   ) {}
 
   @Post('upload')
-  @RequirePermissions('storage.upload')
+  @RequirePermissions('image_drive.upload')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FilesInterceptor('files', 24))
   @ApiConsumes('multipart/form-data')
@@ -128,7 +128,7 @@ export class ImageDriveController {
   }
 
   @Post('record')
-  @RequirePermissions('storage.upload')
+  @RequirePermissions('image_drive.upload')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Record existing image assets against a part number',
@@ -148,7 +148,7 @@ export class ImageDriveController {
   }
 
   @Delete(':assetId')
-  @RequirePermissions('storage.manage')
+  @RequirePermissions('image_drive.manage')
   @ApiOperation({ summary: 'Remove an image from the Image Drive' })
   async removeAsset(@Param('assetId') assetId: string) {
     const removed = await this.imageDriveService.removeAsset(assetId);
@@ -172,7 +172,7 @@ export class ImageDriveController {
   }
 
   @Post('backfill')
-  @RequirePermissions('storage.manage')
+  @RequirePermissions('image_drive.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
