@@ -258,6 +258,68 @@ export class ImageDriveService {
     };
   }
 
+  async backfill(
+    batchSize: number,
+    offset: number,
+  ): Promise<{
+    processed: number;
+    recorded: number;
+    skipped: number;
+    offset: number;
+    nextOffset: number;
+    remaining: number;
+    message: string;
+  }> {
+    const listings = await this.listingRepo
+      .createQueryBuilder('l')
+      .where(
+        `(l.c_manufacturer_part_number IS NOT NULL AND TRIM(l.c_manufacturer_part_number) != '')
+         OR (l.c_oe_oem_part_number IS NOT NULL AND TRIM(l.c_oe_oem_part_number) != '')`,
+      )
+      .andWhere('l.deleted_at IS NULL')
+      .orderBy('l.imported_at', 'ASC')
+      .skip(offset)
+      .take(batchSize)
+      .getMany();
+
+    let recorded = 0;
+    let skipped = 0;
+    for (const listing of listings) {
+      try {
+        const count = await this.recordFromListing(listing.id);
+        if (count > 0) recorded += count;
+        else skipped++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    const total = await this.listingRepo
+      .createQueryBuilder('l')
+      .where(
+        `(l.c_manufacturer_part_number IS NOT NULL AND TRIM(l.c_manufacturer_part_number) != '')
+         OR (l.c_oe_oem_part_number IS NOT NULL AND TRIM(l.c_oe_oem_part_number) != '')`,
+      )
+      .andWhere('l.deleted_at IS NULL')
+      .getCount();
+
+    const nextOffset = offset + listings.length;
+    const remaining = Math.max(total - nextOffset, 0);
+
+    return {
+      processed: listings.length,
+      recorded,
+      skipped,
+      offset,
+      nextOffset,
+      remaining,
+      message:
+        listings.length < batchSize
+          ? 'Backfill complete'
+          : `${remaining} listings remaining. Call again with offset=${nextOffset}`,
+    };
+  }
+
   async getStats(): Promise<{
     totalParts: number;
     totalImages: number;

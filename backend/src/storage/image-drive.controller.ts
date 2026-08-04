@@ -171,6 +171,26 @@ export class ImageDriveController {
     );
   }
 
+  @Post('backfill')
+  @RequirePermissions('storage.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Bulk-index all listing images into the Image Drive by part number. ' +
+      'Reads S3 URLs from image_assets and listing_records.itemPhotoUrl — no files downloaded.',
+  })
+  async backfill(
+    @Query('batchSize') batchSizeParam?: string,
+    @Query('offset') offsetParam?: string,
+  ) {
+    const batchSize = Math.min(
+      Math.max(parseInt(batchSizeParam ?? '200', 10) || 200, 1),
+      1000,
+    );
+    const offset = Math.max(parseInt(offsetParam ?? '0', 10) || 0, 0);
+    return this.imageDriveService.backfill(batchSize, offset);
+  }
+
   @Get('stats')
   @ApiOperation({ summary: 'Get Image Drive statistics' })
   async getStats() {
