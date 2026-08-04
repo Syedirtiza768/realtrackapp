@@ -15,22 +15,13 @@
  */
 
 /**
- * Rewrite an S3 / CDN URL to go through the backend image proxy.
- *   https://bucket.s3.amazonaws.com/mhn/path/photo.jpg
- *   → /api/storage/serve/mhn/path/photo.jpg
- *
+ * Rewrite an S3 / CDN URL for direct browser access.
+ * S3 bucket is public-read for the mhn/ prefix, so images load directly
+ * from S3 without proxying through the backend.
  * External URLs (eBay, etc.) are returned as-is.
  */
 export function toProxyUrl(url: string | null | undefined): string {
-  if (!url) return '';
-  if (!isOurCdnUrl(url)) return url;
-  try {
-    const parsed = new URL(url);
-    // pathname starts with / — strip the leading slash for the key
-    return `/api/storage/serve${parsed.pathname}`;
-  } catch {
-    return url;
-  }
+  return url ?? '';
 }
 
 export function getVariantUrl(
