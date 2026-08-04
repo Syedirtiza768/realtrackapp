@@ -249,6 +249,27 @@ export function isEbayInvalidCategoryError(err: unknown): boolean {
   return /invalid categor/i.test(formatted);
 }
 
+/** True when publish failed because eBay considers all compatibilities invalid (errorId 25002 with compatibility message). */
+export function isEbayInvalidCompatibilitiesError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const bodies: unknown[] = [
+    (err as { response?: { data?: unknown } }).response?.data,
+    err,
+  ];
+  for (const body of bodies) {
+    if (!body || typeof body !== 'object') continue;
+    const errors = (body as { errors?: EbayErrorRow[] }).errors;
+    if (!Array.isArray(errors)) continue;
+    for (const e of errors) {
+      if (String(e.errorId) !== '25002') continue;
+      const msg = e.longMessage ?? e.message ?? '';
+      if (/compatibilit/i.test(msg)) return true;
+    }
+  }
+  const formatted = formatEbayApiError(err, '');
+  return /compatibilit/i.test(formatted) && /invalid/i.test(formatted);
+}
+
 /** Policy errors where refresh or alternate policy selection may recover publish. */
 export function isEbayRecoverableBusinessPolicyError(err: unknown): boolean {
   return (
