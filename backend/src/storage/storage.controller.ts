@@ -236,15 +236,21 @@ export class StorageController {
     );
 
     // Find active images missing the medium variant key
-    const candidates = await this.assetRepo
+    const qb = this.assetRepo
       .createQueryBuilder('a')
       .where('a.deleted_at IS NULL')
       .andWhere('a.s3_key IS NOT NULL')
       .andWhere('a.s3_key_medium IS NULL')
       .andWhere('a.s3_key NOT LIKE :temp', { temp: '%temp/%' })
       .orderBy('a.uploaded_at', 'DESC')
-      .limit(batchSize)
-      .getMany();
+      .limit(batchSize);
+
+    this.logger.log(`Backfill query: ${qb.getSql()}`);
+    const count = await qb.getCount();
+    this.logger.log(`Backfill candidates (count): ${count}`);
+
+    const candidates = await qb.getMany();
+    this.logger.log(`Backfill candidates (rows): ${candidates.length}`);
 
     if (candidates.length === 0) {
       return {
