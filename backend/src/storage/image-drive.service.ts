@@ -273,11 +273,11 @@ export class ImageDriveService {
     const listings = await this.listingRepo
       .createQueryBuilder('l')
       .where(
-        `(l.c_manufacturer_part_number IS NOT NULL AND TRIM(l.c_manufacturer_part_number) != '')
-         OR (l.c_oe_oem_part_number IS NOT NULL AND TRIM(l.c_oe_oem_part_number) != '')`,
+        `(l.cManufacturerPartNumber IS NOT NULL AND TRIM(l.cManufacturerPartNumber) != '')
+         OR (l.cOeOemPartNumber IS NOT NULL AND TRIM(l.cOeOemPartNumber) != '')`,
       )
-      .andWhere('l.deleted_at IS NULL')
-      .orderBy('l.imported_at', 'ASC')
+      .andWhere('l.deletedAt IS NULL')
+      .orderBy('l.importedAt', 'ASC')
       .skip(offset)
       .take(batchSize)
       .getMany();
@@ -297,10 +297,10 @@ export class ImageDriveService {
     const total = await this.listingRepo
       .createQueryBuilder('l')
       .where(
-        `(l.c_manufacturer_part_number IS NOT NULL AND TRIM(l.c_manufacturer_part_number) != '')
-         OR (l.c_oe_oem_part_number IS NOT NULL AND TRIM(l.c_oe_oem_part_number) != '')`,
+        `(l.cManufacturerPartNumber IS NOT NULL AND TRIM(l.cManufacturerPartNumber) != '')
+         OR (l.cOeOemPartNumber IS NOT NULL AND TRIM(l.cOeOemPartNumber) != '')`,
       )
-      .andWhere('l.deleted_at IS NULL')
+      .andWhere('l.deletedAt IS NULL')
       .getCount();
 
     const nextOffset = offset + listings.length;
