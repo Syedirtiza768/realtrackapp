@@ -11,9 +11,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -309,11 +310,18 @@ export class StorageController {
   @Public()
   @HttpCode(HttpStatus.OK)
   async serve(
-    @Param('key') key: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
-    // NestJS wildcard param includes the leading segment separator — strip it
-    const s3Key = key.replace(/^\//, '');
+    // NestJS wildcard param joins path segments with commas — extract from
+    // the raw URL instead to preserve slashes in the S3 key.
+    const fullPath = req.url.split('?')[0]; // strip query string
+    const prefix = '/api/storage/serve/';
+    const idx = fullPath.indexOf(prefix);
+    const s3Key = idx >= 0
+      ? fullPath.substring(idx + prefix.length)
+      : req.params['key']?.replace(/,/g, '/').replace(/^\//, '');
+
     if (!s3Key) {
       throw new NotFoundException('Missing S3 key');
     }
