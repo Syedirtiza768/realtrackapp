@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { HardDrive, Check, Dash, Loader2, ChevronDown, ChevronUp, ImageIcon } from 'lucide-react';
+import { HardDrive, Check, Minus, Loader2, ChevronDown, ChevronUp, ImageIcon } from 'lucide-react';
 import { batchLookupDriveImages, type ImageDriveEntry, type BatchLookupResult } from '../../lib/imageDriveApi';
 import OptimizedImage from '../ui/OptimizedImage';
 
@@ -99,7 +99,7 @@ export default function ImageDrivePanel({ partNumbers, onSelectImages, compact }
                 {item.count > 0 ? (
                   <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                 ) : (
-                  <Dash className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />
+                  <Minus className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />
                 )}
                 <span className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate text-left flex-1">
                   {item.partNumber}
