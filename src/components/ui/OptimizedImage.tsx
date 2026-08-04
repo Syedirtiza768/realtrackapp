@@ -109,11 +109,11 @@ export default function OptimizedImage({
   const handleError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
-      // Try falling back to original URL if we were showing a variant
-      const proxyOriginal = toProxyUrl(src);
-      if (src && isOurCdnUrl(src) && img.src !== proxyOriginal && proxyOriginal) {
+      // Fall back to the original (non-variant) URL if a variant failed.
+      // e.g. _thumb.webp 404 → try the original .jpg/.png instead.
+      if (src && isOurCdnUrl(src) && img.src !== toProxyUrl(src)) {
         img.onerror = null;
-        img.src = proxyOriginal;
+        img.src = toProxyUrl(src);
         return;
       }
       setStatus('error');
@@ -126,8 +126,10 @@ export default function OptimizedImage({
   // Determine the actual image URL to display
   const getDisplayUrl = (): string => {
     if (!src) return '';
-    // Always proxy our S3/CDN URLs; external URLs pass through as-is
-    return toProxyUrl(src);
+    // Apply the responsive variant suffix for our CDN/S3 URLs;
+    // external URLs pass through unchanged.
+    const variantFn = VARIANT_URL_MAP[variant] ?? VARIANT_URL_MAP.original;
+    return toProxyUrl(variantFn(src));
   };
 
   const displayUrl = getDisplayUrl();
