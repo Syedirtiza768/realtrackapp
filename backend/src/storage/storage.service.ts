@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -9,6 +11,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash, randomUUID } from 'crypto';
+import type { CatalogVariantJobData } from './processors/thumbnail.processor.js';
 
 export interface PresignedUploadResult {
   uploadUrl: string;
@@ -34,7 +37,11 @@ export class StorageService {
   private readonly cdnDomain: string;
   private readonly signedUrlExpiry: number;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    @InjectQueue('storage-thumbnails')
+    private readonly thumbnailQueue: Queue<CatalogVariantJobData>,
+  ) {
     this.bucket =
       this.config.get<string>('AWS_S3_BUCKET')?.trim() ||
       this.config.get<string>('S3_BUCKET')?.trim() ||
@@ -350,6 +357,7 @@ export class StorageService {
         const key = this.mirroredObjectKey(sanitizedNs, u, ext);
         await this.putObject(key, buf, contentType);
         out[i] = { url: this.getCdnUrl(key), s3Key: key };
+        await this.queueVariantGeneration(key);
       } catch (e) {
         this.logger.warn(
           `mirrorRemoteImages failed for ${u.slice(0, 96)}: ${e instanceof Error ? e.message : e}`,
@@ -371,6 +379,37 @@ export class StorageService {
       const fallback = urls[i]?.trim() ?? '';
       return { url: fallback, s3Key: null };
     });
+  }
+
+  /**
+   * Enqueue responsive-variant generation (_thumb/_sm/_medium/_lg) for a
+   * freshly-mirrored catalog image. Fire-and-forget: the frontend derives
+   * variant URLs by suffix convention (getVariantUrl in imageUrl.ts) with no
+   * DB lookup, so this writes files to S3 only — no image_assets row needed.
+   * Failure to enqueue must not fail the mirror/import itself.
+   */
+  async queueVariantGeneration(s3Key: string): Promise<void> {
+    try {
+      await this.thumbnailQueue.add(
+        'generate-catalog-variants',
+        { s3Key },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          jobId: `catalog-variants-${s3Key}`,
+        },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to queue variant generation for ${s3Key}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  /** Public wrapper — extracts the S3 key from one of our own CDN/bucket
+   * URLs, or null if the URL isn't ours (e.g. an un-mirrored eBay image). */
+  keyFromUrl(url: string): string | null {
+    return this.tryKeyFromOurUrl(url);
   }
 
   private tryKeyFromOurUrl(url: string): string | null {

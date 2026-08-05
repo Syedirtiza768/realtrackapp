@@ -28,10 +28,14 @@ import {
   RequestUploadDto,
 } from './dto/request-upload.dto.js';
 import { UpdateAssetDto } from './dto/image-transform.dto.js';
-import type { ThumbnailJobData } from './processors/thumbnail.processor.js';
+import type {
+  CatalogVariantJobData,
+  ThumbnailJobData,
+} from './processors/thumbnail.processor.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { ListingRecord } from '../listings/listing-record.entity.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 
 @ApiTags('Storage')
 @Controller('storage')
@@ -46,8 +50,10 @@ export class StorageController {
     private readonly assetRepo: Repository<ImageAsset>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectRepository(CatalogProduct)
+    private readonly catalogProductRepo: Repository<CatalogProduct>,
     @InjectQueue('storage-thumbnails')
-    private readonly thumbnailQueue: Queue<ThumbnailJobData>,
+    private readonly thumbnailQueue: Queue<ThumbnailJobData | CatalogVariantJobData>,
   ) {}
 
   /**
@@ -295,6 +301,91 @@ export class StorageController {
         remaining > 0
           ? `${remaining} images still need processing. Call again to continue.`
           : 'All images queued for processing',
+    };
+  }
+
+  /**
+   * Backfill responsive variants for catalog-imported images. These have no
+   * image_assets row (mirrorRemoteImages writes straight to S3), so unlike
+   * backfill-variants above this walks catalog_products.image_urls directly
+   * and marks each product done via images_variants_generated_at once its
+   * images are queued. Idempotent/resumable — call repeatedly to page
+   * through the backlog.
+   *
+   * POST /storage/backfill-catalog-variants?batchSize=50
+   */
+  @Post('backfill-catalog-variants')
+  @RequirePermissions('storage.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Backfill responsive variants for catalog-imported images',
+  })
+  async backfillCatalogVariants(@Query('batchSize') batchSizeParam?: string) {
+    const batchSize = Math.min(
+      Math.max(parseInt(batchSizeParam ?? '50', 10) || 50, 1),
+      500,
+    );
+
+    const candidates = await this.catalogProductRepo
+      .createQueryBuilder('p')
+      .where('p.images_variants_generated_at IS NULL')
+      .andWhere('p.image_urls IS NOT NULL')
+      .andWhere('array_length(p.image_urls, 1) > 0')
+      .orderBy('p.id')
+      .limit(batchSize)
+      .getMany();
+
+    if (candidates.length === 0) {
+      return {
+        productsQueued: 0,
+        imagesQueued: 0,
+        remaining: 0,
+        message: 'All catalog products already have responsive variants',
+      };
+    }
+
+    let imagesQueued = 0;
+    let productsQueued = 0;
+    for (const product of candidates) {
+      try {
+        for (const url of product.imageUrls ?? []) {
+          const key = this.storageService.keyFromUrl(url);
+          // Skip un-mirrored external URLs (e.g. eBay CDN) — nothing of
+          // ours to generate variants for.
+          if (!key) continue;
+          await this.storageService.queueVariantGeneration(key);
+          imagesQueued++;
+        }
+        await this.catalogProductRepo.update(product.id, {
+          imagesVariantsGeneratedAt: new Date(),
+        });
+        productsQueued++;
+      } catch (err) {
+        this.logger.warn(
+          `Failed to queue variant backfill for catalog product ${product.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    const remaining = await this.catalogProductRepo
+      .createQueryBuilder('p')
+      .where('p.images_variants_generated_at IS NULL')
+      .andWhere('p.image_urls IS NOT NULL')
+      .andWhere('array_length(p.image_urls, 1) > 0')
+      .getCount();
+
+    this.logger.log(
+      `Catalog variant backfill: ${productsQueued} products / ${imagesQueued} images queued, ${remaining} products remaining`,
+    );
+
+    return {
+      productsQueued,
+      imagesQueued,
+      remaining,
+      message:
+        remaining > 0
+          ? `${remaining} catalog products still need processing. Call again to continue.`
+          : 'All catalog products queued for processing',
     };
   }
 

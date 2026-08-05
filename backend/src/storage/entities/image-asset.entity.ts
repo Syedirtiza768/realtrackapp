@@ -70,7 +70,7 @@ export class ImageAsset {
   @Column({ type: 'integer', nullable: true })
   height!: number | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'text', nullable: true })
   blurhash!: string | null;
 
   // ─── Ordering ───

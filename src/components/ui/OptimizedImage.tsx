@@ -23,7 +23,6 @@ import {
   isOurCdnUrl,
   handleImageError,
   toProxyUrl,
-  isCatalogImageUrl,
 } from '../../lib/imageUrl';
 
 export type ImageVariant = 'thumb' | 'small' | 'medium' | 'large' | 'original';
@@ -107,12 +106,24 @@ export default function OptimizedImage({
     onLoadCallback?.();
   }, [onLoadCallback]);
 
+  // Cached images (e.g. the hero and grid thumbnail both requesting the same
+  // catalog-image URL) can finish decoding before React attaches the onLoad
+  // listener — the native `load` event never fires again, so the <img> stays
+  // stuck at opacity:0 forever even though the browser already has it. Catch
+  // that case on mount/src-change by checking .complete directly.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth > 0 && status !== 'loaded') {
+      handleLoad();
+    }
+  }, [src, variant, status, handleLoad]);
+
   const handleError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
-      // Fall back to the original (non-variant) URL if a variant failed.
-      // Skip for catalog images since they don't have variants.
-      if (src && isOurCdnUrl(src) && !isCatalogImageUrl(src) && img.src !== toProxyUrl(src)) {
+      // Fall back to the original (non-variant) URL if a variant failed —
+      // covers catalog images whose backfill hasn't generated variants yet.
+      if (src && isOurCdnUrl(src) && img.src !== toProxyUrl(src)) {
         img.onerror = null;
         img.src = toProxyUrl(src);
         return;
@@ -127,10 +138,12 @@ export default function OptimizedImage({
   // Determine the actual image URL to display
   const getDisplayUrl = (): string => {
     if (!src) return '';
-    // Catalog images don't have responsive variants — use original URL directly.
-    if (isCatalogImageUrl(src)) return toProxyUrl(src);
-    // Apply the responsive variant suffix for our CDN/S3 URLs;
-    // external URLs pass through unchanged.
+    // Only our own CDN/S3 URLs have _thumb/_sm/_medium/_lg derivatives
+    // (catalog images included, once mirrored/backfilled — see
+    // storage.service.ts queueVariantGeneration). External hosts (eBay CDN,
+    // etc.) never generated those files — appending the suffix 404s, so pass
+    // those through unchanged.
+    if (!isOurCdnUrl(src)) return toProxyUrl(src);
     const variantFn = VARIANT_URL_MAP[variant] ?? VARIANT_URL_MAP.original;
     return toProxyUrl(variantFn(src));
   };

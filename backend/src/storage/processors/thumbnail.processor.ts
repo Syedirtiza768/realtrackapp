@@ -12,6 +12,12 @@ export interface ThumbnailJobData {
   s3Key: string;
 }
 
+/** Catalog-imported images have no image_assets row — just generate the
+ * variant files in S3. The frontend derives their URLs by suffix convention. */
+export interface CatalogVariantJobData {
+  s3Key: string;
+}
+
 @Processor('storage-thumbnails', { concurrency: 5 })
 export class ThumbnailProcessor extends WorkerHost {
   private readonly logger = new Logger(ThumbnailProcessor.name);
@@ -25,8 +31,25 @@ export class ThumbnailProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<ThumbnailJobData>): Promise<void> {
-    const { assetId, s3Key } = job.data;
+  async process(
+    job: Job<ThumbnailJobData | CatalogVariantJobData>,
+  ): Promise<void> {
+    if (job.name === 'generate-catalog-variants') {
+      const { s3Key } = job.data as CatalogVariantJobData;
+      this.logger.log(`Generating catalog-image variants for key=${s3Key}`);
+      try {
+        await this.imageProcessor.processImage(s3Key);
+      } catch (err) {
+        this.logger.error(
+          `Catalog variant generation failed for ${s3Key}`,
+          err,
+        );
+        throw err; // triggers BullMQ retry
+      }
+      return;
+    }
+
+    const { assetId, s3Key } = job.data as ThumbnailJobData;
     this.logger.log(`Generating thumbnails for asset=${assetId}`);
 
     try {

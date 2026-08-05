@@ -4,14 +4,17 @@ import { StorageService } from './storage.service';
 
 describe('StorageService.mirroredObjectKey', () => {
   const makeService = (prefix = '') =>
-    new StorageService({
-      get: (key: string, fallback?: string) => {
-        if (key === 'AWS_S3_BUCKET' || key === 'S3_BUCKET') return 'test-bucket';
-        if (key === 'AWS_S3_PREFIX' || key === 'S3_PREFIX') return prefix;
-        if (key === 'AWS_S3_REGION' || key === 'S3_REGION') return 'us-east-1';
-        return fallback;
-      },
-    } as unknown as ConfigService);
+    new StorageService(
+      {
+        get: (key: string, fallback?: string) => {
+          if (key === 'AWS_S3_BUCKET' || key === 'S3_BUCKET') return 'test-bucket';
+          if (key === 'AWS_S3_PREFIX' || key === 'S3_PREFIX') return prefix;
+          if (key === 'AWS_S3_REGION' || key === 'S3_REGION') return 'us-east-1';
+          return fallback;
+        },
+      } as unknown as ConfigService,
+      { add: async () => undefined } as unknown as import('bullmq').Queue,
+    );
 
   it('uses a source-hash key so two different sources at the same index diverge', () => {
     const svc = makeService();

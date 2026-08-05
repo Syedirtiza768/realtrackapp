@@ -114,6 +114,15 @@ export class CatalogProduct {
   @Column({ name: 'image_urls', type: 'text', array: true, default: '{}' })
   imageUrls!: string[];
 
+  /** Set once this product's images have been queued for responsive variant
+   * (_thumb/_sm/_medium/_lg) generation — see backfill-catalog-variants. */
+  @Column({
+    name: 'images_variants_generated_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  imagesVariantsGeneratedAt!: Date | null;
+
   /* ── Shipping & policies ───────────────────────────────── */
 
   @Column({ type: 'text', nullable: true })
