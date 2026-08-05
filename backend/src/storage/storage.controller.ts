@@ -331,7 +331,7 @@ export class StorageController {
       .where('p.images_variants_generated_at IS NULL')
       .andWhere('p.image_urls IS NOT NULL')
       .andWhere('array_length(p.image_urls, 1) > 0')
-      .orderBy('p.created_at', 'DESC')
+      .orderBy('p.createdAt', 'DESC')
       .limit(batchSize)
       .getMany();
 
