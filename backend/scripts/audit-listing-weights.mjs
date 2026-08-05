@@ -1,23 +1,27 @@
-// Audit + backfill shipping weight (kg) for published listings across all
-// connected stores. There is no existing weight-estimation logic in the app —
-// `weight` is a purely optional manual field on the Add Part form, so ~100%
-// of published listings currently have weight = NULL (one exception at
-// 100.000 kg, almost certainly wrong). This script estimates a realistic
-// shipping weight per listing via a cheap bulk AI model and writes it back.
+// Audit + backfill shipping weight (kg) for listings across all connected
+// stores. There is no existing weight-estimation logic in the app — `weight`
+// is a purely optional manual field on the Add Part form, so ~100% of
+// listings currently have weight = NULL (one exception at 100.000 kg,
+// almost certainly wrong). This script estimates a realistic shipping
+// weight per listing via a cheap bulk AI model and writes it back.
 //
 // Usage (run inside the backend container so DB/env vars are already correct):
-//   node scripts/audit-listing-weights.mjs --dry-run --limit 20   # sample, no writes
-//   node scripts/audit-listing-weights.mjs --apply --limit 500    # apply to first 500
-//   node scripts/audit-listing-weights.mjs --apply                # apply to everything
+//   node scripts/audit-listing-weights.mjs --dry-run --limit 20               # sample, no writes
+//   node scripts/audit-listing-weights.mjs --apply --status published        # published only
+//   node scripts/audit-listing-weights.mjs --apply --status draft,ready,published  # every listing
 //
 // Flags:
 //   --dry-run       Default. Estimates and reports, writes nothing.
 //   --apply         Writes the estimated weight to listing_records.weight.
+//   --status LIST   Comma-separated status filter (default: published).
 //   --limit N       Cap the number of listings processed (default: all).
 //   --concurrency N Parallel AI calls (default 8).
 //   --report PATH   Write a JSON report to this path (default: ./weight-audit-report.json).
+//
+// NOTE: uses a pg Pool (not a single Client) so concurrent workers can issue
+// overlapping queries safely — a single Client does not support that.
 
-import { Client } from 'pg';
+import { Pool } from 'pg';
 import OpenAI from 'openai';
 import { writeFileSync } from 'node:fs';
 
@@ -32,6 +36,10 @@ const APPLY = flag('apply');
 const LIMIT = opt('limit', null) ? Number(opt('limit', null)) : null;
 const CONCURRENCY = Number(opt('concurrency', '8'));
 const REPORT_PATH = opt('report', './weight-audit-report.json');
+const STATUSES = opt('status', 'published')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const MODEL = process.env.OPENAI_MODEL_BULK || 'deepseek/deepseek-chat-v3-0324';
 const BASE_URL = process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
@@ -114,27 +122,31 @@ async function main() {
     throw new Error('OPENAI_API_KEY is not set — cannot run (no --dry-run bypass; this always calls the AI).');
   }
 
-  const db = new Client({
+  const db = new Pool({
     host: process.env.DB_HOST ?? 'localhost',
     port: Number(process.env.DB_PORT ?? 5432),
     user: process.env.DB_USER ?? 'postgres',
     password: process.env.DB_PASSWORD ?? 'postgres',
     database: process.env.DB_NAME ?? 'listingpro',
+    max: CONCURRENCY + 2,
   });
-  await db.connect();
   console.log(`Connected to database. Model: ${MODEL} via ${BASE_URL}`);
-  console.log(`Mode: ${APPLY ? 'APPLY (writes weight column)' : 'DRY RUN (no writes)'}${LIMIT ? `, limit=${LIMIT}` : ''}`);
+  console.log(`Mode: ${APPLY ? 'APPLY (writes weight column)' : 'DRY RUN (no writes)'}, status=${STATUSES.join(',')}${LIMIT ? `, limit=${LIMIT}` : ''}`);
 
   const limitClause = LIMIT ? `LIMIT ${LIMIT}` : '';
-  const { rows } = await db.query(`
+  const statusPlaceholders = STATUSES.map((_, i) => `$${i + 1}`).join(',');
+  const { rows } = await db.query(
+    `
     SELECT id, "customLabelSku", title, "cBrand", "cType",
            "cManufacturerPartNumber", "cOeOemPartNumber", "categoryName", weight AS "currentWeight"
     FROM listing_records
-    WHERE "deletedAt" IS NULL AND status = 'published'
+    WHERE "deletedAt" IS NULL AND status IN (${statusPlaceholders})
     ORDER BY id
     ${limitClause}
-  `);
-  console.log(`Fetched ${rows.length} published listing(s) to process.`);
+  `,
+    STATUSES,
+  );
+  console.log(`Fetched ${rows.length} listing(s) to process (status: ${STATUSES.join(', ')}).`);
 
   const aiClient = new OpenAI({
     apiKey: API_KEY,
@@ -194,6 +206,10 @@ async function main() {
       processed++;
       if (processed % 250 === 0 || processed === rows.length) {
         console.log(`Progress: ${processed}/${rows.length} (updated=${report.updated}, failed=${report.failed})`);
+        // Flush periodically so a killed/crashed run still leaves useful
+        // diagnostics instead of losing everything (only writing at the end
+        // meant an interrupted run had zero failure detail to inspect).
+        writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2));
       }
     }
   });
