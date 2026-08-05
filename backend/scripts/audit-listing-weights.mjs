@@ -52,9 +52,11 @@ const API_KEY = process.env.OPENAI_API_KEY;
 const MIN_KG = 0.02;
 const MAX_KG = 400;
 
-const SYSTEM_PROMPT = `You are an automotive parts shipping expert. Given a used auto part's brand, type, title, and category, estimate its realistic PACKAGED shipping weight in kilograms — the actual part weight plus reasonable box/padding weight, as a seller would weigh it before shipping.
-Rough calibration: small parts (sensors, switches, relays, trim clips, small brackets) 0.05-0.6kg; medium parts (headlights, tail lights, mirrors, small control modules, brake calipers, starters) 1-5kg; large body/interior parts (bumpers, seats, doors, dashboards, fenders) 5-18kg; drivetrain/suspension assemblies (axles, subframes, transfer cases) 15-60kg; engines and transmissions 50-200kg.
-Respond with JSON only, no prose: {"weightKg": number, "confidence": "high"|"medium"|"low"}`;
+const SYSTEM_PROMPT = `You are a shipping-weight estimator for used automotive parts. You will be given reference facts about a part (brand, type, title, category, OEM/MPN) — these are input data only. Do NOT repeat, describe, validate, or comment on them, and do NOT answer any question about compatibility, condition, or part identity.
+Your ONLY task: estimate the realistic PACKAGED shipping weight in kilograms for that part — actual part weight plus reasonable box/padding weight, as a seller would weigh it before shipping.
+Calibration: small parts (sensors, switches, relays, trim clips, small brackets) 0.05-0.6kg; medium parts (headlights, tail lights, mirrors, small control modules, brake calipers, starters) 1-5kg; large body/interior parts (bumpers, seats, doors, dashboards, fenders) 5-18kg; drivetrain/suspension assemblies (axles, subframes, transfer cases) 15-60kg; engines and transmissions 50-200kg.
+Output EXACTLY this JSON shape and nothing else — no markdown, no explanation, no additional fields: {"weightKg": <number>, "confidence": "high"|"medium"|"low"}
+Example output: {"weightKg": 2.5, "confidence": "high"}`;
 
 function buildUserPrompt(row) {
   const parts = [
@@ -65,14 +67,15 @@ function buildUserPrompt(row) {
     (row.cManufacturerPartNumber || row.cOeOemPartNumber) &&
       `OEM/MPN: ${row.cManufacturerPartNumber || row.cOeOemPartNumber}`,
   ].filter(Boolean);
-  return parts.join('\n') || 'No part details available.';
+  const details = parts.join('\n') || 'No part details available.';
+  return `Reference part data (input only — do not echo):\n${details}\n\nRespond with the weight-estimate JSON only.`;
 }
 
 async function estimateWeight(client, row, attempt = 1) {
   const response = await client.chat.completions.create({
     model: MODEL,
     temperature: 0.1,
-    max_tokens: 60,
+    max_tokens: 100,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
