@@ -1,5 +1,11 @@
 # RealTrackApp — Claude Code Guide
 
+> **Tool-agnostic rules live in [AGENTS.md](AGENTS.md)** — read that first; it applies to any
+> AI agent, not just Claude Code. **The docs map-of-content is [docs/Home.md](docs/Home.md)**
+> — start there before touching architecture, and see [docs/decisions.md](docs/decisions.md)
+> for the running non-obvious-decisions log. Everything below is Claude-Code-specific
+> supplementary detail; it does not replace the two files above.
+
 ## Project overview
 
 RealTrackApp is a full-stack eBay listing management and inventory pipeline tool.

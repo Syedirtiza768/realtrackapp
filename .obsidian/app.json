@@ -1,0 +1,30 @@
+{
+  "userIgnoreFilters": [
+    "node_modules/",
+    ".git/",
+    "dist/",
+    "build/",
+    "backend/dist/",
+    "backend/node_modules/",
+    "backend/uploads/",
+    "uploads/",
+    "output/",
+    "backend/scripts/output/",
+    "files/",
+    "exports/",
+    "outputs/",
+    "config/",
+    "drive-download-20260706T171856Z-3-001/",
+    "docs/inventory-export-2026-05-11_batches/",
+    ".commandcode/",
+    ".agents/",
+    ".kilo/",
+    ".gstack/",
+    ".claude/",
+    "*.csv",
+    "*.tsv",
+    "*.xlsx",
+    "*.dump",
+    "*.pem"
+  ]
+}

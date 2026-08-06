@@ -1,14 +1,36 @@
 # AGENTS.md — Rules for AI Agents
 
-Operational rules for any AI agent (Claude Code or otherwise) working in this repo.
-Keep it short; this is a contract, not a tutorial.
+Operational rules for any AI agent or model working in this repo (Claude Code, Codex,
+Copilot, Cursor, Gemini, etc.) — not just Claude Code. If your tool has its own
+instructions file (`CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`, ...),
+it should point back here rather than duplicating this content, so there's one place
+to keep current. Keep this file short; it's a contract, not a tutorial.
 
 ## First read
 
 `README.md` → `CONTEXT.md` → `CLAUDE.md` → this file →
-`docs/context/CURRENT_STATE.md` → `docs/architecture/ARCHITECTURE.md`.
+[`docs/Home.md`](docs/Home.md) (map-of-content for the docs vault — an Obsidian vault
+rooted at this repo) → `docs/context/CURRENT_STATE.md` → `docs/architecture/ARCHITECTURE.md`.
 Then inspect the actual code. **Trust code over docs when they conflict, and fix
 the doc.**
+
+## Enforcement
+
+A git pre-commit hook (`scripts/check-docs-freshness.mjs`, installed via
+`simple-git-hooks` — runs automatically after `npm install`, for any tool or human
+committing) checks staged diffs against `src/`, `backend/src/`, `backend/scripts/`,
+`scripts/`, and `shared/`. If it judges a docs update is warranted and none was
+staged, it **blocks the commit**. This fires regardless of which agent made the
+change, since it's enforced by git itself.
+
+- The check calls the local `claude` CLI non-interactively to judge the actual diff
+  (not just path-matching), to keep false positives/negatives low. If that CLI isn't
+  available or isn't authenticated, it fails safe into a blocking generic reminder
+  instead of silently passing.
+- Override (only after actually checking): `SKIP_DOCS_CHECK=1 git commit ...`
+- This is a local hook, so it can be bypassed with `git commit --no-verify`. Nothing
+  in this repo currently backstops that bypass — treat the hook as the only line of
+  defense and don't skip it casually.
 
 ## Project shape (orientation)
 
