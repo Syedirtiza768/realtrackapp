@@ -80,3 +80,9 @@ export class AutoCreateUploadDto {
   @IsString()
   partNumber?: string;
 }
+
+export class BulkDeleteFilesDto {
+  @IsArray()
+  @IsString({ each: true })
+  fileIds!: string[];
+}

@@ -137,7 +137,10 @@ export class ImageDriveService {
     folderId: string,
     updates: { name?: string; linkedPartNumber?: string | null },
   ): Promise<DriveFolderEntry> {
-    const folder = await this.folderRepo.findOneBy({ id: folderId });
+    const folder = await this.folderRepo.findOne({
+      where: { id: folderId },
+      relations: ['assets'],
+    });
     if (!folder) {
       throw new ConflictException(`Folder ${folderId} not found`);
     }
@@ -150,22 +153,72 @@ export class ImageDriveService {
       if (dup && dup.id !== folderId) {
         throw new ConflictException(`Folder "${updates.name}" already exists`);
       }
+
+      const oldPrefix = folder.s3Prefix;
+      const newPrefix = this.storageService.buildDrivePrefix(updates.name);
+
+      if (oldPrefix !== newPrefix && folder.assets.length > 0) {
+        this.logger.log(
+          `Moving ${folder.assets.length} S3 objects from ${oldPrefix} → ${newPrefix}`,
+        );
+        for (const asset of folder.assets) {
+          const filenames = asset.s3Key.slice(oldPrefix.length);
+          const newS3Key = `${newPrefix}${filenames}`;
+
+          try {
+            await this.storageService.moveObject(asset.s3Key, newS3Key);
+            asset.s3Key = newS3Key;
+            asset.cdnUrl = this.storageService.getCdnUrl(newS3Key);
+
+            if (asset.s3KeyThumb) {
+              const thumbFilename = asset.s3KeyThumb.slice(oldPrefix.length);
+              const newThumbKey = `${newPrefix}${thumbFilename}`;
+              await this.storageService.moveObject(
+                asset.s3KeyThumb,
+                newThumbKey,
+              );
+              asset.s3KeyThumb = newThumbKey;
+            }
+            if (asset.s3KeyMedium) {
+              const medFilename = asset.s3KeyMedium.slice(oldPrefix.length);
+              const newMedKey = `${newPrefix}${medFilename}`;
+              await this.storageService.moveObject(
+                asset.s3KeyMedium,
+                newMedKey,
+              );
+              asset.s3KeyMedium = newMedKey;
+            }
+
+            await this.assetRepo.save(asset);
+          } catch (err) {
+            this.logger.error(
+              `Failed to move S3 object ${asset.s3Key} → ${newS3Key}: ${err}`,
+            );
+          }
+        }
+      }
+
       folder.name = updates.name.trim();
       folder.nameNormalized = normalized;
-      folder.s3Prefix = this.storageService.buildDrivePrefix(updates.name);
+      folder.s3Prefix = newPrefix;
     }
 
     if (updates.linkedPartNumber !== undefined) {
-      folder.linkedPartNumber =
-        updates.linkedPartNumber?.trim() || null;
-      folder.linkedPartNumberNormalized =
-        updates.linkedPartNumber
-          ? ImageDriveService.normalizePartNumber(updates.linkedPartNumber)
-          : null;
+      folder.linkedPartNumber = updates.linkedPartNumber?.trim() || null;
+      folder.linkedPartNumberNormalized = updates.linkedPartNumber
+        ? ImageDriveService.normalizePartNumber(updates.linkedPartNumber)
+        : null;
     }
 
     const saved = await this.folderRepo.save(folder);
     this.logger.log(`Updated folder ${folderId}`);
+
+    const thumbAssets = await this.assetRepo.find({
+      where: { folderId },
+      order: { createdAt: 'ASC' },
+      take: 4,
+      withDeleted: false,
+    });
 
     return {
       id: saved.id,
@@ -176,7 +229,7 @@ export class ImageDriveService {
       totalSizeBytes: saved.totalSizeBytes,
       createdAt: saved.createdAt,
       updatedAt: saved.updatedAt,
-      thumbnailUrls: [],
+      thumbnailUrls: thumbAssets.map((t) => t.s3KeyThumb || t.cdnUrl),
     };
   }
 
@@ -357,6 +410,25 @@ export class ImageDriveService {
     const asset = await this.assetRepo.findOneBy({ id: assetId });
     if (!asset) return null;
     return this.toFileEntry(asset);
+  }
+
+  async deleteFiles(
+    assetIds: string[],
+  ): Promise<{ deleted: number; failed: string[] }> {
+    const failed: string[] = [];
+    let deleted = 0;
+
+    for (const assetId of assetIds) {
+      try {
+        const ok = await this.deleteFile(assetId);
+        if (ok) deleted++;
+        else failed.push(assetId);
+      } catch {
+        failed.push(assetId);
+      }
+    }
+
+    return { deleted, failed };
   }
 
   // ─── Part number lookup (for auto-attach) ────────────────────

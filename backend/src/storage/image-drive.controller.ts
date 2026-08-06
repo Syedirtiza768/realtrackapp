@@ -20,7 +20,7 @@ import { RequirePermissions } from '../rbac/decorators/require-permissions.decor
 import { ImageDriveService } from './image-drive.service.js';
 import { StorageService } from './storage.service.js';
 import {
-  AutoCreateUploadDto,
+  BulkDeleteFilesDto,
   CreateFolderDto,
   ImageDriveBatchLookupDto,
   ListFilesDto,
@@ -120,7 +120,6 @@ export class ImageDriveController {
 
     for (const file of files) {
       const mimeType = file.mimetype || 'image/jpeg';
-      const ext = this.storageService.sanitizeExtension(file.originalname);
       const s3Key = `${folder.s3Prefix}${file.originalname}`;
 
       await this.storageService.putObject(s3Key, file.buffer, mimeType);
@@ -236,13 +235,33 @@ export class ImageDriveController {
     return { deleted: true };
   }
 
+  @Get('files/:fileId')
+  @ApiOperation({ summary: 'Get single file details' })
+  async getFile(@Param('fileId') fileId: string) {
+    const file = await this.imageDriveService.getFile(fileId);
+    if (!file) {
+      throw new NotFoundException(`File ${fileId} not found`);
+    }
+    return file;
+  }
+
+  @Post('files/bulk-delete')
+  @RequirePermissions('image_drive.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bulk delete files by IDs' })
+  async bulkDeleteFiles(@Body() dto: BulkDeleteFilesDto) {
+    if (!dto.fileIds?.length) {
+      throw new BadRequestException('fileIds array is required');
+    }
+    return this.imageDriveService.deleteFiles(dto.fileIds);
+  }
+
   // ─── Lookup (auto-attach) ────────────────────────────────────
 
   @Get('lookup/:partNumber')
   @ApiOperation({ summary: 'Get all images for a part number' })
   async findByPartNumber(@Param('partNumber') partNumber: string) {
-    const images =
-      await this.imageDriveService.findByPartNumber(partNumber);
+    const images = await this.imageDriveService.findByPartNumber(partNumber);
     return { partNumber, images, count: images.length };
   }
 

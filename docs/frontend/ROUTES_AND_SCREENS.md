@@ -57,7 +57,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | `/settings/integrations/ebay/:accountId/policies` | `EbayPolicyMappingPage` | `ebay.manage` | Policy mapping |
 | `/sku/:id` | `SkuDetailPage` | `catalog.view` | SKU detail |
 | `/preview` | `EbayPreviewPage` | `listings.view` | Listing preview |
-| `/image-drive` | `ImageDrivePage` | `image_drive.view` | Google Drive-style file manager; folder browser, upload, part-number linking |
+| `/image-drive` | `ImageDrivePage` | `image_drive.view` | Google Drive-style file manager; folder browser, upload, part-number linking, search, sort, bulk select/delete, file preview lightbox, copy URL, download, pagination |
 
 ---
 

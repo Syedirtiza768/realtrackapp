@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -198,6 +199,29 @@ export class StorageService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Copy an object within the same bucket (S3 has no rename).
+   */
+  async copyObject(sourceKey: string, destKey: string): Promise<void> {
+    const command = new CopyObjectCommand({
+      Bucket: this.bucket,
+      CopySource: `${this.bucket}/${sourceKey}`,
+      Key: destKey,
+      CacheControl: 'public, max-age=31536000, immutable',
+    });
+    await this.s3.send(command);
+    this.logger.debug(`Copied object ${sourceKey} → ${destKey}`);
+  }
+
+  /**
+   * Move an object (copy + delete source). Used for folder renames.
+   */
+  async moveObject(sourceKey: string, destKey: string): Promise<void> {
+    await this.copyObject(sourceKey, destKey);
+    await this.deleteObject(sourceKey);
+    this.logger.debug(`Moved object ${sourceKey} → ${destKey}`);
   }
 
   /**

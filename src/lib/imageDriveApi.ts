@@ -195,6 +195,22 @@ export async function deleteFile(fileId: string): Promise<void> {
   });
 }
 
+export async function getFile(fileId: string): Promise<DriveFileEntry> {
+  return fetchWithAuth<DriveFileEntry>(`${API}/image-drive/files/${fileId}`);
+}
+
+export async function bulkDeleteFiles(
+  fileIds: string[],
+): Promise<{ deleted: number; failed: string[] }> {
+  return fetchWithAuth<{ deleted: number; failed: string[] }>(
+    `${API}/image-drive/files/bulk-delete`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ fileIds }),
+    },
+  );
+}
+
 // ─── Lookup (auto-attach) ────────────────────────────────────
 
 export async function lookupDriveImages(

@@ -521,6 +521,8 @@ GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
 | POST | `/api/image-drive/folders/:id/upload` | Upload files to folder (multipart, up to 50) | image_drive.upload |
 | POST | `/api/image-drive/upload` | Upload with auto-create folder (folderId="auto") | image_drive.upload |
 | DELETE | `/api/image-drive/files/:id` | Delete single file (+ S3 cleanup) | image_drive.manage |
+| GET | `/api/image-drive/files/:id` | Get single file details | image_drive.view |
+| POST | `/api/image-drive/files/bulk-delete` | Bulk delete files by IDs | image_drive.manage |
 | GET | `/api/image-drive/lookup/:partNumber` | Auto-attach lookup by part number | image_drive.view |
 | POST | `/api/image-drive/lookup` | Batch lookup by part numbers | image_drive.view |
 | GET | `/api/image-drive/search` | Search folders by name or linked part number | image_drive.view |

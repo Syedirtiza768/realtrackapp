@@ -14,6 +14,12 @@ import {
   Edit3,
   Check,
   Home,
+  Search,
+  Copy,
+  Download,
+  CheckSquare,
+  Square,
+  ChevronLeft,
 } from 'lucide-react';
 import {
   listFolders,
@@ -24,13 +30,17 @@ import {
   uploadToFolder,
   uploadAutoCreate,
   deleteFile,
+  bulkDeleteFiles,
+  searchDrive,
   getDriveStats,
   type DriveFolderEntry,
   type DriveFileEntry,
 } from '../../lib/imageDriveApi';
 import OptimizedImage from '../ui/OptimizedImage';
+import ImageZoom from '../ui/ImageZoom';
 
 type ViewMode = 'grid' | 'list';
+type SortOption = 'name' | 'date' | 'size';
 type BreadcrumbItem = { id: string | null; name: string };
 
 export default function ImageDrivePage() {
@@ -41,6 +51,13 @@ export default function ImageDrivePage() {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [filePage, setFilePage] = useState(1);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { id: null, name: 'Image Drive' },
   ]);
@@ -53,19 +70,34 @@ export default function ImageDrivePage() {
   const { data: folders = [], isLoading: foldersLoading } = useQuery({
     queryKey: ['image-drive-folders'],
     queryFn: listFolders,
-    enabled: currentFolderId === null,
+    enabled: currentFolderId === null && !isSearching,
   });
 
   const { data: fileList, isLoading: filesLoading } = useQuery({
-    queryKey: ['image-drive-files', currentFolderId],
-    queryFn: () => listFiles(currentFolderId!, 1, 200),
+    queryKey: ['image-drive-files', currentFolderId, filePage],
+    queryFn: () => listFiles(currentFolderId!, filePage, 50),
     enabled: currentFolderId !== null,
+  });
+
+  const { data: searchResults, isLoading: searchLoading } = useQuery({
+    queryKey: ['image-drive-search', searchQuery],
+    queryFn: () => searchDrive(searchQuery, 1, 100),
+    enabled: isSearching && searchQuery.trim().length >= 2,
+  });
+
+  const sortedFolders = [...folders].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name);
+    if (sortBy === 'date') return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    return b.totalSizeBytes - a.totalSizeBytes;
   });
 
   const navigateToFolder = useCallback(
     (folder: DriveFolderEntry) => {
       setCurrentFolderId(folder.id);
       setCurrentFolderName(folder.name);
+      setFilePage(1);
+      setSelectedFiles(new Set());
+      setSelectMode(false);
       setBreadcrumbs([
         { id: null, name: 'Image Drive' },
         { id: folder.id, name: folder.name },
@@ -77,8 +109,40 @@ export default function ImageDrivePage() {
   const navigateToRoot = useCallback(() => {
     setCurrentFolderId(null);
     setCurrentFolderName('');
+    setFilePage(1);
+    setSelectedFiles(new Set());
+    setSelectMode(false);
     setBreadcrumbs([{ id: null, name: 'Image Drive' }]);
   }, []);
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+    setIsSearching(q.trim().length >= 2);
+    if (q.trim().length >= 2) {
+      setCurrentFolderId(null);
+    }
+  }, []);
+
+  const openLightbox = useCallback((urls: string[], index: number) => {
+    setLightboxImages(urls);
+    setLightboxIndex(index);
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedFiles.size === 0) return;
+    const ids = [...selectedFiles];
+    const confirmed = window.confirm(
+      `Delete ${ids.length} file${ids.length > 1 ? 's' : ''}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    await bulkDeleteFiles(ids);
+    setSelectedFiles(new Set());
+    setSelectMode(false);
+    queryClient.invalidateQueries({ queryKey: ['image-drive-files'] });
+    queryClient.invalidateQueries({ queryKey: ['image-drive-folders'] });
+    queryClient.invalidateQueries({ queryKey: ['image-drive-stats'] });
+  }, [selectedFiles, queryClient]);
 
   return (
     <div className="flex h-full flex-col bg-slate-50 dark:bg-slate-900">
@@ -97,6 +161,65 @@ export default function ImageDrivePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search folders..."
+              className="w-56 rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => handleSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+          >
+            <option value="name">Sort: Name</option>
+            <option value="date">Sort: Date</option>
+            <option value="size">Sort: Size</option>
+          </select>
+
+          {currentFolderId && (
+            <>
+              <button
+                onClick={() => {
+                  setSelectMode(!selectMode);
+                  if (selectMode) setSelectedFiles(new Set());
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium ${
+                  selectMode
+                    ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-300'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                <CheckSquare className="h-4 w-4" />
+                {selectMode ? 'Cancel' : 'Select'}
+              </button>
+              {selectMode && selectedFiles.size > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete {selectedFiles.size}
+                </button>
+              )}
+            </>
+          )}
+
           <button
             onClick={() => setShowCreateFolder(true)}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
@@ -104,15 +227,13 @@ export default function ImageDrivePage() {
             <FolderPlus className="h-4 w-4" />
             New Folder
           </button>
-          {currentFolderId && (
-            <button
-              onClick={() => setShowUpload(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              <Upload className="h-4 w-4" />
-              Upload
-            </button>
-          )}
+          <button
+            onClick={() => setShowUpload(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Upload className="h-4 w-4" />
+            Upload
+          </button>
         </div>
       </div>
 
@@ -170,14 +291,27 @@ export default function ImageDrivePage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
+        {/* Search results */}
+        {isSearching && (
+          <SearchResults
+            results={searchResults?.items ?? []}
+            loading={searchLoading}
+            viewMode={viewMode}
+            onOpenFile={(file) =>
+              openLightbox([file.cdnUrl], 0)
+            }
+          />
+        )}
+
         {/* Root: show folders */}
-        {currentFolderId === null && (
+        {currentFolderId === null && !isSearching && (
           <FolderGrid
-            folders={folders}
+            folders={sortedFolders}
             loading={foldersLoading}
             viewMode={viewMode}
             onOpen={navigateToFolder}
             onDelete={(id) => {
+              if (!window.confirm('Delete this folder and all its files? This cannot be undone.')) return;
               deleteFolder(id).then(() =>
                 queryClient.invalidateQueries({ queryKey: ['image-drive-folders'] }),
               );
@@ -192,25 +326,66 @@ export default function ImageDrivePage() {
 
         {/* Inside folder: show files */}
         {currentFolderId && (
-          <FileGrid
-            files={fileList?.items ?? []}
-            loading={filesLoading}
-            viewMode={viewMode}
-            folderName={currentFolderName}
-            onDelete={(id) => {
-              deleteFile(id).then(() => {
-                queryClient.invalidateQueries({
-                  queryKey: ['image-drive-files', currentFolderId],
+          <>
+            <FileGrid
+              files={fileList?.items ?? []}
+              loading={filesLoading}
+              viewMode={viewMode}
+              folderName={currentFolderName}
+              selectMode={selectMode}
+              selectedFiles={selectedFiles}
+              onToggleSelect={(id) => {
+                setSelectedFiles((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
                 });
-                queryClient.invalidateQueries({
-                  queryKey: ['image-drive-folders'],
+              }}
+              onDelete={(id) => {
+                if (!window.confirm('Delete this file? This cannot be undone.')) return;
+                deleteFile(id).then(() => {
+                  queryClient.invalidateQueries({
+                    queryKey: ['image-drive-files', currentFolderId],
+                  });
+                  queryClient.invalidateQueries({
+                    queryKey: ['image-drive-folders'],
+                  });
+                  queryClient.invalidateQueries({
+                    queryKey: ['image-drive-stats'],
+                  });
                 });
-                queryClient.invalidateQueries({
-                  queryKey: ['image-drive-stats'],
-                });
-              });
-            }}
-          />
+              }}
+              onPreview={(file) => {
+                const allUrls = (fileList?.items ?? []).map((f) => f.cdnUrl);
+                const idx = allUrls.indexOf(file.cdnUrl);
+                openLightbox(allUrls, Math.max(0, idx));
+              }}
+            />
+
+            {/* Pagination */}
+            {fileList && fileList.totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setFilePage((p) => Math.max(1, p - 1))}
+                  disabled={filePage <= 1}
+                  className="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-40 dark:border-slate-600"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  Page {fileList.page} of {fileList.totalPages}
+                </span>
+                <button
+                  onClick={() => setFilePage((p) => Math.min(fileList.totalPages, p + 1))}
+                  disabled={filePage >= fileList.totalPages}
+                  className="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-40 dark:border-slate-600"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -230,15 +405,17 @@ export default function ImageDrivePage() {
       )}
 
       {/* Upload modal */}
-      {showUpload && currentFolderId && (
+      {showUpload && (
         <UploadModal
           folderId={currentFolderId}
           folderName={currentFolderName}
           onClose={() => setShowUpload(false)}
           onUploaded={() => {
-            queryClient.invalidateQueries({
-              queryKey: ['image-drive-files', currentFolderId],
-            });
+            if (currentFolderId) {
+              queryClient.invalidateQueries({
+                queryKey: ['image-drive-files', currentFolderId],
+              });
+            }
             queryClient.invalidateQueries({
               queryKey: ['image-drive-folders'],
             });
@@ -250,8 +427,17 @@ export default function ImageDrivePage() {
         />
       )}
 
+      {/* Lightbox */}
+      {lightboxImages && (
+        <ImageZoom
+          images={lightboxImages}
+          index={lightboxIndex}
+          onClose={() => setLightboxImages(null)}
+        />
+      )}
+
       {/* Drag-drop zone at root for auto-create */}
-      {currentFolderId === null && (
+      {currentFolderId === null && !isSearching && (
         <RootDropZone
           onUploaded={() => {
             queryClient.invalidateQueries({ queryKey: ['image-drive-folders'] });
@@ -259,6 +445,72 @@ export default function ImageDrivePage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Search Results ──────────────────────────────────────────
+
+function SearchResults({
+  results,
+  loading,
+  viewMode,
+  onOpenFile,
+}: {
+  results: Array<DriveFileEntry & { folderName: string }>;
+  loading: boolean;
+  viewMode: ViewMode;
+  onOpenFile: (file: DriveFileEntry) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        Searching...
+      </div>
+    );
+  }
+
+  if (results.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+        <Search className="mb-4 h-12 w-12" />
+        <p className="text-lg font-medium">No results found</p>
+        <p className="text-sm">Try a different search term</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={
+        viewMode === 'grid'
+          ? 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+          : 'flex flex-col gap-2'
+      }
+    >
+      {results.map((file) => (
+        <div key={file.id} className="group relative">
+          <div
+            className="aspect-square cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-700"
+            onClick={() => onOpenFile(file)}
+          >
+            <OptimizedImage
+              src={file.cdnUrl}
+              alt={file.filename}
+              variant="medium"
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="mt-1 px-1">
+            <p className="truncate text-xs text-slate-600 dark:text-slate-400">
+              {file.filename}
+            </p>
+            <p className="truncate text-xs text-blue-500">
+              {file.folderName}
+            </p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -532,13 +784,21 @@ function FileGrid({
   loading,
   viewMode,
   folderName,
+  selectMode,
+  selectedFiles,
+  onToggleSelect,
   onDelete,
+  onPreview,
 }: {
   files: DriveFileEntry[];
   loading: boolean;
   viewMode: ViewMode;
   folderName: string;
+  selectMode: boolean;
+  selectedFiles: Set<string>;
+  onToggleSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onPreview: (file: DriveFileEntry) => void;
 }) {
   if (loading) {
     return (
@@ -571,7 +831,11 @@ function FileGrid({
           key={file.id}
           file={file}
           viewMode={viewMode}
+          selectMode={selectMode}
+          selected={selectedFiles.has(file.id)}
+          onToggleSelect={() => onToggleSelect(file.id)}
           onDelete={() => onDelete(file.id)}
+          onPreview={() => onPreview(file)}
         />
       ))}
     </div>
@@ -583,23 +847,63 @@ function FileGrid({
 function FileCard({
   file,
   viewMode,
+  selectMode,
+  selected,
+  onToggleSelect,
   onDelete,
+  onPreview,
 }: {
   file: DriveFileEntry;
   viewMode: ViewMode;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onDelete: () => void;
+  onPreview: () => void;
 }) {
   const thumbUrl = file.s3KeyThumb || file.cdnUrl;
+  const [copied, setCopied] = useState(false);
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(file.cdnUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('Copy URL:', file.cdnUrl);
+    }
+  };
+
+  const download = () => {
+    const a = document.createElement('a');
+    a.href = file.cdnUrl;
+    a.download = file.filename;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   if (viewMode === 'list') {
     return (
       <div className="group flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-4 py-2 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800">
+        {selectMode && (
+          <button onClick={onToggleSelect} className="flex-shrink-0">
+            {selected ? (
+              <CheckSquare className="h-5 w-5 text-blue-500" />
+            ) : (
+              <Square className="h-5 w-5 text-slate-300" />
+            )}
+          </button>
+        )}
         <img
           src={thumbUrl}
           alt={file.filename}
-          className="h-10 w-10 rounded object-cover"
+          className="h-10 w-10 cursor-pointer rounded object-cover"
+          onClick={onPreview}
         />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
             {file.filename}
           </p>
@@ -608,19 +912,43 @@ function FileCard({
             {file.width && file.height && ` · ${file.width}×${file.height}`}
           </p>
         </div>
-        <button
-          onClick={onDelete}
-          className="rounded p-1.5 text-red-400 opacity-0 hover:bg-red-100 group-hover:opacity-100 dark:hover:bg-red-900/30"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+          <button onClick={copyUrl} title="Copy URL" className="rounded p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">
+            {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+          </button>
+          <button onClick={download} title="Download" className="rounded p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">
+            <Download className="h-4 w-4" />
+          </button>
+          <button onClick={onDelete} title="Delete" className="rounded p-1.5 text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="group relative">
-      <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-700">
+      {selectMode && (
+        <button
+          onClick={onToggleSelect}
+          className="absolute left-2 top-2 z-10 rounded bg-white/90 p-1 shadow-sm dark:bg-slate-700/90"
+        >
+          {selected ? (
+            <CheckSquare className="h-5 w-5 text-blue-500" />
+          ) : (
+            <Square className="h-5 w-5 text-slate-300" />
+          )}
+        </button>
+      )}
+      <div
+        className={`aspect-square overflow-hidden rounded-xl border bg-slate-100 dark:bg-slate-700 cursor-pointer ${
+          selected
+            ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
+            : 'border-slate-200 dark:border-slate-700'
+        }`}
+        onClick={selectMode ? onToggleSelect : onPreview}
+      >
         <OptimizedImage
           src={file.cdnUrl}
           alt={file.filename}
@@ -633,12 +961,39 @@ function FileCard({
           {file.filename}
         </p>
       </div>
-      <button
-        onClick={onDelete}
-        className="absolute right-2 top-2 rounded bg-white/90 p-1.5 text-red-500 opacity-0 shadow-sm transition hover:bg-white group-hover:opacity-100 dark:bg-slate-700/90 dark:hover:bg-slate-700"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      {/* Actions overlay */}
+      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            copyUrl();
+          }}
+          title="Copy URL"
+          className="rounded bg-white/90 p-1.5 text-slate-600 shadow-sm hover:bg-white dark:bg-slate-700/90 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            download();
+          }}
+          title="Download"
+          className="rounded bg-white/90 p-1.5 text-slate-600 shadow-sm hover:bg-white dark:bg-slate-700/90 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete"
+          className="rounded bg-white/90 p-1.5 text-red-500 shadow-sm hover:bg-white dark:bg-slate-700/90 dark:hover:bg-slate-700"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -717,7 +1072,7 @@ function UploadModal({
   onClose,
   onUploaded,
 }: {
-  folderId: string;
+  folderId: string | null;
   folderName: string;
   onClose: () => void;
   onUploaded: () => void;
@@ -726,34 +1081,59 @@ function UploadModal({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [autoFolderName, setAutoFolderName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback((files: FileList | File[]) => {
     const arr = Array.from(files).filter((f) =>
       f.type.startsWith('image/'),
     );
-    if (arr.length > 0) setPendingFiles(arr);
-  }, []);
+    if (arr.length > 0) {
+      setPendingFiles(arr);
+      if (!autoFolderName && !folderId) {
+        setAutoFolderName(arr[0].name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9\-_ ]/g, ''));
+      }
+    }
+  }, [autoFolderName, folderId]);
 
   const handleUpload = useCallback(async () => {
     if (pendingFiles.length === 0) return;
     setUploading(true);
     try {
-      await uploadToFolder(folderId, pendingFiles, setProgress);
+      if (folderId) {
+        await uploadToFolder(folderId, pendingFiles, setProgress);
+      } else {
+        if (!autoFolderName.trim()) return;
+        await uploadAutoCreate(autoFolderName, pendingFiles, undefined, setProgress);
+      }
       onUploaded();
     } catch (err) {
       console.error('Upload failed:', err);
     } finally {
       setUploading(false);
     }
-  }, [folderId, pendingFiles, onUploaded]);
+  }, [folderId, autoFolderName, pendingFiles, onUploaded]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800">
         <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">
-          Upload to {folderName}
+          {folderId ? `Upload to ${folderName}` : 'Upload Images'}
         </h2>
+
+        {!folderId && (
+          <div className="mb-3">
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Folder Name
+            </label>
+            <input
+              value={autoFolderName}
+              onChange={(e) => setAutoFolderName(e.target.value)}
+              placeholder="Enter folder name for auto-create"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+            />
+          </div>
+        )}
 
         <div
           className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition ${
@@ -815,7 +1195,7 @@ function UploadModal({
           </button>
           <button
             onClick={handleUpload}
-            disabled={pendingFiles.length === 0 || uploading}
+            disabled={pendingFiles.length === 0 || uploading || (!folderId && !autoFolderName.trim())}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {uploading ? 'Uploading...' : `Upload ${pendingFiles.length} file(s)`}
