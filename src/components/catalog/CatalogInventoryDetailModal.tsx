@@ -731,9 +731,6 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
 
   if (!id) return null;
 
-  const thumbVisible = 6;
-  const visibleImages = localImages.slice(0, thumbVisible);
-  const overflowCount = Math.max(0, localImages.length - thumbVisible);
   const displayDraft = draft ?? (listing ? buildDraft(listing, catalogProduct, searchItem) : null);
 
   return (
@@ -1235,29 +1232,21 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
                   </>
                 ) : localImages.length > 0 ? (
                   <div className="flex gap-2 overflow-x-auto pb-1">
-                    {visibleImages.map((url, i) => {
-                      const isLast = i === visibleImages.length - 1 && overflowCount > 0;
-                      return (
-                        <div
-                          key={url}
-                          className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+                    {localImages.map((url, i) => (
+                      <div
+                        key={url}
+                        className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setZoomIndex(i)}
+                          className="block h-full w-full"
+                          aria-label="Zoom image"
                         >
-                          <button
-                            type="button"
-                            onClick={() => setZoomIndex(i)}
-                            className="block h-full w-full"
-                            aria-label="Zoom image"
-                          >
-        <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" className="h-full w-full" />
-                          </button>
-                          {isLast && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-semibold text-white">
-                              +{overflowCount}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          <OptimizedImage src={url} alt="" variant="thumb" aspectRatio="1/1" className="h-full w-full" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 dark:border-slate-600">

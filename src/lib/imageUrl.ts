@@ -16,15 +16,32 @@
 
 /**
  * Rewrite an S3 / CDN URL for direct browser access.
- * S3 bucket is public-read for the mhn/ prefix, so images load directly
- * from S3 without proxying through the backend.
- * External URLs (eBay, etc.) are returned as-is.
  *
- * Catalog images (mhn/catalog-images/...) don't have responsive variants,
- * so we return the original URL unchanged to avoid 404s.
+ * S3 bucket is public-read for the mhn/ prefix, so those images load
+ * directly from S3 without proxying.  Images outside that prefix
+ * (e.g. catalog-images/healed/…) are not publicly accessible, so we
+ * route them through the backend proxy at /api/storage/serve/.
+ *
+ * External URLs (eBay, etc.) are returned as-is.
  */
 export function toProxyUrl(url: string | null | undefined): string {
-  return url ?? '';
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    const isOurS3 =
+      host.includes('amazonaws.com') || host.includes('realtrack-images');
+    if (isOurS3) {
+      const path = parsed.pathname.replace(/^\//, '');
+      // mhn/ prefix is public-read on S3 — no proxy needed
+      if (path.startsWith('mhn/')) return url;
+      // Other S3 paths need the backend proxy
+      return `/api/storage/serve/${path}`;
+    }
+  } catch {
+    // Not a valid absolute URL — return as-is
+  }
+  return url;
 }
 
 /**

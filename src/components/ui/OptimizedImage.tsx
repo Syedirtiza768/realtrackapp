@@ -121,11 +121,19 @@ export default function OptimizedImage({
   const handleError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
+      const originalUrl = toProxyUrl(src);
       // Fall back to the original (non-variant) URL if a variant failed —
       // covers catalog images whose backfill hasn't generated variants yet.
-      if (src && isOurCdnUrl(src) && img.src !== toProxyUrl(src)) {
+      if (src && isOurCdnUrl(src) && img.src !== originalUrl) {
         img.onerror = null;
-        img.src = toProxyUrl(src);
+        img.src = originalUrl;
+        // Re-attach error handler so a failed original shows the placeholder
+        // instead of staying invisible at opacity:0 forever.
+        img.onerror = () => {
+          img.onerror = null;
+          setStatus('error');
+          onErrorCallback?.();
+        };
         return;
       }
       setStatus('error');

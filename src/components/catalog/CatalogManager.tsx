@@ -93,25 +93,6 @@ export default function CatalogManager() {
   const setSearchQuery = (q: string) => setUrlState({ q, page: 0 });
 
   const [searchInput, setSearchInput] = useState(searchQuery);
-  const [filters, setFilters] = useSessionState<ActiveFilters>(
-    'catalog-filters',
-    EMPTY_FILTERS,
-    urlFilterOverrides,
-  );
-  const [detailSelection, setDetailSelection] = useState<{
-    id: string;
-    item: SearchItem;
-  } | null>(null);
-  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-  const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent());
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [publishModalOpen, setPublishModalOpen] = useState(false);
-  const [publishTargetId, setPublishTargetId] = useState<string | null>(null);
-  const [publishJob, setPublishJob] = useState<PublishJob | null>(null);
 
   // Parse URL filter overrides for bookmarked/shared links
   const urlFilterOverrides = useMemo(() => {
@@ -147,6 +128,26 @@ export default function CatalogManager() {
     if (dateAddedTo) { result.dateAddedTo = dateAddedTo; hasAny = true; }
     return hasAny ? result : null;
   }, []);
+
+  const [filters, setFilters] = useSessionState<ActiveFilters>(
+    'catalog-filters',
+    EMPTY_FILTERS,
+    urlFilterOverrides,
+  );
+  const [detailSelection, setDetailSelection] = useState<{
+    id: string;
+    item: SearchItem;
+  } | null>(null);
+  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent());
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishTargetId, setPublishTargetId] = useState<string | null>(null);
+  const [publishJob, setPublishJob] = useState<PublishJob | null>(null);
 
   // Sync filters → URL (on filter change)
   const filtersRef = useRef(filters);

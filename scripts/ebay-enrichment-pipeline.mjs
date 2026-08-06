@@ -94,6 +94,16 @@ const MAKE_ALIASES = {
   porche: 'Porsche', porsche: 'Porsche', landrover: 'Land Rover',
   'land rover': 'Land Rover', rolls: 'Rolls-Royce', bentley: 'Bentley',
   maserati: 'Maserati', lexus: 'Lexus', toyota: 'Toyota',
+  mazda: 'Mazda', honda: 'Honda', nissan: 'Nissan', hyundai: 'Hyundai',
+  kia: 'Kia', subaru: 'Subaru', infiniti: 'Infiniti', acura: 'Acura',
+  dodge: 'Dodge', chrysler: 'Chrysler', jeep: 'Jeep', ram: 'Ram',
+  chevrolet: 'Chevrolet', chevy: 'Chevrolet', ford: 'Ford',
+  cadillac: 'Cadillac', buick: 'Buick', saturn: 'Saturn',
+  pontiac: 'Pontiac', oldsmobile: 'Oldsmobile', mercury: 'Mercury',
+  volvo: 'Volvo', saab: 'Saab', jaguar: 'Jaguar', mini: 'Mini',
+  fiat: 'Fiat', alfa: 'Alfa Romeo', 'alfa romeo': 'Alfa Romeo',
+  'land rover': 'Land Rover', rover: 'Land Rover',
+  scion: 'Scion', isuzu: 'Isuzu', suzuki: 'Suzuki', mitsubishi: 'Mitsubishi',
 };
 
 function extractVehicleFromFilename(filename) {
@@ -142,6 +152,12 @@ function extractVehicleFromFilename(filename) {
       model = model.replace(/\s+\d+$/, '').trim(); // trailing numbers
       if (!model) model = null;
     }
+    // If model equals the make (e.g. "2015 MAZDA MAZDA ..." → model="MAZDA"),
+    // it's a duplicate, not a real model name — discard it so downstream code
+    // can try descriptions or VIN decode.
+    if (model && make && model.toLowerCase() === make.toLowerCase()) {
+      model = null;
+    }
   }
   return { year, make, model, vin, rawName: cleaned };
 }
@@ -174,6 +190,59 @@ function extractModelYear(text, make) {
     }
   }
   return { year, model };
+}
+
+/**
+ * VIN pattern-based model lookup for common makes when NHTSA fails
+ * (e.g. non-US-market VINs). Uses the VDS section (chars 4-8) to
+ * identify the platform/model.
+ */
+function decodeVinPattern(vin) {
+  const v = String(vin || '').toUpperCase();
+  if (v.length < 8) return null;
+  const vds = v.substring(3, 8);
+
+  if (/^JM[0-9]/.test(v)) {
+    if (/^BM[0-9]/.test(vds)) return '3';
+    if (/^BP[0-9]/.test(vds)) return '3';
+    if (/^GJ[0-9]/.test(vds)) return '6';
+    if (/^GH[0-9]/.test(vds)) return '6';
+    if (/^KE[0-9]/.test(vds)) return 'CX-5';
+    if (/^DL[0-9]/.test(vds)) return 'CX-30';
+    if (/^DJ[0-9]/.test(vds)) return 'CX-3';
+    if (/^ND[0-9]/.test(vds)) return 'MX-5';
+    if (/^NE[0-9]/.test(vds)) return 'MX-5';
+    if (/^NC[0-9]/.test(vds)) return 'MX-5';
+    if (/^ER[0-9]/.test(vds)) return 'CX-70';
+    if (/^KH[0-9]/.test(vds)) return 'CX-9';
+    if (/^TC[0-9]/.test(vds)) return 'CX-90';
+  }
+  if (/^JT[0-9A-Z]/.test(v)) {
+    if (/^A[0-9]RE/.test(vds)) return 'RAV4';
+    if (/^A[0-9]RP/.test(vds)) return 'RAV4';
+    if (/^B[0-9]FK/.test(vds)) return '4Runner';
+    if (/^N[0-9]JA/.test(vds)) return 'Tacoma';
+    if (/^H[0-9]JA/.test(vds)) return 'Highlander';
+    if (/^E[0-9]BA/.test(vds)) return 'Camry';
+    if (/^F[0-9]JA/.test(vds)) return 'Corolla';
+  }
+  if (/^JH[M4]/.test(v)) {
+    if (/^C[0-9]4/.test(vds)) return 'Civic';
+    if (/^E[0-9]4/.test(vds)) return 'Accord';
+    if (/^R[0-9]4/.test(vds)) return 'CR-V';
+    if (/^G[0-9]4/.test(vds)) return 'Pilot';
+  }
+  if (/^WB[A-Z]/.test(v)) {
+    if (/^3[0-9]/.test(vds)) return '3 Series';
+    if (/^5[0-9]/.test(vds)) return '5 Series';
+    if (/^7[0-9]/.test(vds)) return '7 Series';
+  }
+  if (/^WD[A-Z]/.test(v)) {
+    if (/^C[0-9]/.test(vds)) return 'C-Class';
+    if (/^E[0-9]/.test(vds)) return 'E-Class';
+    if (/^S[0-9]/.test(vds)) return 'S-Class';
+  }
+  return null;
 }
 
 function extractPosition(desc) {
@@ -743,6 +812,54 @@ async function main() {
         console.log(`Extracted year from description: ${ex.year}`);
       }
       if (vehicleInfo.model && vehicleInfo.year) break;
+    }
+  }
+
+  // 3b. VIN decode fallback — when model is still missing and we have a VIN,
+  // try NHTSA vPIC API (works for US-market VINs) then VIN pattern matching.
+  if (!vehicleInfo.model && vehicleInfo.vin) {
+    console.log(`Model still missing; attempting VIN decode for ${vehicleInfo.vin}...`);
+    try {
+      const resp = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vehicleInfo.vin}?format=json`,
+        { signal: AbortSignal.timeout(10000) },
+      );
+      if (resp.ok) {
+        const nhtsa = await resp.json();
+        const results = nhtsa.Results || [];
+        const getVal = (varName) => {
+          const r = results.find((x) => x.Variable === varName);
+          return r?.Value && r.Value !== null ? String(r.Value).trim() : '';
+        };
+        const nhtsaMake = getVal('Make');
+        const nhtsaModel = getVal('Model');
+        const nhtsaYear = getVal('Model Year');
+        if (nhtsaModel && !['not applicable', 'n/a'].includes(nhtsaModel.toLowerCase())) {
+          vehicleInfo.model = nhtsaModel;
+          console.log(`VIN decode (NHTSA): model=${nhtsaModel}`);
+        }
+        if (nhtsaMake && !vehicleInfo.make) {
+          vehicleInfo.make = nhtsaMake;
+        }
+        if (nhtsaYear && !vehicleInfo.year) {
+          vehicleInfo.year = parseInt(nhtsaYear);
+        }
+      }
+    } catch (err) {
+      console.log(`NHTSA VIN decode failed: ${err.message}`);
+    }
+
+    // Fallback: VIN pattern matching for common makes when NHTSA didn't help
+    if (!vehicleInfo.model) {
+      const vinModel = decodeVinPattern(vehicleInfo.vin);
+      if (vinModel) {
+        vehicleInfo.model = vinModel;
+        console.log(`VIN pattern match: model=${vinModel}`);
+      }
+    }
+
+    if (!vehicleInfo.model) {
+      console.warn(`VIN decode could not determine model for ${vehicleInfo.vin} — compatibility rows will be empty`);
     }
   }
 
