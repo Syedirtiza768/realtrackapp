@@ -36,6 +36,7 @@ import {
 } from '../../lib/inventoryApi';
 import { fetchWithAuth } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 import InventoryDetailModal from './InventoryDetailModal';
 import InventoryFilterBar from './InventoryFilterBar';
 import InventoryFilterSidebar from './InventoryFilterSidebar';
@@ -113,11 +114,77 @@ export default function InventoryManager() {
   const [zoomImages, setZoomImages] = useState<string[] | null>(null);
   const [zoomIndex, setZoomIndex] = useState(0);
 
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [filters, setFilters] = useState<InventoryFilters>({ ...INVENTORY_EMPTY_FILTERS });
+  const [urlState, setUrlState] = useUrlFilters({
+    page: 1,
+    limit: 25,
+    q: '',
+    brands: [] as string[],
+    conditions: [] as string[],
+    teams: [] as string[],
+    locations: [] as string[],
+    marketplaces: [] as string[],
+    stock: [] as string[],
+    minPrice: '',
+    maxPrice: '',
+    minWeight: '',
+    maxWeight: '',
+    status: '',
+    missing: false,
+    make: '',
+    model: '',
+    category: '',
+    dateFrom: '',
+    dateTo: '',
+  }, 'inventory-filters');
+  const page = urlState.page;
+  const limit = urlState.limit;
+  const search = urlState.q;
+  const filters: InventoryFilters = {
+    brands: urlState.brands,
+    conditions: urlState.conditions,
+    teamIds: urlState.teams,
+    locations: urlState.locations,
+    marketplaces: urlState.marketplaces,
+    stockLevels: urlState.stock,
+    minPrice: urlState.minPrice,
+    maxPrice: urlState.maxPrice,
+    minWeight: urlState.minWeight,
+    maxWeight: urlState.maxWeight,
+    status: urlState.status,
+    missingImages: urlState.missing,
+    make: urlState.make,
+    model: urlState.model,
+    category: urlState.category,
+    dateAddedFrom: urlState.dateFrom,
+    dateAddedTo: urlState.dateTo,
+  };
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setUrlState(typeof v === 'function' ? (prev) => ({ page: v(prev.page) }) : { page: v });
+  const setSearch = (v: string) => setUrlState({ q: v, page: 1 });
+  const setFilters = (updater: InventoryFilters | ((prev: InventoryFilters) => InventoryFilters)) => {
+    const newFilters = typeof updater === 'function' ? updater(filters) : updater;
+    setUrlState({
+      brands: newFilters.brands,
+      conditions: newFilters.conditions,
+      teams: newFilters.teamIds,
+      locations: newFilters.locations,
+      marketplaces: newFilters.marketplaces,
+      stock: newFilters.stockLevels,
+      minPrice: newFilters.minPrice,
+      maxPrice: newFilters.maxPrice,
+      minWeight: newFilters.minWeight,
+      maxWeight: newFilters.maxWeight,
+      status: newFilters.status,
+      missing: newFilters.missingImages,
+      make: newFilters.make,
+      model: newFilters.model,
+      category: newFilters.category,
+      dateFrom: newFilters.dateAddedFrom,
+      dateTo: newFilters.dateAddedTo,
+      page: 1,
+    });
+  };
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [showSidebar, setShowSidebar] = useState(false);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -323,7 +390,6 @@ export default function InventoryManager() {
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
-                  setPage(1);
                 }}
                 className="w-full pl-9 pr-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
               />
@@ -333,7 +399,6 @@ export default function InventoryManager() {
               filters={filters}
               onChange={(updater) => {
                 setFilters(typeof updater === 'function' ? updater : updater);
-                setPage(1);
               }}
               onAdvancedClick={() => setShowSidebar((v) => !v)}
               advancedFilterCount={filterCount}
@@ -352,7 +417,7 @@ export default function InventoryManager() {
         <InventoryFilterSidebar
           facets={facets ?? null}
           filters={filters}
-          onChange={(f) => { setFilters(f); setPage(1); }}
+          onChange={(f) => { setFilters(f); }}
           loading={facetsLoading}
         />
       </MobileFilterDrawer>
@@ -607,7 +672,7 @@ export default function InventoryManager() {
                 <div className="flex items-center gap-2">
                   <select
                     value={limit}
-                    onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                    onChange={(e) => { setUrlState({ limit: Number(e.target.value), page: 1 }); }}
                     className="px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-200 focus:outline-none"
                   >
                     <option value={25}>25 per page</option>

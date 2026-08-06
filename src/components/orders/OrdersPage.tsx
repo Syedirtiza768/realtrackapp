@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { getOrders, getOrder, getOrderStats } from '../../lib/ordersApi';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 
 /* --- Types --- */
 
@@ -113,12 +114,23 @@ export default function OrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
 
-    // Filters
-    const [statusFilter, setStatusFilter] = useState<string>('');
-    const [channelFilter, setChannelFilter] = useState<string>('');
-    const [storeFilter, setStoreFilter] = useState<string>('');
+    // Filters (synced to URL)
+    const [urlState, setUrlState] = useUrlFilters({
+        page: 0,
+        status: '',
+        channel: '',
+        store: '',
+    }, 'orders-filters');
+    const statusFilter = urlState.status;
+    const channelFilter = urlState.channel;
+    const storeFilter = urlState.store;
+    const page = urlState.page;
+    const setStatusFilter = (v: string) => setUrlState({ status: v, page: 0 });
+    const setChannelFilter = (v: string) => setUrlState({ channel: v, page: 0 });
+    const setStoreFilter = (v: string) => setUrlState({ store: v, page: 0 });
+    const setPage = (v: number | ((prev: number) => number)) =>
+        setUrlState(typeof v === 'function' ? (prev) => ({ page: v(prev.page) }) : { page: v });
     const [searchQ, setSearchQ] = useState('');
-    const [page, setPage] = useState(0);
     const limit = 20;
 
     const fetchOrders = useCallback(async () => {
@@ -232,7 +244,7 @@ export default function OrdersPage() {
                 </div>
                 <select
                     value={statusFilter}
-                    onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
+                    onChange={e => setStatusFilter(e.target.value)}
                     className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 >
                     <option value="">All Statuses</option>
@@ -242,7 +254,7 @@ export default function OrdersPage() {
                 </select>
                 <select
                     value={channelFilter}
-                    onChange={e => { setChannelFilter(e.target.value); setPage(0); }}
+                    onChange={e => setChannelFilter(e.target.value)}
                     className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 >
                     <option value="">All Channels</option>
@@ -254,7 +266,7 @@ export default function OrdersPage() {
                     type="text"
                     placeholder="Filter by Store ID..."
                     value={storeFilter}
-                    onChange={e => { setStoreFilter(e.target.value); setPage(0); }}
+                    onChange={e => setStoreFilter(e.target.value)}
                     className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none max-w-[200px] placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
             </div>

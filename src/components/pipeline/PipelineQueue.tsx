@@ -27,6 +27,7 @@ import {
   type PipelineDisplayStatus,
   type PipelineJobListItem,
 } from '../../lib/pipelineApi';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 
 const STATUS_OPTIONS: { value: '' | PipelineDisplayStatus; label: string }[] = [
   { value: '', label: 'All Statuses' },
@@ -209,9 +210,18 @@ interface Props {
 
 export default function PipelineQueue({ onViewJob }: Props) {
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<'' | PipelineDisplayStatus>('');
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [urlState, setUrlState] = useUrlFilters({
+    status: '' as string,
+    page: 0,
+    pageSize: 10,
+  }, 'pipeline-filters');
+  const statusFilter = urlState.status as '' | PipelineDisplayStatus;
+  const page = urlState.page;
+  const pageSize = urlState.pageSize;
+  const setStatusFilter = (v: '' | PipelineDisplayStatus) => setUrlState({ status: v, page: 0 });
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setUrlState(typeof v === 'function' ? (prev) => ({ page: v(prev.page) }) : { page: v });
+  const setPageSize = (v: number) => setUrlState({ pageSize: v, page: 0 });
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, isLoading, isFetching } = usePipelineJobs({
@@ -237,12 +247,10 @@ export default function PipelineQueue({ onViewJob }: Props) {
 
   const handleStatusChange = (value: '' | PipelineDisplayStatus) => {
     setStatusFilter(value);
-    setPage(0);
   };
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
-    setPage(0);
   };
 
   return (

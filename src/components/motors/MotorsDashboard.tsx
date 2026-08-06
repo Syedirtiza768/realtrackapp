@@ -25,6 +25,7 @@ import {
 } from '../../lib/motorsApi';
 import type { MotorsProductStatus, MotorsProduct, MotorsProductQuery } from '../../types/motors';
 import { Link } from 'react-router-dom';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 import OptimizedImage from '../ui/OptimizedImage';
 
 /* ── Status config ────────────────────────────────────────── */
@@ -297,7 +298,37 @@ function CreateProductForm({ onClose }: { onClose: () => void }) {
 /* ── Main page ────────────────────────────────────────────── */
 
 export default function MotorsDashboard() {
-  const [query, setQuery] = useState<MotorsProductQuery>({ page: 1, limit: 25 });
+  const [urlState, setUrlState] = useUrlFilters({
+    page: 1,
+    limit: 25,
+    status: '' as string,
+    search: '',
+  }, 'motors-dashboard-filters');
+  const query: MotorsProductQuery = {
+    page: urlState.page,
+    limit: urlState.limit,
+    status: (urlState.status || undefined) as MotorsProductStatus | undefined,
+    search: urlState.search || undefined,
+  };
+  const setQuery = (updater: MotorsProductQuery | ((prev: MotorsProductQuery) => MotorsProductQuery)) => {
+    if (typeof updater === 'function') {
+      const prev = query;
+      const next = updater(prev);
+      setUrlState({
+        page: next.page ?? 1,
+        limit: next.limit ?? 25,
+        status: next.status ?? '',
+        search: next.search ?? '',
+      });
+    } else {
+      setUrlState({
+        page: updater.page ?? 1,
+        limit: updater.limit ?? 25,
+        status: updater.status ?? '',
+        search: updater.search ?? '',
+      });
+    }
+  };
   const [showCreate, setShowCreate] = useState(false);
   const { data, isLoading, refetch } = useMotorsProducts(query);
 

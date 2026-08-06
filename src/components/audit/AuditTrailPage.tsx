@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { fetchWithAuth } from '../../lib/authApi';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 
 const API = '/api/audit-logs';
 
@@ -52,10 +53,21 @@ export default function AuditTrailPage() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
-  const [entityType, setEntityType] = useState('');
-  const [action, setAction] = useState('');
-  const [since, setSince] = useState('');
+  const [urlState, setUrlState] = useUrlFilters({
+    page: 0,
+    entityType: '',
+    action: '',
+    since: '',
+  }, 'audit-trail-filters');
+  const page = urlState.page;
+  const entityType = urlState.entityType;
+  const action = urlState.action;
+  const since = urlState.since;
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setUrlState(typeof v === 'function' ? (prev) => ({ page: v(prev.page) }) : { page: v });
+  const setEntityType = (v: string) => setUrlState({ entityType: v, page: 0 });
+  const setAction = (v: string) => setUrlState({ action: v, page: 0 });
+  const setSince = (v: string) => setUrlState({ since: v, page: 0 });
   const limit = 25;
 
   const fetchLogs = useCallback(async () => {
@@ -92,10 +104,7 @@ export default function AuditTrailPage() {
   }, [fetchLogs]);
 
   const resetFilters = () => {
-    setEntityType('');
-    setAction('');
-    setSince('');
-    setPage(0);
+    setUrlState({ entityType: '', action: '', since: '', page: 0 });
   };
 
   return (
@@ -111,10 +120,7 @@ export default function AuditTrailPage() {
           <Filter size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
           <select
             value={entityType}
-            onChange={(e) => {
-              setEntityType(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) => setEntityType(e.target.value)}
             className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
           >
             <option value="">All Entities</option>
@@ -128,10 +134,7 @@ export default function AuditTrailPage() {
         </div>
         <select
           value={action}
-          onChange={(e) => {
-            setAction(e.target.value);
-            setPage(0);
-          }}
+          onChange={(e) => setAction(e.target.value)}
           className="bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-600 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:outline-none"
         >
           <option value="">All Actions</option>
@@ -147,10 +150,7 @@ export default function AuditTrailPage() {
           <input
             type="date"
             value={since}
-            onChange={(e) => {
-              setSince(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) => setSince(e.target.value)}
             className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
           />
         </div>

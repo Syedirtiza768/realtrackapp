@@ -28,6 +28,7 @@ import {
 import { listEbayAccounts, getEbayWorkspace } from '../../lib/ebayIntegrationsApi';
 import { getStores } from '../../lib/multiStoreApi';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 import OptimizedImage from '../ui/OptimizedImage';
 import { useQuery } from '@tanstack/react-query';
 
@@ -62,13 +63,28 @@ export default function PublishedListingsPage() {
   const canBulk = has('published_listings.bulk');
 
   const [organizationId, setOrganizationId] = useState<string | undefined>();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [ebayAccountId, setEbayAccountId] = useState('');
-  const [storeId, setStoreId] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [sortBy, setSortBy] = useState('updated');
+  const [urlState, setUrlState] = useUrlFilters({
+    page: 1,
+    q: '',
+    account: '',
+    store: '',
+    status: '',
+    sort: 'updated',
+  }, 'published-listings-filters');
+  const page = urlState.page;
+  const search = urlState.q;
+  const ebayAccountId = urlState.account;
+  const storeId = urlState.store;
+  const statusFilter = urlState.status;
+  const sortBy = urlState.sort;
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setUrlState(typeof v === 'function' ? (prev) => ({ page: v(prev.page) }) : { page: v });
+  const setSearch = (v: string) => setUrlState({ q: v, page: 1 });
+  const setEbayAccountId = (v: string) => setUrlState({ account: v, page: 1 });
+  const setStoreId = (v: string) => setUrlState({ store: v, page: 1 });
+  const setStatusFilter = (v: string) => setUrlState({ status: v, page: 1 });
+  const setSortBy = (v: string) => setUrlState({ sort: v });
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkAction, setBulkAction] = useState('update_price');
@@ -252,13 +268,13 @@ export default function PublishedListingsPage() {
                 className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
                 placeholder="Search title, SKU, item ID, store..."
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <select
               className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
               value={ebayAccountId}
-              onChange={(e) => { setEbayAccountId(e.target.value); setPage(1); }}
+              onChange={(e) => setEbayAccountId(e.target.value)}
             >
               <option value="">All eBay accounts</option>
               {accounts.map((a) => (
@@ -268,7 +284,7 @@ export default function PublishedListingsPage() {
             <select
               className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
               value={storeId}
-              onChange={(e) => { setStoreId(e.target.value); setPage(1); }}
+              onChange={(e) => setStoreId(e.target.value)}
             >
               <option value="">All stores</option>
               {stores.map((s) => (
@@ -278,7 +294,7 @@ export default function PublishedListingsPage() {
             <select
               className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+              onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="">All statuses</option>
               <option value="active">Active</option>

@@ -19,6 +19,7 @@ import {
   useResolveReviewTask,
 } from '../../lib/motorsApi';
 import type { ReviewTaskStatus, ReviewTaskPriority, ReviewReason, ReviewTask, ReviewTaskQuery } from '../../types/motors';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 
 /* ── Formatting helpers ───────────────────────────────────── */
 
@@ -179,7 +180,37 @@ function TaskRow({ task }: { task: ReviewTask }) {
 /* ── Main page ────────────────────────────────────────────── */
 
 export default function ReviewQueue() {
-  const [query, setQuery] = useState<ReviewTaskQuery>({ page: 1, limit: 25 });
+  const [urlState, setUrlState] = useUrlFilters({
+    page: 1,
+    limit: 25,
+    status: '' as string,
+    priority: '' as string,
+  }, 'review-queue-filters');
+  const query: ReviewTaskQuery = {
+    page: urlState.page,
+    limit: urlState.limit,
+    status: (urlState.status || undefined) as ReviewTaskStatus | undefined,
+    priority: (urlState.priority || undefined) as ReviewTaskPriority | undefined,
+  };
+  const setQuery = (updater: ReviewTaskQuery | ((prev: ReviewTaskQuery) => ReviewTaskQuery)) => {
+    if (typeof updater === 'function') {
+      const prev = query;
+      const next = updater(prev);
+      setUrlState({
+        page: next.page ?? 1,
+        limit: next.limit ?? 25,
+        status: next.status ?? '',
+        priority: next.priority ?? '',
+      });
+    } else {
+      setUrlState({
+        page: updater.page ?? 1,
+        limit: updater.limit ?? 25,
+        status: updater.status ?? '',
+        priority: updater.priority ?? '',
+      });
+    }
+  };
   const { data, isLoading, refetch } = useReviewTasks(query);
 
   const statusFilters: (ReviewTaskStatus | '')[] = ['', 'open', 'in_progress', 'approved', 'rejected', 'deferred'];

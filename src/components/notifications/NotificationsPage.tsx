@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { authDelete, authPost, fetchWithAuth } from '../../lib/authApi';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
 
 const API = '/api/notifications';
 
@@ -80,10 +81,19 @@ export default function NotificationsPage() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
-    const [severityFilter, setSeverityFilter] = useState<string>('');
-    const [typeFilter, setTypeFilter] = useState<string>('');
+    const [urlState, setUrlState] = useUrlFilters({
+        page: 0,
+        severity: '',
+        type: '',
+    }, 'notifications-filters');
+    const page = urlState.page;
+    const severityFilter = urlState.severity;
+    const typeFilter = urlState.type;
+    const setPage = (v: number | ((prev: number) => number)) =>
+        setUrlState(typeof v === 'function' ? (prev) => ({ page: v(prev.page) }) : { page: v });
+    const setSeverityFilter = (v: string) => setUrlState({ severity: v, page: 0 });
+    const setTypeFilter = (v: string) => setUrlState({ type: v, page: 0 });
     const limit = 25;
 
     const fetchNotifications = useCallback(async () => {
@@ -165,7 +175,7 @@ export default function NotificationsPage() {
                 </div>
                 <select
                     value={severityFilter}
-                    onChange={e => { setSeverityFilter(e.target.value); setPage(0); }}
+                    onChange={e => setSeverityFilter(e.target.value)}
                     className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 >
                     <option value="">All Severities</option>
@@ -177,7 +187,7 @@ export default function NotificationsPage() {
                 {uniqueTypes.length > 1 && (
                     <select
                         value={typeFilter}
-                        onChange={e => { setTypeFilter(e.target.value); setPage(0); }}
+                        onChange={e => setTypeFilter(e.target.value)}
                         className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     >
                         <option value="">All Types</option>

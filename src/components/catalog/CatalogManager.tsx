@@ -13,7 +13,7 @@ import {
   ChevronDown,
   Trash2,
 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import SearchBar from './SearchBar';
 import FilterSidebar, { MobileFilterDrawer } from './FilterSidebar';
 import ActiveFilterTags from './ActiveFilterTags';
@@ -31,8 +31,10 @@ import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
 import type { SearchItem } from '../../types/search';
 import { authHeaders } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
-import type { SearchQuery, SortMode, ActiveFilters } from '../../types/search';
+import type { SearchQuery, SortMode, ActiveFilters, DateAddedPreset } from '../../types/search';
 import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
+import { useUrlFilters } from '../../hooks/useUrlFilters';
+import { useSessionState } from '../../hooks/useSessionState';
 
 const DEFAULT_PAGE_SIZE = 25;
 const RECENT_KEY = 'lp_recent_searches';
@@ -73,13 +75,29 @@ export default function CatalogManager() {
   const navigate = useNavigate();
   const { has } = usePermissions();
   const canDeleteListings = has('listings.delete');
-  /* ── State ─────────────────────────────────────────────── */
-  const [searchInput, setSearchInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [sortMode, setSortMode] = useState<SortMode>('newest');
-  const [filters, setFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+  /* ── State (synced to URL) ─────────────────────────────── */
+  const [urlState, setUrlState] = useUrlFilters({
+    page: 0,
+    pageSize: DEFAULT_PAGE_SIZE,
+    sort: 'newest' as string,
+    q: '',
+  }, 'catalog-url');
+  const page = urlState.page;
+  const pageSize = urlState.pageSize;
+  const sortMode = urlState.sort as SortMode;
+  const searchQuery = urlState.q;
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setUrlState(typeof v === 'function' ? (prev) => ({ page: v(prev.page) }) : { page: v });
+  const setPageSize = (size: number) => setUrlState({ pageSize: size, page: 0 });
+  const setSortMode = (m: SortMode) => setUrlState({ sort: m, page: 0 });
+  const setSearchQuery = (q: string) => setUrlState({ q, page: 0 });
+
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  const [filters, setFilters] = useSessionState<ActiveFilters>(
+    'catalog-filters',
+    EMPTY_FILTERS,
+    urlFilterOverrides,
+  );
   const [detailSelection, setDetailSelection] = useState<{
     id: string;
     item: SearchItem;
@@ -94,28 +112,86 @@ export default function CatalogManager() {
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishTargetId, setPublishTargetId] = useState<string | null>(null);
   const [publishJob, setPublishJob] = useState<PublishJob | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Hydrate filters from URL params on mount
-  useEffect(() => {
-    const pjParam = searchParams.get('pipelineJobIds');
-    const teamParam = searchParams.get('teamIds');
-    const mktParam = searchParams.get('marketplaces');
-    const qParam = searchParams.get('q');
-    if (pjParam || teamParam || mktParam || qParam) {
-      setFilters(prev => ({
-        ...prev,
-        pipelineJobIds: pjParam ? pjParam.split(',').filter(Boolean) : prev.pipelineJobIds,
-        teamIds: teamParam ? teamParam.split(',').filter(Boolean) : prev.teamIds,
-        marketplaces: mktParam ? mktParam.split(',').filter(Boolean) : prev.marketplaces,
-      }));
-      if (qParam) {
-        setSearchInput(qParam);
-        setSearchQuery(qParam);
+  // Parse URL filter overrides for bookmarked/shared links
+  const urlFilterOverrides = useMemo(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const result: Partial<ActiveFilters> = {};
+    const arrayFields: (keyof ActiveFilters)[] = [
+      'brands', 'categories', 'conditions', 'types', 'sourceFiles',
+      'formats', 'locations', 'mpns', 'makes', 'models',
+      'pipelineJobIds', 'teamIds', 'marketplaces', 'stockLevels',
+      'shippingProfiles', 'catalogStatuses',
+    ];
+    let hasAny = false;
+    for (const field of arrayFields) {
+      const val = sp.get(field);
+      if (val) {
+        (result as Record<string, unknown>)[field] = val.split(',').filter(Boolean);
+        hasAny = true;
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const minPrice = sp.get('minPrice');
+    const maxPrice = sp.get('maxPrice');
+    const hasImage = sp.get('hasImage');
+    const hasPrice = sp.get('hasPrice');
+    const dateAddedPreset = sp.get('dateAddedPreset');
+    const dateAddedFrom = sp.get('dateAddedFrom');
+    const dateAddedTo = sp.get('dateAddedTo');
+    if (minPrice) { result.minPrice = Number(minPrice); hasAny = true; }
+    if (maxPrice) { result.maxPrice = Number(maxPrice); hasAny = true; }
+    if (hasImage === '1') { result.hasImage = true; hasAny = true; }
+    if (hasPrice === '1') { result.hasPrice = true; hasAny = true; }
+    if (dateAddedPreset) { result.dateAddedPreset = dateAddedPreset as DateAddedPreset; hasAny = true; }
+    if (dateAddedFrom) { result.dateAddedFrom = dateAddedFrom; hasAny = true; }
+    if (dateAddedTo) { result.dateAddedTo = dateAddedTo; hasAny = true; }
+    return hasAny ? result : null;
   }, []);
+
+  // Sync filters → URL (on filter change)
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const sp = url.searchParams;
+    const f = filters;
+    const arrayFields: { key: keyof ActiveFilters; param: string }[] = [
+      { key: 'brands', param: 'brands' },
+      { key: 'categories', param: 'categories' },
+      { key: 'conditions', param: 'conditions' },
+      { key: 'types', param: 'types' },
+      { key: 'sourceFiles', param: 'sourceFiles' },
+      { key: 'formats', param: 'formats' },
+      { key: 'locations', param: 'locations' },
+      { key: 'mpns', param: 'mpns' },
+      { key: 'makes', param: 'makes' },
+      { key: 'models', param: 'models' },
+      { key: 'pipelineJobIds', param: 'pipelineJobIds' },
+      { key: 'teamIds', param: 'teamIds' },
+      { key: 'marketplaces', param: 'marketplaces' },
+      { key: 'stockLevels', param: 'stockLevels' },
+      { key: 'shippingProfiles', param: 'shippingProfiles' },
+      { key: 'catalogStatuses', param: 'catalogStatuses' },
+    ];
+    for (const { key, param } of arrayFields) {
+      const arr = f[key] as string[];
+      if (arr.length > 0) sp.set(param, arr.join(','));
+      else sp.delete(param);
+    }
+    // Scalar filter fields
+    const setOrDel = (k: string, v: unknown, def?: unknown) => {
+      if (v != null && v !== false && v !== '' && v !== def) sp.set(k, String(v));
+      else sp.delete(k);
+    };
+    setOrDel('minPrice', f.minPrice);
+    setOrDel('maxPrice', f.maxPrice);
+    setOrDel('hasImage', f.hasImage);
+    setOrDel('hasPrice', f.hasPrice);
+    setOrDel('dateAddedPreset', f.dateAddedPreset, 'all');
+    setOrDel('dateAddedFrom', f.dateAddedFrom);
+    setOrDel('dateAddedTo', f.dateAddedTo);
+    window.history.replaceState(null, '', url.toString());
+  }, [filters]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPublishOpen, setBulkPublishOpen] = useState(false);
@@ -180,8 +256,8 @@ export default function CatalogManager() {
   const advancedFilterCount = countAdvancedFilters(filters);
   const hasActiveFilters = !!searchQuery?.trim() || countActiveFilters(filters) > 0;
 
-  /* ── Reset page on filter/search change ─────────────────── */
-  useEffect(() => { setPage(0); }, [searchQuery, filters, sortMode, pageSize]);
+  /* ── Reset page on filter change ──────────────────────── */
+  useEffect(() => { setPage(0); }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Handlers ───────────────────────────────────────────── */
   const handleSearch = useCallback((val: string) => {
@@ -220,7 +296,6 @@ export default function CatalogManager() {
 
   const handlePageSizeChange = useCallback((size: number) => {
     setPageSize(size);
-    setPage(0);
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
