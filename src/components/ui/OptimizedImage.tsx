@@ -23,6 +23,7 @@ import {
   isOurCdnUrl,
   handleImageError,
   toProxyUrl,
+  toBackendProxyPath,
 } from '../../lib/imageUrl';
 
 export type ImageVariant = 'thumb' | 'small' | 'medium' | 'large' | 'original';
@@ -122,13 +123,39 @@ export default function OptimizedImage({
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
       const originalUrl = toProxyUrl(src);
-      // Fall back to the original (non-variant) URL if a variant failed —
-      // covers catalog images whose backfill hasn't generated variants yet.
-      if (src && isOurCdnUrl(src) && img.src !== originalUrl) {
+      const proxyPath = toBackendProxyPath(src);
+
+      // If a variant (_thumb/_sm/_medium/_lg) failed, fall back to the
+      // original URL first (variant might not exist yet).
+      if (src && isOurCdnUrl(src) && img.src !== originalUrl && !img.dataset.fallbackTried) {
         img.onerror = null;
+        img.dataset.fallbackTried = '1';
         img.src = originalUrl;
-        // Re-attach error handler so a failed original shows the placeholder
-        // instead of staying invisible at opacity:0 forever.
+        img.onerror = () => {
+          // Original also failed from S3 — try backend proxy
+          if (proxyPath && !img.dataset.proxyTried) {
+            img.onerror = null;
+            img.dataset.proxyTried = '1';
+            img.src = proxyPath;
+            img.onerror = () => {
+              img.onerror = null;
+              setStatus('error');
+              onErrorCallback?.();
+            };
+            return;
+          }
+          img.onerror = null;
+          setStatus('error');
+          onErrorCallback?.();
+        };
+        return;
+      }
+
+      // Direct S3 URL failed — try backend proxy as last resort
+      if (proxyPath && !img.dataset.proxyTried) {
+        img.onerror = null;
+        img.dataset.proxyTried = '1';
+        img.src = proxyPath;
         img.onerror = () => {
           img.onerror = null;
           setStatus('error');
@@ -136,6 +163,7 @@ export default function OptimizedImage({
         };
         return;
       }
+
       setStatus('error');
       onErrorCallback?.();
       handleImageError(e, null);

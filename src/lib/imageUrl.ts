@@ -17,13 +17,21 @@
 /**
  * Rewrite an S3 / CDN URL for direct browser access.
  *
- * All S3 URLs (including mhn/ prefix) are routed through the backend
- * proxy at /api/storage/serve/ because S3 ACLs are inconsistent across
- * prefixes — some mhn/ paths are public, others return 403.
+ * Returns the S3 URL directly for browser loading. The OptimizedImage
+ * component handles 403 fallback to the backend proxy in the browser
+ * via its onError handler (see error chain in OptimizedImage.tsx).
  *
  * External URLs (eBay, etc.) are returned as-is.
  */
 export function toProxyUrl(url: string | null | undefined): string {
+  return url ?? '';
+}
+
+/**
+ * Build the backend proxy path for an S3 URL. Used by OptimizedImage
+ * when direct S3 access returns 403.
+ */
+export function toBackendProxyPath(url: string | null | undefined): string {
   if (!url) return '';
   try {
     const parsed = new URL(url);
@@ -35,9 +43,9 @@ export function toProxyUrl(url: string | null | undefined): string {
       return `/api/storage/serve/${path}`;
     }
   } catch {
-    // Not a valid absolute URL — return as-is
+    // Not a valid absolute URL
   }
-  return url;
+  return '';
 }
 
 /**
