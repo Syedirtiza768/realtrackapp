@@ -1,156 +1,161 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { HardDrive, Check, Minus, Loader2, ChevronDown, ChevronUp, ImageIcon } from 'lucide-react';
-import { batchLookupDriveImages, type ImageDriveEntry, type BatchLookupResult } from '../../lib/imageDriveApi';
+import { ChevronDown, ChevronRight, Check, Minus, Image as ImageIcon } from 'lucide-react';
+import { batchLookupDriveImages, type DriveFileEntry, type BatchLookupResult } from '../../lib/imageDriveApi';
 import OptimizedImage from '../ui/OptimizedImage';
 
 interface ImageDrivePanelProps {
   partNumbers: string[];
-  onSelectImages?: (partNumber: string, images: ImageDriveEntry[]) => void;
+  onSelectImages?: (partNumber: string, images: DriveFileEntry[]) => void;
   compact?: boolean;
 }
 
-export default function ImageDrivePanel({ partNumbers, onSelectImages, compact }: ImageDrivePanelProps) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Record<string, Set<string>>>({});
-
-  const uniquePartNumbers = useMemo(
-    () => [...new Set(partNumbers.map((p) => p.trim()).filter(Boolean))],
-    [partNumbers],
-  );
+export default function ImageDrivePanel({
+  partNumbers,
+  onSelectImages,
+  compact = false,
+}: ImageDrivePanelProps) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Map<string, Set<string>>>(new Map());
 
   const { data, isLoading } = useQuery<BatchLookupResult>({
-    queryKey: ['image-drive-batch', uniquePartNumbers],
-    queryFn: () => batchLookupDriveImages(uniquePartNumbers),
-    enabled: uniquePartNumbers.length > 0,
+    queryKey: ['image-drive-batch', partNumbers.join(',')],
+    queryFn: () => batchLookupDriveImages(partNumbers),
+    enabled: partNumbers.length > 0,
     staleTime: 60_000,
   });
 
-  if (uniquePartNumbers.length === 0) return null;
+  if (isLoading || !data) return null;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Checking Image Drive...
-      </div>
-    );
-  }
+  const results = data.results ?? {};
+  const matched = partNumbers.filter((pn) => {
+    const norm = pn.trim().toLowerCase().replace(/[\s\-_./\\]+/g, '').replace(/[^a-z0-9]/g, '');
+    return (results[norm]?.length ?? 0) > 0;
+  });
 
-  if (!data) return null;
+  if (matched.length === 0) return null;
 
-  const matchedCount = data.summary.filter((s) => s.count > 0).length;
-  const totalImages = data.summary.reduce((sum, s) => sum + s.count, 0);
+  const totalImages = matched.reduce((sum, pn) => {
+    const norm = pn.trim().toLowerCase().replace(/[\s\-_./\\]+/g, '').replace(/[^a-z0-9]/g, '');
+    return sum + (results[norm]?.length ?? 0);
+  }, 0);
 
   if (compact) {
     return (
-      <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-        <HardDrive className="h-4 w-4 text-blue-500 flex-shrink-0" />
-        <div className="text-sm">
-          <span className="font-medium text-slate-700 dark:text-slate-300">Image Drive:</span>{' '}
-          <span className="text-green-600 dark:text-green-400">{matchedCount}/{uniquePartNumbers.length} parts</span>
-          <span className="text-slate-400 mx-1.5">·</span>
-          <span className="text-slate-500">{totalImages} images total</span>
-        </div>
+      <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm dark:border-blue-800 dark:bg-blue-900/20">
+        <ImageIcon className="h-4 w-4 text-blue-500" />
+        <span className="text-blue-700 dark:text-blue-300">
+          Image Drive: {matched.length}/{partNumbers.length} parts · {totalImages} images
+        </span>
       </div>
     );
   }
 
   const toggleExpand = (pn: string) => {
-    setExpanded((prev) => (prev === pn ? null : pn));
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(pn)) next.delete(pn);
+      else next.add(pn);
+      return next;
+    });
   };
 
-  const toggleSelect = (pn: string, imgId: string) => {
+  const toggleSelect = (pn: string, fileId: string) => {
     setSelected((prev) => {
-      const current = prev[pn] ?? new Set();
-      const next = new Set(current);
-      if (next.has(imgId)) next.delete(imgId);
-      else next.add(imgId);
-      return { ...prev, [pn]: next };
+      const next = new Map(prev);
+      const set = new Set(next.get(pn) ?? []);
+      if (set.has(fileId)) set.delete(fileId);
+      else set.add(fileId);
+      next.set(pn, set);
+      return next;
     });
   };
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-        <HardDrive className="h-4 w-4 text-blue-500" />
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-          Image Drive
-        </span>
-        <span className="ml-auto text-xs text-slate-500">
-          {matchedCount} matched · {totalImages} images
+    <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/10">
+      <div className="flex items-center gap-2 border-b border-blue-200 px-3 py-2 dark:border-blue-800">
+        <ImageIcon className="h-4 w-4 text-blue-500" />
+        <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+          Image Drive: {matched.length}/{partNumbers.length} parts matched · {totalImages} images available
         </span>
       </div>
 
-      <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
-        {data.summary.map((item) => {
-          const normalized = item.partNumber.toLowerCase().replace(/[\s\-_./\\]+/g, '').replace(/[^a-z0-9]/g, '');
-          const images = data.results[normalized] ?? [];
-          const isExpanded = expanded === item.partNumber;
-          const selectedIds = selected[item.partNumber] ?? new Set();
+      <div className="divide-y divide-blue-100 dark:divide-blue-800/50">
+        {partNumbers.map((pn) => {
+          const norm = pn.trim().toLowerCase().replace(/[\s\-_./\\]+/g, '').replace(/[^a-z0-9]/g, '');
+          const images = results[norm] ?? [];
+          const hasImages = images.length > 0;
+          const isExpanded = expanded.has(pn);
+          const selectedSet = selected.get(pn) ?? new Set();
 
           return (
-            <div key={item.partNumber}>
+            <div key={pn}>
               <button
-                type="button"
-                onClick={() => toggleExpand(item.partNumber)}
-                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
+                onClick={() => hasImages && toggleExpand(pn)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-blue-100/50 dark:hover:bg-blue-800/20"
               >
-                {item.count > 0 ? (
-                  <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                {hasImages ? (
+                  isExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                  )
                 ) : (
-                  <Minus className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />
+                  <Minus className="h-3.5 w-3.5 text-slate-300" />
                 )}
-                <span className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate text-left flex-1">
-                  {item.partNumber}
+                {hasImages ? (
+                  <Check className="h-3.5 w-3.5 text-green-500" />
+                ) : (
+                  <Minus className="h-3.5 w-3.5 text-slate-300" />
+                )}
+                <span className={hasImages ? 'font-medium text-slate-900 dark:text-white' : 'text-slate-400'}>
+                  {pn}
                 </span>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${item.count > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
-                  {item.count}
-                </span>
-                {item.count > 0 && (
-                  isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                {hasImages && (
+                  <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-800 dark:text-blue-300">
+                    {images.length}
+                  </span>
                 )}
               </button>
 
-              {isExpanded && images.length > 0 && (
+              {isExpanded && hasImages && (
                 <div className="px-3 pb-3">
-                  <div className="grid grid-cols-4 gap-1.5">
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
                     {images.map((img) => (
                       <button
                         key={img.id}
-                        type="button"
-                        onClick={() => toggleSelect(item.partNumber, img.id)}
-                        className={`relative aspect-square rounded overflow-hidden border-2 transition-colors ${
-                          selectedIds.has(img.id)
-                            ? 'border-blue-500 ring-1 ring-blue-500'
+                        onClick={() => toggleSelect(pn, img.id)}
+                        className={`relative overflow-hidden rounded border-2 transition ${
+                          selectedSet.has(img.id)
+                            ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
                             : 'border-transparent hover:border-slate-300'
                         }`}
                       >
                         <OptimizedImage
                           src={img.cdnUrl}
-                          alt={img.originalFilename ?? ''}
+                          alt=""
                           variant="thumb"
-                          aspectRatio="1/1"
-                          className="w-full h-full"
+                          className="aspect-square w-full object-cover"
                         />
-                        {selectedIds.has(img.id) && (
-                          <div className="absolute top-0.5 right-0.5 bg-blue-500 rounded-full p-0.5">
-                            <Check className="h-2.5 w-2.5 text-white" />
+                        {selectedSet.has(img.id) && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20">
+                            <Check className="h-5 w-5 text-blue-600" />
                           </div>
                         )}
                       </button>
                     ))}
                   </div>
-                  {onSelectImages && selectedIds.size > 0 && (
+                  {onSelectImages && selectedSet.size > 0 && (
                     <button
-                      type="button"
-                      onClick={() => {
-                        const picked = images.filter((img) => selectedIds.has(img.id));
-                        onSelectImages(item.partNumber, picked);
-                      }}
-                      className="mt-2 w-full text-xs px-2 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-500"
+                      onClick={() =>
+                        onSelectImages(
+                          pn,
+                          images.filter((img) => selectedSet.has(img.id)),
+                        )
+                      }
+                      className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
                     >
-                      Use {selectedIds.size} selected image{selectedIds.size !== 1 ? 's' : ''}
+                      Use {selectedSet.size} selected image(s)
                     </button>
                   )}
                 </div>

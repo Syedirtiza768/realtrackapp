@@ -507,6 +507,25 @@ GET list, PUT `/:id/read`, PUT `/read-all`, DELETE `/:id`. WebSocket on `notific
 
 GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
 
+### Image Drive
+
+**Base**: `/api/image-drive` | `image_drive.*`
+
+| Method | Path | Description | Permission |
+|--------|------|-------------|------------|
+| GET | `/api/image-drive/folders` | List all folders (with thumbnail URLs, file counts) | image_drive.view |
+| POST | `/api/image-drive/folders` | Create folder (name, optional linkedPartNumber) | image_drive.manage |
+| PATCH | `/api/image-drive/folders/:id` | Update folder name or linked part number | image_drive.manage |
+| DELETE | `/api/image-drive/folders/:id` | Delete folder + all S3 files | image_drive.manage |
+| GET | `/api/image-drive/folders/:id/files` | List files in folder (paginated) | image_drive.view |
+| POST | `/api/image-drive/folders/:id/upload` | Upload files to folder (multipart, up to 50) | image_drive.upload |
+| POST | `/api/image-drive/upload` | Upload with auto-create folder (folderId="auto") | image_drive.upload |
+| DELETE | `/api/image-drive/files/:id` | Delete single file (+ S3 cleanup) | image_drive.manage |
+| GET | `/api/image-drive/lookup/:partNumber` | Auto-attach lookup by part number | image_drive.view |
+| POST | `/api/image-drive/lookup` | Batch lookup by part numbers | image_drive.view |
+| GET | `/api/image-drive/search` | Search folders by name or linked part number | image_drive.view |
+| GET | `/api/image-drive/stats` | Get stats (totalFolders, totalFiles, totalSizeBytes) | image_drive.view |
+
 ### Feature Flags ⚠️
 
 **Double-prefix**: `/api/api/feature-flags` | `feature_flags.*`
@@ -548,6 +567,7 @@ Located in `src/lib/`:
 | Channels | `channelsApi.ts` | `/api/channels` |
 | Settings | `settingsApi.ts` | `/api/settings` |
 | RBAC | `rbacApi.ts` | `/api/rbac` |
+| Image Drive | `imageDriveApi.ts` | `/api/image-drive` |
 | Templates | `templateApi.ts` | `/api/templates` |
 | Pipeline | `pipelineApi.ts` | `/api/pipeline` |
 

@@ -8,9 +8,29 @@ import {
   Min,
 } from 'class-validator';
 
-export class ImageDriveUploadDto {
+export class CreateFolderDto {
   @IsString()
-  partNumber!: string;
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  linkedPartNumber?: string;
+}
+
+export class UpdateFolderDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  linkedPartNumber?: string | null;
+}
+
+export class UploadToFolderDto {
+  @IsOptional()
+  @IsString()
+  partNumber?: string;
 }
 
 export class ImageDriveBatchLookupDto {
@@ -19,7 +39,22 @@ export class ImageDriveBatchLookupDto {
   partNumbers!: string[];
 }
 
-export class ImageDriveSearchDto {
+export class ListFilesDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  page?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  @Type(() => Number)
+  limit?: number;
+}
+
+export class SearchDriveDto {
   @IsString()
   q!: string;
 
@@ -37,11 +72,11 @@ export class ImageDriveSearchDto {
   limit?: number;
 }
 
-export class ImageDriveRecordFromPartDto {
+export class AutoCreateUploadDto {
   @IsString()
-  partNumber!: string;
+  folderName!: string;
 
-  @IsArray()
-  @IsString({ each: true })
-  assetIds!: string[];
+  @IsOptional()
+  @IsString()
+  partNumber?: string;
 }

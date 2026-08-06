@@ -8,6 +8,7 @@ import {
   HttpStatus,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   UploadedFiles,
@@ -18,13 +19,13 @@ import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { ImageDriveService } from './image-drive.service.js';
 import { StorageService } from './storage.service.js';
-import { ImageAsset } from './entities/image-asset.entity.js';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
+  AutoCreateUploadDto,
+  CreateFolderDto,
   ImageDriveBatchLookupDto,
-  ImageDriveRecordFromPartDto,
-  ImageDriveSearchDto,
+  ListFilesDto,
+  SearchDriveDto,
+  UpdateFolderDto,
 } from './dto/image-drive.dto.js';
 
 @ApiTags('Image Drive')
@@ -34,70 +35,208 @@ export class ImageDriveController {
   constructor(
     private readonly imageDriveService: ImageDriveService,
     private readonly storageService: StorageService,
-    @InjectRepository(ImageAsset)
-    private readonly assetRepo: Repository<ImageAsset>,
   ) {}
 
-  @Post('upload')
+  // ─── Folders ─────────────────────────────────────────────────
+
+  @Get('folders')
+  @ApiOperation({ summary: 'List all folders' })
+  async listFolders() {
+    return this.imageDriveService.listFolders();
+  }
+
+  @Post('folders')
+  @RequirePermissions('image_drive.manage')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new folder' })
+  async createFolder(@Body() dto: CreateFolderDto) {
+    if (!dto.name?.trim()) {
+      throw new BadRequestException('Folder name is required');
+    }
+    return this.imageDriveService.createFolder(dto.name, dto.linkedPartNumber);
+  }
+
+  @Patch('folders/:folderId')
+  @RequirePermissions('image_drive.manage')
+  @ApiOperation({ summary: 'Update folder name or linked part number' })
+  async updateFolder(
+    @Param('folderId') folderId: string,
+    @Body() dto: UpdateFolderDto,
+  ) {
+    return this.imageDriveService.updateFolder(folderId, {
+      name: dto.name,
+      linkedPartNumber: dto.linkedPartNumber,
+    });
+  }
+
+  @Delete('folders/:folderId')
+  @RequirePermissions('image_drive.manage')
+  @ApiOperation({ summary: 'Delete a folder and all its files' })
+  async deleteFolder(@Param('folderId') folderId: string) {
+    await this.imageDriveService.deleteFolder(folderId);
+    return { deleted: true };
+  }
+
+  // ─── Files ───────────────────────────────────────────────────
+
+  @Get('folders/:folderId/files')
+  @ApiOperation({ summary: 'List files in a folder' })
+  async listFiles(
+    @Param('folderId') folderId: string,
+    @Query() query: ListFilesDto,
+  ) {
+    return this.imageDriveService.listFiles(
+      folderId,
+      query.page ?? 1,
+      query.limit ?? 50,
+    );
+  }
+
+  @Post('folders/:folderId/upload')
   @RequirePermissions('image_drive.upload')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FilesInterceptor('files', 24))
+  @UseInterceptors(FilesInterceptor('files', 50))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({
-    summary: 'Upload images directly to the Image Drive by part number',
-  })
-  async uploadDirect(
+  @ApiOperation({ summary: 'Upload files to a folder' })
+  async uploadToFolder(
+    @Param('folderId') folderId: string,
     @UploadedFiles() files: Express.Multer.File[],
-    @Body('partNumber') partNumber: string,
   ) {
-    if (!partNumber?.trim()) {
-      throw new BadRequestException('partNumber is required');
-    }
     if (!files?.length) {
       throw new BadRequestException('At least one file is required');
     }
 
-    const uploaded: Array<{ cdnUrl: string; s3Key: string }> = [];
+    const folder = await this.imageDriveService.getFolder(folderId);
+    if (!folder) {
+      throw new NotFoundException(`Folder ${folderId} not found`);
+    }
+
+    const uploaded: Array<{
+      filename: string;
+      cdnUrl: string;
+      s3Key: string;
+      fileSizeBytes: number;
+    }> = [];
 
     for (const file of files) {
       const mimeType = file.mimetype || 'image/jpeg';
-      const { uploadUrl, s3Key, assetId } =
-        await this.storageService.generateUploadUrl(
-          file.originalname,
-          mimeType,
-        );
+      const ext = this.storageService.sanitizeExtension(file.originalname);
+      const s3Key = `${folder.s3Prefix}${file.originalname}`;
 
       await this.storageService.putObject(s3Key, file.buffer, mimeType);
       const cdnUrl = this.storageService.getCdnUrl(s3Key);
 
-      await this.assetRepo.save(
-        this.assetRepo.create({
-          id: assetId,
-          s3Bucket: this.storageService.getBucket(),
-          s3Key,
-          mimeType,
-          fileSizeBytes: file.size,
-          originalFilename: file.originalname,
-          cdnUrl,
-        }),
-      );
+      const entry = await this.imageDriveService.addFile(folderId, {
+        filename: file.originalname,
+        s3Key,
+        cdnUrl,
+        mimeType,
+        fileSizeBytes: file.size,
+      });
 
-      uploaded.push({ cdnUrl, s3Key });
+      this.storageService
+        .queueDriveVariantGeneration(entry.id, s3Key)
+        .catch((err) =>
+          this.storageService['logger']?.warn?.(
+            `Variant queue failed for ${s3Key}: ${err}`,
+          ),
+        );
+
+      uploaded.push({
+        filename: file.originalname,
+        cdnUrl,
+        s3Key,
+        fileSizeBytes: file.size,
+      });
     }
 
-    const recorded = await this.imageDriveService.recordImages(
-      partNumber.trim(),
-      uploaded.map((u, i) => ({
-        ...u,
-        originalFilename: files[i].originalname,
-        mimeType: files[i].mimetype,
-        fileSizeBytes: files[i].size,
-      })),
-      'direct',
-    );
-
-    return { recorded, images: uploaded };
+    return { uploaded: uploaded.length, files: uploaded };
   }
+
+  @Post('upload')
+  @RequirePermissions('image_drive.upload')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FilesInterceptor('files', 50))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Upload files with auto-create folder. If folderId="auto", creates folder from folderName.',
+  })
+  async uploadAutoCreate(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body('folderId') folderId: string,
+    @Body('folderName') folderName: string,
+    @Body('partNumber') partNumber: string,
+  ) {
+    if (!files?.length) {
+      throw new BadRequestException('At least one file is required');
+    }
+
+    let resolvedFolderId = folderId;
+
+    if (folderId === 'auto' || !folderId) {
+      if (!folderName?.trim()) {
+        throw new BadRequestException(
+          'folderName is required when folderId is "auto"',
+        );
+      }
+      const folder = await this.imageDriveService.findOrCreateFolder(
+        folderName,
+        partNumber,
+      );
+      resolvedFolderId = folder.id;
+    }
+
+    const folder = await this.imageDriveService.getFolder(resolvedFolderId);
+    if (!folder) {
+      throw new NotFoundException(`Folder ${resolvedFolderId} not found`);
+    }
+
+    const uploaded: Array<{ filename: string; cdnUrl: string; s3Key: string }> =
+      [];
+
+    for (const file of files) {
+      const mimeType = file.mimetype || 'image/jpeg';
+      const s3Key = `${folder.s3Prefix}${file.originalname}`;
+
+      await this.storageService.putObject(s3Key, file.buffer, mimeType);
+      const cdnUrl = this.storageService.getCdnUrl(s3Key);
+
+      const entry = await this.imageDriveService.addFile(resolvedFolderId, {
+        filename: file.originalname,
+        s3Key,
+        cdnUrl,
+        mimeType,
+        fileSizeBytes: file.size,
+      });
+
+      this.storageService
+        .queueDriveVariantGeneration(entry.id, s3Key)
+        .catch(() => {});
+
+      uploaded.push({ filename: file.originalname, cdnUrl, s3Key });
+    }
+
+    return {
+      folderId: resolvedFolderId,
+      folderName: folder.name,
+      uploaded: uploaded.length,
+      files: uploaded,
+    };
+  }
+
+  @Delete('files/:fileId')
+  @RequirePermissions('image_drive.manage')
+  @ApiOperation({ summary: 'Delete a single file' })
+  async deleteFile(@Param('fileId') fileId: string) {
+    const removed = await this.imageDriveService.deleteFile(fileId);
+    if (!removed) {
+      throw new NotFoundException(`File ${fileId} not found`);
+    }
+    return { deleted: true };
+  }
+
+  // ─── Lookup (auto-attach) ────────────────────────────────────
 
   @Get('lookup/:partNumber')
   @ApiOperation({ summary: 'Get all images for a part number' })
@@ -118,8 +257,7 @@ export class ImageDriveController {
     );
 
     const summary = dto.partNumbers.map((pn) => {
-      const normalized =
-        ImageDriveService.normalizePartNumber(pn);
+      const normalized = ImageDriveService.normalizePartNumber(pn);
       const images = result[normalized] ?? [];
       return { partNumber: pn, count: images.length };
     });
@@ -127,40 +265,11 @@ export class ImageDriveController {
     return { results: result, summary };
   }
 
-  @Post('record')
-  @RequirePermissions('image_drive.upload')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Record existing image assets against a part number',
-  })
-  async recordFromPartNumber(@Body() dto: ImageDriveRecordFromPartDto) {
-    if (!dto.partNumber?.trim()) {
-      throw new BadRequestException('partNumber is required');
-    }
-    if (!dto.assetIds?.length) {
-      throw new BadRequestException('assetIds array is required');
-    }
-    const recorded = await this.imageDriveService.recordFromPartNumber(
-      dto.partNumber,
-      dto.assetIds,
-    );
-    return { recorded };
-  }
-
-  @Delete(':assetId')
-  @RequirePermissions('image_drive.manage')
-  @ApiOperation({ summary: 'Remove an image from the Image Drive' })
-  async removeAsset(@Param('assetId') assetId: string) {
-    const removed = await this.imageDriveService.removeAsset(assetId);
-    if (!removed) {
-      throw new NotFoundException(`Image Drive asset ${assetId} not found`);
-    }
-    return { deleted: true };
-  }
+  // ─── Search ──────────────────────────────────────────────────
 
   @Get('search')
-  @ApiOperation({ summary: 'Search the Image Drive by part number' })
-  async search(@Query() query: ImageDriveSearchDto) {
+  @ApiOperation({ summary: 'Search Image Drive by folder name or part number' })
+  async search(@Query() query: SearchDriveDto) {
     if (!query.q?.trim()) {
       throw new BadRequestException('q (query) is required');
     }
@@ -171,25 +280,7 @@ export class ImageDriveController {
     );
   }
 
-  @Post('backfill')
-  @RequirePermissions('image_drive.manage')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Bulk-index all listing images into the Image Drive by part number. ' +
-      'Reads S3 URLs from image_assets and listing_records.itemPhotoUrl — no files downloaded.',
-  })
-  async backfill(
-    @Query('batchSize') batchSizeParam?: string,
-    @Query('offset') offsetParam?: string,
-  ) {
-    const batchSize = Math.min(
-      Math.max(parseInt(batchSizeParam ?? '200', 10) || 200, 1),
-      1000,
-    );
-    const offset = Math.max(parseInt(offsetParam ?? '0', 10) || 0, 0);
-    return this.imageDriveService.backfill(batchSize, offset);
-  }
+  // ─── Stats ───────────────────────────────────────────────────
 
   @Get('stats')
   @ApiOperation({ summary: 'Get Image Drive statistics' })

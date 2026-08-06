@@ -4,12 +4,15 @@ import {
   DeleteDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { ImageDriveFolder } from './image-drive-folder.entity.js';
 
 @Entity('image_drive_assets')
-@Index('idx_image_drive_part_number', ['partNumberNormalized'])
-@Index('idx_image_drive_part_cdn', ['partNumberNormalized', 's3Key'], {
+@Index('idx_image_drive_assets_folder', ['folderId'])
+@Index('idx_image_drive_assets_folder_s3key', ['folderId', 's3Key'], {
   unique: true,
   where: '"deleted_at" IS NULL',
 })
@@ -17,20 +20,29 @@ export class ImageDriveAsset {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'part_number_normalized', type: 'text' })
-  partNumberNormalized!: string;
+  @Column({ name: 'folder_id', type: 'uuid' })
+  folderId!: string;
 
-  @Column({ name: 'part_number_raw', type: 'text' })
-  partNumberRaw!: string;
+  @ManyToOne(() => ImageDriveFolder, (folder) => folder.assets, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'folder_id' })
+  folder!: ImageDriveFolder;
 
-  @Column({ name: 'cdn_url', type: 'text' })
-  cdnUrl!: string;
+  @Column({ type: 'text' })
+  filename!: string;
 
   @Column({ name: 's3_key', type: 'text' })
   s3Key!: string;
 
-  @Column({ name: 'original_filename', type: 'text', nullable: true })
-  originalFilename!: string | null;
+  @Column({ name: 'cdn_url', type: 'text' })
+  cdnUrl!: string;
+
+  @Column({ name: 's3_key_thumb', type: 'text', nullable: true })
+  s3KeyThumb!: string | null;
+
+  @Column({ name: 's3_key_medium', type: 'text', nullable: true })
+  s3KeyMedium!: string | null;
 
   @Column({ name: 'mime_type', type: 'varchar', length: 50, nullable: true })
   mimeType!: string | null;
@@ -38,11 +50,14 @@ export class ImageDriveAsset {
   @Column({ name: 'file_size_bytes', type: 'bigint', default: 0 })
   fileSizeBytes!: number;
 
-  @Column({ type: 'varchar', length: 20, default: 'direct' })
-  source!: 'listing' | 'direct';
+  @Column({ type: 'int', nullable: true })
+  width!: number | null;
 
-  @Column({ name: 'source_listing_id', type: 'uuid', nullable: true })
-  sourceListingId!: string | null;
+  @Column({ type: 'int', nullable: true })
+  height!: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  blurhash!: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

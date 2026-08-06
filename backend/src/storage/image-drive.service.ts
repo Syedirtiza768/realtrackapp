@@ -1,26 +1,40 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { ImageDriveAsset } from './entities/image-drive-asset.entity.js';
+import { ImageDriveFolder } from './entities/image-drive-folder.entity.js';
 import { StorageService } from './storage.service.js';
-import { ImageAsset } from './entities/image-asset.entity.js';
-import { ListingRecord } from '../listings/listing-record.entity.js';
 
-export interface ImageDriveEntry {
+export interface DriveFileEntry {
   id: string;
-  partNumberRaw: string;
+  folderId: string;
+  filename: string;
   cdnUrl: string;
   s3Key: string;
-  originalFilename: string | null;
+  s3KeyThumb: string | null;
+  s3KeyMedium: string | null;
   mimeType: string | null;
   fileSizeBytes: number;
-  source: string;
-  sourceListingId: string | null;
+  width: number | null;
+  height: number | null;
+  blurhash: string | null;
   createdAt: Date;
 }
 
+export interface DriveFolderEntry {
+  id: string;
+  name: string;
+  s3Prefix: string;
+  linkedPartNumber: string | null;
+  fileCount: number;
+  totalSizeBytes: number;
+  createdAt: Date;
+  updatedAt: Date;
+  thumbnailUrls: string[];
+}
+
 export interface BatchLookupResult {
-  [partNumber: string]: ImageDriveEntry[];
+  [partNumber: string]: DriveFileEntry[];
 }
 
 @Injectable()
@@ -28,12 +42,10 @@ export class ImageDriveService {
   private readonly logger = new Logger(ImageDriveService.name);
 
   constructor(
+    @InjectRepository(ImageDriveFolder)
+    private readonly folderRepo: Repository<ImageDriveFolder>,
     @InjectRepository(ImageDriveAsset)
-    private readonly driveRepo: Repository<ImageDriveAsset>,
-    @InjectRepository(ImageAsset)
-    private readonly imageAssetRepo: Repository<ImageAsset>,
-    @InjectRepository(ListingRecord)
-    private readonly listingRepo: Repository<ListingRecord>,
+    private readonly assetRepo: Repository<ImageDriveAsset>,
     private readonly storageService: StorageService,
   ) {}
 
@@ -45,19 +57,346 @@ export class ImageDriveService {
       .replace(/[^a-z0-9]/g, '');
   }
 
-  async findByPartNumber(partNumber: string): Promise<ImageDriveEntry[]> {
+  static normalizeFolderName(raw: string): string {
+    return raw.trim().toLowerCase();
+  }
+
+  // ─── Folder operations ───────────────────────────────────────
+
+  async listFolders(): Promise<DriveFolderEntry[]> {
+    const folders = await this.folderRepo.find({
+      order: { name: 'ASC' },
+    });
+
+    const entries: DriveFolderEntry[] = [];
+    for (const folder of folders) {
+      const thumbs = await this.assetRepo.find({
+        where: { folderId: folder.id },
+        order: { createdAt: 'ASC' },
+        take: 4,
+        withDeleted: false,
+      });
+
+      entries.push({
+        id: folder.id,
+        name: folder.name,
+        s3Prefix: folder.s3Prefix,
+        linkedPartNumber: folder.linkedPartNumber,
+        fileCount: folder.fileCount,
+        totalSizeBytes: folder.totalSizeBytes,
+        createdAt: folder.createdAt,
+        updatedAt: folder.updatedAt,
+        thumbnailUrls: thumbs.map((t) => t.s3KeyThumb || t.cdnUrl),
+      });
+    }
+
+    return entries;
+  }
+
+  async createFolder(
+    name: string,
+    linkedPartNumber?: string,
+  ): Promise<DriveFolderEntry> {
+    const normalized = ImageDriveService.normalizeFolderName(name);
+    const existing = await this.folderRepo.findOne({
+      where: { nameNormalized: normalized },
+    });
+    if (existing) {
+      throw new ConflictException(`Folder "${name}" already exists`);
+    }
+
+    const s3Prefix = this.storageService.buildDrivePrefix(name);
+
+    const folder = this.folderRepo.create({
+      name: name.trim(),
+      nameNormalized: normalized,
+      s3Prefix,
+      linkedPartNumber: linkedPartNumber?.trim() || null,
+      linkedPartNumberNormalized: linkedPartNumber
+        ? ImageDriveService.normalizePartNumber(linkedPartNumber)
+        : null,
+    });
+
+    const saved = await this.folderRepo.save(folder);
+    this.logger.log(`Created folder "${name}" (id=${saved.id})`);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      s3Prefix: saved.s3Prefix,
+      linkedPartNumber: saved.linkedPartNumber,
+      fileCount: 0,
+      totalSizeBytes: 0,
+      createdAt: saved.createdAt,
+      updatedAt: saved.updatedAt,
+      thumbnailUrls: [],
+    };
+  }
+
+  async updateFolder(
+    folderId: string,
+    updates: { name?: string; linkedPartNumber?: string | null },
+  ): Promise<DriveFolderEntry> {
+    const folder = await this.folderRepo.findOneBy({ id: folderId });
+    if (!folder) {
+      throw new ConflictException(`Folder ${folderId} not found`);
+    }
+
+    if (updates.name !== undefined) {
+      const normalized = ImageDriveService.normalizeFolderName(updates.name);
+      const dup = await this.folderRepo.findOne({
+        where: { nameNormalized: normalized },
+      });
+      if (dup && dup.id !== folderId) {
+        throw new ConflictException(`Folder "${updates.name}" already exists`);
+      }
+      folder.name = updates.name.trim();
+      folder.nameNormalized = normalized;
+      folder.s3Prefix = this.storageService.buildDrivePrefix(updates.name);
+    }
+
+    if (updates.linkedPartNumber !== undefined) {
+      folder.linkedPartNumber =
+        updates.linkedPartNumber?.trim() || null;
+      folder.linkedPartNumberNormalized =
+        updates.linkedPartNumber
+          ? ImageDriveService.normalizePartNumber(updates.linkedPartNumber)
+          : null;
+    }
+
+    const saved = await this.folderRepo.save(folder);
+    this.logger.log(`Updated folder ${folderId}`);
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      s3Prefix: saved.s3Prefix,
+      linkedPartNumber: saved.linkedPartNumber,
+      fileCount: saved.fileCount,
+      totalSizeBytes: saved.totalSizeBytes,
+      createdAt: saved.createdAt,
+      updatedAt: saved.updatedAt,
+      thumbnailUrls: [],
+    };
+  }
+
+  async deleteFolder(folderId: string): Promise<void> {
+    const folder = await this.folderRepo.findOne({
+      where: { id: folderId },
+      relations: ['assets'],
+    });
+    if (!folder) return;
+
+    for (const asset of folder.assets) {
+      await this.storageService.deleteObject(asset.s3Key).catch(() => {});
+      if (asset.s3KeyThumb) {
+        await this.storageService
+          .deleteObject(asset.s3KeyThumb)
+          .catch(() => {});
+      }
+      if (asset.s3KeyMedium) {
+        await this.storageService
+          .deleteObject(asset.s3KeyMedium)
+          .catch(() => {});
+      }
+    }
+
+    await this.folderRepo.remove(folder);
+    this.logger.log(
+      `Deleted folder "${folder.name}" with ${folder.assets.length} files`,
+    );
+  }
+
+  async getFolder(folderId: string): Promise<DriveFolderEntry | null> {
+    const folder = await this.folderRepo.findOneBy({ id: folderId });
+    if (!folder) return null;
+
+    return {
+      id: folder.id,
+      name: folder.name,
+      s3Prefix: folder.s3Prefix,
+      linkedPartNumber: folder.linkedPartNumber,
+      fileCount: folder.fileCount,
+      totalSizeBytes: folder.totalSizeBytes,
+      createdAt: folder.createdAt,
+      updatedAt: folder.updatedAt,
+      thumbnailUrls: [],
+    };
+  }
+
+  async findOrCreateFolder(
+    name: string,
+    linkedPartNumber?: string,
+  ): Promise<DriveFolderEntry> {
+    const normalized = ImageDriveService.normalizeFolderName(name);
+    const existing = await this.folderRepo.findOne({
+      where: { nameNormalized: normalized },
+    });
+    if (existing) {
+      return {
+        id: existing.id,
+        name: existing.name,
+        s3Prefix: existing.s3Prefix,
+        linkedPartNumber: existing.linkedPartNumber,
+        fileCount: existing.fileCount,
+        totalSizeBytes: existing.totalSizeBytes,
+        createdAt: existing.createdAt,
+        updatedAt: existing.updatedAt,
+        thumbnailUrls: [],
+      };
+    }
+    return this.createFolder(name, linkedPartNumber);
+  }
+
+  // ─── File operations ─────────────────────────────────────────
+
+  async listFiles(
+    folderId: string,
+    page = 1,
+    limit = 50,
+  ): Promise<{
+    items: DriveFileEntry[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const offset = (page - 1) * limit;
+
+    const [assets, total] = await this.assetRepo.findAndCount({
+      where: { folderId },
+      order: { createdAt: 'ASC' },
+      skip: offset,
+      take: limit,
+      withDeleted: false,
+    });
+
+    return {
+      items: assets.map(this.toFileEntry),
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async addFile(
+    folderId: string,
+    data: {
+      filename: string;
+      s3Key: string;
+      cdnUrl: string;
+      mimeType: string;
+      fileSizeBytes: number;
+    },
+  ): Promise<DriveFileEntry> {
+    const asset = this.assetRepo.create({
+      folderId,
+      filename: data.filename,
+      s3Key: data.s3Key,
+      cdnUrl: data.cdnUrl,
+      mimeType: data.mimeType,
+      fileSizeBytes: data.fileSizeBytes,
+    });
+
+    const saved = await this.assetRepo.save(asset);
+
+    await this.folderRepo
+      .createQueryBuilder()
+      .update()
+      .set({
+        fileCount: () => '"file_count" + 1',
+        totalSizeBytes: () => `"total_size_bytes" + ${data.fileSizeBytes}`,
+      })
+      .where('id = :id', { id: folderId })
+      .execute();
+
+    return this.toFileEntry(saved);
+  }
+
+  async updateFileVariants(
+    assetId: string,
+    variants: {
+      s3KeyThumb?: string | null;
+      s3KeyMedium?: string | null;
+      width?: number | null;
+      height?: number | null;
+      blurhash?: string | null;
+    },
+  ): Promise<void> {
+    await this.assetRepo.update(assetId, variants);
+  }
+
+  async deleteFile(assetId: string): Promise<boolean> {
+    const asset = await this.assetRepo.findOneBy({ id: assetId });
+    if (!asset) return false;
+
+    await this.storageService.deleteObject(asset.s3Key).catch(() => {});
+    if (asset.s3KeyThumb) {
+      await this.storageService.deleteObject(asset.s3KeyThumb).catch(() => {});
+    }
+    if (asset.s3KeyMedium) {
+      await this.storageService.deleteObject(asset.s3KeyMedium).catch(() => {});
+    }
+
+    await this.assetRepo.softDelete(assetId);
+
+    await this.folderRepo
+      .createQueryBuilder()
+      .update()
+      .set({
+        fileCount: () => 'GREATEST("file_count" - 1, 0)',
+        totalSizeBytes: () =>
+          `GREATEST("total_size_bytes" - ${asset.fileSizeBytes}, 0)`,
+      })
+      .where('id = :id', { id: asset.folderId })
+      .execute();
+
+    return true;
+  }
+
+  async getFile(assetId: string): Promise<DriveFileEntry | null> {
+    const asset = await this.assetRepo.findOneBy({ id: assetId });
+    if (!asset) return null;
+    return this.toFileEntry(asset);
+  }
+
+  // ─── Part number lookup (for auto-attach) ────────────────────
+
+  async findByPartNumber(partNumber: string): Promise<DriveFileEntry[]> {
     const normalized = ImageDriveService.normalizePartNumber(partNumber);
     if (!normalized) return [];
 
-    const assets = await this.driveRepo.find({
-      where: { partNumberNormalized: normalized },
-      order: { createdAt: 'ASC' },
+    const folder = await this.folderRepo.findOne({
+      where: { linkedPartNumberNormalized: normalized },
     });
 
-    return assets.map(this.toEntry);
+    if (folder) {
+      const assets = await this.assetRepo.find({
+        where: { folderId: folder.id },
+        order: { createdAt: 'ASC' },
+        withDeleted: false,
+      });
+      return assets.map(this.toFileEntry);
+    }
+
+    const nameMatch = await this.folderRepo.findOne({
+      where: { nameNormalized: normalized },
+    });
+
+    if (nameMatch) {
+      const assets = await this.assetRepo.find({
+        where: { folderId: nameMatch.id },
+        order: { createdAt: 'ASC' },
+        withDeleted: false,
+      });
+      return assets.map(this.toFileEntry);
+    }
+
+    return [];
   }
 
-  async findByPartNumbers(partNumbers: string[]): Promise<BatchLookupResult> {
+  async findByPartNumbers(
+    partNumbers: string[],
+  ): Promise<BatchLookupResult> {
     const normalizedSet = new Map<string, string>();
     for (const raw of partNumbers) {
       const norm = ImageDriveService.normalizePartNumber(raw);
@@ -66,182 +405,76 @@ export class ImageDriveService {
 
     if (normalizedSet.size === 0) return {};
 
-    const assets = await this.driveRepo.find({
-      where: { partNumberNormalized: In([...normalizedSet.keys()]) },
-      order: { createdAt: 'ASC' },
+    const normalizedKeys = [...normalizedSet.keys()];
+
+    const linkedFolders = await this.folderRepo.find({
+      where: { linkedPartNumberNormalized: In(normalizedKeys) },
     });
 
-    const result: BatchLookupResult = {};
-    for (const asset of assets) {
-      if (!result[asset.partNumberNormalized]) {
-        result[asset.partNumberNormalized] = [];
-      }
-      result[asset.partNumberNormalized].push(this.toEntry(asset));
+    const nameFolders = await this.folderRepo.find({
+      where: { nameNormalized: In(normalizedKeys) },
+    });
+
+    const allFolders = [...linkedFolders, ...nameFolders];
+    const uniqueFolders = new Map<string, ImageDriveFolder>();
+    for (const f of allFolders) {
+      uniqueFolders.set(f.id, f);
     }
+
+    const folderIds = [...uniqueFolders.values()].map((f) => f.id);
+    if (folderIds.length === 0) return {};
+
+    const assets = await this.assetRepo.find({
+      where: { folderId: In(folderIds) },
+      order: { createdAt: 'ASC' },
+      withDeleted: false,
+    });
+
+    const folderToAssets = new Map<string, DriveFileEntry[]>();
+    for (const asset of assets) {
+      if (!folderToAssets.has(asset.folderId)) {
+        folderToAssets.set(asset.folderId, []);
+      }
+      folderToAssets.get(asset.folderId)!.push(this.toFileEntry(asset));
+    }
+
+    const result: BatchLookupResult = {};
+    for (const [norm, raw] of normalizedSet) {
+      const folder =
+        linkedFolders.find(
+          (f) => f.linkedPartNumberNormalized === norm,
+        ) || nameFolders.find((f) => f.nameNormalized === norm);
+
+      if (folder) {
+        result[norm] = folderToAssets.get(folder.id) ?? [];
+      }
+    }
+
     return result;
   }
 
-  async recordImages(
-    partNumber: string,
-    images: Array<{
-      cdnUrl: string;
-      s3Key: string;
-      originalFilename?: string;
-      mimeType?: string;
-      fileSizeBytes?: number;
-    }>,
-    source: 'listing' | 'direct' = 'direct',
-    sourceListingId?: string,
-  ): Promise<number> {
-    const normalized = ImageDriveService.normalizePartNumber(partNumber);
-    if (!normalized || images.length === 0) return 0;
-
-    let recorded = 0;
-    for (const img of images) {
-      if (!img.cdnUrl || !img.s3Key) continue;
-
-      try {
-        const existing = await this.driveRepo.findOne({
-          where: {
-            partNumberNormalized: normalized,
-            s3Key: img.s3Key,
-          },
-          withDeleted: true,
-        });
-
-        if (existing) {
-          if (existing.deletedAt) {
-            await this.driveRepo.restore(existing.id);
-            recorded++;
-          }
-          continue;
-        }
-
-        await this.driveRepo.save(
-          this.driveRepo.create({
-            partNumberNormalized: normalized,
-            partNumberRaw: partNumber.trim(),
-            cdnUrl: img.cdnUrl,
-            s3Key: img.s3Key,
-            originalFilename: img.originalFilename ?? null,
-            mimeType: img.mimeType ?? null,
-            fileSizeBytes: img.fileSizeBytes ?? 0,
-            source,
-            sourceListingId: sourceListingId ?? null,
-          }),
-        );
-        recorded++;
-      } catch (err) {
-        this.logger.warn(
-          `Failed to record image for part ${partNumber}: ${err instanceof Error ? err.message : err}`,
-        );
-      }
-    }
-
-    if (recorded > 0) {
-      this.logger.log(
-        `Recorded ${recorded} image(s) for part ${partNumber} (source=${source})`,
-      );
-    }
-    return recorded;
-  }
-
-  async recordFromListing(listingId: string): Promise<number> {
-    const listing = await this.listingRepo.findOneBy({ id: listingId });
-    if (!listing) return 0;
-
-    const partNumber =
-      listing.cManufacturerPartNumber?.trim() ||
-      listing.cOeOemPartNumber?.trim();
-    if (!partNumber) return 0;
-
-    const images: Array<{
-      cdnUrl: string;
-      s3Key: string;
-      originalFilename?: string;
-      mimeType?: string;
-      fileSizeBytes?: number;
-    }> = [];
-
-    const assets = await this.imageAssetRepo.find({
-      where: { listingId },
-    });
-
-    for (const asset of assets) {
-      if (asset.cdnUrl && asset.s3Key) {
-        images.push({
-          cdnUrl: asset.cdnUrl,
-          s3Key: asset.s3Key,
-          originalFilename: asset.originalFilename ?? undefined,
-          mimeType: asset.mimeType ?? undefined,
-          fileSizeBytes: asset.fileSizeBytes ?? undefined,
-        });
-      }
-    }
-
-    if (images.length === 0) {
-      const photoUrls = (listing.itemPhotoUrl ?? '')
-        .split('|')
-        .map((u) => u.trim())
-        .filter((u) => u.startsWith('http'));
-
-      for (const url of photoUrls) {
-        const key = this.extractS3KeyFromUrl(url);
-        if (key) {
-          images.push({ cdnUrl: url, s3Key: key });
-        }
-      }
-    }
-
-    return this.recordImages(partNumber, images, 'listing', listingId);
-  }
-
-  async recordFromPartNumber(
-    partNumber: string,
-    assetIds: string[],
-  ): Promise<number> {
-    if (assetIds.length === 0) return 0;
-
-    const assets = await this.imageAssetRepo.find({
-      where: { id: In(assetIds) },
-    });
-
-    const images = assets
-      .filter((a) => a.cdnUrl && a.s3Key)
-      .map((a) => ({
-        cdnUrl: a.cdnUrl!,
-        s3Key: a.s3Key,
-        originalFilename: a.originalFilename ?? undefined,
-        mimeType: a.mimeType ?? undefined,
-        fileSizeBytes: a.fileSizeBytes ?? undefined,
-      }));
-
-    return this.recordImages(partNumber, images, 'direct');
-  }
-
-  async removeAsset(assetId: string): Promise<boolean> {
-    const asset = await this.driveRepo.findOneBy({ id: assetId });
-    if (!asset) return false;
-    await this.driveRepo.softDelete(assetId);
-    return true;
-  }
+  // ─── Search ──────────────────────────────────────────────────
 
   async search(
     query: string,
     page = 1,
     limit = 50,
   ): Promise<{
-    items: ImageDriveEntry[];
+    items: Array<DriveFileEntry & { folderName: string }>;
     total: number;
     page: number;
     totalPages: number;
   }> {
-    const normalized = ImageDriveService.normalizePartNumber(query);
     const offset = (page - 1) * limit;
+    const normalized = ImageDriveService.normalizePartNumber(query);
 
-    const qb = this.driveRepo
+    const qb = this.assetRepo
       .createQueryBuilder('a')
-      .where('a.part_number_normalized LIKE :q', { q: `%${normalized}%` });
+      .leftJoinAndSelect('a.folder', 'f')
+      .where(
+        `f.name_normalized LIKE :q OR f.linked_part_number_normalized LIKE :q`,
+        { q: `%${normalized}%` },
+      );
 
     const total = await qb.getCount();
     const assets = await qb
@@ -251,119 +484,51 @@ export class ImageDriveService {
       .getMany();
 
     return {
-      items: assets.map(this.toEntry),
+      items: assets.map((a) => ({
+        ...this.toFileEntry(a),
+        folderName: a.folder?.name ?? '',
+      })),
       total,
       page,
       totalPages: Math.ceil(total / limit),
     };
   }
 
-  async backfill(
-    batchSize: number,
-    offset: number,
-  ): Promise<{
-    processed: number;
-    recorded: number;
-    skipped: number;
-    offset: number;
-    nextOffset: number;
-    remaining: number;
-    message: string;
-  }> {
-    const listings = await this.listingRepo
-      .createQueryBuilder('l')
-      .where(
-        `(l.cManufacturerPartNumber IS NOT NULL AND TRIM(l.cManufacturerPartNumber) != '')
-         OR (l.cOeOemPartNumber IS NOT NULL AND TRIM(l.cOeOemPartNumber) != '')`,
-      )
-      .andWhere('l.deletedAt IS NULL')
-      .orderBy('l.importedAt', 'ASC')
-      .skip(offset)
-      .take(batchSize)
-      .getMany();
-
-    let recorded = 0;
-    let skipped = 0;
-    for (const listing of listings) {
-      try {
-        const count = await this.recordFromListing(listing.id);
-        if (count > 0) recorded += count;
-        else skipped++;
-      } catch {
-        skipped++;
-      }
-    }
-
-    const total = await this.listingRepo
-      .createQueryBuilder('l')
-      .where(
-        `(l.cManufacturerPartNumber IS NOT NULL AND TRIM(l.cManufacturerPartNumber) != '')
-         OR (l.cOeOemPartNumber IS NOT NULL AND TRIM(l.cOeOemPartNumber) != '')`,
-      )
-      .andWhere('l.deletedAt IS NULL')
-      .getCount();
-
-    const nextOffset = offset + listings.length;
-    const remaining = Math.max(total - nextOffset, 0);
-
-    return {
-      processed: listings.length,
-      recorded,
-      skipped,
-      offset,
-      nextOffset,
-      remaining,
-      message:
-        listings.length < batchSize
-          ? 'Backfill complete'
-          : `${remaining} listings remaining. Call again with offset=${nextOffset}`,
-    };
-  }
+  // ─── Stats ───────────────────────────────────────────────────
 
   async getStats(): Promise<{
-    totalParts: number;
-    totalImages: number;
+    totalFolders: number;
+    totalFiles: number;
+    totalSizeBytes: number;
   }> {
-    const totalImages = await this.driveRepo.count();
-    const result = await this.driveRepo
+    const totalFolders = await this.folderRepo.count();
+    const totalFiles = await this.assetRepo.count();
+    const result = await this.assetRepo
       .createQueryBuilder('a')
-      .select('COUNT(DISTINCT a.part_number_normalized)', 'count')
+      .select('COALESCE(SUM(a.file_size_bytes), 0)', 'total')
       .getRawOne();
-    const totalParts = parseInt(result?.count ?? '0', 10);
+    const totalSizeBytes = parseInt(result?.total ?? '0', 10);
 
-    return { totalParts, totalImages };
+    return { totalFolders, totalFiles, totalSizeBytes };
   }
 
-  private toEntry(asset: ImageDriveAsset): ImageDriveEntry {
+  // ─── Helpers ─────────────────────────────────────────────────
+
+  private toFileEntry(asset: ImageDriveAsset): DriveFileEntry {
     return {
       id: asset.id,
-      partNumberRaw: asset.partNumberRaw,
+      folderId: asset.folderId,
+      filename: asset.filename,
       cdnUrl: asset.cdnUrl,
       s3Key: asset.s3Key,
-      originalFilename: asset.originalFilename,
+      s3KeyThumb: asset.s3KeyThumb,
+      s3KeyMedium: asset.s3KeyMedium,
       mimeType: asset.mimeType,
       fileSizeBytes: asset.fileSizeBytes,
-      source: asset.source,
-      sourceListingId: asset.sourceListingId,
+      width: asset.width,
+      height: asset.height,
+      blurhash: asset.blurhash,
       createdAt: asset.createdAt,
     };
-  }
-
-  private extractS3KeyFromUrl(url: string): string | null {
-    try {
-      const parsed = new URL(url);
-      const cdnDomain = this.storageService['cdnDomain'];
-      const bucket = this.storageService.getBucket();
-
-      if (cdnDomain && parsed.hostname === cdnDomain) {
-        return parsed.pathname.replace(/^\//, '');
-      }
-      if (parsed.hostname.includes(`${bucket}.s3`)) {
-        return parsed.pathname.replace(/^\//, '');
-      }
-    } catch {
-      /* ignore */
-    }
-    return null;
   }
 }

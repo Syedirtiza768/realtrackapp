@@ -392,15 +392,6 @@ export class SingleListingFormService {
         { id: In(dto.uploadedAssetIds) },
         { listingId: listing.id },
       );
-
-      // Record uploaded images to Image Drive for future auto-attach
-      this.imageDriveService
-        .recordFromPartNumber(partNumber, dto.uploadedAssetIds)
-        .catch((err) =>
-          this.logger.warn(
-            `Image Drive record failed for ${partNumber}: ${err instanceof Error ? err.message : err}`,
-          ),
-        );
     }
 
     // Pull existing images from Image Drive if listing has none

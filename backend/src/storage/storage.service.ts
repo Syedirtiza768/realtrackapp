@@ -11,7 +11,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash, randomUUID } from 'crypto';
-import type { CatalogVariantJobData } from './processors/thumbnail.processor.js';
+import type { CatalogVariantJobData, DriveVariantJobData } from './processors/thumbnail.processor.js';
 
 export interface PresignedUploadResult {
   uploadUrl: string;
@@ -40,7 +40,7 @@ export class StorageService {
   constructor(
     private readonly config: ConfigService,
     @InjectQueue('storage-thumbnails')
-    private readonly thumbnailQueue: Queue<CatalogVariantJobData>,
+    private readonly thumbnailQueue: Queue<CatalogVariantJobData | DriveVariantJobData>,
   ) {
     this.bucket =
       this.config.get<string>('AWS_S3_BUCKET')?.trim() ||
@@ -406,6 +406,27 @@ export class StorageService {
     }
   }
 
+  async queueDriveVariantGeneration(
+    assetId: string,
+    s3Key: string,
+  ): Promise<void> {
+    try {
+      await this.thumbnailQueue.add(
+        'generate-drive-variants',
+        { assetId, s3Key },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          jobId: `drive-variants-${assetId}`,
+        },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to queue drive variant generation for ${s3Key}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
   /** Public wrapper — extracts the S3 key from one of our own CDN/bucket
    * URLs, or null if the URL isn't ours (e.g. an un-mirrored eBay image). */
   keyFromUrl(url: string): string | null {
@@ -502,6 +523,14 @@ export class StorageService {
     return `${this.keyPrefix}${relativeKey}`;
   }
 
+  buildDrivePrefix(folderName: string): string {
+    const sanitized = folderName
+      .trim()
+      .replace(/[^a-zA-Z0-9\-_ ./]/g, '')
+      .replace(/\s+/g, ' ');
+    return this.withKeyPrefix(`image-drive/${sanitized}/`);
+  }
+
   /**
    * Durable mirror key for a source identity (remote URL or temp S3 key).
    * Stable across pipeline re-runs of the same source; unique when the source
@@ -525,7 +554,7 @@ export class StorageService {
     return fullKey;
   }
 
-  private sanitizeExtension(filename: string): string {
+  sanitizeExtension(filename: string): string {
     const lastDot = filename.lastIndexOf('.');
     if (lastDot < 0) return '.webp';
     const ext = filename.substring(lastDot).toLowerCase();

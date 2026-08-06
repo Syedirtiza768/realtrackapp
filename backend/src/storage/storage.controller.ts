@@ -22,7 +22,6 @@ import type { Queue } from 'bullmq';
 import { IsNull, Not, Repository } from 'typeorm';
 import { ImageAsset } from './entities/image-asset.entity.js';
 import { StorageService } from './storage.service.js';
-import { ImageDriveService } from './image-drive.service.js';
 import {
   BulkRequestUploadDto,
   RequestUploadDto,
@@ -45,7 +44,6 @@ export class StorageController {
 
   constructor(
     private readonly storageService: StorageService,
-    private readonly imageDriveService: ImageDriveService,
     @InjectRepository(ImageAsset)
     private readonly assetRepo: Repository<ImageAsset>,
     @InjectRepository(ListingRecord)
@@ -121,15 +119,6 @@ export class StorageController {
         backoff: { type: 'exponential', delay: 5000 },
       },
     );
-
-    // Record to Image Drive if linked to a listing with a part number
-    if (asset.listingId) {
-      this.imageDriveService.recordFromListing(asset.listingId).catch((err) =>
-        this.logger.warn(
-          `Image Drive record failed for listing ${asset.listingId}: ${err instanceof Error ? err.message : err}`,
-        ),
-      );
-    }
 
     return { asset };
   }

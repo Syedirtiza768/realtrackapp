@@ -55,7 +55,7 @@ Grouped by module:
 | dashboard | `AuditLog`, `DashboardCache`, `SalesRecord` |
 | settings | `TenantSetting`, `PricingRule`, `ShippingProfile` |
 | client-settings | `ClientSettings` |
-| storage | `ImageAsset` |
+| storage | `ImageAsset`, `ImageDriveFolder`, `ImageDriveAsset` |
 | templates | `ListingTemplate` |
 | notifications | `Notification` |
 | common/feature-flags | `FeatureFlag` |
