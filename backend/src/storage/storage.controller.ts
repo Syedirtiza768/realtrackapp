@@ -20,6 +20,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Queue } from 'bullmq';
 import { IsNull, Not, Repository } from 'typeorm';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ImageAsset } from './entities/image-asset.entity.js';
 import { StorageService } from './storage.service.js';
 import {
@@ -388,6 +389,7 @@ export class StorageController {
    */
   @Get('serve/*key')
   @Public()
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async serve(
     @Req() req: Request,
