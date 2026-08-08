@@ -177,13 +177,32 @@ export function isEbayInvalidItemConditionError(err: unknown): boolean {
 export function isEbayInvalidBusinessPolicyError(err: unknown): boolean {
   const formatted = formatEbayApiError(err, '');
   if (!formatted) return false;
-  return (
+  if (
     /invalid.*fulfillment policy/i.test(formatted) ||
     /invalid.*shipping policy/i.test(formatted) ||
     /invalid.*payment policy/i.test(formatted) ||
     /invalid.*return policy/i.test(formatted) ||
-    /Fulfillment policy/i.test(formatted)
-  );
+    /Fulfillment policy/i.test(formatted) ||
+    /Rücknahmebedingungen.*ungültig/i.test(formatted) ||
+    /Versandbedingungen.*ungültig/i.test(formatted) ||
+    /Zahlungsbedingungen.*ungültig/i.test(formatted)
+  )
+    return true;
+
+  if (!err || typeof err !== 'object') return false;
+  const bodies: unknown[] = [
+    (err as { response?: { data?: unknown } }).response?.data,
+    err,
+  ];
+  for (const body of bodies) {
+    if (!body || typeof body !== 'object') continue;
+    const errors = (body as { errors?: EbayErrorRow[] }).errors;
+    if (!Array.isArray(errors)) continue;
+    for (const e of errors) {
+      if (String(e.errorId) === '25009') return true;
+    }
+  }
+  return false;
 }
 
 /** True when eBay blocked publish for Parts & Accessories return-policy compliance. */

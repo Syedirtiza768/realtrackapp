@@ -1502,23 +1502,52 @@ export class EbayPublishService {
       nameResolvedReturn ??
       (req.requestedReturnPolicyName ? refreshed.returnPolicyId : undefined);
 
-    // A named profile is an explicit listing assignment. Never silently
-    // replace it with a store/marketplace default, because that publishes a
-    // different policy than the user reviewed in RealTrack.
+    // If a named profile can't be resolved on the target store after
+    // refresh, fall back to the marketplace default policy (if set) with a
+    // warning. This enables cross-store publishing where listings created
+    // for one account are published to a different account that doesn't
+    // have a matching policy name.
     if (req.requestedFulfillmentPolicyName && !effectiveNamedFulfillment) {
-      throw new BadRequestException(
-        `Shipping profile "${req.requestedFulfillmentPolicyName}" is not available for "${store.storeName}" on ${marketplaceId}. Sync or create the matching eBay policy before publishing.`,
-      );
+      const fallback = hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultFulfillmentPolicyId
+        : undefined;
+      if (fallback) {
+        this.logger.warn(
+          `Shipping profile "${req.requestedFulfillmentPolicyName}" not found on "${store.storeName}" (${marketplaceId}) — falling back to default policy ${fallback}`,
+        );
+      } else {
+        throw new BadRequestException(
+          `Shipping profile "${req.requestedFulfillmentPolicyName}" is not available for "${store.storeName}" on ${marketplaceId} and no default policy is set. Sync or create a matching eBay policy before publishing.`,
+        );
+      }
     }
     if (req.requestedPaymentPolicyName && !effectiveNamedPayment) {
-      throw new BadRequestException(
-        `Payment profile "${req.requestedPaymentPolicyName}" is not available for "${store.storeName}" on ${marketplaceId}. Sync or create the matching eBay policy before publishing.`,
-      );
+      const fallback = hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultPaymentPolicyId
+        : undefined;
+      if (fallback) {
+        this.logger.warn(
+          `Payment profile "${req.requestedPaymentPolicyName}" not found on "${store.storeName}" (${marketplaceId}) — falling back to default policy ${fallback}`,
+        );
+      } else {
+        throw new BadRequestException(
+          `Payment profile "${req.requestedPaymentPolicyName}" is not available for "${store.storeName}" on ${marketplaceId} and no default policy is set. Sync or create a matching eBay policy before publishing.`,
+        );
+      }
     }
     if (req.requestedReturnPolicyName && !effectiveNamedReturn) {
-      throw new BadRequestException(
-        `Return profile "${req.requestedReturnPolicyName}" is unavailable or incompatible for "${store.storeName}" on ${marketplaceId}. Sync or correct the matching eBay policy before publishing.`,
-      );
+      const fallback = hasValidDefaultPolicyIds(mpRow)
+        ? mpRow?.defaultReturnPolicyId
+        : undefined;
+      if (fallback) {
+        this.logger.warn(
+          `Return profile "${req.requestedReturnPolicyName}" not found on "${store.storeName}" (${marketplaceId}) — falling back to default policy ${fallback}`,
+        );
+      } else {
+        throw new BadRequestException(
+          `Return profile "${req.requestedReturnPolicyName}" is unavailable for "${store.storeName}" on ${marketplaceId} and no default policy is set. Sync or correct the matching eBay policy before publishing.`,
+        );
+      }
     }
 
     const fulfillmentPolicyId = coalesceValidPolicyId(
@@ -1541,16 +1570,33 @@ export class EbayPublishService {
         : undefined,
       store.paymentPolicyId,
     );
-    let returnPolicyId = coalesceValidPolicyId(
-      effectiveNamedReturn,
-      req.returnPolicyId,
-      refreshed.returnPolicyId,
-      synced.returnPolicyId,
-      hasValidDefaultPolicyIds(mpRow)
-        ? mpRow?.defaultReturnPolicyId
-        : undefined,
-      store.returnPolicyId,
-    );
+    // When a named return profile was requested but not found on the target
+    // marketplace (common in cross-store publishing), deprioritise
+    // req.returnPolicyId — it likely belongs to a different store/marketplace
+    // (e.g. a US policy being sent to EBAY_DE). Prefer the refreshed or
+    // marketplace-default policy instead.
+    const returnNameMiss =
+      Boolean(req.requestedReturnPolicyName) && !effectiveNamedReturn;
+    const returnMpDefault = hasValidDefaultPolicyIds(mpRow)
+      ? mpRow?.defaultReturnPolicyId
+      : undefined;
+    let returnPolicyId = returnNameMiss
+      ? coalesceValidPolicyId(
+          effectiveNamedReturn,
+          refreshed.returnPolicyId,
+          returnMpDefault,
+          synced.returnPolicyId,
+          store.returnPolicyId,
+          req.returnPolicyId,
+        )
+      : coalesceValidPolicyId(
+          effectiveNamedReturn,
+          req.returnPolicyId,
+          refreshed.returnPolicyId,
+          synced.returnPolicyId,
+          returnMpDefault,
+          store.returnPolicyId,
+        );
 
     if (paReturnRequired) {
       const ensured = await this.paReturnPolicy.ensureCompliantReturnPolicy({
