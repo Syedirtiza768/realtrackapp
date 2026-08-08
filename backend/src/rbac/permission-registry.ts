@@ -170,24 +170,14 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
     SUPER_AND_ADMIN,
     'Responsible soft-delete; restore via listings.update. Defaults to admin/super_admin; reassignable.',
   ),
-  p('listings.publish', 'Publish listings to channels', 'listings', [
-    ROLE_SLUGS.SUPER_ADMIN,
-    ROLE_SLUGS.ADMIN,
-    ROLE_SLUGS.MANAGER,
-    ROLE_SLUGS.SUPERVISOR,
-  ]),
-  p('listings.approve', 'Approve listings for publication', 'listings', [
-    ROLE_SLUGS.SUPER_ADMIN,
-    ROLE_SLUGS.ADMIN,
-    ROLE_SLUGS.MANAGER,
-    ROLE_SLUGS.SUPERVISOR,
-  ]),
-  p('listings.revise', 'Revise published listings', 'listings', [
-    ROLE_SLUGS.SUPER_ADMIN,
-    ROLE_SLUGS.ADMIN,
-    ROLE_SLUGS.MANAGER,
-    ROLE_SLUGS.SUPERVISOR,
-  ]),
+  p('listings.publish', 'Publish listings to channels', 'listings', READ_ONLY),
+  p(
+    'listings.approve',
+    'Approve listings for publication',
+    'listings',
+    READ_ONLY,
+  ),
+  p('listings.revise', 'Revise published listings', 'listings', READ_ONLY),
   p('listings.price_override', 'Change price on live listings', 'listings', [
     ROLE_SLUGS.SUPER_ADMIN,
     ROLE_SLUGS.ADMIN,
@@ -214,7 +204,7 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('ingestion.create', 'Create ingestion jobs', 'ingestion', READ_WRITE),
   p('ingestion.manage', 'Manage ingestion jobs', 'ingestion', MANAGER_UP),
   p('pipeline.view', 'View pipeline jobs', 'pipeline', READ_ONLY),
-  p('pipeline.run', 'Run pipeline jobs', 'pipeline', READ_WRITE),
+  p('pipeline.run', 'Run pipeline jobs', 'pipeline', READ_ONLY),
   p('pipeline.manage', 'Manage pipeline jobs', 'pipeline', MANAGER_UP),
   p(
     'pipeline.review',
@@ -267,7 +257,7 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   // ── Channels & stores ──
   p('channels.view', 'View channel connections', 'channels', READ_ONLY),
   p('channels.connect', 'Connect channels', 'channels', MANAGER_UP),
-  p('channels.publish', 'Publish to channels', 'channels', READ_WRITE),
+  p('channels.publish', 'Publish to channels', 'channels', READ_ONLY),
   p('channels.sync', 'Sync channel listings', 'channels', READ_WRITE),
   p('channels.manage', 'Manage channel connections', 'channels', MANAGER_UP),
   p('stores.view', 'View stores', 'stores', READ_ONLY),
@@ -284,7 +274,7 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('ebay.view', 'View eBay accounts', 'ebay', READ_ONLY),
   p('ebay.connect', 'Connect eBay accounts', 'ebay', MANAGER_UP),
   p('ebay.sync', 'Sync eBay data', 'ebay', READ_WRITE),
-  p('ebay.publish', 'Publish via eBay', 'ebay', READ_WRITE),
+  p('ebay.publish', 'Publish via eBay', 'ebay', READ_ONLY),
   p('ebay.manage', 'Manage eBay accounts', 'ebay', MANAGER_UP),
   p('ebay.audit', 'View eBay API audit logs', 'ebay', MANAGER_UP),
 
@@ -299,19 +289,19 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
     'published_listings.sync',
     'Sync published listings from eBay',
     'published_listings',
-    READ_WRITE,
+    READ_ONLY,
   ),
   p(
     'published_listings.manage',
     'Revise/end published listings',
     'published_listings',
-    READ_WRITE,
+    READ_ONLY,
   ),
   p(
     'published_listings.bulk',
     'Bulk actions on published listings',
     'published_listings',
-    MANAGER_UP,
+    READ_ONLY,
   ),
 
   // ── Settings (tenant operational) ──
@@ -422,7 +412,7 @@ export const ROLE_DEFINITIONS: {
     slug: ROLE_SLUGS.LISTING_USER,
     name: 'Listing User',
     description:
-      'Upload sheets, verify data, and edit draft listings. Cannot publish, revise, or delete.',
+      'Upload sheets, verify data, edit draft listings, and publish to all stores.',
     isSystem: true,
   },
   {

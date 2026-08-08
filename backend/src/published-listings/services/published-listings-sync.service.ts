@@ -14,10 +14,12 @@ import { Store } from '../../channels/entities/store.entity.js';
 import { resolveMarketplaceId } from '../../channels/ebay/ebay-marketplace-headers.util.js';
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
 import { EbayTradingApiService } from '../../channels/ebay/ebay-trading-api.service.js';
+import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
 import type { TradingSellerListItem } from '../../channels/ebay/ebay-trading-api.service.js';
 import type {
   EbayInventoryItem,
   EbayOffer,
+  EbayItemSummary,
 } from '../../channels/ebay/ebay-api.types.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import { EbayPublishedListingSyncLog } from '../entities/ebay-published-listing-sync-log.entity.js';
@@ -33,6 +35,24 @@ export interface PublishedListingsSyncJobPayload {
   syncLogId: string;
   listingIds?: string[];
   trigger?: 'manual' | 'scheduled' | 'single';
+}
+
+/**
+ * Normalized live listing returned from the eBay Browse `seller` search.
+ * `itemId` is the legacy (numeric) item id used as the local row key; `v1ItemId`
+ * is the Browse REST id (v1|...|0) retained for debugging.
+ */
+export interface BrowseSellerListItem {
+  itemId: string;
+  v1ItemId: string;
+  title: string;
+  price: number | null;
+  currency: string;
+  listingStatus: string;
+  condition: string | null;
+  categoryId: string | null;
+  imageUrls: string[];
+  listingUrl: string | null;
 }
 
 @Injectable()
@@ -51,8 +71,9 @@ export class PublishedListingsSyncService {
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
     private readonly inventoryApi: EbayInventoryApiService,
-    private readonly tradingApi: EbayTradingApiService,
-    private readonly health: PublishedListingsHealthService,
+      private readonly tradingApi: EbayTradingApiService,
+      private readonly browseApi: EbayBrowseApiService,
+      private readonly health: PublishedListingsHealthService,
     private readonly enrichment: PublishedListingsEnrichmentService,
     @InjectQueue('published-listings-sync')
     private readonly syncQueue: Queue<PublishedListingsSyncJobPayload>,
@@ -247,13 +268,24 @@ export class PublishedListingsSyncService {
         // Advancing it here hides every active row that was not in listingIds.
         advanceSyncWatermark = false;
       } else {
-        const tradingResult = await this.syncFromTradingApi(
-          account,
-          storeId,
-          accountMarketplaceId,
-          seenKeys,
-          channelByListing,
-        );
+        const useBrowse =
+          (process.env.PUBLISHED_LISTINGS_SOURCE || 'trading')
+            .toLowerCase() === 'browse';
+        const tradingResult = useBrowse
+          ? await this.syncFromBrowseApi(
+              account,
+              storeId,
+              accountMarketplaceId,
+              seenKeys,
+              channelByListing,
+            )
+          : await this.syncFromTradingApi(
+              account,
+              storeId,
+              accountMarketplaceId,
+              seenKeys,
+              channelByListing,
+            );
         processed += tradingResult.processed;
         created += tradingResult.created;
         updated += tradingResult.updated;
@@ -581,6 +613,331 @@ export class PublishedListingsSyncService {
     const created = this.listingRepo.create(data as EbayPublishedListing);
     await this.listingRepo.save(created);
     return { created: true };
+  }
+
+  // ─────────────────────── Browse API sync (Trading-free) ───────────────────────
+
+  /**
+   * Resolve the eBay seller username used by the Browse `seller` search.
+   * Order: store.config.ebayUserId (if not a placeholder) → env override →
+   * derived from the storefront URL slug (/str/<slug>). Throws if none found.
+   */
+  private async resolveBrowseSeller(
+    account: ConnectedEbayAccount,
+    storeId: string,
+  ): Promise<string> {
+    const store = await this.storeRepo.findOneBy({ id: storeId });
+    const cfg = (store?.config ?? {}) as Record<string, unknown>;
+    const fromCfg = cfg?.ebayUserId;
+    if (
+      typeof fromCfg === 'string' &&
+      fromCfg &&
+      !fromCfg.startsWith('unknown_')
+    ) {
+      return fromCfg;
+    }
+    const envVal =
+      process.env[`EBAY_BROWSE_SELLER_${account.id}`] ||
+      process.env[`EBAY_BROWSE_SELLER_${storeId}`];
+    if (envVal) return envVal;
+    const url = store?.storeUrl ?? '';
+    const m = url.match(/ebay\.[a-z0-9.]+\/str\/([^/?#]+)/i);
+    if (m?.[1]) {
+      this.logger.warn(
+        `Derived eBay seller "${m[1]}" from storeUrl for ${account.accountDisplayName}; set EBAY_BROWSE_SELLER_${account.id} to override`,
+      );
+      return m[1];
+    }
+    throw new Error(
+      `No eBay seller username resolved for ${account.accountDisplayName}; set EBAY_BROWSE_SELLER_${account.id}`,
+    );
+  }
+
+  /**
+   * Enumerate a seller's live listings via the Browse API (avoids the Trading
+   * call-usage cap). Returns normalized items keyed by legacy item id.
+   *
+   * NOTE: eBay Browse search is a buyer search with a result cap and is not a
+   * guaranteed complete enumeration for very large stores (90k+ items).
+   */
+  private async getAllLiveListingsViaBrowse(
+    account: ConnectedEbayAccount,
+    storeId: string,
+    marketplaceId: string,
+    country: string,
+  ): Promise<BrowseSellerListItem[]> {
+    const seller = await this.resolveBrowseSeller(account, storeId);
+    const categoryIds =
+      process.env.PUBLISHED_LISTINGS_BROWSE_CATEGORY_IDS || '6001';
+    const items: BrowseSellerListItem[] = [];
+    let offset = 0;
+    const limit = 100;
+    for (;;) {
+      const res = await this.browseApi.searchSellerListings({
+        seller,
+        marketplaceId,
+        country,
+        categoryIds,
+        limit,
+        offset,
+      });
+      for (const s of res.itemSummaries ?? []) {
+        const legacyId = (
+          s as EbayItemSummary & { legacyItemId?: string }
+        ).legacyItemId;
+        const itemId = legacyId ?? s.itemId;
+        items.push({
+          itemId,
+          v1ItemId: s.itemId,
+          title: s.title,
+          price: Number(s.price?.value ?? '0') || null,
+          currency: s.price?.currency ?? 'USD',
+          listingStatus: 'active',
+          condition: s.condition ?? null,
+          categoryId: s.categories?.[0]?.categoryId ?? null,
+          imageUrls: s.image?.imageUrl ? [s.image.imageUrl] : [],
+          listingUrl: s.itemWebUrl ?? null,
+        });
+      }
+      if ((res.itemSummaries?.length ?? 0) < limit) break;
+      offset += limit;
+      if (offset > 200_000) {
+        this.logger.warn(
+          `Browse seller search capped at offset 200000 for ${seller}`,
+        );
+        break;
+      }
+    }
+    return items;
+  }
+
+  /**
+   * Browse-API equivalent of syncFromTradingApi. Fetches the live set from
+   * Browse (no Trading call), upserts rows, and (bounded) backfills gallery /
+   * compatibility via the enrichment service with Trading explicitly skipped.
+   */
+  private async syncFromBrowseApi(
+    account: ConnectedEbayAccount,
+    storeId: string,
+    marketplaceId: string | null,
+    seenKeys: Set<string>,
+    channelByListing: Map<string, EbayListingChannel>,
+  ): Promise<{
+    processed: number;
+    created: number;
+    updated: number;
+    failed: number;
+    warnings: Record<string, unknown>[];
+    liveFetchOk: boolean;
+  }> {
+    let processed = 0;
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+    const warnings: Record<string, unknown>[] = [];
+    let liveFetchOk = false;
+    const mp = marketplaceId ?? 'EBAY_MOTORS_US';
+    const country = (
+      process.env.PUBLISHED_LISTINGS_BROWSE_COUNTRY || 'US'
+    ).toUpperCase();
+
+    try {
+      const items = await this.getAllLiveListingsViaBrowse(
+        account,
+        storeId,
+        mp,
+        country,
+      );
+      // Successful Browse response (even if legitimately smaller due to the
+      // search result cap) is safe to prune unseen actives and advance the watermark.
+      liveFetchOk = true;
+      const enrichBudget = Math.max(
+        0,
+        Number(
+          process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500',
+        ) || 500,
+      );
+      let enrichUsed = 0;
+
+      for (const item of items) {
+        const key = `${mp}:${item.itemId}`;
+        if (seenKeys.has(key)) continue;
+
+        processed += 1;
+        try {
+          const result = await this.upsertFromBrowseItem(
+            account,
+            item,
+            mp,
+            channelByListing,
+            enrichUsed < enrichBudget,
+          );
+          if (result.enriched) enrichUsed += 1;
+          if (result.created) created += 1;
+          else updated += 1;
+          seenKeys.add(key);
+        } catch (e) {
+          failed += 1;
+          warnings.push({
+            itemId: item.itemId,
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      if (items.length > 0) {
+        this.logger.log(
+          `Browse live list for ${account.accountDisplayName}: ${items.length} active, ${created} new, ${updated} updated, enriched=${enrichUsed}/${enrichBudget}`,
+        );
+      }
+    } catch (e) {
+      warnings.push({
+        source: 'browse_api',
+        message: e instanceof Error ? e.message : String(e),
+      });
+      this.logger.warn(
+        `Browse API fetch skipped for ${account.id}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+
+    return { processed, created, updated, failed, warnings, liveFetchOk };
+  }
+
+  private async upsertFromBrowseItem(
+    account: ConnectedEbayAccount,
+    item: BrowseSellerListItem,
+    marketplaceId: string,
+    channelByListing: Map<string, EbayListingChannel>,
+    allowEnrichment = true,
+  ): Promise<{ created: boolean; enriched: boolean }> {
+    const channel = channelByListing.get(item.itemId);
+    const listingStatus: 'active' | 'ended' | 'out_of_stock' =
+      item.listingStatus.toLowerCase() !== 'active' ? 'ended' : 'active';
+
+    const row = await this.listingRepo.findOne({
+      where: {
+        ebayAccountId: account.id,
+        marketplaceId,
+        ebayItemId: item.itemId,
+      },
+    });
+
+    const imageUrls = [...item.imageUrls];
+    let compatibility: Record<string, unknown> | null =
+      row?.compatibility ?? null;
+    let description = row?.description ?? null;
+    let itemSpecifics: Record<string, string[]> = {
+      ...(row?.itemSpecifics ?? {}),
+    };
+    let enriched = false;
+
+    const enrichmentInput = {
+      storeId: account.primaryStoreId,
+      ebayItemId: item.itemId,
+      sku: row?.sku,
+      marketplaceId,
+      listingUrl: item.listingUrl ?? row?.listingUrl ?? null,
+      title: item.title,
+      imageUrls,
+      compatibility,
+      description,
+      itemSpecifics,
+      // Browse mode must never fall back to Trading GetItem (usage limits).
+      skipTrading: true,
+    };
+
+    let enrichedTitle = item.title;
+    let enrichedListingUrl = item.listingUrl ?? row?.listingUrl ?? null;
+
+    if (
+      allowEnrichment &&
+      listingStatus === 'active' &&
+      this.enrichment.needsEnrichment(enrichmentInput)
+    ) {
+      const result = await this.enrichment.enrichListing(enrichmentInput);
+      const nextImages = preferRicherImageUrls(result.imageUrls, imageUrls);
+      compatibility = result.compatibility ?? compatibility;
+      if (result.description?.trim()) description = result.description;
+      if (result.title?.trim()) enrichedTitle = result.title.trim();
+      if (result.listingUrl?.trim()) enrichedListingUrl = result.listingUrl.trim();
+      if (Object.keys(result.itemSpecifics ?? {}).length > 0) {
+        itemSpecifics = result.itemSpecifics;
+      }
+      enriched =
+        result.sources.length > 0 &&
+        (nextImages.length > imageUrls.length ||
+          compatibility != null ||
+          Boolean(result.description?.trim()) ||
+          Boolean(result.title?.trim()) ||
+          Boolean(result.listingUrl?.trim()) ||
+          Object.keys(result.itemSpecifics ?? {}).length > 0);
+      imageUrls.length = 0;
+      imageUrls.push(...nextImages);
+    }
+
+    const healthFlags = this.health.computeHealthFlags({
+      title: enrichedTitle,
+      imageUrls,
+      itemSpecifics,
+      compatibility,
+      quantityAvailable: row?.quantityAvailable ?? 0,
+      quantitySold: row?.quantitySold ?? 0,
+      performanceMetrics: {},
+      categoryId: item.categoryId,
+      price: item.price != null ? String(item.price) : null,
+      description,
+      lastSyncedAt: new Date(),
+    });
+
+    const data: Partial<EbayPublishedListing> = {
+      organizationId: account.organizationId,
+      ebayAccountId: account.id,
+      storeId: account.primaryStoreId,
+      marketplaceId,
+      ebayItemId: item.itemId,
+      offerId: row?.offerId ?? channel?.offerId ?? null,
+      sku: row?.sku ?? null,
+      title: enrichedTitle,
+      description,
+      categoryId: item.categoryId,
+      price: item.price != null ? String(item.price) : null,
+      currency: item.currency,
+      quantityAvailable: row?.quantityAvailable ?? 0,
+      quantitySold: row?.quantitySold ?? 0,
+      listingStatus,
+      listingFormat: 'fixed_price',
+      condition: item.condition,
+      listingUrl:
+        enrichedListingUrl ??
+        this.health.buildListingUrl(
+          item.itemId,
+          marketplaceId,
+          account.environment,
+        ),
+      imageUrls,
+      itemSpecifics,
+      compatibility,
+      healthFlags,
+      accountDisplayName: account.accountDisplayName,
+      ebayStartTime: null,
+      ebayEndTime: null,
+      lastSyncedAt: new Date(),
+      catalogProductId: channel?.catalogProductId ?? null,
+      ebayListingChannelId: channel?.id ?? row?.ebayListingChannelId ?? null,
+      rawEbayResponse: { syncSource: 'browse_api', item },
+    };
+
+    if (row) {
+      Object.assign(row, data);
+      await this.listingRepo.save(row);
+      return { created: false, enriched };
+    }
+
+    const created = this.listingRepo.create(data as EbayPublishedListing);
+    await this.listingRepo.save(created);
+    return { created: true, enriched };
   }
 
   private isPublishedOffer(offer: EbayOffer): boolean {
@@ -1028,13 +1385,18 @@ export class PublishedListingsSyncService {
 
     if (toEnd.length === 0) return 0;
 
-    await this.listingRepo.update(
-      { id: In(toEnd.map((r) => r.id)) },
-      {
-        listingStatus: 'ended',
-        lastSyncedAt: new Date(),
-      },
-    );
+    // Batch updates to avoid PostgreSQL bind-parameter limit (~32k).
+    // Each batch uses at most BATCH_SIZE ids in the IN(...) clause.
+    const BATCH_SIZE = 500;
+    const endedAt = new Date();
+    for (let i = 0; i < toEnd.length; i += BATCH_SIZE) {
+      const batch = toEnd.slice(i, i + BATCH_SIZE);
+      await this.listingRepo.update(
+        { id: In(batch.map((r) => r.id)) },
+        { listingStatus: 'ended', lastSyncedAt: endedAt },
+      );
+    }
+
     return toEnd.length;
   }
 

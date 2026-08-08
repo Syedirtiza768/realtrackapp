@@ -23,7 +23,6 @@ import {
 import { getEbayWorkspace } from '../../lib/ebayIntegrationsApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getThumbUrl, getMediumUrl, handleThumbError } from '../../lib/imageUrl';
 import OptimizedImage from '../ui/OptimizedImage';
 
 export default function PublishedListingDetailPage() {

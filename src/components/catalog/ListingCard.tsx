@@ -39,7 +39,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
           <OptimizedImage
             src={imageUrl}
             alt={item.title ?? 'Product image'}
-            variant="medium"
+            variant="small"
             priority={false}
             className="h-full w-full transition-transform duration-300 group-hover:scale-105"
           />

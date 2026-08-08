@@ -185,10 +185,13 @@ export default function OptimizedImage({
   };
 
   const displayUrl = getDisplayUrl();
-  // Skip srcSet — variant files (_sm/_medium/_lg.webp) don't exist for most
-  // S3 images. The proxy handles caching; just serve the original.
-  const srcSet = undefined;
   const resolvedSizes = sizes ?? DEFAULT_SIZES[variant];
+  // Build srcSet for our CDN/S3 URLs that have responsive variants.
+  // External URLs (eBay CDN etc.) don't have variants so skip srcSet.
+  const srcSet =
+    src && isOurCdnUrl(src)
+      ? buildSrcSet(src) || undefined
+      : undefined;
   const hasBlurhash = !!blurhash && blurhash.startsWith('data:');
 
   // Placeholder background style

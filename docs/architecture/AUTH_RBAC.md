@@ -82,7 +82,7 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 - **Source of truth**: `backend/src/rbac/permission-registry.ts`
 - **Seeding**: `RbacSeedService.syncFromRegistry()` upserts roles/permissions (enabled via `RBAC_SYNC_PERMISSIONS=true`)
 
-### System Roles (8)
+### System Roles (10)
 
 | Slug | Name | Scope |
 |------|------|-------|
@@ -90,10 +90,14 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 | `admin` | Admin | Broad ops, no branding controls |
 | `manager` | Manager | Ops management across listings/orders/channels |
 | `staff` | Staff | Day-to-day listing/catalog ops (default for new users) |
-| `viewer` | Viewer | Read-only |
+| `supervisor` | Supervisor | Approve/publish listings, revise live listings |
+| `viewer` | Viewer | Read-only **except** all publish perms are granted (see below) |
 | `catalog_manager` | Catalog Manager | Catalog import + product mgmt |
 | `listing_manager` | Listing Manager | Listing create/publish/sync |
 | `ops_user` | Operations User | Orders/inventory/fulfillment |
+| `listing_user` | Listing User | Upload sheets, verify data, edit drafts, publish to all stores |
+
+> A non-system custom role `api_published_listings_reader` exists on some tenants for machine/API read-only access to the published-listings feed. It is intentionally excluded from publish permissions.
 
 ### Permissions
 
@@ -141,6 +145,24 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 | `manager` and up | `users.view`, `roles.view`, `ingestion.manage`, `pipeline.manage`, `catalog.import`, `inventory.adjust`, `orders.refund` |
 | `read_write` | `listings.create`, `listings.update`, `catalog.update`, `orders.update`, `orders.ship` |
 | `read_only` | All view permissions |
+| `read_only` (all human roles) | **All publish permissions** — see [Publish policy](#publish-policy) below |
+
+### Publish policy
+
+> **Policy (2026-08-08):** Every human system role may publish listings to every store. The following permissions default to `READ_ONLY` (all 10 human roles): `listings.publish`, `listings.approve`, `listings.revise`, `channels.publish`, `ebay.publish`, `published_listings.sync`, `published_listings.manage`, `published_listings.bulk`. Only `listings.delete` and `listings.price_override` remain restricted (admin/manager up). The machine role `api_published_listings_reader` is excluded.
+
+Two gates must both be satisfied for a user to publish **all** listings to **all** stores:
+
+1. **Permission gate** — the user's role grants the publish permissions above (checked live per request by `PermissionsGuard` via `RbacService.getPermissionKeysForUser`).
+2. **Store-access gate** — `users.store_access_all`. When `true`, `StoreAccessService` short-circuits all store filters (`resolveStoreFilter` returns `undefined` = all stores) and `assertStoreAccess` passes for any store. When `false`, the user only sees/publishes to stores in `user_store_assignments`.
+
+To grant a user all-store access without per-store assignments, set `store_access_all = true` (toggle via `POST /api/store-access/access-all/:userId` with `stores.access_all_manage`, or directly in the `users` table). On the US production instance all active users were set to `store_access_all = true` on 2026-08-08.
+
+### Pipeline upload policy
+
+> **Policy (2026-08-08):** Every human system role can upload files to the enrichment pipeline and receive output listings. `pipeline.run` (gates `POST /api/pipeline/upload` and `POST /api/pipeline/single`) defaults to `READ_ONLY` — all 10 human roles. `pipeline.view` and `pipeline.export` are already `READ_ONLY`. Pipeline job visibility in `GET /api/pipeline/jobs` is filtered to a user's own jobs unless they hold `users.view` (manager-and-up), but a user who uploads a file always sees their own job and can download its output templates (`us`/`uk`/`au`/`de`/`report`). The pipeline processor imports results into `catalog_products` + `listing_records` as a background job (no per-request permission check); those imported listings are then visible to the uploader via `listings.view` (READ_ONLY) with the store filter bypassed by `store_access_all`.
+
+> **Customized roles caveat:** roles with `roles.is_customized = true` are skipped by `syncFromRegistry()` on boot. If a customized role (e.g. `staff`) is missing publish perms after a registry change, add them directly to `role_permissions` or reset the role to defaults.
 
 ---
 

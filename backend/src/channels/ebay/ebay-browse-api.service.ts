@@ -124,12 +124,14 @@ export class EbayBrowseApiService {
 
   // ──────────────────────────── helpers ────────────────────────────
 
-  private async appHeaders(): Promise<AxiosRequestConfig> {
+  private async appHeaders(
+    marketplaceId?: string | null,
+  ): Promise<AxiosRequestConfig> {
     const token = await this.auth.getApplicationToken();
     return {
       headers: {
         Authorization: `Bearer ${token}`,
-        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+        'X-EBAY-C-MARKETPLACE-ID': marketplaceId || 'EBAY_US',
       },
     };
   }
@@ -147,8 +149,10 @@ export class EbayBrowseApiService {
     limit?: number;
     offset?: number;
     aspectFilter?: string;
+    seller?: string;
+    marketplaceId?: string | null;
   }): Promise<EbaySearchResult> {
-    const cfg = await this.appHeaders();
+    const cfg = await this.appHeaders(options.marketplaceId);
     const params: Record<string, string | number> = {};
 
     if (options.q) params.q = options.q;
@@ -158,6 +162,7 @@ export class EbayBrowseApiService {
     if (options.limit) params.limit = options.limit;
     if (options.offset) params.offset = options.offset;
     if (options.aspectFilter) params.aspect_filter = options.aspectFilter;
+    if (options.seller) params.seller = options.seller;
 
     const { data } = await this.withRateLimitRetry(
       `search(${options.q || options.categoryIds || ''})`,
@@ -190,8 +195,11 @@ export class EbayBrowseApiService {
   /**
    * Get a single item by its legacy item ID.
    */
-  async getItemByLegacyId(legacyItemId: string): Promise<EbayItem> {
-    const cfg = await this.appHeaders();
+  async getItemByLegacyId(
+    legacyItemId: string,
+    marketplaceId?: string | null,
+  ): Promise<EbayItem> {
+    const cfg = await this.appHeaders(marketplaceId);
     const { data } = await this.withRateLimitRetry(
       `getItemByLegacyId(${legacyItemId})`,
       async () => {
@@ -203,6 +211,33 @@ export class EbayBrowseApiService {
       },
     );
     return data;
+  }
+
+  /**
+   * Enumerate a single seller's live listings via Browse `seller` search.
+   * Honors marketplace + country filters so only US / Motors-US inventory is
+   * returned. NOTE: eBay Browse search is a buyer search with a result cap and
+   * is NOT a guaranteed complete enumeration for very large stores (90k+ items).
+   */
+  async searchSellerListings(options: {
+    seller: string;
+    marketplaceId?: string | null;
+    country?: string;
+    categoryIds?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<EbaySearchResult> {
+    const limit = Math.min(options.limit ?? 100, 100);
+    const filterParts: string[] = [];
+    if (options.country) filterParts.push(`itemLocationCountry:${options.country}`);
+    return this.search({
+      seller: options.seller,
+      marketplaceId: options.marketplaceId,
+      categoryIds: options.categoryIds,
+      limit,
+      offset: options.offset ?? 0,
+      filter: filterParts.length ? filterParts.join(',') : undefined,
+    });
   }
 
   // ──────────────────────────── Competitive Research ───────────────

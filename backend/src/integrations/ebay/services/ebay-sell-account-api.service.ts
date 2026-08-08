@@ -194,7 +194,8 @@ export class EbaySellAccountApiService {
     }[] = [];
     let offset = 0;
     const limit = 50;
-    for (;;) {
+    const MAX_PAGES = 20;
+    for (let page = 0; page < MAX_PAGES; page++) {
       const { data } = await http.get('/sell/inventory/v1/location', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -202,7 +203,8 @@ export class EbaySellAccountApiService {
         },
         params: { limit, offset },
       });
-      const locs = (data as { locations?: unknown[] }).locations ?? [];
+      const locs = (data as { locations?: unknown[]; total?: number }).locations ?? [];
+      const total = (data as { total?: number }).total ?? Number.MAX_SAFE_INTEGER;
       for (const l of locs) {
         const row = l as Record<string, unknown>;
         const key = String(row.merchantLocationKey ?? '');
@@ -214,7 +216,7 @@ export class EbaySellAccountApiService {
           raw: row,
         });
       }
-      if (locs.length !== limit) break;
+      if (offset + locs.length >= total || locs.length !== limit) break;
       offset += limit;
     }
     return out;
@@ -240,7 +242,8 @@ export class EbaySellAccountApiService {
     const out: T[] = [];
     let offset = 0;
     const limit = 20;
-    for (;;) {
+    const MAX_PAGES = 50;
+    for (let page = 0; page < MAX_PAGES; page++) {
       try {
         const { data } = await http.get(path, {
           headers: {
@@ -256,10 +259,16 @@ export class EbaySellAccountApiService {
         });
         const batch = mapPage(data).filter((p) => p.ebayPolicyId);
         out.push(...batch);
-        // Break when the API returns fewer than requested (last page) OR
-        // more than requested (eBay ignored our limit and returned everything).
-        // Either way, fetching the next page would loop or be redundant.
-        if (batch.length !== limit) break;
+        // Read total from the API response to detect the last page.
+        // eBay's Account API has a known quirk: when offset === total,
+        // it returns the first page again instead of an empty page.
+        // Checking total prevents an infinite loop at the boundary.
+        const total =
+          (data as { total?: number }).total ?? Number.MAX_SAFE_INTEGER;
+        // Break when we've fetched all items, or the API returned fewer
+        // than requested (last page), or more than requested (eBay ignored
+        // our limit and returned everything).
+        if (offset + batch.length >= total || batch.length !== limit) break;
         offset += limit;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

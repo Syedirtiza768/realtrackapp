@@ -17,10 +17,11 @@
 
 ### Authorization
 
-- RBAC with 8 roles and ~90 permissions (`module.action` format)
+- RBAC with 10 system roles and ~90 permissions (`module.action` format)
 - Global `PermissionsGuard` enforces `@RequirePermissions()` decorators
 - Source of truth: `backend/src/rbac/permission-registry.ts`
 - Super-admin-only features: client settings, role management, feature-flag management
+- **Publish policy (2026-08-08):** all publish permissions are granted to every human role, and `store_access_all` is enabled for all active users on US production — any authenticated user can publish any listing to any store. `listings.delete` / `listings.price_override` remain restricted. See [AUTH_RBAC.md → Publish policy](AUTH_RBAC.md#publish-policy). This is a deliberate business decision, not least-privilege; reassess if tenant isolation is introduced.
 
 ### Rate Limiting
 

@@ -332,8 +332,32 @@ export class StorageService {
             `mirrorRemoteImages: temp key ${existingKey} (and .webp variant) not found — referencing as-is`,
           );
         }
-        out[i] = { url: u, s3Key: existingKey };
-        return;
+        // Verify permanent keys actually exist in S3 before referencing.
+        // Files can be missing if upload failed silently, was deleted by
+        // cleanup, or the URL was copied from another product without
+        // re-mirroring. Fall through to re-download if missing.
+        if (existingKey && !this.isTempKey(existingKey)) {
+          const exists = await this.objectExists(existingKey);
+          if (!exists) {
+            // Try .webp variant (originals are often converted)
+            const webpKey = existingKey.replace(/\.[a-z0-9]+$/i, '.webp');
+            const webpExists = await this.objectExists(webpKey);
+            if (webpExists) {
+              out[i] = { url: this.getCdnUrl(webpKey), s3Key: webpKey };
+              return;
+            }
+            this.logger.warn(
+              `mirrorRemoteImages: permanent key ${existingKey} not found in S3 — will attempt re-download`,
+            );
+            // Fall through to re-download from original source URL
+          } else {
+            out[i] = { url: u, s3Key: existingKey };
+            return;
+          }
+        } else {
+          out[i] = { url: u, s3Key: existingKey };
+          return;
+        }
       }
       // Skip the fetch + upload if this source URL was already mirrored on a
       // prior run. Key is deterministic per (namespace, source URL); extension

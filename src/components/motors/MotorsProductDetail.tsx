@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { sanitizeHtml } from '../../lib/sanitize';
-import { getThumbUrl, handleThumbError } from '../../lib/imageUrl';
 import OptimizedImage from '../ui/OptimizedImage';
 
 import {
@@ -292,7 +291,7 @@ export default function MotorsProductDetail() {
                       key={i}
                       src={url}
                       alt={`Product image ${i + 1}`}
-                      variant="medium"
+                      variant="thumb"
                       aspectRatio="1/1"
                       className="w-32 h-32 rounded-lg shrink-0 bg-gray-100 dark:bg-gray-700"
                     />

@@ -16,7 +16,6 @@ import {
 import { Badge } from '../ui/badge';
 import ImageZoom from '../ui/ImageZoom';
 import { getAllImageUrls, useListingDetail } from '../../lib/searchApi';
-import { getMediumUrl, handleThumbError } from '../../lib/imageUrl';
 import { conditionLabel } from '../../types/search';
 import ChannelListingPanel from '../channels/ChannelListingPanel';
 import OptimizedImage from '../ui/OptimizedImage';
@@ -114,12 +113,13 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
                 {images.length > 0 ? (
                   <>
                     <div className="relative">
-                      <img
-                        src={getMediumUrl(images[activeImg] ?? images[0])}
+                      <OptimizedImage
+                        src={images[activeImg] ?? images[0]}
                         alt={data.title ?? ''}
+                        variant="medium"
+                        objectFit="contain"
+                        className="w-full h-52 sm:h-64 lg:h-80 cursor-zoom-in"
                         onClick={() => setZoomIndex(activeImg)}
-                        className="w-full h-52 sm:h-64 lg:h-80 cursor-zoom-in object-contain"
-                        onError={(e) => handleThumbError(e, images[activeImg] ?? images[0])}
                       />
                       {/* Nav arrows */}
                       {images.length > 1 && (

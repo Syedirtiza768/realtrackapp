@@ -497,7 +497,7 @@ function SearchResults({
             <OptimizedImage
               src={file.cdnUrl}
               alt={file.filename}
-              variant="medium"
+              variant="small"
               className="h-full w-full object-cover"
             />
           </div>
@@ -952,7 +952,7 @@ function FileCard({
         <OptimizedImage
           src={file.cdnUrl}
           alt={file.filename}
-          variant="medium"
+          variant="small"
           className="h-full w-full object-cover"
         />
       </div>

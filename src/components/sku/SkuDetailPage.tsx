@@ -24,7 +24,6 @@ import InventoryPanel from './InventoryPanel';
 import AiEnhancementsPanel from './AiEnhancementsPanel';
 import { fetchWithAuth } from '../../lib/authApi';
 import { getAllImageUrls } from '../../lib/listingsApi';
-import { getThumbUrl, getMediumUrl, handleThumbError } from '../../lib/imageUrl';
 import OptimizedImage from '../ui/OptimizedImage';
 
 interface ListingDetail {

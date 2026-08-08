@@ -441,7 +441,7 @@ export default function IngestionManager() {
                         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
                             {stagedImages.map((image) => (
                                 <div key={image.id} className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-900">
-                                    <OptimizedImage src={image.uri} alt="Staged part" variant="medium" aspectRatio="16/10" className="w-full h-24" />
+                                    <OptimizedImage src={image.uri} alt="Staged part" variant="small" aspectRatio="16/10" className="w-full h-24" />
                                     <div className="p-2 text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
                                         <span>{image.source}</span>
                                         <span>{image.angle ?? 'n/a'}</span>

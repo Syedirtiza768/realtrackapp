@@ -283,7 +283,10 @@ export class PublishedListingsEnrichmentService {
       forceEnglish
     ) {
       try {
-        const browse = await this.browseApi.getItemByLegacyId(input.ebayItemId);
+        const browse = await this.browseApi.getItemByLegacyId(
+          input.ebayItemId,
+          input.marketplaceId,
+        );
         if (needsImages) {
           const browseImages = extractBrowseImages(browse);
           if (browseImages.length > imageUrls.length) {

@@ -34,9 +34,29 @@ export class PublishedListingsSchedulerService {
       'published-listings-sync',
       12 * 60_000,
       async () => {
-        const accounts = await this.accountRepo.find({
-          where: { connectionStatus: 'active' },
-        });
+        const scopedIds = (process.env.PUBLISHED_LISTINGS_SYNC_ACCOUNT_IDS || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        let accounts: ConnectedEbayAccount[];
+        if (scopedIds.length > 0) {
+          // Preserve configured order so priority accounts (e.g. Blackline) sync first.
+          const found = await this.accountRepo.find({
+            where: scopedIds.map((id) => ({ id, connectionStatus: 'active' })),
+          });
+          const byId = new Map(found.map((a) => [a.id, a]));
+          accounts = scopedIds
+            .map((id) => byId.get(id))
+            .filter(
+              (a): a is ConnectedEbayAccount => Boolean(a),
+            );
+        } else {
+          accounts = await this.accountRepo.find({
+            where: { connectionStatus: 'active' },
+          });
+        }
+
         for (const account of accounts) {
           try {
             await this.sync.enqueueSync({

@@ -22,7 +22,7 @@ export interface DriveVariantJobData {
   s3Key: string;
 }
 
-@Processor('storage-thumbnails', { concurrency: 5 })
+@Processor('storage-thumbnails', { concurrency: 15 })
 export class ThumbnailProcessor extends WorkerHost {
   private readonly logger = new Logger(ThumbnailProcessor.name);
 

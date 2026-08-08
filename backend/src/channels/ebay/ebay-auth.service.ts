@@ -257,6 +257,7 @@ export class EbayAuthService {
       'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
       'https://api.ebay.com/oauth/api_scope/sell.marketing',
       'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
+      'https://api.ebay.com/oauth/api_scope/buy.browse',
     ].join('%20');
 
     const authUrl =
@@ -391,12 +392,9 @@ export class EbayAuthService {
         new URLSearchParams({
           grant_type: 'refresh_token',
           refresh_token: refreshToken,
-          scope: [
-            'https://api.ebay.com/oauth/api_scope',
-            'https://api.ebay.com/oauth/api_scope/sell.inventory',
-            'https://api.ebay.com/oauth/api_scope/sell.account',
-            'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
-          ].join(' '),
+          // Do NOT request scopes beyond the original grant — eBay rejects
+          // refresh requests that expand scope. New scopes (e.g. buy.browse)
+          // only take effect on the next fresh OAuth connect.
         }).toString(),
         {
           headers: {
