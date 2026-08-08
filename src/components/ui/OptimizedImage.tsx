@@ -186,12 +186,11 @@ export default function OptimizedImage({
 
   const displayUrl = getDisplayUrl();
   const resolvedSizes = sizes ?? DEFAULT_SIZES[variant];
-  // Build srcSet for our CDN/S3 URLs that have responsive variants.
-  // External URLs (eBay CDN etc.) don't have variants so skip srcSet.
-  const srcSet =
-    src && isOurCdnUrl(src)
-      ? buildSrcSet(src) || undefined
-      : undefined;
+  // srcSet disabled — variant files (_sm/_medium/_lg.webp) don't exist for
+  // most S3 images. Enabling srcSet causes 404s on missing variants, the
+  // image never reaches 'loaded' state, and opacity stays 0 (invisible).
+  // Re-enable only after backfilling variants for all images.
+  const srcSet = undefined;
   const hasBlurhash = !!blurhash && blurhash.startsWith('data:');
 
   // Placeholder background style
