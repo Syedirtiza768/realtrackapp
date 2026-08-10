@@ -66,6 +66,11 @@
 
 ## Latest Session Summary
 
+**2026-08-10** — Published-listings sync prune timeout fixed (Blackline):
+- Every Blackline Auto Parts sync since 2026-08-07 **failed at the very end** with `canceling statement due to statement timeout` — the post-upsert prune (`markUnseenActiveAsEnded`) `find()` used only `idx_epl_account` → a lossy bitmap heap scan over the 1.5GB / 78k-block heap (150k active rows) took ~58s, exceeding the 30s pool `statement_timeout`. The 124k-row upsert loop finished first, so the mirror partially refreshed but the sync log showed `failed` and the watermark never advanced.
+- **Fix:** (1) new partial index `idx_epl_active_acct_mp_item (ebay_account_id, marketplace_id, ebay_item_id) WHERE listing_status = 'active'` (migration `1790000000000`); (2) prune rewritten to index-only-scan active `ebay_item_id`s + batch-UPDATE unseen rows by `ebay_item_id` via `uq_epl_account_item`, in a txn with `SET LOCAL statement_timeout = 300s` + `work_mem = 64MB`; (3) one-off prod `VACUUM (ANALYZE, PARALLEL 0)` reclaimed 86,917 dead tuples. Files: `backend/src/published-listings/services/published-listings-sync.service.ts`, `backend/src/migrations/1790000000000-PublishedListingsActiveAcctMpItemIndex.ts`. See [docs/decisions.md](../decisions.md) → 2026-08-10.
+- **Before re-trigger:** Blackline mirror = 150,349 active / 7,249 ended / 9,614 out_of_stock; 123,842 active rows refreshed within 1 day (the Aug 9 partial run). Last successful full sync watermark = 2026-08-07 07:40 UTC.
+
 **2026-07-23** — PartsBazar360 English list backfill running on prod:
 - Script `scripts/backfill-published-listings-english.cjs` (Browse US) converting EU-host `listing_url` rows to English title + `ebay.com` URL.
 - Order: SalvageA (~11k) then Blackline (~40k); ~300ms/row. Log: container `/tmp/english-backfill.log`. Resume-safe.

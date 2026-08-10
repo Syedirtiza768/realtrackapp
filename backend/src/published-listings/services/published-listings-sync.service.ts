@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
-import { Repository, In, Brackets } from 'typeorm';
+import { Repository, Brackets } from 'typeorm';
 import type { Queue } from 'bullmq';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
@@ -1368,36 +1368,75 @@ export class PublishedListingsSyncService {
     marketplaceId: string,
     seenKeys: Set<string>,
   ): Promise<number> {
-    const activeRows = await this.listingRepo.find({
-      where: {
-        ebayAccountId,
-        marketplaceId,
-        listingStatus: 'active',
-      },
-      select: ['id', 'ebayItemId', 'marketplaceId'],
-    });
+    // The prune previously did `find()` (SELECT id, ebay_item_id, marketplace_id)
+    // then batched UPDATEs by id. On large bloated mirrors (Blackline: 150k active
+    // rows across a 1.5GB / 78k-block heap) that SELECT degenerated into a lossy
+    // bitmap heap scan taking 58s — exceeding the pool's 30s statement_timeout
+    // and aborting the whole sync AFTER the 124k-row upsert loop had finished.
+    //
+    // Fix: select ONLY columns present in the partial index
+    // idx_epl_active_acct_mp_item (ebay_item_id, marketplace_id) so the planner
+    // can serve the read from the index alone (index-only scan, ~77ms when the
+    // visibility map is set). Then batch-UPDATE the unseen rows by (account,
+    // marketplace, ebay_item_id) which resolves via the unique index
+    // uq_epl_account_item (~60ms/batch) instead of scanning the whole heap. The
+    // whole prune runs in a transaction with a raised statement_timeout + work_mem
+    // so even a visibility-map-stale fallback (heap fetches for visibility, ~24s)
+    // never hits the global 30s limit.
+    const prefix = marketplaceId + ':';
+    const queryRunner = this.listingRepo.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      await queryRunner.startTransaction();
+      await queryRunner.query(`SET LOCAL statement_timeout = '300s'`);
+      await queryRunner.query(`SET LOCAL work_mem = '64MB'`);
 
-    const toEnd = activeRows.filter((row) => {
-      if (!row.ebayItemId) return false;
-      const key = `${row.marketplaceId}:${row.ebayItemId}`;
-      return !seenKeys.has(key);
-    });
+      const activeRows = (await queryRunner.query(
+        `SELECT "ebay_item_id" FROM "ebay_published_listings"
+         WHERE "ebay_account_id" = $1 AND "marketplace_id" = $2
+           AND "listing_status" = 'active' AND "ebay_item_id" IS NOT NULL`,
+        [ebayAccountId, marketplaceId],
+      )) as { ebay_item_id: string }[];
 
-    if (toEnd.length === 0) return 0;
+      const toEnd: string[] = [];
+      for (const row of activeRows) {
+        if (row.ebay_item_id && !seenKeys.has(prefix + row.ebay_item_id)) {
+          toEnd.push(row.ebay_item_id);
+        }
+      }
 
-    // Batch updates to avoid PostgreSQL bind-parameter limit (~32k).
-    // Each batch uses at most BATCH_SIZE ids in the IN(...) clause.
-    const BATCH_SIZE = 500;
-    const endedAt = new Date();
-    for (let i = 0; i < toEnd.length; i += BATCH_SIZE) {
-      const batch = toEnd.slice(i, i + BATCH_SIZE);
-      await this.listingRepo.update(
-        { id: In(batch.map((r) => r.id)) },
-        { listingStatus: 'ended', lastSyncedAt: endedAt },
-      );
+      if (toEnd.length === 0) {
+        await queryRunner.commitTransaction();
+        return 0;
+      }
+
+      // Batch UPDATE by ebay_item_id via = ANY(text[]) — one array bind parameter
+      // per batch (no ~32k bind-parameter limit), resolved by uq_epl_account_item.
+      const BATCH_SIZE = 2000;
+      const endedAt = new Date();
+      for (let i = 0; i < toEnd.length; i += BATCH_SIZE) {
+        const batch = toEnd.slice(i, i + BATCH_SIZE);
+        await queryRunner.query(
+          `UPDATE "ebay_published_listings"
+             SET "listing_status" = 'ended', "last_synced_at" = $3
+           WHERE "ebay_account_id" = $1 AND "marketplace_id" = $2
+             AND "ebay_item_id" = ANY($4::text[])`,
+          [ebayAccountId, marketplaceId, endedAt, batch],
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      return toEnd.length;
+    } catch (e) {
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch {
+        /* ignore rollback failure */
+      }
+      throw e;
+    } finally {
+      await queryRunner.release();
     }
-
-    return toEnd.length;
   }
 
   private async resolveAccounts(

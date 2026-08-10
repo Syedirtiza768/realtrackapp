@@ -23,6 +23,29 @@ Format:
 
 ---
 
+## 2026-08-10 — Published-listings prune uses index-only scan + per-txn timeout (not a global timeout bump)
+**Decision:** The `markUnseenActiveAsEnded` prune step runs in its own
+transaction with `SET LOCAL statement_timeout = 300s` + `SET LOCAL work_mem = 64MB`,
+selects only index-covered columns (`ebay_item_id`) from the new partial index
+`idx_epl_active_acct_mp_item (ebay_account_id, marketplace_id, ebay_item_id)
+WHERE listing_status = 'active'`, and batch-UPDATEs unseen rows by `ebay_item_id`
+via the `uq_epl_account_item` unique index. The global pool `statement_timeout`
+stays at 30s (`app.module.ts` `extra.statement_timeout`).
+**Why:** On large bloated mirrors (Blackline: 150k active rows across a 1.5GB /
+78k-block heap with only the single-column `idx_epl_account`), the old prune
+`find()` degenerated into a lossy bitmap heap scan reading 88k blocks (~690MB,
+~58s) — exceeding the 30s timeout and aborting the whole sync *after* the 124k-row
+upsert loop had finished (every Blackline sync since 2026-08-07 failed at the very
+end). Bumping the global timeout was rejected (it would hide slow API queries);
+the partial index + index-only scan + transaction-scoped timeout fixes the prune
+without weakening the global guard. Production also got a one-off
+`VACUUM (ANALYZE, PARALLEL 0)` (reclaimed 86,917 dead tuples; `PARALLEL 0` because
+the postgres container has only 64MB shm).
+**Revisit when:** If the mirror grows past ~500k active rows and the index-only
+scan fallback (visibility-map-stale → ~24s heap fetches) approaches the 300s txn
+timeout, either schedule a periodic `VACUUM` of `ebay_published_listings` or
+consider `pg_repack` to compact the heap (VACUUM FULL needs an exclusive lock).
+
 ## 2026-08-04 — `EbayMvlService` injection made optional in `EbayPublishService`
 **Decision:** `backend/src/channels/ebay/ebay-publish.service.ts` injects
 `EbayMvlService` as an optional dependency instead of a hard constructor dependency.
