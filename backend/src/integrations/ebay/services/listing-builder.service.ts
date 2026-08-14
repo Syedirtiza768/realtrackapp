@@ -506,14 +506,8 @@ export class ListingBuilderService {
       Array.isArray(fitmentOverride) && fitmentOverride.length > 0
         ? (fitmentOverride as Record<string, unknown>[])
         : selectPublishFitmentSource(
-            resolved.catalogProduct?.fitmentData as
-              | Record<string, unknown>[]
-              | null
-              | undefined,
-            resolved.catalogProduct?.fitmentRows as
-              | Record<string, unknown>[]
-              | null
-              | undefined,
+            resolved.catalogProduct?.fitmentData,
+            resolved.catalogProduct?.fitmentRows,
           );
 
     compatibility = fitmentDataToCompatibilityPayload(fitmentSource);

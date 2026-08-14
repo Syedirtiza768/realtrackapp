@@ -112,10 +112,7 @@ describe('ebay-inventory-location.util', () => {
 
   it('honors explicit key hint when present', () => {
     const key = pickPreferredInventoryLocationKey(
-      [
-        { merchantLocationKey: 'AE_Dubai' },
-        { merchantLocationKey: 'default' },
-      ],
+      [{ merchantLocationKey: 'AE_Dubai' }, { merchantLocationKey: 'default' }],
       'default',
     );
     expect(key).toBe('default');

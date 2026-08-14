@@ -23,6 +23,7 @@ import { IsNull, Not, Repository } from 'typeorm';
 import { SkipThrottle } from '@nestjs/throttler';
 import { ImageAsset } from './entities/image-asset.entity.js';
 import { StorageService } from './storage.service.js';
+import { ImageProcessorService } from './image-processor.service.js';
 import {
   BulkRequestUploadDto,
   RequestUploadDto,
@@ -43,8 +44,26 @@ import { CatalogProduct } from '../catalog-import/entities/catalog-product.entit
 export class StorageController {
   private readonly logger = new Logger(StorageController.name);
 
+  /** Variant suffix pattern: e.g. .../hash_thumb.webp */
+  private static readonly VARIANT_RE = /_(thumb|sm|medium|lg)\.webp$/;
+  /** Original extensions to probe when locating the source of a variant. */
+  private static readonly ORIGINAL_EXTS = [
+    '.webp',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.heic',
+  ];
+  /** Max concurrent on-demand sharp generations (protects CPU on t3.medium). */
+  private static readonly MAX_VARIANT_GEN = 4;
+  /** Per-original in-flight dedup: collapses concurrent variant requests. */
+  private readonly variantGenInflight = new Map<string, Promise<boolean>>();
+  private activeVariantGen = 0;
+
   constructor(
     private readonly storageService: StorageService,
+    private readonly imageProcessor: ImageProcessorService,
     @InjectRepository(ImageAsset)
     private readonly assetRepo: Repository<ImageAsset>,
     @InjectRepository(ListingRecord)
@@ -52,7 +71,9 @@ export class StorageController {
     @InjectRepository(CatalogProduct)
     private readonly catalogProductRepo: Repository<CatalogProduct>,
     @InjectQueue('storage-thumbnails')
-    private readonly thumbnailQueue: Queue<ThumbnailJobData | CatalogVariantJobData>,
+    private readonly thumbnailQueue: Queue<
+      ThumbnailJobData | CatalogVariantJobData
+    >,
   ) {}
 
   /**
@@ -223,9 +244,7 @@ export class StorageController {
   @ApiOperation({
     summary: 'Backfill responsive variants for existing images',
   })
-  async backfillVariants(
-    @Query('batchSize') batchSizeParam?: string,
-  ) {
+  async backfillVariants(@Query('batchSize') batchSizeParam?: string) {
     const batchSize = Math.min(
       Math.max(parseInt(batchSizeParam ?? '50', 10) || 50, 1),
       500,
@@ -389,57 +408,149 @@ export class StorageController {
    */
   @Get('serve/*key')
   @Public()
-  @SkipThrottle()
+  @SkipThrottle({ short: true, medium: true, long: true })
   @HttpCode(HttpStatus.OK)
-  async serve(
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
+  async serve(@Req() req: Request, @Res() res: Response) {
     // NestJS wildcard param joins path segments with commas — extract from
     // the raw URL instead to preserve slashes in the S3 key.
     const fullPath = req.url.split('?')[0]; // strip query string
     const prefix = '/api/storage/serve/';
     const idx = fullPath.indexOf(prefix);
-    const s3Key = idx >= 0
-      ? fullPath.substring(idx + prefix.length)
-      : String(req.params['key'] ?? '').replace(/,/g, '/').replace(/^\//, '');
+    const s3Key =
+      idx >= 0
+        ? fullPath.substring(idx + prefix.length)
+        : String(req.params['key'] ?? '')
+            .replace(/,/g, '/')
+            .replace(/^\//, '');
 
     if (!s3Key) {
       throw new NotFoundException('Missing S3 key');
     }
 
     try {
-      const { stream, contentType, contentLength, etag } =
-        await this.storageService.getObjectStream(s3Key);
-
-      res.set({
-        'Content-Type': contentType,
-        ...(contentLength ? { 'Content-Length': String(contentLength) } : {}),
-        ...(etag ? { ETag: etag } : {}),
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'Access-Control-Allow-Origin': '*',
-      });
-
-      // The S3 SDK returns a Node.js Readable stream — pipe it directly
-      // to the Express response for zero-copy streaming.
-      const body = stream as any;
-      if (typeof body?.pipe === 'function') {
-        body.pipe(res);
-      } else {
-        // Fallback: buffer and send (shouldn't happen with S3 GetObject)
-        const chunks: Buffer[] = [];
-        for await (const chunk of stream) {
-          chunks.push(Buffer.from(chunk as Uint8Array));
-        }
-        res.send(Buffer.concat(chunks));
-      }
+      await this.streamObject(s3Key, res);
+      return;
     } catch (err: any) {
       const code = err?.$metadata?.httpStatusCode;
-      if (code === 404 || err?.name === 'NoSuchKey') {
+      const isMissing = code === 404 || err?.name === 'NoSuchKey';
+      if (!isMissing) {
+        this.logger.warn(`S3 serve failed for key=${s3Key}: ${err?.message}`);
         throw new NotFoundException(`Image not found: ${s3Key}`);
       }
-      this.logger.warn(`S3 serve failed for key=${s3Key}: ${err?.message}`);
-      throw new NotFoundException(`Image not found: ${s3Key}`);
+    }
+
+    // Self-healing: if a responsive variant (_thumb/_sm/_medium/_lg.webp) is
+    // missing, generate it on demand from the original and retry once. This
+    // avoids the frontend's expensive fallback to a multi-MB original — the
+    // single variant request succeeds directly (then nginx caches it 30d).
+    const generated = await this.ensureVariant(s3Key);
+    if (generated) {
+      try {
+        await this.streamObject(s3Key, res);
+        return;
+      } catch (err: any) {
+        this.logger.warn(
+          `S3 serve retry failed after on-demand gen for key=${s3Key}: ${err?.message}`,
+        );
+      }
+    }
+
+    throw new NotFoundException(`Image not found: ${s3Key}`);
+  }
+
+  /**
+   * Stream an S3 object to the Express response with long-lived cache
+   * headers. Throws on missing object (NoSuchKey) so the caller can react.
+   */
+  private async streamObject(s3Key: string, res: Response): Promise<void> {
+    const { stream, contentType, contentLength, etag } =
+      await this.storageService.getObjectStream(s3Key);
+
+    res.set({
+      'Content-Type': contentType,
+      ...(contentLength ? { 'Content-Length': String(contentLength) } : {}),
+      ...(etag ? { ETag: etag } : {}),
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Access-Control-Allow-Origin': '*',
+    });
+
+    // The S3 SDK returns a Node.js Readable stream — pipe it directly
+    // to the Express response for zero-copy streaming.
+    const body = stream as any;
+    if (typeof body?.pipe === 'function') {
+      body.pipe(res);
+    } else {
+      // Fallback: buffer and send (shouldn't happen with S3 GetObject)
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk as Uint8Array));
+      }
+      res.send(Buffer.concat(chunks));
+    }
+  }
+
+  /**
+   * On-demand responsive-variant generation. When a variant
+   * (_thumb/_sm/_medium/_lg.webp) is requested but missing from S3, derive
+   * the original key, generate all variants via the image processor, and
+   * signal the caller to retry the GET. Self-healing: every variant
+   * eventually exists without the frontend falling back to a multi-MB
+   * original.
+   *
+   * Bounded to MAX_VARIANT_GEN concurrent generations to protect CPU; per-
+   * original in-flight dedup collapses concurrent requests for variants of
+   * the same image (e.g. thumb + medium on the same page). Returns true if
+   * the variant is now available, false if it could not be produced
+   * (original missing, or concurrency budget exhausted).
+   */
+  private async ensureVariant(variantKey: string): Promise<boolean> {
+    const m = variantKey.match(StorageController.VARIANT_RE);
+    if (!m) return false;
+    const base = variantKey.slice(0, -m[0].length);
+
+    const existing = this.variantGenInflight.get(base);
+    if (existing) return existing;
+
+    const p = this.doEnsureVariant(base);
+    this.variantGenInflight.set(base, p);
+    try {
+      return await p;
+    } finally {
+      this.variantGenInflight.delete(base);
+    }
+  }
+
+  private async doEnsureVariant(base: string): Promise<boolean> {
+    // Locate the original object (variant key stripped of _suffix.webp).
+    let originalKey: string | null = null;
+    for (const ext of StorageController.ORIGINAL_EXTS) {
+      try {
+        if (await this.storageService.objectExists(base + ext)) {
+          originalKey = base + ext;
+          break;
+        }
+      } catch {
+        // HEAD error — try the next extension
+      }
+    }
+    if (!originalKey) return false;
+
+    // Bound concurrent sharp generations to protect the event loop / CPU.
+    if (this.activeVariantGen >= StorageController.MAX_VARIANT_GEN) {
+      return false;
+    }
+    this.activeVariantGen++;
+    try {
+      await this.imageProcessor.processImage(originalKey);
+      this.logger.log(`On-demand variants generated for ${originalKey}`);
+      return true;
+    } catch (err) {
+      this.logger.warn(
+        `On-demand variant generation failed for ${originalKey}: ${err instanceof Error ? err.message : err}`,
+      );
+      return false;
+    } finally {
+      this.activeVariantGen--;
     }
   }
 }

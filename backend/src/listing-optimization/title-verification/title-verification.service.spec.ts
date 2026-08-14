@@ -46,9 +46,7 @@ describe('TitleVerificationService', () => {
 
   it('throws NotFoundException when the pipeline job does not exist', async () => {
     jobRepo.findOneBy.mockResolvedValue(null);
-    await expect(svc.verifyJob('missing-job')).rejects.toThrow(
-      /not found/i,
-    );
+    await expect(svc.verifyJob('missing-job')).rejects.toThrow(/not found/i);
   });
 
   it('flags a product whose title does not match its identified part', async () => {
@@ -137,11 +135,15 @@ describe('TitleVerificationService', () => {
     productRepo.find.mockResolvedValue([p1, p2]);
     openAi.chat
       .mockResolvedValueOnce({
-        content: { results: [{ id: 'p1', match: true, confidence: 0.9, issue: null }] },
+        content: {
+          results: [{ id: 'p1', match: true, confidence: 0.9, issue: null }],
+        },
         estimatedCostUsd: 0.0001,
       })
       .mockResolvedValueOnce({
-        content: { results: [{ id: 'p2', match: true, confidence: 0.9, issue: null }] },
+        content: {
+          results: [{ id: 'p2', match: true, confidence: 0.9, issue: null }],
+        },
         estimatedCostUsd: 0.00015,
       });
 

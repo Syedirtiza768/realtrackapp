@@ -63,7 +63,7 @@ export class FitmentDiscoveryService {
     // eBay Motors P&A categories always support vehicle compatibility.
     // No need to call the Taxonomy API — the MVL database provides the
     // authoritative vehicle data and the fitment pipeline uses it directly.
-    let categorySupportsCompatibility = true;
+    const categorySupportsCompatibility = true;
 
     const candidates: FitmentRow[] = [];
 
@@ -90,7 +90,7 @@ export class FitmentDiscoveryService {
     // ── Source 1: Existing catalog fitment_data (JSONB) ──
     // Reject unscoped full-model MVL dumps (e.g. every Jetta 1980–2027).
     if (Array.isArray(product.fitmentData)) {
-      const rawRows = product.fitmentData as Array<Record<string, unknown>>;
+      const rawRows = product.fitmentData;
       if (isOverExpandedFitment(rawRows)) {
         manualReviewReasons.push(
           `Existing catalog fitment looks over-expanded (span > ${MAX_FITMENT_YEAR_SPAN}yr or huge row count) — ignoring and rediscovering`,
@@ -315,11 +315,7 @@ export class FitmentDiscoveryService {
     const optimizedTitle = product.optimizedTitle?.trim() || '';
 
     let rows = this.candidatesFromTitleText(sourceTitle);
-    if (
-      rows.length === 0 &&
-      optimizedTitle &&
-      optimizedTitle !== sourceTitle
-    ) {
+    if (rows.length === 0 && optimizedTitle && optimizedTitle !== sourceTitle) {
       rows = this.candidatesFromTitleText(optimizedTitle);
     }
     return rows;

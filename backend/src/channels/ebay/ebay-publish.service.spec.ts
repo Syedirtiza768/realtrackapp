@@ -90,9 +90,13 @@ describe('EbayPublishService', () => {
   let policyRepo: ReturnType<typeof createRepo>;
   let listingRepo: ReturnType<typeof createRepo>;
   let catalogRepo: ReturnType<typeof createRepo>;
+  let ebayCategoryRepo: ReturnType<typeof createRepo>;
   let inventoryApi: ReturnType<typeof mockInventoryApi>;
   let auth: ReturnType<typeof mockAuth>;
-  let taxonomyApi: { getCompatibilityProperties: jest.Mock };
+  let taxonomyApi: {
+    getCompatibilityProperties: jest.Mock;
+    getCategorySubtree: jest.Mock;
+  };
 
   beforeEach(() => {
     storeRepo = createRepo();
@@ -101,10 +105,12 @@ describe('EbayPublishService', () => {
     policyRepo = createRepo();
     listingRepo = createRepo();
     catalogRepo = createRepo();
+    ebayCategoryRepo = createRepo();
     inventoryApi = mockInventoryApi();
     auth = mockAuth();
     taxonomyApi = {
       getCompatibilityProperties: jest.fn().mockResolvedValue([]),
+      getCategorySubtree: jest.fn().mockRejectedValue(new Error('not cached')),
     };
 
     svc = new EbayPublishService(
@@ -149,6 +155,7 @@ describe('EbayPublishService', () => {
       policyRepo,
       listingRepo,
       catalogRepo,
+      ebayCategoryRepo,
     );
   });
 
@@ -191,6 +198,86 @@ describe('EbayPublishService', () => {
       expect(inventoryApi.publishOffer).toHaveBeenCalled();
     });
 
+    it('resolves a Motors parent category to a verified leaf before creating the offer', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'Motors Store',
+        config: { marketplace: 'EBAY_MOTORS_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue(null);
+      taxonomyApi.getCategorySubtree.mockResolvedValue({
+        categorySubtreeNode: {
+          category: { categoryId: '33707', categoryName: 'Controls' },
+          categoryTreeNodeLevel: 3,
+          leafCategoryTreeNode: false,
+          childCategoryTreeNodes: [
+            {
+              category: {
+                categoryId: '33716',
+                categoryName: 'Switches & Controls',
+              },
+              categoryTreeNodeLevel: 4,
+              leafCategoryTreeNode: true,
+            },
+          ],
+        },
+      });
+
+      const results = await svc.publish(
+        validRequest({ categoryId: '33707' }),
+      );
+
+      expect(results[0].success).toBe(true);
+      const offer = (inventoryApi.createOffer as jest.Mock).mock.calls[0][1];
+      expect(offer.categoryId).toBe('33716');
+    });
+
+    it('uses and persists the known Motors leaf fallback when taxonomy is unavailable', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'Motors Store',
+        config: { marketplace: 'EBAY_MOTORS_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'listing-1',
+        customLabelSku: 'SKU-001',
+      });
+      catalogRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'catalog-1',
+        sku: 'SKU-001',
+        optimizationPayload: {},
+      });
+
+      const results = await svc.publish(
+        validRequest({ categoryId: '33707' }),
+      );
+
+      expect(results[0].success).toBe(true);
+      const offer = (inventoryApi.createOffer as jest.Mock).mock.calls[0][1];
+      expect(offer.categoryId).toBe('9886');
+      expect(catalogRepo.update).toHaveBeenCalledWith(
+        'catalog-1',
+        expect.objectContaining({
+          categoryId: '9886',
+          categoryName: 'Other Car & Truck Parts & Accessories',
+        }),
+      );
+      expect(listingRepo.update).toHaveBeenCalledWith(
+        { customLabelSku: 'SKU-001' },
+        expect.objectContaining({ categoryId: '9886' }),
+      );
+    });
+
     it('keeps the reviewed request title even when structured fields differ', async () => {
       storeRepo.findOneBy = jest.fn().mockResolvedValue({
         id: 'store-1',
@@ -218,8 +305,7 @@ describe('EbayPublishService', () => {
       const results = await svc.publish(validRequest());
 
       expect(results[0].success).toBe(true);
-      const itemArg = (inventoryApi.createOrReplaceItem as jest.Mock).mock
-        .calls[0][2];
+      const itemArg = inventoryApi.createOrReplaceItem.mock.calls[0][2];
       expect(itemArg.product.title).toBe('Test Brake Pad');
     });
 
@@ -243,8 +329,7 @@ describe('EbayPublishService', () => {
 
       await svc.publish(validRequest({ quantity: 0 }));
 
-      const itemArg = (inventoryApi.createOrReplaceItem as jest.Mock).mock
-        .calls[0][2];
+      const itemArg = inventoryApi.createOrReplaceItem.mock.calls[0][2];
       expect(itemArg.availability.shipToLocationAvailability.quantity).toBe(0);
     });
 

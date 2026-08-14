@@ -96,11 +96,7 @@ export class PublishedListingsService {
 
     const qb = this.listingRepo
       .createQueryBuilder('l')
-      .innerJoin(
-        ConnectedEbayAccount,
-        'cea',
-        'cea.id = l.ebayAccountId',
-      )
+      .innerJoin(ConnectedEbayAccount, 'cea', 'cea.id = l.ebayAccountId')
       .where('l.organizationId = :organizationId', { organizationId });
 
     if (!user.storeAccessAll) {
@@ -366,9 +362,7 @@ export class PublishedListingsService {
     if (listings.length !== ids.length) {
       const found = new Set(listings.map((l) => l.id));
       const missing = ids.filter((id) => !found.has(id));
-      throw new NotFoundException(
-        `Listings not found: ${missing.join(', ')}`,
-      );
+      throw new NotFoundException(`Listings not found: ${missing.join(', ')}`);
     }
     for (const listing of listings) {
       await this.assertListingAccess(user, listing.storeId);
@@ -454,7 +448,8 @@ export class PublishedListingsService {
 
       listing.imageUrls = nextImages;
       if (result.title?.trim()) listing.title = result.title.trim();
-      if (result.listingUrl?.trim()) listing.listingUrl = result.listingUrl.trim();
+      if (result.listingUrl?.trim())
+        listing.listingUrl = result.listingUrl.trim();
       if (result.description?.trim()) listing.description = result.description;
       if (Object.keys(result.itemSpecifics ?? {}).length > 0) {
         listing.itemSpecifics = result.itemSpecifics;
@@ -698,7 +693,9 @@ export class PublishedListingsService {
         if (latestFailByAccount.has(log.ebayAccountId)) continue;
         const firstError = Array.isArray(log.errors) ? log.errors[0] : null;
         const message =
-          firstError && typeof firstError === 'object' && 'message' in firstError
+          firstError &&
+          typeof firstError === 'object' &&
+          'message' in firstError
             ? String((firstError as { message?: unknown }).message ?? '')
             : null;
         latestFailByAccount.set(log.ebayAccountId, {
@@ -718,13 +715,13 @@ export class PublishedListingsService {
         ? new Date(store.lastSyncedAt).getTime()
         : 0;
       const failedRecently =
-        Boolean(fail) &&
-        (!lastSuccessMs || fail!.at.getTime() > lastSuccessMs);
+        Boolean(fail) && (!lastSuccessMs || fail!.at.getTime() > lastSuccessMs);
       const syncStatus = failedRecently ? 'failed' : store.syncStatus;
       const healthFlags: string[] = [];
       if (syncStatus === 'failed') healthFlags.push('store_sync_failed');
       if (syncStatus === 'stale') healthFlags.push('sync_stale');
-      if (store.activeListingCount === 0) healthFlags.push('empty_active_mirror');
+      if (store.activeListingCount === 0)
+        healthFlags.push('empty_active_mirror');
 
       return {
         storeId: store.storeId,

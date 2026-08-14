@@ -304,47 +304,75 @@ export class InventoryWorkbenchService {
     /* ── Multi-select filters ─────────────────────────────── */
 
     if (query.brands?.trim()) {
-      const vals = query.brands.split(',').map((s) => s.trim()).filter(Boolean);
+      const vals = query.brands
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (vals.length > 0) {
-        whereClauses.push(`l."cBrand" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        whereClauses.push(
+          `l."cBrand" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`,
+        );
         params.push(...vals);
       }
     }
 
     if (query.conditions?.trim()) {
-      const vals = query.conditions.split(',').map((s) => s.trim()).filter(Boolean);
+      const vals = query.conditions
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (vals.length > 0) {
-        whereClauses.push(`l."conditionId" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        whereClauses.push(
+          `l."conditionId" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`,
+        );
         params.push(...vals);
       }
     }
 
     if (query.teamIds?.trim()) {
-      const vals = query.teamIds.split(',').map((s) => s.trim()).filter(Boolean);
+      const vals = query.teamIds
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (vals.length > 0) {
-        whereClauses.push(`l."team_id" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        whereClauses.push(
+          `l."team_id" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`,
+        );
         params.push(...vals);
       }
     }
 
     if (query.locations?.trim()) {
-      const vals = query.locations.split(',').map((s) => s.trim()).filter(Boolean);
+      const vals = query.locations
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (vals.length > 0) {
-        whereClauses.push(`l."location" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        whereClauses.push(
+          `l."location" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`,
+        );
         params.push(...vals);
       }
     }
 
     if (query.marketplaces?.trim()) {
-      const vals = query.marketplaces.split(',').map((s) => s.trim()).filter(Boolean);
+      const vals = query.marketplaces
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (vals.length > 0) {
-        whereClauses.push(`l."marketplace" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`);
+        whereClauses.push(
+          `l."marketplace" IN (${vals.map(() => `$${paramIdx++}`).join(',')})`,
+        );
         params.push(...vals);
       }
     }
 
     if (query.stockLevel?.trim()) {
-      const vals = query.stockLevel.split(',').map((s) => s.trim()).filter(Boolean);
+      const vals = query.stockLevel
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       const stockClauses: string[] = [];
       if (vals.includes('in_stock')) {
         stockClauses.push(`(l."quantityNum" > 2)`);
@@ -454,40 +482,43 @@ export class InventoryWorkbenchService {
       ...new Set(listings.map((l) => l.teamId).filter(Boolean)),
     ] as string[];
 
-    const [fitmentRows, siblings, catalogProducts, teamRows] = await Promise.all([
-      this.fitmentRepo
-        .createQueryBuilder('f')
-        .select('f.listingId', 'listingId')
-        .addSelect('COUNT(*)', 'count')
-        .where('f.listingId IN (:...ids)', { ids })
-        .groupBy('f.listingId')
-        .getRawMany<{ listingId: string; count: string }>(),
-      skus.length
-        ? this.listingRepo.find({
-            where: { customLabelSku: In(skus), deletedAt: IsNull() },
-            select: [
-              'id',
-              'customLabelSku',
-              'marketplace',
-              'status',
-              'ebayListingId',
-              'pipelineJobId',
-            ],
-          })
-        : Promise.resolve([] as ListingRecord[]),
-      skus.length
-        ? this.productRepo.find({
-            where: { sku: In(skus) },
-            select: ['sku', 'fitmentData'],
-          })
-        : Promise.resolve([] as CatalogProduct[]),
-      teamIds.length
-        ? this.listingRepo.query(
-            `SELECT id, name, color FROM teams WHERE id = ANY($1)`,
-            [teamIds],
-          )
-        : Promise.resolve([] as Array<{ id: string; name: string; color: string }>),
-    ]);
+    const [fitmentRows, siblings, catalogProducts, teamRows] =
+      await Promise.all([
+        this.fitmentRepo
+          .createQueryBuilder('f')
+          .select('f.listingId', 'listingId')
+          .addSelect('COUNT(*)', 'count')
+          .where('f.listingId IN (:...ids)', { ids })
+          .groupBy('f.listingId')
+          .getRawMany<{ listingId: string; count: string }>(),
+        skus.length
+          ? this.listingRepo.find({
+              where: { customLabelSku: In(skus), deletedAt: IsNull() },
+              select: [
+                'id',
+                'customLabelSku',
+                'marketplace',
+                'status',
+                'ebayListingId',
+                'pipelineJobId',
+              ],
+            })
+          : Promise.resolve([] as ListingRecord[]),
+        skus.length
+          ? this.productRepo.find({
+              where: { sku: In(skus) },
+              select: ['sku', 'fitmentData'],
+            })
+          : Promise.resolve([] as CatalogProduct[]),
+        teamIds.length
+          ? this.listingRepo.query(
+              `SELECT id, name, color FROM teams WHERE id = ANY($1)`,
+              [teamIds],
+            )
+          : Promise.resolve(
+              [] as Array<{ id: string; name: string; color: string }>,
+            ),
+      ]);
 
     const pipelineJobs = await this.loadPipelineJobsForListings(
       listings,
@@ -591,10 +622,17 @@ export class InventoryWorkbenchService {
         storeListings: listing.customLabelSku
           ? (storeListingsBySku.get(listing.customLabelSku) ?? [])
           : [],
-        location: listing.origin === ListingOrigin.ADD_PART ? listing.location ?? undefined : undefined,
+        location:
+          listing.origin === ListingOrigin.ADD_PART
+            ? (listing.location ?? undefined)
+            : undefined,
         version: listing.version,
-        teamName: listing.teamId ? (teamById.get(listing.teamId)?.name ?? null) : null,
-        teamColor: listing.teamId ? (teamById.get(listing.teamId)?.color ?? null) : null,
+        teamName: listing.teamId
+          ? (teamById.get(listing.teamId)?.name ?? null)
+          : null,
+        teamColor: listing.teamId
+          ? (teamById.get(listing.teamId)?.color ?? null)
+          : null,
         importedAt: listing.importedAt
           ? new Date(listing.importedAt).toISOString()
           : undefined,
@@ -624,24 +662,28 @@ export class InventoryWorkbenchService {
     const listing = await this.getListingOrThrow(listingId);
     const sku = listing.customLabelSku;
 
-    const [fitments, siblings, pipelineJob, catalogProduct] = await Promise.all([
-      this.fitmentRepo.find({
-        where: { listingId },
-        relations: ['make', 'model', 'submodel', 'engine'],
-        order: { yearStart: 'ASC' },
-      }),
-      sku
-        ? this.listingRepo.find({
-            where: { customLabelSku: sku, deletedAt: IsNull() },
-          })
-        : Promise.resolve([listing]),
-      listing.pipelineJobId
-        ? this.pipelineJobRepo.findOne({ where: { id: listing.pipelineJobId } })
-        : Promise.resolve(null),
-      sku
-        ? this.productRepo.findOne({ where: { sku } })
-        : Promise.resolve(null),
-    ]);
+    const [fitments, siblings, pipelineJob, catalogProduct] = await Promise.all(
+      [
+        this.fitmentRepo.find({
+          where: { listingId },
+          relations: ['make', 'model', 'submodel', 'engine'],
+          order: { yearStart: 'ASC' },
+        }),
+        sku
+          ? this.listingRepo.find({
+              where: { customLabelSku: sku, deletedAt: IsNull() },
+            })
+          : Promise.resolve([listing]),
+        listing.pipelineJobId
+          ? this.pipelineJobRepo.findOne({
+              where: { id: listing.pipelineJobId },
+            })
+          : Promise.resolve(null),
+        sku
+          ? this.productRepo.findOne({ where: { sku } })
+          : Promise.resolve(null),
+      ],
+    );
 
     const priorJobs = await this.getCompletedJobsForSku(sku, listing.id);
     const storeListings = sku
@@ -819,7 +861,8 @@ export class InventoryWorkbenchService {
       itemPhotoUrl: listing.itemPhotoUrl,
       pUpc: listing.pUpc,
       pEpid: listing.pEpid,
-      location: listing.origin === ListingOrigin.ADD_PART ? listing.location : null,
+      location:
+        listing.origin === ListingOrigin.ADD_PART ? listing.location : null,
       format: listing.format,
       sourceFileName: listing.sourceFileName,
       marketplace: listing.marketplace,
@@ -832,8 +875,7 @@ export class InventoryWorkbenchService {
       enrichmentPermanentFail: listing.enrichmentPermanentFail,
       failureReason: listing.enrichmentLastFailureReason ?? undefined,
       failureClass:
-        classifyFailureForUi(listing.enrichmentLastFailureReason) ??
-        undefined,
+        classifyFailureForUi(listing.enrichmentLastFailureReason) ?? undefined,
       importedAt: listing.importedAt,
       updatedAt: listing.updatedAt,
       publishedAt: listing.publishedAt,
@@ -1328,7 +1370,10 @@ export class InventoryWorkbenchService {
         ? INLINE_ENRICH_STAGES.COMPLETED
         : INLINE_ENRICH_STAGES.NEEDS_REVIEW;
     await setStage(finalStage);
-    if (finalStage === INLINE_ENRICH_STAGES.NEEDS_REVIEW && enrichmentGateFailReason) {
+    if (
+      finalStage === INLINE_ENRICH_STAGES.NEEDS_REVIEW &&
+      enrichmentGateFailReason
+    ) {
       await this.listingRepo.update(listingId, {
         enrichmentLastFailureReason: enrichmentGateFailReason,
       } as Partial<ListingRecord>);
@@ -1438,10 +1483,7 @@ export class InventoryWorkbenchService {
     // duplicate the model segment in the title. Only fall back to it when
     // cBrand is empty, and strip a trailing duplicate model if present.
     let make = listing.cBrand?.trim() || listing.extractedMake?.trim() || '';
-    if (
-      model &&
-      make.toLowerCase().endsWith(` ${model.toLowerCase()}`)
-    ) {
+    if (model && make.toLowerCase().endsWith(` ${model.toLowerCase()}`)) {
       make = make.slice(0, make.length - model.length).trim();
     }
     // The reverse concatenation also occurs: model="AUDI Q7" with make="Audi"
@@ -1497,7 +1539,9 @@ export class InventoryWorkbenchService {
       ''
     ).trim();
     const oemPartNumber =
-      oemCandidate && !/^(19|20)\d{2}$/.test(oemCandidate) && oemCandidate.length >= 4
+      oemCandidate &&
+      !/^(19|20)\d{2}$/.test(oemCandidate) &&
+      oemCandidate.length >= 4
         ? oemCandidate
         : null;
 
@@ -1515,9 +1559,22 @@ export class InventoryWorkbenchService {
   /** Non-descriptive filler values that must never be published as a part
    * name — condition/part-type qualifiers and catch-all category buckets. */
   private static readonly TITLE_PART_NAME_JUNK = new Set([
-    'oem', 'aftermarket', 'salvage', 'used', 'new', 'genuine',
-    'general', 'unknown', 'other', 'misc', 'miscellaneous',
-    'part', 'parts', 'n/a', 'na', 'none',
+    'oem',
+    'aftermarket',
+    'salvage',
+    'used',
+    'new',
+    'genuine',
+    'general',
+    'unknown',
+    'other',
+    'misc',
+    'miscellaneous',
+    'part',
+    'parts',
+    'n/a',
+    'na',
+    'none',
   ]);
 
   /** Return a title-worthy part name, or null when the raw value is filler.
@@ -1567,11 +1624,7 @@ export class InventoryWorkbenchService {
         ? product.fitmentData
         : [];
       const hasYear = existing.some((r) => {
-        const y = String(
-          (r as Record<string, unknown>).Year ??
-            (r as Record<string, unknown>).year ??
-            '',
-        );
+        const y = String(r.Year ?? r.year ?? '');
         return /^(19|20)\d{2}/.test(y);
       });
       if (hasYear) return;
@@ -1919,7 +1972,12 @@ export class InventoryWorkbenchService {
       donorMake?: string;
       donorModel?: string;
     },
-  ): Promise<{ donorVin: string | null; donorYear: string | null; donorMake: string | null; donorModel: string | null }> {
+  ): Promise<{
+    donorVin: string | null;
+    donorYear: string | null;
+    donorMake: string | null;
+    donorModel: string | null;
+  }> {
     const listing = await this.listingRepo.findOne({
       where: { id: listingId },
     });
@@ -1929,7 +1987,9 @@ export class InventoryWorkbenchService {
 
     const sku = listing.customLabelSku?.trim();
     if (!sku) {
-      throw new BadRequestException('Listing has no SKU to link a catalog product');
+      throw new BadRequestException(
+        'Listing has no SKU to link a catalog product',
+      );
     }
 
     const product = await this.productRepo.findOne({ where: { sku } });
@@ -1964,9 +2024,21 @@ export class InventoryWorkbenchService {
     if (dto.donorVin !== undefined) {
       product.donorVin = nextVin;
     }
-    product.donorYear = resolveField(dto.donorYear, product.donorYear, decoded?.year);
-    product.donorMake = resolveField(dto.donorMake, product.donorMake, decoded?.make);
-    product.donorModel = resolveField(dto.donorModel, product.donorModel, decoded?.model);
+    product.donorYear = resolveField(
+      dto.donorYear,
+      product.donorYear,
+      decoded?.year,
+    );
+    product.donorMake = resolveField(
+      dto.donorMake,
+      product.donorMake,
+      decoded?.make,
+    );
+    product.donorModel = resolveField(
+      dto.donorModel,
+      product.donorModel,
+      decoded?.model,
+    );
 
     await this.productRepo.save(product);
 
@@ -2273,7 +2345,12 @@ export class InventoryWorkbenchService {
     models: Array<{ value: string; count: number }>;
     categories: Array<{ value: string; count: number }>;
     statuses: Array<{ value: string; count: number }>;
-    teams: Array<{ value: string; count: number; label: string; color: string }>;
+    teams: Array<{
+      value: string;
+      count: number;
+      label: string;
+      color: string;
+    }>;
     stockLevels: Array<{ value: string; count: number }>;
     totalFiltered: number;
     priceRange: { min: number; max: number };
@@ -2283,7 +2360,9 @@ export class InventoryWorkbenchService {
     const teamScopeIds = await this.resolveTeamScopeIds(user, query.teamIds);
 
     // Build WHERE clauses excluding a given dimension
-    const buildWhere = (exclude?: string): { sql: string; params: unknown[] } => {
+    const buildWhere = (
+      exclude?: string,
+    ): { sql: string; params: unknown[] } => {
       const clauses = ['l."deletedAt" IS NULL'];
       const params: unknown[] = [];
       let idx = 1;
@@ -2297,70 +2376,138 @@ export class InventoryWorkbenchService {
         if (teamScopeIds.length === 0) {
           clauses.push('1 = 0');
         } else {
-          clauses.push(`l."team_id" IN (${teamScopeIds.map(() => `$${idx++}`).join(',')})`);
+          clauses.push(
+            `l."team_id" IN (${teamScopeIds.map(() => `$${idx++}`).join(',')})`,
+          );
           params.push(...teamScopeIds);
         }
       }
 
-      if (exclude !== 'status' && query.status) addParam('l.status = $?', query.status);
+      if (exclude !== 'status' && query.status)
+        addParam('l.status = $?', query.status);
       if (exclude !== 'search' && query.search?.trim()) {
         const term = `%${query.search.trim()}%`;
-        clauses.push(`(l."customLabelSku" ILIKE $${idx} OR l.title ILIKE $${idx} OR l."cBrand" ILIKE $${idx} OR l."cOeOemPartNumber" ILIKE $${idx} OR l."cManufacturerPartNumber" ILIKE $${idx})`);
-        params.push(term); idx++;
+        clauses.push(
+          `(l."customLabelSku" ILIKE $${idx} OR l.title ILIKE $${idx} OR l."cBrand" ILIKE $${idx} OR l."cOeOemPartNumber" ILIKE $${idx} OR l."cManufacturerPartNumber" ILIKE $${idx})`,
+        );
+        params.push(term);
+        idx++;
       }
       if (exclude !== 'missingImages' && query.missingImages) {
-        clauses.push(`(l."itemPhotoUrl" IS NULL OR TRIM(l."itemPhotoUrl") = '' OR l."itemPhotoUrl" NOT LIKE '%|%')`);
+        clauses.push(
+          `(l."itemPhotoUrl" IS NULL OR TRIM(l."itemPhotoUrl") = '' OR l."itemPhotoUrl" NOT LIKE '%|%')`,
+        );
       }
-      if (exclude !== 'dateRange' && query.dateAddedFrom) addParam(`l."importedAt" >= $?::timestamptz`, query.dateAddedFrom);
-      if (exclude !== 'dateRange' && query.dateAddedTo) addParam(`l."importedAt" <= $?::timestamptz`, query.dateAddedTo);
-      if (exclude !== 'brand' && query.brand?.trim()) addParam(`l."cBrand" ILIKE $?`, `%${query.brand.trim()}%`);
-      if (exclude !== 'make' && query.make?.trim()) addParam(`l."extractedMake" ILIKE $?`, `%${query.make.trim()}%`);
-      if (exclude !== 'model' && query.model?.trim()) addParam(`l."extractedModel" ILIKE $?`, `%${query.model.trim()}%`);
-      if (exclude !== 'category' && query.category?.trim()) addParam(`l."categoryName" ILIKE $?`, `%${query.category.trim()}%`);
+      if (exclude !== 'dateRange' && query.dateAddedFrom)
+        addParam(`l."importedAt" >= $?::timestamptz`, query.dateAddedFrom);
+      if (exclude !== 'dateRange' && query.dateAddedTo)
+        addParam(`l."importedAt" <= $?::timestamptz`, query.dateAddedTo);
+      if (exclude !== 'brand' && query.brand?.trim())
+        addParam(`l."cBrand" ILIKE $?`, `%${query.brand.trim()}%`);
+      if (exclude !== 'make' && query.make?.trim())
+        addParam(`l."extractedMake" ILIKE $?`, `%${query.make.trim()}%`);
+      if (exclude !== 'model' && query.model?.trim())
+        addParam(`l."extractedModel" ILIKE $?`, `%${query.model.trim()}%`);
+      if (exclude !== 'category' && query.category?.trim())
+        addParam(`l."categoryName" ILIKE $?`, `%${query.category.trim()}%`);
 
       // Multi-select
       if (exclude !== 'brands' && query.brands?.trim()) {
-        const vals = query.brands.split(',').map((s) => s.trim()).filter(Boolean);
-        if (vals.length) { clauses.push(`l."cBrand" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+        const vals = query.brands
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (vals.length) {
+          clauses.push(
+            `l."cBrand" IN (${vals.map(() => `$${idx++}`).join(',')})`,
+          );
+          params.push(...vals);
+        }
       }
       if (exclude !== 'conditions' && query.conditions?.trim()) {
-        const vals = query.conditions.split(',').map((s) => s.trim()).filter(Boolean);
-        if (vals.length) { clauses.push(`l."conditionId" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+        const vals = query.conditions
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (vals.length) {
+          clauses.push(
+            `l."conditionId" IN (${vals.map(() => `$${idx++}`).join(',')})`,
+          );
+          params.push(...vals);
+        }
       }
       if (exclude !== 'teamIds' && query.teamIds?.trim()) {
-        const vals = query.teamIds.split(',').map((s) => s.trim()).filter(Boolean);
-        if (vals.length) { clauses.push(`l."team_id" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+        const vals = query.teamIds
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (vals.length) {
+          clauses.push(
+            `l."team_id" IN (${vals.map(() => `$${idx++}`).join(',')})`,
+          );
+          params.push(...vals);
+        }
       }
       if (exclude !== 'locations' && query.locations?.trim()) {
-        const vals = query.locations.split(',').map((s) => s.trim()).filter(Boolean);
-        if (vals.length) { clauses.push(`l."location" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+        const vals = query.locations
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (vals.length) {
+          clauses.push(
+            `l."location" IN (${vals.map(() => `$${idx++}`).join(',')})`,
+          );
+          params.push(...vals);
+        }
       }
       if (exclude !== 'marketplaces' && query.marketplaces?.trim()) {
-        const vals = query.marketplaces.split(',').map((s) => s.trim()).filter(Boolean);
-        if (vals.length) { clauses.push(`l."marketplace" IN (${vals.map(() => `$${idx++}`).join(',')})`); params.push(...vals); }
+        const vals = query.marketplaces
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (vals.length) {
+          clauses.push(
+            `l."marketplace" IN (${vals.map(() => `$${idx++}`).join(',')})`,
+          );
+          params.push(...vals);
+        }
       }
       if (exclude !== 'stockLevel' && query.stockLevel?.trim()) {
-        const vals = query.stockLevel.split(',').map((s) => s.trim()).filter(Boolean);
+        const vals = query.stockLevel
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
         const sc: string[] = [];
         if (vals.includes('in_stock')) sc.push(`(l."quantityNum" > 2)`);
-        if (vals.includes('low_stock')) sc.push(`(l."quantityNum" >= 1 AND l."quantityNum" <= 2)`);
-        if (vals.includes('out_of_stock')) sc.push(`(l."quantityNum" IS NULL OR l."quantityNum" <= 0)`);
+        if (vals.includes('low_stock'))
+          sc.push(`(l."quantityNum" >= 1 AND l."quantityNum" <= 2)`);
+        if (vals.includes('out_of_stock'))
+          sc.push(`(l."quantityNum" IS NULL OR l."quantityNum" <= 0)`);
         if (sc.length) clauses.push(`(${sc.join(' OR ')})`);
       }
       if (exclude !== 'priceRange') {
-        if (query.minPrice != null) addParam(`l."startPriceNum" >= $?`, query.minPrice);
-        if (query.maxPrice != null) addParam(`l."startPriceNum" <= $?`, query.maxPrice);
+        if (query.minPrice != null)
+          addParam(`l."startPriceNum" >= $?`, query.minPrice);
+        if (query.maxPrice != null)
+          addParam(`l."startPriceNum" <= $?`, query.maxPrice);
       }
       if (exclude !== 'weightRange') {
-        if (query.minWeight != null) addParam(`l."weight" >= $?`, query.minWeight);
-        if (query.maxWeight != null) addParam(`l."weight" <= $?`, query.maxWeight);
+        if (query.minWeight != null)
+          addParam(`l."weight" >= $?`, query.minWeight);
+        if (query.maxWeight != null)
+          addParam(`l."weight" <= $?`, query.maxWeight);
       }
 
       return { sql: clauses.join(' AND '), params };
     };
 
     // Facet query template: dedup CTE + GROUP BY dimension
-    const facetQuery = async (exclude: string, selectExpr: string, groupCol: string, extraWhere?: string): Promise<Array<{ value: string; count: number }>> => {
+    const facetQuery = async (
+      exclude: string,
+      selectExpr: string,
+      groupCol: string,
+      extraWhere?: string,
+    ): Promise<Array<{ value: string; count: number }>> => {
       const { sql, params } = buildWhere(exclude);
       const ew = extraWhere ? ` AND ${extraWhere}` : '';
       const fq = `
@@ -2380,7 +2527,9 @@ export class InventoryWorkbenchService {
     };
 
     // Team facet with join
-    const teamFacetQuery = async (): Promise<Array<{ value: string; count: number; label: string; color: string }>> => {
+    const teamFacetQuery = async (): Promise<
+      Array<{ value: string; count: number; label: string; color: string }>
+    > => {
       const { sql, params } = buildWhere('teamIds');
       const fq = `
         WITH filtered AS (SELECT l.* FROM listing_records l WHERE ${sql}),
@@ -2404,7 +2553,9 @@ export class InventoryWorkbenchService {
     // via the one-representative-per-SKU dedup (like facetQuery) undercounts every
     // bucket, since most SKUs' representative row is the marketplace=NULL add_part
     // row. Count distinct SKUs per marketplace directly instead.
-    const marketplaceFacetQuery = async (): Promise<Array<{ value: string; count: number }>> => {
+    const marketplaceFacetQuery = async (): Promise<
+      Array<{ value: string; count: number }>
+    > => {
       const { sql, params } = buildWhere('marketplaces');
       const fq = `
         SELECT l."marketplace" AS value, COUNT(DISTINCT COALESCE(l."customLabelSku", l.id::text))::int AS count
@@ -2416,7 +2567,9 @@ export class InventoryWorkbenchService {
     };
 
     // Stock level facet (derived from quantityNum)
-    const stockFacetQuery = async (): Promise<Array<{ value: string; count: number }>> => {
+    const stockFacetQuery = async (): Promise<
+      Array<{ value: string; count: number }>
+    > => {
       const { sql, params } = buildWhere('stockLevel');
       const fq = `
         WITH filtered AS (SELECT l.* FROM listing_records l WHERE ${sql}),
@@ -2439,7 +2592,13 @@ export class InventoryWorkbenchService {
     };
 
     // Total count + price/weight ranges
-    const summaryQuery = async (): Promise<{ total: number; minPrice: number; maxPrice: number; minWeight: number; maxWeight: number }> => {
+    const summaryQuery = async (): Promise<{
+      total: number;
+      minPrice: number;
+      maxPrice: number;
+      minWeight: number;
+      maxWeight: number;
+    }> => {
       const { sql, params } = buildWhere();
       const sq = `
         WITH filtered AS (SELECT l.* FROM listing_records l WHERE ${sql}),
@@ -2458,11 +2617,31 @@ export class InventoryWorkbenchService {
         FROM ranked WHERE rn = 1
       `;
       const rows = await this.listingRepo.query(sq, params);
-      return rows[0] ?? { total: 0, minPrice: 0, maxPrice: 0, minWeight: 0, maxWeight: 0 };
+      return (
+        rows[0] ?? {
+          total: 0,
+          minPrice: 0,
+          maxPrice: 0,
+          minWeight: 0,
+          maxWeight: 0,
+        }
+      );
     };
 
     // Run all facet queries in parallel
-    const [brands, conditions, locations, marketplaces, makes, models, categories, statuses, teams, stockLevels, summary] = await Promise.all([
+    const [
+      brands,
+      conditions,
+      locations,
+      marketplaces,
+      makes,
+      models,
+      categories,
+      statuses,
+      teams,
+      stockLevels,
+      summary,
+    ] = await Promise.all([
       facetQuery('brands', 'f."cBrand"', 'f."cBrand"'),
       facetQuery('conditions', 'f."conditionId"', 'f."conditionId"'),
       facetQuery('locations', 'f."location"', 'f."location"'),
@@ -2477,7 +2656,16 @@ export class InventoryWorkbenchService {
     ]);
 
     return {
-      brands, conditions, locations, marketplaces, makes, models, categories, statuses, teams, stockLevels,
+      brands,
+      conditions,
+      locations,
+      marketplaces,
+      makes,
+      models,
+      categories,
+      statuses,
+      teams,
+      stockLevels,
       totalFiltered: summary.total,
       priceRange: { min: summary.minPrice, max: summary.maxPrice },
       weightRange: { min: summary.minWeight, max: summary.maxWeight },
@@ -2604,7 +2792,9 @@ export class InventoryWorkbenchService {
   async softDeleteListing(listingId: string): Promise<{ success: true }> {
     // Hides this listing instance only. Re-importing the same donor SKU
     // creates a new listing; this soft-deleted row is not recovered by pipeline.
-    const listing = await this.listingRepo.findOne({ where: { id: listingId } });
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
     if (!listing) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
@@ -2613,9 +2803,7 @@ export class InventoryWorkbenchService {
   }
 
   /** Soft-delete multiple inventory listings. */
-  async bulkSoftDeleteListings(
-    ids: string[],
-  ): Promise<{ deleted: number }> {
+  async bulkSoftDeleteListings(ids: string[]): Promise<{ deleted: number }> {
     if (!ids.length) {
       throw new BadRequestException('No listing ids provided');
     }

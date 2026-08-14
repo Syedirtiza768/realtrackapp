@@ -203,8 +203,10 @@ export class EbaySellAccountApiService {
         },
         params: { limit, offset },
       });
-      const locs = (data as { locations?: unknown[]; total?: number }).locations ?? [];
-      const total = (data as { total?: number }).total ?? Number.MAX_SAFE_INTEGER;
+      const locs =
+        (data as { locations?: unknown[]; total?: number }).locations ?? [];
+      const total =
+        (data as { total?: number }).total ?? Number.MAX_SAFE_INTEGER;
       for (const l of locs) {
         const row = l as Record<string, unknown>;
         const key = String(row.merchantLocationKey ?? '');

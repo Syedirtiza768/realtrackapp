@@ -7,9 +7,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * s3_key_medium-based backfill tracking doesn't cover them — this is the
  * equivalent marker for the backfill-catalog-variants endpoint.
  */
-export class AddImagesVariantsGeneratedAtToCatalogProducts1789700000000
-  implements MigrationInterface
-{
+export class AddImagesVariantsGeneratedAtToCatalogProducts1789700000000 implements MigrationInterface {
   name = 'AddImagesVariantsGeneratedAtToCatalogProducts1789700000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

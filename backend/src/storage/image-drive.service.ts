@@ -466,9 +466,7 @@ export class ImageDriveService {
     return [];
   }
 
-  async findByPartNumbers(
-    partNumbers: string[],
-  ): Promise<BatchLookupResult> {
+  async findByPartNumbers(partNumbers: string[]): Promise<BatchLookupResult> {
     const normalizedSet = new Map<string, string>();
     for (const raw of partNumbers) {
       const norm = ImageDriveService.normalizePartNumber(raw);
@@ -513,9 +511,8 @@ export class ImageDriveService {
     const result: BatchLookupResult = {};
     for (const [norm, raw] of normalizedSet) {
       const folder =
-        linkedFolders.find(
-          (f) => f.linkedPartNumberNormalized === norm,
-        ) || nameFolders.find((f) => f.nameNormalized === norm);
+        linkedFolders.find((f) => f.linkedPartNumberNormalized === norm) ||
+        nameFolders.find((f) => f.nameNormalized === norm);
 
       if (folder) {
         result[norm] = folderToAssets.get(folder.id) ?? [];

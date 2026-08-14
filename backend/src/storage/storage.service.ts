@@ -12,7 +12,10 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash, randomUUID } from 'crypto';
-import type { CatalogVariantJobData, DriveVariantJobData } from './processors/thumbnail.processor.js';
+import type {
+  CatalogVariantJobData,
+  DriveVariantJobData,
+} from './processors/thumbnail.processor.js';
 
 export interface PresignedUploadResult {
   uploadUrl: string;
@@ -41,7 +44,9 @@ export class StorageService {
   constructor(
     private readonly config: ConfigService,
     @InjectQueue('storage-thumbnails')
-    private readonly thumbnailQueue: Queue<CatalogVariantJobData | DriveVariantJobData>,
+    private readonly thumbnailQueue: Queue<
+      CatalogVariantJobData | DriveVariantJobData
+    >,
   ) {
     this.bucket =
       this.config.get<string>('AWS_S3_BUCKET')?.trim() ||
@@ -566,6 +571,11 @@ export class StorageService {
     return p;
   }
 
+  /** Wrap a relative key with the configured S3 prefix (e.g. mhn/). */
+  buildDurableKey(relativeKey: string): string {
+    return this.withKeyPrefix(relativeKey);
+  }
+
   private withKeyPrefix(relativeKey: string): string {
     if (!this.keyPrefix) return relativeKey;
     return `${this.keyPrefix}${relativeKey}`;
@@ -585,13 +595,21 @@ export class StorageService {
    * changes — even if it lands at the same array index as a prior image.
    * Exported for unit tests via the public wrapper below.
    */
-  mirroredObjectKey(namespace: string, sourceIdentity: string, ext: string): string {
+  mirroredObjectKey(
+    namespace: string,
+    sourceIdentity: string,
+    ext: string,
+  ): string {
     const digest = createHash('sha256')
       .update(sourceIdentity.trim())
       .digest('hex')
       .slice(0, 20);
-    const safeExt = ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
-    return this.withKeyPrefix(`catalog-images/${namespace}/${digest}${safeExt}`);
+    const safeExt = ext.startsWith('.')
+      ? ext.toLowerCase()
+      : `.${ext.toLowerCase()}`;
+    return this.withKeyPrefix(
+      `catalog-images/${namespace}/${digest}${safeExt}`,
+    );
   }
 
   private relativeKey(fullKey: string): string {

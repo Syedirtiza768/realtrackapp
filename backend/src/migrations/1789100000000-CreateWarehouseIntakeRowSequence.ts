@@ -7,9 +7,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * flow used to allocate this with MAX(sourceRowNumber)+1, which can collide
  * when two intake saves happen at nearly the same time.
  */
-export class CreateWarehouseIntakeRowSequence1789100000000
-  implements MigrationInterface
-{
+export class CreateWarehouseIntakeRowSequence1789100000000 implements MigrationInterface {
   name = 'CreateWarehouseIntakeRowSequence1789100000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

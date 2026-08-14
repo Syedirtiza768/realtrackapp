@@ -97,9 +97,7 @@ describe('SingleListingFormService.lookupPart — eBay Browse primary', () => {
             categoryId: '33596',
             categoryName: 'Fuses & Fuse Boxes',
             aspects: { Type: ['Fuse Box'], Brand: ['Maserati'] },
-            fitmentHints: [
-              { year: '2014', make: 'Maserati', model: 'Ghibli' },
-            ],
+            fitmentHints: [{ year: '2014', make: 'Maserati', model: 'Ghibli' }],
           },
         ],
       }),

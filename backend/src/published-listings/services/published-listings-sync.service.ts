@@ -35,6 +35,8 @@ export interface PublishedListingsSyncJobPayload {
   syncLogId: string;
   listingIds?: string[];
   trigger?: 'manual' | 'scheduled' | 'single';
+  /** 'delta' fetches only listings modified since lastSuccessSyncAt; 'full' enumerates everything. */
+  syncMode?: 'full' | 'delta';
 }
 
 /**
@@ -71,9 +73,9 @@ export class PublishedListingsSyncService {
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
     private readonly inventoryApi: EbayInventoryApiService,
-      private readonly tradingApi: EbayTradingApiService,
-      private readonly browseApi: EbayBrowseApiService,
-      private readonly health: PublishedListingsHealthService,
+    private readonly tradingApi: EbayTradingApiService,
+    private readonly browseApi: EbayBrowseApiService,
+    private readonly health: PublishedListingsHealthService,
     private readonly enrichment: PublishedListingsEnrichmentService,
     @InjectQueue('published-listings-sync')
     private readonly syncQueue: Queue<PublishedListingsSyncJobPayload>,
@@ -86,6 +88,7 @@ export class PublishedListingsSyncService {
     userId?: string | null;
     listingIds?: string[];
     trigger?: 'manual' | 'scheduled' | 'single';
+    syncMode?: 'full' | 'delta';
   }): Promise<{ jobIds: string[]; syncLogIds: string[] }> {
     const accounts = await this.resolveAccounts(
       input.organizationId,
@@ -125,6 +128,7 @@ export class PublishedListingsSyncService {
           syncLogId: syncLog.id,
           listingIds: input.listingIds,
           trigger: input.listingIds?.length ? 'single' : 'manual',
+          syncMode: input.syncMode,
         },
         {
           jobId: `pub-listings-sync-${account.id}-${Date.now()}`,
@@ -269,8 +273,18 @@ export class PublishedListingsSyncService {
         advanceSyncWatermark = false;
       } else {
         const useBrowse =
-          (process.env.PUBLISHED_LISTINGS_SOURCE || 'trading')
-            .toLowerCase() === 'browse';
+          (process.env.PUBLISHED_LISTINGS_SOURCE || 'trading').toLowerCase() ===
+          'browse';
+        const syncMode = payload.syncMode ?? 'full';
+        const modifiedSince =
+          syncMode === 'delta' && account.lastSuccessfulSyncAt
+            ? account.lastSuccessfulSyncAt
+            : undefined;
+        if (modifiedSince) {
+          this.logger.log(
+            `Delta sync for ${account.accountDisplayName}: fetching listings modified since ${modifiedSince.toISOString()}`,
+          );
+        }
         const tradingResult = useBrowse
           ? await this.syncFromBrowseApi(
               account,
@@ -285,6 +299,7 @@ export class PublishedListingsSyncService {
               accountMarketplaceId,
               seenKeys,
               channelByListing,
+              modifiedSince,
             );
         processed += tradingResult.processed;
         created += tradingResult.created;
@@ -293,9 +308,14 @@ export class PublishedListingsSyncService {
         warnings.push(...tradingResult.warnings);
         advanceSyncWatermark = tradingResult.liveFetchOk;
 
+        // Only prune on full sync — delta sync only sees modified listings
+        // so seenKeys does NOT represent the complete live set.
+        const isDelta = (payload.syncMode ?? 'full') === 'delta';
+        advanceSyncWatermark = tradingResult.liveFetchOk && !isDelta;
+
         // Never prune (or advance the live watermark) when Trading failed —
         // rate-limit / auth errors return 0 items and would wipe every active row.
-        if (tradingResult.liveFetchOk) {
+        if (tradingResult.liveFetchOk && !isDelta) {
           const endedCount = await this.markUnseenActiveAsEnded(
             account.id,
             accountMarketplaceId,
@@ -325,7 +345,7 @@ export class PublishedListingsSyncService {
               `Hard-gate prune for ${account.accountDisplayName}: DB had ${remainingActive} active vs ${liveCount} live; ended ${extra} more`,
             );
           }
-        } else {
+        } else if (!tradingResult.liveFetchOk) {
           failed += 1;
           errors.push({
             source: 'trading_api',
@@ -334,6 +354,10 @@ export class PublishedListingsSyncService {
           });
           this.logger.warn(
             `Skipping ActiveList prune for ${account.accountDisplayName}: Trading live fetch failed`,
+          );
+        } else if (isDelta) {
+          this.logger.log(
+            `Delta sync for ${account.accountDisplayName}: ${tradingResult.processed} item(s) updated (skipped prune — not a full live set)`,
           );
         }
 
@@ -425,8 +449,9 @@ export class PublishedListingsSyncService {
       }
 
       if (syncLog) {
+        const isDelta = (payload.syncMode ?? 'full') === 'delta';
         syncLog.status =
-          !advanceSyncWatermark && !payload.listingIds?.length
+          !advanceSyncWatermark && !payload.listingIds?.length && !isDelta
             ? 'failed'
             : failed > 0 && processed === 0
               ? 'failed'
@@ -627,7 +652,7 @@ export class PublishedListingsSyncService {
     storeId: string,
   ): Promise<string> {
     const store = await this.storeRepo.findOneBy({ id: storeId });
-    const cfg = (store?.config ?? {}) as Record<string, unknown>;
+    const cfg = store?.config ?? {};
     const fromCfg = cfg?.ebayUserId;
     if (
       typeof fromCfg === 'string' &&
@@ -682,9 +707,8 @@ export class PublishedListingsSyncService {
         offset,
       });
       for (const s of res.itemSummaries ?? []) {
-        const legacyId = (
-          s as EbayItemSummary & { legacyItemId?: string }
-        ).legacyItemId;
+        const legacyId = (s as EbayItemSummary & { legacyItemId?: string })
+          .legacyItemId;
         const itemId = legacyId ?? s.itemId;
         items.push({
           itemId,
@@ -753,9 +777,8 @@ export class PublishedListingsSyncService {
       liveFetchOk = true;
       const enrichBudget = Math.max(
         0,
-        Number(
-          process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500',
-        ) || 500,
+        Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500') ||
+          500,
       );
       let enrichUsed = 0;
 
@@ -861,7 +884,8 @@ export class PublishedListingsSyncService {
       compatibility = result.compatibility ?? compatibility;
       if (result.description?.trim()) description = result.description;
       if (result.title?.trim()) enrichedTitle = result.title.trim();
-      if (result.listingUrl?.trim()) enrichedListingUrl = result.listingUrl.trim();
+      if (result.listingUrl?.trim())
+        enrichedListingUrl = result.listingUrl.trim();
       if (Object.keys(result.itemSpecifics ?? {}).length > 0) {
         itemSpecifics = result.itemSpecifics;
       }
@@ -951,6 +975,7 @@ export class PublishedListingsSyncService {
     marketplaceId: string | null,
     seenKeys: Set<string>,
     channelByListing: Map<string, EbayListingChannel>,
+    modifiedSince?: Date,
   ): Promise<{
     processed: number;
     created: number;
@@ -968,7 +993,8 @@ export class PublishedListingsSyncService {
     let liveFetchOk = false;
     const enrichBudget = Math.max(
       0,
-      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500') || 500,
+      Number(process.env.PUBLISHED_LISTINGS_ENRICH_MAX_PER_SYNC ?? '500') ||
+        500,
     );
     let enrichUsed = 0;
 
@@ -976,6 +1002,7 @@ export class PublishedListingsSyncService {
       const items = await this.tradingApi.getAllLiveListings(
         storeId,
         marketplaceId,
+        modifiedSince,
       );
       // Successful Trading response (including a legitimately empty seller) —
       // safe to prune unseen actives and advance lastSuccessfulSyncAt.
@@ -1097,17 +1124,16 @@ export class PublishedListingsSyncService {
       description,
       itemSpecifics,
       skipTrading:
-        (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
-          .toLowerCase() === '1' ||
-        (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
-          .toLowerCase() === 'true',
+        (
+          process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? ''
+        ).toLowerCase() === '1' ||
+        (
+          process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? ''
+        ).toLowerCase() === 'true',
     };
 
     let enrichedTitle = item.title;
-    let enrichedListingUrl =
-      item.listingUrl ??
-      row?.listingUrl ??
-      null;
+    let enrichedListingUrl = item.listingUrl ?? row?.listingUrl ?? null;
 
     if (
       allowEnrichment &&
@@ -1119,7 +1145,8 @@ export class PublishedListingsSyncService {
       compatibility = result.compatibility ?? compatibility;
       if (result.description?.trim()) description = result.description;
       if (result.title?.trim()) enrichedTitle = result.title.trim();
-      if (result.listingUrl?.trim()) enrichedListingUrl = result.listingUrl.trim();
+      if (result.listingUrl?.trim())
+        enrichedListingUrl = result.listingUrl.trim();
       if (Object.keys(result.itemSpecifics ?? {}).length > 0) {
         itemSpecifics = result.itemSpecifics;
       }
@@ -1238,9 +1265,7 @@ export class PublishedListingsSyncService {
               `jsonb_array_length(COALESCE(l.image_urls, '[]'::jsonb)) <= 1`,
             )
             .orWhere(`COALESCE(l.description, '') = ''`)
-            .orWhere(
-              `COALESCE(l.item_specifics, '{}'::jsonb) = '{}'::jsonb`,
-            )
+            .orWhere(`COALESCE(l.item_specifics, '{}'::jsonb) = '{}'::jsonb`)
             .orWhere('l.compatibility IS NULL')
             .orWhere(
               `l.listing_url ~* 'ebay\\.(de|fr|it|es|nl|be|at|ch|pl|ie|com\\.br)'`,
@@ -1267,10 +1292,12 @@ export class PublishedListingsSyncService {
           description: row.description,
           itemSpecifics: row.itemSpecifics ?? {},
           skipTrading:
-            (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
-              .toLowerCase() === '1' ||
-            (process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? '')
-              .toLowerCase() === 'true',
+            (
+              process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? ''
+            ).toLowerCase() === '1' ||
+            (
+              process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? ''
+            ).toLowerCase() === 'true',
         });
         const nextImages = preferRicherImageUrls(
           result.imageUrls,

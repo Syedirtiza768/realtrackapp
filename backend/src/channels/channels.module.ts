@@ -47,6 +47,7 @@ import { EbaySellAccountApiService } from '../integrations/ebay/services/ebay-se
 import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa-return-policy.service.js';
 import { EbayCategoryKeywordAuditService } from './ebay/ebay-category-keyword-audit.service.js';
 import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
+import { EbayCategory } from '../listings/entities/ebay-category.entity.js';
 import { FitmentModule } from '../fitment/fitment.module.js';
 
 @Module({
@@ -68,6 +69,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
       EbayBusinessPolicy,
       ShippingProfile,
       EbayCategoryMapping,
+      EbayCategory,
     ]),
     SellerpunditModule,
     BullModule.registerQueue({ name: 'channels' }),

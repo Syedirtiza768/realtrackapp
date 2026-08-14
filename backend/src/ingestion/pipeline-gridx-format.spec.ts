@@ -80,11 +80,6 @@ describe('sheetToVisibleAoa', () => {
     sheet['!rows'] = [{}, {}, {}, { hidden: true }, {}, { hidden: true }];
     const visible = sheetToVisibleAoa(sheet);
     expect(visible).toHaveLength(4);
-    expect(visible.map((r) => r[1])).toEqual([
-      'GridX',
-      'SKU',
-      'VW-1',
-      'VW-2',
-    ]);
+    expect(visible.map((r) => r[1])).toEqual(['GridX', 'SKU', 'VW-1', 'VW-2']);
   });
 });

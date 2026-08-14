@@ -187,7 +187,10 @@ export function stripPartNameNoise(
   s = normalizeListingText(s);
 
   const positionWords = position?.trim()
-    ? position.trim().split(/\s+/).map((w) => w.toLowerCase())
+    ? position
+        .trim()
+        .split(/\s+/)
+        .map((w) => w.toLowerCase())
     : [];
 
   for (let i = 0; i < 6; i++) {
@@ -334,10 +337,7 @@ export function buildStructuredEbayTitle(
 
     const budgetNoSuffix = maxLength - fixedLen - separator;
     if (budgetNoSuffix > 0) {
-      const truncated = truncateAtWord(
-        segmentsByKey.partName,
-        budgetNoSuffix,
-      );
+      const truncated = truncateAtWord(segmentsByKey.partName, budgetNoSuffix);
       if (truncated) {
         segmentsByKey.partName = truncated;
         return normalizeListingText(coreOf(dropped));
@@ -349,7 +349,8 @@ export function buildStructuredEbayTitle(
     delete segmentsByKey.partName;
     dropped = new Set([...dropped, 'partName']);
     bestCoreDropped =
-      bestCoreDropped ?? (coreOf(dropped).length <= maxLength ? new Set(dropped) : null);
+      bestCoreDropped ??
+      (coreOf(dropped).length <= maxLength ? new Set(dropped) : null);
   }
 
   // No combination fits with the suffix — use the least-dropped body that fits

@@ -177,7 +177,8 @@ export class EbayTaxonomyApiService {
       this.consecutiveRateLimitExhaustions >=
       EbayTaxonomyApiService.CIRCUIT_TRIP_THRESHOLD
     ) {
-      this.circuitOpenUntil = Date.now() + EbayTaxonomyApiService.CIRCUIT_COOLDOWN_MS;
+      this.circuitOpenUntil =
+        Date.now() + EbayTaxonomyApiService.CIRCUIT_COOLDOWN_MS;
       this.logger.warn(
         `eBay Taxonomy circuit opened for ${EbayTaxonomyApiService.CIRCUIT_COOLDOWN_MS}ms after ${this.consecutiveRateLimitExhaustions} consecutive rate-limit exhaustions`,
       );

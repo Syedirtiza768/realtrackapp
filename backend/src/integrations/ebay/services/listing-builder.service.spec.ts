@@ -535,9 +535,7 @@ describe('ListingBuilderService', () => {
         imageUrls: ['https://img.example.com/1.jpg'],
       },
       catalogProduct: {
-        fitmentData: [
-          { Make: 'Mercedes-Benz', Model: '170', Year: '2008' },
-        ],
+        fitmentData: [{ Make: 'Mercedes-Benz', Model: '170', Year: '2008' }],
         fitmentRows: [
           {
             year: '2008',
@@ -577,9 +575,7 @@ describe('ListingBuilderService', () => {
         imageUrls: ['https://img.example.com/1.jpg'],
       },
       catalogProduct: {
-        fitmentData: [
-          { Make: 'Mercedes-Benz', Model: '170', Year: '2008' },
-        ],
+        fitmentData: [{ Make: 'Mercedes-Benz', Model: '170', Year: '2008' }],
         fitmentRows: [
           {
             year: '2008',

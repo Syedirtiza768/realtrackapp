@@ -123,7 +123,8 @@ export class InventorySyncProcessor extends WorkerHost {
     );
 
     try {
-      const { baseListing } = await this.workbench.inlineEnrichListing(listingId);
+      const { baseListing } =
+        await this.workbench.inlineEnrichListing(listingId);
       await this.retryService.recordSuccess(listingId);
       this.logger.log(
         `${retryLabel}: inline enrichment completed for listing ${listingId}`,

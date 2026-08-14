@@ -34,23 +34,23 @@ describe('ebay-listing-aspects.util', () => {
     expect(longType.length).toBeGreaterThan(EBAY_ASPECT_VALUE_MAX_LENGTH);
 
     const fromPartType = buildListingAspects({ partType: longType });
-    expect(fromPartType.Type![0].length).toBeLessThanOrEqual(
+    expect(fromPartType.Type[0].length).toBeLessThanOrEqual(
       EBAY_ASPECT_VALUE_MAX_LENGTH,
     );
-    expect(fromPartType.Type![0]).toMatch(/Flat Contact Housing/);
+    expect(fromPartType.Type[0]).toMatch(/Flat Contact Housing/);
 
     const fromExisting = buildListingAspects({
       existing: { Type: [longType] },
     });
-    expect(fromExisting.Type![0].length).toBeLessThanOrEqual(
+    expect(fromExisting.Type[0].length).toBeLessThanOrEqual(
       EBAY_ASPECT_VALUE_MAX_LENGTH,
     );
 
+    expect(truncateEbayAspectValue(longType).length).toBeLessThanOrEqual(
+      EBAY_ASPECT_VALUE_MAX_LENGTH,
+    );
     expect(
-      truncateEbayAspectValue(longType).length,
-    ).toBeLessThanOrEqual(EBAY_ASPECT_VALUE_MAX_LENGTH);
-    expect(
-      sanitizeListingAspects({ Type: [longType] }).Type![0].length,
+      sanitizeListingAspects({ Type: [longType] }).Type[0].length,
     ).toBeLessThanOrEqual(EBAY_ASPECT_VALUE_MAX_LENGTH);
   });
 

@@ -236,6 +236,7 @@ export class EbayTradingApiService {
       page?: number;
       entriesPerPage?: number;
       marketplaceId?: string | null;
+      modifiedSince?: Date;
     } = {},
   ): Promise<{
     items: TradingSellerListItem[];
@@ -251,14 +252,17 @@ export class EbayTradingApiService {
       new Date(now.getTime() + 119 * 24 * 60 * 60 * 1000),
     );
 
+    const modTimeFilter = options.modifiedSince
+      ? `<ModTimeFrom>${this.formatTradingDate(options.modifiedSince)}</ModTimeFrom>`
+      : '';
+
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <GetSellerListRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ErrorLanguage>en_US</ErrorLanguage>
   <WarningLevel>High</WarningLevel>
   <GranularityLevel>Coarse</GranularityLevel>
   <IncludeWatchCount>true</IncludeWatchCount>
-  <EndTimeFrom>${endFrom}</EndTimeFrom>
-  <EndTimeTo>${endTo}</EndTimeTo>
+  ${modTimeFilter || `<EndTimeFrom>${endFrom}</EndTimeFrom>\n  <EndTimeTo>${endTo}</EndTimeTo>`}
   <Pagination>
     <EntriesPerPage>${entriesPerPage}</EntriesPerPage>
     <PageNumber>${page}</PageNumber>
@@ -362,6 +366,7 @@ export class EbayTradingApiService {
   async getAllSellerListListings(
     storeId: string,
     marketplaceId?: string | null,
+    modifiedSince?: Date,
   ): Promise<TradingSellerListItem[]> {
     const byId = new Map<string, TradingSellerListItem>();
     let page = 1;
@@ -370,6 +375,7 @@ export class EbayTradingApiService {
         page,
         entriesPerPage: 200,
         marketplaceId,
+        modifiedSince,
       });
       for (const item of result.items) {
         if (item.listingStatus.toLowerCase() !== 'active') continue;
@@ -396,6 +402,7 @@ export class EbayTradingApiService {
   async getAllLiveListings(
     storeId: string,
     marketplaceId?: string | null,
+    modifiedSince?: Date,
   ): Promise<TradingSellerListItem[]> {
     const byId = new Map<string, TradingSellerListItem>();
 
@@ -403,6 +410,7 @@ export class EbayTradingApiService {
       const sellerList = await this.getAllSellerListListings(
         storeId,
         marketplaceId,
+        modifiedSince,
       );
       for (const item of sellerList) byId.set(item.itemId, item);
       this.logger.log(
@@ -417,7 +425,10 @@ export class EbayTradingApiService {
     }
 
     try {
-      const activeList = await this.getAllActiveListings(storeId, marketplaceId);
+      const activeList = await this.getAllActiveListings(
+        storeId,
+        marketplaceId,
+      );
       let added = 0;
       for (const item of activeList) {
         if (!byId.has(item.itemId)) {

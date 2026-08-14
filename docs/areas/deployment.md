@@ -18,6 +18,15 @@
   proxying (e.g. `51c8f71 fix(nginx): add dedicated location for image proxy
   before static-file regex`) — check this file's location-block order before
   editing it
+- **Production host nginx** (`/etc/nginx/sites-available/mhn.realtrackapp.com`)
+  — the actual running config on the EC2 host. Includes a dedicated
+  `location /api/storage/serve/` block with `proxy_cache` (30-day, 1 GB,
+  `proxy_cache_use_stale`) for S3 image caching, gzip compression, and routes
+  `/api/` → backend (127.0.0.1:4191), `/` → Docker frontend (127.0.0.1:8050).
+  The `proxy_cache_path` directive is in `/etc/nginx/nginx.conf` (http block).
+  The frontend's `toProxyUrl()` routes S3 image URLs through this proxy so the
+  browser reuses its existing connection to the app origin and nginx serves
+  cached images locally (~16ms HIT vs ~100ms direct S3).
 - `ecosystem.config.cjs` — PM2 process config (referenced but not verified how it
   relates to the Docker deployment path in this pass)
 

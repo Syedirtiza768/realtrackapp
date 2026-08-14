@@ -23,7 +23,6 @@ import {
   isOurCdnUrl,
   handleImageError,
   toProxyUrl,
-  toBackendProxyPath,
 } from '../../lib/imageUrl';
 
 export type ImageVariant = 'thumb' | 'small' | 'medium' | 'large' | 'original';
@@ -123,39 +122,21 @@ export default function OptimizedImage({
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
       const originalUrl = toProxyUrl(src);
-      const proxyPath = toBackendProxyPath(src);
+
+      // Detect whether we're showing a variant (different from the original).
+      // toProxyUrl routes both through /api/storage/serve/, so after the
+      // routing change proxyPath === originalUrl — there's no separate proxy
+      // URL to fall back to. The only meaningful retry is variant → original.
+      const variantFn = VARIANT_URL_MAP[variant] ?? VARIANT_URL_MAP.original;
+      const isVariantRequest = src != null && isOurCdnUrl(src) && variantFn(src) !== src;
 
       // If a variant (_thumb/_sm/_medium/_lg) failed, fall back to the
-      // original URL first (variant might not exist yet).
-      if (src && isOurCdnUrl(src) && img.src !== originalUrl && !img.dataset.fallbackTried) {
+      // original URL (variant might not exist yet). Both go through the
+      // same cached proxy, so this is one additional request at most.
+      if (isVariantRequest && !img.dataset.fallbackTried) {
         img.onerror = null;
         img.dataset.fallbackTried = '1';
         img.src = originalUrl;
-        img.onerror = () => {
-          // Original also failed from S3 — try backend proxy
-          if (proxyPath && !img.dataset.proxyTried) {
-            img.onerror = null;
-            img.dataset.proxyTried = '1';
-            img.src = proxyPath;
-            img.onerror = () => {
-              img.onerror = null;
-              setStatus('error');
-              onErrorCallback?.();
-            };
-            return;
-          }
-          img.onerror = null;
-          setStatus('error');
-          onErrorCallback?.();
-        };
-        return;
-      }
-
-      // Direct S3 URL failed — try backend proxy as last resort
-      if (proxyPath && !img.dataset.proxyTried) {
-        img.onerror = null;
-        img.dataset.proxyTried = '1';
-        img.src = proxyPath;
         img.onerror = () => {
           img.onerror = null;
           setStatus('error');
@@ -168,7 +149,7 @@ export default function OptimizedImage({
       onErrorCallback?.();
       handleImageError(e, null);
     },
-    [src, onErrorCallback],
+    [src, variant, onErrorCallback],
   );
 
   // Determine the actual image URL to display
@@ -181,6 +162,7 @@ export default function OptimizedImage({
     // those through unchanged.
     if (!isOurCdnUrl(src)) return toProxyUrl(src);
     const variantFn = VARIANT_URL_MAP[variant] ?? VARIANT_URL_MAP.original;
+    // toProxyUrl routes S3 URLs through /api/storage/serve/ for nginx caching
     return toProxyUrl(variantFn(src));
   };
 

@@ -70,7 +70,15 @@ describe('CleanupProcessor', () => {
       storageService as never,
     );
 
-    return { processor, assetRepo, listingRepo, catalogRepo, storageService, listingQb, catalogQb };
+    return {
+      processor,
+      assetRepo,
+      listingRepo,
+      catalogRepo,
+      storageService,
+      listingQb,
+      catalogQb,
+    };
   }
 
   const baseAsset = (overrides: Partial<ImageAsset> = {}): ImageAsset =>
@@ -95,7 +103,9 @@ describe('CleanupProcessor', () => {
 
     expect(result).toEqual({ cleaned: 1, healed: 0 });
     expect(storageService.putObject).not.toHaveBeenCalled();
-    expect(storageService.deleteObject).toHaveBeenCalledWith('mhn/temp/abc-123.jpg');
+    expect(storageService.deleteObject).toHaveBeenCalledWith(
+      'mhn/temp/abc-123.jpg',
+    );
     expect(assetRepo.delete).toHaveBeenCalledWith('asset-1');
   });
 
@@ -109,7 +119,9 @@ describe('CleanupProcessor', () => {
     const result = await processor.process({} as never);
 
     // Mirrored to a durable key before the temp original was ever deleted.
-    expect(storageService.getObjectBuffer).toHaveBeenCalledWith('mhn/temp/abc-123.jpg');
+    expect(storageService.getObjectBuffer).toHaveBeenCalledWith(
+      'mhn/temp/abc-123.jpg',
+    );
     expect(storageService.putObject).toHaveBeenCalledWith(
       'catalog-images/healed/abc-123.jpg',
       expect.any(Buffer),
@@ -124,13 +136,17 @@ describe('CleanupProcessor', () => {
     });
 
     // Only after healing does the original temp object get deleted.
-    expect(storageService.deleteObject).toHaveBeenCalledWith('mhn/temp/abc-123.jpg');
+    expect(storageService.deleteObject).toHaveBeenCalledWith(
+      'mhn/temp/abc-123.jpg',
+    );
     expect(result).toEqual({ cleaned: 1, healed: 1 });
   });
 
   it('heals via catalog_products.image_urls too, independent of listing_records', async () => {
     const { processor, catalogQb } = makeProcessor({
-      orphanedAssets: [baseAsset({ s3Key: 'mhn/temp/def-456.png', mimeType: 'image/png' })],
+      orphanedAssets: [
+        baseAsset({ s3Key: 'mhn/temp/def-456.png', mimeType: 'image/png' }),
+      ],
       listingMatches: [],
       catalogMatches: [{ id: 'catalog-1' }],
     });
@@ -146,15 +162,20 @@ describe('CleanupProcessor', () => {
   });
 
   it('never checks non-temp keys for references (already-durable assets are never orphan-swept anyway)', async () => {
-    const { processor, storageService, listingRepo, catalogRepo } = makeProcessor({
-      orphanedAssets: [baseAsset({ s3Key: 'mhn/originals/listing-1/photo.webp' })],
-      listingMatches: [],
-      catalogMatches: [],
-    });
+    const { processor, storageService, listingRepo, catalogRepo } =
+      makeProcessor({
+        orphanedAssets: [
+          baseAsset({ s3Key: 'mhn/originals/listing-1/photo.webp' }),
+        ],
+        listingMatches: [],
+        catalogMatches: [],
+      });
 
     await processor.process({} as never);
 
-    expect(storageService.isTempKey).toHaveBeenCalledWith('mhn/originals/listing-1/photo.webp');
+    expect(storageService.isTempKey).toHaveBeenCalledWith(
+      'mhn/originals/listing-1/photo.webp',
+    );
     expect(listingRepo.createQueryBuilder).not.toHaveBeenCalled();
     expect(catalogRepo.createQueryBuilder).not.toHaveBeenCalled();
   });

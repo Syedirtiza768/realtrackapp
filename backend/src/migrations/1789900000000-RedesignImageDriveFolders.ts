@@ -32,7 +32,9 @@ export class RedesignImageDriveFolders1789900000000 implements MigrationInterfac
     `);
 
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_image_drive_part_cdn"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_image_drive_part_number"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_image_drive_part_number"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "image_drive_assets"
@@ -78,8 +80,12 @@ export class RedesignImageDriveFolders1789900000000 implements MigrationInterfac
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_image_drive_assets_folder_s3key"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_image_drive_assets_folder"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_image_drive_assets_folder_s3key"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_image_drive_assets_folder"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "image_drive_assets"

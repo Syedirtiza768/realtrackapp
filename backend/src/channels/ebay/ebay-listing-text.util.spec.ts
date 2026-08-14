@@ -178,17 +178,23 @@ describe('buildStructuredEbayTitle', () => {
 
   it('strips supplier-catalog noise from the part name via stripPartNameNoise', () => {
     expect(
-      stripPartNameNoise('Window Regulator Without Motor D >> - 30.09. Left 1', 'Left'),
+      stripPartNameNoise(
+        'Window Regulator Without Motor D >> - 30.09. Left 1',
+        'Left',
+      ),
     ).toBe('Window Regulator Without Motor');
-    expect(stripPartNameNoise('Operating Lever For Height Adjustment Left 1 Pr:3l3', 'Left')).toBe(
-      'Operating Lever For Height Adjustment',
-    );
+    expect(
+      stripPartNameNoise(
+        'Operating Lever For Height Adjustment Left 1 Pr:3l3',
+        'Left',
+      ),
+    ).toBe('Operating Lever For Height Adjustment');
     expect(stripPartNameNoise('Trim For Switch Left Lhd 1', 'Left')).toBe(
       'Trim For Switch',
     );
     expect(
       stripPartNameNoise(
-        "Alu-Lamin.Insulation (Self-Adhesive) Adhesives And Sealing Compound ,6 1",
+        'Alu-Lamin.Insulation (Self-Adhesive) Adhesives And Sealing Compound ,6 1',
         null,
       ),
     ).toBe('Alu-Lamin.Insulation Adhesives And Sealing Compound ,6');

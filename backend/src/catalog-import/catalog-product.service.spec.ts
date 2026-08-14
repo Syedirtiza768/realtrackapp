@@ -103,8 +103,7 @@ describe('CatalogProductService.syncToListingRecord', () => {
 
   it('syncs title to listings only when title is included in the PATCH', async () => {
     const { svc, listingRepo } = makeService();
-    const newTitle =
-      '2015-2019 Ford F-150 Left Mirror FL3Z17682AA OEM Used';
+    const newTitle = '2015-2019 Ford F-150 Left Mirror FL3Z17682AA OEM Used';
 
     await svc.update('cp-1', { title: newTitle, brand: 'Ford' });
 

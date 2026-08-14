@@ -129,9 +129,7 @@ function collectDescriptionFromJsonLd(
 
 /** Pull every i.ebayimg.com URL mentioned in the page HTML. */
 export function extractEbayImageUrlsFromHtml(html: string): string[] {
-  const matches = html.matchAll(
-    /https?:\/\/i\.ebayimg\.com\/[^"'\\\s<>]+/gi,
-  );
+  const matches = html.matchAll(/https?:\/\/i\.ebayimg\.com\/[^"'\\\s<>]+/gi);
   const urls: string[] = [];
   for (const m of matches) {
     let url = m[0]
@@ -219,8 +217,9 @@ export function extractItemSpecificsFromHtml(
 export function extractCompatibilityFromHtml(
   html: string,
 ): ScrapedListingPage['compatibility'] {
-  const products: NonNullable<ScrapedListingPage['compatibility']>['compatibleProducts'] =
-    [];
+  const products: NonNullable<
+    ScrapedListingPage['compatibility']
+  >['compatibleProducts'] = [];
 
   // Table rows with Year / Make / Model headers nearby
   const tableRows =
@@ -272,18 +271,14 @@ export function extractCompatibilityFromHtml(
 function extractDescriptionHtml(html: string): string | null {
   // iframe srcdoc / classic d-item-description
   const iframeSrc =
-    html.match(
-      /id=["']desc_ifr["'][^>]*src=["']([^"']+)["']/i,
-    )?.[1] ?? null;
+    html.match(/id=["']desc_ifr["'][^>]*src=["']([^"']+)["']/i)?.[1] ?? null;
   void iframeSrc; // remote iframe body needs a second fetch — handled by caller if needed
 
   const sections = [
     html.match(
       /id=["']ds_div["'][^>]*>([\s\S]*?)<\/div>\s*(?:<div|<\/section|<\/td)/i,
     )?.[1],
-    html.match(
-      /itemprop=["']description["'][^>]*>([\s\S]*?)<\/div>/i,
-    )?.[1],
+    html.match(/itemprop=["']description["'][^>]*>([\s\S]*?)<\/div>/i)?.[1],
     html.match(
       /class=["'][^"']*d-item-description[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
     )?.[1],

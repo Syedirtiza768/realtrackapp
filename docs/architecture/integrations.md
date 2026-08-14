@@ -27,6 +27,14 @@
   category, condition, and image precedence even when several listing rows map
   to one canonical catalog product. A non-empty stored title is authoritative;
   structured title composition is used only when the stored title is empty.
+- eBay Motors publish validates the stored category against taxonomy before
+  creating the inventory offer. A cached or live verified leaf is used when
+  available; if taxonomy is unavailable, the service uses the known publishable
+  fallback leaf `9886` (`Other Car & Truck Parts & Accessories`) instead of
+  sending an unverified parent category. The resolved ID/name is persisted to
+  `catalog_products`, the exact source listing, and SKU-linked sibling listing
+  rows. Recent deterministic failures can be repaired and requeued with
+  `scripts/repair-ebay-publish-failures.mjs`; it is dry-run by default.
 - Row-level `shippingProfileName`, `paymentProfileName`, and
   `returnProfileName` assignments are resolved by exact, case-insensitive name
   against every target eBay account and marketplace. A cache miss triggers an

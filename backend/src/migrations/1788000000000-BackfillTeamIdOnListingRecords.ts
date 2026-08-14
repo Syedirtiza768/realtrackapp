@@ -10,9 +10,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   - team_id IS NULL
  *   - The associated pipeline job has a non-null team_id
  */
-export class BackfillTeamIdOnListingRecords1788000000000
-  implements MigrationInterface
-{
+export class BackfillTeamIdOnListingRecords1788000000000 implements MigrationInterface {
   name = 'BackfillTeamIdOnListingRecords1788000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

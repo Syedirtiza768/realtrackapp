@@ -117,7 +117,10 @@ export class RbacAdminController {
   @Post('users')
   @RequirePermissions('users.create')
   @ApiOperation({ summary: 'Create user' })
-  async createUser(@Body() body: CreateRbacUserDto, @CurrentUser() actor: User) {
+  async createUser(
+    @Body() body: CreateRbacUserDto,
+    @CurrentUser() actor: User,
+  ) {
     const email = body.email.toLowerCase();
     const existing = await this.userRepo.findOne({ where: { email } });
     if (existing) {
@@ -214,7 +217,9 @@ export class RbacAdminController {
 
   @Post('org/add-member')
   @RequirePermissions('users.create')
-  @ApiOperation({ summary: 'Add a user to an organization (defaults to actor org)' })
+  @ApiOperation({
+    summary: 'Add a user to an organization (defaults to actor org)',
+  })
   async addOrgMember(
     @Body() body: { userId: string; organizationId?: string; role?: string },
     @CurrentUser() actor: User,
@@ -241,6 +246,11 @@ export class RbacAdminController {
           : 'editor') as 'owner' | 'admin' | 'editor' | 'viewer',
       }),
     );
-    return { ok: true, memberId: member.id, organizationId: orgId, role: member.role };
+    return {
+      ok: true,
+      memberId: member.id,
+      organizationId: orgId,
+      role: member.role,
+    };
   }
 }

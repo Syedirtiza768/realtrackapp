@@ -88,13 +88,24 @@ export class ImageProcessorService {
       };
     }
 
+    // Apply EXIF orientation once so all variants use correctly-oriented
+    // pixels. Phone cameras (esp. iPhone) store sensor rotation in EXIF;
+    // without .rotate(), variants render sideways/upside-down while the
+    // original (served with EXIF intact) displays correctly in browsers.
+    // metadata.orientation is 1 (or undefined) for upright images, 2-8 for
+    // rotated/flipped. Only re-encode when rotation is actually needed.
+    const orientedBuffer =
+      metadata.orientation && metadata.orientation > 1
+        ? await sharp(buffer).rotate().toBuffer()
+        : buffer;
+
     // Resize original to max dimension + WebP (strip EXIF via sharp defaults)
     const needsResize =
       originalWidth > MAX_ORIGINAL_DIMENSION ||
       originalHeight > MAX_ORIGINAL_DIMENSION;
 
     if (needsResize) {
-      const resized = await sharp(buffer)
+      const resized = await sharp(orientedBuffer)
         .resize(MAX_ORIGINAL_DIMENSION, MAX_ORIGINAL_DIMENSION, {
           fit: 'inside',
           withoutEnlargement: true,
@@ -111,7 +122,7 @@ export class ImageProcessorService {
     const results: Record<string, string | null> = {};
     for (const variant of VARIANTS) {
       try {
-        const processed = await sharp(buffer)
+        const processed = await sharp(orientedBuffer)
           .resize(variant.width, variant.height, {
             fit: variant.fit,
             withoutEnlargement: true,
@@ -138,12 +149,14 @@ export class ImageProcessorService {
     // Generate dominant color (6x6 resize → average RGB)
     let dominantColor: string | null = null;
     try {
-      const { data } = await sharp(buffer)
+      const { data } = await sharp(orientedBuffer)
         .resize(6, 6, { fit: 'cover' })
         .removeAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });
-      let r = 0, g = 0, b = 0;
+      let r = 0,
+        g = 0,
+        b = 0;
       const pixels = data.length / 3;
       for (let i = 0; i < data.length; i += 3) {
         r += data[i];
@@ -161,7 +174,7 @@ export class ImageProcessorService {
     // Generate blurhash placeholder (tiny 32px WebP as data URL)
     let blurhash: string | null = null;
     try {
-      const tiny = await sharp(buffer)
+      const tiny = await sharp(orientedBuffer)
         .resize(32, 32, { fit: 'inside' })
         .webp({ quality: 20 })
         .toBuffer();

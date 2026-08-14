@@ -28,8 +28,10 @@ export interface SalvageDetails {
   testedStatus?: string | null;
 }
 
-export interface PublishedListingApiResponse
-  extends Omit<EbayPublishedListing, 'description'> {
+export interface PublishedListingApiResponse extends Omit<
+  EbayPublishedListing,
+  'description'
+> {
   description: string | null;
   descriptionHtml: string | null;
   descriptionText: string | null;

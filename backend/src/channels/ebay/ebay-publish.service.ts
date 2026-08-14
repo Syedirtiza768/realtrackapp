@@ -1,10 +1,16 @@
-import { Injectable, Logger, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
 import { Store } from '../entities/store.entity.js';
 import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
+import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
 import { EbayInventoryApiService } from './ebay-inventory-api.service.js';
 import { EbayTaxonomyApiService } from './ebay-taxonomy-api.service.js';
 import { EbayTaxonomyCacheService } from './ebay-taxonomy-cache.service.js';
@@ -21,6 +27,7 @@ import type {
   EbayConditionEnum,
   EbayCompatibilityPayload,
   EbayPublishResponse,
+  EbayCategoryNode,
 } from './ebay-api.types.js';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayAccountMarketplace } from '../../integrations/ebay/entities/ebay-account-marketplace.entity.js';
@@ -149,6 +156,17 @@ export interface PublishResult {
   platformError?: boolean;
 }
 
+const FALLBACK_MOTORS_CATEGORY = {
+  id: '9886',
+  name: 'Other Car & Truck Parts & Accessories',
+} as const;
+
+interface LeafCategoryResolution {
+  id: string;
+  name: string;
+  usedFallback: boolean;
+}
+
 /**
  * EbayPublishService — Multi-store listing publish orchestrator.
  *
@@ -167,6 +185,10 @@ export interface PublishResult {
 export class EbayPublishService {
   private readonly logger = new Logger(EbayPublishService.name);
   private readonly compatibilityCategoryCache = new Map<string, boolean>();
+  private readonly leafCategoryCache = new Map<
+    string,
+    LeafCategoryResolution
+  >();
 
   constructor(
     private readonly config: ConfigService,
@@ -194,7 +216,175 @@ export class EbayPublishService {
     private readonly listingRepo: Repository<ListingRecord>,
     @InjectRepository(CatalogProduct)
     private readonly catalogRepo: Repository<CatalogProduct>,
+    @InjectRepository(EbayCategory)
+    private readonly ebayCategoryRepo: Repository<EbayCategory>,
   ) {}
+
+  /**
+   * Ensure a category ID is a leaf on the eBay Motors tree.
+   * Checks the local ebay_categories cache first, then falls back to the
+   * Taxonomy API getCategorySubtree call. If the category is not a leaf,
+   * walks children to find the first leaf descendant.
+   * Never returns an unverified parent category. If eBay's taxonomy cannot be
+   * reached, use the known publishable Motors leaf 9886 so the listing can
+   * still be published and the source rows can be repaired.
+   */
+  private async ensureLeafCategoryId(
+    categoryId: string,
+    sku?: string,
+  ): Promise<LeafCategoryResolution> {
+    const normalizedCategoryId = categoryId?.trim() ?? '';
+    if (!normalizedCategoryId) {
+      return { id: normalizedCategoryId, name: '', usedFallback: false };
+    }
+
+    const cached = this.leafCategoryCache.get(normalizedCategoryId);
+    if (cached !== undefined) return cached;
+
+    if (normalizedCategoryId === FALLBACK_MOTORS_CATEGORY.id) {
+      const fallback = {
+        id: FALLBACK_MOTORS_CATEGORY.id,
+        name: FALLBACK_MOTORS_CATEGORY.name,
+        usedFallback: true,
+      };
+      this.leafCategoryCache.set(normalizedCategoryId, fallback);
+      return fallback;
+    }
+
+    // Fast path: check local DB cache
+    try {
+      const local = await this.ebayCategoryRepo.findOne({
+        where: {
+          ebayCategoryId: normalizedCategoryId,
+          treeId: EbayTaxonomyApiService.EBAY_MOTORS_TREE_ID,
+        },
+      });
+      if (local?.isLeaf) {
+        const resolved = {
+          id: normalizedCategoryId,
+          name: local.categoryName,
+          usedFallback: false,
+        };
+        this.leafCategoryCache.set(normalizedCategoryId, resolved);
+        return resolved;
+      }
+      // Found in local cache but NOT a leaf — try to find a leaf child
+      if (local && !local.isLeaf) {
+        const leafChild =
+          await this.findFirstLeafDescendant(normalizedCategoryId);
+        if (leafChild && leafChild.id !== normalizedCategoryId) {
+          this.logger.log(
+            `Category ${normalizedCategoryId} is not a leaf — resolved to leaf child ${leafChild.id}${sku ? ` for SKU ${sku}` : ''}`,
+          );
+          this.leafCategoryCache.set(normalizedCategoryId, {
+            ...leafChild,
+            usedFallback: false,
+          });
+          return { ...leafChild, usedFallback: false };
+        }
+      }
+    } catch {
+      // DB lookup failed — fall through to API
+    }
+
+    // Slow path: check via Taxonomy API
+    try {
+      const subtree = await this.taxonomyApi.getCategorySubtree(
+        normalizedCategoryId,
+        EbayTaxonomyApiService.EBAY_MOTORS_TREE_ID,
+      );
+      const node = subtree.categorySubtreeNode;
+      if (node?.leafCategoryTreeNode) {
+        const resolved = {
+          id: node.category.categoryId,
+          name: node.category.categoryName,
+          usedFallback: false,
+        };
+        this.leafCategoryCache.set(normalizedCategoryId, resolved);
+        return resolved;
+      }
+      // Not a leaf — walk children
+      const leafDescendant = this.walkToFirstLeaf(node);
+      if (leafDescendant && leafDescendant.id !== normalizedCategoryId) {
+        this.logger.log(
+          `Category ${normalizedCategoryId} is not a leaf (API) — resolved to leaf descendant ${leafDescendant.id}${sku ? ` for SKU ${sku}` : ''}`,
+        );
+        this.leafCategoryCache.set(normalizedCategoryId, {
+          ...leafDescendant,
+          usedFallback: false,
+        });
+        return { ...leafDescendant, usedFallback: false };
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not verify leaf status for category ${normalizedCategoryId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    const fallback = {
+      id: FALLBACK_MOTORS_CATEGORY.id,
+      name: FALLBACK_MOTORS_CATEGORY.name,
+      usedFallback: true,
+    };
+    this.logger.warn(
+      `Category ${normalizedCategoryId} could not be verified as an eBay Motors leaf${sku ? ` for SKU ${sku}` : ''}; using fallback leaf ${fallback.id}`,
+    );
+    this.leafCategoryCache.set(normalizedCategoryId, fallback);
+    return fallback;
+  }
+
+  /**
+   * Walk a category subtree node tree to find the first leaf category.
+   */
+  private walkToFirstLeaf(
+    node: EbayCategoryNode | undefined,
+  ): Omit<LeafCategoryResolution, 'usedFallback'> | undefined {
+    if (!node) return undefined;
+    if (node.leafCategoryTreeNode && node.category?.categoryId) {
+      return {
+        id: node.category.categoryId,
+        name: node.category.categoryName,
+      };
+    }
+    for (const child of node.childCategoryTreeNodes ?? []) {
+      const leaf = this.walkToFirstLeaf(child);
+      if (leaf) return leaf;
+    }
+    return undefined;
+  }
+
+  /**
+   * Find first leaf descendant from local ebay_categories table.
+   */
+  private async findFirstLeafDescendant(
+    parentCategoryId: string,
+  ): Promise<Omit<LeafCategoryResolution, 'usedFallback'> | undefined> {
+    // BFS through local category cache
+    const visited = new Set<string>();
+    const queue = [parentCategoryId];
+    let depth = 0;
+
+    while (queue.length > 0 && depth < 10) {
+      const currentBatch = queue.splice(0);
+      const children = await this.ebayCategoryRepo.find({
+        where: {
+          parentCategoryId: In(currentBatch),
+          treeId: EbayTaxonomyApiService.EBAY_MOTORS_TREE_ID,
+        },
+      });
+
+      for (const child of children) {
+        if (visited.has(child.ebayCategoryId)) continue;
+        visited.add(child.ebayCategoryId);
+        if (child.isLeaf) {
+          return { id: child.ebayCategoryId, name: child.categoryName };
+        }
+        queue.push(child.ebayCategoryId);
+      }
+      depth++;
+    }
+    return undefined;
+  }
 
   /** Resolve images from listing_records / catalog_products when the caller omitted them. */
   private async resolvePublishImages(
@@ -301,18 +491,13 @@ export class EbayPublishService {
       // validateFitmentData → parseFitmentEntry only handles single Year.
       const expanded: Record<string, unknown>[] = [];
       for (const row of needsReviewRows) {
-        const make = (row as Record<string, unknown>).make ??
-          (row as Record<string, unknown>).Make;
-        const model = (row as Record<string, unknown>).model ??
-          (row as Record<string, unknown>).Model;
+        const make = row.make ?? row.Make;
+        const model = row.model ?? row.Model;
         if (!make || !model) continue;
 
-        const yearStart = (row as Record<string, unknown>).yearStart ??
-          (row as Record<string, unknown>).YearStart;
-        const yearEnd = (row as Record<string, unknown>).yearEnd ??
-          (row as Record<string, unknown>).YearEnd;
-        const singleYear = (row as Record<string, unknown>).year ??
-          (row as Record<string, unknown>).Year;
+        const yearStart = row.yearStart ?? row.YearStart;
+        const yearEnd = row.yearEnd ?? row.YearEnd;
+        const singleYear = row.year ?? row.Year;
 
         if (singleYear) {
           expanded.push({ ...row, Year: singleYear, year: singleYear });
@@ -357,15 +542,14 @@ export class EbayPublishService {
         : [];
       // Update the MvlStatus on matching original rows
       for (const row of existingRows) {
-        const r = row as Record<string, unknown>;
+        const r = row;
         const rMake = r.make ?? r.Make;
         const rModel = r.model ?? r.Model;
         if (!rMake || !rModel) continue;
         // Check if any accepted row matches this original row's make/model
         const matchingAccepted = result.accepted.filter(
           (a) =>
-            ((a as Record<string, unknown>).Make ?? (a as Record<string, unknown>).make) === rMake &&
-            ((a as Record<string, unknown>).Model ?? (a as Record<string, unknown>).model) === rModel,
+            (a.Make ?? a.make) === rMake && (a.Model ?? a.model) === rModel,
         );
         if (matchingAccepted.length > 0) {
           r.MvlStatus = 'valid';
@@ -834,17 +1018,14 @@ export class EbayPublishService {
               listing.shippingProfileName.trim() !==
                 (catalog.shippingProfile ?? '')
             ) {
-              catalog.shippingProfile =
-                listing.shippingProfileName.trim();
+              catalog.shippingProfile = listing.shippingProfileName.trim();
               dirty = true;
             }
             if (
               listing.returnProfileName?.trim() &&
-              listing.returnProfileName.trim() !==
-                (catalog.returnProfile ?? '')
+              listing.returnProfileName.trim() !== (catalog.returnProfile ?? '')
             ) {
-              catalog.returnProfile =
-                listing.returnProfileName.trim();
+              catalog.returnProfile = listing.returnProfileName.trim();
               dirty = true;
             }
             if (
@@ -852,8 +1033,7 @@ export class EbayPublishService {
               listing.paymentProfileName.trim() !==
                 (catalog.paymentProfile ?? '')
             ) {
-              catalog.paymentProfile =
-                listing.paymentProfileName.trim();
+              catalog.paymentProfile = listing.paymentProfileName.trim();
               dirty = true;
             }
             if (dirty) {
@@ -992,6 +1172,58 @@ export class EbayPublishService {
     };
   }
 
+  /** Keep the canonical catalog and all SKU-linked source rows in sync. */
+  private async persistResolvedCategory(
+    req: PublishRequest,
+    resolution: LeafCategoryResolution,
+  ): Promise<void> {
+    try {
+      const categoryName = resolution.name || FALLBACK_MOTORS_CATEGORY.name;
+      const listing = await this.listingRepo.findOne({
+        where: { id: req.listingId },
+      });
+      const sku = req.sku?.trim() || listing?.customLabelSku?.trim();
+      const catalog = await this.resolveCatalogProductForPublish(
+        req.listingId,
+        sku,
+      );
+
+      if (catalog) {
+        await this.catalogRepo.update(catalog.id, {
+          categoryId: resolution.id,
+          categoryName,
+          optimizationPayload: {
+            ...(catalog.optimizationPayload ?? {}),
+            categoryId: resolution.id,
+            categoryName,
+          },
+        } as any);
+      }
+
+      if (listing) {
+        await this.listingRepo.update(listing.id, {
+          categoryId: resolution.id,
+          categoryName,
+        });
+      }
+
+      if (sku) {
+        await this.listingRepo.update(
+          { customLabelSku: sku },
+          { categoryId: resolution.id, categoryName },
+        );
+      }
+
+      this.logger.warn(
+        `Persisted eBay Motors leaf category ${resolution.id} (${categoryName}) for SKU ${sku ?? req.listingId}${resolution.usedFallback ? ' using fallback' : ''}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to persist resolved eBay category ${resolution.id} for ${req.sku || req.listingId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
   /**
    * Publish a listing to a single store.
    */
@@ -1012,6 +1244,17 @@ export class EbayPublishService {
     const account = await this.connectedAccountRepo.findOne({
       where: { primaryStoreId: storeId },
     });
+
+    const marketplaceId = account
+      ? this.resolvePublishMarketplaceId(account, store)
+      : resolveMarketplaceId(store);
+    if (marketplaceId === 'EBAY_MOTORS_US' && req.categoryId) {
+      const resolved = await this.ensureLeafCategoryId(req.categoryId, req.sku);
+      if (resolved.id !== req.categoryId) {
+        await this.persistResolvedCategory(req, resolved);
+        req = { ...req, categoryId: resolved.id };
+      }
+    }
 
     if (!req.compatibility?.compatibleProducts?.length) {
       const requiresCompatibility = await this.categoryRequiresCompatibility(
@@ -1177,28 +1420,69 @@ export class EbayPublishService {
             throw publishErr;
           }
         } else if (isEbayInvalidCategoryError(publishErr)) {
-          this.logger.warn(
-            `Publish for SKU ${req.sku} failed with invalid category — purging stale offer ${offerId} and retrying`,
-          );
-          await this.purgeStaleEbayInventory(
-            storeId,
+          // Re-resolve the category to a valid leaf — the stored category may
+          // be a non-leaf parent that eBay rejects with error 25005.
+          const resolvedCategory = await this.ensureLeafCategoryId(
+            req.categoryId,
             req.sku,
-            offerId,
-            inventoryItem,
           );
-          const freshOfferId = await this.resolveOrCreateOfferId(
-            storeId,
-            offer,
-            store,
-            inventoryItem,
-          );
-          publishResult = await this.publishOfferWithRetries(
-            storeId,
-            freshOfferId,
-            store,
-            account,
-            req,
-          );
+          const resolvedLeaf = resolvedCategory.id;
+          if (resolvedLeaf && resolvedLeaf !== req.categoryId) {
+            this.logger.warn(
+              `SKU ${req.sku}: category ${req.categoryId} rejected as non-leaf — re-resolved to leaf ${resolvedLeaf}, purging and retrying`,
+            );
+            await this.persistResolvedCategory(req, resolvedCategory);
+            const correctedReq = { ...req, categoryId: resolvedLeaf };
+            await this.purgeStaleEbayInventory(
+              storeId,
+              req.sku,
+              offerId,
+              inventoryItem,
+            );
+            const correctedItem = this.buildInventoryItem(correctedReq, store);
+            await this.inventoryApi.createOrReplaceItem(
+              storeId,
+              correctedReq.sku,
+              correctedItem,
+            );
+            const correctedOffer = this.buildOffer(correctedReq, store);
+            const freshOfferId = await this.resolveOrCreateOfferId(
+              storeId,
+              correctedOffer,
+              store,
+              correctedItem,
+            );
+            publishResult = await this.publishOfferWithRetries(
+              storeId,
+              freshOfferId,
+              store,
+              account,
+              correctedReq,
+            );
+          } else {
+            this.logger.warn(
+              `Publish for SKU ${req.sku} failed with invalid category — purging stale offer ${offerId} and retrying`,
+            );
+            await this.purgeStaleEbayInventory(
+              storeId,
+              req.sku,
+              offerId,
+              inventoryItem,
+            );
+            const freshOfferId = await this.resolveOrCreateOfferId(
+              storeId,
+              offer,
+              store,
+              inventoryItem,
+            );
+            publishResult = await this.publishOfferWithRetries(
+              storeId,
+              freshOfferId,
+              store,
+              account,
+              req,
+            );
+          }
         } else {
           throw publishErr;
         }
@@ -2388,10 +2672,7 @@ export class EbayPublishService {
     req: PublishRequest,
   ): Promise<EbayPublishResponse> {
     try {
-      return await this.publishOfferWithTitlePropagationRetry(
-        storeId,
-        offerId,
-      );
+      return await this.publishOfferWithTitlePropagationRetry(storeId, offerId);
     } catch (publishErr: unknown) {
       // Handle "All compatibilities are invalid" (error 25002) by clearing
       // stale compatibility from the inventory item and retrying once.

@@ -194,7 +194,8 @@ export class ListingGenerationPipeline {
         systemPrompt,
         userPrompt,
         jsonMode: true,
-        temperature: chunk[0].options?.temperature ?? promptTemplate.temperature,
+        temperature:
+          chunk[0].options?.temperature ?? promptTemplate.temperature,
         maxTokens:
           (promptTemplate.maxTokens ?? 2000) * Math.max(1, chunk.length),
       });

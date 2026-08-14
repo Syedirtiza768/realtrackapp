@@ -303,9 +303,11 @@ export function resolveMotorsCategoryFromPart(
     };
   }
 
-  let best:
-    | { categoryId: string; categoryName: string; keywordLength: number }
-    | null = null;
+  let best: {
+    categoryId: string;
+    categoryName: string;
+    keywordLength: number;
+  } | null = null;
   for (const row of CATEGORY_KEYWORD_ROWS) {
     const matchedKeyword = row.kw.find((kw) => text.includes(kw));
     if (

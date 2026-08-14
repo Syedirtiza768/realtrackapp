@@ -107,9 +107,7 @@ function extractBrowseDescription(item: EbayItem): string | null {
   return value || null;
 }
 
-function extractBrowseItemSpecifics(
-  item: EbayItem,
-): Record<string, string[]> {
+function extractBrowseItemSpecifics(item: EbayItem): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const aspect of item.localizedAspects ?? []) {
     const name = aspect?.name?.trim();
@@ -142,9 +140,7 @@ function mergeItemSpecifics(
   return { ...(primary ?? {}) };
 }
 
-function tradingEnrichDisabled(
-  inputSkip?: boolean,
-): boolean {
+function tradingEnrichDisabled(inputSkip?: boolean): boolean {
   if (inputSkip) return true;
   const flag = (
     process.env.PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH ?? ''
@@ -371,10 +367,7 @@ export class PublishedListingsEnrichmentService {
             title = scraped.title.trim();
             sources.push('listing_page_scrape');
           }
-          if (
-            needsSpecifics &&
-            aspectCount(scraped.itemSpecifics) > 0
-          ) {
+          if (needsSpecifics && aspectCount(scraped.itemSpecifics) > 0) {
             itemSpecifics = mergeItemSpecifics(
               itemSpecifics,
               scraped.itemSpecifics,

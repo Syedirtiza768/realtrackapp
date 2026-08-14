@@ -75,7 +75,9 @@ describe('ebay-trading-get-item.util', () => {
   });
 
   it('returns empty compatibility when section is missing', () => {
-    const compat = parseTradingItemCompatibility('<Item><Title>x</Title></Item>');
+    const compat = parseTradingItemCompatibility(
+      '<Item><Title>x</Title></Item>',
+    );
     expect(compat).toBeNull();
   });
 

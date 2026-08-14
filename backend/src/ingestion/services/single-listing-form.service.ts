@@ -388,10 +388,30 @@ export class SingleListingFormService {
     }
 
     if (dto.uploadedAssetIds?.length) {
-      await this.imageAssetRepo.update(
-        { id: In(dto.uploadedAssetIds) },
-        { listingId: listing.id },
-      );
+      const assets = await this.imageAssetRepo.find({
+        where: { id: In(dto.uploadedAssetIds) },
+      });
+
+      for (const asset of assets) {
+        if (this.storageService.isTempKey(asset.s3Key)) {
+          try {
+            const newKey = await this.storageService.confirmUpload(
+              asset.s3Key,
+              listing.id,
+              asset.id,
+            );
+            asset.s3Key = newKey;
+            asset.cdnUrl = this.storageService.getCdnUrl(newKey);
+          } catch (err) {
+            this.logger.warn(
+              `Failed to move temp asset ${asset.id} to originals/: ${err}`,
+            );
+          }
+        }
+        asset.listingId = listing.id;
+      }
+
+      await this.imageAssetRepo.save(assets);
     }
 
     // Pull existing images from Image Drive if listing has none
@@ -503,10 +523,7 @@ export class SingleListingFormService {
       }
 
       // Step 3: MVL canonicalization
-      const finalized = await this.finalizeLookupFields(
-        oemResult,
-        partNumber,
-      );
+      const finalized = await this.finalizeLookupFields(oemResult, partNumber);
 
       // Step 4: Apply results, respecting user overrides
       const placeholderTitle = this.stripTitleSpecialChars(
@@ -515,10 +532,7 @@ export class SingleListingFormService {
       let titleChanged = false;
 
       // Title: only overwrite if still placeholder
-      if (
-        listing.title === placeholderTitle &&
-        finalized.partName?.trim()
-      ) {
+      if (listing.title === placeholderTitle && finalized.partName?.trim()) {
         listing.title = this.buildSeoTitle(
           finalized.brand ?? dto.brand,
           finalized.partName,
@@ -562,9 +576,10 @@ export class SingleListingFormService {
         finalized.partName?.trim() &&
         (!listing.cType?.trim() || fillerCTypes.has(existingCType))
       ) {
-        listing.cType = this.stripTitleSpecialChars(
-          finalized.partName,
-        ).slice(0, 80);
+        listing.cType = this.stripTitleSpecialChars(finalized.partName).slice(
+          0,
+          80,
+        );
       }
 
       // Description: merge user notes + AI note
@@ -596,8 +611,7 @@ export class SingleListingFormService {
             if (listing.cBrand) product.brand = listing.cBrand;
             if (listing.categoryName)
               product.categoryName = listing.categoryName;
-            if (listing.description)
-              product.description = listing.description;
+            if (listing.description) product.description = listing.description;
             await this.catalogProductRepo.save(product);
           }
         } catch (err) {
@@ -682,10 +696,7 @@ export class SingleListingFormService {
     });
 
     if (lookup.partName?.trim()) {
-      listing.title = this.stripTitleSpecialChars(lookup.partName).slice(
-        0,
-        80,
-      );
+      listing.title = this.stripTitleSpecialChars(lookup.partName).slice(0, 80);
       // Prefer a real part name over intake filler ("OEM"/"Salvage"/etc.)
       // so the deterministic title composer has something usable in cType.
       const existingType = (listing.cType ?? '').trim().toLowerCase();
@@ -762,11 +773,7 @@ export class SingleListingFormService {
         ? product.fitmentData
         : [];
       const hasYear = existing.some((r) => {
-        const y = String(
-          (r as Record<string, unknown>).Year ??
-            (r as Record<string, unknown>).year ??
-            '',
-        );
+        const y = String(r.Year ?? r.year ?? '');
         return /^(19|20)\d{2}/.test(y);
       });
       if (hasYear) return;
@@ -1028,9 +1035,7 @@ export class SingleListingFormService {
           year,
           category,
           note: noteParts.join(' '),
-          partNumber: best.mpn
-            ? this.sanitizePartNumber(best.mpn)
-            : partNumber,
+          partNumber: best.mpn ? this.sanitizePartNumber(best.mpn) : partNumber,
           confidence: exactMpn.length > 0 ? 'high' : 'medium',
         },
       };
@@ -1366,9 +1371,11 @@ export class SingleListingFormService {
 
   private isSkuUniqueViolation(err: unknown): boolean {
     if (!this.isUniqueViolation(err)) return false;
-    const driverError = (err as QueryFailedError & {
-      driverError?: { constraint?: string };
-    }).driverError;
+    const driverError = (
+      err as QueryFailedError & {
+        driverError?: { constraint?: string };
+      }
+    ).driverError;
     return (
       driverError?.constraint === 'idx_listing_sku_marketplace_unique_active' ||
       driverError?.constraint === 'idx_listing_sku_unique_active'

@@ -134,8 +134,7 @@ export class ListingOptimizationService {
     // these out instead of serializing every product in the job.
     const PRODUCT_CONCURRENCY = Math.max(
       1,
-      Number(process.env.LISTING_OPTIMIZATION_PRODUCT_CONCURRENCY ?? '5') ||
-        5,
+      Number(process.env.LISTING_OPTIMIZATION_PRODUCT_CONCURRENCY ?? '5') || 5,
     );
     // Group products into batches that each make ONE OpenAI call (see
     // ListingGenerationPipeline.generateBatch) instead of one call per
@@ -444,7 +443,7 @@ export class ListingOptimizationService {
     const existingFitmentUsable =
       Array.isArray(product.fitmentData) &&
       product.fitmentData.some((row) => {
-        const r = row as Record<string, unknown>;
+        const r = row;
         return String(r['Year'] ?? r['year'] ?? '').trim().length > 0;
       });
 

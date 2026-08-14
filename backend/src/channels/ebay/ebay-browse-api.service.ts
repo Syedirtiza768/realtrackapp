@@ -168,10 +168,10 @@ export class EbayBrowseApiService {
       `search(${options.q || options.categoryIds || ''})`,
       async () => {
         await this.rateLimiter.acquire();
-        return this.http.get<EbaySearchResult>(
-          '/item_summary/search',
-          { ...cfg, params },
-        );
+        return this.http.get<EbaySearchResult>('/item_summary/search', {
+          ...cfg,
+          params,
+        });
       },
     );
     return data;
@@ -204,10 +204,10 @@ export class EbayBrowseApiService {
       `getItemByLegacyId(${legacyItemId})`,
       async () => {
         await this.rateLimiter.acquire();
-        return this.http.get<EbayItem>(
-          `/item/get_item_by_legacy_id`,
-          { ...cfg, params: { legacy_item_id: legacyItemId } },
-        );
+        return this.http.get<EbayItem>(`/item/get_item_by_legacy_id`, {
+          ...cfg,
+          params: { legacy_item_id: legacyItemId },
+        });
       },
     );
     return data;
@@ -229,7 +229,8 @@ export class EbayBrowseApiService {
   }): Promise<EbaySearchResult> {
     const limit = Math.min(options.limit ?? 100, 100);
     const filterParts: string[] = [];
-    if (options.country) filterParts.push(`itemLocationCountry:${options.country}`);
+    if (options.country)
+      filterParts.push(`itemLocationCountry:${options.country}`);
     return this.search({
       seller: options.seller,
       marketplaceId: options.marketplaceId,

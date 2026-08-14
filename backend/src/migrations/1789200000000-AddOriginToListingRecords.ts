@@ -9,9 +9,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * the `uq_listing_source_row` unique constraint, the warehouse-intake row
  * sequence, and real pipeline filename lineage. This is purely additive.
  */
-export class AddOriginToListingRecords1789200000000
-  implements MigrationInterface
-{
+export class AddOriginToListingRecords1789200000000 implements MigrationInterface {
   name = 'AddOriginToListingRecords1789200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

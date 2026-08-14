@@ -15,16 +15,21 @@
  */
 
 /**
- * Rewrite an S3 / CDN URL for direct browser access.
+ * Rewrite an S3 / CDN URL for browser access via the nginx-cached proxy.
  *
- * Returns the S3 URL directly for browser loading. The OptimizedImage
- * component handles 403 fallback to the backend proxy in the browser
- * via its onError handler (see error chain in OptimizedImage.tsx).
+ * Routes our own S3 image URLs through /api/storage/serve/{key} so that
+ * nginx proxy_cache (30-day, 1 GB) serves repeated requests locally on the
+ * EC2 host — no per-request round-trip to S3, no separate DNS/TLS connection
+ * to the S3 hostname. The browser reuses its existing connection to the app
+ * origin instead of opening a new one to S3.
  *
  * External URLs (eBay, etc.) are returned as-is.
  */
 export function toProxyUrl(url: string | null | undefined): string {
-  return url ?? '';
+  if (!url) return '';
+  const proxyPath = toBackendProxyPath(url);
+  if (proxyPath) return proxyPath;
+  return url;
 }
 
 /**

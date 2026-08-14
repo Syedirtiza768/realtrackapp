@@ -77,10 +77,7 @@ const READ_ONLY: RoleSlug[] = [
 const SUPER_ADMIN_ONLY: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN];
 
 /** Admin + super_admin only. Super admin can reassign via Roles UI later. */
-const SUPER_AND_ADMIN: RoleSlug[] = [
-  ROLE_SLUGS.SUPER_ADMIN,
-  ROLE_SLUGS.ADMIN,
-];
+const SUPER_AND_ADMIN: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN, ROLE_SLUGS.ADMIN];
 
 function p(
   key: string,
@@ -341,7 +338,12 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   // ── Image Drive ──
   p('image_drive.view', 'View Image Drive', 'image_drive', READ_ONLY),
   p('image_drive.upload', 'Upload to Image Drive', 'image_drive', READ_WRITE),
-  p('image_drive.manage', 'Manage Image Drive assets', 'image_drive', MANAGER_UP),
+  p(
+    'image_drive.manage',
+    'Manage Image Drive assets',
+    'image_drive',
+    MANAGER_UP,
+  ),
 
   // ── Pricing ──
   p('pricing.view', 'View pricing intelligence', 'pricing', READ_ONLY),

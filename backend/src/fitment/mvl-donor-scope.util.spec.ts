@@ -59,11 +59,7 @@ describe('mvl-donor-scope.util', () => {
 
   it('builds year range from scoped rows', () => {
     expect(
-      yearRangeFromRows([
-        { year: 2010 },
-        { year: 2012 },
-        { year: 2011 },
-      ]),
+      yearRangeFromRows([{ year: 2010 }, { year: 2012 }, { year: 2011 }]),
     ).toBe('2010-2012');
     expect(yearRangeFromRows([], 2005)).toBe('2005');
     expect(yearRangeFromRows([])).toBe('');

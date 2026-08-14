@@ -90,11 +90,10 @@ describe('EbayMultiStoreListingService bulk publish', () => {
 
   it('skips unresolvable listings but still publishes the rest', async () => {
     const { service, targetRepo } = setup();
-    (service as any).publishResolver.resolve = jest.fn(
-      async (id: string) =>
-        id === 'listing-bad'
-          ? null
-          : { snapshot: { catalogProductId: `catalog-${id}` } },
+    (service as any).publishResolver.resolve = jest.fn(async (id: string) =>
+      id === 'listing-bad'
+        ? null
+        : { snapshot: { catalogProductId: `catalog-${id}` } },
     );
 
     const result = await service.createBulkPublishJob({
@@ -108,8 +107,7 @@ describe('EbayMultiStoreListingService bulk publish', () => {
     expect(result.skipped).toEqual([
       {
         listingId: 'listing-bad',
-        reason:
-          'Catalog product or listing record listing-bad was not found',
+        reason: 'Catalog product or listing record listing-bad was not found',
       },
     ]);
     expect(targetRepo.create).not.toHaveBeenCalledWith(

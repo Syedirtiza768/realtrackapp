@@ -11,7 +11,9 @@ describe('extractMakeModelFromTitle', () => {
 
   it('reads C-Class when written as two tokens', () => {
     expect(
-      extractMakeModelFromTitle('2008 Mercedes-Benz C Class Brake Pad OEM Used'),
+      extractMakeModelFromTitle(
+        '2008 Mercedes-Benz C Class Brake Pad OEM Used',
+      ),
     ).toEqual({ make: 'Mercedes-Benz', model: 'C-Class' });
   });
 
@@ -29,7 +31,9 @@ describe('extractMakeModelFromTitle', () => {
 
   it('does not treat a bare single letter as the model when a stronger token follows', () => {
     expect(
-      extractMakeModelFromTitle('2008 Mercedes-Benz x C300 Sedan Sensor OEM Used'),
+      extractMakeModelFromTitle(
+        '2008 Mercedes-Benz x C300 Sedan Sensor OEM Used',
+      ),
     ).toEqual({ make: 'Mercedes-Benz', model: 'C300' });
   });
 });

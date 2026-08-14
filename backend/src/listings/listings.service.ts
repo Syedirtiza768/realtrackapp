@@ -524,7 +524,11 @@ export class ListingsService {
 
       // Catalog detail edits one listing row; workbench/publish often read
       // catalog_products.price or US/AU/DE siblings. Propagate shared price/qty.
-      await this.syncSharedPriceQuantityToCatalogAndSiblings(em, saved, changes);
+      await this.syncSharedPriceQuantityToCatalogAndSiblings(
+        em,
+        saved,
+        changes,
+      );
 
       const afterSnapshot = { ...saved } as Record<string, unknown>;
 
@@ -1361,11 +1365,7 @@ export class ListingsService {
     if (!priceChanged && !qtyChanged) return;
 
     if (priceChanged) {
-      await em.update(
-        CatalogProduct,
-        { sku },
-        { price: saved.startPriceNum },
-      );
+      await em.update(CatalogProduct, { sku }, { price: saved.startPriceNum });
       await em.update(
         ListingRecord,
         { customLabelSku: sku },
@@ -1377,11 +1377,7 @@ export class ListingsService {
     }
 
     if (qtyChanged) {
-      await em.update(
-        CatalogProduct,
-        { sku },
-        { quantity: saved.quantityNum },
-      );
+      await em.update(CatalogProduct, { sku }, { quantity: saved.quantityNum });
       await em.update(
         ListingRecord,
         { customLabelSku: sku },

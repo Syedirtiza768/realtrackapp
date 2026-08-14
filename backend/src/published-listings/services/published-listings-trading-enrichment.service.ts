@@ -46,7 +46,12 @@ export class PublishedListingsTradingEnrichmentService {
     this.dailyCallCount += 1;
   }
 
-  getBudgetStatus(): { used: number; remaining: number; limit: number; resetDate: string } {
+  getBudgetStatus(): {
+    used: number;
+    remaining: number;
+    limit: number;
+    resetDate: string;
+  } {
     const today = new Date().toISOString().slice(0, 10);
     if (today !== this.dailyResetDate) {
       this.dailyCallCount = 0;
@@ -196,7 +201,7 @@ export class PublishedListingsTradingEnrichmentService {
   private readCache(
     listing: EbayPublishedListing,
   ): CachedTradingEnrichment | null {
-    const raw = listing.rawEbayResponse as Record<string, unknown> | null;
+    const raw = listing.rawEbayResponse;
     if (!raw) return null;
     const cached = raw['tradingEnrichment'] as
       | CachedTradingEnrichment

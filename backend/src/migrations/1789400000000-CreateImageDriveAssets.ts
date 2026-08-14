@@ -36,7 +36,9 @@ export class CreateImageDriveAssets1789400000000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_image_drive_part_cdn"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_image_drive_part_number"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_image_drive_part_number"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "image_drive_assets"`);
   }
 }

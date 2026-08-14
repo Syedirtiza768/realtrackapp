@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddMediumKeyToImageAssets1789500000000
-  implements MigrationInterface
-{
+export class AddMediumKeyToImageAssets1789500000000 implements MigrationInterface {
   name = 'AddMediumKeyToImageAssets1789500000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

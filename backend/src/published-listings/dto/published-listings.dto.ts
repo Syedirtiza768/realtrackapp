@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -142,6 +143,11 @@ export class SyncPublishedListingsDto {
   @IsOptional()
   @IsString()
   marketplaceId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['full', 'delta'])
+  syncMode?: 'full' | 'delta';
 }
 
 export class RevisePublishedListingDto {

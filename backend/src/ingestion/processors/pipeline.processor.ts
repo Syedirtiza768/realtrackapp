@@ -500,7 +500,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       let settled = false;
 
       // Hard timeout: kill the child if it runs too long (default 90 min).
-      const childTimeoutMs = Number(process.env.PIPELINE_CHILD_TIMEOUT_MS) || 90 * 60 * 1000;
+      const childTimeoutMs =
+        Number(process.env.PIPELINE_CHILD_TIMEOUT_MS) || 90 * 60 * 1000;
       const timer = setTimeout(() => {
         if (settled) return;
         this.logger.error(
@@ -938,7 +939,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           where: { id: In(sourceListingIds) },
         });
         for (const source of sources) {
-          for (const url of parseUrls(source.itemPhotoUrl)) imageUrlSet.add(url);
+          for (const url of parseUrls(source.itemPhotoUrl))
+            imageUrlSet.add(url);
         }
       }
       if (uploadedAssetIds?.length) {
@@ -1091,8 +1093,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               listing.cManufacturerPartNumber?.trim() ||
               listing.cOeOemPartNumber?.trim();
             if (!pn) continue;
-            const normalized =
-              ImageDriveService.normalizePartNumber(pn);
+            const normalized = ImageDriveService.normalizePartNumber(pn);
             const images = driveResults[normalized];
             if (!images?.length) continue;
             const urls = images.map((img) => img.cdnUrl).slice(0, 24);
@@ -1342,7 +1343,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         ) {
           s = s.slice(1, -1);
         }
-        return s.replace(/[\r\n\t]+/g, '').replace(/\s+/g, '').trim();
+        return s
+          .replace(/[\r\n\t]+/g, '')
+          .replace(/\s+/g, '')
+          .trim();
       };
 
       const products: Partial<CatalogProduct>[] = [];
@@ -1802,7 +1806,10 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               .filter((s): s is string => Boolean(s)),
           ),
         );
-        const existingRows: Array<{ id: string; customLabelSku: string | null }> =
+        const existingRows: Array<{
+          id: string;
+          customLabelSku: string | null;
+        }> =
           batchSkus.length > 0
             ? await this.listingRepo.query(
                 `SELECT id, "customLabelSku" FROM "listing_records" WHERE "marketplace" = $1 AND "customLabelSku" = ANY($2) AND "deletedAt" IS NULL`,
@@ -1830,7 +1837,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
               delete patch.version; // @VersionColumn — managed by the DB/TypeORM
               // Keep the existing photo when the re-run produced none (mirrors the
               // COALESCE the old upsert used for itemPhotoUrl).
-              if (!String(patch.itemPhotoUrl ?? '').trim()) delete patch.itemPhotoUrl;
+              if (!String(patch.itemPhotoUrl ?? '').trim())
+                delete patch.itemPhotoUrl;
               try {
                 await this.listingRepo.update({ id }, patch as any);
                 updatedCount++;

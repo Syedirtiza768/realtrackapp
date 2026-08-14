@@ -37,7 +37,10 @@ describe('PartIdentificationService', () => {
 
   describe('identifyAndCorroborate', () => {
     it('skips the Browse API call when brand or MPN is missing', async () => {
-      const result = await svc.identifyAndCorroborate({ brand: null, mpn: null });
+      const result = await svc.identifyAndCorroborate({
+        brand: null,
+        mpn: null,
+      });
       expect(result).toEqual({
         checked: false,
         found: false,
@@ -122,9 +125,7 @@ describe('PartIdentificationService', () => {
     });
 
     it('skips the write when a row already exists', async () => {
-      (categoryRepo.findOne as jest.Mock).mockResolvedValue(
-        new EbayCategory(),
-      );
+      (categoryRepo.findOne as jest.Mock).mockResolvedValue(new EbayCategory());
       await svc.ensureCategoryCached('33559');
       expect(categoryRepo.save).not.toHaveBeenCalled();
     });

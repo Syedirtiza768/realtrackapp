@@ -38,9 +38,7 @@ export class ThumbnailProcessor extends WorkerHost {
   }
 
   async process(
-    job: Job<
-      ThumbnailJobData | CatalogVariantJobData | DriveVariantJobData
-    >,
+    job: Job<ThumbnailJobData | CatalogVariantJobData | DriveVariantJobData>,
   ): Promise<void> {
     if (job.name === 'generate-catalog-variants') {
       const { s3Key } = job.data as CatalogVariantJobData;

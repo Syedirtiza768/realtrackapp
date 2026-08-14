@@ -923,11 +923,7 @@ export class PipelineService {
   /**
    * Permanently delete a pipeline job, its upload files, and any BullMQ entries.
    */
-  async deleteJob(
-    id: string,
-    actorId?: string,
-    viewAll = true,
-  ): Promise<void> {
+  async deleteJob(id: string, actorId?: string, viewAll = true): Promise<void> {
     const job = await this.getJob(id, actorId, viewAll);
 
     // Remove any BullMQ entries for this job
@@ -1004,9 +1000,18 @@ export class PipelineService {
     // worker restart. Also allow re-import for completed jobs whose listing
     // records may have been lost (e.g. silent constraint violations).
     // Block only jobs that are currently being processed.
-    const ACTIVE_STATUSES = ['uploading', 'vin_decode', 'category_mapping', 'enrichment', 'validation', 'output_generation'];
+    const ACTIVE_STATUSES = [
+      'uploading',
+      'vin_decode',
+      'category_mapping',
+      'enrichment',
+      'validation',
+      'output_generation',
+    ];
     if (ACTIVE_STATUSES.includes(job.status)) {
-      throw new BadRequestException(`Job ${id} is currently active (${job.status}) — wait for it to finish`);
+      throw new BadRequestException(
+        `Job ${id} is currently active (${job.status}) — wait for it to finish`,
+      );
     }
 
     const projectRoot =

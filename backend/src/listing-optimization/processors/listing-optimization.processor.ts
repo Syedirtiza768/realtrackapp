@@ -104,7 +104,9 @@ export class ListingOptimizationProcessor extends WorkerHost {
    * for every failure path BullMQ has, including that one.
    */
   @OnWorkerEvent('failed')
-  async onFailed(job: Job<ListingOptimizationJobData> | undefined): Promise<void> {
+  async onFailed(
+    job: Job<ListingOptimizationJobData> | undefined,
+  ): Promise<void> {
     if (!job) return;
     // BullMQ emits 'failed' on every failed attempt, not just the final one
     // — an in-progress retry (attempts remaining) will often succeed moments

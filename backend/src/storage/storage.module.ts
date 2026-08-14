@@ -24,7 +24,16 @@ import { CatalogProduct } from '../catalog-import/entities/catalog-product.entit
       CatalogProduct,
     ]),
     BullModule.registerQueue(
-      { name: 'storage-thumbnails' },
+      {
+        name: 'storage-thumbnails',
+        defaultJobOptions: {
+          // Keep recent jobs for debugging but expire them so jobId-based
+          // dedup doesn't block legitimate re-queues (e.g. backfill re-runs
+          // after a Redis restart, or re-imports of already-mirrored images).
+          removeOnComplete: { age: 86400, count: 5000 },
+          removeOnFail: { age: 86400, count: 5000 },
+        },
+      },
       { name: 'storage-cleanup' },
     ),
   ],
@@ -36,6 +45,11 @@ import { CatalogProduct } from '../catalog-import/entities/catalog-product.entit
     ThumbnailProcessor,
     CleanupProcessor,
   ],
-  exports: [StorageService, ImageDriveService, ImageProcessorService, TypeOrmModule],
+  exports: [
+    StorageService,
+    ImageDriveService,
+    ImageProcessorService,
+    TypeOrmModule,
+  ],
 })
 export class StorageModule {}

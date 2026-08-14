@@ -275,8 +275,7 @@ export class CatalogProductService {
       patch.conditionId = product.conditionId;
     if (changed.conditionLabel !== undefined)
       patch.conditionLabel = product.conditionLabel;
-    if (changed.categoryId !== undefined)
-      patch.categoryId = product.categoryId;
+    if (changed.categoryId !== undefined) patch.categoryId = product.categoryId;
     if (changed.categoryName !== undefined)
       patch.categoryName = product.categoryName;
     if (changed.format !== undefined) patch.format = product.format;
@@ -291,8 +290,7 @@ export class CatalogProductService {
     if (changed.brand !== undefined) patch.cBrand = product.brand;
     if (changed.partType !== undefined) patch.cType = product.partType;
     if (changed.features !== undefined) patch.cFeatures = product.features;
-    if (changed.mpn !== undefined)
-      patch.cManufacturerPartNumber = product.mpn;
+    if (changed.mpn !== undefined) patch.cManufacturerPartNumber = product.mpn;
     if (changed.oemPartNumber !== undefined)
       patch.cOeOemPartNumber = product.oemPartNumber;
     if (changed.material !== undefined) patch.cMaterial = product.material;

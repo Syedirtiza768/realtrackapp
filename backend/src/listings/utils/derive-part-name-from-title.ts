@@ -36,10 +36,7 @@ export function derivePartNameFromTitle(
   if (!title?.trim()) return undefined;
 
   const brandTokens = new Set(
-    (brand ?? '')
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean),
+    (brand ?? '').toLowerCase().split(/\s+/).filter(Boolean),
   );
   const normalize = (v: string) => v.toLowerCase().replace(/[\s\-]/g, '');
   const targetPn = normalize(partNumber ?? '');

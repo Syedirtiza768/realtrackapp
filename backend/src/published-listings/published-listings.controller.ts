@@ -132,6 +132,7 @@ export class PublishedListingsController {
       ebayAccountId: dto.ebayAccountId,
       marketplaceId: dto.marketplaceId,
       userId: user.id,
+      syncMode: dto.syncMode,
     });
   }
 
@@ -201,7 +202,11 @@ export class PublishedListingsController {
   ) {
     const { organizationId: orgId } =
       await this.permissions.resolveOrganization(user.id, organizationId);
-    const listings = await this.listings.getByIdsRaw(dto.listingIds, orgId, user);
+    const listings = await this.listings.getByIdsRaw(
+      dto.listingIds,
+      orgId,
+      user,
+    );
     return this.tradingEnrichment.preEnrichBatch(listings, {
       force: dto.force,
     });

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddDonorYearMakeModelToCatalogProducts1789300000000
-  implements MigrationInterface
-{
+export class AddDonorYearMakeModelToCatalogProducts1789300000000 implements MigrationInterface {
   name = 'AddDonorYearMakeModelToCatalogProducts1789300000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

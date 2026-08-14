@@ -547,7 +547,10 @@ export class EnterpriseListingIntelligenceService {
    */
   private hasUntrustedPartType(product: CatalogProduct): boolean {
     const raw = product.partType?.trim().toLowerCase();
-    return !raw || EnterpriseListingIntelligenceService.NON_DESCRIPTIVE_PART_TYPES.has(raw);
+    return (
+      !raw ||
+      EnterpriseListingIntelligenceService.NON_DESCRIPTIVE_PART_TYPES.has(raw)
+    );
   }
 
   /**
@@ -927,8 +930,9 @@ export class EnterpriseListingIntelligenceService {
       product.partType,
       product.placement,
     );
-    const hasUntrustedGenericIdentity =
-      this.isUntrustedGenericPartIdentity(product.partType);
+    const hasUntrustedGenericIdentity = this.isUntrustedGenericPartIdentity(
+      product.partType,
+    );
     const candidate = product.categoryId?.trim();
     if (candidate) {
       const isValid = await this.isMotorsCategory(candidate);
@@ -1088,7 +1092,10 @@ export class EnterpriseListingIntelligenceService {
   }
 
   private isUntrustedGenericPartIdentity(partType: string | null): boolean {
-    const normalized = (partType ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const normalized = (partType ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
     return EnterpriseListingIntelligenceService.UNTRUSTED_GENERIC_PART_IDENTITIES.has(
       normalized,
     );
@@ -1217,9 +1224,12 @@ export class EnterpriseListingIntelligenceService {
         .createQueryBuilder('m')
         .where('m.active = true')
         .andWhere('m."isMotorsCategory" = true')
-        .andWhere('(LOWER(m."productType") = :norm OR :norm = ANY(m.keywords))', {
-          norm,
-        })
+        .andWhere(
+          '(LOWER(m."productType") = :norm OR :norm = ANY(m.keywords))',
+          {
+            norm,
+          },
+        )
         .getOne();
       return row
         ? { categoryId: row.ebayCategoryId, categoryName: row.ebayCategoryName }
