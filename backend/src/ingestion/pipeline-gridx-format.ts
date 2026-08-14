@@ -112,7 +112,7 @@ export function sheetToVisibleAoa(ws: WorkSheet): unknown[][] {
   const rows = XLSX.utils.sheet_to_json(ws, {
     header: 1,
     defval: '',
-  });
+  }) as unknown[][];
   const rowMeta = ws['!rows'] ?? [];
   if (!rowMeta.length) return rows;
   return rows.filter((_, index) => !rowMeta[index]?.hidden);
@@ -125,7 +125,7 @@ export function countHiddenDataRows(ws: WorkSheet): number {
   const rows = XLSX.utils.sheet_to_json(ws, {
     header: 1,
     defval: '',
-  });
+  }) as unknown[][];
   const rowMeta = ws['!rows'] ?? [];
   if (!rowMeta.length) return 0;
   let skipped = 0;
