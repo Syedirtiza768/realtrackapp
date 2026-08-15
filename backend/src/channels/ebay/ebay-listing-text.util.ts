@@ -401,29 +401,6 @@ export function buildEbayListingTitle(
         `Title truncated from ${normalizeListingText(raw).length} to ${EBAY_TITLE_MAX_LENGTH} characters for eBay`,
       );
     }
-    // STRICT GUARD: enforce the eBay Motors title guideline structure.
-    if (!matchesStrictEbayTitleStructure(title)) {
-      warnings.push(
-        'Stored title does not follow eBay guideline structure — recomposing from structured fields',
-      );
-      const make = (source.make ?? source.brand)?.trim() || '';
-      const partName = (source.partName ?? source.partType)?.trim() || '';
-      const oemPartNumber = (source.oemPartNumber ?? source.mpn)?.trim() || '';
-      if (make && (partName || oemPartNumber)) {
-        const composed = buildStructuredEbayTitle({
-          yearRange: source.yearRange,
-          make,
-          model: source.model,
-          generation: source.generation,
-          position: source.position,
-          partName,
-          oemPartNumber,
-        });
-        if (composed) {
-          return { title: composed, warnings };
-        }
-      }
-    }
     return { title, warnings };
   }
 

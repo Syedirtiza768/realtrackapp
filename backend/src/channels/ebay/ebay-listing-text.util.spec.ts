@@ -268,10 +268,10 @@ describe('buildStructuredEbayTitle', () => {
 });
 
 describe('buildEbayListingTitle structured composition', () => {
-  it('recomposes a stored title that violates the guideline structure', () => {
-    // The strict guard recomposes any stored title that doesn't follow
-    // "[Year Range] ... OEM Used" from structured fields (stale test updated:
-    // it previously asserted the pre-guard behavior of preserving free text).
+  it('preserves a stored title verbatim even without guideline structure', () => {
+    // The strict recompose guard was removed — stored titles are always
+    // trusted as-is (truncated to 80 chars). Recomposing from structured
+    // fields caused the published title to differ from the reviewed edit.
     const { title, warnings } = buildEbayListingTitle({
       title: 'Some old free-text title 4G9827279',
       make: 'Audi',
@@ -280,10 +280,8 @@ describe('buildEbayListingTitle structured composition', () => {
       partName: 'Hood Hinge Cover Cap',
       oemPartNumber: '4G9827279',
     });
-    expect(title).toBe(
-      'Audi A6 Front Left Hood Hinge Cover Cap 4G9827279 OEM Used',
-    );
-    expect(warnings.some((w) => w.includes('recomposing'))).toBe(true);
+    expect(title).toBe('Some old free-text title 4G9827279');
+    expect(warnings.some((w) => w.includes('recomposing'))).toBe(false);
   });
 
   it('preserves a stored title that already follows the guideline structure', () => {
