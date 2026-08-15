@@ -35,6 +35,23 @@
   `catalog_products`, the exact source listing, and SKU-linked sibling listing
   rows. Recent deterministic failures can be repaired and requeued with
   `scripts/repair-ebay-publish-failures.mjs`; it is dry-run by default.
+- If a durable publish target points at a historical source-listing row that
+  has since been removed, `ListingBuilderService` falls back to the target's
+  canonical `catalog_product_id` so the listing can still be built. The
+  `scripts/repair-ebay-publish-failures.mjs --retry-skus=... --apply --retry`
+  mode supports an explicit, auditable requeue after this fallback is deployed.
+- The final per-store publish boundary also removes reconstructed Motors
+  compatibility rows for marketplaces whose configuration sets
+  `supportsMotorsFitment=false` (currently eBay DE and GB). This protects the
+  multi-store publish path, where request enrichment happens before the store
+  loop and could otherwise re-add catalog fitment to a non-Motors target.
+- If eBay rejects a publish because the item already exists, the durable
+  processor extracts the existing item ID and checks the same-account,
+  same-marketplace channel mirror. When that channel is already published, the
+  target is marked `skipped` with the existing item/channel IDs rather than
+  remaining a false failure. The repair script can apply the same audited
+  reconciliation to historical rows with
+  `--reconcile-known-duplicates --apply`.
 - Row-level `shippingProfileName`, `paymentProfileName`, and
   `returnProfileName` assignments are resolved by exact, case-insensitive name
   against every target eBay account and marketplace. A cache miss triggers an

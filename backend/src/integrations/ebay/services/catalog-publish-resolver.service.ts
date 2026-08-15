@@ -6,6 +6,20 @@ import { ListingRecord } from '../../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../../storage/entities/image-asset.entity.js';
 import { sanitizeEbayImageUrls } from '../../../channels/ebay/ebay-listing-images.util.js';
 
+/** Filter out S3 temp-path URLs that may have been deleted after cleanup.
+ *  Returns only durable URLs (catalog-images/, originals/, etc). If all URLs
+ *  were temp, returns the raw temp URLs as a last resort so we don't lose images. */
+function filterTempUrls(urls: string[] | string | null | undefined): string[] {
+  const arr = Array.isArray(urls) ? urls : urls ? [urls] : [];
+  const tempPattern = /\/temp\//;
+  const durable = arr.filter((u) => u && !tempPattern.test(u));
+  return durable.length > 0 ? durable : arr.filter(Boolean);
+}
+
+function isDurableUrl(url: string): boolean {
+  return !/\/temp\//.test(url);
+}
+
 /** Unified publish snapshot from catalog_products and/or listing_records. */
 export interface CatalogPublishSnapshot {
   catalogProductId: string;
@@ -71,6 +85,10 @@ export class CatalogPublishResolverService {
     if (!listingRecord && catalogProduct?.sku) {
       listingRecord = await this.listingRepo.findOne({
         where: { customLabelSku: catalogProduct.sku },
+        order: {
+          publishedAt: { direction: 'DESC', nulls: 'LAST' } as any,
+          updatedAt: 'DESC',
+        },
       });
     }
 
@@ -163,11 +181,11 @@ export class CatalogPublishResolverService {
 
     const addListingImages = () => {
       if (listingRecord?.itemPhotoUrl)
-        candidates.push(listingRecord.itemPhotoUrl);
+        candidates.push(...filterTempUrls(listingRecord.itemPhotoUrl));
     };
     const addCatalogImages = () => {
       if (catalogProduct?.imageUrls?.length) {
-        candidates.push(...catalogProduct.imageUrls);
+        candidates.push(...filterTempUrls(catalogProduct.imageUrls));
       }
     };
     if (preferListingRecord) {
@@ -181,16 +199,33 @@ export class CatalogPublishResolverService {
       warnings.push('Using images from listing record itemPhotoUrl');
     }
 
-    if (listingRecord?.id && !candidates.length) {
+    const hasOnlyTempUrls =
+      candidates.length > 0 && !candidates.some(isDurableUrl);
+
+    if (listingRecord?.id && (!candidates.length || hasOnlyTempUrls)) {
       const assets = await this.assetRepo.find({
         where: { listingId: listingRecord.id },
         order: { sortOrder: 'ASC', uploadedAt: 'ASC' },
       });
-      for (const asset of assets) {
-        if (asset.cdnUrl) candidates.push(asset.cdnUrl);
-      }
-      if (assets.length) {
+      const durableAssets = assets
+        .filter((a) => a.cdnUrl && isDurableUrl(a.cdnUrl))
+        .map((a) => a.cdnUrl!);
+      if (durableAssets.length) {
+        if (hasOnlyTempUrls) {
+          warnings.push(
+            `Replaced ${candidates.length} temp S3 URL(s) with ${durableAssets.length} durable image_assets URL(s)`,
+          );
+          candidates.length = 0;
+        }
+        candidates.push(...durableAssets);
         warnings.push('Using images from linked image_assets records');
+      } else if (!candidates.length) {
+        for (const asset of assets) {
+          if (asset.cdnUrl) candidates.push(asset.cdnUrl);
+        }
+        if (assets.length) {
+          warnings.push('Using images from linked image_assets records');
+        }
       }
     }
 
@@ -219,7 +254,7 @@ export class CatalogPublishResolverService {
     }
 
     const imageUrls = sanitizeEbayImageUrls(
-      listing.itemPhotoUrl ? [listing.itemPhotoUrl] : [],
+      filterTempUrls(listing.itemPhotoUrl),
     ).imageUrls;
 
     const title =
@@ -264,7 +299,7 @@ export class CatalogPublishResolverService {
   ): Promise<CatalogProduct> {
     let dirty = false;
     const listingImages = sanitizeEbayImageUrls(
-      listing.itemPhotoUrl ? [listing.itemPhotoUrl] : [],
+      filterTempUrls(listing.itemPhotoUrl),
     ).imageUrls;
 
     if (!product.imageUrls?.length && listingImages.length) {

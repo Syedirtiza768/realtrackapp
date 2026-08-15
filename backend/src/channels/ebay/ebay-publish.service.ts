@@ -88,6 +88,13 @@ import {
 } from '../../fitment/fitment-mvl.util.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 
+/** Filter out S3 temp-path URLs that may have been cleaned up. */
+function filterTempS3Urls(urls: string[]): string[] {
+  const tempPattern = /\/temp\//;
+  const durable = urls.filter((u) => !tempPattern.test(u));
+  return durable.length > 0 ? durable : urls;
+}
+
 /**
  * Publishing request payload from the frontend / caller.
  */
@@ -398,7 +405,8 @@ export class EbayPublishService {
       where: { id: listingId },
     });
     if (listing?.itemPhotoUrl) {
-      const fromListing = sanitizeEbayImageUrls([listing.itemPhotoUrl]);
+      const filtered = filterTempS3Urls([listing.itemPhotoUrl]);
+      const fromListing = sanitizeEbayImageUrls(filtered);
       if (fromListing.imageUrls.length) return fromListing;
     }
 
@@ -406,7 +414,8 @@ export class EbayPublishService {
       where: { id: listingId },
     });
     if (catalog?.imageUrls?.length) {
-      const fromCatalog = sanitizeEbayImageUrls(catalog.imageUrls);
+      const filtered = filterTempS3Urls(catalog.imageUrls);
+      const fromCatalog = sanitizeEbayImageUrls(filtered);
       if (fromCatalog.imageUrls.length) return fromCatalog;
     }
 
@@ -415,7 +424,8 @@ export class EbayPublishService {
         where: { sku: listing.customLabelSku },
       });
       if (bySku?.imageUrls?.length) {
-        const fromSku = sanitizeEbayImageUrls(bySku.imageUrls);
+        const filtered = filterTempS3Urls(bySku.imageUrls);
+        const fromSku = sanitizeEbayImageUrls(filtered);
         if (fromSku.imageUrls.length) return fromSku;
       }
     }
@@ -1248,6 +1258,21 @@ export class EbayPublishService {
     const marketplaceId = account
       ? this.resolvePublishMarketplaceId(account, store)
       : resolveMarketplaceId(store);
+    const marketplace = this.mpConfig.require(marketplaceId);
+    if (
+      !marketplace.supportsMotorsFitment &&
+      req.compatibility?.compatibleProducts?.length
+    ) {
+      // enrichPublishRequest runs once before the multi-store loop and may
+      // reconstruct compatibility from the catalog. Apply the marketplace
+      // capability gate at the final per-store boundary as well, otherwise a
+      // DE/GB target can receive US Motors fitment rows and eBay rejects the
+      // offer with "all compatibilities are invalid".
+      this.logger.debug(
+        `Omitting structured Motors fitment for ${marketplaceId} on "${store.storeName}"`,
+      );
+      req = { ...req, compatibility: undefined };
+    }
     if (marketplaceId === 'EBAY_MOTORS_US' && req.categoryId) {
       const resolved = await this.ensureLeafCategoryId(req.categoryId, req.sku);
       if (resolved.id !== req.categoryId) {

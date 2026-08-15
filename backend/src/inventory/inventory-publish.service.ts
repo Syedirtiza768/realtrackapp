@@ -155,6 +155,7 @@ export class InventoryPublishService {
         organizationId,
         requestedByUserId: userId,
         catalogProductId: catalogProduct.id,
+        sourceListingId: listingId,
         targets: publishTargets,
       });
 

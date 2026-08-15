@@ -241,6 +241,7 @@ export class EbayMultiStoreListingService {
     organizationId: string;
     requestedByUserId: string;
     catalogProductId: string;
+    sourceListingId?: string;
     targets: { ebayAccountId: string; marketplaceId: string }[];
     idempotencyKey?: string;
   }): Promise<{
@@ -317,7 +318,9 @@ export class EbayMultiStoreListingService {
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
         status: 'pending',
-        resultPayload: { sourceListingId: input.catalogProductId },
+        resultPayload: {
+          sourceListingId: input.sourceListingId ?? input.catalogProductId,
+        },
       });
       targets.push(await this.targetRepo.save(row));
     }
