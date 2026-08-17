@@ -1,6 +1,6 @@
 # Decision log
 
-**Last reviewed:** 2026-08-06
+**Last reviewed:** 2026-08-17
 
 Running log of non-obvious decisions, workarounds, and their reasons. Newest first.
 Add an entry whenever a change is driven by something that isn't obvious from the
@@ -22,6 +22,14 @@ Format:
 ```
 
 ---
+
+## 2026-08-17 — Make eBay publish retries duplicate-aware and source-fallback-safe
+**Decision:** Treat an explicit existing-eBay-listing response as a skipped duplicate
+when the matching published channel is already recorded, and fall back from a removed
+historical source listing to the canonical catalog product when building a job.
+**Why:** Durable publish jobs can outlive source-row cleanup, and retrying a listing
+that eBay already accepted can create misleading failures or duplicate work.
+**Revisit when:** The publish job model gains a first-class idempotency key shared with eBay.
 
 ## 2026-08-10 — Published-listings prune uses index-only scan + per-txn timeout (not a global timeout bump)
 **Decision:** The `markUnseenActiveAsEnded` prune step runs in its own

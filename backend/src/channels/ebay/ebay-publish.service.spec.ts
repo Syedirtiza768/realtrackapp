@@ -93,6 +93,7 @@ describe('EbayPublishService', () => {
   let ebayCategoryRepo: ReturnType<typeof createRepo>;
   let inventoryApi: ReturnType<typeof mockInventoryApi>;
   let auth: ReturnType<typeof mockAuth>;
+  let marketplaceConfig: { require: jest.Mock };
   let taxonomyApi: {
     getCompatibilityProperties: jest.Mock;
     getCategorySubtree: jest.Mock;
@@ -108,6 +109,14 @@ describe('EbayPublishService', () => {
     ebayCategoryRepo = createRepo();
     inventoryApi = mockInventoryApi();
     auth = mockAuth();
+    marketplaceConfig = {
+      require: jest.fn().mockImplementation((marketplaceId: string) => ({
+        currency: marketplaceId === 'EBAY_DE' ? 'EUR' : 'USD',
+        locale: marketplaceId === 'EBAY_DE' ? 'de_DE' : 'en_US',
+        categoryTreeId: marketplaceId === 'EBAY_DE' ? '77' : '0',
+        supportsMotorsFitment: marketplaceId !== 'EBAY_DE',
+      })),
+    };
     taxonomyApi = {
       getCompatibilityProperties: jest.fn().mockResolvedValue([]),
       getCategorySubtree: jest.fn().mockRejectedValue(new Error('not cached')),
@@ -140,14 +149,7 @@ describe('EbayPublishService', () => {
       {
         resolveMarketplaceForAccount: jest.fn().mockReturnValue('EBAY_US'),
       } as any,
-      {
-        require: jest.fn().mockReturnValue({
-          currency: 'USD',
-          locale: 'en_US',
-          categoryTreeId: '0',
-          supportsMotorsFitment: true,
-        }),
-      } as any,
+      marketplaceConfig as any,
       {} as any, // mvlService
       storeRepo,
       connectedAccountRepo,
@@ -228,12 +230,10 @@ describe('EbayPublishService', () => {
         },
       });
 
-      const results = await svc.publish(
-        validRequest({ categoryId: '33707' }),
-      );
+      const results = await svc.publish(validRequest({ categoryId: '33707' }));
 
       expect(results[0].success).toBe(true);
-      const offer = (inventoryApi.createOffer as jest.Mock).mock.calls[0][1];
+      const offer = inventoryApi.createOffer.mock.calls[0][1];
       expect(offer.categoryId).toBe('33716');
     });
 
@@ -258,12 +258,10 @@ describe('EbayPublishService', () => {
         optimizationPayload: {},
       });
 
-      const results = await svc.publish(
-        validRequest({ categoryId: '33707' }),
-      );
+      const results = await svc.publish(validRequest({ categoryId: '33707' }));
 
       expect(results[0].success).toBe(true);
-      const offer = (inventoryApi.createOffer as jest.Mock).mock.calls[0][1];
+      const offer = inventoryApi.createOffer.mock.calls[0][1];
       expect(offer.categoryId).toBe('9886');
       expect(catalogRepo.update).toHaveBeenCalledWith(
         'catalog-1',
@@ -419,6 +417,39 @@ describe('EbayPublishService', () => {
           ],
         },
       );
+    });
+
+    it('omits compatibility for a marketplace that does not support Motors fitment', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'German Store',
+        config: { marketplace: 'EBAY_DE', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue(null);
+
+      await svc.publish(
+        validRequest({
+          compatibility: {
+            compatibleProducts: [
+              {
+                compatibilityProperties: [
+                  { name: 'Make', value: 'Mini' },
+                  { name: 'Model', value: 'Cooper' },
+                  { name: 'Year', value: '2018' },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(inventoryApi.setCompatibility).not.toHaveBeenCalled();
+      expect(inventoryApi.publishOffer).toHaveBeenCalled();
     });
 
     it('blocks a fitment-capable Motors category when structured rows are missing', async () => {
