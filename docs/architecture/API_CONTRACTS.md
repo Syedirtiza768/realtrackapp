@@ -272,6 +272,7 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | GET | `/api/published-listings` | List/filter published listings | published_listings.view |
+| GET | `/api/published-listings/export` | Export published listings as CSV (query params match list endpoint) | published_listings.export |
 | GET | `/api/published-listings/summary` | Dashboard counts | published_listings.view |
 | GET | `/api/published-listings/sync-logs` | Sync job history | published_listings.view |
 | GET | `/api/published-listings/stores` | Connected stores with listing counts | published_listings.view |
@@ -575,4 +576,4 @@ Located in `src/lib/`:
 
 ---
 
-*Consolidated & reorganized: 2026-06-06. Updated: 2026-07-29.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-08-19.*

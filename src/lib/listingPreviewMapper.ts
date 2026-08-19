@@ -26,11 +26,11 @@ export function buildEbayPreview(
     : [];
 
   const compatibility = (catalogProduct?.fitmentData ?? [])
-    .filter((r: Record<string, unknown>) => r.Make && r.Model && r.Year)
+    .filter((r: Record<string, unknown>) => (r.Make ?? r.make) && (r.Model ?? r.model) && (r.Year ?? r.year))
     .map((r: Record<string, unknown>) => ({
-      make: String(r.Make ?? ''),
-      model: String(r.Model ?? ''),
-      year: String(r.Year ?? ''),
+      make: String(r.Make ?? r.make ?? ''),
+      model: String(r.Model ?? r.model ?? ''),
+      year: String(r.Year ?? r.year ?? ''),
     }));
 
   const specifics: { label: string; value: string }[] = [];

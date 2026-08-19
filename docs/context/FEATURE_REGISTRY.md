@@ -48,6 +48,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Settings (tenant) | `/settings` | `settings` | Implemented | Pricing rules, shipping profiles |
 | Storage / image assets | — | `storage` | Implemented | S3 + thumbnails + cleanup |
 | Image Drive (file manager) | `/image-drive` | `storage` (`image-drive.*`) | Implemented | Google Drive-style folder browser; S3-backed; auto-generates thumb/medium WebP variants; optional part-number linking for auto-attach to listings; search, bulk delete, file preview lightbox, copy URL, download, pagination, sort options |
+| Published listings CSV export | (in published listings page) | `published-listings` | Implemented | `published_listings.export` permission; exports filtered results as CSV |
 | Feature flags | — | `common/feature-flags` | Partial | Admin-gated; route on `/api/api/feature-flags` ⚠️ |
 | Health checks | — | `health` | Implemented | `@Public()` |
 | Auto category lookup (backfill + import) | — | `catalog-import` (`CategoryLookupService`) | Implemented | eBay Taxonomy API; backfill endpoint + import pipeline hook |
@@ -56,7 +57,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 
 | Status | Count |
 |--------|-------|
-| Implemented | ~25 |
+| Implemented | ~26 |
 | Partial | ~13 |
 | Missing | 0 |
 | Needs Verification | 2 |
@@ -74,4 +75,4 @@ The app shell shows "RealTrackApp"; the login screen / DB name use "ListingPro".
 
 ---
 
-*Reorganized: 2026-06-06. Updated: 2026-06-11.*
+*Reorganized: 2026-06-06. Updated: 2026-08-19.*

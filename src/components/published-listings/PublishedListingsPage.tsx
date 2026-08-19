@@ -15,6 +15,7 @@ import {
   Square,
   DollarSign,
   XCircle,
+  Download,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -23,6 +24,7 @@ import {
   usePublishedListingSummary,
   useSyncPublishedListings,
   useBulkPublishedListings,
+  downloadPublishedListingsCsv,
   type PublishedListing,
 } from '../../lib/publishedListingsApi';
 import { listEbayAccounts, getEbayWorkspace } from '../../lib/ebayIntegrationsApi';
@@ -61,6 +63,7 @@ export default function PublishedListingsPage() {
   const canSync = has('published_listings.sync');
   const canManage = has('published_listings.manage');
   const canBulk = has('published_listings.bulk');
+  const canExport = has('published_listings.export');
 
   const [organizationId, setOrganizationId] = useState<string | undefined>();
   const [urlState, setUrlState] = useUrlFilters({
@@ -90,6 +93,7 @@ export default function PublishedListingsPage() {
   const [bulkAction, setBulkAction] = useState('update_price');
   const [bulkValue, setBulkValue] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -174,6 +178,26 @@ export default function PublishedListingsPage() {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadPublishedListingsCsv({
+        organizationId,
+        search: debouncedSearch || undefined,
+        ebayAccountId: ebayAccountId || undefined,
+        storeId: storeId || undefined,
+        storeSlug: storeId ? undefined : 'all',
+        status: statusFilter || undefined,
+        sortBy,
+        sortDir: 'desc',
+      });
+    } catch (e) {
+      setSyncMessage(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleBulk = async () => {
     if (!organizationId || selected.size === 0) return;
     const payload: Record<string, unknown> = {};
@@ -207,6 +231,21 @@ export default function PublishedListingsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {canExport && (
+            <button
+              type="button"
+              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 flex items-center"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting ? (
+                <Loader2 className="animate-spin mr-2" size={16} />
+              ) : (
+                <Download className="mr-2" size={16} />
+              )}
+              Export CSV
+            </button>
+          )}
           {canBulk && selected.size > 0 && (
             <button
               type="button"
