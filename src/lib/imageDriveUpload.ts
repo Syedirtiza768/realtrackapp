@@ -104,14 +104,14 @@ export async function collectDroppedImageDriveFiles(
   const items = Array.from(dataTransfer.items);
   const entries = items
     .map((item) => {
-      const getEntry = (
-        item as unknown as {
-          webkitGetAsEntry?: () => FileSystemEntryLike | null;
-        }
-      ).webkitGetAsEntry;
-      return getEntry?.() ?? null;
+      const itemWithEntry = item as unknown as {
+        webkitGetAsEntry?: () => FileSystemEntryLike | null;
+      };
+
+      // Keep the method bound to the DataTransferItem. Chromium's Web IDL
+      // implementation rejects an unbound call with an Illegal invocation.
+      return itemWithEntry.webkitGetAsEntry?.() ?? null;
     })
-    .map((entry) => entry as FileSystemEntryLike | null)
     .filter((entry): entry is FileSystemEntryLike => Boolean(entry));
 
   if (entries.length === 0) return toImageDriveFolderFiles(dataTransfer.files);

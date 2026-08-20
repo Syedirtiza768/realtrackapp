@@ -1183,6 +1183,10 @@ function UploadModal({
               ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
               : 'border-slate-300 dark:border-slate-600'
           }`}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
           onDragOver={(e) => {
             e.preventDefault();
             setDragOver(true);
@@ -1370,6 +1374,10 @@ function RootDropZone({ onUploaded }: { onUploaded: () => void }) {
         }`}>
         <div
           className="flex flex-wrap items-center justify-center gap-3 px-4 py-3"
+          onDragEnter={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
           onDragOver={(e) => {
             e.preventDefault();
             setDragOver(true);
