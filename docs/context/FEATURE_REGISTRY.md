@@ -47,7 +47,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Audit trail | `/audit` | `dashboard` (`audit-logs`) | Implemented | Auth + entity audit logs |
 | Settings (tenant) | `/settings` | `settings` | Implemented | Pricing rules, shipping profiles |
 | Storage / image assets | — | `storage` | Implemented | S3 + thumbnails + cleanup |
-| Image Drive (file manager) | `/image-drive` | `storage` (`image-drive.*`) | Implemented | Google Drive-style folder browser; S3-backed; auto-generates thumb/medium WebP variants; optional part-number linking for auto-attach to listings; search, bulk delete, file preview lightbox, copy URL, download, pagination, sort options |
+| Image Drive (file manager) | `/image-drive` | `storage` (`image-drive.*`) | Implemented | Google Drive-style folder browser; S3-backed; auto-generates thumb/medium WebP variants; optional part-number linking for auto-attach to listings; recursive drag/drop folder upload maps likely part-number subfolders and preserves nested paths; pipeline auto-attaches matched images to missing listing/catalog image fields; search, bulk delete, file preview lightbox, copy URL, download, pagination, sort options |
 | Published listings CSV export | (in published listings page) | `published-listings` | Implemented | `published_listings.export` permission; exports filtered results as CSV |
 | Feature flags | — | `common/feature-flags` | Partial | Admin-gated; route on `/api/api/feature-flags` ⚠️ |
 | Health checks | — | `health` | Implemented | `@Public()` |

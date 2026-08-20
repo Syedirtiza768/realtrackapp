@@ -29,6 +29,7 @@ import {
   listFiles,
   uploadToFolder,
   uploadAutoCreate,
+  uploadFolder,
   deleteFile,
   bulkDeleteFiles,
   searchDrive,
@@ -36,6 +37,12 @@ import {
   type DriveFolderEntry,
   type DriveFileEntry,
 } from '../../lib/imageDriveApi';
+import {
+  collectDroppedImageDriveFiles,
+  getImageDriveRootFolderName,
+  toImageDriveFolderFiles,
+  type ImageDriveFolderFile,
+} from '../../lib/imageDriveUpload';
 import OptimizedImage from '../ui/OptimizedImage';
 import ImageZoom from '../ui/ImageZoom';
 
@@ -1080,39 +1087,68 @@ function UploadModal({
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<ImageDriveFolderFile[]>([]);
+  const [isFolderUpload, setIsFolderUpload] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [autoFolderName, setAutoFolderName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleFiles = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files).filter((f) =>
-      f.type.startsWith('image/'),
-    );
-    if (arr.length > 0) {
-      setPendingFiles(arr);
-      if (!autoFolderName && !folderId) {
-        setAutoFolderName(arr[0].name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9\-_ ]/g, ''));
+  const handleFiles = useCallback(
+    (files: ImageDriveFolderFile[]) => {
+      if (files.length === 0) {
+        setError('No supported image files were found in that selection.');
+        return;
       }
-    }
-  }, [autoFolderName, folderId]);
+      const folderSelection = files.some((item) => /[\\/]/.test(item.relativePath));
+      if (folderId && folderSelection) {
+        setError('Folder-tree uploads must start from the Image Drive root.');
+        return;
+      }
+      setPendingFiles(files);
+      setIsFolderUpload(folderSelection);
+      setError(null);
+      if (!autoFolderName && !folderId) {
+        setAutoFolderName(
+          folderSelection
+            ? getImageDriveRootFolderName(files)
+            : files[0].file.name
+                .replace(/\.[^.]+$/, '')
+                .replace(/[^a-zA-Z0-9\-_ ]/g, ''),
+        );
+      }
+    },
+    [autoFolderName, folderId],
+  );
 
   const handleUpload = useCallback(async () => {
     if (pendingFiles.length === 0) return;
     setUploading(true);
     try {
       if (folderId) {
-        await uploadToFolder(folderId, pendingFiles, setProgress);
+        await uploadToFolder(
+          folderId,
+          pendingFiles.map((item) => item.file),
+          setProgress,
+        );
+      } else if (isFolderUpload) {
+        await uploadFolder(pendingFiles, setProgress);
       } else {
         if (!autoFolderName.trim()) return;
-        await uploadAutoCreate(autoFolderName, pendingFiles, undefined, setProgress);
+        await uploadAutoCreate(
+          autoFolderName,
+          pendingFiles.map((item) => item.file),
+          undefined,
+          setProgress,
+        );
       }
       onUploaded();
     } catch (err) {
-      console.error('Upload failed:', err);
+      setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
-  }, [folderId, autoFolderName, pendingFiles, onUploaded]);
+  }, [folderId, autoFolderName, isFolderUpload, pendingFiles, onUploaded]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -1126,12 +1162,18 @@ function UploadModal({
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
               Folder Name
             </label>
-            <input
-              value={autoFolderName}
-              onChange={(e) => setAutoFolderName(e.target.value)}
-              placeholder="Enter folder name for auto-create"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-            />
+            {isFolderUpload ? (
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {autoFolderName} · part-number subfolders will be linked automatically
+              </p>
+            ) : (
+              <input
+                value={autoFolderName}
+                onChange={(e) => setAutoFolderName(e.target.value)}
+                placeholder="Enter folder name for auto-create"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+              />
+            )}
           </div>
         )}
 
@@ -1149,13 +1191,18 @@ function UploadModal({
           onDrop={(e) => {
             e.preventDefault();
             setDragOver(false);
-            handleFiles(e.dataTransfer.files);
+            void collectDroppedImageDriveFiles(e.dataTransfer)
+              .then(handleFiles)
+              .catch((err) => {
+                setError(err instanceof Error ? err.message : 'Unable to read that folder.');
+              });
           }}
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload className="mb-2 h-8 w-8 text-slate-400" />
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Drag and drop images here or click to browse
+            {!folderId && ' · folders are supported from the root'}
           </p>
           <input
             ref={fileInputRef}
@@ -1163,14 +1210,50 @@ function UploadModal({
             multiple
             accept="image/*"
             className="hidden"
-            onChange={(e) => e.target.files && handleFiles(e.target.files)}
+            onChange={(e) => {
+              if (e.target.files) handleFiles(toImageDriveFolderFiles(e.target.files));
+              e.target.value = '';
+            }}
           />
+          {!folderId && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                folderInputRef.current?.click();
+              }}
+              className="mt-3 rounded border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-700 dark:text-blue-300"
+            >
+              Choose a folder
+            </button>
+          )}
+          {!folderId && (
+            <input
+              ref={(element) => {
+                folderInputRef.current = element;
+                element?.setAttribute('webkitdirectory', '');
+                element?.setAttribute('directory', '');
+              }}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) handleFiles(toImageDriveFolderFiles(e.target.files));
+                e.target.value = '';
+              }}
+            />
+          )}
         </div>
 
         {pendingFiles.length > 0 && (
           <div className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-            {pendingFiles.length} file(s) selected
+            {pendingFiles.length} image(s) selected
+            {isFolderUpload && ' · part-number subfolders will be linked automatically'}
           </div>
+        )}
+
+        {error && (
+          <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
 
         {uploading && (
@@ -1210,94 +1293,179 @@ function UploadModal({
 
 function RootDropZone({ onUploaded }: { onUploaded: () => void }) {
   const [dragOver, setDragOver] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<ImageDriveFolderFile[]>([]);
+  const [isFolderUpload, setIsFolderUpload] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleFiles = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files).filter((f) =>
-      f.type.startsWith('image/'),
-    );
-    if (arr.length > 0) {
-      setPendingFiles(arr);
-      if (!folderName) {
-        setFolderName(arr[0].name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9\-_ ]/g, ''));
+  const handleFiles = useCallback(
+    (files: ImageDriveFolderFile[]) => {
+      if (files.length === 0) {
+        setError('No supported image files were found in that selection.');
+        return;
       }
-    }
-  }, [folderName]);
+
+      const folderSelection = files.some((item) => /[\\/]/.test(item.relativePath));
+      setPendingFiles(files);
+      setIsFolderUpload(folderSelection);
+      setError(null);
+      setFolderName(
+        folderSelection
+          ? getImageDriveRootFolderName(files)
+          : files[0].file.name
+              .replace(/\.[^.]+$/, '')
+              .replace(/[^a-zA-Z0-9\-_ ]/g, ''),
+      );
+    },
+    [],
+  );
+
+  const handleDroppedFiles = useCallback(
+    async (dataTransfer: DataTransfer) => {
+      try {
+        handleFiles(await collectDroppedImageDriveFiles(dataTransfer));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to read that folder.');
+      }
+    },
+    [handleFiles],
+  );
 
   const handleUpload = useCallback(async () => {
     if (pendingFiles.length === 0 || !folderName.trim()) return;
     setUploading(true);
+    setError(null);
     try {
-      await uploadAutoCreate(folderName, pendingFiles, undefined, setProgress);
+      if (isFolderUpload) {
+        await uploadFolder(pendingFiles, setProgress);
+      } else {
+        await uploadAutoCreate(
+          folderName,
+          pendingFiles.map((item) => item.file),
+          undefined,
+          setProgress,
+        );
+      }
       setPendingFiles([]);
+      setIsFolderUpload(false);
       setFolderName('');
       onUploaded();
     } catch (err) {
-      console.error('Upload failed:', err);
+      setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
-  }, [folderName, pendingFiles, onUploaded]);
+  }, [folderName, isFolderUpload, pendingFiles, onUploaded]);
 
   if (pendingFiles.length === 0) {
     return (
-      <div
-        className={`fixed bottom-0 left-0 right-0 z-40 border-t-2 border-dashed transition ${
+      <div className={`fixed bottom-0 left-0 right-0 z-40 border-t-2 border-dashed transition ${
           dragOver
             ? 'border-blue-500 bg-blue-50/90 dark:bg-blue-900/30'
-            : 'border-transparent'
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          handleFiles(e.dataTransfer.files);
-        }}
-      >
-        {dragOver && (
-          <div className="flex items-center justify-center py-8">
-            <p className="text-lg font-medium text-blue-600">
-              Drop files to create a new folder
+            : 'border-slate-200 bg-white/90 dark:border-slate-700 dark:bg-slate-800/90'
+        }`}>
+        <div
+          className="flex flex-wrap items-center justify-center gap-3 px-4 py-3"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            void handleDroppedFiles(e.dataTransfer);
+          }}
+        >
+          <Upload className={`h-4 w-4 ${dragOver ? 'text-blue-600' : 'text-slate-400'}`} />
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            {dragOver ? 'Drop the folder or images to upload' : 'Drop images or a folder here'}
+          </p>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            Choose files
+          </button>
+          <button
+            type="button"
+            onClick={() => folderInputRef.current?.click()}
+            className="rounded border border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/30"
+          >
+            Choose folder
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) handleFiles(toImageDriveFolderFiles(e.target.files));
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={(element) => {
+              folderInputRef.current = element;
+              element?.setAttribute('webkitdirectory', '');
+              element?.setAttribute('directory', '');
+            }}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) handleFiles(toImageDriveFolderFiles(e.target.files));
+              e.target.value = '';
+            }}
+          />
+          {error && (
+            <p className="basis-full text-center text-xs text-red-600 dark:text-red-400">
+              {error}
             </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white p-4 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-      <div className="mx-auto flex max-w-3xl items-center gap-4">
-        <div className="flex-1">
+      <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-4">
+        <div className="min-w-56 flex-1">
           <label className="mb-1 block text-xs font-medium text-slate-500">
-            Folder name
+            {isFolderUpload ? 'Folder upload' : 'Folder name for these images'}
           </label>
-          <input
-            value={folderName}
-            onChange={(e) => setFolderName(e.target.value)}
-            placeholder="Enter folder name"
-            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700"
-          />
+          {isFolderUpload ? (
+            <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+              {folderName} · part-number subfolders will be linked automatically
+            </p>
+          ) : (
+            <input
+              value={folderName}
+              onChange={(e) => setFolderName(e.target.value)}
+              placeholder="Enter folder name"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700"
+            />
+          )}
         </div>
         <div className="text-sm text-slate-500">
-          {pendingFiles.length} file(s)
+          {pendingFiles.length} image{pendingFiles.length === 1 ? '' : 's'}
         </div>
         {uploading && (
           <div className="w-32">
             <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
               <div
-                className="h-full bg-blue-600"
+                className="h-full bg-blue-600 transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
+            <p className="mt-1 text-xs text-slate-500">{progress}%</p>
           </div>
         )}
         <button
@@ -1305,17 +1473,23 @@ function RootDropZone({ onUploaded }: { onUploaded: () => void }) {
           disabled={!folderName.trim() || uploading}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {uploading ? 'Uploading...' : 'Upload'}
+          {uploading ? 'Uploading...' : isFolderUpload ? 'Upload folder' : 'Upload'}
         </button>
         <button
           onClick={() => {
             setPendingFiles([]);
+            setIsFolderUpload(false);
             setFolderName('');
+            setError(null);
           }}
           className="rounded p-1.5 text-slate-400 hover:text-slate-600"
+          disabled={uploading}
         >
           <X className="h-4 w-4" />
         </button>
+        {error && (
+          <p className="basis-full text-xs text-red-600 dark:text-red-400">{error}</p>
+        )}
       </div>
     </div>
   );
