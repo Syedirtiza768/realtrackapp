@@ -20,7 +20,9 @@ function hasFlag(name: string): boolean {
 
 function option(name: string): string | undefined {
   const prefix = `--${name}=`;
-  return process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+  return process.argv
+    .find((arg) => arg.startsWith(prefix))
+    ?.slice(prefix.length);
 }
 
 async function main(): Promise<void> {
