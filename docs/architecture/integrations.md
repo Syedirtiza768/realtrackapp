@@ -105,6 +105,12 @@
   seller title/aspects, verifies again, and only then removes the old offer.
   Listings that eBay reports as genuinely ended are marked `ended` locally
   instead of being represented as an active repaired listing.
+- Pending fitment reprocessing is a durable BullMQ workflow. The maintenance
+  script `backend/src/scripts/queue-pending-fitment-publish.ts --apply` queues
+  every `fitment_status='pending'` product for forced MVL/fitment optimization;
+  the worker publishes only validated rows to already-published eBay channels.
+  Products that remain empty, rejected, or review-only are skipped and remain
+  available for manual review.
 - Reference docs: `docs/EBAY_MULTI_STORE_DEVELOPER_HANDOFF.md`,
   `docs/ebay-multi-store-architecture.md`, `docs/ebay-api-integration-notes.md`,
   `docs/ebay-client-onboarding.md`.

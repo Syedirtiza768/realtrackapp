@@ -40,6 +40,13 @@ for every meaningful change (Continuous Documentation Protocol).
   listings ended locally. Production audit completed with zero remaining
   default candidates.
 
+- **Durable pending-fitment publishing:** Added a BullMQ-backed workflow that
+  reprocesses every pending catalog fitment with forced MVL validation and then
+  synchronizes only validated rows to published eBay channels. Empty,
+  rejected, and review-only results are skipped; the queue is durable across
+  backend restarts. Enqueue with
+  `backend/src/scripts/queue-pending-fitment-publish.ts --apply`.
+
 - **eBay Inventory location reconciliation before publish:** The final eBay publish path now verifies the configured merchant location against the seller's live Inventory API locations before creating an offer. Disabled or missing keys are replaced with an enabled existing location or a provisioned Dubai `AE_Dubai` location, with a short per-store cache to avoid one lookup per listing; repaired marketplace defaults are persisted. This prevents eBay error 25002 (`Location information not found`) when a database key survives deletion or disablement on eBay. Deployed to the production backend on 2026-08-21; Superior Auto Parts is ready for a safe retry.
 
 - **Published-listings sync prune timeout fix (Blackline/SalvageA large stores):** The post-upsert prune step (`markUnseenActiveAsEnded`) was aborting the whole sync with `canceling statement due to statement timeout` on large bloated mirrors (Blackline: 150k active rows across a 1.5GB / 78k-block heap). The `find()` filtered active rows with only the single-column `idx_epl_account` index → a lossy bitmap heap scan reading 88k blocks (~690MB) took ~58s, exceeding the pool's 30s `statement_timeout` (set in `app.module.ts` `extra.statement_timeout`) — and this fired *after* the 124k-row upsert loop had already finished, so every sync since Aug 7 failed at the very end. Fixes: (1) added partial composite index `idx_epl_active_acct_mp_item (ebay_account_id, marketplace_id, ebay_item_id) WHERE listing_status = 'active'` (migration `1790000000000`) so the prune read can be an index-only scan; (2) rewrote the prune to select only index-covered columns + batch-UPDATE unseen rows by `ebay_item_id` via the `uq_epl_account_item` unique index (no full heap scan), wrapped in a transaction with `SET LOCAL statement_timeout = 300s` + `work_mem = 64MB` so it is resilient to heap-bloat / stale visibility maps; (3) ran `VACUUM (ANALYZE, PARALLEL 0)` on the production `ebay_published_listings` table (reclaimed 86,917 dead tuples). Files: `backend/src/published-listings/services/published-listings-sync.service.ts`, `backend/src/migrations/1790000000000-PublishedListingsActiveAcctMpItemIndex.ts`.
