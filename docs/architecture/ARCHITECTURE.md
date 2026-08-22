@@ -124,6 +124,26 @@ legitimate re-queues after a Redis restart or re-import.
 
 External (eBay CDN) image URLs are passed through unchanged — no proxy routing.
 
+### Image Drive Folder-Tree Uploads
+
+The Image Drive UI accepts both the existing flat image upload and a recursive
+folder drop/selection. The browser preserves each file's relative path and
+sends it to `POST /api/image-drive/upload-folder` in chunks of at most 50 files
+(matching the existing multipart limit). The backend normalizes paths, rejects
+absolute/parent-traversal paths, and chooses the deepest directory that looks
+like an automotive part number (at least two normalized characters and one
+digit). Images under that directory are stored in a folder linked to the part
+number; nested paths are retained in the asset filename/S3 key. Files without a
+part-number directory remain in the selected top-level upload folder so no
+images are discarded.
+
+Pipeline finalization already performs Image Drive lookup for missing images by
+manufacturer/OE part number. That lookup now stamps both the missing
+`listing_records.itemPhotoUrl` and the corresponding empty
+`catalog_products.imageUrls`, and records attachment counts in the pipeline
+job's `stageDetails.imageDrive` object. Existing flat uploads, manually linked
+folders, and non-empty image fields are not overwritten.
+
 ## Backend Modules (23)
 
 Registered in `backend/src/app.module.ts`: `auth`, `rbac`, `listings`, `health`, `storage`, `ingestion`, `catalog-import`, `fitment`, `channels`, `inventory`, `orders`, `dashboard`, `settings`, `notifications`, `common/scheduler`, `common/feature-flags`, `automation`, `templates`, `motors-intelligence`, `common/openai`, `pricing-intelligence`, `integrations/ebay`, `client-settings`. Note: `listing-optimization` is imported transitively via `ingestion`, and `sellerpundit` is imported transitively via `integrations/ebay`.

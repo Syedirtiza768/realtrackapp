@@ -300,6 +300,12 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
     'published_listings',
     READ_ONLY,
   ),
+  p(
+    'published_listings.export',
+    'Export published listings as CSV',
+    'published_listings',
+    READ_ONLY,
+  ),
 
   // ── Settings (tenant operational) ──
   p('settings.view', 'View settings', 'settings', READ_ONLY),

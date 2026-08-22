@@ -137,6 +137,7 @@ src/components/
 ├── preview/            # Preview
 │   ├── EbayPreviewPage.tsx   # eBay listing preview; edit mode uses RichTextDescriptionEditor for seller description
 │   └── EditListingPanel.tsx
+├── image-drive/        # Image Drive folder browser and recursive image upload
 └── channels/           # Channels
     ├── PublishModal.tsx        # eBay multi-store publish — store selection only, hands off to PublishProgressPanel
     └── EbayOAuthCallback.tsx
@@ -166,10 +167,13 @@ src/components/
 | `pricingApi.ts` | Pricing | `/api/pricing` |
 | `templateApi.ts` | Templates | `/api/templates` |
 | `pipelineApi.ts` | Pipeline | `/api/pipeline` |
+| `imageDriveApi.ts` | Image Drive folder/file CRUD, flat uploads, and chunked folder-tree uploads | `/api/image-drive` |
 | `listingGenerationApi.ts` | AI generation | `/api/listings` |
 | `rbacApi.ts` | RBAC admin | `/api/rbac` |
 | `clientBrandingApi.ts` | Client branding | `/api/client-settings` |
 | `searchApi.ts` | Search | `/api/listings` |
+
+| `imageDriveUpload.ts` | Browser folder traversal and relative-path/image filtering helpers | — |
 
 ### Core Utilities
 

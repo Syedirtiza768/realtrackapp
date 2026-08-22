@@ -49,7 +49,7 @@ Grouped by module:
 | ingestion | `IngestionJob`, `PipelineJob`, `AiResult` |
 | motors-intelligence | `MotorsProduct`, `ProductCandidate`, `ExtractedAttribute`, `ValidationResult`, `ReviewTask`, `ListingGeneration`, `CorrectionRule`, `EbayAspectRequirement`, `EbayCategoryMapping`, `MotorsFeedbackLog` |
 | channels | `ChannelConnection`, `ChannelListing`, `ChannelWebhookLog`, `ListingChannelInstance`, `Store`, `AiEnhancement`, `DemoSimulationLog` |
-| integrations/ebay | `ConnectedEbayAccount`, `EbayAccountMarketplace`, `EbayOauthToken`, `EbayBusinessPolicy`, `EbayListingJob`, `EbayListingJobTarget`, `EbayListingChannel`, `EbayListingSyncLog`, `EbayApiAuditLog`, `EbayApiError`, `InternalStore`, `InventoryMovement`, `ListingActionLog`, `ListingStoreOverride` |
+| integrations/ebay | `ConnectedEbayAccount`, `EbayAccountMarketplace`, `EbayOauthToken`, `EbayBusinessPolicy`, `EbayHostedImage`, `EbayListingJob`, `EbayListingJobTarget`, `EbayListingChannel`, `EbayListingSyncLog`, `EbayApiAuditLog`, `EbayApiError`, `InternalStore`, `InventoryMovement`, `ListingActionLog`, `ListingStoreOverride` |
 | inventory | `InventoryEvent`, `InventoryLedger`, `StoreInventoryAllocation` |
 | orders | `Order`, `OrderItem` |
 | dashboard | `AuditLog`, `DashboardCache`, `SalesRecord` |
@@ -149,6 +149,13 @@ Grouped by module:
 
 #### `internal_stores`
 `id`, `connectedEbayAccountId` FK, `name`, `storeType`, `marketplaceId`, `isDefault`, `settings` (jsonb)
+
+#### `ebay_hosted_images`
+Store-scoped mapping from a source image URL to the eBay Picture Services URL
+used by Inventory API and SellerPundit publishes. The unique
+`(store_id, source_url)` key prevents repeated uploads; `expiration_date`
+tracks eBay's unused-image expiration response so stale cache entries can be
+replaced.
 
 ### Orders Module
 

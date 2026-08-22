@@ -40,9 +40,18 @@ function mockInventoryApi() {
     getCompatibility: jest
       .fn()
       .mockImplementation(() => Promise.resolve(compatibility)),
+    deleteCompatibility: jest.fn().mockImplementation(() => {
+      compatibility = { compatibleProducts: [] };
+      return Promise.resolve(undefined);
+    }),
+    getOffer: jest.fn().mockResolvedValue({ offerId: 'offer-123' }),
     withdrawOffer: jest.fn().mockResolvedValue(undefined),
     bulkUpdatePriceQuantity: jest.fn().mockResolvedValue(undefined),
-    ensureMerchantLocation: jest.fn().mockResolvedValue('default-loc'),
+    ensureMerchantLocation: jest
+      .fn()
+      .mockImplementation((_storeId, preferredKey) =>
+        Promise.resolve(preferredKey ?? 'default-loc'),
+      ),
     getOffersBySku: jest.fn().mockResolvedValue({ offers: [] }),
   };
 }
@@ -54,6 +63,16 @@ function mockAuth() {
     getApiConfig: jest
       .fn()
       .mockReturnValue({ baseUrl: 'https://api.ebay.com', sandbox: false }),
+  };
+}
+
+function mockEbayMediaApi() {
+  return {
+    hostImages: jest
+      .fn()
+      .mockImplementation((_storeId: string, imageUrls: string[]) =>
+        Promise.resolve(imageUrls.map((url) => `https://i.ebayimg.com/hosted${url}`)),
+      ),
   };
 }
 
@@ -93,6 +112,8 @@ describe('EbayPublishService', () => {
   let ebayCategoryRepo: ReturnType<typeof createRepo>;
   let inventoryApi: ReturnType<typeof mockInventoryApi>;
   let auth: ReturnType<typeof mockAuth>;
+  let ebayMedia: ReturnType<typeof mockEbayMediaApi>;
+  let marketplaceConfig: { require: jest.Mock };
   let taxonomyApi: {
     getCompatibilityProperties: jest.Mock;
     getCategorySubtree: jest.Mock;
@@ -108,6 +129,15 @@ describe('EbayPublishService', () => {
     ebayCategoryRepo = createRepo();
     inventoryApi = mockInventoryApi();
     auth = mockAuth();
+    ebayMedia = mockEbayMediaApi();
+    marketplaceConfig = {
+      require: jest.fn().mockImplementation((marketplaceId: string) => ({
+        currency: marketplaceId === 'EBAY_DE' ? 'EUR' : 'USD',
+        locale: marketplaceId === 'EBAY_DE' ? 'de_DE' : 'en_US',
+        categoryTreeId: marketplaceId === 'EBAY_DE' ? '77' : '0',
+        supportsMotorsFitment: marketplaceId !== 'EBAY_DE',
+      })),
+    };
     taxonomyApi = {
       getCompatibilityProperties: jest.fn().mockResolvedValue([]),
       getCategorySubtree: jest.fn().mockRejectedValue(new Error('not cached')),
@@ -140,14 +170,7 @@ describe('EbayPublishService', () => {
       {
         resolveMarketplaceForAccount: jest.fn().mockReturnValue('EBAY_US'),
       } as any,
-      {
-        require: jest.fn().mockReturnValue({
-          currency: 'USD',
-          locale: 'en_US',
-          categoryTreeId: '0',
-          supportsMotorsFitment: true,
-        }),
-      } as any,
+      marketplaceConfig as any,
       {} as any, // mvlService
       storeRepo,
       connectedAccountRepo,
@@ -156,6 +179,7 @@ describe('EbayPublishService', () => {
       listingRepo,
       catalogRepo,
       ebayCategoryRepo,
+      ebayMedia as any,
     );
   });
 
@@ -196,6 +220,33 @@ describe('EbayPublishService', () => {
       expect(inventoryApi.createOrReplaceItem).toHaveBeenCalled();
       expect(inventoryApi.createOffer).toHaveBeenCalled();
       expect(inventoryApi.publishOffer).toHaveBeenCalled();
+      expect(ebayMedia.hostImages).toHaveBeenCalledWith(
+        'store-1',
+        ['https://img.example.com/1.jpg'],
+      );
+      expect(
+        inventoryApi.createOrReplaceItem.mock.calls[0][2].product.imageUrls,
+      ).toEqual(['https://i.ebayimg.com/hostedhttps://img.example.com/1.jpg']);
+    });
+
+    it('does not publish a store when eBay image hosting fails', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US' },
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      ebayMedia.hostImages.mockRejectedValueOnce(
+        new Error('eBay Picture Services unavailable'),
+      );
+
+      const results = await svc.publish(validRequest());
+
+      expect(results[0]).toMatchObject({
+        success: false,
+        error: 'eBay Picture Services unavailable',
+      });
+      expect(inventoryApi.createOrReplaceItem).not.toHaveBeenCalled();
     });
 
     it('resolves a Motors parent category to a verified leaf before creating the offer', async () => {
@@ -228,12 +279,10 @@ describe('EbayPublishService', () => {
         },
       });
 
-      const results = await svc.publish(
-        validRequest({ categoryId: '33707' }),
-      );
+      const results = await svc.publish(validRequest({ categoryId: '33707' }));
 
       expect(results[0].success).toBe(true);
-      const offer = (inventoryApi.createOffer as jest.Mock).mock.calls[0][1];
+      const offer = inventoryApi.createOffer.mock.calls[0][1];
       expect(offer.categoryId).toBe('33716');
     });
 
@@ -258,12 +307,10 @@ describe('EbayPublishService', () => {
         optimizationPayload: {},
       });
 
-      const results = await svc.publish(
-        validRequest({ categoryId: '33707' }),
-      );
+      const results = await svc.publish(validRequest({ categoryId: '33707' }));
 
       expect(results[0].success).toBe(true);
-      const offer = (inventoryApi.createOffer as jest.Mock).mock.calls[0][1];
+      const offer = inventoryApi.createOffer.mock.calls[0][1];
       expect(offer.categoryId).toBe('9886');
       expect(catalogRepo.update).toHaveBeenCalledWith(
         'catalog-1',
@@ -419,6 +466,39 @@ describe('EbayPublishService', () => {
           ],
         },
       );
+    });
+
+    it('omits compatibility for a marketplace that does not support Motors fitment', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'German Store',
+        config: { marketplace: 'EBAY_DE', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue(null);
+
+      await svc.publish(
+        validRequest({
+          compatibility: {
+            compatibleProducts: [
+              {
+                compatibilityProperties: [
+                  { name: 'Make', value: 'Mini' },
+                  { name: 'Model', value: 'Cooper' },
+                  { name: 'Year', value: '2018' },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(inventoryApi.setCompatibility).not.toHaveBeenCalled();
+      expect(inventoryApi.publishOffer).toHaveBeenCalled();
     });
 
     it('blocks a fitment-capable Motors category when structured rows are missing', async () => {
@@ -736,6 +816,37 @@ describe('EbayPublishService', () => {
       expect(result.paymentPolicyId).toBe('20000000002');
       expect(result.returnPolicyId).toBe('20000000003');
       expect(mpRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('revalidates a persisted eBay location key before publishing', async () => {
+      const mpRow = {
+        enabled: true,
+        defaultInventoryLocationKey: 'stale-location',
+        defaultFulfillmentPolicyId: '10000000001',
+        defaultPaymentPolicyId: '10000000002',
+        defaultReturnPolicyId: '10000000003',
+      };
+      mpRepo.findOne = jest.fn().mockResolvedValue(mpRow);
+      inventoryApi.ensureMerchantLocation.mockResolvedValue('AE_Dubai');
+
+      const result = await (svc as any).enrichPoliciesFromMarketplace(
+        account,
+        store,
+        validRequest({
+          merchantLocationKey: 'stale-location',
+          fulfillmentPolicyId: '10000000001',
+          paymentPolicyId: '10000000002',
+          returnPolicyId: '10000000003',
+        }),
+      );
+
+      expect(inventoryApi.ensureMerchantLocation).toHaveBeenCalledWith(
+        'store-1',
+        'stale-location',
+      );
+      expect(result.merchantLocationKey).toBe('AE_Dubai');
+      expect(mpRow.defaultInventoryLocationKey).toBe('AE_Dubai');
+      expect(mpRepo.save).toHaveBeenCalledWith(mpRow);
     });
 
     it('blocks a missing named profile instead of using the default', async () => {

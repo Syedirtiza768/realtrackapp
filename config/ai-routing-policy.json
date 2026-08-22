@@ -1,6 +1,6 @@
 {
-  "version": 18,
-  "generatedAt": "2026-08-14T02:00:00.040Z",
+  "version": 19,
+  "generatedAt": "2026-08-15T02:00:00.023Z",
   "canaryPercent": 10,
   "source": "optimizer",
   "segments": {

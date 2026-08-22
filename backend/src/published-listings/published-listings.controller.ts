@@ -7,7 +7,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
@@ -57,6 +59,27 @@ export class PublishedListingsController {
       query.organizationId,
     );
     return this.listings.list(organizationId, user, query);
+  }
+
+  @Get('export')
+  @RequirePermissions('published_listings.export')
+  @ApiOperation({ summary: 'Export published listings as CSV' })
+  async exportCsv(
+    @Query() query: PublishedListingsQueryDto,
+    @Res() res: Response,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId } = await this.permissions.resolveOrganization(
+      user.id,
+      query.organizationId,
+    );
+    const csv = await this.listings.exportCsv(organizationId, user, query);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.set({
+      'Content-Type': 'text/csv',
+      'Content-Disposition': `attachment; filename="published-listings-export-${dateStr}.csv"`,
+    });
+    res.send(csv);
   }
 
   @Get('summary')

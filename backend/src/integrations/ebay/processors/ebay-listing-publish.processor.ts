@@ -33,6 +33,16 @@ export function isTransientPublishFailure(message: string): boolean {
   ].some((marker) => normalized.includes(marker));
 }
 
+/**
+ * Extract the existing eBay item ID from a duplicate-listing response.
+ * Only parse messages that explicitly identify an existing eBay listing so
+ * unrelated numeric values in API errors cannot be treated as item IDs.
+ */
+export function extractExistingEbayListingId(message: string): string | null {
+  if (!/already have on eBay/i.test(message)) return null;
+  return message.match(/\((\d{9,})\)/)?.[1] ?? null;
+}
+
 @Processor('ebay-listing-publish', { concurrency: 5 })
 export class EbayListingPublishProcessor extends WorkerHost {
   private readonly logger = new Logger(EbayListingPublishProcessor.name);
@@ -217,6 +227,40 @@ export class EbayListingPublishProcessor extends WorkerHost {
         await this.channelRepo.save(ch);
       } else {
         const message = r?.error ?? 'Publish failed';
+        const existingListingId = extractExistingEbayListingId(message);
+        if (existingListingId) {
+          const existingChannel = await this.channelRepo.findOne({
+            where: {
+              ebayAccountId,
+              marketplaceId: target.marketplaceId,
+              listingId: existingListingId,
+              listingStatus: 'published',
+            },
+          });
+          if (existingChannel) {
+            await this.targetRepo.update(target.id, {
+              status: 'skipped',
+              resultPayload: {
+                ...(target.resultPayload ?? {}),
+                listingId: existingListingId,
+                duplicateExistingListingId: existingListingId,
+                duplicateExistingChannelId: existingChannel.id,
+                warnings: [
+                  ...(Array.isArray(target.resultPayload?.warnings)
+                    ? target.resultPayload.warnings
+                    : []),
+                  'Skipped duplicate publish because the matching eBay listing is already published on this account.',
+                ],
+              },
+              errorPayload: null,
+            });
+            this.logger.warn(
+              `Skipped duplicate publish target ${target.id}: eBay listing ${existingListingId} is already published in channel ${existingChannel.id}`,
+            );
+            await this.refreshJobStatus(listingJob.id);
+            return;
+          }
+        }
         const maxAttempts = job.opts.attempts ?? 1;
         if (
           isTransientPublishFailure(message) &&

@@ -47,6 +47,16 @@ import type {
 export class EbayInventoryApiService {
   private readonly logger = new Logger(EbayInventoryApiService.name);
   private readonly http: AxiosInstance;
+  /**
+   * Inventory locations are account-level resources, not listing-level
+   * resources. Cache a verified key briefly so a 500-item publish does not
+   * issue one identical GET /location request per listing.
+   */
+  private readonly verifiedLocationCache = new Map<
+    string,
+    { merchantLocationKey: string; expiresAt: number }
+  >();
+  private readonly verifiedLocationCacheTtlMs = 5 * 60 * 1000;
 
   constructor(
     private readonly auth: EbayAuthService,
@@ -429,17 +439,39 @@ export class EbayInventoryApiService {
       store,
       preferredKey,
     );
+    const cacheKey = `${storeId}:${keyHint}`;
+    const cached = this.verifiedLocationCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.merchantLocationKey;
+    }
 
     try {
       const preferred = await this.getLocation(storeId, keyHint);
-      if (preferred?.merchantLocationKey) {
+      if (
+        preferred?.merchantLocationKey &&
+        preferred.merchantLocationStatus !== 'DISABLED'
+      ) {
+        this.rememberVerifiedLocation(cacheKey, preferred.merchantLocationKey);
         return preferred.merchantLocationKey;
       }
 
       const { locations } = await this.getLocations(storeId);
       if (locations.length) {
-        const preferred = pickPreferredInventoryLocationKey(locations, keyHint);
-        if (preferred) return preferred;
+        const preferred = pickPreferredInventoryLocationKey(
+          locations.filter(
+            (location) => location.merchantLocationStatus !== 'DISABLED',
+          ),
+          keyHint,
+        );
+        if (preferred) {
+          if (preferred !== keyHint) {
+            this.logger.warn(
+              `Configured inventory location "${keyHint}" was not usable for store ${storeId}; using existing eBay location "${preferred}"`,
+            );
+          }
+          this.rememberVerifiedLocation(cacheKey, preferred);
+          return preferred;
+        }
       }
 
       const payload = buildDefaultInventoryLocationPayload(
@@ -447,6 +479,7 @@ export class EbayInventoryApiService {
         store,
       );
       await this.createLocation(storeId, keyHint, payload);
+      this.rememberVerifiedLocation(cacheKey, keyHint);
 
       if (store && !store.locationKey) {
         store.locationKey = keyHint;
@@ -464,5 +497,15 @@ export class EbayInventoryApiService {
       );
       return null;
     }
+  }
+
+  private rememberVerifiedLocation(
+    cacheKey: string,
+    merchantLocationKey: string,
+  ): void {
+    this.verifiedLocationCache.set(cacheKey, {
+      merchantLocationKey,
+      expiresAt: Date.now() + this.verifiedLocationCacheTtlMs,
+    });
   }
 }

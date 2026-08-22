@@ -34,7 +34,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Orders | `/orders` | `orders` | Implemented | eBay order import |
 | eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth |
 | eBay store detail / policies | `/settings/integrations/ebay/:id[/policies]` | `integrations/ebay` | Partial | Business-policy mapping/sync |
-| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Implemented | Durable jobs support 500 listings/action and 5,000 listing/store targets/day; exact source listing/title preserved; named row policies resolve per target and fail closed on mismatch; structured fitment write/readback required |
+| eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Implemented | Durable jobs support 500 listings/action and 5,000 listing/store targets/day; exact source listing/title preserved; named row policies resolve per target and fail closed on mismatch; structured fitment is replaced/read back in both Inventory and legacy Trading APIs, including reused-offer cleanup; source-empty/rejected fitment repairs are exact zero-row operations with sibling-SKU audit support and fresh-SKU recovery when eBay retains a stale projection; source images are uploaded to eBay Picture Services and cached per store before publish |
 | eBay OAuth callback | `/channels/ebay/callback` | `integrations/ebay` | Implemented | Public callback |
 | eBay/marketplace preview | `/preview`, `/catalog/products/:id` (edit) | `listings` | Implemented | Listing preview; seller description edits use Visual (WYSIWYG) + HTML toggle (`RichTextDescriptionEditor`) |
 | Channels (multi-marketplace) | — | `channels` | Partial | Shopify/Amazon/Walmart scaffolding |
@@ -47,7 +47,8 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | Audit trail | `/audit` | `dashboard` (`audit-logs`) | Implemented | Auth + entity audit logs |
 | Settings (tenant) | `/settings` | `settings` | Implemented | Pricing rules, shipping profiles |
 | Storage / image assets | — | `storage` | Implemented | S3 + thumbnails + cleanup |
-| Image Drive (file manager) | `/image-drive` | `storage` (`image-drive.*`) | Implemented | Google Drive-style folder browser; S3-backed; auto-generates thumb/medium WebP variants; optional part-number linking for auto-attach to listings; search, bulk delete, file preview lightbox, copy URL, download, pagination, sort options |
+| Image Drive (file manager) | `/image-drive` | `storage` (`image-drive.*`) | Implemented | Google Drive-style folder browser; S3-backed; auto-generates thumb/medium WebP variants; optional part-number linking for auto-attach to listings; recursive drag/drop folder upload maps likely part-number subfolders and preserves nested paths; pipeline auto-attaches matched images to missing listing/catalog image fields; search, bulk delete, file preview lightbox, copy URL, download, pagination, sort options |
+| Published listings CSV export | (in published listings page) | `published-listings` | Implemented | `published_listings.export` permission; exports filtered results as CSV |
 | Feature flags | — | `common/feature-flags` | Partial | Admin-gated; route on `/api/api/feature-flags` ⚠️ |
 | Health checks | — | `health` | Implemented | `@Public()` |
 | Auto category lookup (backfill + import) | — | `catalog-import` (`CategoryLookupService`) | Implemented | eBay Taxonomy API; backfill endpoint + import pipeline hook |
@@ -56,7 +57,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 
 | Status | Count |
 |--------|-------|
-| Implemented | ~25 |
+| Implemented | ~26 |
 | Partial | ~13 |
 | Missing | 0 |
 | Needs Verification | 2 |
@@ -74,4 +75,4 @@ The app shell shows "RealTrackApp"; the login screen / DB name use "ListingPro".
 
 ---
 
-*Reorganized: 2026-06-06. Updated: 2026-06-11.*
+*Reorganized: 2026-06-06. Updated: 2026-08-19.*

@@ -1086,6 +1086,27 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           const driveResults =
             await this.imageDriveService.findByPartNumbers(partNumbersNeeded);
           let driveLinked = 0;
+          let driveCatalogLinked = 0;
+          const driveMatchedParts = new Set<string>();
+          const productsBySku = new Map<string, CatalogProduct>();
+          const productsByPartNumber = new Map<string, CatalogProduct>();
+          for (const product of products) {
+            if (product.sku?.trim()) {
+              productsBySku.set(product.sku.trim(), product);
+            }
+            for (const rawPartNumber of [
+              product.mpn,
+              product.mpnNormalized,
+              product.oemPartNumber,
+            ]) {
+              const normalizedPartNumber = rawPartNumber
+                ? ImageDriveService.normalizePartNumber(rawPartNumber)
+                : '';
+              if (normalizedPartNumber) {
+                productsByPartNumber.set(normalizedPartNumber, product);
+              }
+            }
+          }
 
           for (const listing of stillMissingListings) {
             if (listing.itemPhotoUrl?.trim()) continue;
@@ -1100,12 +1121,36 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             listing.itemPhotoUrl = urls.join('|');
             await this.listingRepo.save(listing);
             driveLinked++;
+            driveMatchedParts.add(normalized);
+
+            const product =
+              productsBySku.get(listing.customLabelSku?.trim() || '') ||
+              productsByPartNumber.get(normalized);
+            if (product && !product.imageUrls?.length) {
+              product.imageUrls = urls;
+              await this.productRepo.save(product);
+              driveCatalogLinked++;
+            }
           }
 
           if (driveLinked > 0) {
             this.logger.log(
-              `Job ${jobId}: Image Drive auto-attached images to ${driveLinked} listing(s)`,
+              `Job ${jobId}: Image Drive auto-attached images for ${driveLinked} listing(s) and ${driveCatalogLinked} catalog product(s) across ${driveMatchedParts.size} part number(s)`,
             );
+          }
+
+          if (driveMatchedParts.size > 0) {
+            const latestJob = await this.jobRepo.findOneBy({ id: jobId });
+            await this.jobRepo.update(jobId, {
+              stageDetails: {
+                ...(latestJob?.stageDetails ?? {}),
+                imageDrive: {
+                  matchedPartNumbers: driveMatchedParts.size,
+                  listingsLinked: driveLinked,
+                  catalogProductsLinked: driveCatalogLinked,
+                },
+              },
+            } as any);
           }
         } catch (err) {
           this.logger.warn(

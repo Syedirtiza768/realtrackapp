@@ -12,6 +12,8 @@ import { ListingRecord } from '../../listings/listing-record.entity.js';
 import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { EbayCategory } from '../../listings/entities/ebay-category.entity.js';
 import { EbayInventoryApiService } from './ebay-inventory-api.service.js';
+import { EbayMediaApiService } from './ebay-media-api.service.js';
+import { EbayCompatibilityReconciliationService } from './ebay-compatibility-reconciliation.service.js';
 import { EbayTaxonomyApiService } from './ebay-taxonomy-api.service.js';
 import { EbayTaxonomyCacheService } from './ebay-taxonomy-cache.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
@@ -225,6 +227,9 @@ export class EbayPublishService {
     private readonly catalogRepo: Repository<CatalogProduct>,
     @InjectRepository(EbayCategory)
     private readonly ebayCategoryRepo: Repository<EbayCategory>,
+    private readonly ebayMedia: EbayMediaApiService,
+    @Optional()
+    private readonly compatibilityReconciler?: EbayCompatibilityReconciliationService,
   ) {}
 
   /**
@@ -487,6 +492,17 @@ export class EbayPublishService {
   }
 
   /**
+   * Resolve the exact compatibility payload used by publishing for a catalog
+   * product. Repair jobs use this entry point so MVL re-validation and its
+   * persistence rules cannot drift from the normal publish path.
+   */
+  async resolveCatalogCompatibility(
+    catalog: CatalogProduct,
+  ): Promise<EbayCompatibilityPayload | undefined> {
+    return this.compatibilityFromCatalog(catalog);
+  }
+
+  /**
    * Re-validate needs_review fitment rows against the MVL DB. Rows whose
    * Make/Model/Year are confirmed valid are promoted and used to build
    * eBay compatibility data.  Updated rows are persisted so subsequent
@@ -594,6 +610,7 @@ export class EbayPublishService {
     const marketplaceId = account
       ? this.resolvePublishMarketplaceId(account, store)
       : resolveMarketplaceId(store);
+
     const marketplace = this.mpConfig.require(marketplaceId);
     if (!marketplace.supportsMotorsFitment) return false;
 
@@ -639,6 +656,57 @@ export class EbayPublishService {
     }
     this.logger.log(
       `Verified ${expected.compatibleProducts.length} structured eBay compatibility row(s) for SKU ${sku}`,
+    );
+  }
+
+  private async syncInventoryCompatibility(
+    storeId: string,
+    req: PublishRequest,
+  ): Promise<void> {
+    if (this.compatibilityReconciler) {
+      await this.compatibilityReconciler.syncInventory(
+        storeId,
+        req.sku,
+        req.compatibility,
+      );
+      return;
+    }
+
+    // Unit-test fallback for direct construction without Nest's provider.
+    if (req.compatibility?.compatibleProducts?.length) {
+      await this.inventoryApi.setCompatibility(
+        storeId,
+        req.sku,
+        req.compatibility,
+      );
+      const persistedCompatibility = await this.inventoryApi.getCompatibility(
+        storeId,
+        req.sku,
+      );
+      this.assertCompatibilityPersisted(
+        req.sku,
+        req.compatibility,
+        persistedCompatibility,
+      );
+      return;
+    }
+
+    await this.inventoryApi.deleteCompatibility(storeId, req.sku);
+  }
+
+  private async reconcileLiveListingCompatibility(
+    storeId: string,
+    itemId: string | undefined,
+    marketplaceId: string,
+    req: PublishRequest,
+  ): Promise<void> {
+    if (!itemId || !this.compatibilityReconciler) return;
+    await this.compatibilityReconciler.syncLiveListing(
+      storeId,
+      itemId,
+      marketplaceId,
+      req.sku,
+      req.compatibility,
     );
   }
 
@@ -1258,6 +1326,24 @@ export class EbayPublishService {
     const marketplaceId = account
       ? this.resolvePublishMarketplaceId(account, store)
       : resolveMarketplaceId(store);
+
+    let hostedImageUrls: string[];
+    try {
+      hostedImageUrls = await this.ebayMedia.hostImages(storeId, req.imageUrls);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `eBay image hosting failed for "${store.storeName}" / SKU ${req.sku}: ${message}`,
+      );
+      return {
+        storeId,
+        storeName: store.storeName,
+        success: false,
+        error: message,
+      };
+    }
+    req = { ...req, imageUrls: hostedImageUrls };
+
     const marketplace = this.mpConfig.require(marketplaceId);
     if (
       !marketplace.supportsMotorsFitment &&
@@ -1305,6 +1391,35 @@ export class EbayPublishService {
     ) {
       const spResult = await this.publishViaSellerpundit(store, account, req);
       if (spResult.success) {
+        try {
+          await this.syncInventoryCompatibility(storeId, req);
+          if (spResult.listingId) {
+            await this.reconcileLiveListingCompatibility(
+              storeId,
+              spResult.listingId,
+              marketplaceId,
+              req,
+            );
+          }
+        } catch (err: unknown) {
+          if (spResult.offerId) {
+            await this.inventoryApi
+              .withdrawOffer(storeId, spResult.offerId)
+              .catch((withdrawErr) =>
+                this.logger.error(
+                  `Could not withdraw SellerPundit offer ${spResult.offerId} after compatibility verification failed`,
+                  withdrawErr,
+                ),
+              );
+          }
+          return this.formatDirectPublishFailure(
+            store,
+            storeId,
+            req,
+            err,
+            account,
+          );
+        }
         return spResult;
       }
       if (shouldFallbackFromSellerpunditBulkCreate(fallbackMode, spResult)) {
@@ -1350,35 +1465,7 @@ export class EbayPublishService {
         req.sku,
         inventoryItem,
       );
-
-      if (req.compatibility?.compatibleProducts?.length) {
-        await this.inventoryApi.setCompatibility(
-          storeId,
-          req.sku,
-          req.compatibility,
-        );
-        const persistedCompatibility = await this.inventoryApi.getCompatibility(
-          storeId,
-          req.sku,
-        );
-        this.assertCompatibilityPersisted(
-          req.sku,
-          req.compatibility,
-          persistedCompatibility,
-        );
-      } else {
-        // Clear stale compatibility from previous publishes to prevent
-        // eBay error 25002 ("All compatibilities are invalid") when
-        // fitment data is missing or marked needs_review/rejected.
-        try {
-          await this.inventoryApi.deleteCompatibility(storeId, req.sku);
-          this.logger.debug(
-            `Cleared stale compatibility for SKU ${req.sku} before publishing without fitment`,
-          );
-        } catch {
-          // No existing compatibility — safe to ignore
-        }
-      }
+      await this.syncInventoryCompatibility(storeId, req);
 
       const offer = this.buildOffer(req, store);
 
@@ -1406,7 +1493,20 @@ export class EbayPublishService {
         inventoryItem,
       );
 
+      const existingOffer = await this.inventoryApi
+        .getOffer(storeId, offerId)
+        .catch(() => undefined);
+      if (existingOffer?.listingId) {
+        await this.reconcileLiveListingCompatibility(
+          storeId,
+          existingOffer.listingId,
+          this.resolvePublishMarketplaceId(account, store),
+          req,
+        );
+      }
+
       let publishResult: EbayPublishResponse;
+      let publishedOfferId = offerId;
       try {
         publishResult = await this.publishOfferWithRetries(
           storeId,
@@ -1470,6 +1570,7 @@ export class EbayPublishService {
               correctedReq.sku,
               correctedItem,
             );
+            await this.syncInventoryCompatibility(storeId, correctedReq);
             const correctedOffer = this.buildOffer(correctedReq, store);
             const freshOfferId = await this.resolveOrCreateOfferId(
               storeId,
@@ -1477,6 +1578,7 @@ export class EbayPublishService {
               store,
               correctedItem,
             );
+            publishedOfferId = freshOfferId;
             publishResult = await this.publishOfferWithRetries(
               storeId,
               freshOfferId,
@@ -1500,6 +1602,8 @@ export class EbayPublishService {
               store,
               inventoryItem,
             );
+            publishedOfferId = freshOfferId;
+            await this.syncInventoryCompatibility(storeId, req);
             publishResult = await this.publishOfferWithRetries(
               storeId,
               freshOfferId,
@@ -1513,11 +1617,30 @@ export class EbayPublishService {
         }
       }
 
+      try {
+        await this.reconcileLiveListingCompatibility(
+          storeId,
+          publishResult.listingId,
+          this.resolvePublishMarketplaceId(account, store),
+          req,
+        );
+      } catch (compatibilityErr: unknown) {
+        await this.inventoryApi
+          .withdrawOffer(storeId, publishedOfferId)
+          .catch((withdrawErr) =>
+            this.logger.error(
+              `Could not withdraw offer ${publishedOfferId} after live compatibility verification failed`,
+              withdrawErr,
+            ),
+          );
+        throw compatibilityErr;
+      }
+
       return {
         storeId,
         storeName: store.storeName,
         success: true,
-        offerId,
+        offerId: publishedOfferId,
         listingId: publishResult.listingId,
       };
     };
@@ -1634,11 +1757,11 @@ export class EbayPublishService {
   }
 
   private resolvePublishMarketplaceId(
-    account: ConnectedEbayAccount,
+    account: ConnectedEbayAccount | null | undefined,
     store: Store,
   ): string {
     const fromStore = resolveMarketplaceId(store);
-    if (account.connectionSource !== 'sellerpundit') return fromStore;
+    if (!account || account.connectionSource !== 'sellerpundit') return fromStore;
     return this.sellerpunditRegistry.resolveMarketplaceForAccount(
       account.sellerpunditAccountName ??
         account.accountDisplayName ??
@@ -1971,7 +2094,18 @@ export class EbayPublishService {
         `return=${returnPolicyId ?? 'NONE'} [${returnSource}]`,
     );
 
-    if (mpRow && merchantLocationKey && !mpRow.defaultInventoryLocationKey) {
+    // A persisted key can outlive the corresponding eBay Inventory
+    // Location. The resolver now verifies/reconciles it before the offer is
+    // built. Persist the repaired key when the request used the marketplace
+    // default, but do not overwrite a listing-specific location override.
+    if (
+      mpRow &&
+      merchantLocationKey &&
+      mpRow.defaultInventoryLocationKey !== merchantLocationKey &&
+      (!mpRow.defaultInventoryLocationKey ||
+        req.merchantLocationKey?.trim() ===
+          mpRow.defaultInventoryLocationKey.trim())
+    ) {
       mpRow.defaultInventoryLocationKey = merchantLocationKey;
       await this.mpRepo.save(mpRow);
     }
@@ -2406,18 +2540,25 @@ export class EbayPublishService {
       }
     }
 
-    if (!merchantLocationKey) {
-      const ensured = await this.inventoryApi.ensureMerchantLocation(
-        store.id,
-        req.merchantLocationKey ?? store.locationKey,
-      );
-      if (ensured) {
-        merchantLocationKey = ensured;
-      } else {
+    // Do not trust a database key blindly. eBay locations can be deleted or
+    // disabled independently of this app, which otherwise produces the
+    // opaque Inventory API error 25002 at offer publish time.
+    const configuredLocationKey = merchantLocationKey;
+    const ensured = await this.inventoryApi.ensureMerchantLocation(
+      store.id,
+      merchantLocationKey ?? req.merchantLocationKey ?? store.locationKey,
+    );
+    if (ensured) {
+      if (configuredLocationKey && configuredLocationKey !== ensured) {
         this.logger.warn(
-          `No inventory location for "${store.storeName}" — map a merchant location key in Settings → eBay Integrations.`,
+          `Reconciled inventory location for "${store.storeName}" from "${configuredLocationKey}" to "${ensured}" before publish`,
         );
       }
+      merchantLocationKey = ensured;
+    } else if (!merchantLocationKey) {
+      this.logger.warn(
+        `No inventory location for "${store.storeName}" — map a merchant location key in Settings → eBay Integrations.`,
+      );
     }
 
     return merchantLocationKey;
@@ -2703,13 +2844,9 @@ export class EbayPublishService {
       // stale compatibility from the inventory item and retrying once.
       if (isEbayInvalidCompatibilitiesError(publishErr)) {
         this.logger.warn(
-          `Publish for offer ${offerId} (SKU ${req.sku}) rejected due to invalid compatibilities — clearing and retrying`,
+          `Publish for offer ${offerId} (SKU ${req.sku}) rejected due to invalid compatibilities — reconciling and retrying`,
         );
-        try {
-          await this.inventoryApi.deleteCompatibility(storeId, req.sku);
-        } catch {
-          // Best-effort cleanup
-        }
+        await this.syncInventoryCompatibility(storeId, req);
         return this.publishOfferWithTitlePropagationRetry(storeId, offerId);
       }
 
@@ -2856,6 +2993,10 @@ export class EbayPublishService {
     const offer: EbayOffer = {
       sku: req.sku,
       marketplaceId: toEbayInventoryApiMarketplaceId(marketplace),
+      // Compatibility is application-owned. eBay defaults this field to true
+      // when omitted, which can add catalog fitment rows that are not present
+      // in our approved catalog/MVL source.
+      includeCatalogProductDetails: false,
       format,
       listingDescription: req.description,
       pricingSummary: {
