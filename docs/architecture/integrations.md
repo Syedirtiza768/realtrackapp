@@ -21,6 +21,12 @@
 - Multi-store: `ebay-multi-store-listing.service.ts`, `InternalStore`,
   `ListingStoreOverride`, `EbayAccountMarketplace`.
 - API audit/error logging: `EbayApiAuditLog`, `EbayApiError`.
+- Listing images are uploaded to eBay Picture Services through
+  `EbayMediaApiService` before either the direct Inventory API or SellerPundit
+  publish path runs. The store-scoped `ebay_hosted_images` cache prevents
+  repeated uploads on retries and ensures published listings do not depend on
+  AWS S3 URLs remaining accessible. If eBay hosting fails, that store's
+  listing is not published with the source URL as a fallback.
 - Durable publish targets retain the original `listing_records.id` in
   `result_payload.sourceListingId`. `CatalogPublishResolverService` therefore
   uses the exact reviewed listing row for title, description, price, quantity,
@@ -75,6 +81,30 @@
   the service reads `product_compatibility` back and verifies all requested
   rows before publishing the offer. Description HTML is never treated as a
   substitute for eBay's structured compatibility section.
+- Compatibility is fail-closed across both eBay representations: before a
+  publish, Inventory API SKU compatibility is replaced or explicitly deleted
+  and read back exactly; after an offer is reused or published, the legacy
+  Trading API `ItemCompatibilityList` is read, replaced with `ReviseItem` and
+  `ReplaceAll=true` when necessary, and read back again. A verification failure
+  withdraws the offer. The one-time repair utility is
+  `backend/src/scripts/repair-ebay-compatibility.ts` (dry-run by default;
+  `--apply` performs eBay and published-listing mirror updates).
+- The compatibility repair utility only treats validated `fitment_data` or
+  accepted `fitment_rows` as a source. Empty, rejected, or review-only catalog
+  data therefore produces the exact correct zero-row compatibility set; title
+  text and description HTML are never used to invent vehicle rows. The default
+  scan is deliberately narrow (published Motors channels with local stale
+  compatibility and no valid catalog source); sibling channels can be audited
+  with `--sku`/`--sku-list`, while `--all-current` requires an explicit
+  confirmation flag.
+- eBay can retain a stale catalog/compatibility projection when an Inventory
+  offer is reused or even recreated under the same SKU. The repair path first
+  tries exact same-SKU replacement, then fails closed to a fresh per-channel
+  SKU: it publishes a neutral item with `includeCatalogProductDetails=false`,
+  verifies zero or the exact requested rows through both APIs, restores the
+  seller title/aspects, verifies again, and only then removes the old offer.
+  Listings that eBay reports as genuinely ended are marked `ended` locally
+  instead of being represented as an active repaired listing.
 - Reference docs: `docs/EBAY_MULTI_STORE_DEVELOPER_HANDOFF.md`,
   `docs/ebay-multi-store-architecture.md`, `docs/ebay-api-integration-notes.md`,
   `docs/ebay-client-onboarding.md`.

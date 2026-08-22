@@ -83,6 +83,18 @@
 
 **Files**: `src/components/catalog/PublishProgressPanel.tsx`, `src/components/catalog/CatalogManager.tsx`
 
+### R19: Stale eBay Inventory Location Keys Caused Publish Error 25002
+
+**Type**: Integration reliability bug
+**Severity**: High
+**Status**: Fix deployed to production (2026-08-21); safe retry ready
+
+**Description**: The publish path trusted `ebay_account_marketplaces.default_inventory_location_key` and only checked eBay for a location when the database value was empty. If eBay deleted or disabled that location independently, offer creation succeeded but `publishOffer` failed for every listing with error 25002: `Location information not found`.
+
+**Resolution**: The final publish boundary now verifies the configured key against eBay, filters disabled locations, selects an enabled existing location or provisions the Dubai default `AE_Dubai`, caches the account-level verification briefly during bulk jobs, and persists a repaired marketplace default. The backend was rebuilt and restarted in production on 2026-08-21; the affected Superior Auto Parts batch is ready for retry.
+
+**Files**: `backend/src/channels/ebay/ebay-inventory-api.service.ts`, `backend/src/channels/ebay/ebay-publish.service.ts`
+
 ### R16: Empty ebay_category_mappings Caused Invalid Category Publishes
 
 **Type**: Bug  

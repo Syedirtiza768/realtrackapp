@@ -13,6 +13,35 @@ for every meaningful change (Continuous Documentation Protocol).
 ## [Unreleased]
 
 ### Changed
+- **eBay-hosted listing images:** The common eBay publish boundary now uploads
+  non-eBay-hosted source images to eBay Picture Services through the Media API
+  before invoking direct Inventory API or SellerPundit publishing. Hosted URLs
+  are cached per eBay store in `ebay_hosted_images`, and a hosting failure
+  fails that store's publish instead of leaving an AWS S3 dependency on the
+  live listing. Added migration `1790100000000-CreateEbayHostedImages`.
+
+- **eBay compatibility stale-row prevention:** Publishing now treats the
+  catalog's validated fitment as the only compatibility source. It explicitly
+  replaces/deletes Inventory API SKU compatibility, verifies the exact rows,
+  reconciles reused legacy listings through Trading API `ReviseItem` with
+  `ReplaceAll=true`, and withdraws a listing when live readback cannot be
+  verified. Added the serial repair utility
+  `backend/src/scripts/repair-ebay-compatibility.ts` for current Motors
+  channels and their published-listing mirrors.
+
+- **eBay stale-fitment repair completion:** Audited all current published
+  Motors channels matching the source-empty/rejected-fitment pattern and
+  repaired their sibling store channels as well. The repairer now has a safe
+  default candidate query, explicit `--sku`/`--sku-list` sibling scope, exact
+  Inventory + buyer-facing Trading readback, and a fresh-SKU recovery for eBay
+  catalog projections that survive same-SKU replacement. Fresh recovery
+  publishes neutrally with catalog-product details disabled, restores seller
+  title/aspects only after zero-row verification, and marks genuinely ended
+  listings ended locally. Production audit completed with zero remaining
+  default candidates.
+
+- **eBay Inventory location reconciliation before publish:** The final eBay publish path now verifies the configured merchant location against the seller's live Inventory API locations before creating an offer. Disabled or missing keys are replaced with an enabled existing location or a provisioned Dubai `AE_Dubai` location, with a short per-store cache to avoid one lookup per listing; repaired marketplace defaults are persisted. This prevents eBay error 25002 (`Location information not found`) when a database key survives deletion or disablement on eBay. Deployed to the production backend on 2026-08-21; Superior Auto Parts is ready for a safe retry.
+
 - **Published-listings sync prune timeout fix (Blackline/SalvageA large stores):** The post-upsert prune step (`markUnseenActiveAsEnded`) was aborting the whole sync with `canceling statement due to statement timeout` on large bloated mirrors (Blackline: 150k active rows across a 1.5GB / 78k-block heap). The `find()` filtered active rows with only the single-column `idx_epl_account` index → a lossy bitmap heap scan reading 88k blocks (~690MB) took ~58s, exceeding the pool's 30s `statement_timeout` (set in `app.module.ts` `extra.statement_timeout`) — and this fired *after* the 124k-row upsert loop had already finished, so every sync since Aug 7 failed at the very end. Fixes: (1) added partial composite index `idx_epl_active_acct_mp_item (ebay_account_id, marketplace_id, ebay_item_id) WHERE listing_status = 'active'` (migration `1790000000000`) so the prune read can be an index-only scan; (2) rewrote the prune to select only index-covered columns + batch-UPDATE unseen rows by `ebay_item_id` via the `uq_epl_account_item` unique index (no full heap scan), wrapped in a transaction with `SET LOCAL statement_timeout = 300s` + `work_mem = 64MB` so it is resilient to heap-bloat / stale visibility maps; (3) ran `VACUUM (ANALYZE, PARALLEL 0)` on the production `ebay_published_listings` table (reclaimed 86,917 dead tuples). Files: `backend/src/published-listings/services/published-listings-sync.service.ts`, `backend/src/migrations/1790000000000-PublishedListingsActiveAcctMpItemIndex.ts`.
 
 - **All users can publish to all stores:** Publish-related permissions (`listings.publish`, `listings.approve`, `listings.revise`, `channels.publish`, `ebay.publish`, `published_listings.sync`, `published_listings.manage`, `published_listings.bulk`) now default to `READ_ONLY` — granted to every human system role (super_admin, admin, manager, staff, supervisor, catalog_manager, listing_manager, ops_user, listing_user, viewer). The machine role `api_published_listings_reader` remains read-only. `listings.delete` and `listings.price_override` stay restricted. On the US production instance, all active users were also set to `store_access_all = true` so the store-access gate no longer scopes them to assigned stores. Applied via `permission-registry.ts` (rebuilt backend image) + direct `role_permissions` insert for the customized `staff` role (skipped by boot-sync). See `docs/architecture/AUTH_RBAC.md` → Publish policy.

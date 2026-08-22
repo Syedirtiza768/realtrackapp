@@ -97,6 +97,8 @@ export interface EbayOffer {
   };
   /** Listing duration (e.g. 'GTC' for Good 'Til Cancelled) */
   listingDuration?: string;
+  /** Whether eBay catalog product details should be copied into the listing. */
+  includeCatalogProductDetails?: boolean;
   /** eBay-format vehicle compatibility */
   compatibility?: EbayCompatibilityPayload;
 }

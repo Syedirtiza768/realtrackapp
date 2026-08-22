@@ -80,3 +80,7 @@ is a shell deploy helper. nginx config also at repo-root `nginx.conf`.
 ## Operational runbook
 
 Step-by-step deploy/rollback: [/docs/operations/deployment-runbook.md](../operations/deployment-runbook.md).
+
+The eBay inventory-location reconciliation fix was deployed to the production
+backend with a backend-only Docker rebuild on 2026-08-21; the production health
+endpoint and running compiled markers were verified afterward.
