@@ -87,14 +87,15 @@
   the service reads `product_compatibility` back and verifies all requested
   rows before publishing the offer. Description HTML is never treated as a
   substitute for eBay's structured compatibility section.
-- Compatibility is fail-closed across both eBay representations: before a
-  publish, Inventory API SKU compatibility is replaced or explicitly deleted
-  and read back exactly; after an offer is reused or published, the legacy
-  Trading API `ItemCompatibilityList` is read, replaced with `ReviseItem` and
-  `ReplaceAll=true` when necessary, and read back again. A verification failure
-  withdraws the offer. The one-time repair utility is
-  `backend/src/scripts/repair-ebay-compatibility.ts` (dry-run by default;
-  `--apply` performs eBay and published-listing mirror updates).
+- Compatibility is fail-closed across the Inventory API representation: before
+  a publish, Inventory API SKU compatibility is replaced or explicitly deleted
+  and read back exactly; after an offer is reused or published, the Inventory
+  offer is refreshed with `updateOffer` and verified again. Normal publishing
+  does not call Trading API `ReviseItem` for Inventory-managed listings. A
+  verification failure withdraws the offer. Trading read/replace remains an
+  explicit legacy-repair path in `backend/src/scripts/repair-ebay-compatibility.ts`
+  (dry-run by default; `--apply` performs eBay and published-listing mirror
+  updates).
 - eBay returns error `21919474` when Trading API `ReviseItem` is attempted on
   an Inventory-managed listing, and can return `21919233` when a legacy
   compatibility projection exceeds its category limit. Both are handled as

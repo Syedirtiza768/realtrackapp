@@ -204,7 +204,9 @@ describe('EbayPublishService', () => {
     ebayMedia = mockEbayMediaApi();
     compatibilityReconciler = {
       syncInventory: jest.fn().mockImplementation((storeId, sku, payload) =>
-        inventoryApi.setCompatibility(storeId, sku, payload),
+        payload
+          ? inventoryApi.setCompatibility(storeId, sku, payload)
+          : inventoryApi.deleteCompatibility(storeId, sku),
       ),
       refreshPublishedOffer: jest.fn().mockResolvedValue('listing-456'),
       syncLiveListing: jest.fn(),

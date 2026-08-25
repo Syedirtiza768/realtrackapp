@@ -51,6 +51,37 @@ describe('EbayCompatibilityReconciliationService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('refreshes an Inventory offer without calling the Trading revise path', async () => {
+    const inventory = {
+      getOffer: jest.fn().mockResolvedValue({
+        offerId: 'offer-1',
+        listingId: 'listing-1',
+        status: 'PUBLISHED',
+      }),
+      updateOffer: jest.fn().mockResolvedValue(undefined),
+    };
+    const trading = { replaceItemCompatibility: jest.fn() };
+    const service = new EbayCompatibilityReconciliationService(
+      inventory as any,
+      trading as any,
+    );
+    const expected = { compatibleProducts: [row('2018')] };
+
+    await expect(
+      service.refreshPublishedOffer('store-1', 'offer-1', 'SKU-1', expected),
+    ).resolves.toBe('listing-1');
+
+    expect(inventory.updateOffer).toHaveBeenCalledWith(
+      'store-1',
+      'offer-1',
+      expect.objectContaining({
+        includeCatalogProductDetails: false,
+        compatibility: expected,
+      }),
+    );
+    expect(trading.replaceItemCompatibility).not.toHaveBeenCalled();
+  });
+
   it('revises a legacy listing and verifies the Trading API readback', async () => {
     const inventory = {};
     const trading = {

@@ -57,8 +57,10 @@ for every meaningful change (Continuous Documentation Protocol).
 
 - **Inventory-managed compatibility repair:** eBay Trading `ReviseItem` error
   `21919474` is now treated as a non-writable legacy projection for
-  Inventory-managed listings. Inventory compatibility and offer readback
-  remain authoritative; unrelated Trading API failures still fail closed.
+  Inventory-managed listings. Normal publishing refreshes the Inventory offer
+  instead of attempting Trading `ReviseItem`; Inventory compatibility and offer
+  readback remain authoritative, while unrelated Trading API failures in the
+  explicit repair path still fail closed.
   Added the dry-run-by-default `backend/src/scripts/repair-add-part-ebay.ts`
     runner with audited scope, canary offset, canonical identity checks,
     per-store failure accounting, and fresh/noncanonical SKU exclusions.
@@ -84,12 +86,12 @@ for every meaningful change (Continuous Documentation Protocol).
   fails that store's publish instead of leaving an AWS S3 dependency on the
   live listing. Added migration `1790100000000-CreateEbayHostedImages`.
 
-- **eBay compatibility stale-row prevention:** Publishing now treats the
+- **eBay compatibility stale-row prevention:** Publishing treats the
   catalog's validated fitment as the only compatibility source. It explicitly
   replaces/deletes Inventory API SKU compatibility, verifies the exact rows,
-  reconciles reused legacy listings through Trading API `ReviseItem` with
-  `ReplaceAll=true`, and withdraws a listing when live readback cannot be
-  verified. Added the serial repair utility
+  refreshes Inventory API offers, and withdraws a listing when live readback
+  cannot be verified. Explicit legacy repair uses Trading API `ReviseItem` with
+  `ReplaceAll=true`. Added the serial repair utility
   `backend/src/scripts/repair-ebay-compatibility.ts` for current Motors
   channels and their published-listing mirrors.
 
