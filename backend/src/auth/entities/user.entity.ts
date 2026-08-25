@@ -27,7 +27,7 @@ export class User {
   @Column({ type: 'boolean', default: true })
   active: boolean;
 
-  @Column({ name: 'store_access_all', type: 'boolean', default: false })
+  @Column({ name: 'store_access_all', type: 'boolean', default: true })
   storeAccessAll: boolean;
 
   @Column({ type: 'timestamptz', nullable: true })

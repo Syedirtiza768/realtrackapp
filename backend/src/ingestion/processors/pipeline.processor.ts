@@ -33,6 +33,7 @@ import {
   buildActiveIdBySku,
   routePipelineListingRecords,
 } from '../utils/pipeline-listing-routing.util.js';
+import { resolvePipelineProjectRoot } from '../utils/pipeline-paths.util.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -177,9 +178,8 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
     await this.updateStatus(jobId, 'uploading');
 
-    // Resolve paths — PIPELINE_PROJECT_ROOT is set in Docker; falls back to cwd/.. for bare-metal
-    const projectRoot =
-      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    // Resolve paths across Docker (/app) and local backend/ working directories.
+    const projectRoot = resolvePipelineProjectRoot();
     const scriptPath = path.resolve(
       projectRoot,
       'scripts',
@@ -253,8 +253,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   private async runResumeImport(jobId: string): Promise<void> {
     this.logger.log(`Resuming catalog import for job=${jobId}`);
 
-    const projectRoot =
-      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const projectRoot = resolvePipelineProjectRoot();
     const outputDir = path.resolve(
       projectRoot,
       'output',

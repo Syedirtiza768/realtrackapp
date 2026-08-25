@@ -36,6 +36,11 @@ Four Docker Compose services (`docker-compose.yml`):
 - Backend container: `NODE_ENV=production`, `IGNORE_ENV_FILE=true` (config comes
   from compose `environment`, not a mounted `.env`), `PORT=4191`,
   `PIPELINE_PROJECT_ROOT=/app`.
+- Pipeline path resolution validates that the configured root contains
+  `scripts/ebay-enrichment-pipeline.mjs`; if the variable is missing or stale,
+  it falls back to the backend working directory and then its parent. This
+  keeps Docker runs rooted at `/app` and local `backend/` runs rooted at the
+  repository checkout.
 - `NODE_OPTIONS=--max-old-space-size=1536` (default, AWS t3.medium / 4 GB RAM) —
   large CSV catalog imports load the file into the V8 heap. Raise on larger
   instances (e.g. `3072` on t3.large). Includes IPv4-first DNS for Docker.

@@ -26,6 +26,13 @@ export const ROLE_SLUGS = {
 
 export type RoleSlug = (typeof ROLE_SLUGS)[keyof typeof ROLE_SLUGS];
 
+/** Publish permissions intentionally granted to every RBAC role. */
+export const ALL_USERS_PUBLISH_PERMISSION_KEYS = [
+  'listings.publish',
+  'channels.publish',
+  'ebay.publish',
+] as const;
+
 /** Maps legacy users.role column values to RBAC role slugs. */
 export const LEGACY_USER_ROLE_TO_SLUG: Record<string, RoleSlug> = {
   admin: ROLE_SLUGS.ADMIN,

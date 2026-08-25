@@ -19,6 +19,10 @@ import { DuplicateDetectionService } from '../services/duplicate-detection.servi
 import { EbayComplianceService } from '../services/ebay-compliance.service.js';
 import { CategoryLookupService } from '../services/category-lookup.service.js';
 import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
+import {
+  isSingleImageBrand,
+  selectPrimaryImageForBrand,
+} from '../../channels/ebay/ebay-listing-images.util.js';
 
 export interface CsvImportJobData {
   importId: string;
@@ -1046,6 +1050,9 @@ export class CsvImportProcessor extends WorkerHost {
         .map((u) => u.trim())
         .filter(Boolean);
     }
+    if (isSingleImageBrand(brand)) {
+      imageUrls = selectPrimaryImageForBrand(imageUrls, brand);
+    }
 
     // Parse price
     let price: number | null = null;
@@ -1167,7 +1174,12 @@ export class CsvImportProcessor extends WorkerHost {
       pEpid: data['epid'] || null,
       startPrice: startPriceText,
       quantity: quantityText,
-      itemPhotoUrl: data['imageUrls'] || null,
+      itemPhotoUrl: isSingleImageBrand(data['brand'])
+        ? selectPrimaryImageForBrand(
+            [data['imageUrls'] ?? ''],
+            data['brand'],
+          ).join('|') || null
+        : data['imageUrls'] || null,
       conditionId: data['conditionId'] || null,
       description: data['description'] || null,
       format: data['format'] || null,

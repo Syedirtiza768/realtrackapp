@@ -124,6 +124,15 @@ legitimate re-queues after a Redis restart or re-import.
 
 External (eBay CDN) image URLs are passed through unchanged — no proxy routing.
 
+For FEBI/Febi Bilstein and Lemförder products, the catalog import and eBay
+publish boundary reduce the source gallery to one primary image. eBay URLs with
+embedded dimensions are ranked by resolution (including `s-l` size URLs); S3 or
+other URLs without dimension metadata retain their source order. The published
+listings API and future published-listings syncs apply the same brand-specific
+selection so redundant galleries do not return to the application view. This
+does not revise already-live eBay offers; existing live galleries require an
+explicit, separately audited marketplace update.
+
 ### Image Drive Folder-Tree Uploads
 
 The Image Drive UI accepts both the existing flat image upload and a recursive

@@ -148,6 +148,16 @@ export function isEbayOfferAlreadyExistsError(err: unknown): boolean {
   return /offer entity already exists/i.test(formatEbayApiError(err, ''));
 }
 
+/** True when eBay blocks a new offer because an identical active listing exists (errorId 25002). */
+export function isEbayDuplicateActiveListingError(err: unknown): boolean {
+  const formatted = formatEbayApiError(err, '');
+  return (
+    /already have on eBay/i.test(formatted) ||
+    /identical items from the same seller/i.test(formatted) ||
+    /don't allow listings for identical items/i.test(formatted)
+  );
+}
+
 /** True when publish failed due to invalid item condition for the category (errorId 25021). */
 export function isEbayInvalidItemConditionError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -324,4 +334,30 @@ export function isEbayTitleMissingTransientError(err: unknown): boolean {
   }
   const formatted = formatEbayApiError(err, '');
   return /seller provided title value is missing/i.test(formatted);
+}
+
+/**
+ * True when eBay has accepted a just-written inventory item but has not yet
+ * made its availability visible to the publish validator (error 25604).
+ * Treat this as a short read-after-write propagation delay; callers must still
+ * cap retries and verify the final published projection.
+ */
+export function isEbayAvailabilityMissingTransientError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const bodies: unknown[] = [
+    (err as { response?: { data?: unknown } }).response?.data,
+    err,
+  ];
+  for (const body of bodies) {
+    if (!body || typeof body !== 'object') continue;
+    const errors = (body as { errors?: EbayErrorRow[] }).errors;
+    if (!Array.isArray(errors)) continue;
+    for (const e of errors) {
+      if (String(e.errorId) === '25604') return true;
+      const msg = e.longMessage ?? e.message ?? '';
+      if (/availability not found/i.test(msg)) return true;
+    }
+  }
+  const formatted = formatEbayApiError(err, '');
+  return /availability not found/i.test(formatted);
 }

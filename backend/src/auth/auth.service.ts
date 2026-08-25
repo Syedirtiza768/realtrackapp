@@ -96,6 +96,7 @@ export class AuthService {
       passwordHash,
       name: name ?? null,
       role: 'user',
+      storeAccessAll: true,
     });
     const saved = await this.userRepo.save(user);
     await this.userOrgs.ensureDefaultForUser(saved.id);

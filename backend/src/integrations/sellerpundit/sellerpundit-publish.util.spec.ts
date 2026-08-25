@@ -64,6 +64,22 @@ describe('isSellerpunditRecoverableEbayPublishError', () => {
       ),
     ).toBe(true);
   });
+
+  it('falls back for inventory-managed Trading ReviseItem errors', () => {
+    expect(
+      isSellerpunditRecoverableEbayPublishError(
+        'ReviseItem failed (21919474): Inventory-based listing management is not currently supported by this tool',
+      ),
+    ).toBe(true);
+  });
+
+  it('falls back for Trading compatibility-limit errors', () => {
+    expect(
+      isSellerpunditRecoverableEbayPublishError(
+        'ReviseItem failed (21919233): Listing has exceeded the maximum compatibilities allowed for this listing category',
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('shouldFallbackFromSellerpunditBulkCreate', () => {
@@ -93,6 +109,16 @@ describe('shouldFallbackFromSellerpunditBulkCreate', () => {
         platformError: true,
       }),
     ).toBe(false);
+  });
+
+  it('falls back for legacy Trading errors even in sellerpundit-only mode', () => {
+    expect(
+      shouldFallbackFromSellerpunditBulkCreate('sellerpundit', {
+        success: false,
+        error:
+          'ReviseItem failed (21919474): Inventory-based listing management is not currently supported',
+      }),
+    ).toBe(true);
   });
 
   it('does not fall back on P&A return policy errors in auto mode', () => {

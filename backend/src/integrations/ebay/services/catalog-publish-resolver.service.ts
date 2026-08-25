@@ -4,7 +4,12 @@ import { Repository } from 'typeorm';
 import { CatalogProduct } from '../../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../../storage/entities/image-asset.entity.js';
-import { sanitizeEbayImageUrls } from '../../../channels/ebay/ebay-listing-images.util.js';
+import {
+  flattenImageUrlInputs,
+  isSingleImageBrand,
+  sanitizeEbayImageUrls,
+  selectPrimaryImageForBrand,
+} from '../../../channels/ebay/ebay-listing-images.util.js';
 
 /** Filter out S3 temp-path URLs that may have been deleted after cleanup.
  *  Returns only durable URLs (catalog-images/, originals/, etc). If all URLs
@@ -109,12 +114,20 @@ export class CatalogPublishResolverService {
       );
     }
 
-    const imageUrls = await this.resolveImageUrls(
+    const imageBrand = resolvedFromListingId
+      ? (listingRecord?.cBrand ?? catalogProduct?.brand)
+      : (catalogProduct?.brand ?? listingRecord?.cBrand);
+    const resolvedImageUrls = await this.resolveImageUrls(
       catalogProduct,
       listingRecord,
       warnings,
       resolvedFromListingId,
+      imageBrand,
     );
+
+    const imageUrls = isSingleImageBrand(imageBrand)
+      ? selectPrimaryImageForBrand(resolvedImageUrls, imageBrand)
+      : resolvedImageUrls;
 
     const preferListing = <T>(
       listingValue: T | null | undefined,
@@ -176,6 +189,7 @@ export class CatalogPublishResolverService {
     listingRecord: ListingRecord | null,
     warnings: string[],
     preferListingRecord = false,
+    brandOrTitle?: string | null,
   ): Promise<string[]> {
     const candidates: string[] = [];
 
@@ -229,7 +243,14 @@ export class CatalogPublishResolverService {
       }
     }
 
-    const sanitized = sanitizeEbayImageUrls(candidates);
+    const sanitized = sanitizeEbayImageUrls(
+      candidates,
+      isSingleImageBrand(brandOrTitle)
+        ? {
+            maxImages: Math.max(flattenImageUrlInputs(candidates).length, 1),
+          }
+        : undefined,
+    );
     warnings.push(...sanitized.warnings);
     return sanitized.imageUrls;
   }
@@ -253,9 +274,10 @@ export class CatalogPublishResolverService {
       );
     }
 
-    const imageUrls = sanitizeEbayImageUrls(
-      filterTempUrls(listing.itemPhotoUrl),
-    ).imageUrls;
+    const listingImages = filterTempUrls(listing.itemPhotoUrl);
+    const imageUrls = isSingleImageBrand(listing.cBrand)
+      ? selectPrimaryImageForBrand(listingImages, listing.cBrand)
+      : sanitizeEbayImageUrls(listingImages).imageUrls;
 
     const title =
       listing.title?.trim() ||
@@ -298,9 +320,10 @@ export class CatalogPublishResolverService {
     warnings: string[],
   ): Promise<CatalogProduct> {
     let dirty = false;
-    const listingImages = sanitizeEbayImageUrls(
-      filterTempUrls(listing.itemPhotoUrl),
-    ).imageUrls;
+    const rawListingImages = filterTempUrls(listing.itemPhotoUrl);
+    const listingImages = isSingleImageBrand(listing.cBrand)
+      ? selectPrimaryImageForBrand(rawListingImages, listing.cBrand)
+      : sanitizeEbayImageUrls(rawListingImages).imageUrls;
 
     if (!product.imageUrls?.length && listingImages.length) {
       product.imageUrls = listingImages;

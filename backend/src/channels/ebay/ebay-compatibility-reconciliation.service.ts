@@ -15,11 +15,24 @@ import { EbayInventoryApiService } from './ebay-inventory-api.service.js';
 import { EbayTradingApiService } from './ebay-trading-api.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
 import { EbaySellAccountApiService } from '../../integrations/ebay/services/ebay-sell-account-api.service.js';
+import { conflictSafeSkuFor } from './ebay-sku.util.js';
 
 export interface EbayFreshOfferRecovery {
   sku: string;
   offerId: string;
   listingId: string;
+}
+
+export interface EbayFreshOfferCanonicalSource {
+  item: EbayInventoryItem;
+  offer?: Partial<EbayOffer>;
+}
+
+function normalizeDescription(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
 }
 
 /**
@@ -161,9 +174,14 @@ export class EbayCompatibilityReconciliationService {
     offerId: string,
     sku: string,
     payload?: EbayCompatibilityPayload | null,
+    canonicalSource?: EbayFreshOfferCanonicalSource,
   ): Promise<string> {
-    const [item, offer, offerPage] = await Promise.all([
-      this.inventoryApi.getItem(storeId, sku),
+    if (!canonicalSource?.item) {
+      throw new BadRequestException(
+        `Cannot recreate SKU ${sku} without a canonical source inventory item.`,
+      );
+    }
+    const [offer, offerPage] = await Promise.all([
       this.inventoryApi.getOffer(storeId, offerId),
       this.inventoryApi.getOffersBySku(storeId, sku, 100, 0),
     ]);
@@ -183,6 +201,7 @@ export class EbayCompatibilityReconciliationService {
       storeId,
       offer.marketplaceId,
     );
+    const canonicalOffer = canonicalSource.offer ?? {};
 
     if (offer.status === 'PUBLISHED') {
       await this.inventoryApi.withdrawOffer(storeId, offerId);
@@ -190,46 +209,105 @@ export class EbayCompatibilityReconciliationService {
     await this.inventoryApi.deleteOffer(storeId, offerId);
     await this.inventoryApi.deleteItem(storeId, sku);
 
-    await this.inventoryApi.createOrReplaceItem(
-      storeId,
-      sku,
-      this.inventoryItemPayloadForWrite(item),
-    );
-    await this.syncInventory(storeId, sku, payload);
+    let createdOfferId: string | null = null;
+    let createdItem = false;
+    try {
+      await this.inventoryApi.createOrReplaceItem(
+        storeId,
+        sku,
+        this.inventoryItemPayloadForWrite(canonicalSource.item),
+      );
+      createdItem = true;
+      await this.syncInventory(storeId, sku, payload);
 
     const offerPayload: EbayOffer = {
       sku,
-      marketplaceId: offer.marketplaceId,
-      format: offer.format,
-      listingDescription: offer.listingDescription,
-      availableQuantity: offer.availableQuantity,
-      categoryId: offer.categoryId,
-      merchantLocationKey: offer.merchantLocationKey,
-      pricingSummary: offer.pricingSummary,
+      marketplaceId: canonicalOffer.marketplaceId ?? offer.marketplaceId,
+      format: canonicalOffer.format ?? offer.format,
+      listingDescription:
+        canonicalOffer.listingDescription ?? offer.listingDescription,
+      availableQuantity:
+        canonicalOffer.availableQuantity ?? offer.availableQuantity,
+      categoryId: canonicalOffer.categoryId ?? offer.categoryId,
+      merchantLocationKey:
+        canonicalOffer.merchantLocationKey ?? offer.merchantLocationKey,
+      pricingSummary: canonicalOffer.pricingSummary ?? offer.pricingSummary,
       listingPolicies,
-      tax: offer.tax,
-      listingDuration: offer.listingDuration,
+      tax: canonicalOffer.tax ?? offer.tax,
+      listingDuration: canonicalOffer.listingDuration ?? offer.listingDuration,
       // eBay defaults this to true when omitted. The application owns the
       // exact compatibility list, so catalog-derived fitment must be off.
       includeCatalogProductDetails: false,
       compatibility: expected,
     };
-    const created = await this.inventoryApi.createOffer(storeId, {
-      ...offerPayload,
-    });
-    const result = await this.inventoryApi.publishOffer(
-      storeId,
-      created.offerId,
-    );
-    if (!result.listingId) {
-      throw new BadRequestException(
-        `eBay did not return a listing ID while recreating SKU ${sku}.`,
-      );
+    if (canonicalOffer.listingPolicies) {
+      offerPayload.listingPolicies = canonicalOffer.listingPolicies;
     }
-    this.logger.log(
-      `Recreated Inventory API offer ${created.offerId} as listing ${result.listingId} for SKU ${sku}`,
-    );
-    return result.listingId;
+      const created = await this.inventoryApi.createOffer(storeId, {
+        ...offerPayload,
+      });
+      createdOfferId = created.offerId;
+      const result = await this.inventoryApi.publishOffer(
+        storeId,
+        created.offerId,
+      );
+      if (!result.listingId) {
+        throw new BadRequestException(
+          `eBay did not return a listing ID while recreating SKU ${sku}.`,
+        );
+      }
+      await this.verifyLiveListing(
+        storeId,
+        result.listingId,
+        offer.marketplaceId,
+        sku,
+        expected,
+      );
+      await this.verifyFreshProjection(
+        storeId,
+        sku,
+        created.offerId,
+        this.inventoryItemPayloadForWrite(canonicalSource.item),
+        offerPayload,
+      );
+      this.logger.log(
+        `Recreated Inventory API offer ${created.offerId} as listing ${result.listingId} for SKU ${sku}`,
+      );
+      return result.listingId;
+    } catch (error: unknown) {
+      // The original offer/item were already removed before recreation. Never
+      // leave a newly-created published offer or partial item untracked when
+      // Trading or Inventory verification fails.
+      try {
+        if (createdOfferId) {
+          const createdOffer = await this.inventoryApi
+            .getOffer(storeId, createdOfferId)
+            .catch(() => null);
+          if (createdOffer?.status === 'PUBLISHED') {
+            await this.inventoryApi.withdrawOffer(storeId, createdOfferId);
+          }
+          await this.inventoryApi.deleteOffer(storeId, createdOfferId);
+        }
+        if (createdItem) {
+          const remaining = await this.inventoryApi.getOffersBySku(
+            storeId,
+            sku,
+            100,
+            0,
+          );
+          if (remaining.total === 0) {
+            await this.inventoryApi.deleteItem(storeId, sku);
+          }
+        }
+      } catch (cleanupError: unknown) {
+        this.logger.error(
+          `Failed to clean up failed same-SKU recreation for ${sku}: ${
+            cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+          }`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**
@@ -241,15 +319,27 @@ export class EbayCompatibilityReconciliationService {
    *
    * If the caller's offer ID is already stale, use the sole currently
    * published offer for the SKU. This covers interrupted prior recoveries.
+   * `canonicalSource.item` must be built from the canonical local listing
+   * source. It is required because the remote item under `sku` may belong to
+   * another part; `canonicalSource.offer` can supply the canonical buyer-
+   * facing description and policy/location projection as well.
    */
   async recreatePublishedOfferWithFreshSku(
     storeId: string,
     offerId: string,
     sku: string,
     payload?: EbayCompatibilityPayload | null,
+    canonicalSource?: EbayFreshOfferCanonicalSource,
+    replacementSku?: string,
   ): Promise<EbayFreshOfferRecovery> {
     const expected = this.normalize(payload);
-    const item = await this.inventoryApi.getItem(storeId, sku);
+    if (!canonicalSource?.item) {
+      throw new BadRequestException(
+        `Cannot recover SKU ${sku} with a fresh eBay SKU without a canonical ` +
+          'source inventory item. The remote item is not trusted after a SKU collision.',
+      );
+    }
+    const item = this.inventoryItemPayloadForWrite(canonicalSource.item);
     let sourceOffer: EbayOffer;
     let sourceOfferId = offerId;
     try {
@@ -274,32 +364,44 @@ export class EbayCompatibilityReconciliationService {
       storeId,
       sourceOffer.marketplaceId,
     );
-    const freshSku = this.freshInventorySku(sku);
+    const freshSku = this.freshInventorySku(sku, replacementSku);
+    await this.assertFreshSkuAvailable(storeId, freshSku);
     const finalItem = {
       ...this.inventoryItemPayloadForWrite(item),
       sku: freshSku,
     };
     const neutralItem = this.neutralizeCatalogIdentifiers(finalItem);
+    const canonicalOffer = canonicalSource.offer ?? {};
     const offerPayload: EbayOffer = {
       sku: freshSku,
-      marketplaceId: sourceOffer.marketplaceId,
-      format: sourceOffer.format,
-      listingDescription: sourceOffer.listingDescription,
-      availableQuantity: sourceOffer.availableQuantity ?? 1,
-      categoryId: sourceOffer.categoryId,
-      merchantLocationKey: sourceOffer.merchantLocationKey,
-      pricingSummary: sourceOffer.pricingSummary,
+      marketplaceId: canonicalOffer.marketplaceId ?? sourceOffer.marketplaceId,
+      format: canonicalOffer.format ?? sourceOffer.format,
+      listingDescription:
+        canonicalOffer.listingDescription ?? sourceOffer.listingDescription,
+      availableQuantity:
+        canonicalOffer.availableQuantity ?? sourceOffer.availableQuantity ?? 1,
+      categoryId: canonicalOffer.categoryId ?? sourceOffer.categoryId,
+      merchantLocationKey:
+        canonicalOffer.merchantLocationKey ?? sourceOffer.merchantLocationKey,
+      pricingSummary: canonicalOffer.pricingSummary ?? sourceOffer.pricingSummary,
       listingPolicies,
-      tax: sourceOffer.tax,
-      listingDuration: sourceOffer.listingDuration,
+      tax: canonicalOffer.tax ?? sourceOffer.tax,
+      listingDuration: canonicalOffer.listingDuration ?? sourceOffer.listingDuration,
       includeCatalogProductDetails: false,
       compatibility: expected,
     };
+    if (canonicalOffer.listingPolicies) {
+      offerPayload.listingPolicies = canonicalOffer.listingPolicies;
+    }
 
+    let createdFreshOfferId: string | null = null;
+    let createdFreshItem = false;
     try {
       await this.inventoryApi.createOrReplaceItem(storeId, freshSku, neutralItem);
+      createdFreshItem = true;
       await this.syncInventory(storeId, freshSku, expected);
       const created = await this.inventoryApi.createOffer(storeId, offerPayload);
+      createdFreshOfferId = created.offerId;
       const published = await this.inventoryApi.publishOffer(
         storeId,
         created.offerId,
@@ -316,7 +418,6 @@ export class EbayCompatibilityReconciliationService {
         freshSku,
         expected,
       );
-
       await this.inventoryApi.createOrReplaceItem(storeId, freshSku, finalItem);
       await this.inventoryApi.updateOffer(storeId, created.offerId, {
         ...offerPayload,
@@ -329,6 +430,13 @@ export class EbayCompatibilityReconciliationService {
         sourceOffer.marketplaceId,
         freshSku,
         expected,
+      );
+      await this.verifyFreshProjection(
+        storeId,
+        freshSku,
+        created.offerId,
+        finalItem,
+        offerPayload,
       );
 
       if (sourceOffer.status === 'PUBLISHED') {
@@ -368,14 +476,18 @@ export class EbayCompatibilityReconciliationService {
           100,
           0,
         );
-        for (const freshOffer of freshOffers.offers) {
-          if (!freshOffer.offerId) continue;
-          if (freshOffer.status === 'PUBLISHED') {
-            await this.inventoryApi.withdrawOffer(storeId, freshOffer.offerId);
+        const ownedOffer = createdFreshOfferId
+          ? freshOffers.offers.find((candidate) => candidate.offerId === createdFreshOfferId)
+          : null;
+        if (ownedOffer?.offerId) {
+          if (ownedOffer.status === 'PUBLISHED') {
+            await this.inventoryApi.withdrawOffer(storeId, ownedOffer.offerId);
           }
-          await this.inventoryApi.deleteOffer(storeId, freshOffer.offerId);
+          await this.inventoryApi.deleteOffer(storeId, ownedOffer.offerId);
         }
-        await this.inventoryApi.deleteItem(storeId, freshSku);
+        if (createdFreshItem && freshOffers.total === 0) {
+          await this.inventoryApi.deleteItem(storeId, freshSku);
+        }
       } catch (cleanupErr: unknown) {
         this.logger.warn(
           `Fresh SKU cleanup failed for ${freshSku}: ${
@@ -384,6 +496,60 @@ export class EbayCompatibilityReconciliationService {
         );
       }
       throw err;
+    }
+  }
+
+  private async verifyFreshProjection(
+    storeId: string,
+    sku: string,
+    offerId: string,
+    expectedItem: EbayInventoryItem,
+    expectedOffer: EbayOffer,
+  ): Promise<void> {
+    const [actualItem, actualOffer] = await Promise.all([
+      this.inventoryApi.getItem(storeId, sku),
+      this.inventoryApi.getOffer(storeId, offerId),
+    ]);
+    if (actualItem.product.title?.trim() !== expectedItem.product.title?.trim()) {
+      throw new BadRequestException(
+        `Fresh-SKU title verification failed for ${sku}.`,
+      );
+    }
+    if (
+      (actualItem.product.imageUrls ?? []).length !==
+      (expectedItem.product.imageUrls ?? []).length
+    ) {
+      throw new BadRequestException(
+        `Fresh-SKU image verification failed for ${sku}.`,
+      );
+    }
+    if (
+      normalizeDescription(actualItem.product.description) !==
+      normalizeDescription(expectedItem.product.description)
+    ) {
+      throw new BadRequestException(
+        `Fresh-SKU description verification failed for ${sku}.`,
+      );
+    }
+    for (const key of [
+      'fulfillmentPolicyId',
+      'paymentPolicyId',
+      'returnPolicyId',
+    ] as const) {
+      const expectedId = expectedOffer.listingPolicies?.[key];
+      if (expectedId && actualOffer.listingPolicies?.[key] !== expectedId) {
+        throw new BadRequestException(
+          `Fresh-SKU ${key} verification failed for ${sku}.`,
+        );
+      }
+    }
+    if (
+      expectedOffer.merchantLocationKey &&
+      actualOffer.merchantLocationKey !== expectedOffer.merchantLocationKey
+    ) {
+      throw new BadRequestException(
+        `Fresh-SKU location verification failed for ${sku}.`,
+      );
     }
   }
 
@@ -482,7 +648,46 @@ export class EbayCompatibilityReconciliationService {
       : base;
   }
 
-  private freshInventorySku(sourceSku: string): string {
+  private async assertFreshSkuAvailable(storeId: string, sku: string): Promise<void> {
+    const [offers, itemExists] = await Promise.all([
+      this.inventoryApi.getOffersBySku(storeId, sku, 100, 0),
+      this.inventoryApi
+        .getItem(storeId, sku)
+        .then(() => true)
+        .catch((error: unknown) => {
+          if (this.isNotFound(error)) return false;
+          throw error;
+        }),
+    ]);
+    if (offers.total > 0 || offers.offers.length > 0 || itemExists) {
+      const offerIds = offers.offers
+        .map((offer) => offer.offerId)
+        .filter(Boolean)
+        .join(',') || 'none';
+      throw new BadRequestException(
+        `Cannot recover with eBay SKU ${sku}: an inventory item or offer already exists; ` +
+          `the replacement was not attempted (item=${itemExists}, offers=${offers.total}, offerIds=${offerIds}).`,
+      );
+    }
+  }
+
+  private freshInventorySku(sourceSku: string, requestedSku?: string): string {
+    const requested = requestedSku?.trim();
+    if (requested) {
+      if (!/^[A-Za-z0-9._-]{1,50}$/.test(requested)) {
+        throw new BadRequestException(
+          `Replacement eBay SKU ${requested} is invalid; use 1-50 letters, numbers, dot, underscore, or hyphen.`,
+        );
+      }
+      if (requested === sourceSku) {
+        throw new BadRequestException(
+          `Replacement eBay SKU ${requested} is the same as the source SKU; a fresh recovery requires a different SKU.`,
+        );
+      }
+      return requested;
+    }
+    const deterministic = conflictSafeSkuFor(sourceSku);
+    if (deterministic) return deterministic;
     const base = sourceSku.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 34);
     return `${base || 'EBAY-FITMENT'}-FF-${Date.now().toString(36)}`.slice(
       0,

@@ -14,6 +14,7 @@
  * and must not be fanned out in parallel against the same eBay account.
  */
 import 'reflect-metadata';
+import { BadRequestException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Repository } from 'typeorm';
@@ -39,6 +40,7 @@ interface RepairTarget {
   offerId: string | null;
   publishedListingId: string | null;
   catalogProductId: string;
+  sourceListingId: string | null;
   title: string;
   fitmentStatus: string | null;
   fitmentData: Record<string, unknown>[] | null;
@@ -151,6 +153,7 @@ async function main(): Promise<void> {
           elc.offer_id AS "offerId",
           epl.id AS "publishedListingId",
           cp.id AS "catalogProductId",
+          source_listing.id AS "sourceListingId",
           cp.title,
           cp.fitment_status AS "fitmentStatus",
           cp.fitment_data AS "fitmentData",
@@ -159,6 +162,15 @@ async function main(): Promise<void> {
         FROM ebay_listing_channels elc
         JOIN catalog_products cp ON cp.id = elc.catalog_product_id
         JOIN connected_ebay_accounts ca ON ca.id = elc.ebay_account_id
+        LEFT JOIN LATERAL (
+          SELECT lr.id
+          FROM listing_records lr
+          WHERE lr.origin = 'add_part'
+            AND lr."customLabelSku" = cp.sku
+            AND lr."deletedAt" IS NULL
+          ORDER BY lr."updatedAt" DESC NULLS LAST, lr."importedAt" DESC NULLS LAST
+          LIMIT 1
+        ) source_listing ON TRUE
         LEFT JOIN ebay_published_listings epl
           ON epl.ebay_account_id = elc.ebay_account_id
          AND epl.marketplace_id = elc.marketplace_id
@@ -212,13 +224,29 @@ async function main(): Promise<void> {
         let verifiedSku = target.sku;
         let verifiedOfferId = target.offerId;
         if (target.offerId) {
+          const getCanonicalRecoverySource = async () => {
+            if (!target.sourceListingId) {
+              throw new BadRequestException(
+                `Recovery for ${label} requires a canonical Add Part source row; ` +
+                  'the remote item is not trusted.',
+              );
+            }
+            const canonical =
+              await publishService.buildCanonicalRecoveryProjection(
+                target.sourceListingId,
+                target.storeId,
+              );
+            return { item: canonical.item, offer: canonical.offer };
+          };
           const recoverWithFreshSku = async (): Promise<void> => {
+            const canonical = await getCanonicalRecoverySource();
             const fresh =
               await reconciler.recreatePublishedOfferWithFreshSku(
                 target.storeId,
                 verifiedOfferId ?? target.offerId!,
                 verifiedSku,
                 expected,
+                canonical,
               );
             verifiedSku = fresh.sku;
             verifiedOfferId = fresh.offerId;
@@ -291,6 +319,7 @@ async function main(): Promise<void> {
                 target.offerId,
                 target.sku,
                 expected,
+                await getCanonicalRecoverySource(),
               );
               await reconciler.verifyLiveListing(
                 target.storeId,

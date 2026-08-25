@@ -211,7 +211,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
           });
         }
         ch.internalSku = built.publishRequest.sku;
-        ch.ebayInventorySku = built.publishRequest.sku;
+        ch.ebayInventorySku = r.effectiveSku ?? built.publishRequest.sku;
         ch.offerId = r.offerId ?? null;
         ch.listingId = r.listingId ?? null;
         ch.listingUrl =

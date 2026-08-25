@@ -5,6 +5,7 @@ import {
   EbayPublishService,
   type PublishRequest,
 } from './ebay-publish.service.js';
+import { conflictSafeSkuFor } from './ebay-sku.util.js';
 
 /* ── Helpers ── */
 
@@ -26,10 +27,27 @@ function mockInventoryApi() {
   let compatibility: { compatibleProducts: unknown[] } = {
     compatibleProducts: [],
   };
+  let item: Record<string, unknown> | null = null;
+  let offer: Record<string, unknown> | null = null;
+  const notFound = Object.assign(new Error('status code 404'), {
+    response: { status: 404 },
+  });
   return {
-    createOrReplaceItem: jest.fn().mockResolvedValue(undefined),
-    createOffer: jest.fn().mockResolvedValue({ offerId: 'offer-123' }),
-    updateOffer: jest.fn().mockResolvedValue(undefined),
+    createOrReplaceItem: jest.fn().mockImplementation((_storeId, _sku, payload) => {
+      item = payload;
+      return Promise.resolve(undefined);
+    }),
+    getItem: jest.fn().mockImplementation(() =>
+      item ? Promise.resolve(item) : Promise.reject(notFound),
+    ),
+    createOffer: jest.fn().mockImplementation((_storeId, payload) => {
+      offer = { ...payload, offerId: 'offer-123' };
+      return Promise.resolve({ offerId: 'offer-123' });
+    }),
+    updateOffer: jest.fn().mockImplementation((_storeId, _offerId, payload) => {
+      offer = { ...(offer ?? {}), ...payload, offerId: 'offer-123' };
+      return Promise.resolve(undefined);
+    }),
     publishOffer: jest.fn().mockResolvedValue({ listingId: 'listing-456' }),
     setCompatibility: jest
       .fn()
@@ -44,7 +62,9 @@ function mockInventoryApi() {
       compatibility = { compatibleProducts: [] };
       return Promise.resolve(undefined);
     }),
-    getOffer: jest.fn().mockResolvedValue({ offerId: 'offer-123' }),
+    getOffer: jest.fn().mockImplementation(() =>
+      Promise.resolve(offer ?? { offerId: 'offer-123' }),
+    ),
     withdrawOffer: jest.fn().mockResolvedValue(undefined),
     bulkUpdatePriceQuantity: jest.fn().mockResolvedValue(undefined),
     ensureMerchantLocation: jest
@@ -102,17 +122,68 @@ function validRequest(overrides: Partial<PublishRequest> = {}): PublishRequest {
 /* ── Tests ── */
 
 describe('EbayPublishService', () => {
+  describe('conflictSafeSkuFor', () => {
+    it('maps canonical BLA SKUs to a deterministic postfix-free BLAP SKU', () => {
+      expect(conflictSafeSkuFor('BLA-19279')).toBe('BLAP-19279');
+      expect(conflictSafeSkuFor('BLA-A2123520202')).toBe('BLAP-A2123520202');
+    });
+
+    it('does not create a second fallback namespace or an invalid SKU', () => {
+      expect(conflictSafeSkuFor('BLAP-19279')).toBeNull();
+      expect(conflictSafeSkuFor('SKU-19279')).toBeNull();
+      expect(conflictSafeSkuFor(`BLA-${'x'.repeat(50)}`)).toBeNull();
+    });
+  });
+
+  describe('remote SKU ownership', () => {
+    it('reclaims an unpublished orphan without changing the source projection', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'Test Store',
+        config: { marketplace: 'EBAY_MOTORS_US' },
+        ebayMarketplaceId: 'EBAY_MOTORS_US',
+      };
+      const account = {
+        id: 'account-1',
+        primaryStoreId: 'store-1',
+        connectionSource: 'native_oauth',
+      };
+      inventoryApi.getItem.mockResolvedValue({
+        product: { title: 'Stale unpublished item' },
+      });
+      inventoryApi.getOffersBySku.mockResolvedValue({ offers: [], total: 0 });
+      catalogRepo.findOne = jest.fn().mockResolvedValue({ id: 'catalog-1' });
+      listingRepo.findOne = jest.fn().mockResolvedValue(null);
+      channelRepo.findOne = jest.fn().mockResolvedValue(null);
+
+      await expect(
+        (svc as any).assertRemoteSkuOwnership(
+          'store-1',
+          store,
+          validRequest({ sku: 'AUD-Q7-1712-CC-G' }),
+          account,
+        ),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   let svc: EbayPublishService;
   let storeRepo: ReturnType<typeof createRepo>;
   let connectedAccountRepo: ReturnType<typeof createRepo>;
   let mpRepo: ReturnType<typeof createRepo>;
   let policyRepo: ReturnType<typeof createRepo>;
+  let channelRepo: ReturnType<typeof createRepo>;
   let listingRepo: ReturnType<typeof createRepo>;
   let catalogRepo: ReturnType<typeof createRepo>;
   let ebayCategoryRepo: ReturnType<typeof createRepo>;
   let inventoryApi: ReturnType<typeof mockInventoryApi>;
   let auth: ReturnType<typeof mockAuth>;
   let ebayMedia: ReturnType<typeof mockEbayMediaApi>;
+  let compatibilityReconciler: {
+    syncInventory: jest.Mock;
+    refreshPublishedOffer: jest.Mock;
+    syncLiveListing: jest.Mock;
+  };
   let marketplaceConfig: { require: jest.Mock };
   let taxonomyApi: {
     getCompatibilityProperties: jest.Mock;
@@ -124,12 +195,20 @@ describe('EbayPublishService', () => {
     connectedAccountRepo = createRepo();
     mpRepo = createRepo();
     policyRepo = createRepo();
+    channelRepo = createRepo();
     listingRepo = createRepo();
     catalogRepo = createRepo();
     ebayCategoryRepo = createRepo();
     inventoryApi = mockInventoryApi();
     auth = mockAuth();
     ebayMedia = mockEbayMediaApi();
+    compatibilityReconciler = {
+      syncInventory: jest.fn().mockImplementation((storeId, sku, payload) =>
+        inventoryApi.setCompatibility(storeId, sku, payload),
+      ),
+      refreshPublishedOffer: jest.fn().mockResolvedValue('listing-456'),
+      syncLiveListing: jest.fn(),
+    };
     marketplaceConfig = {
       require: jest.fn().mockImplementation((marketplaceId: string) => ({
         currency: marketplaceId === 'EBAY_DE' ? 'EUR' : 'USD',
@@ -172,14 +251,16 @@ describe('EbayPublishService', () => {
       } as any,
       marketplaceConfig as any,
       {} as any, // mvlService
-      storeRepo,
-      connectedAccountRepo,
-      mpRepo,
-      policyRepo,
-      listingRepo,
-      catalogRepo,
-      ebayCategoryRepo,
+      storeRepo as any,
+      connectedAccountRepo as any,
+      mpRepo as any,
+      policyRepo as any,
+      channelRepo as any,
+      listingRepo as any,
+      catalogRepo as any,
+      ebayCategoryRepo as any,
       ebayMedia as any,
+      compatibilityReconciler as any,
     );
   });
 
@@ -220,6 +301,13 @@ describe('EbayPublishService', () => {
       expect(inventoryApi.createOrReplaceItem).toHaveBeenCalled();
       expect(inventoryApi.createOffer).toHaveBeenCalled();
       expect(inventoryApi.publishOffer).toHaveBeenCalled();
+      expect(compatibilityReconciler.refreshPublishedOffer).toHaveBeenCalledWith(
+        'store-1',
+        'offer-123',
+        'SKU-001',
+        undefined,
+      );
+      expect(compatibilityReconciler.syncLiveListing).not.toHaveBeenCalled();
       expect(ebayMedia.hostImages).toHaveBeenCalledWith(
         'store-1',
         ['https://img.example.com/1.jpg'],
@@ -227,6 +315,71 @@ describe('EbayPublishService', () => {
       expect(
         inventoryApi.createOrReplaceItem.mock.calls[0][2].product.imageUrls,
       ).toEqual(['https://i.ebayimg.com/hostedhttps://img.example.com/1.jpg']);
+    });
+
+    it('fails closed when the eBay SKU belongs to an unrelated remote item', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({ cBrand: 'TRW' });
+      catalogRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'catalog-1',
+        sku: 'SKU-001',
+      });
+      inventoryApi.getItem.mockResolvedValue({
+        sku: 'SKU-001',
+        product: {
+          title: 'Unrelated Cadillac Part',
+          imageUrls: ['https://img.example.com/unrelated.jpg'],
+        },
+        condition: 'USED_EXCELLENT',
+        availability: { shipToLocationAvailability: { quantity: 1 } },
+      });
+      inventoryApi.getOffersBySku.mockResolvedValue({
+        offers: [{ offerId: 'other-offer', listingId: 'other-listing' }],
+        total: 1,
+      });
+
+      const results = await svc.publish(validRequest());
+
+      expect(results[0].success).toBe(false);
+      expect(results[0].error).toContain('SKU collision');
+      expect(inventoryApi.createOrReplaceItem).not.toHaveBeenCalled();
+      expect(inventoryApi.createOffer).not.toHaveBeenCalled();
+    });
+
+    it('uses BLAP without a postfix when a canonical BLA SKU is occupied', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({ cBrand: 'TRW' });
+      inventoryApi.getItem.mockResolvedValueOnce({
+        sku: 'BLA-19279',
+        product: { title: 'Unrelated remote part', imageUrls: [] },
+      });
+
+      const results = await svc.publish(validRequest({ sku: 'BLA-19279' }));
+
+      expect(results[0]).toMatchObject({
+        success: true,
+        effectiveSku: 'BLAP-19279',
+      });
+      expect(inventoryApi.createOrReplaceItem.mock.calls[0][1]).toBe(
+        'BLAP-19279',
+      );
+      expect(inventoryApi.createOffer.mock.calls[0][1].sku).toBe('BLAP-19279');
     });
 
     it('does not publish a store when eBay image hosting fails', async () => {

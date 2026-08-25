@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import axios from 'axios';
+import { resolvePipelineProjectRoot } from '../utils/pipeline-paths.util.js';
 
 export interface OptimizedImage {
   localPath: string;
@@ -34,8 +35,7 @@ export class ImageOptimizerService {
   private readonly maxDownloadBytes: number;
 
   constructor(private readonly config: ConfigService) {
-    const root =
-      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const root = resolvePipelineProjectRoot();
     this.storageDir = path.resolve(root, 'uploads', 'enriched-images');
     // 50 MB — must comfortably exceed the vision provider's 30MB cap so this
     // service can actually download oversized originals in order to shrink

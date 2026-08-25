@@ -12,7 +12,71 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+### Fixed
+- **Organization-wide publishing access:** All RBAC roles now retain the
+  listing/channel/eBay publish permissions, active users receive all-store
+  access, and new users inherit the same access. Inactive users remain blocked.
+
+- **Recent eBay publish failure recovery:** SellerPundit `21919474` and legacy
+  compatibility-limit `21919233` failures now fall back to the direct Inventory
+  API / treat the unsupported Trading projection as non-fatal after exact
+  Inventory readback. Account-scoped SKU collisions can reclaim only remote
+  unpublished orphans with no local channel; live or locally-owned items still
+  fail closed. The retry path preserves the canonical title, images, policies,
+  fitment, and compatibility rows.
+
+- **FEBI/Lemförder image selection:** Catalog imports and eBay publish resolution now retain one primary image for FEBI/Febi Bilstein and Lemförder products. When eBay URLs expose dimensions, the highest-resolution candidate is selected; otherwise the source order is preserved. Published-listing API responses and future mirrors apply the same rule so redundant FEBI galleries do not reappear in the application view.
+
+- **Add Part production repair hardening:** The audited repair runner now
+  excludes confirmed warehouse-bin-only location flags, persists successful
+  effective `BLAP-` SKU and eBay offer/listing pointers transactionally, retries
+  eBay error `25604` availability propagation with a bounded delay, and safely
+  cleans up only unpublished/no-listing partial alternate-SKU artifacts created
+  by the failed attempt. A targeted `--channel-id` audit can verify a repaired
+  channel without rerunning the full report.
+
+- **Pipeline script lookup in containers:** `/pipeline` no longer resolves the
+  enrichment script to `/scripts/ebay-enrichment-pipeline.mjs` when
+  `PIPELINE_PROJECT_ROOT` is unset or stale. Pipeline upload, output, resume,
+  and image-enrichment paths now select a configured root only when it contains
+  the script, then fall back to the current working directory (`/app` in Docker)
+  or its parent (`backend/` local development).
+
+- **eBay account-scoped SKU collision and publish projection drift:** Direct
+  and SellerPundit publish paths now fail closed when a remote SKU cannot be
+  proven to belong to the local channel, then verify title, description,
+  image count, policy IDs, location, and compatibility after eBay reports
+  success. Canonical `BLA-<suffix>` conflicts now use the deterministic,
+  postfix-free `BLAP-<suffix>` alternate only after an account-scoped
+  availability check; if it is also occupied, publishing remains blocked.
+  Fresh-SKU compatibility recovery now requires an explicitly supplied
+  canonical inventory item and will not copy an untrusted remote item. The
+  read-only maintenance audit is
+  `backend/src/scripts/audit-add-part-ebay.ts`; it scopes to individual
+  `listing_records.origin='add_part'` listings and excludes FEBI/Lemförder.
+
+- **Inventory-managed compatibility repair:** eBay Trading `ReviseItem` error
+  `21919474` is now treated as a non-writable legacy projection for
+  Inventory-managed listings. Inventory compatibility and offer readback
+  remain authoritative; unrelated Trading API failures still fail closed.
+  Added the dry-run-by-default `backend/src/scripts/repair-add-part-ebay.ts`
+    runner with audited scope, canary offset, canonical identity checks,
+    per-store failure accounting, and fresh/noncanonical SKU exclusions.
+
+- **Canonical recovery for fresh Add Part SKUs:** Added the dry-run-by-default
+  `backend/src/scripts/repair-add-part-fresh-ebay.ts` utility. It rebuilds
+  noncanonical channels from the reviewed local source using deterministic
+  `BLA-<suffix>` → `BLAP-<suffix>` SKUs, verifies the complete eBay projection
+  before changing local pointers, and never treats the remote item under the
+  old SKU as canonical content.
+
 ### Changed
+- **Add Part SKU namespace:** New automatically allocated Add Part and
+  warehouse-intake SKUs now use `BLAP-<sequence>`. Existing `BLA-` source SKUs
+  remain unchanged, while legacy BLA conflicts continue to use the deterministic
+  `BLAP-<suffix>` eBay fallback; unrelated or already-occupied BLAP collisions
+  remain blocked rather than overwriting an active remote listing.
+
 - **eBay-hosted listing images:** The common eBay publish boundary now uploads
   non-eBay-hosted source images to eBay Picture Services through the Media API
   before invoking direct Inventory API or SellerPundit publishing. Hosted URLs

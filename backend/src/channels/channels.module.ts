@@ -51,6 +51,7 @@ import { EbayCategoryKeywordAuditService } from './ebay/ebay-category-keyword-au
 import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
 import { EbayCategory } from '../listings/entities/ebay-category.entity.js';
 import { EbayHostedImage } from '../integrations/ebay/entities/ebay-hosted-image.entity.js';
+import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { FitmentModule } from '../fitment/fitment.module.js';
 
 @Module({
@@ -74,6 +75,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
       EbayCategoryMapping,
       EbayCategory,
       EbayHostedImage,
+      EbayListingChannel,
     ]),
     SellerpunditModule,
     BullModule.registerQueue({ name: 'channels' }),
