@@ -33,6 +33,11 @@ import {
   buildActiveIdBySku,
   routePipelineListingRecords,
 } from '../utils/pipeline-listing-routing.util.js';
+import {
+  mergeImageUrls,
+  parseImageUrlPipe,
+  hasHttpImageUrls,
+} from '../utils/pipeline-image-matching.util.js';
 import { resolvePipelineProjectRoot } from '../utils/pipeline-paths.util.js';
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
@@ -324,6 +329,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     await this.touchSubStage(jobId, 'finalizing');
     await this.linkUploadedImages(jobId);
     await this.propagateSourceImages(jobId);
+    await this.syncPipelineImageDrive(jobId);
 
     await this.updateStatus(jobId, 'completed');
 
@@ -947,7 +953,11 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           where: { id: In(uploadedAssetIds) },
         });
         for (const asset of assets) {
-          if (asset.cdnUrl?.startsWith('http')) imageUrlSet.add(asset.cdnUrl);
+          if (
+            typeof asset.cdnUrl === 'string' &&
+            hasHttpImageUrls(asset.cdnUrl)
+          )
+            imageUrlSet.add(asset.cdnUrl);
         }
       }
 
@@ -965,7 +975,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         where: { pipelineJobId: jobId },
       });
       for (const product of products) {
-        if (!product.imageUrls?.length) {
+        if (!hasHttpImageUrls(product.imageUrls)) {
           product.imageUrls = imageUrls;
           await this.productRepo.save(product);
           catalogUpdated++;
@@ -973,7 +983,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       }
 
       for (const listing of pipelineListings) {
-        if (!listing.itemPhotoUrl?.trim()) {
+        if (!hasHttpImageUrls(listing.itemPhotoUrl)) {
           listing.itemPhotoUrl = photoPipe;
           await this.listingRepo.save(listing);
           listingsUpdated++;
@@ -990,7 +1000,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     const skusNeedingImages = [
       ...new Set(
         pipelineListings
-          .filter((l) => !l.itemPhotoUrl?.trim())
+          .filter((l) => !hasHttpImageUrls(l.itemPhotoUrl))
           .map((l) => l.customLabelSku?.trim())
           .filter((s): s is string => Boolean(s)),
       ),
@@ -1023,7 +1033,13 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       });
       const assetsByListing = new Map<string, string[]>();
       for (const asset of linkedAssets) {
-        if (!asset.listingId || !asset.cdnUrl?.startsWith('http')) continue;
+        if (
+          !asset.listingId ||
+          typeof asset.cdnUrl !== 'string' ||
+          !hasHttpImageUrls(asset.cdnUrl)
+        ) {
+          continue;
+        }
         const list = assetsByListing.get(asset.listingId) ?? [];
         list.push(asset.cdnUrl);
         assetsByListing.set(asset.listingId, list);
@@ -1040,7 +1056,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     let listingsUpdated = 0;
 
     for (const listing of pipelineListings) {
-      if (listing.itemPhotoUrl?.trim()) continue;
+      if (hasHttpImageUrls(listing.itemPhotoUrl)) continue;
       const sku = listing.customLabelSku?.trim();
       if (!sku) continue;
       const urls = intakeBySku.get(sku);
@@ -1054,7 +1070,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       where: { pipelineJobId: jobId },
     });
     for (const product of products) {
-      if (product.imageUrls?.length) continue;
+      if (hasHttpImageUrls(product.imageUrls)) continue;
       const sku = product.sku?.trim();
       if (!sku) continue;
       const urls = intakeBySku.get(sku);
@@ -1070,7 +1086,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
     // Image Drive fallback: fill remaining missing images from the drive
     const stillMissingListings = pipelineListings.filter(
-      (l) => !l.itemPhotoUrl?.trim(),
+      (l) => !hasHttpImageUrls(l.itemPhotoUrl),
     );
     if (stillMissingListings.length > 0) {
       const partNumbersNeeded = stillMissingListings
@@ -1108,7 +1124,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           }
 
           for (const listing of stillMissingListings) {
-            if (listing.itemPhotoUrl?.trim()) continue;
+            if (hasHttpImageUrls(listing.itemPhotoUrl)) continue;
             const pn =
               listing.cManufacturerPartNumber?.trim() ||
               listing.cOeOemPartNumber?.trim();
@@ -1125,7 +1141,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
             const product =
               productsBySku.get(listing.customLabelSku?.trim() || '') ||
               productsByPartNumber.get(normalized);
-            if (product && !product.imageUrls?.length) {
+            if (product && !hasHttpImageUrls(product.imageUrls)) {
               product.imageUrls = urls;
               await this.productRepo.save(product);
               driveCatalogLinked++;
@@ -1157,6 +1173,152 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
           );
         }
       }
+    }
+  }
+
+  /**
+   * Attach Image Drive images to every bulk pipeline listing whose manufacturer
+   * or OEM part number resolves to a folder. Explicit single-source uploads
+   * keep their intentional job-wide image behavior.
+   */
+  private async syncPipelineImageDrive(jobId: string): Promise<void> {
+    const job = await this.jobRepo.findOneBy({ id: jobId });
+    const stageDetails = job?.stageDetails ?? {};
+    const sourceListingIds = stageDetails.sourceListingIds as
+      | string[]
+      | undefined;
+    const uploadedAssetIds = stageDetails.uploadedAssetIds as
+      | string[]
+      | undefined;
+
+    if (sourceListingIds?.length || uploadedAssetIds?.length) return;
+
+    const pipelineListings = await this.listingRepo.find({
+      where: { pipelineJobId: jobId },
+    });
+    const partNumbersNeeded = pipelineListings
+      .flatMap((listing) => [
+        listing.cManufacturerPartNumber?.trim(),
+        listing.cOeOemPartNumber?.trim(),
+      ])
+      .filter((partNumber): partNumber is string => Boolean(partNumber));
+
+    if (partNumbersNeeded.length === 0) return;
+
+    try {
+      const driveResults =
+        await this.imageDriveService.findByPartNumbers(partNumbersNeeded);
+      const products = await this.productRepo.find({
+        where: { pipelineJobId: jobId },
+      });
+      const productsBySku = new Map<string, CatalogProduct>();
+      const productsByPartNumber = new Map<string, CatalogProduct>();
+
+      for (const product of products) {
+        const sku = product.sku?.trim();
+        if (sku) productsBySku.set(sku, product);
+
+        for (const rawPartNumber of [
+          product.mpn,
+          product.mpnNormalized,
+          product.oemPartNumber,
+        ]) {
+          const normalizedPartNumber = rawPartNumber
+            ? ImageDriveService.normalizePartNumber(rawPartNumber)
+            : '';
+          if (normalizedPartNumber) {
+            productsByPartNumber.set(normalizedPartNumber, product);
+          }
+        }
+      }
+
+      const driveMatchedParts = new Set<string>();
+      let driveMatchedListings = 0;
+      let driveLinked = 0;
+      let driveCatalogLinked = 0;
+
+      for (const listing of pipelineListings) {
+        const normalizedPartNumbers = [
+          listing.cManufacturerPartNumber?.trim(),
+          listing.cOeOemPartNumber?.trim(),
+        ]
+          .filter((partNumber): partNumber is string => Boolean(partNumber))
+          .map((partNumber) =>
+            ImageDriveService.normalizePartNumber(partNumber),
+          )
+          .filter(
+            (partNumber, index, all) =>
+              partNumber.length > 0 && all.indexOf(partNumber) === index,
+          );
+
+        const driveUrls = mergeImageUrls(
+          [],
+          normalizedPartNumbers.flatMap((normalizedPartNumber) => {
+            const images = driveResults[normalizedPartNumber] ?? [];
+            if (images.length > 0) driveMatchedParts.add(normalizedPartNumber);
+            return images.map((image) => image.cdnUrl);
+          }),
+        );
+        if (driveUrls.length === 0) continue;
+
+        driveMatchedListings++;
+        const mergedListingUrls = mergeImageUrls(
+          parseImageUrlPipe(listing.itemPhotoUrl),
+          driveUrls,
+        );
+        const mergedListingPipe = mergedListingUrls.join('|');
+        if (mergedListingPipe && listing.itemPhotoUrl !== mergedListingPipe) {
+          listing.itemPhotoUrl = mergedListingPipe;
+          await this.listingRepo.save(listing);
+          driveLinked++;
+        }
+
+        const product =
+          productsBySku.get(listing.customLabelSku?.trim() || '') ||
+          normalizedPartNumbers
+            .map((normalizedPartNumber) =>
+              productsByPartNumber.get(normalizedPartNumber),
+            )
+            .find((candidate): candidate is CatalogProduct =>
+              Boolean(candidate),
+            );
+        if (!product) continue;
+
+        const mergedProductUrls = mergeImageUrls(
+          product.imageUrls ?? [],
+          driveUrls,
+        );
+        if (
+          mergedProductUrls.join('|') !== (product.imageUrls ?? []).join('|')
+        ) {
+          product.imageUrls = mergedProductUrls;
+          await this.productRepo.save(product);
+          driveCatalogLinked++;
+        }
+      }
+
+      if (driveMatchedParts.size > 0) {
+        const latestJob = await this.jobRepo.findOneBy({ id: jobId });
+        await this.jobRepo.update(jobId, {
+          stageDetails: {
+            ...(latestJob?.stageDetails ?? {}),
+            imageDrive: {
+              matchedPartNumbers: driveMatchedParts.size,
+              matchedListings: driveMatchedListings,
+              listingsLinked: driveLinked,
+              catalogProductsLinked: driveCatalogLinked,
+            },
+          },
+        } as any);
+      }
+
+      this.logger.log(
+        `Job ${jobId}: Image Drive matched ${driveMatchedListings} listing(s) and attached images to ${driveLinked} listing(s) and ${driveCatalogLinked} catalog product(s) across ${driveMatchedParts.size} part number(s)`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Job ${jobId}: Image Drive synchronization failed: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 

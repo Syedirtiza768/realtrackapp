@@ -12,6 +12,7 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+- **Pipeline Image Drive auto-attachment:** Bulk pipeline finalization now resolves manufacturer/OEM part numbers against Image Drive folders, replaces warehouse/bin placeholders, prepends matched CDN image URLs, preserves valid source URLs, updates listing and catalog image fields, and records match/link counts.
 ### Fixed
 - **Organization-wide publishing access:** All RBAC roles now retain the
   listing/channel/eBay publish permissions, active users receive all-store
