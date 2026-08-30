@@ -12,6 +12,7 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+- **Image Drive thumbnail visibility:** Folder APIs now return CDN URLs for generated thumbnail keys, and raw Image Drive thumbnails are routed through the backend image proxy.
 - **Pipeline Image Drive auto-attachment:** Bulk pipeline finalization now resolves manufacturer/OEM part numbers against Image Drive folders, replaces warehouse/bin placeholders, prepends matched CDN image URLs, preserves valid source URLs, updates listing and catalog image fields, and records match/link counts.
 ### Fixed
 - **Organization-wide publishing access:** All RBAC roles now retain the

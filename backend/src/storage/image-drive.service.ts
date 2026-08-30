@@ -91,7 +91,9 @@ export class ImageDriveService {
         totalSizeBytes: folder.totalSizeBytes,
         createdAt: folder.createdAt,
         updatedAt: folder.updatedAt,
-        thumbnailUrls: thumbs.map((t) => t.s3KeyThumb || t.cdnUrl),
+        thumbnailUrls: thumbs.map((t) =>
+          t.s3KeyThumb ? this.storageService.getCdnUrl(t.s3KeyThumb) : t.cdnUrl,
+        ),
       });
     }
 
@@ -234,7 +236,9 @@ export class ImageDriveService {
       totalSizeBytes: saved.totalSizeBytes,
       createdAt: saved.createdAt,
       updatedAt: saved.updatedAt,
-      thumbnailUrls: thumbAssets.map((t) => t.s3KeyThumb || t.cdnUrl),
+      thumbnailUrls: thumbAssets.map((t) =>
+        t.s3KeyThumb ? this.storageService.getCdnUrl(t.s3KeyThumb) : t.cdnUrl,
+      ),
     };
   }
 

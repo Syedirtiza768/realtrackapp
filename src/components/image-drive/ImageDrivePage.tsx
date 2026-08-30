@@ -45,6 +45,7 @@ import {
 } from '../../lib/imageDriveUpload';
 import OptimizedImage from '../ui/OptimizedImage';
 import ImageZoom from '../ui/ImageZoom';
+import { toProxyUrl } from '../../lib/imageUrl';
 
 type ViewMode = 'grid' | 'list';
 type SortOption = 'name' | 'date' | 'size';
@@ -636,7 +637,7 @@ function FolderCard({
           <div className="flex h-10 w-10 items-center justify-center rounded bg-blue-100 dark:bg-blue-900/30">
             {folder.thumbnailUrls.length > 0 ? (
               <img
-                src={folder.thumbnailUrls[0]}
+                src={toProxyUrl(folder.thumbnailUrls[0])}
                 alt=""
                 className="h-10 w-10 rounded object-cover"
               />
@@ -705,7 +706,7 @@ function FolderCard({
               {folder.thumbnailUrls.slice(0, 4).map((url, i) => (
                 <img
                   key={i}
-                  src={url}
+                  src={toProxyUrl(url)}
                   alt=""
                   className="h-full w-full object-cover"
                 />
@@ -868,7 +869,7 @@ function FileCard({
   onDelete: () => void;
   onPreview: () => void;
 }) {
-  const thumbUrl = file.s3KeyThumb || file.cdnUrl;
+  const thumbUrl = toProxyUrl(file.cdnUrl);
   const [copied, setCopied] = useState(false);
 
   const copyUrl = async () => {

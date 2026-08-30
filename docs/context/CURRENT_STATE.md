@@ -3,7 +3,7 @@
 > **Source**: Moved from `docs/handover/current-state.md` (2026-05-29).
 > This file is a snapshot; for live state use `git log` and run the app.
 
-**2026-08-30** — Pipeline Image Drive matching now runs for every bulk pipeline listing with a manufacturer or OEM part number. It treats only HTTP(S) values as images, replaces warehouse/bin placeholders, prepends matched Image Drive CDN URLs, preserves valid source URLs, updates both `listing_records.itemPhotoUrl` and `catalog_products.image_urls`, and records match/link counts in job `stageDetails.imageDrive`.
+**2026-08-30** — Pipeline Image Drive matching now runs for every bulk pipeline listing with a manufacturer or OEM part number. It treats only HTTP(S) values as images, replaces warehouse/bin placeholders, prepends matched Image Drive CDN URLs, preserves valid source URLs, updates both `listing_records.itemPhotoUrl` and `catalog_products.image_urls`, and records match/link counts in job `stageDetails.imageDrive`. Image Drive folder/file thumbnails now return browser-safe CDN URLs and raw thumbnail displays use the backend image proxy.
 
 ## Overall Status
 
