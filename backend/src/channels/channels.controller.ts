@@ -56,7 +56,7 @@ export class ChannelsController {
     if (channel === 'ebay') {
       throw new BadRequestException({
         message:
-          'Legacy eBay OAuth is retired. Sign in to RealTrack, then POST /api/integrations/ebay/oauth/start (JWT). Seller identity comes from Sign in with eBay.',
+          'Legacy eBay OAuth is retired. Sign in to Omni Core, then POST /api/integrations/ebay/oauth/start (JWT). Seller identity comes from Sign in with eBay.',
         migration: 'integrations-ebay-oauth',
         replacement: {
           method: 'POST',

@@ -6,7 +6,7 @@ export function toContentLanguage(locale: string): string {
 }
 
 /**
- * RealTrack / Account API marketplace ids (e.g. EBAY_MOTORS_US) vs Inventory API
+ * Omni Core / Account API marketplace ids (e.g. EBAY_MOTORS_US) vs Inventory API
  * offer body MarketplaceEnum (e.g. EBAY_MOTORS). Headers keep the internal id.
  */
 const INVENTORY_OFFER_MARKETPLACE: Record<string, string> = {

@@ -29,7 +29,7 @@ describe('store-slug.util', () => {
     ]);
   });
 
-  it('maps known slugs to RealTrack store IDs', () => {
+  it('maps known slugs to Omni Core store IDs', () => {
     expect(EBAY_STORE_SLUG_ALIASES.salvagea).toContain(
       '3b84b063-3811-481f-a61d-f7846a03558f',
     );

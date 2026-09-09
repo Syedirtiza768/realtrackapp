@@ -34,13 +34,15 @@ import type {
   VerticalConfig,
   VerticalPublishProjection,
 } from './vertical.types.js';
+import { isRestrictedBusinessIndustrialFamily, validateBusinessIndustrialAttributes } from './business-industrial.config.js';
 import { ProductFamily } from './entities/product-family.entity.js';
 import { ProductVariant } from './entities/product-variant.entity.js';
 import { VariantMarketplaceMapping } from './entities/variant-marketplace-mapping.entity.js';
 import { ProductMarketplaceCategory } from './entities/product-marketplace-category.entity.js';
+import { BusinessIndustrialReview } from './entities/business-industrial-review.entity.js';
 import { Repository } from 'typeorm';
 
-type ProductLike = Pick<CatalogProduct, 'vertical' | 'verticalAttributes' | 'verticalValidationStatus' | 'title' | 'description' | 'brand' | 'mpn' | 'price' | 'quantity' | 'categoryId' | 'categoryName' | 'conditionId' | 'conditionLabel' | 'imageUrls'>;
+type ProductLike = Pick<CatalogProduct, 'vertical' | 'verticalAttributes' | 'verticalValidationStatus' | 'manualReview' | 'title' | 'description' | 'brand' | 'mpn' | 'price' | 'quantity' | 'categoryId' | 'categoryName' | 'conditionId' | 'conditionLabel' | 'imageUrls'>;
 
 @Injectable()
 export class VerticalsService {
@@ -60,6 +62,7 @@ export class VerticalsService {
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(VariantMarketplaceMapping) private readonly mappingRepo: Repository<VariantMarketplaceMapping>,
     @InjectRepository(ProductMarketplaceCategory) private readonly categoryRepo: Repository<ProductMarketplaceCategory>,
+    @InjectRepository(BusinessIndustrialReview) private readonly businessIndustrialReviewRepo: Repository<BusinessIndustrialReview>,
   ) {}
 
   async assertFeatureEnabled(): Promise<void> {
@@ -198,6 +201,44 @@ export class VerticalsService {
     );
     const warnings = [...productAttributes.errors.map((error) => `Invalid vertical attributes: ${error}`)];
     const blockingErrors: string[] = [];
+    if (params.vertical === 'business_industrial') {
+      const businessIndustrial = validateBusinessIndustrialAttributes(
+        params.product.verticalAttributes ?? {},
+      );
+      for (const error of businessIndustrial.errors) {
+        blockingErrors.push(`Invalid Business & Industrial attributes: ${error}`);
+      }
+      warnings.push(...businessIndustrial.warnings);
+      if (params.product.verticalValidationStatus !== 'approved') {
+        blockingErrors.push('Business & Industrial compliance review must be approved before publishing');
+      }
+      const productIdentity = params.product as CatalogProduct;
+      const review = await this.businessIndustrialReviewRepo.findOne({
+        where: { organizationId: productIdentity.organizationId!, catalogProductId: productIdentity.id },
+      });
+      if (review?.status !== 'approved') {
+        blockingErrors.push('A recorded Business & Industrial compliance decision is required before publishing');
+      }
+      const attributes = businessIndustrial.attributes;
+      if (isRestrictedBusinessIndustrialFamily(attributes.categoryFamily) && !review?.restrictedCategoryCleared) {
+        blockingErrors.push('Restricted Business & Industrial categories require recorded compliance clearance before publishing');
+      }
+      if (params.product.manualReview) {
+        blockingErrors.push('Business & Industrial listing is quarantined and cannot be published');
+      }
+      const shippingMode = attributes.shippingMode;
+      if (!shippingMode) blockingErrors.push('shippingMode is required for Business & Industrial publishing');
+      if (!attributes.dispatchLocation) blockingErrors.push('dispatchLocation is required for Business & Industrial publishing');
+      if (!attributes.shippingCoverage) blockingErrors.push('shippingCoverage is required for Business & Industrial publishing');
+      if (shippingMode === 'parcel' || shippingMode === 'freight') {
+        for (const field of ['packedLength', 'packedWidth', 'packedHeight', 'packedWeight', 'packedDimensionsUnit', 'packedWeightUnit']) {
+          if (attributes[field] === undefined || attributes[field] === '') blockingErrors.push(`${field} is required for ${shippingMode} shipping`);
+        }
+      }
+      if (shippingMode === 'freight' && !attributes.freightLoadingFacilities) {
+        blockingErrors.push('freightLoadingFacilities is required for freight shipping');
+      }
+    }
     if (
       params.vertical === 'fashion' &&
       params.product.verticalValidationStatus !== 'approved'
@@ -222,7 +263,6 @@ export class VerticalsService {
     if (metadata) {
       for (const aspect of metadata.aspects) {
         const name = aspect.localizedAspectName;
-        // Imported/editor keys are normalized; always emit eBay's canonical display name.
         const normalize = (key: string) => key.trim().replace(/[^a-zA-Z0-9]+(.)/g, (_match, ch: string) => ch.toUpperCase()).toLowerCase();
         const matched = Object.keys(aspects).find((key) => normalize(key) === normalize(name));
         const values = aspects[name] ?? aspects[matched ?? ''] ?? [];

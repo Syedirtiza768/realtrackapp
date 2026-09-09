@@ -185,8 +185,10 @@ export class EbayIntegrationsOAuthService {
         ebayUserId,
         ebayMarketplaceId: pending.marketplaceId,
         verticalConfig: pending.vertical === 'fashion'
-          ? { enabledVerticals: ['fashion'], defaultVertical: 'fashion', workflows: {} }
-          : null,
+          ? { enabledVerticals: ['fashion'], defaultVertical: 'fashion', ownerVertical: 'fashion', workflows: {} }
+          : pending.vertical === 'business_industrial'
+            ? { enabledVerticals: ['business_industrial'], defaultVertical: 'business_industrial', ownerVertical: 'business_industrial', workflows: {} }
+            : null,
         config: {
           marketplace: pending.marketplaceId,
           sandbox: pending.environment === 'sandbox',
@@ -280,7 +282,7 @@ export class EbayIntegrationsOAuthService {
           });
       }, 1000);
 
-      return { connectedEbayAccountId: savedAcct.id, redirectUrl: pending.vertical === 'fashion' ? '/fashion/stores' : '/settings/integrations/ebay' };
+      return { connectedEbayAccountId: savedAcct.id, redirectUrl: pending.vertical === 'fashion' ? '/fashion/stores' : pending.vertical === 'business_industrial' ? '/business-industrial/stores' : '/settings/integrations/ebay' };
     } catch (e: unknown) {
       await qr.rollbackTransaction();
       this.logger.warn(

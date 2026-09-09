@@ -70,8 +70,8 @@ export class OpenAiService implements OnModuleInit {
       maxRetries: 0,
       timeout: Number(this.config.get('OPENAI_TIMEOUT_MS', '120000')),
       defaultHeaders: {
-        'HTTP-Referer': 'https://realtrackapp.com',
-        'X-Title': 'RealTrackApp',
+        'HTTP-Referer': 'https://app.omnicoreholding.com',
+        'X-Title': 'Omni Core',
       },
     });
     this.baseURL = baseURL;

@@ -393,7 +393,7 @@ export function buildPaCompliantReturnPolicyRequest(
     ];
   const days = Math.max(30, readReturnPeriodDays(raw) ?? 30);
   return {
-    name: String(raw.name ?? 'P&A Compliant Return (RealTrack)'),
+    name: String(raw.name ?? 'P&A Compliant Return (Omni Core)'),
     description:
       typeof raw.description === 'string' ? raw.description : undefined,
     marketplaceId,

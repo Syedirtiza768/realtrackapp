@@ -9,6 +9,7 @@ import { Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { usePublicBranding } from '../../hooks/usePublicBranding';
 import { usePublicAuthConfig } from '../../hooks/usePublicAuthConfig';
+import { toProxyUrl } from '../../lib/imageUrl';
 
 export default function LoginPage() {
   const { login, loading } = useAuth();
@@ -39,7 +40,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           {logoSrc ? (
             <img
-              src={logoSrc}
+              src={toProxyUrl(logoSrc)}
               alt={branding.appName}
               className="h-14 mx-auto mb-3 object-contain"
             />
@@ -159,7 +160,7 @@ export default function LoginPage() {
         </div>
 
         {branding.poweredByVisible && (
-          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">Powered by RealTrack</p>
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">Powered by Omni Core</p>
         )}
       </div>
     </div>

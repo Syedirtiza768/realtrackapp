@@ -2377,7 +2377,7 @@ export class EbayPublishService {
           );
         errorMsg =
           `eBay rejected the OAuth token for "${store.storeName}". ` +
-          "RealTrackApp is connected to SellerPundit, but SellerPundit's eBay authorization for this store is invalid or expired. " +
+          "Omni Core is connected to SellerPundit, but SellerPundit's eBay authorization for this store is invalid or expired. " +
           'Reconnect eBay in SellerPundit for this account, then use Settings → eBay Integrations → Re-sync stores.';
       } else {
         errorMsg = `eBay authorization failed for "${store.storeName}". Re-sync or reconnect this store in Settings → eBay Integrations.`;

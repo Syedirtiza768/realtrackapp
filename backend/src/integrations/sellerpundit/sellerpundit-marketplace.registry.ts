@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-/** Maps RealTrack eBay marketplace ids to SellerPundit siteId strings. */
+/** Maps Omni Core eBay marketplace ids to SellerPundit siteId strings. */
 const SITE_BY_MARKETPLACE: Record<string, string> = {
   EBAY_US: 'EBAY_US',
   EBAY_MOTORS_US: 'EBAY_MOTORS_US',
@@ -9,7 +9,7 @@ const SITE_BY_MARKETPLACE: Record<string, string> = {
   EBAY_AU: 'EBAY_AU',
 };
 
-/** Default RealTrack marketplaces enabled when importing a SellerPundit token. */
+/** Default Omni Core marketplaces enabled when importing a SellerPundit token. */
 const DEFAULT_MARKETPLACES = [
   'EBAY_US',
   'EBAY_MOTORS_US',

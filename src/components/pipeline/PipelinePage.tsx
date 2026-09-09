@@ -20,7 +20,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useUploadPipelineFile, type PipelineUploadProfileInput } from '../../lib/pipelineApi';
-import type { ProductVertical } from '../../lib/verticalsApi';
 import {
   PIPELINE_GRIDX_REQUIRED_HEADERS,
   PIPELINE_GRIDX_SAMPLE_PATH,
@@ -149,7 +148,6 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [dragOver, setDragOver] = useState(false);
     const [condition, setCondition] = useState<PipelineConditionLabel>('Used');
-    const [vertical, setVertical] = useState<ProductVertical>('automotive');
     const [teamId, setTeamId] = useState('');
     const [storeId, setStoreId] = useState('');
     const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
@@ -225,13 +223,13 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
           return;
         }
         try {
-          const result = await upload(file, selectedTeamId, condition, profileInput, vertical);
+          const result = await upload(file, selectedTeamId, condition, profileInput);
           if (result?.job?.id) onJobCreated(result.job.id);
         } catch {
           // hook sets error
         }
       },
-      [upload, selectedTeamId, condition, profileInput, vertical, canUpload, onJobCreated],
+      [upload, selectedTeamId, condition, profileInput, canUpload, onJobCreated],
     );
 
     const handleFile = useCallback(async (file: File) => {
@@ -340,21 +338,6 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
                   Marketplace: {marketplace} — {PIPELINE_MARKETPLACE_LABELS[marketplace]}
                 </p>
               )}
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-slate-600 dark:text-slate-300">Product vertical</span>
-              <select
-                value={vertical}
-                onChange={(e) => setVertical(e.target.value as ProductVertical)}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
-              >
-                <option value="automotive">Automotive</option>
-                <option value="business_industrial">Business &amp; Industrial</option>
-                <option value="fashion">Fashion</option>
-              </select>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Choose the eBay selling vertical for this upload.
-              </p>
             </label>
             <label className="block text-sm">
               <span className="font-medium text-slate-600 dark:text-slate-300">Condition</span>

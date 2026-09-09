@@ -52,6 +52,7 @@ import { EbaySyncService } from './services/ebay-sync.service.js';
 import { IntegrationsEbayController } from './controllers/integrations-ebay.controller.js';
 import { EbayMultiStoreController } from './controllers/ebay-multi-store.controller.js';
 import { FashionEbayController } from './controllers/fashion-ebay.controller.js';
+import { BusinessIndustrialEbayController } from './controllers/business-industrial-ebay.controller.js';
 import { SellerpunditModule } from '../sellerpundit/sellerpundit.module.js';
 import { SellerpunditEbayController } from '../sellerpundit/sellerpundit-ebay.controller.js';
 import { FitmentModule } from '../../fitment/fitment.module.js';
@@ -103,6 +104,7 @@ import { StorageModule } from '../../storage/storage.module.js';
     IntegrationsEbayController,
     EbayMultiStoreController,
     FashionEbayController,
+    BusinessIndustrialEbayController,
     SellerpunditEbayController,
   ],
   providers: [

@@ -21,9 +21,9 @@ export type PublicBranding = {
 };
 
 const DEFAULT_BRANDING: PublicBranding = {
-  appName: 'RealTrackApp',
-  clientName: 'RealTrack',
-  shortName: 'RT',
+  appName: 'Omni Core',
+  clientName: 'Omni Core',
+  shortName: 'OC',
   logoUrl: null,
   faviconUrl: null,
   loginLogoUrl: null,

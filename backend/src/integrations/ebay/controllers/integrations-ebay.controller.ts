@@ -52,7 +52,7 @@ export class IntegrationsEbayController {
   @Get('workspace')
   @ApiOperation({
     summary:
-      'Resolve RealTrack workspace for the signed-in user (not an eBay seller ID)',
+      'Resolve Omni Core workspace for the signed-in user (not an eBay seller ID)',
   })
   async workspace(@CurrentUser() user: User) {
     return this.userOrgs.getWorkspaceContext(user.id);
@@ -95,8 +95,9 @@ export class IntegrationsEbayController {
         return;
       }
       const result = await this.oauth.handleCallback({ code, state });
+      const destination = result.redirectUrl ?? '/settings/integrations/ebay';
       res.redirect(
-        `${base}/settings/integrations/ebay?success=1&accountId=${result.connectedEbayAccountId}`,
+        base + destination + "?success=1&accountId=" + result.connectedEbayAccountId,
       );
     } catch (err) {
       this.logger.error(

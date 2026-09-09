@@ -16,6 +16,7 @@ import {
   type SellerpunditConfigView,
 } from '../../lib/sellerpunditIntegrationsApi';
 import { useEbayWorkspace } from '../../hooks/useEbayWorkspace';
+import VerticalSettingsPanel from './VerticalSettingsPanel';
 
 export default function EbayStoresSettingsPage() {
   const {
@@ -242,7 +243,7 @@ export default function EbayStoresSettingsPage() {
             <Link to="/login" className="underline">
               Sign in
             </Link>{' '}
-            to RealTrack first, then connect eBay.
+            to Omni Core first, then connect eBay.
           </p>
         )}
         {signedIn && workspaceLoading && (
@@ -289,6 +290,8 @@ export default function EbayStoresSettingsPage() {
         </button>
         {message && <p className="text-sm text-amber-300">{message}</p>}
       </section>
+
+      <VerticalSettingsPanel organizationId={organizationId} />
 
       {/* SECTION HIDDEN 2026-07-01 — Import from SellerPundit. Uncomment to restore.
       <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 p-6 space-y-4">

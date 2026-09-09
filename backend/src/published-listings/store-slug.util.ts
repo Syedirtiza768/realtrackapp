@@ -1,5 +1,5 @@
 /**
- * Maps public eBay storefront URL slugs (ebay.com/str/{slug}) to RealTrack stores.
+ * Maps public eBay storefront URL slugs (ebay.com/str/{slug}) to Omni Core stores.
  * Prefer stores.config.storeSlug when set; these aliases are a documented fallback.
  */
 export const EBAY_STORE_SLUG_ALIASES: Record<string, string[]> = {

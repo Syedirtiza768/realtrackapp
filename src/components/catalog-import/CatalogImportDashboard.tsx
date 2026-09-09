@@ -1,5 +1,4 @@
-import type { ProductVertical } from '../../lib/verticalsApi';
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Database,
@@ -49,7 +48,6 @@ export default function CatalogImportDashboard() {
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [catalogFields, setCatalogFields] = useState<CatalogField[]>([]);
   const [showHistory, setShowHistory] = useState(true);
-  const [selectedVertical, setSelectedVertical] = useState<ProductVertical>('automotive');
 
   const { upload, uploading, progress, error: uploadError, result: uploadResult, reset: resetUpload } = useUploadCsv();
   const { data: importDetail } = useImportDetail(
@@ -88,7 +86,7 @@ export default function CatalogImportDashboard() {
   const handleFileSelected = useCallback(
     async (file: File) => {
       try {
-        const response = await upload(file, undefined, selectedVertical);
+        const response = await upload(file);
         if (!response) return;
         const { detectedHeaders: headers, columnMapping: mapping, catalogFields: fields, import: imp } = response;
         setDetectedHeaders(headers);
@@ -118,7 +116,7 @@ export default function CatalogImportDashboard() {
         // Error is handled by useUploadCsv
       }
     },
-    [selectedVertical, upload],
+    [upload],
   );
 
   /* ── Mapping confirmed → start import ───────────────────── */
@@ -298,27 +296,13 @@ export default function CatalogImportDashboard() {
 
       {/* Step: Upload */}
       {step === 'upload' && (
-        <div className="space-y-3">
-          <label className="block max-w-sm text-sm">
-            <span className="text-slate-500 dark:text-slate-400">Product vertical</span>
-            <select
-              className="mt-1 w-full rounded-md bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2"
-              value={selectedVertical}
-              onChange={(event) => setSelectedVertical(event.target.value as ProductVertical)}
-            >
-              <option value="automotive">Automotive (legacy)</option>
-              <option value="business_industrial">Business &amp; Industrial</option>
-              <option value="fashion">Fashion</option>
-            </select>
-          </label>
-          <CsvUploader
-            onFileSelected={handleFileSelected}
-            uploading={uploading}
-            progress={progress}
-            error={uploadError}
-            uploaded={!!uploadResult}
-          />
-        </div>
+        <CsvUploader
+          onFileSelected={handleFileSelected}
+          uploading={uploading}
+          progress={progress}
+          error={uploadError}
+          uploaded={!!uploadResult}
+        />
       )}
 
       {/* Step: Column mapping */}

@@ -1,6 +1,8 @@
 import type { ProductVertical } from '../../verticals/vertical.types.js';
 import { normalizeProductVertical } from '../../verticals/vertical.types.js';
 import { attributesFromImportRow, validateVerticalAttributes } from '../../verticals/vertical.config.js';
+import { businessIndustrialAttributesFromImportRow } from '../../verticals/business-industrial-import.js';
+import { validateBusinessIndustrialAttributes } from '../../verticals/business-industrial.config.js';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -231,7 +233,28 @@ const pulled = vertical === 'automotive'
               rawData: row.data,
             });
           } else {
-if (vertical === 'automotive') {
+            if (vertical === 'business_industrial') {
+              const businessIndustrialValidation = validateBusinessIndustrialAttributes(
+                businessIndustrialAttributesFromImportRow(row.data),
+              );
+              if (businessIndustrialValidation.errors.length) {
+                invalidRows++;
+                const businessIndustrialMessage = `Business & Industrial validation failed: ${businessIndustrialValidation.errors.join('; ')}`;
+                importRowEntries.push({
+                  importId,
+                  rowNumber: row.rowNumber,
+                  status: 'invalid',
+                  message: businessIndustrialMessage,
+                  rawData: row.data,
+                });
+                if (warnings.length < 500) warnings.push(`Row ${row.rowNumber}: ${businessIndustrialMessage}`);
+                continue;
+              }
+              for (const warning of businessIndustrialValidation.warnings) {
+                if (warnings.length < 500) warnings.push(`Row ${row.rowNumber}: ${warning}`);
+              }
+            }
+            if (vertical === 'automotive') {
               // The existing compliance service is Motors/File Exchange-specific.
               const compliance = this.complianceService.validateRowData(row.data);
               if (!compliance.compliant) {
@@ -1134,7 +1157,9 @@ if (vertical === 'automotive') {
     const title = data['title'] || '';
     const attributeValidation = validateVerticalAttributes(
       vertical,
-      attributesFromImportRow(vertical, data),
+      vertical === 'business_industrial'
+        ? businessIndustrialAttributesFromImportRow(data)
+        : attributesFromImportRow(vertical, data),
     );
 
     // Parse image URLs (pipe-delimited in eBay format)
@@ -1262,7 +1287,9 @@ if (vertical === 'automotive') {
     return {
       organizationId,
       vertical,
-      verticalAttributes: attributesFromImportRow(vertical, data),
+      verticalAttributes: vertical === 'business_industrial'
+        ? businessIndustrialAttributesFromImportRow(data)
+        : attributesFromImportRow(vertical, data),
       sourceFileName,
       sourceFilePath,
       origin: ListingOrigin.PIPELINE_IMPORT,

@@ -16,6 +16,7 @@ import {
   stripListingHtmlBoilerplate,
 } from '../../../channels/ebay/ebay-listing-text.util.js';
 import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
+import { VerticalsService } from '../../../verticals/verticals.service.js';
 
 export type ValidationStatus = 'ready' | 'warnings' | 'blocked';
 
@@ -37,6 +38,7 @@ export class EbayListingValidationService {
     private readonly sellerpunditTokens: SellerpunditTokenSyncService,
     private readonly inventoryApi: EbayInventoryApiService,
     private readonly publishResolver: CatalogPublishResolverService,
+    private readonly verticals: VerticalsService,
     @InjectRepository(ConnectedEbayAccount)
     private readonly accountRepo: Repository<ConnectedEbayAccount>,
     @InjectRepository(EbayAccountMarketplace)
@@ -63,7 +65,7 @@ export class EbayListingValidationService {
         id: params.ebayAccountId,
         organizationId: params.organizationId,
       },
-      relations: ['oauthToken'],
+      relations: ['oauthToken', 'primaryStore'],
     });
     if (!account) {
       errors.push('eBay account not found for organization');
@@ -81,7 +83,7 @@ export class EbayListingValidationService {
     ) {
       errors.push(
         isSellerpundit
-          ? `eBay rejected the OAuth token for "${account.accountDisplayName ?? account.ebayUsername ?? 'this store'}". Re-sync in RealTrackApp only refreshes what SellerPundit has — reconnect eBay for this store inside SellerPundit admin, then Re-sync stores here.`
+          ? `eBay rejected the OAuth token for "${account.accountDisplayName ?? account.ebayUsername ?? 'this store'}". Re-sync in Omni Core only refreshes what SellerPundit has — reconnect eBay for this store inside SellerPundit admin, then Re-sync stores here.`
           : 'eBay account requires reconnection',
       );
       requiredActions.push(
@@ -201,6 +203,29 @@ export class EbayListingValidationService {
     } else {
       const { snapshot } = resolved;
       warnings.push(...resolved.warnings);
+
+      const vertical = this.verticals.resolveVertical(
+        resolved.catalogProduct,
+        resolved.listingRecord,
+        snapshot.vertical,
+      );
+      if (vertical === 'business_industrial') {
+        if (!account.primaryStoreId) {
+          errors.push('Business & Industrial publishing requires a dedicated seller store');
+        } else {
+          const projection = await this.verticals.buildPublishProjection({
+            vertical,
+            product: resolved.catalogProduct!,
+            listing: resolved.listingRecord,
+            storeId: account.primaryStoreId,
+            marketplaceId: params.marketplaceId,
+          });
+          if (projection) {
+            errors.push(...projection.blockingErrors);
+            warnings.push(...projection.warnings);
+          }
+        }
+      }
 
       if (!snapshot.sku?.trim()) {
         errors.push('Listing is missing SKU');

@@ -52,7 +52,7 @@ async function bootstrap() {
   // Swagger API docs (D13 fix) — enabled in non-production
   if (process.env.NODE_ENV !== 'production') {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('RealTrackApp API')
+      .setTitle('Omni Core API')
       .setDescription('Multi-channel motor parts platform API')
       .setVersion('1.0')
       .addBearerAuth()

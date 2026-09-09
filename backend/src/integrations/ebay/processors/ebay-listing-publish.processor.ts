@@ -208,6 +208,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
           resolved?.snapshot.listingRecordId ??
           catalogProductId,
         storeId: account.primaryStoreId,
+        vertical: target.vertical ?? undefined,
       });
 
       if (built.blockingErrors.length) {
@@ -258,6 +259,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
             marketplaceId: target.marketplaceId,
           });
         }
+        ch.vertical = built.publishRequest.vertical ?? target.vertical ?? null;
         ch.internalSku = built.publishRequest.sku;
         ch.ebayInventorySku = r.effectiveSku ?? built.publishRequest.sku;
         ch.offerId = r.offerId ?? null;

@@ -1,5 +1,9 @@
 # Fashion workspace completion — 2026-09-09
 
+## Corrected production baseline (2026-09-09, later verification)
+
+The earlier Fashion-only baseline assumption below is superseded: Docker labels and runtime files prove the active release is `/home/ubuntu/realtrackapp-bi-release-20260909-01`, including deployed Business & Industrial code. The candidate has been overlaid onto that live source snapshot to preserve B&I. Do not deploy commit `9e0d797` by itself. GitHub push was blocked by automatic approval review pending explicit authorization for `Syedirtiza768/realtrackapp`. No live services, database or passwords have been changed by this completion session.
+
 ## Implemented in this release candidate
 
 The Fashion route tree in `src/App.tsx` uses a parent Outlet and relative child routes. The former nested absolute routes rendered an empty shell. Screens now cover overview, listing list/create/detail/edit, bulk import, authenticity review, dedicated seller stores, users, quarantine incidents, workspace rules and first-login password change.
@@ -34,4 +38,3 @@ Seed variables: `FASHION_SEED_ADMIN_EMAIL`, `FASHION_SEED_ADMIN_PASSWORD`, optio
 ## Release procedure
 
 Use the isolated `.codex-fashion-release` worktree based on the deployed source snapshot. Do not deploy the root dirty tree: it contains unrelated unfinished Business & Industrial changes. Preserve the current live images and database backup; validate backup before migrations. Build candidate images, then replace only backend/frontend services, preserving volumes and other applications. Record actual commit, migration, health and browser checks after deployment. This document is not evidence that deployment has occurred.
-

@@ -53,7 +53,7 @@ function resolveSellerCountryFromLocation(
   ) {
     return 'AE';
   }
-  // RealTrack warehouses ship from Dubai even when marketplace is US/AU.
+  // Omni Core warehouses ship from Dubai even when marketplace is US/AU.
   return 'AE';
 }
 

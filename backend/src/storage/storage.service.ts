@@ -406,7 +406,7 @@ export class StorageService {
           signal: AbortSignal.timeout(120_000),
           headers: {
             'User-Agent':
-              'RealTrackApp-catalog-import/1.0 (image mirror; by sku)',
+              'OmniCore-catalog-import/1.0 (image mirror; by sku)',
           },
         });
         if (!res.ok) {

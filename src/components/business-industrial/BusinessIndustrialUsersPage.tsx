@@ -1,0 +1,14 @@
+import { useEffect, useState } from 'react';
+import { fetchWithAuth } from '../../lib/authApi';
+
+type BusinessIndustrialUser = { userId: string; email: string; name: string | null; roleSlug: string; roleName: string; active: boolean };
+const roles = ['business_industrial_admin', 'business_industrial_manager', 'business_industrial_operator'] as const;
+export default function BusinessIndustrialUsersPage() {
+  const [users, setUsers] = useState<BusinessIndustrialUser[]>([]);
+  const [message, setMessage] = useState('');
+  const load = () => void fetchWithAuth<BusinessIndustrialUser[]>('/api/business-industrial/users').then(setUsers).catch((err) => setMessage(err instanceof Error ? err.message : 'Unable to load B&I users'));
+  useEffect(load, []);
+  async function changeRole(userId: string, role: string) { try { await fetchWithAuth(`/api/business-industrial/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }); setMessage('B&I role updated.'); load(); } catch (err) { setMessage(err instanceof Error ? err.message : 'Unable to update role'); } }
+  async function deactivate(userId: string) { if (!window.confirm('Deactivate this B&I workspace user?')) return; try { await fetchWithAuth(`/api/business-industrial/users/${userId}/deactivate`, { method: 'PATCH' }); setMessage('User deactivated.'); load(); } catch (err) { setMessage(err instanceof Error ? err.message : 'Unable to deactivate user'); } }
+  return <div><h1 className="text-3xl font-semibold">B&amp;I users</h1><p className="mt-2 text-slate-500">Manage vertical roles and deactivate access without granting automotive or Fashion permissions. New invitations remain an administrator follow-up item.</p>{message && <p className="mt-4 text-sm text-slate-600">{message}</p>}<div className="mt-6 overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-900">{users.map((user) => <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-4 dark:border-slate-800" key={user.userId}><div><p className="font-medium">{user.name || user.email}</p><p className="text-sm text-slate-500">{user.email} · {user.active ? 'Active' : 'Inactive'}</p></div><div className="flex items-center gap-2"><select disabled={!user.active} className="rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800" value={roles.includes(user.roleSlug as typeof roles[number]) ? user.roleSlug : 'business_industrial_operator'} onChange={(event) => changeRole(user.userId, event.target.value)}>{roles.map((role) => <option key={role} value={role}>{role.replace('business_industrial_', 'B&I ')}</option>)}</select>{user.active && <button className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700" onClick={() => deactivate(user.userId)}>Deactivate</button>}</div></div>)}{!users.length && <p className="p-5 text-sm text-slate-500">No B&amp;I workspace members found.</p>}</div></div>;
+}

@@ -183,7 +183,10 @@ export class RbacService implements OnModuleInit {
     const roles = await this.roleRepo.find({ relations: ['rolePermissions'] });
     let added = 0;
     for (const role of roles) {
-      if (role.slug.startsWith('fashion_')) continue;
+      if (
+        role.slug.startsWith('fashion_') ||
+        role.slug.startsWith('business_industrial_')
+      ) continue;
       const existing = new Set(
         (role.rolePermissions ?? []).map(
           (assignment) => assignment.permissionId,
@@ -343,7 +346,10 @@ export class RbacService implements OnModuleInit {
 
   private async ensureRoleCanPublish(roleId: string): Promise<void> {
     const role = await this.roleRepo.findOne({ where: { id: roleId } });
-    if (role?.slug.startsWith('fashion_')) return;
+    if (
+      role?.slug.startsWith('fashion_') ||
+      role?.slug.startsWith('business_industrial_')
+    ) return;
 
     const permissions = await this.permissionRepo.find({
       where: { key: In([...ALL_USERS_PUBLISH_PERMISSION_KEYS]) },
@@ -405,7 +411,9 @@ export class RbacService implements OnModuleInit {
       );
     }
 
-    const enforcedPublishKeys = role.slug.startsWith('fashion_')
+    const enforcedPublishKeys =
+      role.slug.startsWith('fashion_') ||
+      role.slug.startsWith('business_industrial_')
       ? []
       : ALL_USERS_PUBLISH_PERMISSION_KEYS;
     const effectivePermissionKeys = [
@@ -457,7 +465,9 @@ export class RbacService implements OnModuleInit {
 
   async resetRoleToDefaults(roleId: string): Promise<Role> {
     const role = await this.roleRepo.findOneOrFail({ where: { id: roleId } });
-    const enforcedPublishKeys = role.slug.startsWith('fashion_')
+    const enforcedPublishKeys =
+      role.slug.startsWith('fashion_') ||
+      role.slug.startsWith('business_industrial_')
       ? []
       : ALL_USERS_PUBLISH_PERMISSION_KEYS;
     const defaultKeys = [

@@ -30,6 +30,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useBranding } from "../../contexts/BrandingContext";
 import { usePermissions } from "../../hooks/usePermissions";
+import { toProxyUrl } from "../../lib/imageUrl";
 
 type NavItem = {
   icon: typeof LayoutDashboard;
@@ -249,7 +250,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const shortLabel = (branding.shortName || branding.appName || "RT")
     .slice(0, 2)
     .toUpperCase();
-  const appTitle = branding.appName || "RealTrackApp";
+  const appTitle = branding.appName || "Omni Core";
 
   const sidebarModuleSet = useMemo(
     () => new Set(sidebarModules),
@@ -278,7 +279,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         <h1 className="text-lg lg:text-xl font-bold tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
           {branding.logoUrl ? (
             <img
-              src={branding.logoUrl}
+              src={toProxyUrl(branding.logoUrl)}
               alt=""
               className="w-8 h-8 rounded-md object-contain shrink-0"
             />

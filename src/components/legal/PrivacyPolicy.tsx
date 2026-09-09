@@ -79,15 +79,15 @@ export default function PrivacyPolicy() {
           <h2 className="text-xl font-semibold text-white mb-3">7. Contact</h2>
           <p>
             For privacy-related inquiries, contact us at{' '}
-            <a href="mailto:privacy@realtrackapp.com" className="text-blue-400 hover:text-blue-300">
-              privacy@realtrackapp.com
+            <a href="mailto:privacy@omnicoreholding.com" className="text-blue-400 hover:text-blue-300">
+              privacy@omnicoreholding.com
             </a>.
           </p>
         </section>
 
         <div className="border-t border-slate-700 pt-6 text-sm text-slate-500">
           <p>
-            RealTrack App —{' '}
+            Omni Core —{' '}
             <a href="https://app.omnicoreholding.com" className="text-blue-400 hover:text-blue-300">
               app.omnicoreholding.com
             </a>

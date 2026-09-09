@@ -19,7 +19,6 @@ import type {
   PipelineStats,
   ProductOptimizationSummary,
 } from '../types/pipeline';
-import type { ProductVertical } from './verticalsApi';
 
 const API = '/api';
 
@@ -125,7 +124,6 @@ export function useUploadPipelineFile() {
       teamId: string,
       conditionLabel: string,
       profiles?: PipelineUploadProfileInput,
-      vertical: ProductVertical = 'automotive',
     ) => {
       if (!profiles) {
         setError('Select an eBay store and business profiles before uploading.');
@@ -141,7 +139,6 @@ export function useUploadPipelineFile() {
         formData.append('file', file);
         formData.append('teamId', teamId);
         formData.append('conditionLabel', conditionLabel);
-        formData.append('vertical', vertical);
         formData.append('marketplace', profiles.marketplace);
         formData.append('storeId', profiles.storeId);
         formData.append('shippingProfileName', profiles.shippingProfileName);

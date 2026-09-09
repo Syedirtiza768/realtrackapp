@@ -176,6 +176,7 @@ services:
       PUBLISHED_LISTINGS_SCRAPE_ENRICH: ${PUBLISHED_LISTINGS_SCRAPE_ENRICH:-0}
       PUBLISHED_LISTINGS_ON_DEMAND_ENRICH: ${PUBLISHED_LISTINGS_ON_DEMAND_ENRICH:-0}
       EBAY_REDIRECT_URI: ${EBAY_REDIRECT_URI:-}
+      EBAY_WEBHOOK_SECRET: ${EBAY_WEBHOOK_SECRET:-}
       # SellerPundit (optional eBay connection source — set in project root .env)
       SELLERPUNDIT_API_BASE_URL: ${SELLERPUNDIT_API_BASE_URL:-https://authentication.sellerpundit.com/api/v1}
       SELLERPUNDIT_MARKETPLACES_URL: ${SELLERPUNDIT_MARKETPLACES_URL:-https://marketplaces.sellerpundit.com}

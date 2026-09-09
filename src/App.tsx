@@ -65,6 +65,15 @@ import FashionListingEditorPage from './components/fashion/FashionListingEditorP
 import FashionIncidentsPage from './components/fashion/FashionIncidentsPage';
 import FashionSettingsPage from './components/fashion/FashionSettingsPage';
 import FashionPasswordPage from './components/fashion/FashionPasswordPage';
+import BusinessIndustrialLoginPage from './components/business-industrial/BusinessIndustrialLoginPage';
+import BusinessIndustrialShell from './components/business-industrial/BusinessIndustrialShell';
+import BusinessIndustrialDashboardPage from './components/business-industrial/BusinessIndustrialDashboardPage';
+import BusinessIndustrialListingsPage from './components/business-industrial/BusinessIndustrialListingsPage';
+import BusinessIndustrialImportPage from './components/business-industrial/BusinessIndustrialImportPage';
+import BusinessIndustrialReviewPage from './components/business-industrial/BusinessIndustrialReviewPage';
+import BusinessIndustrialStoresPage from './components/business-industrial/BusinessIndustrialStoresPage';
+import BusinessIndustrialIncidentsPage from './components/business-industrial/BusinessIndustrialIncidentsPage';
+import BusinessIndustrialUsersPage from './components/business-industrial/BusinessIndustrialUsersPage';
 
 
 function App() {
@@ -78,6 +87,7 @@ function App() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/fashion/login" element={<FashionLoginPage />} />
                 <Route path="/fashion/change-password" element={<ProtectedRoute loginPath="/fashion/login"><FashionPasswordPage /></ProtectedRoute>} />
+                <Route path="/business-industrial/login" element={<BusinessIndustrialLoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/channels/ebay/callback" element={<EbayOAuthCallback />} />
@@ -153,7 +163,22 @@ function App() {
                     </ProtectedRoute>
                 } />
 
-
+                {/* Business & Industrial routes use a separate shell and permission boundary. */}
+                <Route path="/business-industrial/*" element={
+                    <ProtectedRoute permissions={['business_industrial.access']} loginPath="/business-industrial/login">
+                        <BusinessIndustrialShell>
+                            <Routes>
+                                <Route path="/business-industrial" element={<ProtectedRoute permissions={['business_industrial.dashboard.view']} loginPath="/business-industrial/login"><BusinessIndustrialDashboardPage /></ProtectedRoute>} />
+                                <Route path="/business-industrial/listings" element={<ProtectedRoute permissions={['business_industrial.listings.view']} loginPath="/business-industrial/login"><BusinessIndustrialListingsPage /></ProtectedRoute>} />
+                                <Route path="/business-industrial/import" element={<ProtectedRoute permissions={['business_industrial.import']} loginPath="/business-industrial/login"><BusinessIndustrialImportPage /></ProtectedRoute>} />
+                                <Route path="/business-industrial/review" element={<ProtectedRoute permissions={['business_industrial.review']} loginPath="/business-industrial/login"><BusinessIndustrialReviewPage /></ProtectedRoute>} />
+                                <Route path="/business-industrial/stores" element={<ProtectedRoute permissions={['business_industrial.stores.view']} loginPath="/business-industrial/login"><BusinessIndustrialStoresPage /></ProtectedRoute>} />
+                                <Route path="/business-industrial/incidents" element={<ProtectedRoute permissions={['business_industrial.incidents.view']} loginPath="/business-industrial/login"><BusinessIndustrialIncidentsPage /></ProtectedRoute>} />
+                                <Route path="/business-industrial/users" element={<ProtectedRoute permissions={['business_industrial.users.manage']} loginPath="/business-industrial/login"><BusinessIndustrialUsersPage /></ProtectedRoute>} />
+                            </Routes>
+                        </BusinessIndustrialShell>
+                    </ProtectedRoute>
+                } />
             </Routes>
         </Router>
         </BrandingProvider>
@@ -163,4 +188,3 @@ function App() {
 }
 
 export default App
-

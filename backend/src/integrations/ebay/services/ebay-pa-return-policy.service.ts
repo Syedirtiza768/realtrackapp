@@ -228,7 +228,7 @@ export class EbayPaReturnPolicyService {
           canEvaluateReturnPolicyCompliance(c.rawPayload ?? {}),
         )?.rawPayload;
       const body = buildPaCompliantReturnPolicyRequest(marketplaceId, template);
-      body.name = 'P&A Compliant Return (RealTrack)';
+      body.name = 'P&A Compliant Return (Omni Core)';
       const created = await this.sellAccount.createReturnPolicy(
         token,
         baseUrl,
