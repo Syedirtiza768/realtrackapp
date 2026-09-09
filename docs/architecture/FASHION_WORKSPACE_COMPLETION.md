@@ -2,7 +2,7 @@
 
 ## Corrected production baseline (2026-09-09, later verification)
 
-The earlier Fashion-only baseline assumption below is superseded: Docker labels and runtime files prove the active release is `/home/ubuntu/realtrackapp-bi-release-20260909-01`, including deployed Business & Industrial code. The candidate has been overlaid onto that live source snapshot to preserve B&I. Do not deploy commit `9e0d797` by itself. GitHub push was blocked by automatic approval review pending explicit authorization for `Syedirtiza768/realtrackapp`. No live services, database or passwords have been changed by this completion session.
+The earlier Fashion-only baseline assumption below is superseded: Docker labels and runtime files proved the active release was `/home/ubuntu/realtrackapp-bi-release-20260909-01`, including deployed Business & Industrial code. The release was overlaid onto that live source snapshot to preserve B&I. Commit `475b716` was deployed on 2026-09-09; migration `1790700000000` is applied, the Fashion admin seed is verified, and rollback tags are retained. The existing admin password was not changed; first-login password setup is enforced.
 
 ## Implemented in this release candidate
 

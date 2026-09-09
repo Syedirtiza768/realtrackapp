@@ -1,6 +1,6 @@
 > ⚠️ MOVED → [/docs/architecture/DEPLOYMENT.md](DEPLOYMENT.md) (2026-06-06)
 
-> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+> Fashion deployment (2026-09-09): commit `475b716` is deployed to the active `realtrackapp` Compose project from a source overlay that preserves the live Business & Industrial release. Migration `1790700000000` is applied and rollback image tags are retained.
 
 # Deployment Architecture
 

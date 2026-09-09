@@ -1,6 +1,6 @@
 # Setup
 
-> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+> Fashion deployment (2026-09-09): commit `475b716` is deployed; migration `1790700000000` is applied and the idempotent Fashion admin seed is verified. See docs/architecture/FASHION_WORKSPACE_COMPLETION.md for seed variable names, verification, rollback, and remaining requirements.
 
 > **Source**: Consolidated from `docs/development/setup.md` and `docs/SETUP_AND_DEPLOYMENT.md` — 2026-05-29.
 > For environment variables reference, see [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md).
