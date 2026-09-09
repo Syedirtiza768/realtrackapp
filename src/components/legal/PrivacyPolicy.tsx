@@ -88,8 +88,8 @@ export default function PrivacyPolicy() {
         <div className="border-t border-slate-700 pt-6 text-sm text-slate-500">
           <p>
             RealTrack App —{' '}
-            <a href="https://mhn.realtrackapp.com" className="text-blue-400 hover:text-blue-300">
-              mhn.realtrackapp.com
+            <a href="https://app.omnicoreholding.com" className="text-blue-400 hover:text-blue-300">
+              app.omnicoreholding.com
             </a>
           </p>
         </div>

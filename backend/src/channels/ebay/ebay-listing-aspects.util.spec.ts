@@ -20,6 +20,12 @@ describe('ebay-listing-aspects.util', () => {
     expect(aspects.Type).toEqual(['Glass']);
   });
 
+  it('uses the non-applicable UPC value when the source has no barcode', () => {
+    expect(buildListingAspects({ brand: 'FEBI', mpn: '21684' }).UPC).toEqual([
+      'Does not apply',
+    ]);
+  });
+
   it('does not overwrite existing aspect values', () => {
     const aspects = buildListingAspects({
       brand: 'OTHER',

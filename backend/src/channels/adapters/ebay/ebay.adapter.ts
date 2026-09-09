@@ -13,6 +13,10 @@ import type {
 import { mapToEbayConditionEnum } from '../../ebay/ebay-listing-condition.util.js';
 import { toEbayInventoryApiMarketplaceId } from '../../ebay/ebay-marketplace-headers.util.js';
 import {
+  DEFAULT_MERCHANT_LOCATION_KEY,
+  isLegacyDefaultMerchantLocationKey,
+} from '../../ebay/ebay-inventory-location.util.js';
+import {
   extractEbayErrorParameter,
   isEbayOfferAlreadyExistsError,
 } from '../../ebay/ebay-api-error.util.js';
@@ -163,6 +167,15 @@ export class EbayAdapter implements ChannelAdapter {
         (listingData['marketplaceId'] as string) || 'EBAY_MOTORS_US';
       const marketplaceId = toEbayInventoryApiMarketplaceId(marketplaceRaw);
       const authHeaders = { Authorization: `Bearer ${tokens.accessToken}` };
+      const requestedLocationKey =
+        typeof listingData['locationKey'] === 'string'
+          ? listingData['locationKey'].trim()
+          : '';
+      const merchantLocationKey =
+        requestedLocationKey &&
+        !isLegacyDefaultMerchantLocationKey(requestedLocationKey)
+          ? requestedLocationKey
+          : DEFAULT_MERCHANT_LOCATION_KEY;
 
       await this.http.put(
         `/sell/inventory/v1/inventory_item/${sku}`,
@@ -195,7 +208,7 @@ export class EbayAdapter implements ChannelAdapter {
           },
         },
         categoryId: listingData['categoryId'],
-        merchantLocationKey: listingData['locationKey'] ?? 'default',
+        merchantLocationKey,
         listingDuration: 'GTC',
       };
       if (listingData['fulfillmentPolicyId']) {

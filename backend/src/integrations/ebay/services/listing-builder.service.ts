@@ -1,3 +1,6 @@
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
+import { VerticalsService } from '../../../verticals/verticals.service.js';
+import { Optional } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
@@ -21,6 +24,10 @@ import {
 } from '../../../channels/ebay/ebay-listing-text.util.js';
 
 import { applyImageOrderOverride } from '../../../channels/ebay/ebay-listing-images.util.js';
+import {
+  resolveSafePublishCategory,
+  SAFE_PUBLISH_FALLBACK_CATEGORY_NAME,
+} from '../../../channels/ebay/ebay-publish-category.util.js';
 
 import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
 
@@ -43,7 +50,7 @@ import {
   parseFitmentEntry,
   selectPublishFitmentSource,
 } from '../../../fitment/fitment-mvl.util.js';
-import type { EbayCompatibilityPayload } from '../../../channels/ebay/ebay-api.types.js';
+import type { EbayCompatibilityPayload, EbayConditionEnum } from '../../../channels/ebay/ebay-api.types.js';
 
 export interface ListingBuilderResult {
   publishRequest: PublishRequest;
@@ -73,6 +80,7 @@ export class ListingBuilderService {
     private readonly publishResolver: CatalogPublishResolverService,
 
     private readonly inventoryApi: EbayInventoryApiService,
+    @Optional() private readonly verticals?: VerticalsService,
   ) {}
 
   async build(params: {
@@ -87,6 +95,7 @@ export class ListingBuilderService {
     listingRecordId: string;
 
     storeId: string;
+    vertical?: ProductVertical;
   }): Promise<ListingBuilderResult> {
     const warnings: string[] = [];
 
@@ -135,6 +144,35 @@ export class ListingBuilderService {
 
     const listingRecord = resolved.listingRecord;
     const catalogProduct = resolved.catalogProduct;
+    const vertical: ProductVertical =
+      params.vertical ?? snapshot.vertical ?? catalogProduct?.vertical ?? listingRecord?.vertical ?? 'automotive';
+    const projection = vertical !== 'automotive' && this.verticals
+      ? await this.verticals.buildPublishProjection({
+          vertical,
+          product: (catalogProduct ?? {
+            vertical,
+            verticalAttributes: listingRecord?.verticalAttributes ?? {},
+            title: snapshot.title,
+            description: snapshot.description,
+            brand: snapshot.brand,
+            mpn: snapshot.mpn,
+            price: snapshot.price,
+            quantity: snapshot.quantity,
+            categoryId: snapshot.categoryId,
+            categoryName: null,
+            conditionId: snapshot.conditionId,
+            conditionLabel: snapshot.conditionLabel,
+            imageUrls: snapshot.imageUrls,
+          }) as any,
+          listing: listingRecord,
+          storeId: params.storeId,
+          marketplaceId: params.marketplaceId,
+        })
+      : null;
+    if (projection) {
+      warnings.push(...projection.warnings);
+      blockingErrors.push(...projection.blockingErrors);
+    }
 
     // Fitment-derived make/year range. catalog_products.fitmentData resolves
     // make against the canonical fitment_makes table during enrichment, which
@@ -143,7 +181,7 @@ export class ListingBuilderService {
     // recomposed title because this call site previously used cBrand
     // directly and never derived a year range at all). Fitment rows also
     // give us the actual compatible year span for the composed title.
-    const parsedFitmentRows = (catalogProduct?.fitmentData ?? [])
+    const parsedFitmentRows = (vertical === 'automotive' ? (catalogProduct?.fitmentData ?? []) : [])
       .map((row) => parseFitmentEntry(row))
       .filter((row): row is NonNullable<typeof row> => row !== null);
     const fitmentMake = parsedFitmentRows[0]?.make?.trim() || null;
@@ -222,9 +260,9 @@ export class ListingBuilderService {
       oemPartNumber: structuredOem,
     });
 
-    warnings.push(...titleResult.warnings);
+    if (vertical === 'automotive') warnings.push(...titleResult.warnings);
 
-    const title = titleResult.title;
+    const title = vertical === 'automotive' ? titleResult.title : (ov?.titleOverride?.trim() || projection?.title || snapshot.title);
 
     const descResult = buildEbayListingDescription({
       description: ov?.descriptionOverride?.trim() || snapshot.description,
@@ -240,9 +278,9 @@ export class ListingBuilderService {
       partType: snapshot.partType,
     });
 
-    warnings.push(...descResult.warnings);
+    if (vertical === 'automotive') warnings.push(...descResult.warnings);
 
-    const description = descResult.description;
+    const description = vertical === 'automotive' ? descResult.description : (ov?.descriptionOverride?.trim() || projection?.description || snapshot.description || title);
 
     const price =
       ov?.priceOverride != null
@@ -251,14 +289,36 @@ export class ListingBuilderService {
 
     const quantity = ov?.quantityOverride ?? snapshot.quantity ?? 0;
 
-    const categoryId =
+    let categoryId =
       ov?.categoryIdOverride?.trim() || snapshot.categoryId || '';
 
-    const condition = mapToEbayConditionEnum(
-      ov?.conditionOverride ?? snapshot.conditionId,
+    if (vertical === 'automotive') {
+    const safeCategory = resolveSafePublishCategory({
+        categoryId,
+        categoryName: catalogProduct?.categoryName ?? listingRecord?.categoryName,
+        listingText: [
+          snapshot.title,
+          snapshot.partType,
+          catalogProduct?.title,
+          listingRecord?.cType,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      });
+      if (safeCategory.changed) {
+        warnings.push(
+          `Replaced stale generic engine category ${categoryId || '(name only)'} with ${SAFE_PUBLISH_FALLBACK_CATEGORY_NAME} (${safeCategory.categoryId})`,
+        );
+        categoryId = safeCategory.categoryId;
+      }
+    }
 
-      'USED_GOOD',
-    );
+        const condition: EbayConditionEnum = vertical === 'automotive'
+      ? mapToEbayConditionEnum(
+          ov?.conditionOverride ?? snapshot.conditionId,
+          'USED_GOOD',
+        )
+      : ((projection?.condition as EbayConditionEnum) ?? 'NEW');
 
     if (!categoryId) {
       warnings.push(
@@ -485,13 +545,16 @@ export class ListingBuilderService {
       }
     }
 
-    const aspects = buildListingAspects({
+    const automotiveAspects = buildListingAspects({
       brand: snapshot.brand,
       mpn: snapshot.mpn,
       partType: snapshot.partType,
+      upc: listingRecord?.pUpc ?? catalogProduct?.upc,
     });
 
-    if (!aspects.Brand?.length) {
+    const aspects = vertical === 'automotive' ? automotiveAspects : (projection?.aspects ?? {});
+
+    if (vertical === 'automotive' && !aspects.Brand?.length) {
       aspects.Brand = ['Unbranded'];
       warnings.push(
         'Brand/Hersteller is missing — using "Unbranded" as fallback. Set the brand on the catalog product for better search ranking.',
@@ -516,16 +579,18 @@ export class ListingBuilderService {
       snapshot.catalogProductId;
 
     let compatibility: EbayCompatibilityPayload | undefined;
-    const fitmentOverride = ov?.fitmentOverride;
-    const fitmentSource =
-      Array.isArray(fitmentOverride) && fitmentOverride.length > 0
-        ? (fitmentOverride as Record<string, unknown>[])
-        : selectPublishFitmentSource(
-            resolved.catalogProduct?.fitmentData,
-            resolved.catalogProduct?.fitmentRows,
-          );
-
-    compatibility = fitmentDataToCompatibilityPayload(fitmentSource);
+if (vertical === 'automotive') {
+      const fitmentOverride = ov?.fitmentOverride;
+      const fitmentSource =
+        Array.isArray(fitmentOverride) && fitmentOverride.length > 0
+          ? (fitmentOverride as Record<string, unknown>[])
+          : selectPublishFitmentSource(
+              resolved.catalogProduct?.fitmentData,
+              resolved.catalogProduct?.fitmentRows,
+              { requireValidated: true },
+            );
+      compatibility = fitmentDataToCompatibilityPayload(fitmentSource);
+    }
 
     if (compatibility) {
       let supportsMotorsFitment = true;
@@ -552,6 +617,8 @@ export class ListingBuilderService {
     const publishRequest: PublishRequest = {
       listingId: listingRecordId,
 
+      vertical,
+
       storeIds: [params.storeId],
 
       sku,
@@ -565,10 +632,10 @@ export class ListingBuilderService {
       condition,
 
       conditionDescription:
-        snapshot.conditionLabel?.trim() ||
-        (isUsedEbayCondition(condition)
-          ? snapshot.partType?.trim() || title
-          : undefined),
+        vertical === 'automotive'
+          ? snapshot.conditionLabel?.trim() ||
+            (isUsedEbayCondition(condition) ? snapshot.partType?.trim() || title : undefined)
+          : projection?.conditionDescription || snapshot.conditionLabel?.trim() || undefined,
       listingDuration: 'GTC',
 
       price,

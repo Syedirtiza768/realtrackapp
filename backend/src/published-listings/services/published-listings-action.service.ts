@@ -8,6 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
+import {
+  formatEbayApiError,
+  formatEbayOverseasWarehouseBlockError,
+} from '../../channels/ebay/ebay-api-error.util.js';
 import { EbayPublishService } from '../../channels/ebay/ebay-publish.service.js';
 import { ListingActionLogWriterService } from '../../integrations/ebay/services/listing-action-log-writer.service.js';
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
@@ -110,6 +114,32 @@ export class PublishedListingsActionService {
     return null;
   }
 
+  private async runEbayOperation<T>(
+    listing: EbayPublishedListing,
+    operation: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await work();
+    } catch (error: unknown) {
+      const policyMessage = formatEbayOverseasWarehouseBlockError(error);
+      const message =
+        policyMessage ??
+        formatEbayApiError(
+          error,
+          error instanceof Error ? error.message : 'eBay revise failed',
+        );
+      this.logger.warn(
+        'Published listing action ' +
+          operation +
+          ' failed for SKU ' +
+          listing.sku +
+          ': ' +
+          message,
+      );
+      throw new BadRequestException(message);
+    }
+  }
   async revise(
     id: string,
     organizationId: string,
@@ -139,7 +169,11 @@ export class PublishedListingsActionService {
       dto.imageUrls != null ||
       dto.itemSpecifics != null
     ) {
-      const current = await this.inventoryApi.getItem(storeId, listing.sku);
+      const current = await this.runEbayOperation(
+        listing,
+        'read inventory item',
+        () => this.inventoryApi.getItem(storeId, listing.sku!),
+      );
       const updatedItem = {
         ...current,
         product: {
@@ -150,16 +184,20 @@ export class PublishedListingsActionService {
           ...(dto.itemSpecifics != null ? { aspects: dto.itemSpecifics } : {}),
         },
       };
-      await this.inventoryApi.createOrReplaceItem(
-        storeId,
-        listing.sku,
-        updatedItem,
+      await this.runEbayOperation(listing, 'write inventory item', () =>
+        this.inventoryApi.createOrReplaceItem(
+          storeId,
+          listing.sku!,
+          updatedItem,
+        ),
       );
 
       if (listing.offerId && dto.description != null) {
-        await this.inventoryApi.updateOffer(storeId, listing.offerId, {
-          listingDescription: dto.description,
-        });
+        await this.runEbayOperation(listing, 'update listing description', () =>
+          this.inventoryApi.updateOffer(storeId, listing.offerId!, {
+            listingDescription: dto.description,
+          }),
+        );
       }
     }
 
@@ -170,29 +208,33 @@ export class PublishedListingsActionService {
           'Listing has no offer ID for price/qty update — sync Inventory offers for this SKU first',
         );
       }
-      await this.inventoryApi.bulkUpdatePriceQuantity(storeId, [
-        {
-          offers: [
-            {
-              offerId,
-              ...(dto.price != null
-                ? {
-                    price: {
-                      value: String(dto.price),
-                      currency: listing.currency ?? 'USD',
-                    },
-                  }
-                : {}),
-              ...(dto.quantity != null
-                ? { availableQuantity: dto.quantity }
-                : {}),
-            },
-          ],
-        },
-      ]);
+      await this.runEbayOperation(listing, 'update price/quantity', () =>
+        this.inventoryApi.bulkUpdatePriceQuantity(storeId, [
+          {
+            offers: [
+              {
+                offerId,
+                ...(dto.price != null
+                  ? {
+                      price: {
+                        value: String(dto.price),
+                        currency: listing.currency ?? 'USD',
+                      },
+                    }
+                  : {}),
+                ...(dto.quantity != null
+                  ? { availableQuantity: dto.quantity }
+                  : {}),
+              },
+            ],
+          },
+        ]),
+      );
     }
 
-    await this.sync.syncListingById(listing.id, organizationId);
+    await this.runEbayOperation(listing, 'sync revised listing', () =>
+      this.sync.syncListingById(listing.id, organizationId),
+    );
 
     const refreshed = await this.listingRepo.findOneByOrFail({ id });
 
@@ -334,7 +376,9 @@ export class PublishedListingsActionService {
     );
 
     // Sync the local record to pick up the updated listingPolicies
-    await this.sync.syncListingById(listing.id, organizationId);
+    await this.runEbayOperation(listing, 'sync revised listing', () =>
+      this.sync.syncListingById(listing.id, organizationId),
+    );
 
     const refreshed = await this.listingRepo.findOneByOrFail({ id });
 

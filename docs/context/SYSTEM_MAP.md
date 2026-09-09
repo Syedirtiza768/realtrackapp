@@ -1,5 +1,7 @@
 # System Map
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Moved from `docs/CODEMAP.md` (2026-05-29).
 > This is the anchor reference for navigating the entire codebase.
 > For architecture overview, see [/docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md).

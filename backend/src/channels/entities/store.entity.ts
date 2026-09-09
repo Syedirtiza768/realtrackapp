@@ -61,6 +61,10 @@ export class Store {
   @Column({ type: 'jsonb', default: '{}' })
   config!: Record<string, unknown>;
 
+  /** Explicit product-vertical rollout configuration; null preserves legacy automotive behavior. */
+  @Column({ name: 'vertical_config', type: 'jsonb', nullable: true })
+  verticalConfig!: Record<string, unknown> | null;
+
   /** Per-store metrics cache */
   @Column({ name: 'metrics_cache', type: 'jsonb', default: '{}' })
   metricsCache!: Record<string, unknown>;

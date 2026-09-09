@@ -49,6 +49,10 @@ import {
   parsePipelineUploadRows,
   validatePipelineGridxHeaders,
 } from './pipeline-gridx-format.js';
+import {
+  DEFAULT_PRODUCT_VERTICAL,
+  type ProductVertical,
+} from '../verticals/vertical.types.js';
 
 const SINGLE_LISTING_DEFAULT_PRICE = 100;
 const SINGLE_LISTING_DEFAULT_QUANTITY = 1;
@@ -193,6 +197,7 @@ export class PipelineService {
     manageAllTeams = false,
     profileOptions?: PipelineUploadProfileOptions,
     user?: User,
+    vertical: ProductVertical = DEFAULT_PRODUCT_VERTICAL,
   ): Promise<PipelineJob> {
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
 
@@ -205,6 +210,16 @@ export class PipelineService {
       );
     }
 
+    if (vertical !== DEFAULT_PRODUCT_VERTICAL) {
+      const multiVerticalEnabled = await this.featureFlagService.isEnabled(
+        'multi_vertical_catalog',
+      );
+      if (!multiVerticalEnabled) {
+        throw new ServiceUnavailableException(
+          'The selected product vertical is not enabled for this workspace.',
+        );
+      }
+    }
     if (!teamId) {
       throw new BadRequestException('teamId is required');
     }
@@ -314,6 +329,7 @@ export class PipelineService {
         teamId,
         conditionLabel: conditionLabel.trim(),
         marketplace,
+        vertical,
         storeId,
         shippingProfileName: shippingProfileName.trim(),
         returnProfileName: returnProfileName.trim(),
@@ -803,6 +819,7 @@ export class PipelineService {
         totalParts: job.totalParts,
         conditionLabel: job.conditionLabel,
         marketplace: job.marketplace,
+        vertical: job.vertical ?? DEFAULT_PRODUCT_VERTICAL,
         store: store ?? null,
         shippingProfileName: job.shippingProfileName,
         returnProfileName: job.returnProfileName,

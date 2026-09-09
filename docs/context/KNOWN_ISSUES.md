@@ -1,5 +1,7 @@
 # Known Issues
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Moved from `docs/KNOWN_GAPS_AND_RISKS.md` (2026-05-29).
 > This is the master file for known issues, risks, and technical debt.
 > For prioritized action items, see [NEXT_STEPS.md](NEXT_STEPS.md).

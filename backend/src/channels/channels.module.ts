@@ -32,6 +32,7 @@ import { EbayAuthService } from './ebay/ebay-auth.service.js';
 import { EbayInventoryApiService } from './ebay/ebay-inventory-api.service.js';
 import { EbayTaxonomyApiService } from './ebay/ebay-taxonomy-api.service.js';
 import { EbayTaxonomyCacheService } from './ebay/ebay-taxonomy-cache.service.js';
+import { EbaySellingMetadataService } from './ebay/ebay-selling-metadata.service.js';
 import { EbayFulfillmentApiService } from './ebay/ebay-fulfillment-api.service.js';
 import { EbayBrowseApiService } from './ebay/ebay-browse-api.service.js';
 import { EbayTradingApiService } from './ebay/ebay-trading-api.service.js';
@@ -105,6 +106,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     EbayAuthService,
     EbayInventoryApiService,
     EbayTaxonomyCacheService,
+    EbaySellingMetadataService,
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,
@@ -127,6 +129,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     EbayAuthService,
     EbayInventoryApiService,
     EbayTaxonomyCacheService,
+    EbaySellingMetadataService,
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,

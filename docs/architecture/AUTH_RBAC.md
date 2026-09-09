@@ -1,5 +1,7 @@
 # Auth & RBAC
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Consolidated from `docs/RBAC_AND_SECURITY.md` (374 lines) and `docs/architecture/auth-rbac.md` (106 lines) — 2026-05-29.
 > For the security checklist and operational concerns, see [SECURITY.md](SECURITY.md).
 

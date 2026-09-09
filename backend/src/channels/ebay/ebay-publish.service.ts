@@ -1,8 +1,11 @@
+import { FeatureFlagService } from '../../common/feature-flags/feature-flag.service.js';
+import type { ProductVertical } from '../../verticals/vertical.types.js';
 import {
   Injectable,
   Logger,
   BadRequestException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -51,12 +54,14 @@ import { mapToEbayConditionEnum } from './ebay-listing-condition.util.js';
 import {
   extractEbayErrorParameter,
   formatEbayApiError,
+  formatEbayOverseasWarehouseBlockError,
   isEbayInvalidAccessTokenError,
   isEbayInvalidCategoryError,
   isEbayInvalidCompatibilitiesError,
   isEbayInvalidItemConditionError,
   isEbayAvailabilityMissingTransientError,
   isEbayOfferAlreadyExistsError,
+  isEbayOfferUnavailableError,
   isEbayPartsAccessoriesReturnPolicyError,
   isEbayRecoverableBusinessPolicyError,
   isEbaySellingLimitError,
@@ -91,7 +96,17 @@ import {
   selectPublishFitmentSource,
 } from '../../fitment/fitment-mvl.util.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
+import { resolveMotorsCategoryFromPart } from './ebay-german-listing.util.js';
 import { conflictSafeSkuFor } from './ebay-sku.util.js';
+import {
+  resolveSafePublishCategory,
+  SAFE_PUBLISH_FALLBACK_CATEGORY_ID,
+  SAFE_PUBLISH_FALLBACK_CATEGORY_NAME,
+} from './ebay-publish-category.util.js';
+import {
+  isLegacyDefaultMerchantLocationKey,
+  resolvePreferredMerchantLocationKey,
+} from './ebay-inventory-location.util.js';
 
 /** Filter out S3 temp-path URLs that may have been cleaned up. */
 function filterTempS3Urls(urls: string[]): string[] {
@@ -113,6 +128,8 @@ function normalizePublishedDescription(value: unknown): string {
 export interface PublishRequest {
   /** Internal listing/product ID */
   listingId: string;
+  /** Resolved product vertical; omitted legacy requests resolve to automotive. */
+  vertical?: ProductVertical;
   /** Target store(s) to publish to */
   storeIds: string[];
   /** SKU — must be unique per store */
@@ -170,7 +187,7 @@ export interface PublishResult {
   success: boolean;
   offerId?: string;
   listingId?: string;
-  /** Actual eBay Seller SKU; differs from the catalog SKU only on BLAP fallback. */
+  /** Actual eBay Seller SKU; differs from the catalog SKU when collision recovery selects an alternate. */
   effectiveSku?: string;
   error?: string;
   /** Internal: SellerPundit bulk-create platform defect — triggers direct eBay fallback. */
@@ -251,6 +268,7 @@ export class EbayPublishService {
     private readonly ebayMedia: EbayMediaApiService,
     @Optional()
     private readonly compatibilityReconciler?: EbayCompatibilityReconciliationService,
+    @Optional() private readonly featureFlags?: FeatureFlagService,
   ) {}
 
   /**
@@ -486,6 +504,7 @@ export class EbayPublishService {
     const source = selectPublishFitmentSource(
       catalog.fitmentData as Record<string, unknown>[] | null | undefined,
       catalog.fitmentRows as Record<string, unknown>[] | null | undefined,
+      { requireValidated: true },
     );
     const compatibility = fitmentDataToCompatibilityPayload(source);
     if (compatibility) return compatibility;
@@ -726,6 +745,53 @@ export class EbayPublishService {
     );
   }
 
+  /**
+   * Build the safest retry payload after eBay rejects all compatibility rows.
+   *
+   * The local MVL validator verifies Make/Model/Year. Trim, Engine, and notes
+   * can still come from catalog data whose vocabulary differs from the target
+   * eBay marketplace (for example, a regional engine description). Keep the
+   * validated core fields for the retry and omit those unverified details.
+   */
+  private buildCoreCompatibilityFallback(
+    compatibility?: EbayCompatibilityPayload,
+  ): EbayCompatibilityPayload | undefined {
+    if (!compatibility?.compatibleProducts?.length) return undefined;
+
+    const compatibleProducts: EbayCompatibilityPayload['compatibleProducts'] =
+      [];
+    const seenRows = new Set<string>();
+
+    for (const row of compatibility.compatibleProducts) {
+      const values = new Map<string, string>();
+      for (const property of row.compatibilityProperties ?? []) {
+        const name = property.name.trim().toLowerCase();
+        const value = property.value.trim();
+        if (value && (name === 'make' || name === 'model' || name === 'year')) {
+          values.set(name, value);
+        }
+      }
+
+      const make = values.get('make');
+      const model = values.get('model');
+      const year = values.get('year');
+      if (!make || !model || !year) continue;
+
+      const rowKey = `${make.toLowerCase()}|${model.toLowerCase()}|${year}`;
+      if (seenRows.has(rowKey)) continue;
+      seenRows.add(rowKey);
+      compatibleProducts.push({
+        compatibilityProperties: [
+          { name: 'Make', value: make },
+          { name: 'Model', value: model },
+          { name: 'Year', value: year },
+        ],
+      });
+    }
+
+    return compatibleProducts.length ? { compatibleProducts } : undefined;
+  }
+
   private async syncInventoryCompatibility(
     storeId: string,
     req: PublishRequest,
@@ -796,7 +862,15 @@ export class EbayPublishService {
       typeof conditionSource === 'string' ? conditionSource : undefined,
     );
 
-    if (!listing) {
+        if (!listing) {
+      if (req.vertical && req.vertical !== 'automotive') {
+        return {
+          ...req,
+          title: req.title?.trim() || '',
+          description: req.description?.trim() || req.title?.trim() || '',
+          compatibility: undefined,
+        };
+      }
       const desc = buildEbayListingDescription({
         description: req.description,
         title: req.title,
@@ -815,6 +889,36 @@ export class EbayPublishService {
       ? listing.customLabelSku?.trim() || req.sku
       : req.sku.trim();
     const catalog = await this.resolveCatalogProductForPublish(listing.id, sku);
+    const vertical: ProductVertical = req.vertical ?? listing.vertical ?? catalog?.vertical ?? 'automotive';
+    if (vertical !== 'automotive') {
+      const attributes = (listing.verticalAttributes ?? catalog?.verticalAttributes ?? {}) as Record<string, unknown>;
+      const aspects: Record<string, string[]> = { ...(req.aspects ?? {}) };
+      for (const [key, value] of Object.entries(attributes)) {
+        const values = Array.isArray(value) ? value.map(String) : [String(value ?? '')];
+        if (values.some((item) => item.trim())) aspects[key] = values.filter((item) => item.trim());
+      }
+      const brand = listing.cBrand?.trim() || catalog?.brand?.trim();
+      const mpn = listing.cManufacturerPartNumber?.trim() || catalog?.mpn?.trim();
+      if (brand && !aspects.Brand) aspects.Brand = [brand];
+      if (mpn && !aspects.MPN) aspects.MPN = [mpn];
+      const parsedPrice = parseFloat(listing.startPrice ?? '');
+      const parsedQty = parseInt(listing.quantity ?? '', 10);
+      return {
+        ...req,
+        vertical,
+        sku,
+        title: req.title?.trim() || listing.title?.trim() || catalog?.title?.trim() || '',
+        description: req.description?.trim() || listing.description?.trim() || catalog?.description?.trim() || req.title?.trim() || '',
+        categoryId: req.categoryId?.trim() || listing.categoryId?.trim() || catalog?.categoryId?.trim() || '',
+        condition: mappedCondition,
+        conditionDescription: req.conditionDescription?.trim() || listing.conditionLabel?.trim() || catalog?.conditionLabel?.trim() || undefined,
+        listingDuration: req.listingDuration?.trim() || 'GTC',
+        aspects,
+        compatibility: undefined,
+        price: req.price > 0 ? req.price : Number.isFinite(parsedPrice) ? parsedPrice : req.price,
+        quantity: Number.isFinite(parsedQty) && parsedQty >= 0 ? parsedQty : req.quantity,
+      };
+    }
     const compatibility = req.compatibility?.compatibleProducts?.length
       ? req.compatibility
       : await this.compatibilityFromCatalog(catalog);
@@ -855,7 +959,73 @@ export class EbayPublishService {
       (listing.duration?.trim().toUpperCase() === 'GTC' ? 'GTC' : undefined) ||
       'GTC';
 
-    let categoryId = req.categoryId?.trim() || listing.categoryId?.trim() || '';
+    let categoryId =
+      req.categoryId?.trim() ||
+      listing.categoryId?.trim() ||
+      catalog?.categoryId?.trim() ||
+      '';
+    let categoryName =
+     catalog?.categoryName?.trim() || listing.categoryName?.trim() || '';
+    const categoryText = [
+      title,
+      listing.cType,
+      catalog?.title,
+      catalog?.partType,
+      categoryName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    // Legacy imports can retain a valid leaf from the wrong Motors branch.
+    // Reconcile a deterministic part keyword at the final publish boundary so
+    // a car part cannot carry a motorcycle category into eBay compatibility
+    // validation (for example, BMW X5 coolant hose + motorcycle Radiators).
+    const deterministicCategory = resolveMotorsCategoryFromPart(
+      catalog?.partType ?? listing.cType,
+      categoryText,
+    );
+    if (
+      deterministicCategory &&
+      deterministicCategory.categoryId !== categoryId
+    ) {
+      const previousCategory = categoryId || categoryName || '(name only)';
+      categoryId = deterministicCategory.categoryId;
+      categoryName = deterministicCategory.categoryName;
+      await this.persistResolvedCategory(
+        { ...req, sku },
+        {
+          id: deterministicCategory.categoryId,
+          name: deterministicCategory.categoryName,
+          usedFallback: false,
+        },
+      );
+      this.logger.warn(
+        `Replaced stale Motors category ${previousCategory} for SKU ${sku} with ${deterministicCategory.categoryName} (${deterministicCategory.categoryId}) from listing keywords`,
+      );
+    }
+
+    const applySafeCategory = async (): Promise<void> => {
+      const safeCategory = resolveSafePublishCategory({
+        categoryId,
+        categoryName,
+        listingText: categoryText,
+      });
+      if (!safeCategory.changed) return;
+
+      const previousCategory = categoryId || categoryName || '(name only)';
+      categoryId = safeCategory.categoryId;
+      this.logger.warn(
+        `Replaced stale generic engine category ${previousCategory} for SKU ${sku} with ${SAFE_PUBLISH_FALLBACK_CATEGORY_NAME} (${SAFE_PUBLISH_FALLBACK_CATEGORY_ID})`,
+      );
+      if (catalog) {
+        await this.catalogRepo.update(catalog.id, {
+          categoryId: SAFE_PUBLISH_FALLBACK_CATEGORY_ID,
+          categoryName: SAFE_PUBLISH_FALLBACK_CATEGORY_NAME,
+        } as any);
+      }
+    };
+
+    await applySafeCategory();
 
     // When categoryId is empty, try to resolve from catalog product's categoryName
     // via the eBay Taxonomy API category suggestions. Use the Motors tree (100)
@@ -903,6 +1073,11 @@ export class EbayPublishService {
         }
       }
     }
+
+    // Taxonomy suggestions can themselves resolve a generic legacy Engine node.
+    // Apply the same guard after suggestion resolution before the request leaves
+    // this service.
+    await applySafeCategory();
 
     return {
       ...req,
@@ -1029,6 +1204,10 @@ export class EbayPublishService {
     }
 
     const enriched = await this.enrichPublishRequest(req);
+    const requestedVertical: ProductVertical = enriched.vertical ?? 'automotive';
+    if (requestedVertical !== 'automotive' && (!this.featureFlags || !(await this.featureFlags.isEnabled('multi_vertical_catalog')))) {
+      throw new ServiceUnavailableException('Non-automotive eBay publishing is disabled until the multi_vertical_catalog pilot is enabled.');
+    }
     const listing = await this.listingRepo.findOne({
       where: { id: enriched.listingId },
     });
@@ -1049,7 +1228,8 @@ export class EbayPublishService {
       enriched.listingId,
       enriched.sku,
     );
-    const parsedFitmentRows = (catalogForText?.fitmentData ?? [])
+    const isAutomotive = requestedVertical === 'automotive';
+    const parsedFitmentRows = (isAutomotive ? (catalogForText?.fitmentData ?? []) : [])
       .map((row) => parseFitmentEntry(row))
       .filter((row): row is NonNullable<typeof row> => row !== null);
     const fitmentMake = parsedFitmentRows[0]?.make?.trim() || null;
@@ -1079,7 +1259,8 @@ export class EbayPublishService {
       fitmentMake ||
       null;
 
-    const sanitized = sanitizePublishListingText({
+    const sanitized = isAutomotive
+      ? sanitizePublishListingText({
       title: enriched.title,
       description: enriched.description,
       sku: enriched.sku,
@@ -1092,7 +1273,12 @@ export class EbayPublishService {
       position: (listing?.cPlacement ?? '').trim() || null,
       partName: (listing?.cType ?? '').trim() || null,
       oemPartNumber: listingOem.trim() || null,
-    });
+      })
+      : {
+          title: enriched.title?.trim() || '',
+          description: enriched.description?.trim() || '',
+          warnings: [],
+        };
     if (sanitized.warnings.length) {
       this.logger.debug(
         `Publish text warnings for "${enriched.sku}": ${sanitized.warnings.join('; ')}`,
@@ -1445,6 +1631,24 @@ export class EbayPublishService {
       }
     }
 
+    if (account) {
+      const assignedSku = await this.resolveExistingChannelSku(
+        account,
+        store,
+        req,
+      );
+      if (assignedSku && assignedSku !== req.sku) {
+        this.logger.warn(
+          'Reusing effective eBay SKU ' +
+            assignedSku +
+            ' for canonical SKU ' +
+            req.sku +
+            ' on store ' +
+            store.storeName,
+        );
+        req = { ...req, sku: assignedSku };
+      }
+    }
     // eBay inventory SKUs are account-scoped. Before either the SellerPundit
     // or direct path writes an item, prove that an existing remote item is
     // owned by this local channel. If eBay has an unrelated item under the
@@ -1454,36 +1658,44 @@ export class EbayPublishService {
       await this.assertRemoteSkuOwnership(storeId, store, req, account);
     } catch (collisionErr: unknown) {
       const canonicalSku = req.sku;
-      const alternateSku = conflictSafeSkuFor(canonicalSku);
-      if (!alternateSku) {
-        return this.formatDirectPublishFailure(
-          store,
-          storeId,
-          req,
-          collisionErr,
-          account,
-        );
+      let lastCollisionError: unknown = collisionErr;
+      let lastAttemptedSku = canonicalSku;
+      let recovered = false;
+
+      for (let variant = 0; variant < 4; variant += 1) {
+        const alternateSku = conflictSafeSkuFor(canonicalSku, variant);
+        if (!alternateSku || alternateSku === canonicalSku) break;
+        const alternateReq = { ...req, sku: alternateSku };
+        lastAttemptedSku = alternateSku;
+        try {
+          await this.assertRemoteSkuOwnership(
+            storeId,
+            store,
+            alternateReq,
+            account,
+          );
+          req = alternateReq;
+          recovered = true;
+          this.logger.warn(
+            'Canonical eBay SKU ' +
+              canonicalSku +
+              ' is occupied; ' +
+              'using deterministic conflict-safe SKU ' +
+              req.sku +
+              '.',
+          );
+          break;
+        } catch (alternateErr: unknown) {
+          lastCollisionError = alternateErr;
+        }
       }
 
-      const alternateReq = { ...req, sku: alternateSku };
-      try {
-        await this.assertRemoteSkuOwnership(
-          storeId,
-          store,
-          alternateReq,
-          account,
-        );
-        req = alternateReq;
-        this.logger.warn(
-          `Canonical eBay SKU ${canonicalSku} is occupied; ` +
-            `using deterministic conflict-safe SKU ${req.sku}.`,
-        );
-      } catch (alternateErr: unknown) {
+      if (!recovered) {
         return this.formatDirectPublishFailure(
           store,
           storeId,
-          alternateReq,
-          alternateErr,
+          { ...req, sku: lastAttemptedSku },
+          lastCollisionError,
           account,
         );
       }
@@ -1502,12 +1714,12 @@ export class EbayPublishService {
       if (spResult.success) {
         try {
           await this.syncInventoryCompatibility(storeId, req);
-           if (spResult.offerId) {
-             await this.refreshPublishedOfferCompatibility(
-               storeId,
-               spResult.offerId,
-               req,
-             );
+          if (spResult.offerId) {
+            await this.refreshPublishedOfferCompatibility(
+              storeId,
+              spResult.offerId,
+              req,
+            );
           }
           if (!spResult.offerId || !spResult.listingId) {
             throw new BadRequestException(
@@ -1630,7 +1842,7 @@ export class EbayPublishService {
         inventoryItem,
       );
 
-       await this.refreshPublishedOfferCompatibility(storeId, offerId, req);
+      await this.refreshPublishedOfferCompatibility(storeId, offerId, req);
 
       let publishResult: EbayPublishResponse;
       let publishedOfferId = offerId;
@@ -1671,6 +1883,40 @@ export class EbayPublishService {
           } else {
             throw publishErr;
           }
+        } else if (isEbayOfferUnavailableError(publishErr)) {
+          // eBay can leave an offer id in our local path after the remote
+          // offer has expired or been removed. Reusing that id returns 25713
+          // forever; remove the stale offer/item, restore compatibility, and
+          // create one fresh offer for this publish attempt.
+          this.logger.warn(
+            `Publish for SKU ${req.sku} referenced unavailable offer ${offerId} — purging stale eBay inventory and retrying with a fresh offer`,
+          );
+          await this.purgeStaleEbayInventory(
+            storeId,
+            req.sku,
+            offerId,
+            inventoryItem,
+          );
+          await this.syncInventoryCompatibility(storeId, req);
+          const freshOfferId = await this.resolveOrCreateOfferId(
+            storeId,
+            offer,
+            store,
+            inventoryItem,
+          );
+          publishedOfferId = freshOfferId;
+          await this.refreshPublishedOfferCompatibility(
+            storeId,
+            freshOfferId,
+            req,
+          );
+          publishResult = await this.publishOfferWithRetries(
+            storeId,
+            freshOfferId,
+            store,
+            account,
+            req,
+          );
         } else if (isEbayInvalidCategoryError(publishErr)) {
           // Re-resolve the category to a valid leaf — the stored category may
           // be a non-leaf parent that eBay rejects with error 25005.
@@ -1745,11 +1991,11 @@ export class EbayPublishService {
       }
 
       try {
-         await this.refreshPublishedOfferCompatibility(
-           storeId,
-           publishedOfferId,
-           req,
-         );
+        await this.refreshPublishedOfferCompatibility(
+          storeId,
+          publishedOfferId,
+          req,
+        );
         await this.verifyPublishedProjection(
           storeId,
           publishedOfferId,
@@ -1817,6 +2063,30 @@ export class EbayPublishService {
    * the same SKU. This is the guard that prevents the A2123520202/Cadillac
    * cross-listing failure from recurring.
    */
+  private async resolveExistingChannelSku(
+    account: ConnectedEbayAccount,
+    store: Store,
+    req: PublishRequest,
+  ): Promise<string | undefined> {
+    const canonicalSku = req.sku.trim();
+    const catalog = await this.catalogRepo.findOne({
+      where: { sku: canonicalSku },
+    });
+    if (!catalog) return undefined;
+
+    const channel = await this.channelRepo.findOne({
+      where: {
+        organizationId: account.organizationId,
+        catalogProductId: catalog.id,
+        ebayAccountId: account.id,
+        marketplaceId: this.resolvePublishMarketplaceId(account, store),
+      },
+    });
+    const assignedSku = channel?.ebayInventorySku?.trim();
+    return assignedSku && assignedSku !== canonicalSku
+      ? assignedSku
+      : undefined;
+  }
   private async assertRemoteSkuOwnership(
     storeId: string,
     store: Store,
@@ -1831,7 +2101,9 @@ export class EbayPublishService {
       throw new BadRequestException(
         `Cannot verify eBay SKU ${req.sku} before publishing: ${formatEbayApiError(
           error,
-          error instanceof Error ? error.message : 'eBay inventory lookup failed',
+          error instanceof Error
+            ? error.message
+            : 'eBay inventory lookup failed',
         )}`,
       );
     }
@@ -1858,7 +2130,10 @@ export class EbayPublishService {
           marketplaceId,
         },
       });
-      if (localChannel?.listingId && existingListingIds.has(localChannel.listingId)) {
+      if (
+        localChannel?.listingId &&
+        existingListingIds.has(localChannel.listingId)
+      ) {
         return;
       }
       if (
@@ -1873,6 +2148,28 @@ export class EbayPublishService {
       }
     }
 
+    if (!localChannel && account) {
+      localChannel = await this.channelRepo.findOne({
+        where: {
+          organizationId: account.organizationId,
+          ebayAccountId: account.id,
+          marketplaceId,
+          ebayInventorySku: req.sku,
+        },
+      });
+    }
+    if (
+      localChannel?.listingId &&
+      existingListingIds.has(localChannel.listingId)
+    ) {
+      return;
+    }
+    if (
+      localChannel?.ebayInventorySku === req.sku &&
+      this.remoteItemMatchesCanonicalRequest(existing, req)
+    ) {
+      return;
+    }
     const remoteOfferCount =
       typeof offersPage.total === 'number'
         ? offersPage.total
@@ -1935,7 +2232,9 @@ export class EbayPublishService {
               `Expected ${expectedImageCount} image(s) but eBay returned ${actualImageCount}.`,
           );
         }
-        const expectedDescription = normalizePublishedDescription(req.description);
+        const expectedDescription = normalizePublishedDescription(
+          req.description,
+        );
         const actualDescription = normalizePublishedDescription(
           item.product?.description,
         );
@@ -1981,7 +2280,10 @@ export class EbayPublishService {
           }
         }
         const expectedLocation = expectedOffer.merchantLocationKey?.trim();
-        if (expectedLocation && offer.merchantLocationKey !== expectedLocation) {
+        if (
+          expectedLocation &&
+          offer.merchantLocationKey !== expectedLocation
+        ) {
           throw new BadRequestException(
             `eBay location verification failed for SKU ${req.sku}, listing ${listingId}. ` +
               `Expected ${expectedLocation} but eBay returned ${offer.merchantLocationKey ?? '<missing>'}.`,
@@ -1991,7 +2293,9 @@ export class EbayPublishService {
       } catch (error: unknown) {
         lastError = error;
         if (attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1500 * (attempt + 1)),
+          );
         }
       }
     }
@@ -2021,12 +2325,11 @@ export class EbayPublishService {
     ) {
       return true;
     }
-    const expectedMpn = Object.entries(req.aspects ?? {})
-      .find(([name]) =>
-        /^(mpn|manufacturerpartnumber|oempartnumber|oempartnumber)/i.test(
-          name.replace(/[^a-z0-9]/gi, ''),
-        ),
-      )?.[1]?.[0];
+    const expectedMpn = Object.entries(req.aspects ?? {}).find(([name]) =>
+      /^(mpn|manufacturerpartnumber|oempartnumber|oempartnumber)/i.test(
+        name.replace(/[^a-z0-9]/gi, ''),
+      ),
+    )?.[1]?.[0];
     const remoteMpn =
       existing.product?.mpn ??
       Object.entries(existing.product?.aspects ?? {}).find(([name]) =>
@@ -2036,9 +2339,9 @@ export class EbayPublishService {
       )?.[1]?.[0];
     return Boolean(
       expectedMpn &&
-        remoteMpn &&
-        normalizePublishedDescription(expectedMpn) ===
-          normalizePublishedDescription(remoteMpn),
+      remoteMpn &&
+      normalizePublishedDescription(expectedMpn) ===
+        normalizePublishedDescription(remoteMpn),
     );
   }
 
@@ -2053,6 +2356,11 @@ export class EbayPublishService {
       err,
       err instanceof Error ? err.message : 'Publish failed',
     );
+    const locationPolicyError = formatEbayOverseasWarehouseBlockError(err, {
+      storeName: store.storeName,
+      merchantLocationKey: req.merchantLocationKey,
+    });
+    if (locationPolicyError) errorMsg = locationPolicyError;
     if (isEbayInvalidAccessTokenError(err)) {
       if (account?.connectionSource === 'sellerpundit') {
         void this.connectedAccountRepo
@@ -2126,7 +2434,8 @@ export class EbayPublishService {
     store: Store,
   ): string {
     const fromStore = resolveMarketplaceId(store);
-    if (!account || account.connectionSource !== 'sellerpundit') return fromStore;
+    if (!account || account.connectionSource !== 'sellerpundit')
+      return fromStore;
     return this.sellerpunditRegistry.resolveMarketplaceForAccount(
       account.sellerpunditAccountName ??
         account.accountDisplayName ??
@@ -2468,6 +2777,8 @@ export class EbayPublishService {
       merchantLocationKey &&
       mpRow.defaultInventoryLocationKey !== merchantLocationKey &&
       (!mpRow.defaultInventoryLocationKey ||
+        isLegacyDefaultMerchantLocationKey(mpRow.defaultInventoryLocationKey) ||
+        isLegacyDefaultMerchantLocationKey(req.merchantLocationKey) ||
         req.merchantLocationKey?.trim() ===
           mpRow.defaultInventoryLocationKey.trim())
     ) {
@@ -2882,16 +3193,22 @@ export class EbayPublishService {
     mpDefaultKey?: string | null,
     ebayAccountId?: string,
   ): Promise<string | undefined> {
-    let merchantLocationKey =
+    const storeConfig = store.config ?? {};
+    const directConfiguredKey =
       req.merchantLocationKey?.trim() ||
       mpDefaultKey?.trim() ||
       store.locationKey?.trim() ||
-      undefined;
+      (typeof storeConfig.locationKey === 'string'
+        ? storeConfig.locationKey.trim()
+        : undefined);
 
-    const storeConfig = store.config ?? {};
-    if (!merchantLocationKey && typeof storeConfig.locationKey === 'string') {
-      merchantLocationKey = storeConfig.locationKey.trim() || undefined;
-    }
+    let merchantLocationKey = directConfiguredKey
+      ? resolvePreferredMerchantLocationKey(
+          this.config,
+          store,
+          directConfiguredKey,
+        )
+      : undefined;
 
     if (!merchantLocationKey && ebayAccountId) {
       const sibling = await this.mpRepo.findOne({
@@ -2901,9 +3218,18 @@ export class EbayPublishService {
         },
       });
       if (sibling?.defaultInventoryLocationKey?.trim()) {
-        merchantLocationKey = sibling.defaultInventoryLocationKey.trim();
+        merchantLocationKey = resolvePreferredMerchantLocationKey(
+          this.config,
+          store,
+          sibling.defaultInventoryLocationKey,
+        );
       }
     }
+
+    merchantLocationKey ??= resolvePreferredMerchantLocationKey(
+      this.config,
+      store,
+    );
 
     // Do not trust a database key blindly. eBay locations can be deleted or
     // disabled independently of this app, which otherwise produces the
@@ -2920,7 +3246,8 @@ export class EbayPublishService {
         );
       }
       merchantLocationKey = ensured;
-    } else if (!merchantLocationKey) {
+    } else {
+      merchantLocationKey = undefined;
       this.logger.warn(
         `No inventory location for "${store.storeName}" — map a merchant location key in Settings → eBay Integrations.`,
       );
@@ -2997,6 +3324,10 @@ export class EbayPublishService {
       spResult.error ??
       spResult.errors?.join('; ') ??
       'SellerPundit publish failed';
+    const actionableError = formatEbayOverseasWarehouseBlockError(error, {
+      storeName: store.storeName,
+      merchantLocationKey: req.merchantLocationKey,
+    });
 
     if (!spResult.platformError) {
       this.logger.error(
@@ -3008,7 +3339,7 @@ export class EbayPublishService {
       storeId: store.id,
       storeName: store.storeName,
       success: false,
-      error,
+      error: actionableError ?? error,
       platformError: spResult.platformError,
     };
   }
@@ -3208,9 +3539,25 @@ export class EbayPublishService {
       // stale compatibility from the inventory item and retrying once.
       if (isEbayInvalidCompatibilitiesError(publishErr)) {
         this.logger.warn(
-          `Publish for offer ${offerId} (SKU ${req.sku}) rejected due to invalid compatibilities — reconciling and retrying`,
+          `Publish for offer ${offerId} (SKU ${req.sku}) rejected due to invalid compatibilities — retrying with validated core vehicle fields`,
         );
-        await this.syncInventoryCompatibility(storeId, req);
+        const fallbackCompatibility = this.buildCoreCompatibilityFallback(
+          req.compatibility,
+        );
+        const retryReq = fallbackCompatibility
+          ? { ...req, compatibility: fallbackCompatibility }
+          : req;
+        if (fallbackCompatibility) {
+          // The post-publish projection verifier must compare against the
+          // payload that eBay accepted, not the rejected optional fields.
+          req.compatibility = fallbackCompatibility;
+        }
+        await this.syncInventoryCompatibility(storeId, retryReq);
+        await this.refreshPublishedOfferCompatibility(
+          storeId,
+          offerId,
+          retryReq,
+        );
         return this.publishOfferWithTitlePropagationRetry(storeId, offerId);
       }
 

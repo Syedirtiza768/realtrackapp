@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 import {
   buildDefaultInventoryLocationPayload,
+  isLegacyDefaultMerchantLocationKey,
+  isUaeInventoryLocation,
   pickPreferredInventoryLocationKey,
   resolvePreferredMerchantLocationKey,
 } from './ebay-inventory-location.util.js';
@@ -19,6 +21,7 @@ import {
 import type {
   EbayInventoryItem,
   EbayInventoryItemPage,
+  EbayInventoryItemGroup,
   EbayOffer,
   EbayOfferResponse,
   EbayPublishResponse,
@@ -119,6 +122,45 @@ export class EbayInventoryApiService {
     this.logger.debug(`Upserted inventory item ${sku} for store ${storeId}`);
   }
 
+  /** Create or replace a variation family for Inventory API item-group publishing. */
+  async createOrReplaceInventoryItemGroup(
+    storeId: string,
+    inventoryItemGroupKey: string,
+    group: EbayInventoryItemGroup,
+  ): Promise<void> {
+    const cfg = await this.authHeaders(storeId);
+    await this.http.put(
+      `/inventory_item_group/${encodeURIComponent(inventoryItemGroupKey)}`,
+      group,
+      cfg,
+    );
+    this.logger.debug(`Upserted inventory item group ${inventoryItemGroupKey} for store ${storeId}`);
+  }
+
+  /** Get an Inventory API variation family. */
+  async getInventoryItemGroup(
+    storeId: string,
+    inventoryItemGroupKey: string,
+  ): Promise<EbayInventoryItemGroup> {
+    const cfg = await this.authHeaders(storeId);
+    const { data } = await this.http.get<EbayInventoryItemGroup>(
+      `/inventory_item_group/${encodeURIComponent(inventoryItemGroupKey)}`,
+      cfg,
+    );
+    return data;
+  }
+
+  /** Delete an Inventory API variation family. */
+  async deleteInventoryItemGroup(
+    storeId: string,
+    inventoryItemGroupKey: string,
+  ): Promise<void> {
+    const cfg = await this.authHeaders(storeId);
+    await this.http.delete(
+      `/inventory_item_group/${encodeURIComponent(inventoryItemGroupKey)}`,
+      cfg,
+    );
+  }
   /**
    * Get a single inventory item by SKU.
    */
@@ -318,6 +360,35 @@ export class EbayInventoryApiService {
     return data;
   }
 
+  /** Publish all offers associated with an Inventory API item group. */
+  async publishOfferByInventoryItemGroup(
+    storeId: string,
+    inventoryItemGroupKey: string,
+  ): Promise<EbayPublishResponse> {
+    const cfg = await this.authHeaders(storeId);
+    const { data } = await this.http.post<EbayPublishResponse>(
+      `/offer/publish_by_inventory_item_group`,
+      { inventoryItemGroupKey },
+      cfg,
+    );
+    this.logger.log(
+      `Published inventory item group ${inventoryItemGroupKey} for store ${storeId}`,
+    );
+    return data;
+  }
+
+  /** Withdraw all offers associated with an Inventory API item group. */
+  async withdrawOfferByInventoryItemGroup(
+    storeId: string,
+    inventoryItemGroupKey: string,
+  ): Promise<void> {
+    const cfg = await this.authHeaders(storeId);
+    await this.http.post(
+      `/offer/withdraw_by_inventory_item_group`,
+      { inventoryItemGroupKey },
+      cfg,
+    );
+  }
   // ──────────────────────────── Product Compatibility ──────────────
 
   /**
@@ -449,10 +520,16 @@ export class EbayInventoryApiService {
       const preferred = await this.getLocation(storeId, keyHint);
       if (
         preferred?.merchantLocationKey &&
-        preferred.merchantLocationStatus !== 'DISABLED'
+        preferred.merchantLocationStatus !== 'DISABLED' &&
+        isUaeInventoryLocation(preferred)
       ) {
         this.rememberVerifiedLocation(cacheKey, preferred.merchantLocationKey);
         return preferred.merchantLocationKey;
+      }
+      if (preferred?.merchantLocationKey) {
+        this.logger.warn(
+          `Ignored non-UAE or disabled inventory location "${preferred.merchantLocationKey}" for store ${storeId}; resolving the Dubai location instead`,
+        );
       }
 
       const { locations } = await this.getLocations(storeId);
@@ -481,7 +558,11 @@ export class EbayInventoryApiService {
       await this.createLocation(storeId, keyHint, payload);
       this.rememberVerifiedLocation(cacheKey, keyHint);
 
-      if (store && !store.locationKey) {
+      if (
+        store &&
+        (!store.locationKey ||
+          isLegacyDefaultMerchantLocationKey(store.locationKey))
+      ) {
         store.locationKey = keyHint;
         await this.storeRepo.save(store);
       }

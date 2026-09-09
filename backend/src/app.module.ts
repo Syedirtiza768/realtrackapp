@@ -41,6 +41,7 @@ import { EbayIntegrationsModule } from './integrations/ebay/ebay-integrations.mo
 import { ClientSettingsModule } from './client-settings/client-settings.module.js';
 import { PublishedListingsModule } from './published-listings/published-listings.module.js';
 import { TeamsModule } from './teams/teams.module.js';
+import { VerticalsModule } from './verticals/verticals.module.js';
 
 @Module({
   imports: [
@@ -125,6 +126,7 @@ import { TeamsModule } from './teams/teams.module.js';
     ClientSettingsModule,
     PublishedListingsModule,
     TeamsModule,
+    VerticalsModule,
   ],
   controllers: [AppController],
   providers: [

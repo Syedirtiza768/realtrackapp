@@ -1,5 +1,5 @@
 import SingleListingPipeline from './components/listings/SingleListingPipeline';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Outlet, Link } from 'react-router-dom';
 import Shell from './components/layout/Shell';
 import { AuthProvider } from './components/auth/AuthContext';
 import { BrandingProvider } from './contexts/BrandingContext';
@@ -53,6 +53,18 @@ import AiRoutingDashboardPage from './components/settings/AiRoutingDashboardPage
 import PublishedListingsPage from './components/published-listings/PublishedListingsPage';
 import PublishedListingDetailPage from './components/published-listings/PublishedListingDetailPage';
 import ImageDrivePage from './components/image-drive/ImageDrivePage';
+import FashionLoginPage from './components/fashion/FashionLoginPage';
+import FashionShell from './components/fashion/FashionShell';
+import FashionDashboardPage from './components/fashion/FashionDashboardPage';
+import FashionListingsPage from './components/fashion/FashionListingsPage';
+import FashionImportPage from './components/fashion/FashionImportPage';
+import FashionReviewPage from './components/fashion/FashionReviewPage';
+import FashionStoresPage from './components/fashion/FashionStoresPage';
+import FashionUsersPage from './components/fashion/FashionUsersPage';
+import FashionListingEditorPage from './components/fashion/FashionListingEditorPage';
+import FashionIncidentsPage from './components/fashion/FashionIncidentsPage';
+import FashionSettingsPage from './components/fashion/FashionSettingsPage';
+import FashionPasswordPage from './components/fashion/FashionPasswordPage';
 
 
 function App() {
@@ -64,10 +76,32 @@ function App() {
             <Routes>
                 {/* Auth routes (no Shell) */}
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/fashion/login" element={<FashionLoginPage />} />
+                <Route path="/fashion/change-password" element={<ProtectedRoute loginPath="/fashion/login"><FashionPasswordPage /></ProtectedRoute>} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/channels/ebay/callback" element={<EbayOAuthCallback />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
+
+                {/* Fashion routes use a separate shell and permission boundary. */}
+                <Route path="/fashion" element={
+                    <ProtectedRoute permissions={['fashion.access']} loginPath="/fashion/login">
+                        <FashionShell><Outlet /></FashionShell>
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<ProtectedRoute permissions={['fashion.dashboard.view']} loginPath="/fashion/login"><FashionDashboardPage /></ProtectedRoute>} />
+                    <Route path="listings" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionListingsPage /></ProtectedRoute>} />
+                    <Route path="listings/new" element={<ProtectedRoute permissions={['fashion.listings.create']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
+                    <Route path="listings/:id" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
+                    <Route path="listings/:id/edit" element={<ProtectedRoute permissions={['fashion.listings.update']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
+                    <Route path="import" element={<ProtectedRoute permissions={['fashion.import']} loginPath="/fashion/login"><FashionImportPage /></ProtectedRoute>} />
+                    <Route path="review" element={<ProtectedRoute permissions={['fashion.review']} loginPath="/fashion/login"><FashionReviewPage /></ProtectedRoute>} />
+                    <Route path="stores" element={<ProtectedRoute permissions={['fashion.stores.view']} loginPath="/fashion/login"><FashionStoresPage /></ProtectedRoute>} />
+                    <Route path="users" element={<ProtectedRoute permissions={['fashion.users.manage']} loginPath="/fashion/login"><FashionUsersPage /></ProtectedRoute>} />
+                    <Route path="incidents" element={<ProtectedRoute permissions={['fashion.incidents.manage']} loginPath="/fashion/login"><FashionIncidentsPage /></ProtectedRoute>} />
+                    <Route path="settings" element={<ProtectedRoute permissions={['fashion.settings.manage']} loginPath="/fashion/login"><FashionSettingsPage /></ProtectedRoute>} />
+                    <Route path="*" element={<div><h1 className="text-2xl font-semibold">Fashion page not found</h1><Link to="/fashion" className="mt-4 inline-block text-pink-600">Return to overview</Link></div>} />
+                </Route>
 
                 {/* App routes (with Shell) */}
                 <Route path="*" element={
@@ -118,6 +152,8 @@ function App() {
                     </Shell>
                     </ProtectedRoute>
                 } />
+
+
             </Routes>
         </Router>
         </BrandingProvider>
@@ -127,3 +163,4 @@ function App() {
 }
 
 export default App
+

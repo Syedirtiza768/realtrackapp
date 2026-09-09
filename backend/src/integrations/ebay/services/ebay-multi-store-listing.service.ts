@@ -124,6 +124,7 @@ export class EbayMultiStoreListingService {
     const resolvedProducts: Array<{
       sourceListingId: string;
       catalogProductId: string;
+      vertical: import('../../../verticals/vertical.types.js').ProductVertical;
     }> = [];
     const skipped: Array<{ listingId: string; reason: string }> = [];
     for (const listingId of listingIds) {
@@ -138,6 +139,7 @@ export class EbayMultiStoreListingService {
       resolvedProducts.push({
         sourceListingId: listingId,
         catalogProductId: resolved.snapshot.catalogProductId,
+        vertical: resolved.snapshot.vertical ?? 'automotive',
       });
     }
 
@@ -172,6 +174,7 @@ export class EbayMultiStoreListingService {
           listingJobId: savedJob.id,
           catalogProductId: product.catalogProductId,
           ebayAccountId: account.id,
+          vertical: product.vertical,
           marketplaceId:
             account.primaryStore?.ebayMarketplaceId ??
             (typeof account.primaryStore?.config?.marketplace === 'string'
@@ -259,6 +262,8 @@ export class EbayMultiStoreListingService {
     const canonicalProductId = await this.resolveCanonicalProductId(
       input.catalogProductId,
     );
+    const source = await this.publishResolver.resolve(input.sourceListingId ?? input.catalogProductId);
+    const vertical = source?.snapshot.vertical ?? 'automotive';
 
     const eligible: { ebayAccountId: string; marketplaceId: string }[] = [];
     const skipped: {
@@ -315,6 +320,7 @@ export class EbayMultiStoreListingService {
       const row = this.targetRepo.create({
         listingJobId: savedJob.id,
         catalogProductId: canonicalProductId,
+        vertical,
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
         status: 'pending',
@@ -356,6 +362,7 @@ export class EbayMultiStoreListingService {
       catalogProductId: t.catalogProductId,
       ebayAccountId: t.ebayAccountId,
       marketplaceId: t.marketplaceId,
+      vertical: t.vertical,
       storeId: t.ebayAccount?.primaryStoreId ?? null,
       storeName: t.ebayAccount?.primaryStore?.storeName ?? null,
       status: t.status,

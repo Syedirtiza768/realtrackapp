@@ -95,4 +95,60 @@ describe('EbayMediaApiService', () => {
     });
     expect(post).not.toHaveBeenCalled();
   });
+
+  it('keeps valid images when one source is permanently rejected by EPS', async () => {
+    const post = jest
+      .spyOn(axios, 'post')
+      .mockResolvedValueOnce({
+        data: { imageUrl: 'https://i.ebayimg.com/images/g/valid/s-l1600.jpg' },
+        headers: {},
+      } as any)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('invalid source'), {
+          isAxiosError: true,
+          response: {
+            status: 400,
+            data: {
+              message:
+                'No valid image can be downloaded from provided imageUrl',
+            },
+          },
+        }),
+      );
+
+    const urls = await service.hostImages('store-1', [
+      'https://bucket.example.com/valid.jpg',
+      'https://bucket.example.com/broken.jpg',
+    ]);
+
+    expect(urls).toEqual(['https://i.ebayimg.com/images/g/valid/s-l1600.jpg']);
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries transient EPS failures before succeeding', async () => {
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+    const post = jest
+      .spyOn(axios, 'post')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('upstream unavailable'), {
+          isAxiosError: true,
+          response: { status: 503, data: { message: 'Service unavailable' } },
+        }),
+      )
+      .mockResolvedValueOnce({
+        data: {
+          imageUrl: 'https://i.ebayimg.com/images/g/retried/s-l1600.jpg',
+        },
+        headers: {},
+      } as any);
+
+    const urls = await service.hostImages('store-1', [
+      'https://bucket.example.com/retried.jpg',
+    ]);
+
+    expect(urls).toEqual([
+      'https://i.ebayimg.com/images/g/retried/s-l1600.jpg',
+    ]);
+    expect(post).toHaveBeenCalledTimes(2);
+  });
 });

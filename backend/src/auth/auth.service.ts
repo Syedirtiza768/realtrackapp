@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -46,15 +47,20 @@ export class AuthService {
   async validateAndSign(
     email: string,
     password: string,
+    requestedVertical?: 'fashion',
   ): Promise<{ accessToken: string; user: Partial<User> } | null> {
     const user = await this.userRepo.findOne({
       where: { email: email.toLowerCase(), active: true },
-      select: ['id', 'email', 'passwordHash', 'name', 'role'],
+      select: ['id', 'email', 'passwordHash', 'name', 'role', 'passwordChangeRequired'],
     });
     if (!user) return null;
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return null;
+
+    if (requestedVertical === 'fashion' && !(await this.rbac.userHasPermission(user.id, 'fashion.access'))) {
+      throw new ForbiddenException('This account is not authorized for the Fashion workspace');
+    }
 
     // Update last login
     await this.userRepo.update(user.id, { lastLoginAt: new Date() });
@@ -69,6 +75,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        passwordChangeRequired: user.passwordChangeRequired,
       },
     };
   }
@@ -122,6 +129,9 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
+    if (Array.from(newPassword).length < 12 || Buffer.byteLength(newPassword, 'utf8') > 72) {
+      throw new BadRequestException('New password must be at least 12 characters and at most 72 UTF-8 bytes');
+    }
     const user = await this.userRepo.findOne({
       where: { id: userId, active: true },
       select: ['id', 'passwordHash'],
@@ -132,11 +142,22 @@ export class AuthService {
 
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      throw new BadRequestException('New password must be different from the current password');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.userRepo.update(userId, { passwordHash });
+    // Compare-and-swap prevents concurrent changes from accepting a stale password.
+    const updated = await this.userRepo.update(
+      { id: userId, active: true, passwordHash: user.passwordHash },
+      { passwordHash, passwordChangeRequired: false },
+    );
+    if (updated.affected !== 1) {
+      throw new ConflictException('Password changed concurrently. Please try again.');
+    }
   }
 
   async adminResetPassword(userId: string, newPassword: string): Promise<void> {

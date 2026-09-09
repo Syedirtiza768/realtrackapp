@@ -1,5 +1,7 @@
 # Component Map
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Moved from `docs/FRONTEND_MAP.md` (405 lines, 2026-05-29).
 > Complete reference for the React frontend structure.
 > For API clients, see [/docs/architecture/API_CONTRACTS.md](../architecture/API_CONTRACTS.md).

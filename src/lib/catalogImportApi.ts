@@ -1,3 +1,4 @@
+import type { ProductVertical } from './verticalsApi';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CatalogImport,
@@ -26,7 +27,7 @@ export function useUploadCsv() {
   const [result, setResult] = useState<UploadResponse | null>(null);
 
   const upload = useCallback(
-    async (file: File, columnMapping?: Record<string, string>) => {
+    async (file: File, columnMapping?: Record<string, string>, vertical: ProductVertical = 'automotive') => {
       setUploading(true);
       setProgress(0);
       setError(null);
@@ -38,6 +39,7 @@ export function useUploadCsv() {
         if (columnMapping) {
           formData.append('columnMapping', JSON.stringify(columnMapping));
         }
+        formData.append('vertical', vertical);
 
         // Use XMLHttpRequest for upload progress tracking
         const response = await new Promise<UploadResponse>((resolve, reject) => {

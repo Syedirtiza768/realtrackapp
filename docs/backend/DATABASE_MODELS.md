@@ -1,5 +1,7 @@
 # Database Models
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Note**: Lightweight satellite to [/docs/architecture/DATABASE_SCHEMA.md](../architecture/DATABASE_SCHEMA.md).
 > Extracted from entity details in `docs/architecture/database.md` (2026-05-29).
 > For the complete schema with columns and indexes, see DATABASE_SCHEMA.

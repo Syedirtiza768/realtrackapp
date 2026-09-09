@@ -24,6 +24,7 @@ export interface AuthUser {
   roleSlug: string;
   roleName: string;
   active: boolean;
+  passwordChangeRequired?: boolean;
   permissions: string[];
   lastLoginAt?: string | null;
   createdAt?: string;
@@ -47,7 +48,7 @@ interface AuthContextValue {
   sidebarModules: string[];
   loading: boolean;
   initializing: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, vertical?: 'fashion') => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
@@ -136,6 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       persistUser(data.user);
       setToken(currentToken);
 
+      if (data.user.passwordChangeRequired) {
+        setSidebarModules([]);
+        persistSidebarModules([]);
+        return;
+      }
       // Fetch sidebar module visibility
       try {
         const sidebar = await fetchWithAuth<{ visibleModules: string[] }>(
@@ -163,13 +169,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshSession]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, vertical?: 'fashion') => {
       setLoading(true);
       try {
         const res = await fetch(`${API}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, ...(vertical ? { vertical } : {}) }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));

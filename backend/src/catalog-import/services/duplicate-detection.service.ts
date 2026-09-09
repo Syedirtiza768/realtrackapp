@@ -1,3 +1,4 @@
+import type { ProductVertical } from '../../verticals/vertical.types.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -172,6 +173,7 @@ export class DuplicateDetectionService {
       title?: string | null;
       brand?: string | null;
     }>,
+    scope?: { organizationId?: string | null; vertical?: ProductVertical },
   ): Promise<Map<number, DuplicateCheckResult>> {
     const results = new Map<number, DuplicateCheckResult>();
 
@@ -179,11 +181,13 @@ export class DuplicateDetectionService {
     const skuEntries = products.filter((p) => p.sku);
     if (skuEntries.length > 0) {
       const skus = skuEntries.map((p) => p.sku!);
-      const existingBySku = await this.productRepo
+      const existingBySkuQuery = this.productRepo
         .createQueryBuilder('p')
         .select(['p.id', 'p.sku'])
-        .where('p.sku IN (:...skus)', { skus })
-        .getMany();
+        .where('p.sku IN (:...skus)', { skus });
+      if (scope?.organizationId) existingBySkuQuery.andWhere('p.organization_id = :scopeOrganizationId', { scopeOrganizationId: scope.organizationId });
+      if (scope?.vertical) existingBySkuQuery.andWhere(scope.vertical === 'automotive' ? '(p.vertical = :scopeVertical OR p.vertical IS NULL)' : 'p.vertical = :scopeVertical', { scopeVertical: scope.vertical });
+      const existingBySku = await existingBySkuQuery.getMany();
 
       const skuMap = new Map(existingBySku.map((p) => [p.sku, p.id]));
 
@@ -204,11 +208,13 @@ export class DuplicateDetectionService {
     const mpnEntries = products.filter((p) => p.mpn && !results.has(p.index));
     if (mpnEntries.length > 0) {
       const mpns = mpnEntries.map((p) => this.normalizeMpn(p.mpn!));
-      const existingByMpn = await this.productRepo
+      const existingByMpnQuery = this.productRepo
         .createQueryBuilder('p')
         .select(['p.id', 'p.mpnNormalized'])
-        .where('p.mpn_normalized IN (:...mpns)', { mpns })
-        .getMany();
+        .where('p.mpn_normalized IN (:...mpns)', { mpns });
+      if (scope?.organizationId) existingByMpnQuery.andWhere('p.organization_id = :scopeOrganizationId', { scopeOrganizationId: scope.organizationId });
+      if (scope?.vertical) existingByMpnQuery.andWhere(scope.vertical === 'automotive' ? '(p.vertical = :scopeVertical OR p.vertical IS NULL)' : 'p.vertical = :scopeVertical', { scopeVertical: scope.vertical });
+      const existingByMpn = await existingByMpnQuery.getMany();
 
       const mpnMap = new Map(existingByMpn.map((p) => [p.mpnNormalized, p.id]));
 
@@ -232,11 +238,13 @@ export class DuplicateDetectionService {
     );
     if (titleEntries.length > 0) {
       const titles = titleEntries.map((p) => this.normalizeTitle(p.title!));
-      const existingByTitle = await this.productRepo
+      const existingByTitleQuery = this.productRepo
         .createQueryBuilder('p')
         .select(['p.id', 'p.titleNormalized'])
-        .where('p.title_normalized IN (:...titles)', { titles })
-        .getMany();
+        .where('p.title_normalized IN (:...titles)', { titles });
+      if (scope?.organizationId) existingByTitleQuery.andWhere('p.organization_id = :scopeOrganizationId', { scopeOrganizationId: scope.organizationId });
+      if (scope?.vertical) existingByTitleQuery.andWhere(scope.vertical === 'automotive' ? '(p.vertical = :scopeVertical OR p.vertical IS NULL)' : 'p.vertical = :scopeVertical', { scopeVertical: scope.vertical });
+      const existingByTitle = await existingByTitleQuery.getMany();
 
       const titleMap = new Map(
         existingByTitle.map((p) => [p.titleNormalized, p.id]),

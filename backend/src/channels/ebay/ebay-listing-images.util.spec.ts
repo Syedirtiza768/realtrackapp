@@ -21,6 +21,22 @@ describe('ebay-listing-images.util', () => {
     expect(imageUrls).toEqual(['https://cdn.example.com/part.jpg']);
   });
 
+  it('expands the known PartsFinder rotating-image template', () => {
+    const { imageUrls } = sanitizeEbayImageUrls([
+      'https://cdn.partsfinder.bilsteingroup.com/pf-allaround-zoomed/1/21684/21684-{col}.jpg',
+    ]);
+    expect(imageUrls).toEqual([
+      'https://cdn.partsfinder.bilsteingroup.com/pf-allaround-details/1/21684/21684-01.jpg',
+    ]);
+  });
+
+  it('drops unresolved image templates', () => {
+    const { imageUrls } = sanitizeEbayImageUrls([
+      'https://cdn.example.com/part-{color}.jpg',
+    ]);
+    expect(imageUrls).toEqual([]);
+  });
+
   it('expands pipe-delimited image strings', () => {
     const { imageUrls } = sanitizeEbayImageUrls([
       'https://cdn.example.com/a.jpg|https://cdn.example.com/b.jpg',

@@ -1,4 +1,4 @@
-﻿import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { hasAllPermissions, hasAnyPermission } from '../../lib/permissions';
@@ -10,14 +10,17 @@ type ProtectedRouteProps = {
   permissions?: string[];
   /** When multiple permissions listed, require any (default) or all. */
   mode?: 'any' | 'all';
+  /** Login route used when the protected area has its own entry point. */
+  loginPath?: string;
 };
 
 export default function ProtectedRoute({
   children,
   permissions,
   mode = 'any',
+  loginPath = '/login',
 }: ProtectedRouteProps) {
-  const { isAuthenticated, initializing, permissions: granted } = useAuth();
+  const { isAuthenticated, initializing, permissions: granted, user } = useAuth();
   const location = useLocation();
 
   if (initializing) {
@@ -29,7 +32,11 @@ export default function ProtectedRoute({
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
+  }
+
+  if (user?.passwordChangeRequired && location.pathname !== '/fashion/change-password') {
+    return <Navigate to="/fashion/change-password" replace />;
   }
 
   if (permissions?.length) {

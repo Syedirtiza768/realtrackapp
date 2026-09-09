@@ -19,6 +19,7 @@ import { Public } from './decorators/public.decorator.js';
 import { CurrentUser } from './decorators/current-user.decorator.js';
 import { ChangePasswordDto, LoginDto, RegisterDto } from './dto/auth.dto.js';
 import { User } from './entities/user.entity.js';
+import { AllowPasswordChange } from './decorators/allow-password-change.decorator.js';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -33,7 +34,7 @@ export class AuthController {
   @Public()
   @Post('login')
   async login(@Body() body: LoginDto, @Req() req: Request) {
-    const result = await this.auth.validateAndSign(body.email, body.password);
+    const result = await this.auth.validateAndSign(body.email, body.password, body.vertical);
     if (!result) {
       await this.authAudit.log('auth.login_failed', {
         metadata: { email: body.email?.toLowerCase() },
@@ -75,6 +76,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @AllowPasswordChange()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Current authenticated user with permissions' })
@@ -82,7 +84,7 @@ export class AuthController {
     const profile = await this.rbac.getAuthProfile(user);
     const organizations = await this.userOrgs.listForUser(user.id);
     return {
-      user: profile,
+      user: { ...profile, passwordChangeRequired: user.passwordChangeRequired },
       organizations:
         organizations.length > 0
           ? organizations
@@ -104,6 +106,7 @@ export class AuthController {
   }
 
   @Patch('change-password')
+  @AllowPasswordChange()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Change current user password' })
@@ -130,7 +133,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      'List RealTrack workspaces for the signed-in user (internal tenant, not eBay)',
+      'List Omni Core workspaces for the signed-in user (internal tenant, not eBay)',
   })
   async listOrganizations(@CurrentUser() user: User) {
     const organizations = await this.userOrgs.listForUser(user.id);

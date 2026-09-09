@@ -27,8 +27,8 @@ async function bootstrap() {
   const defaultCorsOrigins = [
     'http://localhost:3911', // npm run dev (vite)
     'http://localhost:8050', // docker compose frontend (FRONTEND_PORT)
-    'https://mhn.realtrackapp.com',
-    'http://mhn.realtrackapp.com',
+    'https://app.omnicoreholding.com',
+    'http://app.omnicoreholding.com',
   ];
   const corsOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',')

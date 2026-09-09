@@ -99,23 +99,26 @@ export class ImageProcessorService {
         ? await sharp(buffer).rotate().toBuffer()
         : buffer;
 
-    // Resize original to max dimension + WebP (strip EXIF via sharp defaults)
+    // Always create a canonical WebP sibling for every non-WebP source. The
+    // previous implementation only wrote this sibling when the source was
+    // larger than MAX_ORIGINAL_DIMENSION, which left smaller uploads without
+    // the representation used by the frontend and eBay publishing path.
     const needsResize =
       originalWidth > MAX_ORIGINAL_DIMENSION ||
       originalHeight > MAX_ORIGINAL_DIMENSION;
 
-    if (needsResize) {
-      const resized = await sharp(orientedBuffer)
-        .resize(MAX_ORIGINAL_DIMENSION, MAX_ORIGINAL_DIMENSION, {
+    if (!/\.webp$/i.test(s3Key)) {
+      const webpPipeline = sharp(orientedBuffer);
+      if (needsResize) {
+        webpPipeline.resize(MAX_ORIGINAL_DIMENSION, MAX_ORIGINAL_DIMENSION, {
           fit: 'inside',
           withoutEnlargement: true,
-        })
-        .webp({ quality: 85 })
-        .toBuffer();
-
+        });
+      }
+      const webpBuffer = await webpPipeline.webp({ quality: 85 }).toBuffer();
       const webpKey = s3Key.replace(/\.\w+$/, '.webp');
-      await this.storage.putObject(webpKey, resized, 'image/webp');
-      this.logger.debug(`Resized original → ${webpKey}`);
+      await this.storage.putObject(webpKey, webpBuffer, 'image/webp');
+      this.logger.debug(`Generated canonical WebP → ${webpKey}`);
     }
 
     // Generate responsive variants

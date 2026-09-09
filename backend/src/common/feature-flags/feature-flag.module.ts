@@ -49,6 +49,11 @@ export class FeatureFlagModule implements OnModuleInit {
         'Enable VIN-to-listing enrichment pipeline',
         true,
       ],
+      [
+        'multi_vertical_catalog',
+        'Enable Business & Industrial and Fashion catalog workflows',
+        false,
+      ],
     ];
 
     try {

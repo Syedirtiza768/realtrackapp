@@ -1,5 +1,7 @@
 # Feature Registry
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **2026-07-12 publish-readiness update:** A completed enrichment pipeline automatically enqueues its mandatory US/AU/DE listing optimization pass. That pass discovers and validates structured fitment before eBay Motors publishing; the queue handoff is idempotent and retries transient worker failures.
 
 > **Source**: Extracted from `docs/product/features.md` (2026-05-29).

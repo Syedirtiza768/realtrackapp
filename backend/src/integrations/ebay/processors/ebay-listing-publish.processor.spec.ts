@@ -14,6 +14,28 @@ describe('isTransientPublishFailure', () => {
 
   it('does not retry deterministic validation failures', () => {
     expect(isTransientPublishFailure('Invalid category ID')).toBe(false);
+    expect(
+      isTransientPublishFailure(
+        'ReviseItem failed (21919474): Inventory-based listing management is not currently supported by this tool.',
+      ),
+    ).toBe(false);
+    expect(
+      isTransientPublishFailure(
+        'Only approved sellers may list this airbag item; do not relist it.',
+      ),
+    ).toBe(false);
+    expect(
+      isTransientPublishFailure(
+        'The item is mis-categorized. Select a different category.',
+      ),
+    ).toBe(false);
+  });
+
+  it('retries network and eBay service failures', () => {
+    expect(
+      isTransientPublishFailure('status code 503: service unavailable'),
+    ).toBe(true);
+    expect(isTransientPublishFailure('upstream connect error')).toBe(true);
   });
 });
 

@@ -25,6 +25,7 @@ export interface CatalogImport {
   mimeType: string | null;
   detectedHeaders: string[];
   columnMapping: Record<string, string> | null;
+  vertical?: 'automotive' | 'business_industrial' | 'fashion';
   status: CatalogImportStatus;
   totalRows: number;
   processedRows: number;

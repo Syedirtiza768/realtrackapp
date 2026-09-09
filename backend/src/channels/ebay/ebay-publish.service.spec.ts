@@ -598,7 +598,13 @@ describe('EbayPublishService', () => {
         id: 'cp-1',
         sku: 'SKU-001',
         fitmentData: [
-          { Make: 'Toyota', Model: 'Camry', Year: '2018', Trim: 'LE' },
+          {
+            Make: 'Toyota',
+            Model: 'Camry',
+            Year: '2018',
+            Trim: 'LE',
+            MvlStatus: 'valid',
+          },
         ],
       });
 

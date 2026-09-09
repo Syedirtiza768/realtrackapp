@@ -251,6 +251,20 @@ export class StorageService {
     return `https://${this.bucket}.s3.amazonaws.com/${s3Key}`;
   }
 
+
+  /**
+   * Return the verified canonical WebP URL for a first-party S3 image.
+   * External URLs and images without a generated sibling remain unchanged.
+   */
+  async getPreferredImageUrl(url: string): Promise<string> {
+    const key = this.keyFromUrl(url);
+    if (!key || /\.webp$/i.test(key) || !/\.(?:jpe?g|png|gif|bmp|heic|avif)$/i.test(key)) {
+      return url;
+    }
+
+    const webpKey = key.replace(/\.[^./]+$/i, '.webp');
+    return (await this.objectExists(webpKey)) ? this.getCdnUrl(webpKey) : url;
+  }
   /**
    * Download remote image URLs and store under catalog-import prefix.
    * Returns public HTTPS URLs (same shape as getCdnUrl). Failed URLs keep the original link.

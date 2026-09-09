@@ -53,7 +53,19 @@ export class StorageController {
     '.jpg',
     '.jpeg',
     '.gif',
+    '.bmp',
     '.heic',
+    '.avif',
+  ];
+  /** Original image extensions used when an optional WebP source is absent. */
+  private static readonly WEBP_FALLBACK_EXTS = [
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.bmp',
+    '.heic',
+    '.avif',
   ];
   /** Max concurrent on-demand sharp generations (protects CPU on t3.medium). */
   private static readonly MAX_VARIANT_GEN = 4;
@@ -427,6 +439,18 @@ export class StorageController {
       throw new NotFoundException('Missing S3 key');
     }
 
+    // Direct callers may still request the stored .jpg/.png URL. Redirect
+    // those requests to the sibling WebP object when it exists so the
+    // response URL and cache key match the representation being served.
+    const preferredKey = this.preferredWebpKey(s3Key);
+    if (
+      preferredKey !== s3Key &&
+      (await this.storageService.objectExists(preferredKey))
+    ) {
+      this.redirectToKey(preferredKey, res);
+      return;
+    }
+
     try {
       await this.streamObject(s3Key, res);
       return;
@@ -436,6 +460,16 @@ export class StorageController {
       if (!isMissing) {
         this.logger.warn(`S3 serve failed for key=${s3Key}: ${err?.message}`);
         throw new NotFoundException(`Image not found: ${s3Key}`);
+      }
+    }
+
+    // A WebP source is preferred but optional. If it is missing, redirect to
+    // the first available original sibling instead of returning a broken
+    // image or streaming a different representation under the .webp URL.
+    for (const fallbackKey of this.webpFallbackKeys(s3Key)) {
+      if (await this.storageService.objectExists(fallbackKey)) {
+        this.redirectToKey(fallbackKey, res);
+        return;
       }
     }
 
@@ -456,6 +490,37 @@ export class StorageController {
     }
 
     throw new NotFoundException(`Image not found: ${s3Key}`);
+  }
+
+  private preferredWebpKey(s3Key: string): string {
+    if (
+      StorageController.VARIANT_RE.test(s3Key) ||
+      /\.webp$/i.test(s3Key) ||
+      !/\.(?:jpe?g|png|gif|bmp|heic|avif)$/i.test(s3Key)
+    ) {
+      return s3Key;
+    }
+    return s3Key.replace(/\.[^./]+$/i, '.webp');
+  }
+
+  private webpFallbackKeys(s3Key: string): string[] {
+    if (!/\.webp$/i.test(s3Key) || StorageController.VARIANT_RE.test(s3Key)) {
+      return [];
+    }
+
+    const base = s3Key.slice(0, -'.webp'.length);
+    return StorageController.WEBP_FALLBACK_EXTS.map((ext) => base + ext);
+  }
+
+  private redirectToKey(s3Key: string, res: Response): void {
+    const encodedKey = s3Key
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    res.redirect(
+      HttpStatus.TEMPORARY_REDIRECT,
+      `/api/storage/serve/${encodedKey}`,
+    );
   }
 
   /**

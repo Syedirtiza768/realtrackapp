@@ -22,6 +22,9 @@ export const ROLE_SLUGS = {
   OPS_USER: 'ops_user',
   LISTING_USER: 'listing_user',
   SUPERVISOR: 'supervisor',
+  FASHION_ADMIN: 'fashion_admin',
+  FASHION_MANAGER: 'fashion_manager',
+  FASHION_OPERATOR: 'fashion_operator',
 } as const;
 
 export type RoleSlug = (typeof ROLE_SLUGS)[keyof typeof ROLE_SLUGS];
@@ -85,6 +88,17 @@ const SUPER_ADMIN_ONLY: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN];
 
 /** Admin + super_admin only. Super admin can reassign via Roles UI later. */
 const SUPER_AND_ADMIN: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN, ROLE_SLUGS.ADMIN];
+
+const FASHION_ALL: RoleSlug[] = [
+  ROLE_SLUGS.FASHION_ADMIN,
+  ROLE_SLUGS.FASHION_MANAGER,
+  ROLE_SLUGS.FASHION_OPERATOR,
+];
+const FASHION_MANAGER_UP: RoleSlug[] = [
+  ROLE_SLUGS.FASHION_ADMIN,
+  ROLE_SLUGS.FASHION_MANAGER,
+];
+const FASHION_ADMIN_ONLY: RoleSlug[] = [ROLE_SLUGS.FASHION_ADMIN];
 
 function p(
   key: string,
@@ -367,6 +381,23 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('feature_flags.manage', 'Manage feature flags', 'feature_flags', [
     ROLE_SLUGS.SUPER_ADMIN,
   ]),
+
+  // ── Fashion vertical ──
+  p('fashion.access', 'Access Fashion workspace', 'fashion', FASHION_ALL),
+  p('fashion.dashboard.view', 'View Fashion dashboard', 'fashion', FASHION_ALL),
+  p('fashion.listings.view', 'View Fashion listings', 'fashion', FASHION_ALL),
+  p('fashion.listings.create', 'Create Fashion listings', 'fashion', FASHION_ALL),
+  p('fashion.listings.update', 'Edit Fashion drafts', 'fashion', FASHION_ALL),
+  p('fashion.import', 'Import Fashion listings', 'fashion', FASHION_ALL),
+  p('fashion.review', 'Review Fashion listings', 'fashion', FASHION_MANAGER_UP),
+  p('fashion.publish', 'Publish Fashion listings', 'fashion', FASHION_MANAGER_UP),
+  p('fashion.stores.view', 'View authorized Fashion stores', 'fashion', FASHION_ALL),
+  p('fashion.stores.manage', 'Connect and manage Fashion stores', 'fashion', FASHION_ADMIN_ONLY),
+  p('fashion.users.manage', 'Manage Fashion users', 'fashion', FASHION_ADMIN_ONLY),
+  p('fashion.roles.manage', 'Assign Fashion roles', 'fashion', FASHION_ADMIN_ONLY),
+  p('fashion.settings.manage', 'Manage Fashion settings', 'fashion', FASHION_ADMIN_ONLY),
+  p('fashion.authenticity.review', 'Review Fashion authenticity evidence', 'fashion', FASHION_MANAGER_UP),
+  p('fashion.incidents.manage', 'Quarantine Fashion listings and incidents', 'fashion', FASHION_MANAGER_UP),
 ];
 
 export const ROLE_DEFINITIONS: {
@@ -435,6 +466,24 @@ export const ROLE_DEFINITIONS: {
     name: 'Supervisor',
     description:
       'Approve and publish listings, revise live listings. Cannot delete or change price on live listings without manager approval.',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.FASHION_ADMIN,
+    name: 'Fashion Admin',
+    description: 'Administers the Fashion workspace, users, stores, roles, and settings without platform administration access',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.FASHION_MANAGER,
+    name: 'Fashion Manager',
+    description: 'Reviews and publishes Fashion listings and handles compliance incidents',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.FASHION_OPERATOR,
+    name: 'Fashion Operator',
+    description: 'Creates and imports Fashion drafts within assigned stores',
     isSystem: true,
   },
 ];

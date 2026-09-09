@@ -1,5 +1,7 @@
 # Database Schema
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Consolidated from `docs/DATABASE_MAP.md` (513 lines, entity-focused) and `docs/architecture/database.md` (108 lines, engine/ORM config focused) — 2026-05-29. Updated: 2026-06-11.
 
 ---

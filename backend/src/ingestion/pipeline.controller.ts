@@ -38,6 +38,11 @@ import {
 import { User } from '../auth/entities/user.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { TeamsService } from '../teams/teams.service.js';
+import {
+  DEFAULT_PRODUCT_VERTICAL,
+  isProductVertical,
+  type ProductVertical,
+} from '../verticals/vertical.types.js';
 
 /**
  * PipelineController — REST endpoints for the enrichment pipeline.
@@ -203,6 +208,7 @@ export class PipelineController {
     @Body('fulfillmentPolicyId') fulfillmentPolicyId: string | undefined,
     @Body('paymentPolicyId') paymentPolicyId: string | undefined,
     @Body('returnPolicyId') returnPolicyId: string | undefined,
+    @Body('vertical') verticalRaw: string | undefined,
     @CurrentUser() user: User,
   ) {
     if (!file) {
@@ -212,6 +218,13 @@ export class PipelineController {
       throw new BadRequestException('marketplace must be US, UK, AU, or DE');
     }
     const marketplaceCode = marketplace.trim() as PipelineMarketplaceCode;
+    const verticalValue = verticalRaw?.trim() || DEFAULT_PRODUCT_VERTICAL;
+    if (!isProductVertical(verticalValue)) {
+      throw new BadRequestException(
+        'vertical must be automotive, business_industrial, or fashion',
+      );
+    }
+    const vertical = verticalValue as ProductVertical;
 
     const manageAllTeams = await this.rbac.userHasPermission(
       user.id,
@@ -235,6 +248,7 @@ export class PipelineController {
         returnPolicyId: returnPolicyId?.trim(),
       },
       user,
+      vertical,
     );
 
     return { job };

@@ -129,7 +129,7 @@ export default function InventoryManager() {
     minWeight: '',
     maxWeight: '',
     status: '',
-    missing: false,
+    missing: false as boolean,
     make: '',
     model: '',
     category: '',

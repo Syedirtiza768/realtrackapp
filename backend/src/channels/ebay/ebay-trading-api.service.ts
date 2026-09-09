@@ -339,6 +339,45 @@ export class EbayTradingApiService {
   }
 
   /**
+   * Replace the complete item-level gallery with one externally hosted image.
+   * ReviseItem replaces the existing PictureURL set when PictureDetails is
+   * supplied, so sending exactly one URL removes the other item-level images
+   * while preserving the rest of the listing fields.
+   */
+  async replaceListingImages(
+    storeId: string,
+    itemId: string,
+    imageUrl: string,
+    marketplaceId?: string | null,
+  ): Promise<void> {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <ItemID>${escapeXml(itemId)}</ItemID>
+    <PictureDetails>
+      <PictureURL>${escapeXml(imageUrl)}</PictureURL>
+    </PictureDetails>
+  </Item>
+</ReviseItemRequest>`;
+
+    const xml = await this.postTradingRequest(
+      storeId,
+      'ReviseItem',
+      body,
+      marketplaceId,
+    );
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const err = tagValue(xml, 'LongMessage') ?? 'ReviseItem image update failed';
+      const code = tagValue(xml, 'ErrorCode');
+      throw new Error(
+        code ? `ReviseItem image update failed (${code}): ${err}` : err,
+      );
+    }
+  }
+
+  /**
    * Replace the legacy listing compatibility list.
    *
    * ReviseItem with ItemCompatibilityList.ReplaceAll=true is intentional:

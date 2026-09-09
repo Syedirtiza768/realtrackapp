@@ -1,5 +1,7 @@
 # API Contracts
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Consolidated from `docs/API_MAP.md` (557 lines) and `docs/architecture/api-map.md` — 2026-05-29.
 > Complete API endpoint reference. All routes under global prefix `/api` (set in `main.ts`).
 

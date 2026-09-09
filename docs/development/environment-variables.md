@@ -1,5 +1,7 @@
 > ⚠️ MOVED → [/docs/operations/ENVIRONMENT_VARIABLES.md](../operations/ENVIRONMENT_VARIABLES.md) (2026-06-06)
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 # Environment Variables
 
 Source of truth: `.env.example` (copy to `.env`). Docker passes these via

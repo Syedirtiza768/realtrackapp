@@ -12,6 +12,9 @@ export function formatEbayApiError(
   err: unknown,
   fallback = 'eBay API request failed',
 ): string {
+  if (typeof err === 'string') {
+    return err.trim() || fallback;
+  }
   if (!err || typeof err !== 'object') {
     return fallback;
   }
@@ -72,6 +75,43 @@ export function formatEbayApiError(
   return specific.length ? specific.join('; ') : parts.join('; ');
 }
 
+/** True when eBay blocks inventory from a country different from the seller address. */
+export function isEbayOverseasWarehouseBlockError(err: unknown): boolean {
+  const formatted = formatEbayApiError(err, '').toLowerCase();
+  if (!formatted) return false;
+  return [
+    'srm_his_wh_location_mismatch_inventory_block',
+    '1276646',
+    'forward-deployed item',
+    'forward deployed item',
+    'overseas warehouse block policy',
+    'overseas-warehouse-block-policy-authorization',
+    'different from your registered address',
+    'shipping from overseas warehouses',
+    'ship from overseas warehouses',
+  ].some((marker) => formatted.includes(marker));
+}
+
+/** Return an actionable message for eBay's permanent warehouse-location block. */
+export function formatEbayOverseasWarehouseBlockError(
+  err: unknown,
+  context: { storeName?: string; merchantLocationKey?: string } = {},
+): string | null {
+  if (!isEbayOverseasWarehouseBlockError(err)) return null;
+  const storeName = context.storeName?.trim();
+  const locationKey = context.merchantLocationKey?.trim();
+  const storePart = storeName ? ' for store ' + storeName : '';
+  const locationPart = locationKey ? ' at location ' + locationKey : '';
+  return (
+    'eBay blocked this operation' +
+    storePart +
+    ' because inventory location' +
+    locationPart +
+    ' is in a different country than the seller registered eBay address (Overseas Warehouse Block Policy). ' +
+    'Set the merchant location to a real enabled location in the registered country, or request eBay authorization for forward-deployed inventory at whappeals@ebay.com, then retry. ' +
+    'This is a permanent account/location policy block (eBay reference 1276646).'
+  );
+}
 /** True when eBay rejected the OAuth user token (errorId 1001 / HTTP 401). */
 export function isEbayInvalidAccessTokenError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -146,6 +186,26 @@ export function isEbayOfferAlreadyExistsError(err: unknown): boolean {
     }
   }
   return /offer entity already exists/i.test(formatEbayApiError(err, ''));
+}
+
+/** True when eBay returned an offer id that no longer resolves (errorId 25713). */
+export function isEbayOfferUnavailableError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const bodies: unknown[] = [
+    (err as { response?: { data?: unknown } }).response?.data,
+    err,
+  ];
+  for (const body of bodies) {
+    if (!body || typeof body !== 'object') continue;
+    const errors = (body as { errors?: EbayErrorRow[] }).errors;
+    if (!Array.isArray(errors)) continue;
+    for (const e of errors) {
+      if (String(e.errorId) === '25713') return true;
+      const msg = e.longMessage ?? e.message ?? '';
+      if (/this offer is not available/i.test(msg)) return true;
+    }
+  }
+  return /this offer is not available/i.test(formatEbayApiError(err, ''));
 }
 
 /** True when eBay blocks a new offer because an identical active listing exists (errorId 25002). */

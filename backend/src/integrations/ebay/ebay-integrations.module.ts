@@ -1,3 +1,4 @@
+import { VerticalsModule } from '../../verticals/verticals.module.js';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
@@ -50,9 +51,11 @@ import { EbayApiAuditService } from './services/ebay-api-audit.service.js';
 import { EbaySyncService } from './services/ebay-sync.service.js';
 import { IntegrationsEbayController } from './controllers/integrations-ebay.controller.js';
 import { EbayMultiStoreController } from './controllers/ebay-multi-store.controller.js';
+import { FashionEbayController } from './controllers/fashion-ebay.controller.js';
 import { SellerpunditModule } from '../sellerpundit/sellerpundit.module.js';
 import { SellerpunditEbayController } from '../sellerpundit/sellerpundit-ebay.controller.js';
 import { FitmentModule } from '../../fitment/fitment.module.js';
+import { StorageModule } from '../../storage/storage.module.js';
 
 @Module({
   imports: [
@@ -90,13 +93,16 @@ import { FitmentModule } from '../../fitment/fitment.module.js';
       { name: 'ebay-inventory-sync' },
     ),
     ChannelsModule,
+    VerticalsModule,
     AuthModule,
     OrdersModule,
     FitmentModule,
+    StorageModule,
   ],
   controllers: [
     IntegrationsEbayController,
     EbayMultiStoreController,
+    FashionEbayController,
     SellerpunditEbayController,
   ],
   providers: [
