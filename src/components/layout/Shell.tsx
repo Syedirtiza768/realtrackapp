@@ -102,7 +102,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     icon: Database,
    label: "Catalog",
-    path: "/auto-parts/catalog",
+    path: "/catalog",
     permission: "catalog.view",
     moduleKey: "catalog",
   },

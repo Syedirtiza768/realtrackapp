@@ -108,3 +108,7 @@ if (can('listings.delete')) { /* show delete */ }
 ## Automotive modal image mutations
 
 The Auto Parts `CatalogInventoryDetailModal` receives a `listing_records` ID. Reorder/remove uses `PATCH /api/inventory/listings/:listingId/images/reorder`, while newly uploaded images use `PATCH /api/inventory/listings/:listingId/images` with uploaded asset IDs.
+
+### Auto Parts sidebar navigation
+
+The shared Auto Parts shell stores Catalog as the relative path `/catalog`, so its `/auto-parts` prefix produces `/auto-parts/catalog` exactly once.
