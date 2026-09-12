@@ -1,9 +1,11 @@
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CatalogProduct } from '../../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../../storage/entities/image-asset.entity.js';
+import { StorageService } from '../../../storage/storage.service.js';
 import {
   flattenImageUrlInputs,
   isSingleImageBrand,
@@ -41,6 +43,8 @@ export interface CatalogPublishSnapshot {
   conditionId: string | null;
   conditionLabel: string | null;
   imageUrls: string[];
+  /** Frozen product vertical; omitted legacy snapshots resolve to automotive. */
+  vertical?: ProductVertical | null;
 }
 
 export interface ResolvedCatalogPublishSource {
@@ -59,6 +63,7 @@ export class CatalogPublishResolverService {
     private readonly listingRepo: Repository<ListingRecord>,
     @InjectRepository(ImageAsset)
     private readonly assetRepo: Repository<ImageAsset>,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -179,6 +184,7 @@ export class CatalogPublishResolverService {
       ),
       conditionLabel: catalogProduct?.conditionLabel ?? null,
       imageUrls,
+      vertical: catalogProduct?.vertical ?? listingRecord?.vertical ?? null,
     };
 
     return { snapshot, catalogProduct, listingRecord, warnings };
@@ -252,7 +258,11 @@ export class CatalogPublishResolverService {
         : undefined,
     );
     warnings.push(...sanitized.warnings);
-    return sanitized.imageUrls;
+    return Promise.all(
+      sanitized.imageUrls.map((url) =>
+        this.storageService.getPreferredImageUrl(url),
+      ),
+    );
   }
 
   /**
@@ -304,6 +314,8 @@ export class CatalogPublishResolverService {
       returnProfile: listing.returnProfileName,
       paymentProfile: listing.paymentProfileName,
       imageUrls,
+      vertical: listing.vertical,
+      verticalAttributes: listing.verticalAttributes ?? {},
       sourceFile: listing.sourceFileName,
       sourceRow: listing.sourceRowNumber,
     });
@@ -325,6 +337,11 @@ export class CatalogPublishResolverService {
       ? selectPrimaryImageForBrand(rawListingImages, listing.cBrand)
       : sanitizeEbayImageUrls(rawListingImages).imageUrls;
 
+    if (!product.vertical && listing.vertical) {
+      product.vertical = listing.vertical;
+      product.verticalAttributes = listing.verticalAttributes ?? {};
+      dirty = true;
+    }
     if (!product.imageUrls?.length && listingImages.length) {
       product.imageUrls = listingImages;
       dirty = true;
