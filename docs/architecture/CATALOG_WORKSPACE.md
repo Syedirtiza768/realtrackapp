@@ -36,3 +36,7 @@ The operation permissions are `fashion.catalog.export|delete|assign_team|manage_
 ## Verification
 
 Focused `CatalogWorkspaceService` authorization tests pass, and the frontend production build passes. The backend build still reports the pre-existing syntax/type errors in `backend/src/scripts/backfill-brand-images.ts`; no catalog or vertical module errors were reported.
+
+## Runtime dependencies
+
+The vertical publish and catalog runtime also registers the eBay Selling Metadata client, Inventory API item-group operations, retry-safe target vertical snapshots, listing vertical fields, image WebP conversion, and AI batch-total aggregation. These dependencies are included in the catalog release so the clean Docker build has the same contracts used by the vertical services.

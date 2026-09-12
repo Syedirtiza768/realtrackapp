@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -14,6 +19,7 @@ import { EbayAccountTokenService } from './ebay-account-token.service.js';
 import { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.js';
 import { EbayPolicySyncService } from './ebay-policy-sync.service.js';
 import { ListingActionLogWriterService } from './listing-action-log-writer.service.js';
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
 
 interface TokenBlob {
   accessToken: string;
@@ -54,6 +60,7 @@ export class EbayIntegrationsOAuthService {
     marketplaceId: string;
     environment: 'sandbox' | 'production';
     accountDisplayName: string;
+    vertical?: ProductVertical;
   }): Promise<{ authUrl: string; state: string }> {
     this.mpConfig.require(input.marketplaceId);
     const state = crypto.randomBytes(32).toString('hex');
@@ -65,6 +72,7 @@ export class EbayIntegrationsOAuthService {
       environment: input.environment,
       scopes: this.tokenService.getDefaultScopes(),
       accountDisplayName: input.accountDisplayName,
+      vertical: input.vertical ?? 'automotive',
     });
     const authUrl = this.tokenService.buildAuthorizeUrl({
       state,
@@ -126,6 +134,19 @@ export class EbayIntegrationsOAuthService {
       );
     }
 
+    const existingSellerStores = await this.storeRepo.find({
+      where: {
+        organizationId: pending.organizationId,
+        ebayUserId,
+      },
+      select: ['id', 'storeName', 'verticalConfig'],
+    });
+    if (existingSellerStores.length > 0) {
+      throw new ConflictException(
+        'This eBay seller account is already connected in this workspace and cannot be reused across verticals',
+      );
+    }
+
     const tokenBlob: TokenBlob = {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -168,6 +189,22 @@ export class EbayIntegrationsOAuthService {
         isPrimary: false,
         ebayUserId,
         ebayMarketplaceId: pending.marketplaceId,
+        verticalConfig:
+          pending.vertical === 'fashion'
+            ? {
+                enabledVerticals: ['fashion'],
+                defaultVertical: 'fashion',
+                ownerVertical: 'fashion',
+                workflows: {},
+              }
+            : pending.vertical === 'business_industrial'
+              ? {
+                  enabledVerticals: ['business_industrial'],
+                  defaultVertical: 'business_industrial',
+                  ownerVertical: 'business_industrial',
+                  workflows: {},
+                }
+              : null,
         config: {
           marketplace: pending.marketplaceId,
           sandbox: pending.environment === 'sandbox',
@@ -261,7 +298,15 @@ export class EbayIntegrationsOAuthService {
           });
       }, 1000);
 
-      return { connectedEbayAccountId: savedAcct.id };
+      return {
+        connectedEbayAccountId: savedAcct.id,
+        redirectUrl:
+          pending.vertical === 'fashion'
+            ? '/fashion/stores'
+            : pending.vertical === 'business_industrial'
+              ? '/business-industrial/stores'
+              : '/settings/integrations/ebay',
+      };
     } catch (e: unknown) {
       await qr.rollbackTransaction();
       this.logger.warn(
