@@ -363,8 +363,8 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
   }, [stores, selectedStoreId]);
 
   const catalogImages = useMemo(() => {
-    if (catalogProduct?.imageUrls?.length) return catalogProduct.imageUrls;
     if (listing?.itemPhotoUrl) return getAllImageUrls(listing.itemPhotoUrl);
+    if (catalogProduct?.imageUrls?.length) return catalogProduct.imageUrls;
     return [];
   }, [catalogProduct?.imageUrls, listing?.itemPhotoUrl]);
 
@@ -645,26 +645,26 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
   };
 
   const persistImages = useCallback(
-    async (urls: string[]) => {
+    async (urls: string[], uploadedAssetIds: string[] = []) => {
       if (!id || !listing) return;
-      if (catalogProduct?.id && canEditCatalog) {
-        await fetchWithAuth(`/api/catalog-products/${catalogProduct.id}`, {
+      if (uploadedAssetIds.length > 0 && canEditListing) {
+        await fetchWithAuth(`/api/inventory/listings/${id}/images`, {
           method: 'PATCH',
-          body: JSON.stringify({ imageUrls: urls }),
+          body: JSON.stringify({ imageUrls: urls, uploadedAssetIds }),
         });
       } else if (canEditListing) {
-        await fetchWithAuth(`/api/listings/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            itemPhotoUrl: urls.length > 0 ? urls.join('|') : '',
-            version: listing.version,
-          }),
+        // Automotive catalog rows are backed by listing_records. The shared
+        // /api/catalog-products/:id patch route is only available for the
+        // Fashion and Business & Industrial workspaces.
+        await fetchWithAuth(`/api/inventory/listings/${id}/images/reorder`, {
+          method: 'PATCH',
+          body: JSON.stringify({ imageUrls: urls }),
         });
       }
       await qc.invalidateQueries({ queryKey: ['catalog-listing-detail', id] });
       await qc.invalidateQueries({ queryKey: ['listing', id] });
     },
-    [id, listing, catalogProduct?.id, canEditCatalog, canEditListing, qc],
+    [id, listing, canEditListing, qc],
   );
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -708,7 +708,10 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
       setSavingImages(true);
       setImageError(null);
       try {
-        await persistImages(merged);
+        await persistImages(
+          newUrls,
+          uploaded.map((img) => img.assetId),
+        );
         setLocalImages(merged);
         setUploadZoneKey((k) => k + 1);
       } catch (err) {

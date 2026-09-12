@@ -367,6 +367,7 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 | DELETE | `/api/inventory/listings/:listingId` | Soft-delete inventory listing | inventory.delete |
 | POST | `/api/inventory/listings/bulk-delete` | Soft-delete multiple inventory listings (`{ ids }`) | inventory.delete |
 | PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing | listings.update |
+| PATCH | `/api/inventory/listings/:listingId/images/reorder` | Reorder or remove the complete image URL array for an automotive listing; the first image is primary | listings.update |
 | POST | `/api/inventory/part-lookup` | Vision-first fetch details for one listing (OEM + brand + 2+ photos → title, category, SEO notes) | inventory.enrich |
 | POST | `/api/inventory/part-lookup/bulk` | Vision-first fetch details for multiple listings | inventory.enrich |
 | POST | `/api/inventory/inline-enrich` | **Complete inline enrichment:** vision part lookup + EnrichmentPipeline + AI content generation for US/AU/DE. Creates marketplace listing records directly — no pipeline job. | inventory.enrich |

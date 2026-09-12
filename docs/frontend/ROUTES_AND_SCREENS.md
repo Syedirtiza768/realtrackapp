@@ -105,3 +105,6 @@ if (can('listings.delete')) { /* show delete */ }
 ---
 
 *Created: 2026-06-06.*
+## Automotive modal image mutations
+
+The Auto Parts `CatalogInventoryDetailModal` receives a `listing_records` ID. Reorder/remove uses `PATCH /api/inventory/listings/:listingId/images/reorder`, while newly uploaded images use `PATCH /api/inventory/listings/:listingId/images` with uploaded asset IDs.

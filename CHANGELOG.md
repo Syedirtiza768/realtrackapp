@@ -14,6 +14,8 @@ for every meaningful change (Continuous Documentation Protocol).
 
 - **Image Drive thumbnail visibility:** Folder APIs now return CDN URLs for generated thumbnail keys, and raw Image Drive thumbnails are routed through the backend image proxy.
 - **Pipeline Image Drive auto-attachment:** Bulk pipeline finalization now resolves manufacturer/OEM part numbers against Image Drive folders, replaces warehouse/bin placeholders, prepends matched CDN image URLs, preserves valid source URLs, updates listing and catalog image fields, and records match/link counts.
+- **Auto Parts catalog image save:** Fixed the Inventory Details modal to use the automotive listing image endpoints for reorder/remove and uploads instead of sending an automotive catalog-product ID to the vertical catalog patch route. The modal now reloads the persisted listing image order.
+
 ### Fixed
 - **Organization-wide publishing access:** All RBAC roles now retain the
   listing/channel/eBay publish permissions, active users receive all-store
