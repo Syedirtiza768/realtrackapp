@@ -1,3 +1,4 @@
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
 import {
   Column,
   CreateDateColumn,
@@ -59,6 +60,9 @@ export class EbayListingChannel {
 
   @Column({ name: 'marketplace_id', type: 'varchar', length: 30 })
   marketplaceId!: string;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  vertical!: ProductVertical | null;
 
   @Column({ name: 'internal_sku', type: 'text', nullable: true })
   internalSku!: string | null;

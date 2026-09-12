@@ -1,3 +1,5 @@
+import { VerticalsModule } from '../verticals/verticals.module.js';
+import { AuthModule } from '../auth/auth.module.js';
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -34,6 +36,8 @@ import { ListingsModule } from '../listings/listings.module.js';
       ListingRecord,
     ]),
     RbacModule,
+    AuthModule,
+    VerticalsModule,
     HeavyJobLimiterModule,
     BullModule.registerQueue({ name: 'catalog-import' }),
     OpenAiModule,

@@ -24,32 +24,38 @@ export interface AuthUser {
   roleSlug: string;
   roleName: string;
   active: boolean;
+  passwordChangeRequired?: boolean;
   permissions: string[];
   lastLoginAt?: string | null;
   createdAt?: string;
   sidebarModules?: string[];
 }
 
+export interface OrganizationSummary {
+  organizationId: string;
+  name: string;
+  slug: string;
+  role: string;
+}
+
 interface MeResponse {
   user: AuthUser;
-  organizations: {
-    organizationId: string;
-    name: string;
-    slug: string;
-    role: string;
-  }[];
+  organizations: OrganizationSummary[];
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   permissions: string[];
+  organizations: OrganizationSummary[];
+  activeOrganizationId: string | null;
   sidebarModules: string[];
   loading: boolean;
   initializing: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, vertical?: 'automotive' | 'fashion' | 'business_industrial') => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
+  selectOrganization: (organizationId: string) => void;
   requestPasswordReset: (email: string) => Promise<void>;
   refreshSession: () => Promise<void>;
   isAuthenticated: boolean;
@@ -72,6 +78,7 @@ function persistUser(user: AuthUser | null) {
 }
 
 const SIDEBAR_MODULES_KEY = "mk_sidebar_modules";
+const ORGANIZATION_KEY = "mk_active_organization_id";
 
 function persistSidebarModules(modules: string[]) {
   localStorage.setItem(SIDEBAR_MODULES_KEY, JSON.stringify(modules));
@@ -100,6 +107,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [sidebarModules, setSidebarModules] = useState<string[]>(() =>
     loadSidebarModules(),
+  );
+  const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
+  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(() =>
+    localStorage.getItem(ORGANIZATION_KEY),
   );
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(
@@ -135,7 +146,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       persistUser(data.user);
       setToken(currentToken);
+      setOrganizations(data.organizations);
+      setActiveOrganizationId((current) => {
+        const preferred = current && data.organizations.some((item) => item.organizationId === current)
+          ? current
+          : data.organizations.find((item) => item.role === 'admin')?.organizationId
+            ?? data.organizations.find((item) => item.slug.startsWith('business-industrial-'))?.organizationId
+            ?? data.organizations[0]?.organizationId
+            ?? null;
+        if (preferred) localStorage.setItem(ORGANIZATION_KEY, preferred);
+        else localStorage.removeItem(ORGANIZATION_KEY);
+        return preferred;
+      });
 
+      if (data.user.passwordChangeRequired) {
+        setSidebarModules([]);
+        persistSidebarModules([]);
+        return;
+      }
       // Fetch sidebar module visibility
       try {
         const sidebar = await fetchWithAuth<{ visibleModules: string[] }>(
@@ -162,14 +190,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refreshSession();
   }, [refreshSession]);
 
+  const selectOrganization = useCallback((organizationId: string) => {
+    if (!organizations.some((item) => item.organizationId === organizationId)) return;
+    setActiveOrganizationId(organizationId);
+    localStorage.setItem(ORGANIZATION_KEY, organizationId);
+  }, [organizations]);
+
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, vertical?: 'automotive' | 'fashion' | 'business_industrial') => {
       setLoading(true);
       try {
         const res = await fetch(`${API}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, ...(vertical ? { vertical } : {}) }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -222,10 +256,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setToken(null);
     setUser(null);
+    setOrganizations([]);
+    setActiveOrganizationId(null);
     setSidebarModules([]);
     persistUser(null);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(SIDEBAR_MODULES_KEY);
+    localStorage.removeItem(ORGANIZATION_KEY);
   }, [token]);
 
   const requestPasswordReset = useCallback(async (email: string) => {
@@ -246,12 +283,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         token,
         permissions,
+        organizations,
+        activeOrganizationId,
         sidebarModules,
         loading,
         initializing,
         login,
         register,
         logout,
+        selectOrganization,
         requestPasswordReset,
         refreshSession,
         isAuthenticated: !!token && !!user,

@@ -1,4 +1,11 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsByteLength,
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class LoginDto {
   @IsEmail()
@@ -7,6 +14,11 @@ export class LoginDto {
   @IsString()
   @MinLength(1)
   password: string;
+
+  /** Optional product vertical requested by a dedicated workspace login. */
+  @IsOptional()
+  @IsIn(['automotive', 'fashion', 'business_industrial'])
+  vertical?: 'automotive' | 'fashion' | 'business_industrial';
 }
 
 export class RegisterDto {
@@ -28,6 +40,7 @@ export class ChangePasswordDto {
   currentPassword: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(12)
+  @IsByteLength(0, 72)
   newPassword: string;
 }

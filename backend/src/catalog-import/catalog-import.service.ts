@@ -1,3 +1,5 @@
+import type { ProductVertical } from '../verticals/vertical.types.js';
+import { normalizeProductVertical } from '../verticals/vertical.types.js';
 import {
   ForbiddenException,
   Injectable,
@@ -8,7 +10,7 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, type SelectQueryBuilder } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { StringDecoder } from 'node:string_decoder';
@@ -28,6 +30,13 @@ import {
   withCreatedByBackfill,
 } from '../common/utils/job-visibility.js';
 import { HeavyJobLimiterService } from '../common/jobs/heavy-job-limiter.service.js';
+
+export interface ImportAccessScope {
+  organizationId: string;
+  viewerId: string;
+  viewAll: boolean;
+  verticals: ProductVertical[];
+}
 
 export interface ImportVerificationSummary {
   importId: string;
@@ -117,6 +126,94 @@ const DEFAULT_COLUMN_MAP: Record<string, string> = {
   imageurl: 'imageUrls',
   imageurls: 'imageUrls',
   images: 'imageUrls',
+  // Vertical-neutral and Business & Industrial fields
+  department: 'department',
+  size: 'size',
+  sizesystem: 'sizeSystem',
+  'size system': 'sizeSystem',
+  color: 'color',
+  colour: 'color',
+  measurements: 'measurements',
+  'condition details': 'conditionDetails',
+  conditiondetails: 'conditionDetails',
+  manufacturer: 'manufacturer',
+  model: 'model',
+  'category family': 'categoryFamily',
+  categoryfamily: 'categoryFamily',
+  'inventory mode': 'inventoryMode',
+  inventorymode: 'inventoryMode',
+  'shipping mode': 'shippingMode',
+  shippingmode: 'shippingMode',
+  'voltage unit': 'voltageUnit',
+  voltageunit: 'voltageUnit',
+  'frequency unit': 'frequencyUnit',
+  frequencyunit: 'frequencyUnit',
+  'current unit': 'currentUnit',
+  currentunit: 'currentUnit',
+  'power unit': 'powerUnit',
+  powerunit: 'powerUnit',
+  'capacity unit': 'capacityUnit',
+  capacityunit: 'capacityUnit',
+  'dimensions length': 'dimensionsLength',
+  'dimensions width': 'dimensionsWidth',
+  'dimensions height': 'dimensionsHeight',
+  'dimensions unit': 'dimensionsUnit',
+  dimensionslength: 'dimensionsLength',
+  dimensionswidth: 'dimensionsWidth',
+  dimensionsheight: 'dimensionsHeight',
+  dimensionsunit: 'dimensionsUnit',
+  'weight unit': 'weightUnit',
+  weightunit: 'weightUnit',
+  pressure: 'pressure',
+  'pressure unit': 'pressureUnit',
+  pressureunit: 'pressureUnit',
+  'compatible equipment': 'compatibleEquipment',
+  compatibleequipment: 'compatibleEquipment',
+  'included components': 'includedComponents',
+  includedcomponents: 'includedComponents',
+  'testing scope': 'testingScope',
+  testingscope: 'testingScope',
+  'test results': 'testResults',
+  testresults: 'testResults',
+  'total physical units': 'totalPhysicalUnits',
+  totalphysicalunits: 'totalPhysicalUnits',
+  'sellable lots': 'sellableLots',
+  sellablelots: 'sellableLots',
+  'units per lot': 'unitsPerLot',
+  unitsperlot: 'unitsPerLot',
+  'packed weight': 'packedWeight',
+  packedweight: 'packedWeight',
+  'packed weight unit': 'packedWeightUnit',
+  packedweightunit: 'packedWeightUnit',
+  'dispatch location': 'dispatchLocation',
+  dispatchlocation: 'dispatchLocation',
+  'shipping coverage': 'shippingCoverage',
+  shippingcoverage: 'shippingCoverage',
+  'freight loading facilities': 'freightLoadingFacilities',
+  freightloadingfacilities: 'freightLoadingFacilities',
+  voltage: 'voltage',
+  power: 'power',
+  dimensions: 'dimensions',
+  capacity: 'capacity',
+  'testing status': 'testingStatus',
+  testingstatus: 'testingStatus',
+  'included accessories': 'includedAccessories',
+  includedaccessories: 'includedAccessories',
+  'c:department': 'department',
+  'c:size': 'size',
+  'c:size system': 'sizeSystem',
+  'c:color': 'color',
+  'c:colour': 'color',
+  'c:measurements': 'measurements',
+  'c:condition details': 'conditionDetails',
+  'c:manufacturer': 'manufacturer',
+  'c:model': 'model',
+  'c:voltage': 'voltage',
+  'c:power': 'power',
+  'c:dimensions': 'dimensions',
+  'c:capacity': 'capacity',
+  'c:testing status': 'testingStatus',
+  'c:included accessories': 'includedAccessories',
 };
 
 @Injectable()
@@ -246,6 +343,8 @@ export class CatalogImportService {
     file: Express.Multer.File,
     columnMapping?: Record<string, string>,
     userId?: string,
+    vertical: ProductVertical = 'automotive',
+    organizationId?: string,
   ): Promise<CatalogImport> {
     const ext = path.extname(file.originalname).toLowerCase();
     const isCsv = ext === '.csv';
@@ -288,6 +387,8 @@ export class CatalogImportService {
       totalRows,
       status: 'pending',
       createdBy: userId ?? null,
+      organizationId: organizationId ?? null,
+      vertical: normalizeProductVertical(vertical),
     });
 
     const saved = await this.importRepo.save(catalogImport);
@@ -347,6 +448,15 @@ export class CatalogImportService {
       );
     }
 
+    if (
+      importRecord.vertical === 'fashion' &&
+      (!importRecord.filePath || !fs.existsSync(importRecord.filePath))
+    ) {
+      throw new BadRequestException(
+        'Source file is unavailable. Upload the file again.',
+      );
+    }
+    const previousStatus = importRecord.status;
     // Update column mapping if provided
     if (columnMapping) {
       importRecord.columnMapping = columnMapping;
@@ -358,24 +468,55 @@ export class CatalogImportService {
     );
     importRecord.status = 'validating';
     importRecord.startedAt = new Date();
-    await this.importRepo.save(importRecord);
+    if (importRecord.vertical === 'fashion') {
+      const claimed = await this.importRepo.update(
+        { id: importId, status: previousStatus },
+        {
+          status: 'validating',
+          startedAt: importRecord.startedAt,
+          completedAt: null,
+          errorMessage: null,
+          columnMapping: importRecord.columnMapping,
+        },
+      );
+      if (!claimed.affected)
+        throw new BadRequestException(
+          'Import was already started or cancelled. Refresh its status.',
+        );
+    } else {
+      await this.importRepo.save(importRecord);
+    }
 
-    // Enqueue for processing
-    await this.importQueue.add(
-      'process-csv',
-      {
-        importId: importRecord.id,
-        filePath: importRecord.filePath!,
-        columnMapping: importRecord.columnMapping!,
-        resumeFromRow: importRecord.lastProcessedRow,
-      },
-      {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 30_000 },
-        removeOnComplete: 50,
-        removeOnFail: 100,
-      },
-    );
+    // Fashion retry is explicit: a failed worker must not race an automatic retry.
+    try {
+      await this.importQueue.add(
+        'process-csv',
+        {
+          importId: importRecord.id,
+          filePath: importRecord.filePath!,
+          columnMapping: importRecord.columnMapping!,
+          resumeFromRow: importRecord.lastProcessedRow,
+        },
+        {
+          attempts: importRecord.vertical === 'fashion' ? 1 : 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: 50,
+          removeOnFail: 100,
+        },
+      );
+    } catch (error) {
+      if (importRecord.vertical === 'fashion') {
+        await this.importRepo.update(
+          { id: importId, status: 'validating' },
+          {
+            status: 'failed',
+            errorMessage:
+              'Could not queue import. Retry when the queue is available.',
+          },
+        );
+      }
+      throw error;
+    }
 
     this.logger.log(`Enqueued import ${importRecord.id} for processing`);
     return importRecord;
@@ -390,6 +531,7 @@ export class CatalogImportService {
     offset = 0,
     viewerId?: string,
     viewAll = true,
+    scope?: ImportAccessScope,
   ): Promise<{ imports: CatalogImport[]; total: number }> {
     const qb = this.importRepo
       .createQueryBuilder('i')
@@ -398,6 +540,7 @@ export class CatalogImportService {
     if (viewerId) {
       applyCreatedByVisibility(qb, 'i', viewerId, viewAll);
     }
+    if (scope) this.applyImportScope(qb, scope);
     qb.take(limit).skip(offset);
     const [imports, total] = await qb.getManyAndCount();
     return { imports, total };
@@ -410,11 +553,16 @@ export class CatalogImportService {
     id: string,
     viewerId?: string,
     viewAll = true,
+    scope?: ImportAccessScope,
   ): Promise<{
     import: CatalogImport;
     verification: ImportVerificationSummary | null;
   }> {
-    const record = await this.importRepo.findOneBy({ id });
+    const qb = this.importRepo
+      .createQueryBuilder('i')
+      .where('i.id = :id', { id });
+    if (scope) this.applyImportScope(qb, scope);
+    const record = await qb.getOne();
     if (!record) throw new NotFoundException(`Import ${id} not found`);
     if (viewerId && !canViewJob(record.createdBy, viewerId, viewAll)) {
       throw new ForbiddenException(
@@ -435,6 +583,66 @@ export class CatalogImportService {
       import: record,
       verification,
     };
+  }
+
+  /** Fashion imports never share null tenant/owner legacy records. */
+  private applyImportScope(
+    qb: SelectQueryBuilder<CatalogImport>,
+    scope: ImportAccessScope,
+  ) {
+    qb.andWhere("COALESCE(i.vertical, 'automotive') IN (:...verticals)", {
+      verticals: scope.verticals.length ? scope.verticals : ['__none__'],
+    });
+    qb.andWhere(
+      "(COALESCE(i.vertical, 'automotive') = 'automotive' OR (COALESCE(i.vertical, 'automotive') IN ('fashion', 'business_industrial') AND i.organizationId = :organizationId AND i.createdBy IS NOT NULL))",
+      {
+        organizationId: scope.organizationId,
+      },
+    );
+    if (!scope.viewAll) {
+      qb.andWhere(
+        "(i.createdBy = :scopeViewerId OR (i.createdBy IS NULL AND COALESCE(i.vertical, 'automotive') <> 'fashion'))",
+        {
+          scopeViewerId: scope.viewerId,
+        },
+      );
+    }
+    return qb;
+  }
+
+  /** Five source rows from the uploaded CSV (including converted Excel). */
+  async previewImport(
+    record: CatalogImport,
+  ): Promise<Record<string, string>[]> {
+    if (!record.filePath || !fs.existsSync(record.filePath)) {
+      throw new BadRequestException(
+        'Source file is unavailable. Upload the file again.',
+      );
+    }
+    const rows: Record<string, string>[] = [];
+    let foundHeader = false;
+    for await (const line of this.logicalLineIterator(record.filePath)) {
+      if (!line.trim()) continue;
+      const cells = this.parseCsvLine(line.trim());
+      if (!foundHeader) {
+        foundHeader =
+          cells.length === record.detectedHeaders.length &&
+          cells.every(
+            (cell, index) => cell.trim() === record.detectedHeaders[index],
+          );
+        continue;
+      }
+      rows.push(
+        Object.fromEntries(
+          record.detectedHeaders.map((header, index) => [
+            header,
+            (cells[index] ?? '').slice(0, 2000),
+          ]),
+        ),
+      );
+      if (rows.length === 5) break;
+    }
+    return rows;
   }
 
   /**
@@ -516,7 +724,7 @@ export class CatalogImportService {
   /**
    * Get aggregate import statistics for the dashboard.
    */
-  async getImportStats(): Promise<{
+  async getImportStats(scope?: ImportAccessScope): Promise<{
     totalImports: number;
     totalProductsInserted: number;
     totalDuplicatesSkipped: number;
@@ -524,6 +732,33 @@ export class CatalogImportService {
     totalCatalogProducts: number;
     recentImports: CatalogImport[];
   }> {
+    if (scope) {
+      const scoped = () =>
+        this.applyImportScope(this.importRepo.createQueryBuilder('i'), scope);
+      const [totalImports, aggregate, recentImports, totalCatalogProducts] =
+        await Promise.all([
+          scoped().getCount(),
+          scoped()
+            .select('SUM(i.inserted_rows)', 'inserted')
+            .addSelect('SUM(i.skipped_duplicates)', 'duplicates')
+            .addSelect('SUM(i.invalid_rows)', 'invalid')
+            .getRawOne(),
+          scoped().orderBy('i.createdAt', 'DESC').take(10).getMany(),
+          this.productRepo
+            .createQueryBuilder('p')
+            .where(`p.importId IN (${scoped().select('i.id').getQuery()})`)
+            .setParameters(scoped().getParameters())
+            .getCount(),
+        ]);
+      return {
+        totalImports,
+        totalProductsInserted: Number(aggregate?.inserted ?? 0),
+        totalDuplicatesSkipped: Number(aggregate?.duplicates ?? 0),
+        totalInvalidRows: Number(aggregate?.invalid ?? 0),
+        totalCatalogProducts,
+        recentImports,
+      };
+    }
     const [totalImports, totalCatalogProducts] = await Promise.all([
       this.importRepo.count(),
       this.productRepo.count(),
@@ -860,6 +1095,28 @@ export class CatalogImportService {
       { field: 'shippingProfile', label: 'Shipping Profile', required: false },
       { field: 'returnProfile', label: 'Return Profile', required: false },
       { field: 'paymentProfile', label: 'Payment Profile', required: false },
+      { field: 'manufacturer', label: 'Manufacturer', required: false },
+      { field: 'model', label: 'Model', required: false },
+      { field: 'department', label: 'Department', required: false },
+      { field: 'size', label: 'Size', required: false },
+      { field: 'sizeSystem', label: 'Size System', required: false },
+      { field: 'color', label: 'Color', required: false },
+      { field: 'measurements', label: 'Measurements', required: false },
+      {
+        field: 'conditionDetails',
+        label: 'Condition Details',
+        required: false,
+      },
+      { field: 'voltage', label: 'Voltage', required: false },
+      { field: 'power', label: 'Power', required: false },
+      { field: 'dimensions', label: 'Dimensions', required: false },
+      { field: 'capacity', label: 'Capacity', required: false },
+      { field: 'testingStatus', label: 'Testing Status', required: false },
+      {
+        field: 'includedAccessories',
+        label: 'Included Accessories',
+        required: false,
+      },
     ];
   }
 

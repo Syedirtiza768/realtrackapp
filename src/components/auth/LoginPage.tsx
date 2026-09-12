@@ -4,15 +4,19 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { usePublicBranding } from '../../hooks/usePublicBranding';
 import { usePublicAuthConfig } from '../../hooks/usePublicAuthConfig';
+import { toProxyUrl } from '../../lib/imageUrl';
 
-export default function LoginPage() {
+type LoginPageProps = { redirectTo?: string };
+
+export default function LoginPage({ redirectTo = '/auto-parts' }: LoginPageProps) {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { branding, loading: brandingLoading } = usePublicBranding();
   const { config: authConfig } = usePublicAuthConfig();
   const [email, setEmail] = useState('');
@@ -23,8 +27,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     try {
-      await login(email, password);
-      navigate('/');
+      await login(email, password, 'automotive');
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from || redirectTo, { replace: true });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     }
@@ -39,7 +44,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           {logoSrc ? (
             <img
-              src={logoSrc}
+              src={toProxyUrl(logoSrc)}
               alt={branding.appName}
               className="h-14 mx-auto mb-3 object-contain"
             />
@@ -159,7 +164,7 @@ export default function LoginPage() {
         </div>
 
         {branding.poweredByVisible && (
-          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">Powered by RealTrack</p>
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">Powered by Omni Core</p>
         )}
       </div>
     </div>

@@ -22,6 +22,12 @@ export const ROLE_SLUGS = {
   OPS_USER: 'ops_user',
   LISTING_USER: 'listing_user',
   SUPERVISOR: 'supervisor',
+  FASHION_ADMIN: 'fashion_admin',
+  FASHION_MANAGER: 'fashion_manager',
+  FASHION_OPERATOR: 'fashion_operator',
+  BUSINESS_INDUSTRIAL_ADMIN: 'business_industrial_admin',
+  BUSINESS_INDUSTRIAL_MANAGER: 'business_industrial_manager',
+  BUSINESS_INDUSTRIAL_OPERATOR: 'business_industrial_operator',
 } as const;
 
 export type RoleSlug = (typeof ROLE_SLUGS)[keyof typeof ROLE_SLUGS];
@@ -85,6 +91,29 @@ const SUPER_ADMIN_ONLY: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN];
 
 /** Admin + super_admin only. Super admin can reassign via Roles UI later. */
 const SUPER_AND_ADMIN: RoleSlug[] = [ROLE_SLUGS.SUPER_ADMIN, ROLE_SLUGS.ADMIN];
+
+const FASHION_ALL: RoleSlug[] = [
+  ROLE_SLUGS.FASHION_ADMIN,
+  ROLE_SLUGS.FASHION_MANAGER,
+  ROLE_SLUGS.FASHION_OPERATOR,
+];
+const FASHION_MANAGER_UP: RoleSlug[] = [
+  ROLE_SLUGS.FASHION_ADMIN,
+  ROLE_SLUGS.FASHION_MANAGER,
+];
+const FASHION_ADMIN_ONLY: RoleSlug[] = [ROLE_SLUGS.FASHION_ADMIN];
+const BUSINESS_INDUSTRIAL_ALL: RoleSlug[] = [
+  ROLE_SLUGS.BUSINESS_INDUSTRIAL_ADMIN,
+  ROLE_SLUGS.BUSINESS_INDUSTRIAL_MANAGER,
+  ROLE_SLUGS.BUSINESS_INDUSTRIAL_OPERATOR,
+];
+const BUSINESS_INDUSTRIAL_MANAGER_UP: RoleSlug[] = [
+  ROLE_SLUGS.BUSINESS_INDUSTRIAL_ADMIN,
+  ROLE_SLUGS.BUSINESS_INDUSTRIAL_MANAGER,
+];
+const BUSINESS_INDUSTRIAL_ADMIN_ONLY: RoleSlug[] = [
+  ROLE_SLUGS.BUSINESS_INDUSTRIAL_ADMIN,
+];
 
 function p(
   key: string,
@@ -367,6 +396,214 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('feature_flags.manage', 'Manage feature flags', 'feature_flags', [
     ROLE_SLUGS.SUPER_ADMIN,
   ]),
+
+  // ── Fashion vertical ──
+  p('fashion.access', 'Access Fashion workspace', 'fashion', FASHION_ALL),
+  p('fashion.dashboard.view', 'View Fashion dashboard', 'fashion', FASHION_ALL),
+  p('fashion.listings.view', 'View Fashion listings', 'fashion', FASHION_ALL),
+  p(
+    'fashion.listings.create',
+    'Create Fashion listings',
+    'fashion',
+    FASHION_ALL,
+  ),
+  p('fashion.listings.update', 'Edit Fashion drafts', 'fashion', FASHION_ALL),
+  p('fashion.import', 'Import Fashion listings', 'fashion', FASHION_ALL),
+  p('fashion.review', 'Review Fashion listings', 'fashion', FASHION_MANAGER_UP),
+  p(
+    'fashion.publish',
+    'Publish Fashion listings',
+    'fashion',
+    FASHION_MANAGER_UP,
+  ),
+  p(
+    'fashion.stores.view',
+    'View authorized Fashion stores',
+    'fashion',
+    FASHION_ALL,
+  ),
+  p(
+    'fashion.stores.manage',
+    'Connect and manage Fashion stores',
+    'fashion',
+    FASHION_ADMIN_ONLY,
+  ),
+  p(
+    'fashion.users.manage',
+    'Manage Fashion users',
+    'fashion',
+    FASHION_ADMIN_ONLY,
+  ),
+  p(
+    'fashion.roles.manage',
+    'Assign Fashion roles',
+    'fashion',
+    FASHION_ADMIN_ONLY,
+  ),
+  p(
+    'fashion.settings.manage',
+    'Manage Fashion settings',
+    'fashion',
+    FASHION_ADMIN_ONLY,
+  ),
+  p(
+    'fashion.authenticity.review',
+    'Review Fashion authenticity evidence',
+    'fashion',
+    FASHION_MANAGER_UP,
+  ),
+  p(
+    'fashion.incidents.manage',
+    'Quarantine Fashion listings and incidents',
+    'fashion',
+    FASHION_MANAGER_UP,
+  ),
+  p(
+    'fashion.catalog.export',
+    'Export Fashion catalog records',
+    'fashion',
+    FASHION_ALL,
+  ),
+  p(
+    'fashion.catalog.delete',
+    'Delete Fashion catalog records',
+    'fashion',
+    FASHION_ADMIN_ONLY,
+  ),
+  p(
+    'fashion.catalog.assign_team',
+    'Assign Fashion catalog records to teams',
+    'fashion',
+    FASHION_MANAGER_UP,
+  ),
+  p(
+    'fashion.catalog.manage_policies',
+    'Manage Fashion catalog listing policies',
+    'fashion',
+    FASHION_MANAGER_UP,
+  ),
+
+  // ── Business & Industrial vertical ──
+  p(
+    'business_industrial.access',
+    'Access Business & Industrial workspace',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.dashboard.view',
+    'View Business & Industrial dashboard',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.listings.view',
+    'View Business & Industrial listings',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.listings.create',
+    'Create Business & Industrial listings',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.listings.update',
+    'Edit Business & Industrial drafts',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.import',
+    'Import Business & Industrial listings',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.review',
+    'Review Business & Industrial listings',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
+  p(
+    'business_industrial.review.private',
+    'View private Business & Industrial evidence',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
+  p(
+    'business_industrial.publish',
+    'Publish Business & Industrial listings',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
+  p(
+    'business_industrial.stores.view',
+    'View authorized Business & Industrial stores',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.stores.manage',
+    'Connect and manage Business & Industrial stores',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ADMIN_ONLY,
+  ),
+  p(
+    'business_industrial.users.manage',
+    'Manage Business & Industrial users',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ADMIN_ONLY,
+  ),
+  p(
+    'business_industrial.roles.manage',
+    'Assign Business & Industrial roles',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ADMIN_ONLY,
+  ),
+  p(
+    'business_industrial.incidents.view',
+    'View Business & Industrial incidents',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
+  p(
+    'business_industrial.incidents.manage',
+    'Quarantine Business & Industrial listings and incidents',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
+  p(
+    'business_industrial.incidents.release',
+    'Release Business & Industrial incidents after documented review',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
+  p(
+    'business_industrial.catalog.export',
+    'Export Business & Industrial catalog records',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ALL,
+  ),
+  p(
+    'business_industrial.catalog.delete',
+    'Delete Business & Industrial catalog records',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_ADMIN_ONLY,
+  ),
+  p(
+    'business_industrial.catalog.assign_team',
+    'Assign Business & Industrial catalog records to teams',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
+  p(
+    'business_industrial.catalog.manage_policies',
+    'Manage Business & Industrial catalog listing policies',
+    'business_industrial',
+    BUSINESS_INDUSTRIAL_MANAGER_UP,
+  ),
 ];
 
 export const ROLE_DEFINITIONS: {
@@ -435,6 +672,47 @@ export const ROLE_DEFINITIONS: {
     name: 'Supervisor',
     description:
       'Approve and publish listings, revise live listings. Cannot delete or change price on live listings without manager approval.',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.FASHION_ADMIN,
+    name: 'Fashion Admin',
+    description:
+      'Administers the Fashion workspace, users, stores, roles, and settings without platform administration access',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.FASHION_MANAGER,
+    name: 'Fashion Manager',
+    description:
+      'Reviews and publishes Fashion listings and handles compliance incidents',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.FASHION_OPERATOR,
+    name: 'Fashion Operator',
+    description: 'Creates and imports Fashion drafts within assigned stores',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.BUSINESS_INDUSTRIAL_ADMIN,
+    name: 'Business & Industrial Admin',
+    description:
+      'Administers the Business & Industrial workspace, users, stores, and settings',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.BUSINESS_INDUSTRIAL_MANAGER,
+    name: 'Business & Industrial Manager',
+    description:
+      'Reviews and publishes Business & Industrial listings and handles compliance incidents',
+    isSystem: true,
+  },
+  {
+    slug: ROLE_SLUGS.BUSINESS_INDUSTRIAL_OPERATOR,
+    name: 'Business & Industrial Operator',
+    description:
+      'Creates and imports Business & Industrial drafts within assigned stores',
     isSystem: true,
   },
 ];

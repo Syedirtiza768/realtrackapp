@@ -1,9 +1,19 @@
+import type { ProductVertical } from '../../verticals/vertical.types.js';
+import { normalizeProductVertical } from '../../verticals/vertical.types.js';
+import {
+  attributesFromImportRow,
+  validateVerticalAttributes,
+} from '../../verticals/vertical.config.js';
+import { businessIndustrialAttributesFromImportRow } from '../../verticals/business-industrial-import.js';
+import { validateBusinessIndustrialAttributes } from '../../verticals/business-industrial.config.js';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, type EntityManager } from 'typeorm';
+import { FashionReview } from '../../verticals/entities/fashion-review.entity.js';
+import { BusinessIndustrialReview } from '../../verticals/entities/business-industrial-review.entity.js';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as fs from 'fs';
 import { CatalogImport } from '../entities/catalog-import.entity.js';
@@ -91,6 +101,8 @@ export class CsvImportProcessor extends WorkerHost {
 
     // Mark as processing
     await this.importRepo.update(importId, { status: 'processing' });
+    const vertical = normalizeProductVertical(importRecord.vertical);
+    const organizationId = importRecord.organizationId;
 
     try {
       // Read and parse the CSV
@@ -178,12 +190,20 @@ export class CsvImportProcessor extends WorkerHost {
           physicalCursor < totalRows &&
           batchPrimaryRows.length < BATCH_SIZE
         ) {
-          const pulled = this.pullNextFileExchangeLogicalRow(
-            dataLines,
-            headers,
-            columnMapping,
-            physicalCursor,
-          );
+          const pulled =
+            vertical === 'automotive'
+              ? this.pullNextFileExchangeLogicalRow(
+                  dataLines,
+                  headers,
+                  columnMapping,
+                  physicalCursor,
+                )
+              : this.pullNextNonAutomotiveLogicalRow(
+                  dataLines,
+                  headers,
+                  columnMapping,
+                  physicalCursor,
+                );
           physicalCursor = pulled.nextPhysicalIndex;
           if (pulled.mergedFitmentLines > 0) {
             fitmentMergedLines += pulled.mergedFitmentLines;
@@ -218,42 +238,64 @@ export class CsvImportProcessor extends WorkerHost {
               rawData: row.data,
             });
           } else {
-            // eBay compliance pre-check: validate & auto-correct before insert
-            const compliance = this.complianceService.validateRowData(row.data);
-            if (!compliance.compliant) {
-              // Non-compliant rows are rejected with audit info
-              invalidRows++;
-              const complianceMsg = `eBay compliance failed: ${compliance.errors.join('; ')}`;
-              importRowEntries.push({
-                importId,
-                rowNumber: row.rowNumber,
-                status: 'invalid',
-                message: complianceMsg,
-                rawData: row.data,
-              });
-              if (warnings.length < 500) {
-                warnings.push(`Row ${row.rowNumber}: ${complianceMsg}`);
-              }
-              continue;
-            }
-
-            // Log auto-corrections as warnings
-            for (const ac of compliance.autoCorrections) {
-              if (warnings.length < 500) {
-                warnings.push(
-                  `Row ${row.rowNumber}: Auto-corrected ${ac.field}: "${ac.original}" → "${ac.corrected}"`,
+            if (vertical === 'business_industrial') {
+              const businessIndustrialValidation =
+                validateBusinessIndustrialAttributes(
+                  businessIndustrialAttributesFromImportRow(row.data),
                 );
+              if (businessIndustrialValidation.errors.length) {
+                invalidRows++;
+                const businessIndustrialMessage = `Business & Industrial validation failed: ${businessIndustrialValidation.errors.join('; ')}`;
+                importRowEntries.push({
+                  importId,
+                  rowNumber: row.rowNumber,
+                  status: 'invalid',
+                  message: businessIndustrialMessage,
+                  rawData: row.data,
+                });
+                if (warnings.length < 500)
+                  warnings.push(
+                    `Row ${row.rowNumber}: ${businessIndustrialMessage}`,
+                  );
+                continue;
+              }
+              for (const warning of businessIndustrialValidation.warnings) {
+                if (warnings.length < 500)
+                  warnings.push(`Row ${row.rowNumber}: ${warning}`);
+              }
+            }
+            if (vertical === 'automotive') {
+              // The existing compliance service is Motors/File Exchange-specific.
+              const compliance = this.complianceService.validateRowData(
+                row.data,
+              );
+              if (!compliance.compliant) {
+                invalidRows++;
+                const complianceMsg = `eBay compliance failed: ${compliance.errors.join('; ')}`;
+                importRowEntries.push({
+                  importId,
+                  rowNumber: row.rowNumber,
+                  status: 'invalid',
+                  message: complianceMsg,
+                  rawData: row.data,
+                });
+                if (warnings.length < 500)
+                  warnings.push(`Row ${row.rowNumber}: ${complianceMsg}`);
+                continue;
+              }
+              for (const ac of compliance.autoCorrections) {
+                if (warnings.length < 500) {
+                  warnings.push(
+                    `Row ${row.rowNumber}: Auto-corrected ${ac.field}: "${ac.original}" → "${ac.corrected}"`,
+                  );
+                }
+              }
+              for (const w of compliance.warnings) {
+                if (warnings.length < 500)
+                  warnings.push(`Row ${row.rowNumber}: [Compliance] ${w}`);
               }
             }
 
-            // Log compliance warnings
-            for (const w of compliance.warnings) {
-              if (warnings.length < 500) {
-                warnings.push(`Row ${row.rowNumber}: [Compliance] ${w}`);
-              }
-            }
-
-            // Collect row-level structural warnings
             if (validation.warnings) {
               for (const w of validation.warnings) {
                 const warnMsg = `Row ${row.rowNumber}: ${w}`;
@@ -264,8 +306,10 @@ export class CsvImportProcessor extends WorkerHost {
           }
         }
 
-        await this.enrichRowsFromEbayBrowse(validRows);
-        await this.enrichMissingCategories(validRows);
+        if (vertical === 'automotive') {
+          await this.enrichRowsFromEbayBrowse(validRows);
+          await this.enrichMissingCategories(validRows);
+        }
 
         // Intra-import duplicate detection (same file / same import)
         const uniqueRows: ParsedRow[] = [];
@@ -336,8 +380,10 @@ export class CsvImportProcessor extends WorkerHost {
           brand: row.data['brand'] || null,
         }));
 
-        const dupResults =
-          await this.duplicateService.checkDuplicateBatch(dupCheckInputs);
+        const dupResults = await this.duplicateService.checkDuplicateBatch(
+          dupCheckInputs,
+          { organizationId, vertical },
+        );
 
         // Process each valid row
         const productsToInsert: Partial<CatalogProduct>[] = [];
@@ -364,6 +410,8 @@ export class CsvImportProcessor extends WorkerHost {
               row.data,
               importId,
               row.rowNumber,
+              vertical,
+              organizationId,
             );
             productsToUpdate.push({
               product: productUpdate,
@@ -377,6 +425,8 @@ export class CsvImportProcessor extends WorkerHost {
                 importRecord.fileName,
                 filePath,
                 listingSheetName,
+                vertical,
+                organizationId,
               ),
               key: {
                 sourceFileName: importRecord.fileName,
@@ -413,6 +463,8 @@ export class CsvImportProcessor extends WorkerHost {
               row.data,
               importId,
               row.rowNumber,
+              vertical,
+              organizationId,
             );
             productsToInsert.push(product);
             seenInsertedRows.add(row.rowNumber);
@@ -423,6 +475,8 @@ export class CsvImportProcessor extends WorkerHost {
                 importRecord.fileName,
                 filePath,
                 listingSheetName,
+                vertical,
+                organizationId,
               ),
             );
             importRowEntries.push({
@@ -447,6 +501,15 @@ export class CsvImportProcessor extends WorkerHost {
                 .getRepository(CatalogProduct)
                 .save(productsToInsert as CatalogProduct[]);
 
+              if (vertical === 'fashion') {
+                for (const product of savedBatchProducts)
+                  await this.resetFashionReview(manager, product);
+              }
+              if (vertical === 'business_industrial') {
+                for (const product of savedBatchProducts)
+                  await this.resetBusinessIndustrialReview(manager, product);
+              }
+
               await manager
                 .getRepository(ListingRecord)
                 .save(listingsToInsert as ListingRecord[]);
@@ -465,13 +528,95 @@ export class CsvImportProcessor extends WorkerHost {
             }
 
             if (productsToUpdate.length > 0) {
+              const protectedRows = new Set<number>();
               for (const { product, productId } of productsToUpdate) {
+                if (vertical === 'fashion') {
+                  const existing = await manager
+                    .getRepository(CatalogProduct)
+                    .findOne({
+                      where: {
+                        id: productId,
+                        organizationId: organizationId!,
+                        vertical: 'fashion',
+                      },
+                      lock: { mode: 'pessimistic_write' },
+                    });
+                  const review = existing
+                    ? await manager.getRepository(FashionReview).findOneBy({
+                        catalogProductId: productId,
+                        organizationId: organizationId!,
+                      })
+                    : null;
+                  if (
+                    !existing ||
+                    existing.manualReview ||
+                    existing.verticalValidationStatus === 'quarantined' ||
+                    review?.status === 'quarantined' ||
+                    review?.status === 'rejected'
+                  ) {
+                    protectedRows.add(product.sourceRow!);
+                    const row = importRowEntries.find(
+                      (entry) => entry.rowNumber === product.sourceRow,
+                    );
+                    if (row) {
+                      row.status = 'duplicate_flagged';
+                      row.message =
+                        'Existing Fashion product is protected or unavailable; resolve its review before importing changes';
+                    }
+                    updatedRows--;
+                    flaggedForReview++;
+                    continue;
+                  }
+                  await this.resetFashionReview(manager, existing);
+                }
+                if (vertical === 'business_industrial') {
+                  const existing = await manager
+                    .getRepository(CatalogProduct)
+                    .findOne({
+                      where: {
+                        id: productId,
+                        organizationId: organizationId!,
+                        vertical: 'business_industrial',
+                      },
+                      lock: { mode: 'pessimistic_write' },
+                    });
+                  const review = existing
+                    ? await manager
+                        .getRepository(BusinessIndustrialReview)
+                        .findOneBy({
+                          catalogProductId: productId,
+                          organizationId: organizationId!,
+                        })
+                    : null;
+                  if (
+                    !existing ||
+                    existing.manualReview ||
+                    existing.verticalValidationStatus === 'quarantined' ||
+                    review?.status === 'quarantined' ||
+                    review?.status === 'rejected'
+                  ) {
+                    protectedRows.add(product.sourceRow!);
+                    const row = importRowEntries.find(
+                      (entry) => entry.rowNumber === product.sourceRow,
+                    );
+                    if (row) {
+                      row.status = 'duplicate_flagged';
+                      row.message =
+                        'Existing Business & Industrial product is protected or unavailable; resolve its compliance incident before importing changes';
+                    }
+                    updatedRows--;
+                    flaggedForReview++;
+                    continue;
+                  }
+                  await this.resetBusinessIndustrialReview(manager, existing);
+                }
                 await manager
                   .getRepository(CatalogProduct)
                   .update(productId, product as any);
               }
 
               for (const { listing, key } of listingsToUpdate) {
+                if (protectedRows.has(key.sourceRowNumber)) continue;
                 await manager
                   .getRepository(ListingRecord)
                   .upsert(listing as ListingRecord, [
@@ -619,6 +764,107 @@ export class CsvImportProcessor extends WorkerHost {
     }
   }
 
+  /** Called under the product write lock (or for a newly inserted product) in the batch transaction. */
+  private async resetFashionReview(
+    manager: EntityManager,
+    product: CatalogProduct,
+  ): Promise<void> {
+    if (!product.organizationId)
+      throw new Error('Fashion import requires an organization');
+    const reviews = manager.getRepository(FashionReview);
+    const existing = await reviews.findOneBy({
+      catalogProductId: product.id,
+      organizationId: product.organizationId,
+    });
+    await reviews.save(
+      reviews.create({
+        ...(existing ?? {}),
+        catalogProductId: product.id,
+        organizationId: product.organizationId,
+        status: 'pending',
+        authenticityConfirmed: false,
+        reviewedByUserId: null,
+        reviewedAt: null,
+        evidenceKeys: existing?.evidenceKeys ?? [],
+      }),
+    );
+  }
+
+  private async resetBusinessIndustrialReview(
+    manager: EntityManager,
+    product: CatalogProduct,
+  ): Promise<void> {
+    if (!product.organizationId)
+      throw new Error('Business & Industrial import requires an organization');
+    const reviews = manager.getRepository(BusinessIndustrialReview);
+    const existing = await reviews.findOneBy({
+      catalogProductId: product.id,
+      organizationId: product.organizationId,
+    });
+    await reviews.save(
+      reviews.create({
+        ...(existing ?? {}),
+        catalogProductId: product.id,
+        organizationId: product.organizationId,
+        status: 'pending',
+        provenanceConfirmed: false,
+        specificationsVerified: false,
+        testingReviewed: false,
+        restrictedCategoryCleared: false,
+        reviewedByUserId: null,
+        reviewedAt: null,
+        reviewedProductUpdatedAt: null,
+        evidenceKeys: existing?.evidenceKeys ?? [],
+        riskFlags: [],
+      }),
+    );
+  }
+
+  /** Parse one non-automotive row without merging or retaining Motors compatibility lines. */
+  private pullNextNonAutomotiveLogicalRow(
+    dataLines: string[],
+    headers: string[],
+    columnMapping: Record<string, string>,
+    cursor: number,
+  ): {
+    primary: {
+      rowNumber: number;
+      data: Record<string, string>;
+      rawLine: string;
+    } | null;
+    nextPhysicalIndex: number;
+    mergedFitmentLines: number;
+    skippedOrphanFitment: boolean;
+  } {
+    if (cursor >= dataLines.length) {
+      return {
+        primary: null,
+        nextPhysicalIndex: cursor,
+        mergedFitmentLines: 0,
+        skippedOrphanFitment: false,
+      };
+    }
+    const rawLine = dataLines[cursor];
+    const cells = this.parseCsvLine(rawLine);
+    if (this.isFileExchangeFitmentContinuation(cells, headers)) {
+      return {
+        primary: null,
+        nextPhysicalIndex: cursor + 1,
+        mergedFitmentLines: 0,
+        skippedOrphanFitment: true,
+      };
+    }
+    return {
+      primary: {
+        rowNumber: cursor + 1,
+        data: this.parseRow(rawLine, headers, columnMapping),
+        rawLine,
+      },
+      nextPhysicalIndex: cursor + 1,
+      mergedFitmentLines: 0,
+      skippedOrphanFitment: false,
+    };
+  }
   /**
    * eBay Motors File Exchange: pull one logical listing row, merging trailing
    * `Relationship=Compatibility` continuation lines into fitment JSON.
@@ -1037,10 +1283,18 @@ export class CsvImportProcessor extends WorkerHost {
     data: Record<string, string>,
     importId: string,
     rowNumber: number,
+    vertical: ProductVertical,
+    organizationId: string | null,
   ): Partial<CatalogProduct> {
     const brand = data['brand'] || null;
     const mpn = data['mpn'] || null;
     const title = data['title'] || '';
+    const attributeValidation = validateVerticalAttributes(
+      vertical,
+      vertical === 'business_industrial'
+        ? businessIndustrialAttributesFromImportRow(data)
+        : attributesFromImportRow(vertical, data),
+    );
 
     // Parse image URLs (pipe-delimited in eBay format)
     let imageUrls: string[] = [];
@@ -1050,7 +1304,7 @@ export class CsvImportProcessor extends WorkerHost {
         .map((u) => u.trim())
         .filter(Boolean);
     }
-    if (isSingleImageBrand(brand)) {
+    if (vertical === 'automotive' && isSingleImageBrand(brand)) {
       imageUrls = selectPrimaryImageForBrand(imageUrls, brand);
     }
 
@@ -1088,7 +1342,10 @@ export class CsvImportProcessor extends WorkerHost {
     }
 
     let fitmentData: Record<string, unknown>[] | null = null;
-    const rawFit = data['_fitmentRecordsJson']?.trim();
+    const rawFit =
+      vertical === 'automotive'
+        ? data['_fitmentRecordsJson']?.trim()
+        : undefined;
     if (rawFit) {
       try {
         const parsed = JSON.parse(rawFit) as unknown;
@@ -1126,7 +1383,13 @@ export class CsvImportProcessor extends WorkerHost {
       categoryId: data['categoryId'] || null,
       categoryName: data['categoryName'] || null,
       imageUrls,
-      fitmentData,
+      fitmentData: vertical === 'automotive' ? fitmentData : null,
+      organizationId,
+      vertical,
+      verticalAttributes: attributeValidation.attributes,
+      verticalValidationStatus: attributeValidation.errors.length
+        ? 'needs_review'
+        : 'draft',
       location: data['location'] || null,
       format: data['format'] || null,
       duration: data['duration'] || null,
@@ -1145,6 +1408,8 @@ export class CsvImportProcessor extends WorkerHost {
     sourceFileName: string,
     sourceFilePath: string,
     sheetName: string,
+    vertical: ProductVertical,
+    organizationId: string | null,
   ): Partial<ListingRecord> {
     const startPriceText = this.normalizeNumericText(data['price']);
     const quantityText = this.normalizeIntegerText(data['quantity']);
@@ -1159,7 +1424,12 @@ export class CsvImportProcessor extends WorkerHost {
       extractMakeModelFromTitle(title);
 
     return {
-      organizationId: null,
+      organizationId,
+      vertical,
+      verticalAttributes:
+        vertical === 'business_industrial'
+          ? businessIndustrialAttributesFromImportRow(data)
+          : attributesFromImportRow(vertical, data),
       sourceFileName,
       sourceFilePath,
       origin: ListingOrigin.PIPELINE_IMPORT,

@@ -13,6 +13,8 @@ import {
 } from './utils/catalog-product-list-query.js';
 import { sanitizeTitle } from '../common/openai/listing-guards.js';
 import { StorageService } from '../storage/storage.service.js';
+import { User } from '../auth/entities/user.entity.js';
+import { AutomotiveAccessScopeService } from '../auth/automotive-access-scope.service.js';
 
 export interface UpdateProductDto {
   title?: string;
@@ -51,13 +53,19 @@ export class CatalogProductService {
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
     private readonly storageService: StorageService,
+    private readonly automotiveScope: AutomotiveAccessScopeService,
   ) {}
 
-  async findAll(params: CatalogProductListParams): Promise<{
+  async findAll(
+    params: CatalogProductListParams,
+    user?: User,
+  ): Promise<{
     products: Array<CatalogProduct & { derived?: CatalogProductDerived }>;
     total: number;
   }> {
     const qb = this.productRepo.createQueryBuilder('p');
+    const accessFilter = await this.automotiveScope.buildFilter(user, 'p');
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
     applyCatalogProductListFilters(qb, params);
 
     qb.orderBy('p.createdAt', 'DESC').take(params.limit).skip(params.offset);
@@ -75,32 +83,61 @@ export class CatalogProductService {
     return { products: enriched, total };
   }
 
-  async findOne(id: string): Promise<CatalogProduct> {
-    const product = await this.productRepo.findOneBy({ id });
+  async findOne(id: string, user?: User): Promise<CatalogProduct> {
+    const qb = this.productRepo
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id });
+    const accessFilter = await this.automotiveScope.buildFilter(user, 'p');
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
+    const product = await qb.getOne();
     if (!product)
       throw new NotFoundException(`Catalog product ${id} not found`);
     return product;
   }
 
-  async findBySku(sku: string): Promise<CatalogProduct | null> {
-    return this.productRepo.findOneBy({ sku });
+  async findBySku(sku: string, user?: User): Promise<CatalogProduct | null> {
+    const qb = this.productRepo
+      .createQueryBuilder('p')
+      .where('p.sku = :sku', { sku });
+    const accessFilter = await this.automotiveScope.buildFilter(user, 'p');
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
+    return qb.getOne();
   }
 
-  async findByIds(ids: string[]): Promise<CatalogProduct[]> {
-    return this.productRepo.findBy({ id: In(ids) });
+  async findByIds(ids: string[], user?: User): Promise<CatalogProduct[]> {
+    if (!ids.length) return [];
+    const qb = this.productRepo
+      .createQueryBuilder('p')
+      .where('p.id IN (:...ids)', { ids });
+    const accessFilter = await this.automotiveScope.buildFilter(user, 'p');
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
+    return qb.getMany();
   }
 
-  async findByListingIds(listingIds: string[]): Promise<CatalogProduct[]> {
+  async findByListingIds(
+    listingIds: string[],
+    user?: User,
+  ): Promise<CatalogProduct[]> {
+    if (!listingIds.length) return [];
     // Look up listing records to get SKUs, then find catalog products by SKU
-    const listings = await this.listingRepo.findBy({ id: In(listingIds) });
+    const listingQb = this.listingRepo
+      .createQueryBuilder('r')
+      .where('r.id IN (:...listingIds)', { listingIds });
+    const listingAccess = await this.automotiveScope.buildFilter(user, 'r');
+    if (listingAccess)
+      listingQb.andWhere(listingAccess.sql, listingAccess.params);
+    const listings = await listingQb.getMany();
     const skus = listings
       .map((l) => l.customLabelSku)
       .filter((s): s is string => s != null && s !== '');
     if (!skus.length) return [];
-    return this.productRepo
+    const productQb = this.productRepo
       .createQueryBuilder('p')
-      .where('p.sku IN (:...skus)', { skus })
-      .getMany();
+      .where('p.sku IN (:...skus)', { skus });
+    const productAccess = await this.automotiveScope.buildFilter(user, 'p');
+    if (productAccess)
+      productQb.andWhere(productAccess.sql, productAccess.params);
+    return productQb.getMany();
   }
 
   applyProfileOverrides(
@@ -131,11 +168,18 @@ export class CatalogProductService {
       returnProfile?: string;
       paymentProfile?: string;
     },
+    user?: User,
   ): Promise<void> {
     const { shippingProfile, returnProfile, paymentProfile } = overrides;
     if (!shippingProfile && !returnProfile && !paymentProfile) return;
 
-    const listings = await this.listingRepo.findBy({ id: In(listingIds) });
+    const listingQb = this.listingRepo
+      .createQueryBuilder('r')
+      .where('r.id IN (:...listingIds)', { listingIds });
+    const listingAccess = await this.automotiveScope.buildFilter(user, 'r');
+    if (listingAccess)
+      listingQb.andWhere(listingAccess.sql, listingAccess.params);
+    const listings = await listingQb.getMany();
     const skus = [
       ...new Set(
         listings
@@ -145,21 +189,29 @@ export class CatalogProductService {
     ];
     if (!skus.length) return;
 
-    const products = await this.productRepo.findBy({ sku: In(skus) });
+    const products = await this.findBySkuList(skus, user);
     for (const product of products) {
       if (shippingProfile) product.shippingProfile = shippingProfile;
       if (returnProfile) product.returnProfile = returnProfile;
       if (paymentProfile) product.paymentProfile = paymentProfile;
-      await this.update(product.id, {
-        shippingProfile: product.shippingProfile ?? undefined,
-        returnProfile: product.returnProfile ?? undefined,
-        paymentProfile: product.paymentProfile ?? undefined,
-      });
+      await this.update(
+        product.id,
+        {
+          shippingProfile: product.shippingProfile ?? undefined,
+          returnProfile: product.returnProfile ?? undefined,
+          paymentProfile: product.paymentProfile ?? undefined,
+        },
+        user,
+      );
     }
   }
 
-  async update(id: string, dto: UpdateProductDto): Promise<CatalogProduct> {
-    const product = await this.findOne(id);
+  async update(
+    id: string,
+    dto: UpdateProductDto,
+    user?: User,
+  ): Promise<CatalogProduct> {
+    const product = await this.findOne(id, user);
 
     // Update product fields
     if (dto.title !== undefined) product.title = dto.title;
@@ -215,7 +267,7 @@ export class CatalogProductService {
     // Sync only fields present in this PATCH — never stomp listing titles
     // (or other listing-only edits) with stale catalog values when the DTO
     // did not include those fields.
-    await this.syncToListingRecord(saved, dto);
+    await this.syncToListingRecord(saved, dto, user);
 
     return saved;
   }
@@ -223,11 +275,12 @@ export class CatalogProductService {
   async updateBySku(
     sku: string,
     dto: UpdateProductDto,
+    user?: User,
   ): Promise<CatalogProduct> {
-    const product = await this.findBySku(sku);
+    const product = await this.findBySku(sku, user);
     if (!product)
       throw new NotFoundException(`Catalog product with SKU ${sku} not found`);
-    return this.update(product.id, dto);
+    return this.update(product.id, dto, user);
   }
 
   /**
@@ -245,12 +298,17 @@ export class CatalogProductService {
   private async syncToListingRecord(
     product: CatalogProduct,
     changed: UpdateProductDto,
+    user?: User,
   ): Promise<void> {
     if (!product.sku) return;
 
-    const listings = await this.listingRepo.findBy({
-      customLabelSku: product.sku,
-    });
+    const listingQb = this.listingRepo
+      .createQueryBuilder('r')
+      .where('r.customLabelSku = :sku', { sku: product.sku });
+    const listingAccess = await this.automotiveScope.buildFilter(user, 'r');
+    if (listingAccess)
+      listingQb.andWhere(listingAccess.sql, listingAccess.params);
+    const listings = await listingQb.getMany();
     if (!listings.length) return;
 
     const patch: Partial<ListingRecord> = {};
@@ -300,7 +358,23 @@ export class CatalogProductService {
 
     if (Object.keys(patch).length === 0) return;
 
-    await this.listingRepo.update({ customLabelSku: product.sku }, patch);
+    await this.listingRepo.update(
+      { id: In(listings.map((row) => row.id)) },
+      patch,
+    );
+  }
+
+  private async findBySkuList(
+    skus: string[],
+    user?: User,
+  ): Promise<CatalogProduct[]> {
+    if (!skus.length) return [];
+    const qb = this.productRepo
+      .createQueryBuilder('p')
+      .where('p.sku IN (:...skus)', { skus });
+    const accessFilter = await this.automotiveScope.buildFilter(user, 'p');
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
+    return qb.getMany();
   }
 
   async bulkFixConditionMismatchTitles(pipelineJobId: string): Promise<{
