@@ -21,6 +21,12 @@ export interface ProcessingResult {
   dominantColor: string | null;
 }
 
+export interface CanonicalWebpResult {
+  buffer: Buffer;
+  width: number | null;
+  height: number | null;
+}
+
 const VARIANTS: ImageVariant[] = [
   { suffix: '_thumb', width: 200, height: 200, fit: 'cover', quality: 75 },
   { suffix: '_sm', width: 320, height: 320, fit: 'inside', quality: 78 },
@@ -36,6 +42,26 @@ export class ImageProcessorService {
   private readonly logger = new Logger(ImageProcessorService.name);
 
   constructor(private readonly storage: StorageService) {}
+
+  /** Convert and orient an uploaded image before it is persisted to S3. */
+  async convertBufferToWebp(buffer: Buffer): Promise<CanonicalWebpResult> {
+    const validation = this.validateMagicBytes(buffer);
+    if (!validation.valid) throw new Error('Invalid image data');
+    const metadata = await sharp(buffer).metadata();
+    const width = metadata.width ?? 0;
+    const height = metadata.height ?? 0;
+    if (width * height > MAX_PIXEL_COUNT)
+      throw new Error('Image exceeds the maximum pixel count');
+    const converted = await sharp(buffer)
+      .rotate()
+      .resize(MAX_ORIGINAL_DIMENSION, MAX_ORIGINAL_DIMENSION, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 85 })
+      .toBuffer();
+    return { buffer: converted, width: width || null, height: height || null };
+  }
 
   /**
    * Process an uploaded image:
@@ -99,23 +125,26 @@ export class ImageProcessorService {
         ? await sharp(buffer).rotate().toBuffer()
         : buffer;
 
-    // Resize original to max dimension + WebP (strip EXIF via sharp defaults)
+    // Always create a canonical WebP sibling for every non-WebP source. The
+    // previous implementation only wrote this sibling when the source was
+    // larger than MAX_ORIGINAL_DIMENSION, which left smaller uploads without
+    // the representation used by the frontend and eBay publishing path.
     const needsResize =
       originalWidth > MAX_ORIGINAL_DIMENSION ||
       originalHeight > MAX_ORIGINAL_DIMENSION;
 
-    if (needsResize) {
-      const resized = await sharp(orientedBuffer)
-        .resize(MAX_ORIGINAL_DIMENSION, MAX_ORIGINAL_DIMENSION, {
+    if (!/\.webp$/i.test(s3Key)) {
+      const webpPipeline = sharp(orientedBuffer);
+      if (needsResize) {
+        webpPipeline.resize(MAX_ORIGINAL_DIMENSION, MAX_ORIGINAL_DIMENSION, {
           fit: 'inside',
           withoutEnlargement: true,
-        })
-        .webp({ quality: 85 })
-        .toBuffer();
-
+        });
+      }
+      const webpBuffer = await webpPipeline.webp({ quality: 85 }).toBuffer();
       const webpKey = s3Key.replace(/\.\w+$/, '.webp');
-      await this.storage.putObject(webpKey, resized, 'image/webp');
-      this.logger.debug(`Resized original → ${webpKey}`);
+      await this.storage.putObject(webpKey, webpBuffer, 'image/webp');
+      this.logger.debug(`Generated canonical WebP → ${webpKey}`);
     }
 
     // Generate responsive variants

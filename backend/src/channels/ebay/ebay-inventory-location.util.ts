@@ -5,6 +5,19 @@ import type { EbayLocation } from './ebay-api.types.js';
 /** Preferred key for Dubai-based warehouses (matches live eBay inventory locations). */
 export const DEFAULT_MERCHANT_LOCATION_KEY = 'AE_Dubai';
 
+/**
+ * Values written by older integrations to mean "use the account default".
+ * They are not safe eBay merchant-location keys: in production, eBay can
+ * resolve them to the seller's old US location.
+ */
+const LEGACY_DEFAULT_LOCATION_KEYS = new Set([
+  'default',
+  'usa',
+  'us',
+  'us_77001',
+  'houston',
+]);
+
 export interface InventoryLocationAddress {
   addressLine1?: string;
   city: string;
@@ -23,6 +36,35 @@ export interface InventoryLocationCandidate {
       postalCode?: string;
     };
   };
+}
+
+export function isLegacyDefaultMerchantLocationKey(
+  value?: string | null,
+): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return Boolean(normalized && LEGACY_DEFAULT_LOCATION_KEYS.has(normalized));
+}
+
+/** Only UAE locations are valid for the Dubai default ship-from policy. */
+export function isUaeInventoryLocation(
+  location: InventoryLocationCandidate,
+): boolean {
+  const key = location.merchantLocationKey?.trim() ?? '';
+  const country = (location.location?.address?.country ?? '')
+    .trim()
+    .toUpperCase();
+  if (country) {
+    return (
+      country === 'AE' ||
+      country === 'ARE' ||
+      country === 'UNITED ARAB EMIRATES'
+    );
+  }
+  // Some older eBay responses omit country on the list endpoint. Keep the
+  // explicit UAE key safe in that case, but never infer UAE from a US key.
+  return (
+    key === DEFAULT_MERCHANT_LOCATION_KEY || key.toUpperCase().startsWith('AE_')
+  );
 }
 
 /** Resolve ship-from address from store config, then env defaults (Dubai / AE). */
@@ -87,23 +129,39 @@ export function resolvePreferredMerchantLocationKey(
   store?: Pick<Store, 'locationKey' | 'config'> | null,
   explicit?: string | null,
 ): string {
-  if (explicit?.trim()) return explicit.trim();
-  if (store?.locationKey?.trim()) return store.locationKey.trim();
-  const storeConfig = store?.config ?? {};
-  if (
-    typeof storeConfig.locationKey === 'string' &&
-    storeConfig.locationKey.trim()
-  ) {
-    return storeConfig.locationKey.trim();
-  }
-  return (
-    config
-      .get<string>(
-        'EBAY_DEFAULT_MERCHANT_LOCATION_KEY',
-        DEFAULT_MERCHANT_LOCATION_KEY,
-      )
-      .trim() || DEFAULT_MERCHANT_LOCATION_KEY
+  const normalizeKey = (value?: string | null): string | undefined => {
+    const key = value?.trim();
+    // "default" is a legacy placeholder, not the Dubai merchant location.
+    // Passing it through makes eBay evaluate the wrong country/location.
+    return key && !isLegacyDefaultMerchantLocationKey(key) ? key : undefined;
+  };
+
+  const explicitKey = normalizeKey(explicit);
+  if (explicitKey) return explicitKey;
+
+  const configuredDefault = normalizeKey(
+    config.get<string>('EBAY_DEFAULT_MERCHANT_LOCATION_KEY', ''),
   );
+  const fallbackKey = configuredDefault || DEFAULT_MERCHANT_LOCATION_KEY;
+  // An explicit legacy value must not fall through to an unrelated store key.
+  // That would preserve the very US/default mapping this resolver is meant to
+  // repair.
+  if (explicit?.trim() && isLegacyDefaultMerchantLocationKey(explicit)) {
+    return DEFAULT_MERCHANT_LOCATION_KEY;
+  }
+
+  const storeKey = normalizeKey(store?.locationKey);
+  if (storeKey) return storeKey;
+
+  const storeConfig = store?.config ?? {};
+  const configKey = normalizeKey(
+    typeof storeConfig.locationKey === 'string'
+      ? storeConfig.locationKey
+      : undefined,
+  );
+  if (configKey) return configKey;
+
+  return fallbackKey;
 }
 
 /**
@@ -115,11 +173,16 @@ export function pickPreferredInventoryLocationKey(
   locations: InventoryLocationCandidate[],
   keyHint?: string | null,
 ): string | undefined {
-  if (!locations.length) return undefined;
+  const uaeLocations = locations.filter(isUaeInventoryLocation);
+  if (!uaeLocations.length) return undefined;
 
-  const hint = keyHint?.trim();
+  const rawHint = keyHint?.trim();
+  const hint =
+    rawHint && !isLegacyDefaultMerchantLocationKey(rawHint)
+      ? rawHint
+      : undefined;
   if (hint) {
-    const exact = locations.find((l) => l.merchantLocationKey === hint);
+    const exact = uaeLocations.find((l) => l.merchantLocationKey === hint);
     if (exact) return exact.merchantLocationKey;
   }
 
@@ -127,22 +190,16 @@ export function pickPreferredInventoryLocationKey(
     const key = loc.merchantLocationKey ?? '';
     const country = (loc.location?.address?.country ?? '').toUpperCase();
     const city = (loc.location?.address?.city ?? '').toLowerCase();
-    const postal = loc.location?.address?.postalCode ?? '';
     let s = 0;
-    if (key === DEFAULT_MERCHANT_LOCATION_KEY || key === 'AE_Dubai') s += 100;
+    if (key === DEFAULT_MERCHANT_LOCATION_KEY) s += 100;
     if (key.startsWith('AE_')) s += 50;
     if (country === 'AE') s += 40;
     if (city === 'dubai') s += 20;
-    if (key === 'default') s += 5;
-    // Legacy mistaken Houston provision — keep available but never prefer.
-    if (key === 'US_77001' || postal === '77001' || city === 'houston') {
-      s -= 100;
-    }
-    if (country === 'US' && postal === '77001') s -= 50;
+    if (country === 'AE' && city === 'dubai') s += 20;
     return s;
   };
 
-  const ranked = [...locations].sort((a, b) => score(b) - score(a));
+  const ranked = [...uaeLocations].sort((a, b) => score(b) - score(a));
   return ranked[0]?.merchantLocationKey;
 }
 
