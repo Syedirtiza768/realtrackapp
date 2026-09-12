@@ -1,3 +1,4 @@
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
 import {
   Column,
   CreateDateColumn,
@@ -52,6 +53,10 @@ export class EbayListingJobTarget {
 
   @Column({ name: 'marketplace_id', type: 'varchar', length: 30 })
   marketplaceId!: string;
+
+  /** Resolved vertical snapshot for retry-safe publishing. */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  vertical!: ProductVertical | null;
 
   @Column({ type: 'varchar', length: 20, default: 'pending' })
   status!: EbayListingJobTargetStatus;

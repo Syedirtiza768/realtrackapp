@@ -71,6 +71,7 @@ src/components/
 ├── audit/              # Audit trail
 ├── sku/                # SKU detail page
 ├── preview/            # eBay listing preview
+├── image-drive/        # Image Drive folder browser and recursive image upload
 └── channels/           # eBay OAuth callback
 ```
 
@@ -96,6 +97,7 @@ src/components/
 | `pricingApi.ts` | Pricing intelligence API |
 | `templateApi.ts` | Templates API |
 | `pipelineApi.ts` | Pipeline API |
+| `imageDriveApi.ts` | Image Drive folder/file APIs and chunked folder-tree uploads |
 | `listingGenerationApi.ts` | AI listing generation API |
 | `rbacApi.ts` | RBAC admin API |
 | `clientBrandingApi.ts` | Client branding API |
@@ -107,6 +109,7 @@ src/components/
 | `ebayFileExchangeParser.ts` | eBay file parsing |
 | `catalogDestructiveUi.ts` | Deprecated; use RBAC for delete UI |
 | `listingsQueryHooks.ts` | React Query hooks for listings |
+| `imageDriveUpload.ts` | Browser directory traversal and upload-path helpers |
 
 ### Contexts (`src/contexts/`)
 
@@ -181,7 +184,7 @@ module-name/
 | **automation** | `automation/` | `automation.controller.ts` | Automation rules |
 | **templates** | `templates/` | `template.controller.ts` | Listing templates |
 | **notifications** | `notifications/` | `notifications.controller.ts`, `notifications.gateway.ts` | WebSocket notifications |
-| **storage** | `storage/` | `storage.controller.ts`, `processors/thumbnail.processor.ts`, `processors/cleanup.processor.ts` | S3 assets, thumbnails |
+| **storage** | `storage/` | `storage.controller.ts`, `image-drive.controller.ts`, `image-drive.service.ts`, `utils/image-drive-folder-upload.util.ts`, `processors/thumbnail.processor.ts`, `processors/cleanup.processor.ts` | S3 assets, thumbnails, Image Drive folder-tree uploads, and part-number lookup |
 | **health** | `health/` | `health.controller.ts` | Health checks (@Public) |
 | **pricing-intelligence** | `pricing-intelligence/` | `pricing-intelligence.controller.ts` | Pricing rules |
 | **common/openai** | `common/openai/` | `openai-queue.service.ts` | OpenAI client, queued calls |

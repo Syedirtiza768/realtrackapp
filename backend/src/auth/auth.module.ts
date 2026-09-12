@@ -13,6 +13,8 @@ import { JwtStrategy } from './jwt.strategy';
 import { User } from './entities/user.entity';
 import { Organization } from './entities/organization.entity';
 import { OrganizationMember } from './entities/organization-member.entity';
+import { AutomotiveAccessScopeService } from './automotive-access-scope.service.js';
+import { AuthSessionService } from './auth-session.service.js';
 
 @Module({
   imports: [
@@ -44,11 +46,15 @@ import { OrganizationMember } from './entities/organization-member.entity';
     UserOrganizationService,
     JwtStrategy,
     AuthAuditService,
+    AutomotiveAccessScopeService,
+    AuthSessionService,
   ],
   exports: [
     AuthService,
     UserOrganizationService,
     AuthAuditService,
+    AutomotiveAccessScopeService,
+    AuthSessionService,
     JwtModule,
     PassportModule,
     TypeOrmModule,

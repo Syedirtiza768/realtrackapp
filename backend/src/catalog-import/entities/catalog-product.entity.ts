@@ -1,3 +1,7 @@
+import type {
+  ProductAttributes,
+  ProductVertical,
+} from '../../verticals/vertical.types.js';
 import {
   Column,
   CreateDateColumn,
@@ -268,6 +272,24 @@ export class CatalogProduct {
   @Column({ name: 'team_id', type: 'uuid', nullable: true })
   @Index('idx_catalog_team')
   teamId!: string | null;
+
+  /** Organization and vertical are nullable so existing automotive catalog rows remain valid. */
+  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId!: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  vertical!: ProductVertical | null;
+
+  @Column({ name: 'vertical_attributes', type: 'jsonb', default: '{}' })
+  verticalAttributes!: ProductAttributes;
+
+  @Column({
+    name: 'vertical_validation_status',
+    type: 'varchar',
+    length: 24,
+    default: 'draft',
+  })
+  verticalValidationStatus!: string;
 
   /* ── Audit columns ─────────────────────────────────────── */
 

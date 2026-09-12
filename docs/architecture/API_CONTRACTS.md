@@ -272,6 +272,7 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | GET | `/api/published-listings` | List/filter published listings | published_listings.view |
+| GET | `/api/published-listings/export` | Export published listings as CSV (query params match list endpoint) | published_listings.export |
 | GET | `/api/published-listings/summary` | Dashboard counts | published_listings.view |
 | GET | `/api/published-listings/sync-logs` | Sync job history | published_listings.view |
 | GET | `/api/published-listings/stores` | Connected stores with listing counts | published_listings.view |
@@ -520,6 +521,7 @@ GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
 | GET | `/api/image-drive/folders/:id/files` | List files in folder (paginated) | image_drive.view |
 | POST | `/api/image-drive/folders/:id/upload` | Upload files to folder (multipart, up to 50) | image_drive.upload |
 | POST | `/api/image-drive/upload` | Upload with auto-create folder (folderId="auto") | image_drive.upload |
+| POST | `/api/image-drive/upload-folder` | Upload up to 50 images from a folder-tree chunk; `filePaths` preserves relative paths and part-number directories are mapped to linked Image Drive folders | image_drive.upload |
 | DELETE | `/api/image-drive/files/:id` | Delete single file (+ S3 cleanup) | image_drive.manage |
 | GET | `/api/image-drive/files/:id` | Get single file details | image_drive.view |
 | POST | `/api/image-drive/files/bulk-delete` | Bulk delete files by IDs | image_drive.manage |
@@ -527,6 +529,12 @@ GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
 | POST | `/api/image-drive/lookup` | Batch lookup by part numbers | image_drive.view |
 | GET | `/api/image-drive/search` | Search folders by name or linked part number | image_drive.view |
 | GET | `/api/image-drive/stats` | Get stats (totalFolders, totalFiles, totalSizeBytes) | image_drive.view |
+
+`POST /api/image-drive/upload-folder` accepts multipart `files`, a JSON
+`filePaths` array aligned with those files, and `topLevelFolderName`. The
+frontend chunks larger folder trees into requests of 50 files or fewer. The
+response reports `uploaded`, retry-safe `skipped`, `unassigned`, and per-folder
+counts.
 
 ### Feature Flags ⚠️
 
@@ -575,4 +583,4 @@ Located in `src/lib/`:
 
 ---
 
-*Consolidated & reorganized: 2026-06-06. Updated: 2026-07-29.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-08-19.*

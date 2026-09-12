@@ -131,6 +131,7 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 | fitment | `fitment.view`, `fitment.manage` |
 | storage | `storage.view`, `storage.upload`, `storage.manage` |
 | pricing | `pricing.view`, `pricing.manage` |
+| published_listings | `published_listings.view`, `published_listings.export`, `published_listings.sync`, `published_listings.manage`, `published_listings.bulk` |
 | feature_flags | `feature_flags.view`, `feature_flags.manage` |
 
 > Full list: read `permission-registry.ts` (do not duplicate it here — it drifts).
@@ -149,7 +150,7 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 
 ### Publish policy
 
-> **Policy (2026-08-08):** Every human system role may publish listings to every store. The following permissions default to `READ_ONLY` (all 10 human roles): `listings.publish`, `listings.approve`, `listings.revise`, `channels.publish`, `ebay.publish`, `published_listings.sync`, `published_listings.manage`, `published_listings.bulk`. Only `listings.delete` and `listings.price_override` remain restricted (admin/manager up). The machine role `api_published_listings_reader` is excluded.
+> **Policy (2026-08-08):** Every human system role may publish listings to every store. The following permissions default to `READ_ONLY` (all 10 human roles): `listings.publish`, `listings.approve`, `listings.revise`, `channels.publish`, `ebay.publish`, `published_listings.export`, `published_listings.sync`, `published_listings.manage`, `published_listings.bulk`. Only `listings.delete` and `listings.price_override` remain restricted (admin/manager up). The machine role `api_published_listings_reader` is excluded.
 
 Two gates must both be satisfied for a user to publish **all** listings to **all** stores:
 
@@ -246,4 +247,4 @@ Permissions returned from `GET /api/auth/me`.
 
 ---
 
-*Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-08-19.*

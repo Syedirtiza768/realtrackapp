@@ -3,6 +3,10 @@ import type { EbayCompatibilityPayload } from './ebay-api.types.js';
 export interface TradingItemDetails {
   imageUrls: string[];
   compatibility: EbayCompatibilityPayload | null;
+  listingDetails: {
+    bestOfferEnabled: boolean | null;
+    immediatePayRequired: boolean | null;
+  };
   description: string | null;
   itemSpecifics: Record<string, string[]>;
 }
@@ -13,7 +17,29 @@ function tagValue(block: string, tag: string): string | null {
   );
   const raw = m?.[1]?.trim() ?? null;
   if (!raw) return null;
-  return raw.replace(/^<!\[CDATA\[|\]\]>$/g, '');
+  return decodeXmlEntities(raw.replace(/^<!\[CDATA\[|\]\]>$/g, ''));
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&amp;', '&')
+    .replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (_match, code: string) => {
+      const value = code.toLowerCase().startsWith('x')
+        ? Number.parseInt(code.slice(1), 16)
+        : Number.parseInt(code, 10);
+      return Number.isFinite(value) ? String.fromCodePoint(value) : _match;
+    });
+}
+
+function parseBoolean(value: string | null): boolean | null {
+  if (value == null) return null;
+  if (/^(true|1)$/i.test(value)) return true;
+  if (/^(false|0)$/i.test(value)) return false;
+  return null;
 }
 
 /** Extract all PictureURL values (and optional GalleryURL) from a Trading Item XML block. */
@@ -97,9 +123,20 @@ export function parseTradingItemSpecifics(
 
 export function parseTradingGetItemResponse(xml: string): TradingItemDetails {
   const itemBlock = xml.match(/<Item>[\s\S]*?<\/Item>/i)?.[0] ?? xml;
+  const listingDetailsBlock =
+    itemBlock.match(/<ListingDetails>[\s\S]*?<\/ListingDetails>/i)?.[0] ?? '';
+  const bestOfferEnabled = parseBoolean(
+    tagValue(itemBlock, 'BestOfferEnabled') ??
+      tagValue(listingDetailsBlock, 'BestOfferEnabled'),
+  );
+  const immediatePayRequired = parseBoolean(tagValue(itemBlock, 'AutoPay'));
   return {
     imageUrls: parsePictureUrls(itemBlock),
     compatibility: parseTradingItemCompatibility(itemBlock),
+    listingDetails: {
+      bestOfferEnabled,
+      immediatePayRequired,
+    },
     description: tagValue(itemBlock, 'Description'),
     itemSpecifics: parseTradingItemSpecifics(itemBlock),
   };

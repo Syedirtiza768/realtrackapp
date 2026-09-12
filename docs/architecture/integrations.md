@@ -21,6 +21,12 @@
 - Multi-store: `ebay-multi-store-listing.service.ts`, `InternalStore`,
   `ListingStoreOverride`, `EbayAccountMarketplace`.
 - API audit/error logging: `EbayApiAuditLog`, `EbayApiError`.
+- Listing images are uploaded to eBay Picture Services through
+  `EbayMediaApiService` before either the direct Inventory API or SellerPundit
+  publish path runs. The store-scoped `ebay_hosted_images` cache prevents
+  repeated uploads on retries and ensures published listings do not depend on
+  AWS S3 URLs remaining accessible. If eBay hosting fails, that store's
+  listing is not published with the source URL as a fallback.
 - Durable publish targets retain the original `listing_records.id` in
   `result_payload.sourceListingId`. `CatalogPublishResolverService` therefore
   uses the exact reviewed listing row for title, description, price, quantity,
@@ -40,6 +46,12 @@
   canonical `catalog_product_id` so the listing can still be built. The
   `scripts/repair-ebay-publish-failures.mjs --retry-skus=... --apply --retry`
   mode supports an explicit, auditable requeue after this fallback is deployed.
+- When a remote SKU exists but has no local channel and no published remote
+  offer/listing, the publish boundary may reclaim that unpublished orphan for
+  the current canonical catalog product. It never reclaims a locally-owned or
+  published remote SKU; those collisions remain fail-closed. Reclaim writes the
+  existing canonical request and the post-publish projection check verifies
+  title, image count, description, policies, location, and compatibility.
 - The final per-store publish boundary also removes reconstructed Motors
   compatibility rows for marketplaces whose configuration sets
   `supportsMotorsFitment=false` (currently eBay DE and GB). This protects the
@@ -75,6 +87,102 @@
   the service reads `product_compatibility` back and verifies all requested
   rows before publishing the offer. Description HTML is never treated as a
   substitute for eBay's structured compatibility section.
+- Compatibility is fail-closed across the Inventory API representation: before
+  a publish, Inventory API SKU compatibility is replaced or explicitly deleted
+  and read back exactly; after an offer is reused or published, the Inventory
+  offer is refreshed with `updateOffer` and verified again. Normal publishing
+  does not call Trading API `ReviseItem` for Inventory-managed listings. A
+  verification failure withdraws the offer. Trading read/replace remains an
+  explicit legacy-repair path in `backend/src/scripts/repair-ebay-compatibility.ts`
+  (dry-run by default; `--apply` performs eBay and published-listing mirror
+  updates).
+- eBay returns error `21919474` when Trading API `ReviseItem` is attempted on
+  an Inventory-managed listing, and can return `21919233` when a legacy
+  compatibility projection exceeds its category limit. Both are handled as
+  read-only legacy-projection limitations, not as successful Trading writes:
+  Inventory compatibility is still replaced and verified exactly, the
+  Inventory offer is updated and verified, and the source title, images,
+  policies, fitment rows, and compatibility rows are not rewritten. Other
+  Trading errors still fail closed. SellerPundit errors in these classes fall
+  back to the direct Inventory API path.
+- Individual Add Part/New listing audits use
+  `backend/src/scripts/audit-add-part-ebay.ts`. The audit excludes
+  `pipeline_import`, FEBI/FEBI Bilstein, and Lemförder/Lemforder rows, then
+  reads the live Inventory and Trading APIs to compare the source title,
+  buyer-facing description, image counts, exact compatibility/MVL rows,
+  business-policy IDs, and merchant location. It is read-only and emits
+  JSONL results with fetch failures separated from confirmed mismatches. Use
+  `--skip-trading` when the eBay Trading API application quota is exhausted and
+  `--channel-id=...` for a bounded post-repair verification. Internal warehouse
+  bin codes are not compared to the eBay merchant-address projection.
+- `backend/src/scripts/repair-add-part-ebay.ts` consumes the completed audit
+  JSONL and is dry-run by default. Its apply mode is serial and guarded by
+  canonical source-row resolution, exact title/MPN identity for orphaned
+  remote SKUs, eBay-hosted image resolution, compatibility/policy checks, and
+  post-publish verification. A per-store `success=false` result is logged as
+  a repair error rather than being counted as a completed repair.
+  Successful repairs transactionally persist the effective eBay SKU and
+  offer/listing pointers. The runner retries bounded eBay availability
+  propagation failures and cleans up only unpublished, no-listing partial
+  alternate-SKU artifacts proven to belong to that repair attempt.
+  Fresh/noncanonical SKUs are skipped for a separate canonical recovery
+  workflow.
+- `backend/src/scripts/repair-add-part-fresh-ebay.ts` is the separate,
+  dry-run-by-default recovery for those audited noncanonical channels. It
+  uses the deterministic `BLA-<suffix>` → `BLAP-<suffix>` Seller SKU for
+  Blackline conflicts (with no postfix), after verifying that the replacement
+  item and offers are absent on the target eBay account. It creates the new
+  offer from the canonical Add Part source, neutralizes
+  catalog identifiers during the initial projection, verifies the final eBay
+  item/offer, and only then swaps `ebay_listing_channels` and
+  `ebay_published_listings` pointers. A failed local pointer transaction never
+  triggers another eBay offer creation automatically. Use `--channel-id=...`
+  for a single canary before applying the remaining target set.
+- New Add Part and warehouse-intake records with an omitted SKU now receive
+  the `BLAP-<sequence>` prefix. Existing catalog/listing SKUs are not renamed;
+  the `BLA-<suffix>` → `BLAP-<suffix>` rule remains the deterministic fallback
+  for legacy BLA conflicts. A BLAP collision, or a collision in an unrelated
+  legacy SKU family, remains fail-closed until ownership is proven, so the
+  publisher never overwrites an active eBay item.
+- The normal publish boundary applies the same deterministic fallback when a
+  canonical `BLA-` SKU is occupied: it preflights `BLAP-` ownership, publishes
+  under the alternate only when unused, returns the effective Seller SKU, and
+  persists that value for new queue-created channel rows. If either SKU is
+  occupied by an unrelated remote item, publishing fails closed.
+- The compatibility repair utility only treats validated `fitment_data` or
+  accepted `fitment_rows` as a source. Empty, rejected, or review-only catalog
+  data therefore produces the exact correct zero-row compatibility set; title
+  text and description HTML are never used to invent vehicle rows. The default
+  scan is deliberately narrow (published Motors channels with local stale
+  compatibility and no valid catalog source); sibling channels can be audited
+  with `--sku`/`--sku-list`, while `--all-current` requires an explicit
+  confirmation flag.
+- eBay can retain a stale catalog/compatibility projection when an Inventory
+  offer is reused or even recreated under the same SKU. The repair path first
+  tries exact same-SKU replacement, then may use a fresh per-channel SKU only
+  when the caller supplies a canonical local inventory item. Recovery refuses
+  to copy the remote item under the collided SKU, publishes a neutral item
+  with `includeCatalogProductDetails=false`, verifies zero or the exact
+  requested rows through both APIs, restores the canonical seller fields,
+  verifies again, and only then removes the old offer. Listings that eBay
+  reports as genuinely ended are marked `ended` locally instead of being
+  represented as an active repaired listing.
+- Every successful direct or SellerPundit publish performs a post-publish
+  projection check for the canonical title, image count, description, policy
+  IDs, location, and compatibility. A failed check withdraws the new offer
+  so a partially or incorrectly projected listing is not accepted as a
+  successful publish.
+- Publishing authorization is organization-wide: every RBAC role receives
+  `listings.publish`, `channels.publish`, and `ebay.publish`, and new/active
+  users receive all-store access. Deactivated users remain blocked by the
+  authentication guard. Store access does not bypass eBay account, policy,
+  source-data, or remote-SKU ownership safeguards.
+- Pending fitment reprocessing is a durable BullMQ workflow. The maintenance
+  script `backend/src/scripts/queue-pending-fitment-publish.ts --apply` queues
+  every `fitment_status='pending'` product for forced MVL/fitment optimization;
+  the worker publishes only validated rows to already-published eBay channels.
+  Products that remain empty, rejected, or review-only are skipped and remain
+  available for manual review.
 - Reference docs: `docs/EBAY_MULTI_STORE_DEVELOPER_HANDOFF.md`,
   `docs/ebay-multi-store-architecture.md`, `docs/ebay-api-integration-notes.md`,
   `docs/ebay-client-onboarding.md`.

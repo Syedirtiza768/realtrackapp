@@ -1,5 +1,6 @@
 import {
   applyImageOrderOverride,
+  selectPrimaryImageForBrand,
   preferRicherImageUrls,
   sanitizeEbayImageUrls,
 } from './ebay-listing-images.util.js';
@@ -66,5 +67,29 @@ describe('ebay-listing-images.util', () => {
     );
     expect(ordered[0]).toBe('https://cdn.example.com/b.jpg');
     expect(ordered[1]).toBe('https://cdn.example.com/a.jpg');
+  });
+
+  it('keeps one primary image for FEBI and chooses the larger eBay image', () => {
+    const selected = selectPrimaryImageForBrand(
+      [
+        'https://i.ebayimg.com/00/s/NTAyWDUzMA==/z/a/$_1.JPG',
+        'https://i.ebayimg.com/00/s/MTUwMFgxNTAw/z/b/$_1.JPG',
+      ],
+      'FEBI',
+    );
+    expect(selected).toEqual([
+      'https://i.ebayimg.com/00/s/MTUwMFgxNTAw/z/b/$_1.JPG',
+    ]);
+  });
+
+  it('keeps the first image when source URLs have no resolution metadata', () => {
+    const selected = selectPrimaryImageForBrand(
+      [
+        'https://cdn.example.com/lemforder/main.jpg',
+        'https://cdn.example.com/lemforder/duplicate.jpg',
+      ],
+      'Lemförder',
+    );
+    expect(selected).toEqual(['https://cdn.example.com/lemforder/main.jpg']);
   });
 });

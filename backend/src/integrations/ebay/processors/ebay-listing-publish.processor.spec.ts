@@ -1,4 +1,7 @@
-import { isTransientPublishFailure } from './ebay-listing-publish.processor.js';
+import {
+  extractExistingEbayListingId,
+  isTransientPublishFailure,
+} from './ebay-listing-publish.processor.js';
 
 describe('isTransientPublishFailure', () => {
   it.each([
@@ -11,5 +14,21 @@ describe('isTransientPublishFailure', () => {
 
   it('does not retry deterministic validation failures', () => {
     expect(isTransientPublishFailure('Invalid category ID')).toBe(false);
+  });
+});
+
+describe('extractExistingEbayListingId', () => {
+  it('extracts an item ID only from an explicit duplicate-listing response', () => {
+    expect(
+      extractExistingEbayListingId(
+        'It looks like this listing is for an item you already have on eBay (307118517987).',
+      ),
+    ).toBe('307118517987');
+  });
+
+  it('does not treat unrelated numeric errors as existing listings', () => {
+    expect(
+      extractExistingEbayListingId('Invalid category ID 33707'),
+    ).toBeNull();
   });
 });

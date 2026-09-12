@@ -109,4 +109,23 @@ describe('CatalogPublishResolverService', () => {
     expect(result!.snapshot.quantity).toBe(1);
     expect(result!.snapshot.imageUrls[0]).toBe('https://cdn.example.com/a.jpg');
   });
+
+  it('selects one highest-resolution image for a FEBI publish snapshot', async () => {
+    const febiListing = {
+      ...listingRecord,
+      cBrand: 'FEBI',
+      itemPhotoUrl:
+        'https://i.ebayimg.com/00/s/NTAyWDUzMA==/z/a/$_1.JPG|https://i.ebayimg.com/00/s/MTUwMFgxNTAw/z/b/$_1.JPG',
+    } as ListingRecord;
+    const { service } = makeService({
+      catalogProduct: null,
+      listingRecord: febiListing,
+    });
+
+    const result = await service.resolve(listingId);
+
+    expect(result!.snapshot.imageUrls).toEqual([
+      'https://i.ebayimg.com/00/s/MTUwMFgxNTAw/z/b/$_1.JPG',
+    ]);
+  });
 });

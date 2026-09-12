@@ -49,6 +49,11 @@
 | `DEFAULT_STAFF_EMAIL` / `_PASSWORD` | Seed staff |
 | `DEFAULT_VIEWER_EMAIL` / `_PASSWORD` | Seed viewer |
 
+Publishing access is organization-wide in the current deployment: RBAC sync
+adds `listings.publish`, `channels.publish`, and `ebay.publish` to every role,
+and active users receive all-store access. Deactivated users remain blocked by
+authentication. This is not a secret or an environment override.
+
 ## CORS / Network
 
 | Var | Default | Purpose |

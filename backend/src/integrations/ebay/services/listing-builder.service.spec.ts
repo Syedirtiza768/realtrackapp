@@ -81,6 +81,58 @@ describe('ListingBuilderService', () => {
     );
   });
 
+  it('falls back to the canonical catalog product when a durable source listing was removed', async () => {
+    publishResolver.resolve.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      snapshot: {
+        catalogProductId: 'cp-1',
+        listingRecordId: null,
+        sku: 'SKU-001',
+        title: 'Catalog Title',
+        description: '<p>Desc</p>',
+        brand: 'TRW',
+        mpn: 'BP-123',
+        partType: 'Brake Pad',
+        price: 49.99,
+        quantity: 1,
+        categoryId: '9886',
+        conditionId: '3000',
+        imageUrls: ['https://img.example.com/1.jpg'],
+      },
+      listingRecord: null,
+      catalogProduct: {
+        fitmentData: [],
+        fitmentRows: [],
+      },
+      warnings: [],
+    });
+    mpRepo.findOne = jest.fn().mockResolvedValue({
+      defaultFulfillmentPolicyId: '10000000001',
+      defaultPaymentPolicyId: '10000000002',
+      defaultReturnPolicyId: '10000000003',
+      defaultInventoryLocationKey: 'loc-1',
+    });
+    policyRepo.find = jest.fn().mockResolvedValue([]);
+
+    const result = await svc.build({
+      catalogProductId: 'cp-1',
+      sourceListingId: 'deleted-listing',
+      ebayAccountId: 'acct-1',
+      marketplaceId: 'EBAY_DE',
+      listingRecordId: 'deleted-listing',
+      storeId: 'store-1',
+    });
+
+    expect(publishResolver.resolve).toHaveBeenNthCalledWith(
+      1,
+      'deleted-listing',
+    );
+    expect(publishResolver.resolve).toHaveBeenNthCalledWith(2, 'cp-1');
+    expect(result.blockingErrors).toEqual([]);
+    expect(result.warnings).toContain(
+      'Stored source listing was not found; fell back to the canonical catalog product',
+    );
+  });
+
   it('applies title override from ListingStoreOverride', async () => {
     publishResolver.resolve.mockResolvedValue({
       snapshot: {

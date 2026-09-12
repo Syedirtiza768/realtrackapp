@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 
 export class EbayOAuthStartDto {
-  /** RealTrack workspace (internal). Omit to use the user's default workspace. */
+  /** Omni Core workspace (internal). Omit to use the user's default workspace. */
   @IsOptional()
   @IsUUID()
   organizationId?: string;
@@ -26,7 +26,7 @@ export class EbayOAuthStartDto {
   @IsIn(['sandbox', 'production'])
   environment!: 'sandbox' | 'production';
 
-  /** Optional label in RealTrack; defaults to eBay username after OAuth. */
+  /** Optional label in Omni Core; defaults to eBay username after OAuth. */
   @IsOptional()
   @IsString()
   accountDisplayName?: string;

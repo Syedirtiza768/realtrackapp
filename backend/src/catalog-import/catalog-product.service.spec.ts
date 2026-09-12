@@ -50,11 +50,21 @@ describe('CatalogProductService.syncToListingRecord', () => {
     const productRepo = {
       findOneBy: jest.fn(async () => product),
       save: jest.fn(async (p: CatalogProduct) => p),
+      createQueryBuilder: jest.fn(() => ({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn(async () => product),
+      })),
     };
     const listingRepo = {
       findBy: jest.fn(async () => listings),
       update: jest.fn(async () => ({ affected: listings.length })),
       save: jest.fn(async (rows: ListingRecord[]) => rows),
+      createQueryBuilder: jest.fn(() => ({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn(async () => listings),
+      })),
     };
     const storageService = {
       mirrorRemoteImageUrls: jest.fn(async (urls: string[]) => urls),
@@ -64,6 +74,7 @@ describe('CatalogProductService.syncToListingRecord', () => {
       productRepo as never,
       listingRepo as never,
       storageService as never,
+      { buildFilter: jest.fn().mockResolvedValue(null) } as never,
     );
 
     return { svc, productRepo, listingRepo, product, listings };

@@ -1,5 +1,8 @@
 export const EBAY_MAX_LISTING_IMAGES = 24;
 
+const SINGLE_IMAGE_BRAND_PATTERN =
+  /\b(?:febi(?:\s+bilstein)?|lemforder|lemförder)\b/i;
+
 const PLACEHOLDER_IMAGE_PATTERN =
   /placeholder|no-image|default-image|logo-only/i;
 
@@ -60,6 +63,66 @@ export function preferLargeEbayImageUrl(url: string): string {
   return url
     .replace(/\/s-l(64|96|140|225|300|400|500)\./gi, '/s-l1600.')
     .replace(/([?&]s-l)(64|96|140|225|300|400|500)(?=\D|$)/gi, '$11600');
+}
+
+/** True for brands whose catalog images are intentionally reduced to one primary image. */
+export function isSingleImageBrand(
+  brandOrTitle: string | null | undefined,
+): boolean {
+  return SINGLE_IMAGE_BRAND_PATTERN.test(brandOrTitle?.trim() ?? '');
+}
+
+function embeddedEbayImageDimensions(url: string): [number, number] | null {
+  const token = url.match(/\/s\/([^/]+)\//i)?.[1];
+  if (!token) {
+    const size = url.match(/(?:^|[/?])s-l(\d+)(?:\D|$)/i)?.[1];
+    return size ? [Number(size), Number(size)] : null;
+  }
+
+  try {
+    const normalized = token.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = (4 - (normalized.length % 4)) % 4;
+    const padded = normalized.padEnd(normalized.length + padding, '=');
+    const decoded = Buffer.from(padded, 'base64').toString('utf8');
+    const match = decoded.match(/(\d{2,5})x(\d{2,5})/i);
+    return match ? [Number(match[1]), Number(match[2])] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Keep one high-resolution primary image for FEBI/Lemförder listings.
+ * eBay URLs commonly carry dimensions in either an s-l size or a base64 path
+ * segment; unknown-resolution URLs retain their original order.
+ */
+export function selectPrimaryImageForBrand(
+  urls: string[] | null | undefined,
+  brandOrTitle: string | null | undefined,
+): string[] {
+  if (!isSingleImageBrand(brandOrTitle)) {
+    return sanitizeEbayImageUrls((urls ?? []).map(preferLargeEbayImageUrl))
+      .imageUrls;
+  }
+
+  const rawCount = Math.max(flattenImageUrlInputs(urls).length, 1);
+  const candidates = sanitizeEbayImageUrls(
+    (urls ?? []).map(preferLargeEbayImageUrl),
+    { maxImages: rawCount },
+  ).imageUrls;
+  if (candidates.length <= 1) return candidates;
+
+  let best = candidates[0];
+  let bestScore = -1;
+  for (const candidate of candidates) {
+    const dimensions = embeddedEbayImageDimensions(candidate);
+    const score = dimensions ? dimensions[0] * dimensions[1] : 0;
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return [best];
 }
 
 /**

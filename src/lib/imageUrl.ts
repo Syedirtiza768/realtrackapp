@@ -7,6 +7,9 @@
  *   _medium.webp (800×800 inside)
  *   _lg.webp     (1200×1200 inside)
  *
+ * Given `https://cdn.example.com/path/photo.jpg` →
+ *   preferWebpUrl → `https://cdn.example.com/path/photo.webp`
+ *
  * Given `https://cdn.example.com/path/photo.webp` →
  *   getThumbUrl  → `https://cdn.example.com/path/photo_thumb.webp`
  *   getSmallUrl  → `https://cdn.example.com/path/photo_sm.webp`
@@ -17,7 +20,8 @@
 /**
  * Rewrite an S3 / CDN URL for browser access via the nginx-cached proxy.
  *
- * Routes our own S3 image URLs through /api/storage/serve/{key} so that
+ * Routes our own S3 image URLs through /api/storage/serve/{key}, preferring
+ * the sibling .webp object, so that
  * nginx proxy_cache (30-day, 1 GB) serves repeated requests locally on the
  * EC2 host — no per-request round-trip to S3, no separate DNS/TLS connection
  * to the S3 hostname. The browser reuses its existing connection to the app
@@ -27,14 +31,43 @@
  */
 export function toProxyUrl(url: string | null | undefined): string {
   if (!url) return '';
-  const proxyPath = toBackendProxyPath(url);
+  const proxyPath = toBackendProxyPath(preferWebpUrl(url));
   if (proxyPath) return proxyPath;
-  return url;
+  return preferWebpUrl(url);
 }
 
 /**
- * Build the backend proxy path for an S3 URL. Used by OptimizedImage
- * when direct S3 access returns 403.
+ * Prefer the sibling WebP object for images stored in our S3/CDN namespace.
+ *
+ * The original URL remains the source of truth and the backend image proxy
+ * provides the runtime fallback when the sibling object is not present. URLs
+ * from other hosts, local previews, data URLs, SVGs, and already-WebP/variant
+ * URLs are returned unchanged.
+ */
+export function preferWebpUrl(url: string | null | undefined): string {
+  if (!url || !isOurCdnUrl(url)) return url ?? '';
+
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname;
+
+    if (
+      /\.webp$/i.test(pathname) ||
+      !/\.(?:jpe?g|png|gif|bmp|heic|avif)$/i.test(pathname)
+    ) {
+      return url;
+    }
+
+    parsed.pathname = pathname.replace(/\.[^./]+$/i, '.webp');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Build the backend proxy path for an S3/CDN URL. Used by image consumers to
+ * keep first-party S3 and CloudFront images on the same WebP fallback path.
  */
 export function toBackendProxyPath(url: string | null | undefined): string {
   if (!url) return '';
@@ -42,7 +75,9 @@ export function toBackendProxyPath(url: string | null | undefined): string {
     const parsed = new URL(url);
     const host = parsed.hostname;
     const isOurS3 =
-      host.includes('amazonaws.com') || host.includes('realtrack-images');
+      host.includes('amazonaws.com') ||
+      host.includes('realtrack-images') ||
+      host.includes('cloudfront');
     if (isOurS3) {
       const path = parsed.pathname.replace(/^\//, '');
       return `/api/storage/serve/${path}`;

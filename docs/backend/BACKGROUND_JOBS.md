@@ -13,7 +13,7 @@ All queues run on Redis 7, configured globally in `app.module.ts` via `BullModul
 |-------|-------------------|-------------|---------|
 | `ingestion` | `ingestion/processors/ingestion.processor.ts` | 3 | Image/data ingestion |
 | `pipeline` | `ingestion/processors/pipeline.processor.ts` | `MAX_CONCURRENT_PIPELINE_JOBS` (default `2`) | Enrichment pipeline; enqueues `listing-optimization` |
-| `listing-optimization` | `listing-optimization/` | 1 | Listing optimization |
+| `listing-optimization` | `listing-optimization/` | 3 by default (`LISTING_OPTIMIZATION_CONCURRENCY`) | Listing optimization and validated pending-fitment publishing |
 | `catalog-import` | `catalog-import/processors/csv-import.processor.ts` | 1 | CSV/catalog import (memory-heavy) |
 | `fitment` | `fitment/processors/fitment-import.processor.ts` | 1 | Fitment import |
 | `inventory` | `inventory/processors/inventory-sync.processor.ts` | 1 | Inventory sync |
@@ -78,6 +78,9 @@ All queues run on Redis 7, configured globally in `app.module.ts` via `BullModul
 - **Thumbnail** queue runs at concurrency 5 (CPU-bound, parallelizable)
 - All processing is idempotent — retries are safe
 - Redis persistence (`redisdata` volume) ensures queue durability across restarts
+- Pending fitment repair/publish jobs are enqueued with stable IDs by
+  `backend/src/scripts/queue-pending-fitment-publish.ts`; the processor forces
+  MVL validation and never sends rejected or review-only rows to eBay.
 
 ---
 

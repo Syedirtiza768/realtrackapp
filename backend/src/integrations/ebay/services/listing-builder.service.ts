@@ -92,9 +92,24 @@ export class ListingBuilderService {
 
     const blockingErrors: string[] = [];
 
-    const resolved = await this.publishResolver.resolve(
+    let resolved = await this.publishResolver.resolve(
       params.sourceListingId ?? params.catalogProductId,
     );
+
+    // Durable jobs intentionally retain the reviewed source listing ID, but a
+    // source row may later be soft-deleted or removed during catalog cleanup.
+    // The canonical catalog product is still a valid publish source, so do not
+    // strand the target when only that historical source reference is gone.
+    if (
+      !resolved &&
+      params.sourceListingId &&
+      params.sourceListingId !== params.catalogProductId
+    ) {
+      warnings.push(
+        'Stored source listing was not found; fell back to the canonical catalog product',
+      );
+      resolved = await this.publishResolver.resolve(params.catalogProductId);
+    }
 
     if (!resolved) {
       blockingErrors.push('Catalog product or listing record not found');

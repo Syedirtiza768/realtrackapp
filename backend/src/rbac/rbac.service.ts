@@ -18,6 +18,7 @@ import {
   PERMISSION_REGISTRY,
   ROLE_DEFINITIONS,
   ROLE_SLUGS,
+  ALL_USERS_PUBLISH_PERMISSION_KEYS,
   permissionsForRole,
   type RoleSlug,
 } from './permission-registry.js';
@@ -152,7 +153,64 @@ export class RbacService implements OnModuleInit {
       }
     }
 
+    await this.ensureAllRolesCanPublish();
+
     this.logger.log('RBAC registry synced');
+  }
+
+  /**
+   * Publishing is an organization-wide operational action in this deployment:
+   * every authenticated user's role may publish to every connected store.
+   * Keep these permissions additive so customized roles retain their other
+   * permissions while future role changes cannot silently remove publishing.
+   */
+  private async ensureAllRolesCanPublish(): Promise<void> {
+    const permissions = await this.permissionRepo.find({
+      where: { key: In([...ALL_USERS_PUBLISH_PERMISSION_KEYS]) },
+    });
+    const permissionByKey = new Map(
+      permissions.map((permission) => [permission.key, permission]),
+    );
+    const missingDefinitions = ALL_USERS_PUBLISH_PERMISSION_KEYS.filter(
+      (key) => !permissionByKey.has(key),
+    );
+    if (missingDefinitions.length) {
+      throw new Error(
+        `Missing publish permissions in registry sync: ${missingDefinitions.join(', ')}`,
+      );
+    }
+
+    const roles = await this.roleRepo.find({ relations: ['rolePermissions'] });
+    let added = 0;
+    for (const role of roles) {
+      if (
+        role.slug.startsWith('fashion_') ||
+        role.slug.startsWith('business_industrial_')
+      )
+        continue;
+      const existing = new Set(
+        (role.rolePermissions ?? []).map(
+          (assignment) => assignment.permissionId,
+        ),
+      );
+      for (const key of ALL_USERS_PUBLISH_PERMISSION_KEYS) {
+        const permission = permissionByKey.get(key)!;
+        if (existing.has(permission.id)) continue;
+        await this.rolePermissionRepo.save(
+          this.rolePermissionRepo.create({
+            roleId: role.id,
+            permissionId: permission.id,
+          }),
+        );
+        existing.add(permission.id);
+        added += 1;
+      }
+    }
+    if (added) {
+      this.logger.warn(
+        `Granted publish permissions to ${added} role assignment(s)`,
+      );
+    }
   }
 
   /** Assign RBAC roles for users that only have legacy users.role. */
@@ -282,7 +340,35 @@ export class RbacService implements OnModuleInit {
       description: dto.description ?? null,
       isSystem: false,
     });
-    return this.roleRepo.save(role);
+    const saved = await this.roleRepo.save(role);
+    await this.ensureRoleCanPublish(saved.id);
+    return saved;
+  }
+
+  private async ensureRoleCanPublish(roleId: string): Promise<void> {
+    const role = await this.roleRepo.findOne({ where: { id: roleId } });
+    if (
+      role?.slug.startsWith('fashion_') ||
+      role?.slug.startsWith('business_industrial_')
+    )
+      return;
+
+    const permissions = await this.permissionRepo.find({
+      where: { key: In([...ALL_USERS_PUBLISH_PERMISSION_KEYS]) },
+    });
+    const existing = await this.rolePermissionRepo.find({ where: { roleId } });
+    const existingIds = new Set(
+      existing.map((assignment) => assignment.permissionId),
+    );
+    for (const permission of permissions) {
+      if (existingIds.has(permission.id)) continue;
+      await this.rolePermissionRepo.save(
+        this.rolePermissionRepo.create({
+          roleId,
+          permissionId: permission.id,
+        }),
+      );
+    }
   }
 
   async updateRole(
@@ -327,8 +413,16 @@ export class RbacService implements OnModuleInit {
       );
     }
 
+    const enforcedPublishKeys =
+      role.slug.startsWith('fashion_') ||
+      role.slug.startsWith('business_industrial_')
+        ? []
+        : ALL_USERS_PUBLISH_PERMISSION_KEYS;
+    const effectivePermissionKeys = [
+      ...new Set([...permissionKeys, ...enforcedPublishKeys]),
+    ];
     const permissions = await this.permissionRepo.find({
-      where: { key: In(permissionKeys) },
+      where: { key: In(effectivePermissionKeys) },
     });
 
     await this.rolePermissionRepo.delete({ roleId });
@@ -350,6 +444,19 @@ export class RbacService implements OnModuleInit {
     roleId: string,
     permissionId: string,
   ): Promise<void> {
+    const permission = await this.permissionRepo.findOne({
+      where: { id: permissionId },
+    });
+    if (
+      permission &&
+      ALL_USERS_PUBLISH_PERMISSION_KEYS.includes(
+        permission.key as (typeof ALL_USERS_PUBLISH_PERMISSION_KEYS)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Publishing permissions are enabled for every role and cannot be removed',
+      );
+    }
     await this.rolePermissionRepo.delete({ roleId, permissionId });
     const role = await this.roleRepo.findOne({ where: { id: roleId } });
     if (role?.isSystem && !role.isCustomized) {
@@ -360,7 +467,17 @@ export class RbacService implements OnModuleInit {
 
   async resetRoleToDefaults(roleId: string): Promise<Role> {
     const role = await this.roleRepo.findOneOrFail({ where: { id: roleId } });
-    const defaultKeys = permissionsForRole(role.slug as RoleSlug);
+    const enforcedPublishKeys =
+      role.slug.startsWith('fashion_') ||
+      role.slug.startsWith('business_industrial_')
+        ? []
+        : ALL_USERS_PUBLISH_PERMISSION_KEYS;
+    const defaultKeys = [
+      ...new Set([
+        ...permissionsForRole(role.slug as RoleSlug),
+        ...enforcedPublishKeys,
+      ]),
+    ];
     const permissions = await this.permissionRepo.find({
       where: { key: In(defaultKeys) },
     });

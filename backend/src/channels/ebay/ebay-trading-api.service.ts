@@ -6,6 +6,7 @@ import {
   parseTradingGetItemResponse,
   type TradingItemDetails,
 } from './ebay-trading-get-item.util.js';
+import type { EbayCompatibilityPayload } from './ebay-api.types.js';
 
 export interface TradingSellerListItem {
   itemId: string;
@@ -43,6 +44,15 @@ function tagValue(block: string, tag: string): string | null {
   const raw = m?.[1]?.trim() ?? null;
   if (!raw) return null;
   return raw.replace(/^<!\[CDATA\[|\]\]>$/g, '');
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 function parseActiveListItems(xml: string): TradingSellerListItem[] {
@@ -326,6 +336,142 @@ export class EbayTradingApiService {
     }
 
     return parseTradingGetItemResponse(xml);
+  }
+
+  /**
+   * Replace the legacy listing compatibility list.
+   *
+   * ReviseItem with ItemCompatibilityList.ReplaceAll=true is intentional:
+   * an empty list removes all old compatibility rows, while a non-empty list
+   * replaces the old list instead of appending to it.
+   */
+  async replaceItemCompatibility(
+    storeId: string,
+    itemId: string,
+    payload: EbayCompatibilityPayload,
+    marketplaceId?: string | null,
+    listingDetails?: {
+      bestOfferEnabled?: boolean | null;
+      immediatePayRequired?: boolean | null;
+    },
+  ): Promise<void> {
+    const rows = payload.compatibleProducts ?? [];
+    const compatibilityXml = rows
+      .map((row) => {
+        const properties = row.compatibilityProperties
+          .map(
+            (property) =>
+              `      <NameValueList><Name>${escapeXml(property.name)}</Name><Value>${escapeXml(property.value)}</Value></NameValueList>`,
+          )
+          .join('\n');
+        const notes = row.notes
+          ? `\n      <CompatibilityNotes>${escapeXml(row.notes)}</CompatibilityNotes>`
+          : '';
+        return `    <Compatibility>\n${properties}${notes}\n    </Compatibility>`;
+      })
+      .join('\n');
+    const legacyBestOfferConflict =
+      listingDetails?.bestOfferEnabled === true &&
+      listingDetails.immediatePayRequired === true;
+    if (legacyBestOfferConflict) {
+      this.logger.warn(
+        `ReviseItem ${itemId}: legacy Best Offer/AutoPay conflict; will use fixed-price revise fallback if needed`,
+      );
+    }
+
+    const buildBody = (requestName: 'ReviseItemRequest' | 'ReviseFixedPriceItemRequest') => `<?xml version="1.0" encoding="utf-8"?>
+<${requestName} xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <ItemID>${escapeXml(itemId)}</ItemID>
+    <ItemCompatibilityList>
+      <ReplaceAll>true</ReplaceAll>
+${compatibilityXml}
+    </ItemCompatibilityList>
+  </Item>
+  </${requestName}>`;
+
+    const submit = async (
+      callName: 'ReviseItem' | 'ReviseFixedPriceItem',
+      requestName: 'ReviseItemRequest' | 'ReviseFixedPriceItemRequest',
+    ) => {
+      const xml = await this.postTradingRequest(
+        storeId,
+        callName,
+        buildBody(requestName),
+        marketplaceId,
+      );
+      if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+        const err = tagValue(xml, 'LongMessage') ?? `${callName} failed`;
+        const code = tagValue(xml, 'ErrorCode');
+        throw new Error(code ? `${callName} failed (${code}): ${err}` : err);
+      }
+    };
+
+    const submitItemFields = async (fieldsXml: string, description: string) => {
+      const body = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <ItemID>${escapeXml(itemId)}</ItemID>
+${fieldsXml}
+  </Item>
+</ReviseItemRequest>`;
+      const xml = await this.postTradingRequest(
+        storeId,
+        'ReviseItem',
+        body,
+        marketplaceId,
+      );
+      if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+        const err = tagValue(xml, 'LongMessage') ?? `${description} failed`;
+        const code = tagValue(xml, 'ErrorCode');
+        throw new Error(code ? `${description} failed (${code}): ${err}` : err);
+      }
+    };
+
+    if (legacyBestOfferConflict) {
+      // eBay validates the existing payment flags before it processes a
+      // compatibility-only revise. Temporarily remove Best Offer, clear the
+      // contradictory AutoPay flag, then restore Best Offer after the list is
+      // replaced. This preserves the seller's original listing behavior.
+      await submitItemFields(
+        '    <BestOfferDetails><BestOfferEnabled>false</BestOfferEnabled></BestOfferDetails>',
+        'ReviseItem Best Offer disable',
+      );
+      await submitItemFields(
+        '    <AutoPay>false</AutoPay>',
+        'ReviseItem AutoPay clear',
+      );
+      this.logger.log(`Cleared legacy AutoPay for item ${itemId}`);
+    }
+
+    try {
+      await submit('ReviseItem', 'ReviseItemRequest');
+    } catch (error) {
+      if (!legacyBestOfferConflict || !String(error).includes('(23015)')) {
+        throw error;
+      }
+      // Some old fixed-price listings retain an invalid AutoPay=true flag
+      // alongside Best Offer. ReviseFixedPriceItem accepts the compatibility
+      // replacement without revalidating that legacy payment combination.
+      this.logger.warn(
+        `ReviseItem ${itemId}: retrying compatibility replacement with ReviseFixedPriceItem`,
+      );
+      await submit('ReviseFixedPriceItem', 'ReviseFixedPriceItemRequest');
+    }
+    if (legacyBestOfferConflict) {
+      await submitItemFields(
+        '    <BestOfferDetails><BestOfferEnabled>true</BestOfferEnabled></BestOfferDetails>',
+        'ReviseItem Best Offer restore',
+      );
+      this.logger.log(`Restored Best Offer for item ${itemId}`);
+    }
+    this.logger.log(
+      `Replaced ${rows.length} legacy compatibility row(s) for item ${itemId}`,
+    );
   }
 
   /** Paginate all active seller listings via Trading API (GetMyeBaySelling ActiveList). */

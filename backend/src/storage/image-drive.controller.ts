@@ -17,7 +17,10 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
-import { ImageDriveService } from './image-drive.service.js';
+import {
+  ImageDriveService,
+  type DriveFolderEntry,
+} from './image-drive.service.js';
 import { StorageService } from './storage.service.js';
 import {
   BulkDeleteFilesDto,
@@ -27,6 +30,10 @@ import {
   SearchDriveDto,
   UpdateFolderDto,
 } from './dto/image-drive.dto.js';
+import {
+  isSupportedImageUpload,
+  resolveFolderUploadPath,
+} from './utils/image-drive-folder-upload.util.js';
 
 @ApiTags('Image Drive')
 @Controller('image-drive')
@@ -221,6 +228,120 @@ export class ImageDriveController {
       folderName: folder.name,
       uploaded: uploaded.length,
       files: uploaded,
+    };
+  }
+
+  @Post('upload-folder')
+  @RequirePermissions('image_drive.upload')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FilesInterceptor('files', 50))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Upload a folder tree and map part-number directories to Image Drive folders',
+  })
+  async uploadFolderTree(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body('filePaths') rawFilePaths: string,
+    @Body('topLevelFolderName') topLevelFolderName: string,
+  ) {
+    if (!files?.length) {
+      throw new BadRequestException('At least one image file is required');
+    }
+
+    let filePaths: unknown;
+    try {
+      filePaths = JSON.parse(rawFilePaths || '[]');
+    } catch {
+      throw new BadRequestException('filePaths must be a JSON array');
+    }
+
+    if (
+      !Array.isArray(filePaths) ||
+      filePaths.length !== files.length ||
+      filePaths.some((path) => typeof path !== 'string')
+    ) {
+      throw new BadRequestException(
+        'filePaths must contain one relative path for every uploaded file',
+      );
+    }
+
+    const folderCache = new Map<string, DriveFolderEntry>();
+    const folderSummary = new Map<
+      string,
+      { folderName: string; partNumber: string | null; uploaded: number }
+    >();
+    let uploaded = 0;
+    let skipped = 0;
+    let unassigned = 0;
+
+    for (const [index, file] of files.entries()) {
+      const resolved = resolveFolderUploadPath(
+        filePaths[index] as string,
+        topLevelFolderName || undefined,
+      );
+      if (
+        !resolved ||
+        !isSupportedImageUpload(file.originalname, file.mimetype)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const targetFolderName = resolved.partNumber || resolved.topLevelFolderName;
+      const folderKey = resolved.partNumber
+        ? `part:${ImageDriveService.normalizePartNumber(resolved.partNumber)}`
+        : `root:${ImageDriveService.normalizeFolderName(targetFolderName)}`;
+      let folder = folderCache.get(folderKey);
+      if (!folder) {
+        folder = await this.imageDriveService.findOrCreateFolder(
+          targetFolderName,
+          resolved.partNumber || undefined,
+        );
+        folderCache.set(folderKey, folder);
+      }
+
+      if (!resolved.partNumber) unassigned++;
+
+      const mimeType = file.mimetype || 'image/jpeg';
+      const s3Key = `${folder.s3Prefix}${resolved.assetPath}`;
+      await this.storageService.putObject(s3Key, file.buffer, mimeType);
+      const cdnUrl = this.storageService.getCdnUrl(s3Key);
+      const result = await this.imageDriveService.addFileIfMissing(folder.id, {
+        filename: resolved.assetPath,
+        s3Key,
+        cdnUrl,
+        mimeType,
+        fileSizeBytes: file.size,
+      });
+
+      if (result.created) {
+        uploaded++;
+        this.storageService
+          .queueDriveVariantGeneration(result.entry.id, s3Key)
+          .catch((err) =>
+            this.storageService['logger']?.warn?.(
+              `Folder-upload variant queue failed for ${s3Key}: ${err}`,
+            ),
+          );
+      } else {
+        skipped++;
+      }
+
+      const summary = folderSummary.get(folderKey) || {
+        folderName: folder.name,
+        partNumber: resolved.partNumber,
+        uploaded: 0,
+      };
+      if (result.created) summary.uploaded++;
+      folderSummary.set(folderKey, summary);
+    }
+
+    return {
+      uploaded,
+      skipped,
+      unassigned,
+      folders: [...folderSummary.values()],
     };
   }
 

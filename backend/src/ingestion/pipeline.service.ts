@@ -43,6 +43,7 @@ import {
   mapPipelineDisplayStatus,
   type PipelineDisplayStatus,
 } from './pipeline.constants.js';
+import { resolvePipelineProjectRoot } from './utils/pipeline-paths.util.js';
 import {
   countHiddenDataRowsInUpload,
   parsePipelineUploadRows,
@@ -170,8 +171,7 @@ export class PipelineService {
   }
 
   private pipelineUploadRoot(): string {
-    const projectRoot =
-      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const projectRoot = resolvePipelineProjectRoot();
     return path.resolve(projectRoot, 'uploads', 'pipeline');
   }
 
@@ -960,8 +960,7 @@ export class PipelineService {
 
     // Remove output directory from disk
     try {
-      const projectRoot =
-        process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+      const projectRoot = resolvePipelineProjectRoot();
       const outputDir = path.resolve(
         projectRoot,
         'output',
@@ -1014,8 +1013,7 @@ export class PipelineService {
       );
     }
 
-    const projectRoot =
-      process.env.PIPELINE_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const projectRoot = resolvePipelineProjectRoot();
     const outputDir = path.resolve(
       projectRoot,
       'output',

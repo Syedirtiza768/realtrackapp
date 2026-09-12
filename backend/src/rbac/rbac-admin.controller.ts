@@ -133,6 +133,7 @@ export class RbacAdminController {
         passwordHash: await bcrypt.hash(body.password, SALT_ROUNDS),
         role: legacyUserRoleFromSlug(body.roleSlug),
         active: true,
+        storeAccessAll: true,
       }),
     );
     await this.rbac.assignPrimaryRole(user.id, body.roleSlug);

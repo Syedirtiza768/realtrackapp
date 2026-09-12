@@ -1,3 +1,4 @@
+import type { ProductVertical } from '../verticals/vertical.types.js';
 import {
   Column,
   CreateDateColumn,
@@ -42,6 +43,12 @@ export class ListingRecord {
   /** Multi-tenant: nullable until `multi_tenant` flag is turned on */
   @Column({ name: 'organization_id', type: 'uuid', nullable: true })
   organizationId: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  vertical: ProductVertical | null;
+
+  @Column({ name: 'vertical_attributes', type: 'jsonb', nullable: true })
+  verticalAttributes: any;
 
   /* ── source metadata ────────────────────────────────────── */
 
