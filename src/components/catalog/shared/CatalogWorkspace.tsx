@@ -276,7 +276,7 @@ export default function CatalogWorkspace({ config }: Props) {
     <div className="space-y-4 pb-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Catalog</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl lg:text-3xl">Catalog</h1>
           <p className="mt-1 text-sm text-slate-500">{catalogDescription}</p>
           {summary ? <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{summary.total.toLocaleString()} products · {summary.withImages.toLocaleString()} with images · {summary.published.toLocaleString()} published</p> : null}
         </div>
@@ -304,20 +304,20 @@ export default function CatalogWorkspace({ config }: Props) {
         </div>
       </div>
 
-      <form onSubmit={submitSearch} className="relative flex max-w-3xl gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 text-slate-400" size={18} aria-hidden="true" />
+      <form onSubmit={submitSearch} className="relative flex max-w-3xl flex-col gap-2 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-3 text-slate-400" size={18} aria-hidden="true" />
           <input
             value={state.input}
             onChange={(event) => setState((current) => ({ ...current, input: event.target.value }))}
             placeholder="Search SKU, title, brand, MPN, category, attributes…"
-            className={`w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm shadow-sm outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-white ${isBusinessIndustrial ? 'focus:border-cyan-500' : 'focus:border-blue-500'}`}
+            className={`min-h-11 w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base shadow-sm outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-white sm:text-sm ${isBusinessIndustrial ? 'focus:border-cyan-500' : 'focus:border-blue-500'}`}
             aria-label="Search catalog"
             list="catalog-suggestions"
           />
           <datalist id="catalog-suggestions">{suggestions.map((suggestion) => <option key={suggestion.label} value={suggestion.value}>{suggestion.label}</option>)}</datalist>
         </div>
-        <button type="submit" className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium text-white ${primaryButtonClass(isBusinessIndustrial)}`}>Search</button>
+        <button type="submit" className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium text-white sm:shrink-0 ${primaryButtonClass(isBusinessIndustrial)}`}>Search</button>
       </form>
 
       {recentSearches.length && !state.q ? (
@@ -334,10 +334,10 @@ export default function CatalogWorkspace({ config }: Props) {
       <CatalogActiveFilterTags config={config} filters={state.filters} facets={facets} onChange={setFilters} />
 
       {hasActiveQuery && summary ? (
-        <div className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-xs ${isBusinessIndustrial ? 'border-cyan-200 bg-cyan-50 dark:border-cyan-900 dark:bg-cyan-950/30' : 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30'}`}>
+        <div className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs sm:px-4 ${isBusinessIndustrial ? 'border-cyan-200 bg-cyan-50 dark:border-cyan-900 dark:bg-cyan-950/30' : 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30'}`}>
           <span className={`font-medium ${isBusinessIndustrial ? 'text-cyan-700 dark:text-cyan-300' : 'text-blue-700 dark:text-blue-300'}`}>{(data?.total ?? 0).toLocaleString()}</span>
           <span className={isBusinessIndustrial ? 'text-cyan-700/80 dark:text-cyan-300/80' : 'text-blue-700/80 dark:text-blue-300/80'}>of {summary.total.toLocaleString()} products match your filters</span>
-          <span className={`ml-auto text-[10px] ${isBusinessIndustrial ? 'text-cyan-600/70' : 'text-blue-600/70'}`}>{data?.queryTimeMs != null ? data.queryTimeMs + 'ms' : null}</span>
+          <span className={`sm:ml-auto text-[10px] ${isBusinessIndustrial ? 'text-cyan-600/70' : 'text-blue-600/70'}`}>{data?.queryTimeMs != null ? data.queryTimeMs + 'ms' : null}</span>
         </div>
       ) : null}
 
@@ -397,8 +397,8 @@ export default function CatalogWorkspace({ config }: Props) {
               {selectedCount ? ` · ${selectedCount} selected on this page` : ''}
             </span>
             <div className="flex items-center gap-2">
-              <label>Sort <select value={state.sort} onChange={(event) => setState((current) => ({ ...current, page: 0, sort: event.target.value as CatalogSort }))} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-900"><option value="relevance">Relevance</option><option value="newest">Newest</option><option value="updated">Updated</option><option value="title_asc">Title A–Z</option><option value="title_desc">Title Z–A</option><option value="sku_asc">SKU</option><option value="price_asc">Price low</option><option value="price_desc">Price high</option></select></label>
-              <label>Rows <select value={state.pageSize} onChange={(event) => setState((current) => ({ ...current, page: 0, pageSize: Number(event.target.value) }))} className="rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-900">{PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
+              <label className="inline-flex min-h-11 items-center gap-1">Sort <select value={state.sort} onChange={(event) => setState((current) => ({ ...current, page: 0, sort: event.target.value as CatalogSort }))} className="min-h-11 rounded border border-slate-300 bg-white px-2 py-1 text-base dark:border-slate-600 dark:bg-slate-900 sm:text-sm"><option value="relevance">Relevance</option><option value="newest">Newest</option><option value="updated">Updated</option><option value="title_asc">Title A–Z</option><option value="title_desc">Title Z–A</option><option value="sku_asc">SKU</option><option value="price_asc">Price low</option><option value="price_desc">Price high</option></select></label>
+              <label className="inline-flex min-h-11 items-center gap-1">Rows <select value={state.pageSize} onChange={(event) => setState((current) => ({ ...current, page: 0, pageSize: Number(event.target.value) }))} className="min-h-11 rounded border border-slate-300 bg-white px-2 py-1 text-base dark:border-slate-600 dark:bg-slate-900 sm:text-sm">{PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
             </div>
           </div>
 
@@ -421,9 +421,9 @@ export default function CatalogWorkspace({ config }: Props) {
             onPublish={(item) => openPublish([item.id], item)}
           />
 
-          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
             <button type="button" disabled={state.page === 0 || loading} onClick={() => setState((current) => ({ ...current, page: Math.max(0, current.page - 1) }))} className="min-h-11 rounded px-3 py-1.5 font-medium text-slate-600 disabled:opacity-40 dark:text-slate-300">Previous</button>
-            <span className="text-xs text-slate-500">Page {state.page + 1} of {pageCount}{data ? ` · showing ${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}` : ''}</span>
+            <span className="text-center text-xs text-slate-500">Page {state.page + 1} of {pageCount}{data ? <span className="hidden sm:inline">{` · showing ${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}`}</span> : ''}</span>
             <button type="button" disabled={!hasNext || loading} onClick={() => setState((current) => ({ ...current, page: current.page + 1 }))} className="min-h-11 rounded px-3 py-1.5 font-medium text-slate-600 disabled:opacity-40 dark:text-slate-300">Next</button>
           </div>
         </div>

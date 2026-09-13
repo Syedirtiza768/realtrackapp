@@ -89,8 +89,8 @@ export default function BusinessIndustrialStoresPage() {
       <WorkspacePageHeader title="B&I stores" subtitle="Seller accounts are dedicated to Business & Industrial and cannot be reused by Fashion or Automotive." />
       {message ? <FeedbackPanel tone="success" onDismiss={() => setMessage('')}>{message}</FeedbackPanel> : null}
       {error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
-      <form onSubmit={(event) => void connect(event)} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:grid-cols-4">
-        <Field label="Connection name" htmlFor="store-name" className="sm:col-span-2">
+      <form onSubmit={(event) => void connect(event)} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5 md:grid-cols-2 xl:grid-cols-4">
+        <Field label="Connection name" htmlFor="store-name" className="md:col-span-2 xl:col-span-2">
           <input id="store-name" className={FIELD_CONTROL} style={fieldControlStyle} value={name} maxLength={160} onChange={(event) => setName(event.target.value)} />
         </Field>
         <Field label="Marketplace" htmlFor="marketplace">
@@ -107,7 +107,7 @@ export default function BusinessIndustrialStoresPage() {
             <option value="sandbox">Sandbox</option>
           </select>
         </Field>
-        <button className="min-h-11 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-4" style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-primary-fg)' }} disabled={connecting} type="submit">
+        <button className="min-h-11 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 md:col-span-2 xl:col-span-4" style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-primary-fg)' }} disabled={connecting} type="submit">
           {connecting ? 'Redirecting to eBay…' : 'Connect dedicated B&I eBay seller'}
         </button>
       </form>
@@ -121,7 +121,7 @@ export default function BusinessIndustrialStoresPage() {
                 <p className="text-sm text-slate-500">{account.marketplaceId || 'marketplace pending'} · {account.environment}</p>
                 <div className="mt-2"><Badge variant={account.status === 'active' ? 'success' : 'warning'}>{account.status}</Badge></div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                 <button className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-700" disabled={!!busyId} onClick={() => void inspectPolicies(account)}>
                   {busyId === 'view-' + account.id ? 'Loading policies…' : 'View policies'}
                 </button>

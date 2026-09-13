@@ -11,7 +11,7 @@ type Props = {
 };
 
 export const FIELD_CONTROL =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
+  'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 sm:py-2 sm:text-sm';
 
 export const fieldControlStyle = {
   ['--tw-ring-color' as string]: 'var(--brand-primary)',

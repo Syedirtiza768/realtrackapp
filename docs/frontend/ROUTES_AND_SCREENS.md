@@ -174,7 +174,9 @@ to automotive or Fashion permissions. `BusinessIndustrialShell` forces the
 active organization to the user's owned `business-industrial-*` workspace so
 catalog/search APIs do not scope to Super Admin when the account is a member of
 both. Overview Create listing requires `business_industrial.listings.create` and
-opens `/business-industrial/listings/editor`.
+opens `/business-industrial/listings/editor`. Phone and tablet layouts use a
+drawer, 44px controls, and stacked actions; catalog results use cards below
+`lg` and a contained table on desktop.
 
 Business Industrial image intake accepts a public Google Drive folder or a local
 directory/drop, previews source images, uploads in API-sized batches, queues

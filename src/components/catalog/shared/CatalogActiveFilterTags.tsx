@@ -38,5 +38,5 @@ export default function CatalogActiveFilterTags({ config, filters, facets, onCha
   if (filters.hasImage) tags.push({ key: 'hasImage', label: 'Has image', remove: () => onChange({ hasImage: false }) });
   if (filters.hasPrice) tags.push({ key: 'hasPrice', label: 'Has price', remove: () => onChange({ hasPrice: false }) });
   if (!tags.length) return null;
-  return <div className="flex flex-wrap gap-2" aria-label="Active filters">{tags.map((tag) => <button key={tag.key} type="button" onClick={tag.remove} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"><span>{tag.label}</span><X size={13} /></button>)}</div>;
+  return <div className="flex flex-wrap gap-2" aria-label="Active filters">{tags.map((tag) => <button key={tag.key} type="button" onClick={tag.remove} className="inline-flex max-w-full min-h-11 items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"><span className="min-w-0 break-words">{tag.label}</span><X size={13} className="shrink-0" /></button>)}</div>;
 }

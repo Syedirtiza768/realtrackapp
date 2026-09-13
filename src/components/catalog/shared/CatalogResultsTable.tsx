@@ -151,11 +151,11 @@ export default function CatalogResultsTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="space-y-3 p-3 md:hidden">
+      <div className="space-y-3 p-3 lg:hidden">
         {items.map((item) => (
           <article key={item.id} className={`rounded-xl border border-slate-200 p-3 dark:border-slate-700 ${selected.has(item.id) ? 'bg-blue-50/50 dark:bg-blue-950/10' : ''}`}>
             <div className="flex gap-3">
-              <label className="mt-1 shrink-0">
+              <label className="mt-1 flex min-h-11 min-w-11 shrink-0 items-center justify-center">
                 <span className="sr-only">{selected.has(item.id) ? 'Clear ' : 'Select '}{item.title}</span>
                 <input type="checkbox" className="h-4 w-4" checked={selected.has(item.id)} onChange={() => onToggle(item.id)} />
               </label>
@@ -180,7 +180,7 @@ export default function CatalogResultsTable({
           </article>
         ))}
       </div>
-      <div className="hidden max-w-full overflow-x-auto md:block">
+      <div className="hidden max-w-full overflow-x-auto overscroll-x-contain lg:block">
         <table className="min-w-[980px] w-full text-left text-sm">
           <caption className="sr-only">{config.label} catalog results</caption>
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800/70">

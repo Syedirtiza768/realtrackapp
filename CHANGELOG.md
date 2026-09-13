@@ -1,5 +1,12 @@
 # Changelog
 
+- **B&I mobile and cross-platform layout (2026-09-13):** Business & Industrial
+  (and the shared catalog used by Fashion) now use a 16px type floor, notch
+  safe-area padding, 44px touch targets, stacked phone toolbars, card catalog
+  results below `lg`, and full-screen/bottom-sheet dialogs. Login, editor
+  measurement+unit fields, stores, and publish/quick-view panels no longer
+  force page-level horizontal overflow on ~360px viewports.
+
 - **B&I Auto Parts layout alignment (2026-09-13):** Business & Industrial now
   uses the Auto Parts sidebar/drawer workspace chrome, shared page primitives,
   and catalog presentation patterns while keeping its server-backed catalog,

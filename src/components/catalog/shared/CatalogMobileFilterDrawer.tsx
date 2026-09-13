@@ -58,7 +58,7 @@ export default function CatalogMobileFilterDrawer({ open, onClose, filterCount, 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="absolute inset-y-0 left-0 flex w-full max-w-sm flex-col border-r border-slate-200 bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] shadow-2xl dark:border-slate-700 dark:bg-slate-900"
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
           <div id={titleId} className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">

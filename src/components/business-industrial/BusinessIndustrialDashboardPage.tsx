@@ -81,8 +81,8 @@ export default function BusinessIndustrialDashboardPage() {
             {data.stores.length ? (
               <ul className="mt-3 space-y-2">
                 {data.stores.map((store) => (
-                  <li className="flex justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800" key={store.id}>
-                    <span>{store.storeName}</span>
+                  <li className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800" key={store.id}>
+                    <span className="min-w-0 truncate">{store.storeName}</span>
                     <Badge variant={store.status === 'active' ? 'success' : 'secondary'}>{store.status}</Badge>
                   </li>
                 ))}

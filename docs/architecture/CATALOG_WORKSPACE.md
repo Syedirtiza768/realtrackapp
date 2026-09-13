@@ -35,7 +35,7 @@ The operation permissions are `fashion.catalog.export|delete|assign_team|manage_
 
 ## Presentation
 
-The shared workspace is table-first. Title and summary sit above the primary add action, search, active filters, results toolbar, and table. Desktop keeps a filter column; viewports below `lg` open filters in an accessible drawer. The results table contains its own horizontal scrolling. An empty catalog is distinct from a filtered search with no matches. Selection is page-local and clears when the organization, query, filters, sort, or page change. Export and bulk actions expose pending labels, and bulk APIs that return per-record `results` show failed ids. Publish job UI maps queue statuses to submitted, processing, published, partially failed, and failed, and closing the panel does not cancel the job.
+The shared workspace is table-first on desktop (`lg` and up). Title and summary sit above the primary add action, search, active filters, results toolbar, and table. Desktop keeps a filter column; viewports below `lg` open filters in an accessible drawer and show compact result cards instead of the eleven-column table. The results table contains its own horizontal scrolling. An empty catalog is distinct from a filtered search with no matches. Selection is page-local and clears when the organization, query, filters, sort, or page change. Export and bulk actions expose pending labels, and bulk APIs that return per-record `results` show failed ids. Publish job UI maps queue statuses to submitted, processing, published, partially failed, and failed, and closing the panel does not cancel the job. Quick view and the B&I publish dialog use full-height / bottom-sheet layouts on small screens with safe-area padding.
 
 ## Verification
 

@@ -1,5 +1,11 @@
 # Current State
 
+**2026-09-13 (B&I mobile / cross-platform)** — Phone and tablet layouts for the
+B&I shell, login, catalog, editor, and remaining workflows use dynamic viewport
+height, `viewport-fit=cover`, 16px form controls, and contained scrolling.
+Catalog result cards show below the `lg` breakpoint; the table remains on
+desktop with its own horizontal scroll.
+
 **2026-09-13 (B&I layout alignment)** — Business & Industrial uses the Auto
 Parts sidebar/drawer shell proportions and catalog presentation patterns while
 retaining CatalogWorkspace, B&I catalog configuration, and existing domain

@@ -95,7 +95,7 @@ function SidebarContent({
         <button
           type="button"
           onClick={() => void handleLogout()}
-          className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800/50 dark:hover:text-slate-200"
+          className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800/50 dark:hover:text-slate-200"
         >
           <LogOut size={14} aria-hidden="true" />
           Sign out
@@ -162,13 +162,16 @@ export default function VerticalWorkspaceShell({
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-white font-sans text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-white font-sans text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       {mobileNavOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60 motion-reduce:animate-none" onClick={closeMobileNav} />
           <aside
             ref={drawerRef}
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+            role="dialog"
+            aria-modal="true"
+            id="vertical-mobile-nav"
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[min(20rem,100vw)] flex-col border-r border-slate-200 bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] shadow-2xl dark:border-slate-800 dark:bg-slate-950"
             aria-labelledby={titleId}
           >
             <h2 id={titleId} className="sr-only">
@@ -177,7 +180,7 @@ export default function VerticalWorkspaceShell({
             <button
               type="button"
               onClick={closeMobileNav}
-              className="absolute right-4 top-4 z-10 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 min-h-11 min-w-11 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               aria-label="Close navigation"
             >
               <X size={20} />
@@ -207,22 +210,24 @@ export default function VerticalWorkspaceShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white/80 px-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/50 sm:h-16 sm:px-4 lg:px-6">
+        <header className="sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white/80 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/50 sm:min-h-16 sm:px-4 lg:px-6">
           <button
             ref={triggerRef}
             type="button"
             onClick={() => setMobileNavOpen(true)}
-            className="-ml-1 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 lg:hidden"
+            className="-ml-1 min-h-11 min-w-11 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 lg:hidden"
             aria-label="Open navigation"
+            aria-expanded={mobileNavOpen}
+            aria-controls="vertical-mobile-nav"
           >
             <Menu size={22} />
           </button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</p>
             <p className="hidden truncate text-xs text-slate-500 sm:block">Workspace</p>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-3 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700 sm:p-4 lg:p-6">
+        <main className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700 sm:p-4 lg:p-6">
           {children}
         </main>
       </div>

@@ -72,7 +72,7 @@ export default function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center p-4 sm:items-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-slate-950/60" onClick={() => { if (!busy) onClose(); }} />
       <div
         ref={panelRef}
@@ -80,7 +80,7 @@ export default function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className="relative w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="relative w-full max-w-md rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:rounded-xl"
       >
         <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           {title}
@@ -91,7 +91,7 @@ export default function ConfirmDialog({
           </div>
         ) : null}
         {children ? <div className="mt-4">{children}</div> : null}
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
             disabled={busy}

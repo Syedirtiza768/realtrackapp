@@ -383,7 +383,7 @@ export default function BusinessIndustrialListingsPage() {
   function unitSelect(name: string, label: string) {
     const options = UNIT_OPTIONS[name] || [];
     return (
-      <select aria-label={label} {...controlProps(name, 'w-28 shrink-0')} value={form[name]} onChange={(event) => update(name, event.target.value)}>
+      <select aria-label={label} {...controlProps(name, 'w-full min-w-[5.5rem] sm:w-28 sm:shrink-0')} value={form[name]} onChange={(event) => update(name, event.target.value)}>
         {options.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
         {form[name] && !options.includes(form[name]) ? <option value={form[name]}>{form[name]}</option> : null}
       </select>
@@ -439,7 +439,7 @@ export default function BusinessIndustrialListingsPage() {
         </nav>
 
         <form onSubmit={(event) => void save(event)} onInvalidCapture={revealInvalid} className="space-y-5">
-          <section id="identity" data-editor-section className="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <section id="identity" data-editor-section className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
             <h2 className="font-semibold">Product identity</h2>
             <p className="mt-1 text-xs text-slate-500">SKU, title, manufacturer, model, MPN, description, and public HTTPS images.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -456,7 +456,7 @@ export default function BusinessIndustrialListingsPage() {
             </div>
           </section>
 
-          <section id="category" data-editor-section className="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <section id="category" data-editor-section className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
             <h2 className="font-semibold">Category and marketplace</h2>
             <p className="mt-1 text-xs text-slate-500">Dedicated seller, category family, verified leaf category, and required eBay item specifics. Restricted medical/laboratory and hazardous-material families remain review-gated.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -517,7 +517,7 @@ export default function BusinessIndustrialListingsPage() {
             </div>
           </section>
 
-          <section id="condition" data-editor-section className="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <section id="condition" data-editor-section className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
             <h2 className="font-semibold">Condition and evidence</h2>
             <p className="mt-1 text-xs text-slate-500">Testing, calibration, certification, included components, and missing parts used during compliance review.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -544,7 +544,7 @@ export default function BusinessIndustrialListingsPage() {
             </div>
           </section>
 
-          <section id="specifications" data-editor-section className="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <section id="specifications" data-editor-section className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
             <h2 className="font-semibold">Technical specifications</h2>
             <p className="mt-1 text-xs text-slate-500">Pair each measurement with a supported unit. Value and unit must both be set when a measurement is provided.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -558,7 +558,7 @@ export default function BusinessIndustrialListingsPage() {
                 ['weight', 'Weight', 'weightUnit'],
               ] as const).map(([key, text, unitKey]) => (
                 <Field key={key} label={text} htmlFor={key}>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <input type="number" min="0" step="any" {...controlProps(key)} value={form[key]} onChange={(event) => update(key, event.target.value)} />
                     {unitSelect(unitKey, text + ' unit')}
                   </div>
@@ -578,7 +578,7 @@ export default function BusinessIndustrialListingsPage() {
             </div>
           </section>
 
-          <section id="inventory" data-editor-section className="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <section id="inventory" data-editor-section className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
             <h2 className="font-semibold">Inventory</h2>
             <p className="mt-1 text-xs text-slate-500">Single-item, serialized, multipack, and lot semantics. Private serial numbers are not displayed after save; re-enter private records only when changing serialized units.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -608,7 +608,7 @@ export default function BusinessIndustrialListingsPage() {
             </div>
           </section>
 
-          <section id="shipping" data-editor-section className="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <section id="shipping" data-editor-section className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
             <h2 className="font-semibold">Shipping</h2>
             <p className="mt-1 text-xs text-slate-500">Dispatch location, coverage, packing details, and freight or local-pickup requirements. Switching modes keeps entered values.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -625,13 +625,13 @@ export default function BusinessIndustrialListingsPage() {
               {form.shippingMode !== 'local_pickup' ? (
                 <>
                   <Field label="Packed weight" htmlFor="packedWeight" required>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <input required type="number" min="0" step="any" {...controlProps('packedWeight')} value={form.packedWeight} onChange={(event) => update('packedWeight', event.target.value)} />
                       {unitSelect('packedWeightUnit', 'Packed weight unit')}
                     </div>
                   </Field>
                   <Field label="Packed dimensions (L × W × H)" htmlFor="packedLength" required>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-3">
                       {(['packedLength', 'packedWidth', 'packedHeight'] as const).map((key) => (
                         <input required type="number" min="0" step="any" key={key} {...controlProps(key)} value={form[key]} aria-label={key} onChange={(event) => update(key, event.target.value)} />
                       ))}
@@ -641,16 +641,16 @@ export default function BusinessIndustrialListingsPage() {
                 </>
               ) : null}
               <Field label="Pallet weight" htmlFor="palletWeight">
-                <div className="flex gap-2">
-                  <input type="number" min="0" step="any" {...controlProps('palletWeight')} value={form.palletWeight} onChange={(event) => update('palletWeight', event.target.value)} />
-                  {unitSelect('palletWeightUnit', 'Pallet weight unit')}
-                </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                      <input type="number" min="0" step="any" {...controlProps('palletWeight')} value={form.palletWeight} onChange={(event) => update('palletWeight', event.target.value)} />
+                      {unitSelect('palletWeightUnit', 'Pallet weight unit')}
+                    </div>
               </Field>
               <Field label="Crate weight" htmlFor="crateWeight">
-                <div className="flex gap-2">
-                  <input type="number" min="0" step="any" {...controlProps('crateWeight')} value={form.crateWeight} onChange={(event) => update('crateWeight', event.target.value)} />
-                  {unitSelect('crateWeightUnit', 'Crate weight unit')}
-                </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                      <input type="number" min="0" step="any" {...controlProps('crateWeight')} value={form.crateWeight} onChange={(event) => update('crateWeight', event.target.value)} />
+                      {unitSelect('crateWeightUnit', 'Crate weight unit')}
+                    </div>
               </Field>
               {form.shippingMode === 'freight' ? (
                 <>
@@ -662,9 +662,9 @@ export default function BusinessIndustrialListingsPage() {
             </div>
           </section>
 
-          <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+          <div className="sticky bottom-0 z-20 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-1 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <p className="text-xs text-slate-500">Editing an existing draft can return it to compliance review. The backend remains authoritative for publication eligibility.</p>
-            <button disabled={saving} className="min-h-11 rounded-lg px-4 py-2 font-semibold text-white disabled:opacity-50" style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-primary-fg)' }} type="submit">
+            <button disabled={saving} className="min-h-11 w-full rounded-lg px-4 py-2 font-semibold text-white disabled:opacity-50 sm:w-auto" style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-primary-fg)' }} type="submit">
               {saving ? 'Saving…' : editingId ? 'Update B&I draft' : 'Save B&I draft'}
             </button>
           </div>
