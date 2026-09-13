@@ -24,6 +24,13 @@ now stores `mk_preferred_vertical`, org selection prefers the matching vertical
 workspace, and `BusinessIndustrialShell` auto-selects the owned B&I organization
 so catalog search scopes to the B&I product set.
 
+**2026-09-13** — B&I publish validation failed with "No targets passed
+validation" because the dedicated native-OAuth store had no merchant inventory
+location and most catalog products have null/zero price. Production provisioned
+`AE_Dubai` for the B&I store; native policy sync/validate now ensure a location;
+the publish modal shows API `errors`/`failures`. Five priced SKUs validate
+cleanly; the remaining 72 need prices before publish.
+
 **2026-09-13** — Shared catalog filters now use loading-safe, searchable checkbox
 facets with collapsed secondary groups; category facet selections match the
 server's ID filter, imported-to dates include the chosen day, and partial eBay

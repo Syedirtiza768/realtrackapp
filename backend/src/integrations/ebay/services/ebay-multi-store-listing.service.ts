@@ -320,9 +320,15 @@ export class EbayMultiStoreListingService {
       }
     }
     if (!eligible.length) {
+      const detail = skipped
+        .flatMap((row) => row.errors)
+        .filter((message) => typeof message === 'string' && message.trim())
+        .slice(0, 8)
+        .join('; ');
       throw new BadRequestException({
-        message:
-          'No targets passed validation — fix errors or deselect blocked stores.',
+        message: detail
+          ? `No targets passed validation — ${detail}`
+          : 'No targets passed validation — fix errors or deselect blocked stores.',
         failures: skipped,
       });
     }

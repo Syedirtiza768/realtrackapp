@@ -2,6 +2,15 @@
 
 > Fashion/B&I completion record (2026-09-10): see the vertical architecture, security, API, route, and setup documentation for the deployed workspace behavior and operational prerequisites.
 
+- **B&I publish validation blockers (2026-09-13):** Recent
+  `No targets passed validation` failures for `bniadmin` were caused by a missing
+  merchant inventory location on the native-OAuth B&I store plus null catalog
+  prices on most SKUs. Production now has `AE_Dubai` provisioned and mapped on
+  all B&I marketplaces. Native policy sync and validate now auto-ensure an
+  inventory location (same as SellerPundit). Publish/validation UI surfaces the
+  real `errors`/`failures` detail instead of only the generic message. 72/77
+  catalog rows still need a positive price before they can queue.
+
 - **B&I catalog empty for multi-org admins (2026-09-13):** `bniadmin@realtrack.local`
   (and similar users with Super Admin + B&I membership) no longer land on the Super
   Admin organization when using `/business-industrial/*`. Login stores

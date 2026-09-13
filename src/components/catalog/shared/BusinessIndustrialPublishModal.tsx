@@ -31,7 +31,12 @@ export type BusinessIndustrialAccount = {
 };
 
 type PublishResult = { jobId: string; status: string; targetCount?: number; dailyRemaining?: number };
-type ValidationResult = { blockingErrors?: unknown[]; warnings?: unknown[]; status?: string };
+type ValidationResult = {
+  blockingErrors?: unknown[];
+  errors?: unknown[];
+  warnings?: unknown[];
+  status?: string;
+};
 type Props = {
   open: boolean;
   item?: CatalogItem;
@@ -169,7 +174,7 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
   }), [profiles, connectedLocationKey]);
 
   if (!open) return null;
-  const blockingErrors = messages(validation?.blockingErrors);
+  const blockingErrors = messages(validation?.blockingErrors ?? validation?.errors);
   const warnings = messages(validation?.warnings);
   const canValidate = Boolean(item && selectedAccounts.length && selectedAccounts.every((account) => account.marketplaceId) && !busy);
   const canPublishSingle = Boolean(item && selectedAccounts.length && selectedAccounts.every((account) => account.marketplaceId) && validation && blockingErrors.length === 0 && !busy);
@@ -224,7 +229,12 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
         onSubmitted(result);
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to submit the publish job.');
+      const body = (reason as { responseBody?: { failures?: Array<{ errors?: string[] }> } })?.responseBody;
+      const failureDetail = Array.isArray(body?.failures)
+        ? body.failures.flatMap((failure) => failure.errors || []).filter(Boolean).slice(0, 8).join('; ')
+        : '';
+      const base = reason instanceof Error ? reason.message : 'Unable to submit the publish job.';
+      setError(failureDetail && !base.includes(failureDetail) ? `${base} ${failureDetail}` : base);
     } finally { setBusy(''); }
   };
   return (

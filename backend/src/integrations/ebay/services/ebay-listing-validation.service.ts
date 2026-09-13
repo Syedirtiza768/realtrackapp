@@ -119,31 +119,31 @@ export class EbayListingValidationService {
         errors.push(`SellerPundit policy refresh failed: ${msg}`);
         requiredActions.push('sync_sellerpundit_policies');
       }
+    }
 
-      // Hydrate inventory location — SellerPundit policy sync only handles
-      // policy IDs, not inventory locations. Auto-resolve via eBay Inventory API.
-      if (account.primaryStoreId) {
-        try {
-          const key = await this.inventoryApi.ensureMerchantLocation(
-            account.primaryStoreId,
-          );
-          if (key) {
-            await this.mpRepo
-              .createQueryBuilder()
-              .update()
-              .set({ defaultInventoryLocationKey: key })
-              .where('ebay_account_id = :accountId', {
-                accountId: params.ebayAccountId,
-              })
-              .andWhere('default_inventory_location_key IS NULL')
-              .execute();
-          }
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
-          this.logger.warn(
-            `Inventory location hydration failed for ${params.ebayAccountId}: ${msg}`,
-          );
+    // Hydrate inventory location for native OAuth and SellerPundit accounts.
+    // Native policy sync can return an empty location list for new B&I stores.
+    if (account.primaryStoreId) {
+      try {
+        const key = await this.inventoryApi.ensureMerchantLocation(
+          account.primaryStoreId,
+        );
+        if (key) {
+          await this.mpRepo
+            .createQueryBuilder()
+            .update()
+            .set({ defaultInventoryLocationKey: key })
+            .where('ebay_account_id = :accountId', {
+              accountId: params.ebayAccountId,
+            })
+            .andWhere('default_inventory_location_key IS NULL')
+            .execute();
         }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(
+          `Inventory location hydration failed for ${params.ebayAccountId}: ${msg}`,
+        );
       }
     }
 
