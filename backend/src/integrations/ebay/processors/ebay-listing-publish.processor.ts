@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { FashionListingsService } from '../../../verticals/fashion-listings.service.js';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,14 +19,55 @@ class RetriablePublishError extends Error {}
 
 export function isTransientPublishFailure(message: string): boolean {
   const normalized = message.toLowerCase();
+  const permanentMarkers = [
+    '21919474',
+    '21919233',
+    'inventory-based listing management is not currently supported',
+    'already have on ebay',
+    'identical items from the same seller',
+    'selling limit',
+    'only approved sellers',
+    'do not relist',
+    'policy violation',
+    'policy restriction',
+    'airbag',
+    'mis-categor',
+    'select a different category',
+    'invalid category',
+    'invalid item condition',
+    'missing business policy',
+    'sku collision',
+    'srm_his_wh_location_mismatch_inventory_block',
+    '1276646',
+    'forward-deployed item',
+    'forward deployed item',
+    'overseas warehouse block policy',
+    'overseas-warehouse-block-policy-authorization',
+    'different from your registered address',
+    'shipping from overseas warehouses',
+    'ship from overseas warehouses',
+  ];
+  if (permanentMarkers.some((marker) => normalized.includes(marker))) {
+    return false;
+  }
+
   return [
     'product not found',
     'availability not found',
+    'this offer is not available',
+    '25713',
     'cannot revise listing',
     'try again later',
     'core inventory service internal error',
     'status code 500',
+    'status code 502',
+    'status code 503',
+    'status code 504',
     'temporarily unavailable',
+    'service unavailable',
+    'connection reset',
+    'socket hang up',
+    'upstream connect error',
     'timed out',
     'timeout',
     'rate limit',
@@ -62,6 +104,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
     private readonly builder: ListingBuilderService,
     private readonly publishResolver: CatalogPublishResolverService,
     private readonly ebayPublish: EbayPublishService,
+    @Optional() private readonly fashion?: FashionListingsService,
   ) {
     super();
   }
@@ -101,6 +144,11 @@ export class EbayListingPublishProcessor extends WorkerHost {
 
     const catalogProductId = target.catalogProductId;
     const ebayAccountId = target.ebayAccountId!;
+    const policyOverrides =
+      target.resultPayload?.policyOverrides &&
+      typeof target.resultPayload.policyOverrides === 'object'
+        ? (target.resultPayload.policyOverrides as Record<string, unknown>)
+        : undefined;
 
     await this.jobRepo.update(listingJob.id, { status: 'processing' });
 
@@ -112,6 +160,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
         catalogProductId,
         ebayAccountId,
         marketplaceId: target.marketplaceId,
+        policyOverrides,
       });
 
       if (v.status === 'blocked') {
@@ -165,6 +214,8 @@ export class EbayListingPublishProcessor extends WorkerHost {
           resolved?.snapshot.listingRecordId ??
           catalogProductId,
         storeId: account.primaryStoreId,
+        vertical: target.vertical ?? undefined,
+        policyOverrides,
       });
 
       if (built.blockingErrors.length) {
@@ -181,6 +232,17 @@ export class EbayListingPublishProcessor extends WorkerHost {
         return;
       }
 
+      const isFashion =
+        target.vertical === 'fashion' ||
+        resolved?.snapshot.vertical === 'fashion';
+      if (isFashion) {
+        if (!this.fashion)
+          throw new Error('Fashion publishing safeguards unavailable');
+        await this.fashion.assertApproved(
+          catalogProductId,
+          listingJob.organizationId,
+        );
+      }
       const results = await this.ebayPublish.publish(built.publishRequest);
       const r = results[0];
       if (r?.success) {
@@ -210,6 +272,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
             marketplaceId: target.marketplaceId,
           });
         }
+        ch.vertical = built.publishRequest.vertical ?? target.vertical ?? null;
         ch.internalSku = built.publishRequest.sku;
         ch.ebayInventorySku = r.effectiveSku ?? built.publishRequest.sku;
         ch.offerId = r.offerId ?? null;
@@ -225,6 +288,21 @@ export class EbayListingPublishProcessor extends WorkerHost {
         ch.lastErrorCode = null;
         ch.lastErrorMessage = null;
         await this.channelRepo.save(ch);
+        // A quarantine/edit may commit while the remote publish request is in flight.
+        if (isFashion) {
+          const containment = await this.fashion!.containIfBlocked(
+            ch,
+            listingJob.requestedByUserId,
+          );
+          if (containment)
+            await this.targetRepo.update(target.id, {
+              status: 'failed',
+              errorPayload: {
+                message: 'Fashion approval changed during publication',
+                containment,
+              },
+            });
+        }
       } else {
         const message = r?.error ?? 'Publish failed';
         const existingListingId = extractExistingEbayListingId(message);
@@ -238,6 +316,13 @@ export class EbayListingPublishProcessor extends WorkerHost {
             },
           });
           if (existingChannel) {
+            const existingWarnings = Array.isArray(
+              target.resultPayload?.warnings,
+            )
+              ? (target.resultPayload.warnings as unknown[]).filter(
+                  (warning): warning is string => typeof warning === 'string',
+                )
+              : [];
             await this.targetRepo.update(target.id, {
               status: 'skipped',
               resultPayload: {
@@ -246,9 +331,7 @@ export class EbayListingPublishProcessor extends WorkerHost {
                 duplicateExistingListingId: existingListingId,
                 duplicateExistingChannelId: existingChannel.id,
                 warnings: [
-                  ...(Array.isArray(target.resultPayload?.warnings)
-                    ? target.resultPayload.warnings
-                    : []),
+                  ...existingWarnings,
                   'Skipped duplicate publish because the matching eBay listing is already published on this account.',
                 ],
               },

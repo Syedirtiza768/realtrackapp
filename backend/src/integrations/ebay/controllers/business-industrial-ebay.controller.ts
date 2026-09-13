@@ -128,6 +128,7 @@ export class BusinessIndustrialEbayController {
         marketplaceId: account.primaryStore.ebayMarketplaceId,
         storeId: account.primaryStoreId,
         storeName: account.primaryStore.storeName,
+        locationKey: account.primaryStore.locationKey,
         marketplaces: account.marketplaces
           .filter((marketplace) => marketplace.enabled)
           .map((marketplace) => ({

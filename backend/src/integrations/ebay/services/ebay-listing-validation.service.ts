@@ -16,6 +16,7 @@ import {
   stripListingHtmlBoilerplate,
 } from '../../../channels/ebay/ebay-listing-text.util.js';
 import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
+import { VerticalsService } from '../../../verticals/verticals.service.js';
 
 export type ValidationStatus = 'ready' | 'warnings' | 'blocked';
 
@@ -37,6 +38,7 @@ export class EbayListingValidationService {
     private readonly sellerpunditTokens: SellerpunditTokenSyncService,
     private readonly inventoryApi: EbayInventoryApiService,
     private readonly publishResolver: CatalogPublishResolverService,
+    private readonly verticals: VerticalsService,
     @InjectRepository(ConnectedEbayAccount)
     private readonly accountRepo: Repository<ConnectedEbayAccount>,
     @InjectRepository(EbayAccountMarketplace)
@@ -48,6 +50,7 @@ export class EbayListingValidationService {
     catalogProductId: string;
     ebayAccountId: string;
     marketplaceId: string;
+    policyOverrides?: Record<string, unknown>;
   }): Promise<ListingValidationResult> {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -63,7 +66,7 @@ export class EbayListingValidationService {
         id: params.ebayAccountId,
         organizationId: params.organizationId,
       },
-      relations: ['oauthToken'],
+      relations: ['oauthToken', 'primaryStore'],
     });
     if (!account) {
       errors.push('eBay account not found for organization');
@@ -81,7 +84,7 @@ export class EbayListingValidationService {
     ) {
       errors.push(
         isSellerpundit
-          ? `eBay rejected the OAuth token for "${account.accountDisplayName ?? account.ebayUsername ?? 'this store'}". Re-sync in RealTrackApp only refreshes what SellerPundit has — reconnect eBay for this store inside SellerPundit admin, then Re-sync stores here.`
+          ? `eBay rejected the OAuth token for "${account.accountDisplayName ?? account.ebayUsername ?? 'this store'}". Re-sync in Omni Core only refreshes what SellerPundit has — reconnect eBay for this store inside SellerPundit admin, then Re-sync stores here.`
           : 'eBay account requires reconnection',
       );
       requiredActions.push(
@@ -150,6 +153,11 @@ export class EbayListingValidationService {
         marketplaceId: params.marketplaceId,
       },
     });
+    const overrideValue = (key: string): string | undefined => {
+      const value = params.policyOverrides?.[key];
+      return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+    };
+
     if (mpRow && !mpRow.enabled) {
       errors.push('Marketplace is disabled for this account');
     }
@@ -159,7 +167,7 @@ export class EbayListingValidationService {
         'Marketplace is not configured for this eBay account — reconnect or add a marketplace row.',
       );
     } else {
-      if (!mpRow.defaultFulfillmentPolicyId) {
+      if (!mpRow.defaultFulfillmentPolicyId && !overrideValue('fulfillmentPolicyId') && !overrideValue('requestedFulfillmentPolicyName')) {
         errors.push(
           isSellerpundit
             ? 'Default fulfillment policy is required — sync policies from SellerPundit.'
@@ -167,7 +175,7 @@ export class EbayListingValidationService {
         );
         requiredActions.push('map_fulfillment_policy');
       }
-      if (!mpRow.defaultPaymentPolicyId) {
+      if (!mpRow.defaultPaymentPolicyId && !overrideValue('paymentPolicyId') && !overrideValue('requestedPaymentPolicyName')) {
         errors.push(
           isSellerpundit
             ? 'Default payment policy is required — sync policies from SellerPundit.'
@@ -175,7 +183,7 @@ export class EbayListingValidationService {
         );
         requiredActions.push('map_payment_policy');
       }
-      if (!mpRow.defaultReturnPolicyId) {
+      if (!mpRow.defaultReturnPolicyId && !overrideValue('returnPolicyId') && !overrideValue('requestedReturnPolicyName')) {
         errors.push(
           isSellerpundit
             ? 'Default return policy is required — sync policies from SellerPundit.'
@@ -183,7 +191,7 @@ export class EbayListingValidationService {
         );
         requiredActions.push('map_return_policy');
       }
-      if (!mpRow.defaultInventoryLocationKey) {
+      if (!mpRow.defaultInventoryLocationKey && !overrideValue('merchantLocationKey')) {
         errors.push(
           isSellerpundit
             ? 'Default inventory location is required — needed when SellerPundit publish falls back to direct eBay. Sync policies from eBay or map a merchant location key.'
@@ -201,6 +209,31 @@ export class EbayListingValidationService {
     } else {
       const { snapshot } = resolved;
       warnings.push(...resolved.warnings);
+
+      const vertical = this.verticals.resolveVertical(
+        resolved.catalogProduct,
+        resolved.listingRecord,
+        snapshot.vertical,
+      );
+      if (vertical === 'business_industrial') {
+        if (!account.primaryStoreId) {
+          errors.push(
+            'Business & Industrial publishing requires a dedicated seller store',
+          );
+        } else {
+          const projection = await this.verticals.buildPublishProjection({
+            vertical,
+            product: resolved.catalogProduct!,
+            listing: resolved.listingRecord,
+            storeId: account.primaryStoreId,
+            marketplaceId: params.marketplaceId,
+          });
+          if (projection) {
+            errors.push(...projection.blockingErrors);
+            warnings.push(...projection.warnings);
+          }
+        }
+      }
 
       if (!snapshot.sku?.trim()) {
         errors.push('Listing is missing SKU');

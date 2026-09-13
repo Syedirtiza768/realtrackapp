@@ -1,5 +1,42 @@
 # Current State
 
+**2026-09-13 (deployed to `app.omnicoreholding.com`)** — The B&I
+catalog now follows the Auto Parts table-first catalog interface and reads its
+filters from the fields actually populated in production. The API adds a
+validation-status facet/filter; the UI exposes eBay category, review status,
+stock, and populated B&I attributes while omitting automotive and empty legacy
+facets. Results include manufacturer, model, category family, created date,
+summary counts, quick view/editing, bulk operations, export, and approval-gated
+publish progress. The quick view hydrates the canonical product, shows all
+stored images in an Auto Parts-style viewer/lightbox, and supports image
+ordering/upload. Single publish runs account-targeted B&I validation with
+visible blockers/warnings; bulk publish targets dedicated B&I stores and keeps
+server-side approval/category/policy checks. The facet endpoint also handles
+accounts with no accessible publication stores safely: marketplace facets are
+empty while populated B&I product/attribute facets remain available. Production verification confirmed healthy backend/database
+checks, the public catalog route, protected API routing, and the compiled
+frontend/backend feature markers.
+
+The B&I publish dialog now reads policies from the selected dedicated eBay
+account's cache, shows fulfillment/return/payment profiles plus the connected
+inventory location, and persists those target values through validation and the
+publish worker; bulk targets continue to use each connected store's defaults.
+
+**2026-09-13** — Shared catalog filters now use loading-safe, searchable checkbox
+facets with collapsed secondary groups; category facet selections match the
+server's ID filter, imported-to dates include the chosen day, and partial eBay
+publish jobs stop polling while exposing target errors. The shared quick view
+now has the Auto Parts drag/keyboard image ordering pattern with an explicit
+primary image and deduplicated upload batches. These changes are inherited by
+all verticals using CatalogWorkspace.
+
+**2026-09-12** — Shared Fashion and Business & Industrial catalog workspaces
+now carry the active organization through search, facets, suggestions, edits,
+and exports. Catalog publish controls require approval before enqueueing the
+existing durable eBay publish job; production B&I rows remain review-gated.
+The Auto Parts sidebar Catalog link also resolves to the canonical
+`/auto-parts/catalog` route.
+
 > **Source**: Moved from `docs/handover/current-state.md` (2026-05-29).
 > This file is a snapshot; for live state use `git log` and run the app.
 
@@ -7,7 +44,7 @@
 
 ## Overall Status
 
-**Active Development** — RealTrackApp is a substantial, actively developed full-stack platform (NestJS + React + PostgreSQL + Redis/BullMQ) focused on **eBay** automotive-parts listing, catalog import, AI enrichment, fitment, inventory, orders, and multi-store management. The architecture is mature (23 backend modules, 82 entities, 27 migrations, 14 BullMQ queues, RBAC with 8 roles / 73 permissions). Maturity of *individual features* varies — see [FEATURE_REGISTRY.md](FEATURE_REGISTRY.md).
+**Active Development** — Omni Core is a substantial, actively developed full-stack platform (NestJS + React + PostgreSQL + Redis/BullMQ) focused on **eBay** automotive-parts listing, catalog import, AI enrichment, fitment, inventory, orders, and multi-store management. The architecture is mature (23 backend modules, 82 entities, 27 migrations, 14 BullMQ queues, RBAC with 8 roles / 73 permissions). Maturity of *individual features* varies — see [FEATURE_REGISTRY.md](FEATURE_REGISTRY.md).
 
 ## What Exists Now
 
@@ -30,7 +67,7 @@
 - **Dashboard** with KPI aggregation
 - **Listing editor** with AI assistance, revision history. Catalog inventory price/qty edits now sync to `catalog_products` and US/AU/DE sibling `listing_records` (not only the opened row). SKU renames from inventory/catalog detail modals update `customLabelSku`, linked `catalog_products.sku`, and siblings (collision-checked). Published-listing price revise resolves Inventory `offerId` when Trading sync left it null.
 - **Catalog import** (CSV/bulk, BullMQ processing, motors filters)
-- **eBay multi-store** (OAuth, sync, publish, multi-account). Inventory location defaults are **Dubai / `AE_Dubai`** (not Houston/`US_77001`); policy sync prefers AE warehouse keys. Before an offer is created, publish now verifies the configured merchant location against live eBay locations, ignores disabled/missing keys, selects or provisions a usable location, and caches the verification briefly for bulk jobs. Repaired marketplace defaults are persisted; this source fix was deployed to the production backend on 2026-08-21. Publish sanitizes item-specific values to eBay's 65-char aspect limit (fixes Type-too-long rejects on long OEM descriptions). eBay Motors publishing now rejects no unverified parent category: it resolves a cached/live leaf and persists the known leaf fallback `9886` when taxonomy is unavailable. Pipeline MVL fitment is **donor-year scoped** (±5/±8) and refuses full make/model dumps when year is missing. Publish sends only **MVL-valid** compatibility rows (`needs_review`/`rejected` omitted; empty fitment still allowed). Title/make-model parsing skips junk tokens and maps Mercedes series codes (`C350`→`C-Class`) so optimizers cannot lock in corrupted models like `170`. Pipeline / enterprise US-AU titles use Gemini 3.1 Flash Lite **only** for Position + Part Name slots; the rest of the house title structure stays deterministic.
+- **eBay multi-store** (OAuth, sync, publish, multi-account). Inventory location defaults are **Dubai / `AE_Dubai`** (not Houston/`US_77001`); policy sync prefers AE warehouse keys. Before an offer is created, publish now verifies the configured merchant location against live eBay locations, ignores disabled and non-UAE keys, selects or provisions an enabled UAE location, and caches the verification briefly for bulk jobs. Repaired marketplace defaults are persisted; the source location fix and UAE-only hardening were deployed and verified in production on 2026-09-03. Publish fails closed when eBay cannot verify or provision a UAE location. Publish sanitizes item-specific values to eBay's 65-char aspect limit (fixes Type-too-long rejects on long OEM descriptions). eBay Motors publishing now rejects no unverified parent category: it resolves a cached/live leaf and persists the known leaf fallback `9886` when taxonomy is unavailable. Legacy rows with deterministic part keywords are corrected at the final publish boundary; coolant hoses resolve to live car leaf `33601` rather than motorcycle leaf `177983`. Pipeline MVL fitment is **donor-year scoped** (±5/±8) and refuses full make/model dumps when year is missing. Publish sends only **MVL-valid** compatibility rows (`needs_review`/`rejected` omitted; empty fitment still allowed). Title/make-model parsing skips junk tokens and maps Mercedes series codes (`C350`→`C-Class`) so optimizers cannot lock in corrupted models like `170`. Pipeline / enterprise US-AU titles use Gemini 3.1 Flash Lite **only** for Position + Part Name slots; the rest of the house title structure stays deterministic.
 - **Inventory management** (ledger, allocations, events)
 - **Order import** from eBay
 - **Notifications** (in-app + WebSocket)
@@ -64,7 +101,7 @@
 - **Sparse automated tests** — 24 backend specs (unit only), 0 e2e, 0 frontend tests
 - **DB typing issues** — TEXT-typed price/quantity columns partially fixed by migration
 - **Missing foreign keys** on some entity relationships
-- **Branding inconsistency** — "RealTrackApp" (shell) vs "ListingPro" (login/DB)
+- **Branding** — Omni Core is now consistent across the user-facing shell and login; `listingpro` remains the internal database identifier.
 
 ## Latest Session Summary
 
@@ -110,7 +147,7 @@
 - Root-caused title and business-policy mismatches on pipelines `1c3a0f2a`, `5d5c2413`, and `6e30444a`: publish-time title recomposition replaced every reviewed title, durable targets lost the exact source listing identity, row policy names were ignored in favor of target-account defaults, and concurrent publishes wrote their resolved row policies back as new defaults.
 - Publish now preserves the exact listing row and stored title, resolves each named shipping/payment/return profile independently for every target account, refreshes stale policy caches, blocks absent/incompatible named policies, and leaves marketplace defaults unchanged.
 - Production remediation created the two exact missing Primemotive fulfillment policies, deployed the fix, and republished all 1,960 affected BLACKLINEAUTOPARTS/Primemotive channels. Transient eBay revise/availability failures now retry, and an audit-discovered zero-stock coercion bug was fixed so quantity `0` remains zero.
-- Complete eBay Inventory API readback found every affected inventory item and offer. Titles, categories, prices, quantities, and fulfillment/payment/return policy IDs now match RealTrack; named-profile coverage is complete, marketplace defaults were not mutated, and the final mismatch count is zero.
+- Complete eBay Inventory API readback found every affected inventory item and offer. Titles, categories, prices, quantities, and fulfillment/payment/return policy IDs now match Omni Core; named-profile coverage is complete, marketplace defaults were not mutated, and the final mismatch count is zero.
 - Pipeline `52292964-b8c5-4443-a076-088ed292a5a1` exposed a separate part-identity issue: generic types such as `Part`, `Not Specified`, `Miscellaneous`, and `Automotive` were allowed to keep AI/taxonomy categories like Fuel Injectors, ECUs, Hood Panels, and Liftgates. Added script and backend guards so generic identities fall back to verified leaf `9886` unless a trusted keyword confirms the part family; repaired the production batch across `listing_records` and `catalog_products`, with uncertain rows marked for manual review.
 
 **2026-07-12** — High-volume catalog publishing:
@@ -147,12 +184,29 @@ Phase 4: Catalog dedup and polish — the catalog grid now groups listing record
 All 4 phases of the Inventory Auto-Enrich → Multi-Marketplace Editor → Publish pipeline are complete.
 
 ## Current Assumptions
-
 - eBay remains the primary (only fully-developed) marketplace integration
 - PostgreSQL 16 + Redis 7 remain the infrastructure stack
 - Docker Compose remains the primary deployment method
 - The `@Controller('api/...')` double-prefix issue has not been resolved (verify)
 - Uncommitted working tree from 2026-05-29 snapshot needs triage (verify with `git status`)
+
+## Shared catalog parity implementation (2026-09-12)
+
+Implemented shared Fashion and Business & Industrial catalog workspaces and
+canonical routes. The server now provides paginated search, suggestions,
+facets, safe publication summaries, detail projection, inline edits, bulk
+team/policy/delete actions, and server-side CSV export from catalog_products.
+Frontend state is URL/session-persistent and uses debounced suggestions,
+responsive facets, consistent tables, quick view image management, and durable
+publish progress. Fashion bulk publish now uses the shared multi-store job path.
+Focused catalog authorization tests pass. The frontend production build passes;
+the backend build remains blocked by pre-existing TypeScript errors in
+`backend/src/scripts/backfill-brand-images.ts`; the repository
+root lint command still fails because ESLint 9 finds no root eslint.config file,
+and the backend repository-wide lint baseline contains unrelated existing errors.
+No migration was added because the implementation uses existing catalog and audit
+columns; shared soft-delete is the existing vertical_validation_status=deleted
+lifecycle value.
 
 ## Immediate Next Step
 
