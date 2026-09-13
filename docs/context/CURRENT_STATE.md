@@ -5,15 +5,17 @@ catalog follows the Auto Parts table-first catalog interface and reads its
 filters from fields actually populated in production. Facets include brand,
 eBay category, condition (label when ID is null), review/validation status,
 stock, and populated B&I attributes while omitting automotive and empty legacy
-facets. Results show manufacturer/brand, model, category family, condition,
-image count, created date, assignment, validation, and publishing state.
-Quick view hydrates the canonical product, shows every stored image with
-thumbnail/lightbox navigation, and supports image ordering/upload. Single
-publish loads the selected dedicated store's policies and inventory location,
-passes those overrides through validation and the publish worker, and shows
-blockers/warnings; bulk publish uses each selected store's defaults. Facets
-remain available when the account has no publication stores (marketplace facet
-empty). Catalog image URLs are filtered to http(s) or `/api/` proxy paths.
+facets. Category/condition facet `OR` predicates are fully parenthesized so they
+cannot escape organization/vertical scope. Results show manufacturer/brand,
+model, category family, condition, image count, created date, assignment,
+validation, and publishing state. Quick view hydrates the canonical product,
+shows every stored image with thumbnail/lightbox navigation, and supports image
+ordering/upload. Single publish loads the selected dedicated store's policies
+and inventory location, passes those overrides through validation and the
+publish worker, and shows blockers/warnings; bulk publish uses each selected
+store's defaults. Production verification on 2026-09-13 confirmed healthy
+backend/database checks, HTTP 200 catalog route, scoped facets (77 B&I rows),
+and a logged-in catalog UI with populated filters plus a 12-image quick view.
 
 **2026-09-13** — Shared catalog filters now use loading-safe, searchable checkbox
 facets with collapsed secondary groups; category facet selections match the
