@@ -414,7 +414,7 @@ export class CatalogWorkspaceService {
         .addSelect('p.categoryName', 'value')
         .addSelect('COUNT(*)', 'count')
         .andWhere(
-          "(p.categoryName IS NOT NULL AND p.categoryName != '') OR (p.categoryId IS NOT NULL AND p.categoryId != '')",
+          "((p.categoryName IS NOT NULL AND p.categoryName != '') OR (p.categoryId IS NOT NULL AND p.categoryId != ''))",
         )
         .groupBy('p.categoryId')
         .addGroupBy('p.categoryName')
@@ -430,7 +430,7 @@ export class CatalogWorkspaceService {
         )
         .addSelect('COUNT(*)', 'count')
         .andWhere(
-          "(p.condition_label IS NOT NULL AND p.condition_label != '') OR (p.condition_id IS NOT NULL AND p.condition_id != '')",
+          "((p.condition_label IS NOT NULL AND p.condition_label != '') OR (p.condition_id IS NOT NULL AND p.condition_id != ''))",
         )
         .groupBy(
           "coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))",

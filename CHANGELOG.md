@@ -30,9 +30,9 @@ for every meaningful change (Continuous Documentation Protocol).
   exposes brand/manufacturer and condition alongside category, review status,
   stock, and populated B&I attributes. Results and quick view show condition
   and image counts; the publish modal no longer violates React hooks order when
-  closed. Facet queries now build a fresh scoped QueryBuilder per aggregation
-  so concurrent TypeORM clones cannot drop organization/vertical predicates and
-  leak automotive facet values into B&I.
+  closed. Facet queries now build a fresh scoped QueryBuilder per aggregation,
+  and category/condition `OR` predicates are fully parenthesized so they cannot
+  escape organization/vertical filters and leak automotive facet values into B&I.
 
 - **B&I connected-store publishing:** The Business & Industrial catalog publish
   dialog now loads synced policies from the dedicated connected eBay account,
