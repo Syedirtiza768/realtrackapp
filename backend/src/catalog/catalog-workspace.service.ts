@@ -367,11 +367,15 @@ export class CatalogWorkspaceService {
     const cacheKey = `${user.id}:${scope.organizationId}:${vertical}:${JSON.stringify(dto)}`;
     const cached = this.facetCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
-    const base = this.baseQuery(vertical, dto, scope);
-    this.applySearchAndFilters(base, vertical, dto, scope);
+    // Build a fresh query per facet. TypeORM clones share mutable state, so
+    // concurrent Promise.all(base.clone()...) can drop org/vertical predicates.
+    const scopedBase = () => {
+      const qb = this.baseQuery(vertical, dto, scope);
+      this.applySearchAndFilters(qb, vertical, dto, scope);
+      return qb;
+    };
     const run = async (column: string, extra = ''): Promise<FacetBucket[]> => {
-      const facet = base
-        .clone()
+      const facet = scopedBase()
         .select(column, 'value')
         .addSelect('COUNT(*)', 'count')
         .andWhere(extra || `${column} IS NOT NULL AND ${column} != ''`)
@@ -405,8 +409,7 @@ export class CatalogWorkspaceService {
       totalFiltered,
     ] = await Promise.all([
       run('p.brand'),
-      base
-        .clone()
+      scopedBase()
         .select('p.categoryId', 'id')
         .addSelect('p.categoryName', 'value')
         .addSelect('COUNT(*)', 'count')
@@ -420,8 +423,7 @@ export class CatalogWorkspaceService {
         .getRawMany<{ id: string; value: string; count: string }>(),
       // B&I (and some imports) store human labels with null condition IDs.
       // Facet on the coalesced display value so filters stay populated.
-      base
-        .clone()
+      scopedBase()
         .select(
           "coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))",
           'value',
@@ -450,8 +452,7 @@ export class CatalogWorkspaceService {
       run('p.format'),
       run('p.location'),
       run('p.mpn'),
-      base
-        .clone()
+      scopedBase()
         .innerJoin(Team, 'facetTeam', 'facetTeam.id = p.teamId')
         .select('p.teamId', 'value')
         .addSelect('facetTeam.name', 'label')
@@ -492,17 +493,16 @@ export class CatalogWorkspaceService {
         })),
       ),
       run('p.verticalValidationStatus'),
-      base
-        .clone()
+      scopedBase()
         .select(`MIN(${SAFE_PRICE})`, 'min')
         .addSelect(`MAX(${SAFE_PRICE})`, 'max')
         .getRawOne<{ min: string | null; max: string | null }>(),
-      base.clone().getCount(),
+      scopedBase().getCount(),
     ]);
     const [stockCounts, statusCounts, attributeFacets] = await Promise.all([
-      this.countStockLevels(base),
-      this.countCatalogStatuses(base, vertical, scope),
-      this.attributeFacets(base, vertical),
+      this.countStockLevels(scopedBase),
+      this.countCatalogStatuses(scopedBase, vertical, scope),
+      this.attributeFacets(scopedBase, vertical),
     ]);
     const safeStockCounts = stockCounts as Record<string, number>;
     const safeStatusCounts = statusCounts as Record<string, number>;
@@ -524,7 +524,7 @@ export class CatalogWorkspaceService {
       locations,
       mpns,
       teams,
-      marketplaces: await this.marketplaceFacets(base, scope, vertical),
+      marketplaces: await this.marketplaceFacets(scopedBase(), scope, vertical),
       shippingProfiles,
       stockLevels: stockLevels.map((entry) => ({
         ...entry,
@@ -1242,7 +1242,9 @@ export class CatalogWorkspaceService {
   }
 
   private async attributeFacets(
-    base: SelectQueryBuilder<CatalogProduct>,
+    base:
+      | SelectQueryBuilder<CatalogProduct>
+      | (() => SelectQueryBuilder<CatalogProduct>),
     vertical: ProductVertical,
   ): Promise<Record<string, FacetBucket[]>> {
     const keys = ATTRIBUTE_KEYS[vertical]
@@ -1250,8 +1252,8 @@ export class CatalogWorkspaceService {
       .join(', ');
     // Select the JSON column explicitly so the derived table has a stable alias.
     // Selecting the full entity gives TypeORM a generated p_vertical_attributes alias.
-    const [sql, params] = base
-      .clone()
+    const source = typeof base === 'function' ? base() : base.clone();
+    const [sql, params] = source
       .select('p.verticalAttributes', 'vertical_attributes')
       .getQueryAndParameters();
     const rawRows: unknown = await this.productRepo.query(
@@ -1278,37 +1280,45 @@ export class CatalogWorkspaceService {
     return result;
   }
 
-  private async countStockLevels(base: SelectQueryBuilder<CatalogProduct>) {
+  private async countStockLevels(
+    base:
+      | SelectQueryBuilder<CatalogProduct>
+      | (() => SelectQueryBuilder<CatalogProduct>),
+  ) {
+    const source = () => (typeof base === 'function' ? base() : base.clone());
     const rows = await Promise.all([
-      base.clone().andWhere(`${SAFE_QTY} > 0`).getCount(),
-      base.clone().andWhere(`${SAFE_QTY} > 0 AND ${SAFE_QTY} <= 2`).getCount(),
-      base.clone().andWhere(`${SAFE_QTY} <= 0`).getCount(),
+      source().andWhere(`${SAFE_QTY} > 0`).getCount(),
+      source().andWhere(`${SAFE_QTY} > 0 AND ${SAFE_QTY} <= 2`).getCount(),
+      source().andWhere(`${SAFE_QTY} <= 0`).getCount(),
     ]);
     return { in_stock: rows[0], low_stock: rows[1], out_of_stock: rows[2] };
   }
 
   private async countCatalogStatuses(
-    base: SelectQueryBuilder<CatalogProduct>,
+    base:
+      | SelectQueryBuilder<CatalogProduct>
+      | (() => SelectQueryBuilder<CatalogProduct>),
     vertical: ProductVertical,
     scope: Scope,
   ) {
+    const source = () => (typeof base === 'function' ? base() : base.clone());
     const publishedSql = this.publishedSql(scope);
-    const published = base
-      .clone()
+    const published = source()
       .andWhere(publishedSql)
       .setParameters(this.publishedParameters(scope, vertical))
       .getCount();
-    const notPublished = base
-      .clone()
-      .andWhere('NOT ' + publishedSql)
-      .setParameters(this.publishedParameters(scope, vertical));
     const [publishedCount, readyCount, missingCount] = await Promise.all([
       published,
-      notPublished
-        .clone()
+      source()
+        .andWhere('NOT ' + publishedSql)
+        .setParameters(this.publishedParameters(scope, vertical))
         .andWhere('array_length(p.imageUrls, 1) > 0')
         .getCount(),
-      notPublished.andWhere('array_length(p.imageUrls, 1) IS NULL').getCount(),
+      source()
+        .andWhere('NOT ' + publishedSql)
+        .setParameters(this.publishedParameters(scope, vertical))
+        .andWhere('array_length(p.imageUrls, 1) IS NULL')
+        .getCount(),
     ]);
     return {
       published: publishedCount,
