@@ -2,9 +2,13 @@ import { AlertTriangle, CheckCircle2, Loader2, Send, ShieldCheck, Store as Store
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '../../../lib/authApi';
-import type { StoreProfiles } from '../../../lib/multiStoreApi';
+import { getStoreProfiles, type StoreProfiles } from '../../../lib/multiStoreApi';
 import ProfileSelectors from '../ProfileSelectors';
-import { EMPTY_PROFILE_SELECTION, type ProfileSelection } from '../profileUtils';
+import {
+  EMPTY_PROFILE_SELECTION,
+  defaultProfileSelection,
+  type ProfileSelection,
+} from '../profileUtils';
 import type { CatalogItem } from './catalogTypes';
 
 export type BusinessIndustrialAccount = {
@@ -47,22 +51,35 @@ function active(account: BusinessIndustrialAccount) {
   return (account.status || account.connectionStatus || '').toLowerCase() === 'active';
 }
 
-function pickConnectedProfile(
-  options: Array<{ name: string; ebayPolicyId?: string }>,
-  defaultPolicyId: string | null | undefined,
-  listingName: string | null | undefined,
-) {
-  return (
-    (defaultPolicyId && options.find((option) => option.ebayPolicyId === defaultPolicyId)?.name) ||
-    (listingName && options.some((option) => option.name === listingName) ? listingName : '') ||
-    options[0]?.name ||
-    ''
-  );
+function accountMarketplace(account: BusinessIndustrialAccount) {
+  return account.marketplaces?.find((marketplace) => marketplace.marketplaceId === account.marketplaceId);
 }
 
-async function getConnectedStoreProfiles(accountId: string, marketplaceId: string): Promise<StoreProfiles> {
+function policyNameById(
+  options: Array<{ name: string; ebayPolicyId?: string }>,
+  policyId: string | null | undefined,
+) {
+  if (!policyId) return undefined;
+  return options.find((option) => option.ebayPolicyId === policyId)?.name;
+}
+
+/** Prefer the same /stores/:id/profiles path Auto Parts uses; fall back to B&I account policies. */
+async function getConnectedStoreProfiles(account: BusinessIndustrialAccount): Promise<StoreProfiles> {
+  try {
+    const storeProfiles = await getStoreProfiles(account.storeId);
+    const count =
+      (storeProfiles.shippingProfiles?.length ?? 0) +
+      (storeProfiles.returnProfiles?.length ?? 0) +
+      (storeProfiles.paymentProfiles?.length ?? 0);
+    if (count > 0) return storeProfiles;
+  } catch {
+    /* fall through to vertical account policies */
+  }
+  if (!account.marketplaceId) {
+    return { shippingProfiles: [], returnProfiles: [], paymentProfiles: [] };
+  }
   const result = await fetchWithAuth<{ policies?: Array<{ id: string; policyType?: string; ebayPolicyId?: string; name?: string }> }>(
-    '/api/business-industrial/ebay/accounts/' + encodeURIComponent(accountId) + '/policies?marketplaceId=' + encodeURIComponent(marketplaceId),
+    '/api/business-industrial/ebay/accounts/' + encodeURIComponent(account.id) + '/policies?marketplaceId=' + encodeURIComponent(account.marketplaceId),
   );
   const policies = result.policies || [];
   const map = (policy: { id: string; ebayPolicyId?: string; name?: string }) => ({
@@ -95,16 +112,10 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
     () => activeAccounts.find((account) => account.id === (profileSourceAccountId || selectedAccounts[0]?.id || '')) ?? null,
     [activeAccounts, profileSourceAccountId, selectedAccounts],
   );
-  const profileSourceMarketplace = profileSourceAccount?.marketplaces?.find(
-    (marketplace) => marketplace.marketplaceId === profileSourceAccount.marketplaceId,
-  );
-  const connectedLocationKey =
-    profileSourceMarketplace?.defaultInventoryLocationKey || profileSourceAccount?.locationKey || null;
-
   const { data: storeProfiles, isLoading: profilesLoading, error: profilesError } = useQuery<StoreProfiles>({
-    queryKey: ['business-industrial-store-profiles', profileSourceAccount?.id, profileSourceAccount?.marketplaceId],
-    queryFn: () => getConnectedStoreProfiles(profileSourceAccount!.id, profileSourceAccount!.marketplaceId!),
-    enabled: open && mode === 'single' && Boolean(profileSourceAccount?.id && profileSourceAccount.marketplaceId),
+    queryKey: ['business-industrial-store-profiles', profileSourceAccount?.id, profileSourceAccount?.storeId, profileSourceAccount?.marketplaceId],
+    queryFn: () => getConnectedStoreProfiles(profileSourceAccount!),
+    enabled: open && mode === 'single' && Boolean(profileSourceAccount?.id && profileSourceAccount.storeId),
     staleTime: 60_000,
   });
 
@@ -126,23 +137,26 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
 
   useEffect(() => {
     if (!open || mode !== 'single' || !storeProfiles || !profileSourceAccount) return;
-    const next = {
-      shippingProfileName: pickConnectedProfile(storeProfiles.shippingProfiles, profileSourceMarketplace?.defaultFulfillmentPolicyId, item?.shippingProfile),
-      returnProfileName: pickConnectedProfile(storeProfiles.returnProfiles, profileSourceMarketplace?.defaultReturnPolicyId, item?.returnProfile),
-      paymentProfileName: pickConnectedProfile(storeProfiles.paymentProfiles, profileSourceMarketplace?.defaultPaymentPolicyId, item?.paymentProfile),
+    const marketplace = accountMarketplace(profileSourceAccount);
+    const storeLike = {
+      fulfillmentPolicyName: policyNameById(storeProfiles.shippingProfiles, marketplace?.defaultFulfillmentPolicyId) ?? undefined,
+      returnPolicyName: policyNameById(storeProfiles.returnProfiles, marketplace?.defaultReturnPolicyId) ?? undefined,
+      paymentPolicyName: policyNameById(storeProfiles.paymentProfiles, marketplace?.defaultPaymentPolicyId) ?? undefined,
     };
-    const shipping = storeProfiles.shippingProfiles.find((profile) => profile.name === next.shippingProfileName);
-    const returns = storeProfiles.returnProfiles.find((profile) => profile.name === next.returnProfileName);
-    const payment = storeProfiles.paymentProfiles.find((profile) => profile.name === next.paymentProfileName);
-    setProfiles({
-      ...next,
-      fulfillmentPolicyId: shipping?.ebayPolicyId,
-      returnPolicyId: returns?.ebayPolicyId,
-      paymentPolicyId: payment?.ebayPolicyId,
-    });
-  }, [open, mode, storeProfiles, profileSourceAccount, profileSourceMarketplace, item]);
+    setProfiles(
+      defaultProfileSelection(storeProfiles, storeLike as never, {
+        shippingProfileName: item?.shippingProfile,
+        returnProfileName: item?.returnProfile,
+        paymentProfileName: item?.paymentProfile,
+      }),
+    );
+  }, [open, mode, storeProfiles, profileSourceAccount, item]);
 
   useEffect(() => { setValidation(null); }, [selectedAccountIds, profiles]);
+
+  const connectedLocationKey = profileSourceAccount
+    ? (accountMarketplace(profileSourceAccount)?.defaultInventoryLocationKey || profileSourceAccount.locationKey || null)
+    : null;
 
   const policyOverrides = useMemo(() => ({
     fulfillmentPolicyId: profiles.fulfillmentPolicyId,

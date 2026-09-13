@@ -2,6 +2,15 @@
 
 > Fashion/B&I completion record (2026-09-10): see the vertical architecture, security, API, route, and setup documentation for the deployed workspace behavior and operational prerequisites.
 
+- **B&I catalog publish readiness (2026-09-13):** Publish modal now loads
+  shipping/return/payment profiles through the same `/stores/:id/profiles`
+  path Auto Parts uses (with B&I account-policy fallback), defaults from the
+  connected store marketplace mapping, and multi-store selection. Production
+  B&I store config was marked dedicated (`ownerVertical` /
+  `enabledVerticals`), catalog products were moved into the B&I workspace org
+  with the connected store, and all 77 compliance reviews were approved so
+  valid listings can enter the publish flow.
+
 - **B&I catalog publish modal Auto Parts parity (2026-09-13):** The Business
   & Industrial publish modal now supports multi-store single-mode publishing
   (checkboxes, not radio), select all/deselect all, a profile source store

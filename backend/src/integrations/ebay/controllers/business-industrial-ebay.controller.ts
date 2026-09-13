@@ -110,11 +110,8 @@ export class BusinessIndustrialEbayController {
       .filter((account) => {
         if (!account.primaryStore || !accessible.has(account.primaryStoreId))
           return false;
-        const config = this.verticals.getStoreConfig(account.primaryStore);
-        return (
-          config.enabledVerticals.length === 1 &&
-          config.enabledVerticals[0] === 'business_industrial'
-        );
+        // Dedicated B&I ownership is already enforced by authorizedStores().
+        return account.connectionStatus === 'active';
       })
       .map((account) => ({
         id: account.id,
