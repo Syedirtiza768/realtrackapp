@@ -22,6 +22,8 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+- **Publish build dependencies:** Added the safe eBay category util, `PublishRequest.vertical`, and validated fitment-source option required by the B&I listing builder.
+
 - **B&I catalog condition and brand filters:** Business & Industrial facets now
   aggregate condition from `condition_label` when `condition_id` is null (the
   production B&I shape), and condition filters match either field. The sidebar

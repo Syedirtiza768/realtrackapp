@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Optional,
 } from '@nestjs/common';
+import type { ProductVertical } from '../../verticals/vertical.types.js';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
@@ -113,6 +114,8 @@ function normalizePublishedDescription(value: unknown): string {
 export interface PublishRequest {
   /** Internal listing/product ID */
   listingId: string;
+  /** Resolved product vertical; omitted legacy requests resolve to automotive. */
+  vertical?: ProductVertical;
   /** Target store(s) to publish to */
   storeIds: string[];
   /** SKU — must be unique per store */

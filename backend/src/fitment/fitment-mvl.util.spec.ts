@@ -156,6 +156,15 @@ describe('fitment-mvl.util', () => {
     expect(source).toBeUndefined();
   });
 
+  it('omits untagged legacy fitment data when publishing requires MVL validation', () => {
+    const source = selectPublishFitmentSource(
+      [{ Make: 'Mercedes-Benz', Model: 'S-Class', Year: '2008' }],
+      [],
+      { requireValidated: true },
+    );
+    expect(source).toBeUndefined();
+  });
+
   it('pickCanonicalPropertyValue refuses short fuzzy matches like s→S-Class or 17→170', () => {
     const options = [
       { value: '170' },

@@ -45,7 +45,8 @@ export function getFitmentValidationStatus(
 
 /**
  * Soft-invalid (`needs_review`) and hard-rejected rows must not be sent to eBay.
- * Untagged legacy rows (no status) are left alone so previously working publishes keep working.
+ * Untagged legacy rows can be retained for non-publish workflows, but publish
+ * callers can require explicit MVL validation with selectPublishFitmentSource.
  */
 export function isUnpublishableFitmentRow(
   raw: Record<string, unknown>,
@@ -58,11 +59,13 @@ export function isUnpublishableFitmentRow(
  * Choose fitment source for publish payloads.
  * Prefer explicitly `valid` fitment_rows; if rows are status-tagged but none are valid,
  * omit compatibility rather than falling back to status-blind fitment_data.
- * Untagged legacy data still uses fitment_data → fitment_rows as before.
+ * With requireValidated=true, untagged legacy data is also omitted because
+ * eBay rejects rows whose Make/Model/Year are not in the active MVL.
  */
 export function selectPublishFitmentSource(
   fitmentData: Record<string, unknown>[] | null | undefined,
   fitmentRows: Record<string, unknown>[] | null | undefined,
+  options?: { requireValidated?: boolean },
 ): Record<string, unknown>[] | undefined {
   const rows = Array.isArray(fitmentRows) ? fitmentRows : [];
   const data = Array.isArray(fitmentData) ? fitmentData : [];
@@ -72,13 +75,23 @@ export function selectPublishFitmentSource(
   );
   if (validRows.length > 0) return validRows;
 
-  const hasStatusTaggedRows = rows.some((row) =>
-    Boolean(getFitmentValidationStatus(row)),
+  // Some enriched catalog rows store the validation status on fitmentData
+  // rather than materializing fitmentRows. Treat that explicit status as
+  // authoritative too; only status-blind legacy data is unsafe to publish.
+  const validData = data.filter(
+    (row) => getFitmentValidationStatus(row) === 'valid',
   );
+  if (validData.length > 0) return validData;
+
+  const hasStatusTaggedRows =
+    rows.some((row) => Boolean(getFitmentValidationStatus(row))) ||
+    data.some((row) => Boolean(getFitmentValidationStatus(row)));
   if (hasStatusTaggedRows) {
     // All tagged rows are needs_review/rejected — do not resurrect them via fitment_data.
     return undefined;
   }
+
+  if (options?.requireValidated) return undefined;
 
   if (data.length > 0) return data;
   if (rows.length > 0) return rows;
