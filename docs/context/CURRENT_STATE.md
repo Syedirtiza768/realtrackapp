@@ -1,5 +1,11 @@
 # Current State
 
+**2026-09-13 (light theme default)** — Branding defaults to `themeMode: light`.
+The document starts with `data-theme="light"` and a light `theme-color`. Fashion
+login and the shared change-password page (B&I / Auto Parts / Fashion) use a
+light canvas instead of hardcoded slate-950. Client Settings can still select
+dark or system. Migration `1790900000000` flips stored `dark` rows to `light`.
+
 **2026-09-13 (B&I mobile / cross-platform)** — Phone and tablet layouts for the
 B&I shell, login, catalog, editor, and remaining workflows use dynamic viewport
 height, `viewport-fit=cover`, 16px form controls, and contained scrolling.

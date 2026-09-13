@@ -1,11 +1,15 @@
 import { FormEvent, useState } from 'react';
+import { AlertCircle, Loader2, Shirt } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { usePublicBranding } from '../../hooks/usePublicBranding';
+import { toProxyUrl } from '../../lib/imageUrl';
 
 export default function FashionLoginPage() {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { branding, loading: brandingLoading } = usePublicBranding();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,17 +26,55 @@ export default function FashionLoginPage() {
     }
   }
 
+  const logoSrc = branding.loginLogoUrl ?? branding.logoUrl;
+  const fieldClass = 'mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 outline-none focus:ring-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100';
+  const fieldStyle = { ['--tw-ring-color' as string]: 'var(--brand-primary)' };
+
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-16 text-white">
-      <form onSubmit={submit} className="mx-auto max-w-md rounded-2xl border border-pink-400/20 bg-slate-900 p-8 shadow-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-pink-300">Omni Core Fashion</p>
-        <h1 className="mt-3 text-3xl font-semibold">Fashion workspace</h1>
-        <p className="mt-2 text-sm text-slate-400">Use an account explicitly provisioned for Fashion.</p>
-        <label className="mt-8 block text-sm text-slate-300">Email<input className="mt-2 w-full rounded-lg bg-slate-800 px-3 py-2" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-        <label className="mt-4 block text-sm text-slate-300">Password<input className="mt-2 w-full rounded-lg bg-slate-800 px-3 py-2" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-        {error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-        <button className="mt-6 w-full rounded-lg bg-pink-500 px-4 py-2.5 font-semibold text-white disabled:opacity-50" disabled={loading} type="submit">{loading ? 'Signing in…' : 'Enter Fashion workspace'}</button>
-      </form>
-    </main>
+    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-50 px-4 py-6 font-sans pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] dark:bg-slate-950">
+      <div className="w-full max-w-md">
+        <div className="mb-6 text-center sm:mb-8">
+          {logoSrc ? (
+            <img src={toProxyUrl(logoSrc)} alt="" className="mx-auto mb-3 h-12 max-w-[12rem] object-contain sm:h-14" />
+          ) : (
+            <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500 text-white sm:h-14 sm:w-14">
+              <Shirt size={28} aria-hidden="true" />
+            </div>
+          )}
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Omni Core Fashion</p>
+          <h1 className="mt-2 break-words text-2xl font-bold text-slate-800 dark:text-slate-100 sm:text-3xl">
+            {brandingLoading ? 'Fashion' : branding.appName}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Fashion workspace. Use an account explicitly provisioned for this vertical.</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8">
+          <h2 className="mb-6 text-xl font-semibold text-slate-800 dark:text-slate-100">Sign in</h2>
+          {error ? (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400" role="alert">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 break-words">{error}</span>
+            </div>
+          ) : null}
+          <form onSubmit={submit} className="space-y-4">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+              Email
+              <input className={fieldClass} style={fieldStyle} type="email" autoComplete="username" inputMode="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+            </label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+              Password
+              <input className={fieldClass} style={fieldStyle} type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+            </label>
+            <button
+              className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-pink-500 px-4 py-2.5 text-base font-semibold text-white disabled:opacity-50 sm:text-sm"
+              disabled={loading}
+              type="submit"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+              {loading ? 'Signing in…' : 'Enter Fashion workspace'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
   );
 }

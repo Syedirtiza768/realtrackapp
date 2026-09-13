@@ -1,5 +1,11 @@
 # Changelog
 
+- **Light theme default (2026-09-13):** Workspaces now default to light
+  (`data-theme="light"`, slate canvas, light browser `theme-color`). Fashion
+  login and the shared first-login password page (including B&I) use the same
+  light card pattern as B&I login. Dark remains available from Client Settings.
+  Existing `client_settings.themeMode = dark` rows are migrated to `light`.
+
 - **B&I mobile and cross-platform layout (2026-09-13):** Business & Industrial
   (and the shared catalog used by Fashion) now use a 16px type floor, notch
   safe-area padding, 44px touch targets, stacked phone toolbars, card catalog

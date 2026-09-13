@@ -13,7 +13,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 |---------|---------------|----------------|--------|-------|
 | Authentication (login/register/me) | `/login`, `/register`, `/forgot-password` | `auth` | Implemented | JWT; `forgot-password` flow **Needs verification** (no reset endpoint seen) |
 | RBAC roles & permissions admin | `/auto-parts/settings/users`, `/auto-parts/settings/permissions` | `rbac` | Implemented | 8 roles, 73 permissions, registry-driven |
-| White-label / branding | `/auto-parts/settings/client` | `client-settings` | Implemented | Super-admin only; public branding endpoint |
+| White-label / branding | `/auto-parts/settings/client` | `client-settings` | Implemented | Super-admin only; public branding endpoint; default `themeMode` is `light` |
 | Public vertical landing | `/` | — | Implemented | Public Omni Core overview with entry links for Auto Parts, Business & Industrial, and Fashion |
 | Dashboard / KPIs | `/auto-parts` | `dashboard` | Implemented | Auto Parts aggregation via BullMQ; cache table |
 | Listing editor (create/edit) | `/auto-parts/listings/new`, `/auto-parts/listings/:id/edit` | `listings` | Implemented | AI-assisted; split preview |

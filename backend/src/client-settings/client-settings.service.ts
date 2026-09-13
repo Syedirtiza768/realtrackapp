@@ -5,16 +5,16 @@ import { ClientSettings } from './entities/client-settings.entity.js';
 import { UpdateClientSettingsDto } from './dto/client-settings.dto.js';
 
 const DEFAULTS: Partial<ClientSettings> = {
-  appName: 'RealTrackApp',
-  clientName: 'RealTrack',
-  shortName: 'RT',
+  appName: 'Omni Core',
+  clientName: 'Omni Core',
+  shortName: 'OC',
   primaryColor: '#2563eb',
   secondaryColor: '#1e293b',
   accentColor: '#0ea5e9',
-  themeMode: 'dark',
+  themeMode: 'light',
   sidebarTheme: 'slate',
   navbarTheme: 'slate',
-  footerText: '© RealTrack',
+  footerText: '© Omni Core',
   whiteLabelEnabled: true,
   poweredByVisible: false,
 };

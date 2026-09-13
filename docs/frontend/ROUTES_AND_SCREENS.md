@@ -139,7 +139,7 @@ Fashion has a separate shell and login boundary rather than reusing the automoti
 
 | Route | Component | Permission | Purpose |
 |-------|-----------|------------|---------|
-| /fashion/login | FashionLoginPage | public | Fashion-specific login request |
+| /fashion/login | FashionLoginPage | public | Fashion-specific login on the shared light canvas |
 | /fashion | FashionDashboardPage | fashion.dashboard.view | Fashion metrics and stores |
 | /fashion/catalog | FashionCatalogPage | fashion.listings.view | Shared catalog workspace with searchable/collapsible facets, quick view, drag-reorder images, bulk actions, export, and publish progress |
 | /fashion/listings | FashionListingsPage | fashion.listings.view | Fashion draft creation/list |
@@ -165,7 +165,7 @@ A 401 from a Fashion page preserves the Fashion login route. A Fashion-authentic
 | /business-industrial/stores | BusinessIndustrialStoresPage | business_industrial.stores.view | Dedicated eBay seller connections, policies, and marketplace configuration |
 | /business-industrial/incidents | BusinessIndustrialIncidentsPage | business_industrial.incidents.view | Verified enforcement, remote takedown status/retry, and gated release |
 | /business-industrial/users | BusinessIndustrialUsersPage | business_industrial.users.manage | Temporary-password account creation, B&I roles, store assignments, and deactivation |
-| /business-industrial/change-password | FashionPasswordPage | authenticated B&I account | Required first-login password change with B&I branding and return path |
+| /business-industrial/change-password | FashionPasswordPage | authenticated B&I account | Required first-login password change with B&I branding, light canvas, and return path |
 
 The B&I route tree uses a separate Auto Parts-style sidebar shell
 (`VerticalWorkspaceShell` via `BusinessIndustrialShell`) with an Outlet-based

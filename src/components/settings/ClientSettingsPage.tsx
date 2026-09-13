@@ -229,8 +229,8 @@ function ClientSettingsForm() {
             disabled={!canManage}
             onChange={(e) => update({ themeMode: e.target.value })}
           >
-            <option value="dark">Dark</option>
             <option value="light">Light</option>
+            <option value="dark">Dark</option>
             <option value="system">System</option>
           </select>
         </label>

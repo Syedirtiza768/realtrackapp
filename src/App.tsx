@@ -137,7 +137,7 @@ function LegacyAutoPartsRedirect() {
     if (legacyAutoRoute) {
         return <Navigate to={`/auto-parts${pathname}${search}${hash}`} replace />;
     }
-    return <div className="min-h-screen bg-slate-950 p-10 text-center text-slate-300"><h1 className="text-2xl font-semibold">Page not found</h1><Link to="/" className="mt-4 inline-block text-blue-400">Return to Omni Core</Link></div>;
+    return <div className="min-h-screen bg-slate-50 p-10 text-center text-slate-600 dark:bg-slate-950 dark:text-slate-300"><h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">Page not found</h1><Link to="/" className="mt-4 inline-block text-blue-600 dark:text-blue-400">Return to Omni Core</Link></div>;
 }
 
 
