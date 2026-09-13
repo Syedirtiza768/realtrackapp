@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Loader2, Send, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, Send, ShieldCheck, Store as StoreIcon, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '../../../lib/authApi';
@@ -80,55 +80,56 @@ async function getConnectedStoreProfiles(accountId: string, marketplaceId: strin
 export default function BusinessIndustrialPublishModal({ open, item, listingIds, accounts, organizationId, onClose, onSubmitted }: Props) {
   const mode = listingIds.length > 1 ? 'bulk' : 'single';
   const activeAccounts = useMemo(() => accounts.filter(active).filter((account) => account.storeId), [accounts]);
-  const [accountId, setAccountId] = useState('');
-  const [storeIds, setStoreIds] = useState<string[]>([]);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+  const [profileSourceAccountId, setProfileSourceAccountId] = useState('');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [busy, setBusy] = useState<'validate' | 'publish' | ''>('');
   const [error, setError] = useState('');
   const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
 
-  const selectedAccount = activeAccounts.find((account) => account.id === accountId);
-  const selectedMarketplace = selectedAccount?.marketplaces?.find(
-    (marketplace) => marketplace.marketplaceId === selectedAccount.marketplaceId,
+  const selectedAccounts = useMemo(
+    () => activeAccounts.filter((account) => selectedAccountIds.has(account.id)),
+    [activeAccounts, selectedAccountIds],
+  );
+  const profileSourceAccount = useMemo(
+    () => activeAccounts.find((account) => account.id === (profileSourceAccountId || selectedAccounts[0]?.id || '')) ?? null,
+    [activeAccounts, profileSourceAccountId, selectedAccounts],
+  );
+  const profileSourceMarketplace = profileSourceAccount?.marketplaces?.find(
+    (marketplace) => marketplace.marketplaceId === profileSourceAccount.marketplaceId,
   );
   const connectedLocationKey =
-    selectedMarketplace?.defaultInventoryLocationKey || selectedAccount?.locationKey || null;
+    profileSourceMarketplace?.defaultInventoryLocationKey || profileSourceAccount?.locationKey || null;
+
   const { data: storeProfiles, isLoading: profilesLoading, error: profilesError } = useQuery<StoreProfiles>({
-    queryKey: ['business-industrial-store-profiles', selectedAccount?.id, selectedAccount?.marketplaceId],
-    queryFn: () => getConnectedStoreProfiles(selectedAccount!.id, selectedAccount!.marketplaceId!),
-    enabled: open && mode === 'single' && Boolean(selectedAccount?.id && selectedAccount.marketplaceId),
+    queryKey: ['business-industrial-store-profiles', profileSourceAccount?.id, profileSourceAccount?.marketplaceId],
+    queryFn: () => getConnectedStoreProfiles(profileSourceAccount!.id, profileSourceAccount!.marketplaceId!),
+    enabled: open && mode === 'single' && Boolean(profileSourceAccount?.id && profileSourceAccount.marketplaceId),
     staleTime: 60_000,
   });
 
   useEffect(() => {
     if (!open) return;
-    const first = activeAccounts.find((account) => account.marketplaceId) || activeAccounts[0];
-    setAccountId(first?.id || '');
-    setStoreIds(first ? [first.storeId] : []);
+    setSelectedAccountIds(new Set());
+    setProfileSourceAccountId('');
     setValidation(null);
     setBusy('');
     setError('');
     setProfiles(EMPTY_PROFILE_SELECTION);
-  }, [open, activeAccounts]);
+  }, [open]);
 
   useEffect(() => {
-    if (!open || mode !== 'single' || !storeProfiles || !selectedAccount) return;
+    if (open && activeAccounts.length && selectedAccountIds.size === 0) {
+      setSelectedAccountIds(new Set(activeAccounts.map((account) => account.id)));
+    }
+  }, [open, activeAccounts, selectedAccountIds.size]);
+
+  useEffect(() => {
+    if (!open || mode !== 'single' || !storeProfiles || !profileSourceAccount) return;
     const next = {
-      shippingProfileName: pickConnectedProfile(
-        storeProfiles.shippingProfiles,
-        selectedMarketplace?.defaultFulfillmentPolicyId,
-        item?.shippingProfile,
-      ),
-      returnProfileName: pickConnectedProfile(
-        storeProfiles.returnProfiles,
-        selectedMarketplace?.defaultReturnPolicyId,
-        item?.returnProfile,
-      ),
-      paymentProfileName: pickConnectedProfile(
-        storeProfiles.paymentProfiles,
-        selectedMarketplace?.defaultPaymentPolicyId,
-        item?.paymentProfile,
-      ),
+      shippingProfileName: pickConnectedProfile(storeProfiles.shippingProfiles, profileSourceMarketplace?.defaultFulfillmentPolicyId, item?.shippingProfile),
+      returnProfileName: pickConnectedProfile(storeProfiles.returnProfiles, profileSourceMarketplace?.defaultReturnPolicyId, item?.returnProfile),
+      paymentProfileName: pickConnectedProfile(storeProfiles.paymentProfiles, profileSourceMarketplace?.defaultPaymentPolicyId, item?.paymentProfile),
     };
     const shipping = storeProfiles.shippingProfiles.find((profile) => profile.name === next.shippingProfileName);
     const returns = storeProfiles.returnProfiles.find((profile) => profile.name === next.returnProfileName);
@@ -139,7 +140,9 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
       returnPolicyId: returns?.ebayPolicyId,
       paymentPolicyId: payment?.ebayPolicyId,
     });
-  }, [open, mode, storeProfiles, selectedAccount, selectedMarketplace, item]);
+  }, [open, mode, storeProfiles, profileSourceAccount, profileSourceMarketplace, item]);
+
+  useEffect(() => { setValidation(null); }, [selectedAccountIds, profiles]);
 
   const policyOverrides = useMemo(() => ({
     fulfillmentPolicyId: profiles.fulfillmentPolicyId,
@@ -154,39 +157,37 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
   if (!open) return null;
   const blockingErrors = messages(validation?.blockingErrors);
   const warnings = messages(validation?.warnings);
-  const canValidate = Boolean(item && selectedAccount?.marketplaceId && !busy);
-  const canPublishSingle = Boolean(item && selectedAccount?.marketplaceId && validation && blockingErrors.length === 0 && !busy);
-  const canPublishBulk = storeIds.length > 0 && storeIds.length <= 10 && !busy;
+  const canValidate = Boolean(item && selectedAccounts.length && selectedAccounts.every((account) => account.marketplaceId) && !busy);
+  const canPublishSingle = Boolean(item && selectedAccounts.length && selectedAccounts.every((account) => account.marketplaceId) && validation && blockingErrors.length === 0 && !busy);
+  const canPublishBulk = selectedAccounts.length > 0 && selectedAccounts.length <= 10 && !busy;
 
-  const selectedTarget = selectedAccount?.marketplaceId ? {
-    ebayAccountId: selectedAccount.id,
-    marketplaceId: selectedAccount.marketplaceId,
-    ...policyOverrides,
-  } : null;
+  const targets = selectedAccounts
+    .filter((account) => account.marketplaceId)
+    .map((account) => ({ ebayAccountId: account.id, marketplaceId: account.marketplaceId!, ...policyOverrides }));
+
+  const toggleAccount = (accountId: string) => setSelectedAccountIds((current) => {
+    const next = new Set(current);
+    if (next.has(accountId)) next.delete(accountId); else next.add(accountId);
+    return next;
+  });
+  const selectAll = () => setSelectedAccountIds(new Set(activeAccounts.map((account) => account.id)));
+  const deselectAll = () => setSelectedAccountIds(new Set());
 
   const validate = async () => {
-    if (!item || !selectedAccount?.marketplaceId) return;
+    if (!item || !selectedAccounts.length) return;
     setBusy('validate');
     setError('');
     try {
       const result = await fetchWithAuth<{ results?: ValidationResult[] } | ValidationResult>('/api/business-industrial/ebay/listings/validate', {
         method: 'POST',
-        body: JSON.stringify({
-          catalogProductId: item.id,
-          organizationId: organizationId || undefined,
-          targets: selectedTarget ? [selectedTarget] : [],
-        }),
+        body: JSON.stringify({ catalogProductId: item.id, organizationId: organizationId || undefined, targets }),
       });
-      const next: ValidationResult = 'results' in result
-        ? (result.results?.[0] || {})
-        : (result as ValidationResult);
+      const next: ValidationResult = 'results' in result ? (result.results?.[0] || {}) : (result as ValidationResult);
       setValidation(next);
     } catch (reason) {
       setValidation(null);
       setError(reason instanceof Error ? reason.message : 'Unable to validate this listing.');
-    } finally {
-      setBusy('');
-    }
+    } finally { setBusy(''); }
   };
 
   const publish = async () => {
@@ -194,47 +195,35 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
     setError('');
     try {
       if (mode === 'single') {
-        if (!item || !selectedAccount?.marketplaceId) throw new Error('Choose an active B&I eBay account with a marketplace.');
+        if (!item || !selectedAccounts.length) throw new Error('Choose at least one active B&I eBay store with a marketplace.');
         const result = await fetchWithAuth<PublishResult>('/api/business-industrial/ebay/listings/publish', {
           method: 'POST',
-          body: JSON.stringify({
-            catalogProductId: item.id,
-            organizationId: organizationId || undefined,
-            targets: selectedTarget ? [selectedTarget] : [],
-            idempotencyKey: 'business-industrial-catalog-' + item.id + '-' + Date.now(),
-          }),
+          body: JSON.stringify({ catalogProductId: item.id, organizationId: organizationId || undefined, targets, idempotencyKey: 'business-industrial-catalog-' + item.id + '-' + Date.now() }),
         });
         onSubmitted(result);
       } else {
+        const storeIds = selectedAccounts.map((account) => account.storeId);
         const result = await fetchWithAuth<PublishResult>('/api/business-industrial/ebay/listings/publish-bulk', {
           method: 'POST',
-          body: JSON.stringify({
-            listingIds,
-            storeIds,
-            organizationId: organizationId || undefined,
-            idempotencyKey: 'business-industrial-catalog-bulk-' + Date.now(),
-          }),
+          body: JSON.stringify({ listingIds, storeIds, organizationId: organizationId || undefined, idempotencyKey: 'business-industrial-catalog-bulk-' + Date.now() }),
         });
         onSubmitted(result);
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to submit the publish job.');
-    } finally {
-      setBusy('');
-    }
+    } finally { setBusy(''); }
   };
-
-  const toggleStore = (storeId: string) => setStoreIds((current) => current.includes(storeId) ? current.filter((id) => id !== storeId) : [...current, storeId].slice(0, 10));
   return (
-    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Publish Business and Industrial listings">
-      <div className="max-h-[min(760px,calc(100vh-2rem))] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Publish Business and Industrial listings" onClick={onClose}>
+      <div className="max-h-[min(85vh,calc(100vh-2rem))] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-cyan-600">Business &amp; Industrial eBay</p><h2 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{mode === 'single' ? 'Validate and publish listing' : 'Publish selected listings'}</h2><p className="mt-1 text-sm text-slate-500">{mode === 'single' ? 'Run the marketplace validation first so category, policy, and item-specific blockers are visible.' : `${listingIds.length.toLocaleString()} records will be checked again by the server before they are queued.`}</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close publish dialog"><X size={19} /></button></div>
         {item ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Listing</p><p className="mt-1 line-clamp-2 text-sm font-medium text-slate-900 dark:text-white">{item.title || 'Untitled product'}</p><p className="mt-1 text-xs text-slate-500">{item.sku || 'No SKU'} · validation status: {item.verticalValidationStatus.replace(/_/g, ' ')}</p></div> : null}
-        <section className="mt-5" aria-label="eBay account selection"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">{mode === 'single' ? 'Destination account' : 'Destination stores'}</h3>{!activeAccounts.length ? <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">No active Business &amp; Industrial eBay store is connected. Connect a dedicated B&amp;I store before publishing.</div> : mode === 'single' ? <div className="mt-2 space-y-2">{activeAccounts.map((account) => <label key={account.id} className={'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 ' + (account.id === accountId ? 'border-cyan-500 bg-cyan-50 dark:border-cyan-400 dark:bg-cyan-950/30' : 'border-slate-200 dark:border-slate-700')}><input type="radio" name="bi-publish-account" checked={account.id === accountId} onChange={() => { setAccountId(account.id); setValidation(null); }} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-900 dark:text-white">{account.storeName || account.accountDisplayName || account.accountName || 'B&amp;I store'}</span><span className="block text-xs text-slate-500">{account.marketplaceId || 'Marketplace not configured'} · connected</span></span></label>)}</div> : <div className="mt-2 space-y-2">{activeAccounts.map((account) => <label key={account.storeId} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5 dark:border-slate-700"><input type="checkbox" checked={storeIds.includes(account.storeId)} onChange={() => toggleStore(account.storeId)} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-900 dark:text-white">{account.storeName || account.accountDisplayName || account.accountName || 'B&amp;I store'}</span><span className="block text-xs text-slate-500">{account.marketplaceId || 'Marketplace not configured'}</span></span></label>)}<p className="text-xs text-slate-500">Select up to 10 stores. The server re-checks approval, category, policies, and B&amp;I store ownership for every record.</p></div>}</section>
-        {mode === 'single' ? <section className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Connected store policies"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Connected store policies &amp; location</h3><p className="mt-1 text-xs text-slate-500">These values are loaded from the selected B&amp;I eBay store and sent with the publish request.</p></div><span className="text-xs text-cyan-700 dark:text-cyan-300">{selectedAccount?.marketplaceId || 'Marketplace pending'}</span></div>{profilesLoading ? <div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Loader2 size={14} className="animate-spin" /> Loading connected-store profiles…</div> : profilesError ? <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">Unable to load profiles from this store. Sync eBay policies in B&amp;I Stores, then try again.</p> : <><div className="mt-3"><ProfileSelectors profiles={storeProfiles} loading={false} storeLabel={selectedAccount?.storeName} value={profiles} onChange={setProfiles} disabled={!selectedAccount} /></div><div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/70"><span className="font-medium text-slate-700 dark:text-slate-200">Inventory location:</span>{' '}<span className={connectedLocationKey ? 'text-slate-600 dark:text-slate-300' : 'text-amber-700 dark:text-amber-300'}>{connectedLocationKey || 'Not configured on the connected store'}</span></div>{storeProfiles && !storeProfiles.shippingProfiles.length && !storeProfiles.returnProfiles.length && !storeProfiles.paymentProfiles.length ? <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">No synced business policies were found for this store. Publishing is blocked until the store policies are synchronized.</p> : null}</>}</section> : <section className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Connected store defaults"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Connected store defaults</h3><p className="mt-1 text-xs text-slate-500">Each selected store supplies its own synced policies and inventory location when the bulk job is built.</p><div className="mt-3 space-y-2">{activeAccounts.filter((account) => storeIds.includes(account.storeId)).map((account) => { const marketplace = account.marketplaces?.find((value) => value.marketplaceId === account.marketplaceId); const location = marketplace?.defaultInventoryLocationKey || account.locationKey; return <div key={account.storeId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/70"><span className="truncate font-medium text-slate-700 dark:text-slate-200">{account.storeName}</span><span className={location ? 'text-slate-500' : 'text-amber-700 dark:text-amber-300'}>{location || 'Location not synced'}</span></div>; })}</div></section>}
+        <section className="mt-5" aria-label="eBay account selection"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Destination stores</h3>{activeAccounts.length > 1 ? <div className="flex gap-2"><button type="button" onClick={selectAll} className="text-[10px] text-cyan-600 hover:text-cyan-500 dark:text-cyan-400">Select all</button><span className="text-slate-400">|</span><button type="button" onClick={deselectAll} className="text-[10px] text-slate-500 hover:text-slate-400">Deselect all</button></div> : null}</div>{!activeAccounts.length ? <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">No active Business &amp; Industrial eBay store is connected. Connect a dedicated B&amp;I store before publishing.</div> : <div className="mt-2 space-y-2">{activeAccounts.map((account) => { const isChecked = selectedAccountIds.has(account.id); const mp = account.marketplaces?.find((value) => value.marketplaceId === account.marketplaceId); const loc = mp?.defaultInventoryLocationKey || account.locationKey; return <button key={account.id} type="button" onClick={() => toggleAccount(account.id)} className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${isChecked ? 'border-cyan-500 bg-cyan-50 dark:border-cyan-400 dark:bg-cyan-950/30' : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900'}`}><div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isChecked ? 'border-cyan-600 bg-cyan-600' : 'border-slate-300 dark:border-slate-600'}`}>{isChecked ? <svg viewBox="0 0 12 12\" className="h-3 w-3 text-white"><path d="M3.5 6.5L5 8l3.5-4" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg> : null}</div><div className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-900 dark:text-white">{account.storeName || account.accountDisplayName || account.accountName || 'B&amp;I store'}</span><span className="block text-xs text-slate-500">{account.marketplaceId || 'Marketplace not configured'}{loc ? ' · location: ' + loc : ' · no location synced'}</span></div><span className="shrink-0 text-xs text-emerald-600 dark:text-emerald-400">Active</span></button>; })}<p className="text-xs text-slate-500">{mode === 'single' ? 'Selected stores will each receive this listing with the shared policy overrides below.' : 'Select up to 10 stores. Each store uses its own synced policies and inventory location.'}</p></div>}</section>
+        {mode === 'single' && selectedAccounts.length > 0 ? <section className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Connected store policies and location"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Connected store policies &amp; location</h3><p className="mt-1 text-xs text-slate-500">These values are loaded from the selected B&amp;I eBay store and sent with every publish target.</p></div><span className="text-xs text-cyan-700 dark:text-cyan-300">{profileSourceAccount?.marketplaceId || 'Marketplace pending'}</span></div>{selectedAccounts.length > 1 ? <div className="mt-3"><label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">Profile source store</label><select value={profileSourceAccountId || selectedAccounts[0]?.id || ''} onChange={(event) => setProfileSourceAccountId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">{selectedAccounts.map((account) => <option key={account.id} value={account.id}>{account.storeName || account.accountDisplayName || account.accountName || 'B&amp;I store'}</option>)}</select></div> : null}{profilesLoading ? <div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Loader2 size={14} className="animate-spin" /> Loading connected-store profiles…</div> : profilesError ? <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">Unable to load profiles from this store. Sync eBay policies in B&amp;I Stores, then try again.</p> : <><div className="mt-3"><ProfileSelectors profiles={storeProfiles} loading={false} storeLabel={profileSourceAccount?.storeName} value={profiles} onChange={setProfiles} disabled={!profileSourceAccount} /></div><div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/70"><span className="font-medium text-slate-700 dark:text-slate-200">Inventory location:</span>{' '}<span className={connectedLocationKey ? 'text-slate-600 dark:text-slate-300' : 'text-amber-700 dark:text-amber-300'}>{connectedLocationKey || 'Not configured on the connected store'}</span></div>{storeProfiles && !storeProfiles.shippingProfiles.length && !storeProfiles.returnProfiles.length && !storeProfiles.paymentProfiles.length ? <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">No synced business policies were found for this store. Publishing is blocked until the store policies are synchronized.</p> : null}</>}</section> : null}
+        {mode === 'bulk' && selectedAccounts.length > 0 ? <section className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Connected store defaults"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Connected store defaults</h3><p className="mt-1 text-xs text-slate-500">Each selected store supplies its own synced policies and inventory location when the bulk job is built.</p><div className="mt-3 space-y-2">{selectedAccounts.map((account) => { const mp = account.marketplaces?.find((value) => value.marketplaceId === account.marketplaceId); const loc = mp?.defaultInventoryLocationKey || account.locationKey; return <div key={account.storeId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/70"><span className="truncate font-medium text-slate-700 dark:text-slate-200">{account.storeName}</span><span className={loc ? 'text-slate-500' : 'text-amber-700 dark:text-amber-300'}>{loc || 'Location not synced'}</span></div>; })}</div></section> : null}
         {mode === 'single' ? <section className="mt-5" aria-label="Listing validation"><div className="flex flex-wrap gap-2"><button type="button" disabled={!canValidate} onClick={() => void validate()} className="inline-flex items-center gap-2 rounded-lg border border-cyan-600 px-3 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-50 disabled:opacity-50 dark:border-cyan-400 dark:text-cyan-300 dark:hover:bg-cyan-950/30">{busy === 'validate' ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} {busy === 'validate' ? 'Validating…' : validation ? 'Run validation again' : 'Validate listing'}</button></div>{validation ? <div className="mt-3 space-y-2">{blockingErrors.length ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"><div className="flex items-center gap-2 font-semibold"><AlertTriangle size={15} /> Blocking issues</div><ul className="mt-1 list-disc space-y-1 pl-5">{blockingErrors.map((message, index) => <li key={index}>{message}</li>)}</ul></div> : <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"><CheckCircle2 size={15} /> Validation passed; this listing is ready to queue.</div>}{warnings.length ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><div className="flex items-center gap-2 font-semibold"><AlertTriangle size={15} /> Warnings</div><ul className="mt-1 list-disc space-y-1 pl-5">{warnings.map((message, index) => <li key={index}>{message}</li>)}</ul></div> : null}</div> : null}</section> : null}
         {error ? <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert">{error}</div> : null}
-        <div className="mt-6 flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700"><button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Cancel</button><button type="button" disabled={mode === 'single' ? !canPublishSingle : !canPublishBulk} onClick={() => void publish()} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{busy === 'publish' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {busy === 'publish' ? 'Submitting…' : mode === 'single' ? 'Publish listing' : `Publish ${listingIds.length.toLocaleString()} listings`}</button></div>
+        <div className="mt-6 flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700"><button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Cancel</button><button type="button" disabled={mode === 'single' ? !canPublishSingle : !canPublishBulk} onClick={() => void publish()} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{busy === 'publish' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {busy === 'publish' ? 'Submitting…' : mode === 'single' ? `Publish to ${selectedAccounts.length || '…'} store${selectedAccounts.length !== 1 ? 's' : ''}` : `Publish ${listingIds.length.toLocaleString()} listings`}</button></div>
       </div>
     </div>
   );

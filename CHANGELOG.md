@@ -2,6 +2,16 @@
 
 > Fashion/B&I completion record (2026-09-10): see the vertical architecture, security, API, route, and setup documentation for the deployed workspace behavior and operational prerequisites.
 
+- **B&I catalog publish modal Auto Parts parity (2026-09-13):** The Business
+  & Industrial publish modal now supports multi-store single-mode publishing
+  (checkboxes, not radio), select all/deselect all, a profile source store
+  selector when multiple stores are selected, and a wider `max-w-2xl` dialog
+  to prevent policy selector clipping. Selected stores each receive the
+  listing with shared connected-store policy and inventory-location overrides.
+  The bulk mode uses each selected store's own synced defaults. This matches
+  the Auto Parts `PublishModal` workflow while preserving B&I's server-side
+  validation and durable queue architecture.
+
 - **B&I Drive public-download compatibility:** The Drive pilot now uses each
   image's public `webContentLink` before the API media endpoint, allowing
   link-shared images with Drive security-update protection to be downloaded,
