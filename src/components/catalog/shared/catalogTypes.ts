@@ -118,4 +118,5 @@ export type CatalogConfig = {
   attributes: Array<{ key: string; label: string; valueLabels?: Record<string, string> }>;
   quickAttributes: string[];
   protectedStatuses: string[];
+  filterLabels?: Partial<Record<keyof CatalogFilters, string>>;
 };

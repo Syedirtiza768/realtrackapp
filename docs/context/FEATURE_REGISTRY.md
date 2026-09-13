@@ -70,18 +70,22 @@ status, and B&I-specific publish actions. The technical editor remains at
 Status: Implemented and deployed to `app.omnicoreholding.com` on 2026-09-12.
 The active-organization propagation fix is live. The image-intake page accepts a public Drive
 folder URL or a local folder and queues a server-side import for up to 200 item
-folders (12 images per item). The worker converts every stored source image to WebP, runs explicit
-GPT-5.6 Luna vision plus evidence-bound text enrichment, logs token/cost
-totals, creates reviewable B&I catalog drafts, and projects those drafts into
-the shared Inventory workbench. The import requires GOOGLE_DRIVE_API_KEY and
-does not publish automatically.
+folders. The worker retains every supported image in each folder up to the
+5,000-image job cap, while using a bounded 12-image slice for model evidence;
+decimal dot-suffix folders remain grouped as multiple instances of one base
+item. It converts every stored source image to WebP, runs explicit GPT-5.6
+Luna vision plus evidence-bound text enrichment, prices through eBay Browse
+and the shared pricing-analysis pipeline, logs token/cost totals, creates
+reviewable B&I catalog drafts, and projects those drafts into the shared
+Inventory workbench. Reruns merge into the normalized existing B&I SKU. The
+import requires GOOGLE_DRIVE_API_KEY and does not publish automatically.
 
 ## Shared vertical catalog parity (2026-09-12)
 
 | Feature | Frontend route | Backend module | Status | Notes |
 |---------|----------------|----------------|--------|-------|
 | Shared Fashion catalog | `/fashion/catalog` (legacy `/fashion/listings`) | `catalog` + `verticals` | Implemented | Server-side search, loading-safe checkbox facets with search/collapse, URL/session state, quick view, drag-reorder image management, bulk actions, export, publication summaries, and durable publish progress/error details. |
-| Shared Business & Industrial catalog | `/business-industrial/catalog` (legacy `/business-industrial/listings`) | `catalog` + `verticals` | Implemented and deployed | Reuses the Auto Parts table-first catalog hierarchy and complete shared actions. Facets cover brand, eBay category, condition (label when ID is null), review/validation status, stock, and populated B&I attributes (category family, manufacturer, model, MPN, inventory/shipping mode, industrial technical fields). Results show condition and image counts. Quick view hydrates the canonical record, displays all stored images with lightbox navigation/zoom, and supports image reorder/upload. Single publish runs B&I account-targeted validation before queueing, loads connected-account policies/location, and persists the selected store mapping through the worker; bulk publish supports dedicated B&I stores with server-side compliance checks and progress details. The B&I editor remains at `/business-industrial/listings/editor`. |
+| Shared Business & Industrial catalog | `/business-industrial/catalog` (legacy `/business-industrial/listings`) | `catalog` + `verticals` | Implemented and deployed | Reuses the Auto Parts table-first catalog hierarchy and complete shared actions, now with a mobile filter drawer, empty vs no-match states, mixed selection checkboxes, pending export/bulk feedback, and publish phases (submitted/processing/published/partially failed/failed). Facets cover brand/manufacturer, eBay category, condition (label when ID is null), review/validation status, stock, and populated B&I attributes (category family, manufacturer, model, MPN, inventory/shipping mode, industrial technical fields). Results show condition and image counts. Quick view hydrates the canonical record, displays all stored images with lightbox navigation/zoom, and supports image reorder/upload. Single publish runs B&I account-targeted validation before queueing, loads connected-account policies/location, and persists the selected store mapping through the worker; bulk publish supports dedicated B&I stores with server-side compliance checks and progress details. The B&I editor remains at `/business-industrial/listings/editor`. |
 
 The shared catalog API reads the organization and vertical from the authenticated request, applies team visibility and accessible-store publication filtering, and never returns private review evidence or serialized-unit secrets. The frontend forwards the selected organization for every shared-catalog read, mutation, and export path, while row and bulk publish controls reflect the server-side compliance approval gate. Soft delete is represented by the existing catalog_products.vertical_validation_status=deleted lifecycle value because the common entity has no deleted-at column; published or quarantined products cannot be deleted through these bulk actions.
 
@@ -125,8 +129,9 @@ The Fashion vertical is now a separate workspace surface at /fashion with dedica
 
 ## Business & Industrial vertical implementation note (2026-09-09)
 
-The B&I vertical has a separate `/business-industrial` login and shell,
-explicit technical listing/import forms, organization-scoped review and
+The B&I vertical has a separate `/business-industrial` login and Auto Parts–
+aligned workspace shell (`VerticalWorkspaceShell`: persistent sidebar, mobile
+drawer), explicit technical listing/import forms, organization-scoped review and
 incident queues, private serialized-unit storage, dedicated eBay OAuth,
 category/policy metadata, publish-job/channel controls, vertical roles, and an
 idempotent admin seed command. The shared eBay worker enforces B&I approval,

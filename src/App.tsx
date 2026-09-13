@@ -210,7 +210,7 @@ function App() {
                     <Route path="stores" element={<ProtectedRoute permissions={['business_industrial.stores.view']} loginPath="/business-industrial/login"><BusinessIndustrialStoresPage /></ProtectedRoute>} />
                     <Route path="incidents" element={<ProtectedRoute permissions={['business_industrial.incidents.view']} loginPath="/business-industrial/login"><BusinessIndustrialIncidentsPage /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute permissions={['business_industrial.users.manage']} loginPath="/business-industrial/login"><BusinessIndustrialUsersPage /></ProtectedRoute>} />
-                    <Route path="*" element={<div><h1 className="text-2xl font-semibold">Business &amp; Industrial page not found</h1><Link to="/business-industrial" className="mt-4 inline-block text-cyan-700">Return to overview</Link></div>} />
+                    <Route path="*" element={<div><h1 className="text-2xl font-semibold">Business &amp; Industrial page not found</h1><Link to="/business-industrial" className="mt-4 inline-block" style={{ color: 'var(--brand-primary)' }}>Return to overview</Link></div>} />
                 </Route>
                 <Route path="*" element={<LegacyAutoPartsRedirect />} />
             </Routes>

@@ -1,5 +1,21 @@
 # Current State
 
+**2026-09-13 (B&I layout alignment)** — Business & Industrial uses the Auto
+Parts sidebar/drawer shell proportions and catalog presentation patterns while
+retaining CatalogWorkspace, B&I catalog configuration, and existing domain
+rules. Overview Create listing now opens the technical editor. Shared catalog
+changes (mobile filter drawer, empty vs no-match, mixed selection, publish
+phases, pending bulk/export feedback) are inherited by Fashion. Frontend `tsc -b`
+and `vite build` passed. Mocked `scripts/test-business-industrial-catalog-ui.mjs`
+passed against `http://127.0.0.1:3923` (catalog labels, 360px filter drawer,
+quick view, publish submitted→published, close-does-not-cancel copy). That
+script intercepts `/api/**` and is not live backend evidence. Authenticated
+shell/editor/import/review/stores/users flows were not exercised because the
+local API proxy had no backend (`ECONNREFUSED`). Public B&I login showed
+pending “Signing in…” then a preserved-form error (`Login failed (500)`).
+Fashion login still rendered. Root `npm run lint` remains the pre-existing
+missing `eslint.config` failure.
+
 **2026-09-13 (deployed to `app.omnicoreholding.com`)** — The B&I
 catalog follows the Auto Parts table-first catalog interface and reads its
 filters from fields actually populated in production. Facets include brand,

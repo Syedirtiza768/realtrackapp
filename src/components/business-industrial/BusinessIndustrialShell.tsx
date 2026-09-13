@@ -1,22 +1,41 @@
-import { Factory, LogOut } from 'lucide-react';
-import { useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  ClipboardCheck,
+  Database,
+  Factory,
+  ImagePlus,
+  LayoutDashboard,
+  ShieldAlert,
+  Store,
+  Upload,
+  Users,
+} from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import WorkspaceSwitcher from '../auth/WorkspaceSwitcher';
+import VerticalWorkspaceShell, { type VerticalNavItem } from '../layout/VerticalWorkspaceShell';
+
+const NAV: Array<VerticalNavItem & { permission: string }> = [
+  { icon: LayoutDashboard, label: 'Overview', path: '/business-industrial', end: true, permission: 'business_industrial.dashboard.view' },
+  {
+    icon: Database,
+    label: 'Catalog',
+    path: '/business-industrial/catalog',
+    permission: 'business_industrial.listings.view',
+    isActive: (pathname) => pathname === '/business-industrial/catalog' || pathname === '/business-industrial/listings',
+  },
+  { icon: ImagePlus, label: 'AI image intake', path: '/business-industrial/image-intake', permission: 'business_industrial.import' },
+  { icon: Upload, label: 'Bulk import', path: '/business-industrial/import', permission: 'business_industrial.import' },
+  { icon: ClipboardCheck, label: 'Compliance review', path: '/business-industrial/review', permission: 'business_industrial.review' },
+  { icon: Store, label: 'Stores', path: '/business-industrial/stores', permission: 'business_industrial.stores.view' },
+  { icon: ShieldAlert, label: 'Incidents', path: '/business-industrial/incidents', permission: 'business_industrial.incidents.view' },
+  { icon: Users, label: 'Users', path: '/business-industrial/users', permission: 'business_industrial.users.manage' },
+];
 
 export default function BusinessIndustrialShell({ children }: { children: React.ReactNode }) {
-  const { logout, permissions, user, organizations, activeOrganizationId, selectOrganization } = useAuth();
-  const navigate = useNavigate();
-  const links = [
-    ['/business-industrial', 'Overview', 'business_industrial.dashboard.view'],
-    ['/business-industrial/catalog', 'Catalog', 'business_industrial.listings.view'],
-    ['/business-industrial/image-intake', 'AI image intake', 'business_industrial.import'],
-    ['/business-industrial/import', 'Bulk import', 'business_industrial.import'],
-    ['/business-industrial/review', 'Compliance review', 'business_industrial.review'],
-    ['/business-industrial/stores', 'Stores', 'business_industrial.stores.view'],
-    ['/business-industrial/incidents', 'Incidents', 'business_industrial.incidents.view'],
-    ['/business-industrial/users', 'Users', 'business_industrial.users.manage'],
-  ].filter(([, , permission]) => permissions.includes(permission));
+  const { permissions, organizations, activeOrganizationId, selectOrganization } = useAuth();
+  const navItems = useMemo(
+    () => NAV.filter((item) => permissions.includes(item.permission)).map(({ permission: _permission, ...item }) => item),
+    [permissions],
+  );
 
   useEffect(() => {
     localStorage.setItem('mk_preferred_vertical', 'business_industrial');
@@ -28,8 +47,16 @@ export default function BusinessIndustrialShell({ children }: { children: React.
     }
   }, [organizations, activeOrganizationId, selectOrganization]);
 
-  return <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-    <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-cyan-600 p-2 text-white"><Factory size={20} /></div><div><p className="font-semibold">Omni Core Business &amp; Industrial</p><p className="text-xs text-slate-500">{user?.name || user?.email}</p></div></div><div className="flex items-center gap-3"><WorkspaceSwitcher /><button className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white" onClick={async () => { await logout(); navigate('/business-industrial/login', { replace: true }); }}><LogOut size={16} /> Sign out</button></div></div></header>
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-6 md:flex-row"><nav className="flex gap-2 overflow-x-auto md:w-56 md:flex-col">{links.map(([to, label]) => <NavLink key={to} to={to} end={to === '/business-industrial'} className={({ isActive }) => `rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-cyan-600 font-semibold text-white' : 'text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800'}`}>{label}</NavLink>)}</nav><main className="min-w-0 flex-1">{children}</main></div>
-  </div>;
+  return (
+    <VerticalWorkspaceShell
+      title="Omni Core Business & Industrial"
+      icon={Factory}
+      identityClassName="bg-cyan-600"
+      loginPath="/business-industrial/login"
+      navLabel="Business and Industrial navigation"
+      navItems={navItems}
+    >
+      {children}
+    </VerticalWorkspaceShell>
+  );
 }

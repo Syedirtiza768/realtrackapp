@@ -1,5 +1,7 @@
 # System Map
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Moved from `docs/CODEMAP.md` (2026-05-29).
 > This is the anchor reference for navigating the entire codebase.
 > For architecture overview, see [/docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md).
@@ -52,8 +54,8 @@ F:\apps\realtrackapp\
 ```
 src/components/
 ├── auth/               # Login, register, forgot password
-├── layout/             # Shell, navigation, layout components
-├── ui/                 # Reusable UI components (buttons, inputs, etc.)
+├── layout/             # Auto Parts Shell, VerticalWorkspaceShell, page headers
+├── ui/                 # Reusable UI (Card, Badge, Field, FeedbackPanel, ConfirmDialog)
 ├── dashboard/          # Dashboard, KPIs, charts
 ├── listings/           # Listing editor, revision history
 ├── catalog/            # Catalog manager, bulk actions, eBay publish
@@ -222,3 +224,37 @@ module-name/
 ---
 
 *Last updated: 2026-06-11. Reorganized: 2026-06-06.*
+
+## Fashion vertical boundary (2026-09-09)
+
+The Fashion path is a distinct frontend route tree backed by /api/fashion controllers. Auth/RBAC is shared, while Fashion roles, review records, store configuration, and OAuth state are explicitly vertical-aware. Automotive remains the default for legacy rows and routes.
+
+## Business & Industrial boundary (2026-09-09)
+
+The B&I path is a distinct frontend route tree at `/business-industrial` backed
+by `BusinessIndustrialController` and a dedicated eBay controller. It uses
+organization-scoped `CatalogProduct` rows plus review, serialized-unit, and
+incident tables. Its role namespace, category families, measurement units,
+shipping checks, and dedicated eBay seller ownership are separate from
+automotive and Fashion. The shared publish worker reuses the B&I projection and
+fails closed on approval, quarantine, category, or shipping gaps.
+
+The B&I image-intake branch adds organization-scoped upload job/group/asset
+tables, `business-industrial-image-intake.controller.ts`, the sequential
+`business-industrial-image-intake` worker, and the frontend
+`/business-industrial/image-intake` screen. It feeds verified category metadata
+into the existing B&I draft, compliance, and eBay publish path.
+
+## Shared catalog workspace boundary (2026-09-12)
+
+Fashion and Business & Industrial now converge on a shared catalog read/write
+surface at their canonical catalog routes. `CatalogWorkspaceService` owns the
+common server-side projection query, facets, suggestions, CSV export, audit
+logging, and authorization scope; `FashionListingsService` and
+`BusinessIndustrialService` remain authorities for vertical validation, review,
+quarantine, and single-record edit rules. Existing automotive CatalogManager
+and APIs remain intact, so legacy automotive data is not widened into the
+non-automotive workspaces. The React `CatalogWorkspace` presents those APIs
+with Auto Parts-style toolbar density, a mobile filter drawer, and publish-job
+phases; B&I wraps it in `VerticalWorkspaceShell` without changing payload or
+permission contracts.

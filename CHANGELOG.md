@@ -1,5 +1,11 @@
 # Changelog
 
+- **B&I Auto Parts layout alignment (2026-09-13):** Business & Industrial now
+  uses the Auto Parts sidebar/drawer workspace chrome, shared page primitives,
+  and catalog presentation patterns while keeping its server-backed catalog,
+  editor payload, review, import, intake, store, incident, and permission
+  rules unchanged. Overview Create listing opens `/business-industrial/listings/editor`.
+
 > Fashion/B&I completion record (2026-09-10): see the vertical architecture, security, API, route, and setup documentation for the deployed workspace behavior and operational prerequisites.
 
 - **B&I publish validation blockers (2026-09-13):** Recent

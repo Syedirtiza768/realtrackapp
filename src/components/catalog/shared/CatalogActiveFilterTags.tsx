@@ -12,7 +12,7 @@ type Props = {
 export default function CatalogActiveFilterTags({ config, filters, facets, onChange }: Props) {
   const tags: Array<{ key: string; label: string; remove: () => void }> = [];
   const fields: Array<[keyof CatalogFilters, string]> = [
-    ['brands', 'Brand'], ['categories', 'Category'], ['conditions', 'Condition'], ['types', 'Type'],
+    ['brands', config.filterLabels?.brands || 'Brand'], ['categories', 'Category'], ['conditions', 'Condition'], ['types', 'Type'],
     ['sourceFiles', 'Source file'], ['formats', 'Format'], ['locations', 'Location'], ['mpns', 'MPN'],
     ['catalogStatuses', 'Catalog status'], ['validationStatuses', 'Review status'], ['stockLevels', 'Stock'], ['shippingProfiles', 'Shipping'], ['marketplaces', 'Marketplace'],
   ];

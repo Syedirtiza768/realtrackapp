@@ -1,5 +1,7 @@
 # Component Map
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Moved from `docs/FRONTEND_MAP.md` (405 lines, 2026-05-29).
 > Complete reference for the React frontend structure.
 > For API clients, see [/docs/architecture/API_CONTRACTS.md](../architecture/API_CONTRACTS.md).
@@ -64,10 +66,10 @@ src/components/
 │   ├── ForgotPasswordPage.tsx
 │   └── ProtectedRoute.tsx
 ├── layout/             # Layout components
-│   ├── Shell.tsx       # Main app shell
-│   ├── Sidebar.tsx
-│   ├── Header.tsx
-│   └── Navigation.tsx
+│   ├── Shell.tsx       # Auto Parts app shell
+│   ├── VerticalWorkspaceShell.tsx  # Presentation-only vertical sidebar/drawer
+│   ├── WorkspacePageHeader.tsx
+│   └── ResponsiveContainer.tsx
 ├── ui/                 # Reusable UI components
 │   ├── Button.tsx
 │   ├── Input.tsx
@@ -258,3 +260,32 @@ export default defineConfig({
 ---
 
 *Reorganized: 2026-06-06.*
+
+## Fashion workspace components (2026-09-09)
+
+src/components/fashion contains FashionLoginPage, FashionShell, FashionDashboardPage, FashionListingsPage, FashionImportPage, FashionReviewPage, FashionStoresPage, and FashionUsersPage. These components use the existing authenticated fetch wrapper but never render inside the automotive Shell.
+
+## Business & Industrial workspace components (2026-09-09)
+
+## Shared vertical catalog components (2026-09-12)
+
+`src/components/catalog/shared/CatalogWorkspace.tsx` is the shared parity surface for Fashion and Business & Industrial. `CatalogFilterControls`, `CatalogActiveFilterTags`, `CatalogMobileFilterDrawer`, and `CatalogResultsTable` provide loading-safe checkbox facets, facet search/collapse, a mobile filter drawer, empty-catalog versus no-match states, compact mobile product cards, mixed selection checkboxes, readable removable filters, pagination, selection, pending export/bulk states, and record-level bulk failure details. `CatalogPublishJobPanel` distinguishes submitted, processing, published, partially failed, and failed jobs and states that closing the panel does not cancel the job. `CatalogProductQuickView` provides scoped inline edits, vertical attributes, full-editor handoff, and image upload/reorder/remove/zoom. `CatalogImageGallery` owns the accessible pointer/keyboard drag ordering and marks the first image as primary. Configuration and API serialization live in `catalogConfig.ts` and `catalogApi.ts`; URL state is mirrored into a vertical-namespaced session key.
+
+Reusable presentation primitives used by B&I (and available to other verticals) live in `src/components/ui/FeedbackPanel.tsx`, `Field.tsx`, `ConfirmDialog.tsx`, and `StatusBlock.tsx`. `src/components/layout/VerticalWorkspaceShell.tsx` is presentation-only: vertical routes, authorization, and organization selection remain in each vertical shell.
+
+`src/components/business-industrial/` contains the dedicated login, shell,
+dashboard, listings editor, import, image intake, compliance-review, stores, incidents, and users
+surfaces. They use the existing authenticated API wrapper and render only in
+the B&I route tree in `src/App.tsx`. The shell matches Auto Parts sidebar/drawer
+behavior without importing Auto Parts search, notification, or status controls.
+
+The B&I component set also includes `BusinessIndustrialImageIntakePage`, which
+handles directory/drop selection, upload progress, AI group review, Excel
+export, failed-group retry, condition confirmation, and handoff to the B&I
+listing editor. API calls live in
+`src/lib/businessIndustrialImageIntakeApi.ts`.
+
+`BusinessIndustrialListingsPage` preserves all top-level product fields on edit,
+captures the full validated B&I schema and image URLs, searches seller-specific
+eBay categories, renders required item specifics and supported conditions, and
+tracks publish jobs through a terminal result.

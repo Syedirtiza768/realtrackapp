@@ -71,7 +71,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 
 ## Vertical catalog routes (2026-09-12)
 
-The canonical parity surfaces are `/auto-parts/catalog`, `/business-industrial/catalog`, and `/fashion/catalog`. The B&I and Fashion `/listings` collection routes remain aliases to the shared workspace; their `/listings/editor` and `/fashion/listings/:id[/edit]` routes remain full vertical editors. Both shared surfaces use `CatalogWorkspace` with loading-safe checkbox facets, searchable/collapsible filters, server-side pagination, URL/session persistence, quick view, drag-reorder image management, bulk actions, export, and publish-job progress with per-target errors. Category selections use the facet's stable category ID and imported-to dates are inclusive.
+The canonical parity surfaces are `/auto-parts/catalog`, `/business-industrial/catalog`, and `/fashion/catalog`. The B&I and Fashion `/listings` collection routes remain aliases to the shared workspace; their `/listings/editor` and `/fashion/listings/:id[/edit]` routes remain full vertical editors. Both shared surfaces use `CatalogWorkspace` with loading-safe checkbox facets, searchable/collapsible filters, a mobile filter drawer, empty-catalog versus no-match states, server-side pagination, URL/session persistence, quick view, drag-reorder image management, bulk actions with pending and record-level failure feedback, export, and publish-job progress that distinguishes submitted, processing, published, partially failed, and failed without treating panel close as cancellation. Category selections use the facet's stable category ID and imported-to dates are inclusive.
 
 The B&I catalog reuses the Auto Parts catalog's table-first header and action
 hierarchy (summary, refresh, export, policy edit, add item, selection bar,
@@ -156,9 +156,9 @@ A 401 from a Fashion page preserves the Fashion login route. A Fashion-authentic
 |-------|-----------|------------|---------|
 | /business-industrial/login | BusinessIndustrialLoginPage | public | Dedicated B&I login surface |
 | /business-industrial | BusinessIndustrialDashboardPage | business_industrial.dashboard.view | Metrics and dedicated stores |
-| /business-industrial/catalog | BusinessIndustrialCatalogWorkspacePage | business_industrial.listings.view | Shared Auto Parts-style catalog workspace with brand/category/condition/review/stock and populated B&I facets, canonical detail hydration, complete image viewer/lightbox, drag-reorder images, multi-store single validation/publish that loads shipping/return/payment profiles via `/stores/:id/profiles` (Auto Parts path) with B&I account-policy fallback plus connected-store defaults/location, select all/deselect all, bulk store publishing, export, and publish progress |
+| /business-industrial/catalog | BusinessIndustrialCatalogWorkspacePage | business_industrial.listings.view | Shared Auto Parts-style catalog workspace with brand/category/condition/review/stock and populated B&I facets, mobile filter drawer, compact mobile product cards, mixed selection checkboxes, canonical detail hydration, complete image viewer/lightbox, drag-reorder images, multi-store single validation/publish that loads shipping/return/payment profiles via `/stores/:id/profiles` (Auto Parts path) with B&I account-policy fallback plus connected-store defaults/location, select all/deselect all, bulk store publishing, export, and publish progress phases |
 | /business-industrial/listings | BusinessIndustrialCatalogWorkspacePage | business_industrial.listings.view | Legacy alias to the shared B&I catalog workspace |
-| /business-industrial/listings/editor | BusinessIndustrialListingsPage | business_industrial.listings.view | Full technical/certification/inventory/freight editor, seller selection, live eBay leaf-category search, supported conditions, required item specifics, per-target validation, publish-job tracking, and publication end; accepts the edit query parameter from the catalogue |
+| /business-industrial/listings/editor | BusinessIndustrialListingsPage | business_industrial.listings.view | Sectioned technical editor (identity, category/marketplace, evidence, specifications, inventory, shipping) with supported unit controls, validation jump, unsaved-change warning, direct `?edit=` loading via catalog product, seller selection, live eBay leaf-category search, required item specifics, per-target validation, publish-job tracking, and publication end. Saving returns the draft to compliance review; visible completeness does not authorize publication. |
 | /business-industrial/image-intake | BusinessIndustrialImageIntakeWorkspacePage | business_industrial.import | Production image intake workspace for public Google Drive or local folders, organization-scoped background processing, WebP storage, progress/cost visibility, group evidence review, retry, Excel export, and catalog draft creation |
 | /business-industrial/import | BusinessIndustrialImportPage | business_industrial.import | B&I CSV/XLSX upload, progress, preview, retry, cancel, and client error report |
 | /business-industrial/review | BusinessIndustrialReviewPage | business_industrial.review | Provenance/specification/testing/restricted-category approval and private unit actions |
@@ -167,11 +167,14 @@ A 401 from a Fashion page preserves the Fashion login route. A Fashion-authentic
 | /business-industrial/users | BusinessIndustrialUsersPage | business_industrial.users.manage | Temporary-password account creation, B&I roles, store assignments, and deactivation |
 | /business-industrial/change-password | FashionPasswordPage | authenticated B&I account | Required first-login password change with B&I branding and return path |
 
-The B&I route tree uses a separate shell with an Outlet-based child route tree
-and preserves its login path on a 401. It never grants access to automotive or
-Fashion permissions. `BusinessIndustrialShell` forces the active organization to
-the user's owned `business-industrial-*` workspace so catalog/search APIs do not
-scope to Super Admin when the account is a member of both.
+The B&I route tree uses a separate Auto Parts-style sidebar shell
+(`VerticalWorkspaceShell` via `BusinessIndustrialShell`) with an Outlet-based
+child route tree and preserves its login path on a 401. It never grants access
+to automotive or Fashion permissions. `BusinessIndustrialShell` forces the
+active organization to the user's owned `business-industrial-*` workspace so
+catalog/search APIs do not scope to Super Admin when the account is a member of
+both. Overview Create listing requires `business_industrial.listings.create` and
+opens `/business-industrial/listings/editor`.
 
 Business Industrial image intake accepts a public Google Drive folder or a local
 directory/drop, previews source images, uploads in API-sized batches, queues

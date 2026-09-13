@@ -1,14 +1,99 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchWithAuth } from '../../lib/authApi';
+import { usePermissions } from '../../hooks/usePermissions';
+import { Card, CardContent } from '../ui/card';
+import { Badge } from '../ui/badge';
+import FeedbackPanel from '../ui/FeedbackPanel';
+import WorkspacePageHeader from '../layout/WorkspacePageHeader';
+import { EmptyState, ErrorState, LoadingPlaceholder } from '../ui/StatusBlock';
 
-type Workspace = { metrics: { listingCount: number; draftCount: number; pendingReviewCount: number; openIncidentCount: number }; stores: { id: string; storeName: string; status: string }[] };
+type Workspace = {
+  metrics: { listingCount: number; draftCount: number; pendingReviewCount: number; openIncidentCount: number };
+  stores: { id: string; storeName: string; status: string }[];
+};
+
+const METRICS: Array<{ key: keyof Workspace['metrics']; label: string; to: string; tone?: 'warning' | 'destructive' }> = [
+  { key: 'listingCount', label: 'Listings', to: '/business-industrial/catalog' },
+  { key: 'draftCount', label: 'Drafts', to: '/business-industrial/catalog' },
+  { key: 'pendingReviewCount', label: 'Pending review', to: '/business-industrial/review', tone: 'warning' },
+  { key: 'openIncidentCount', label: 'Open incidents', to: '/business-industrial/incidents', tone: 'destructive' },
+];
 
 export default function BusinessIndustrialDashboardPage() {
+  const { has } = usePermissions();
   const [data, setData] = useState<Workspace | null>(null);
   const [error, setError] = useState('');
-  useEffect(() => { void fetchWithAuth<Workspace>('/api/business-industrial/workspace').then(setData).catch((err) => setError(err instanceof Error ? err.message : 'Unable to load workspace')); }, []);
-  if (error) return <p className="rounded-lg bg-red-500/10 p-4 text-red-600">{error}</p>;
-  if (!data) return <p className="text-slate-500">Loading Business &amp; Industrial workspace…</p>;
-  return <div><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-cyan-600">Business &amp; Industrial vertical</p><h1 className="mt-1 text-3xl font-semibold">Operational overview</h1><p className="mt-2 text-slate-500">Manage industrial catalog data, compliance evidence, shipping readiness, and dedicated seller stores.</p></div><Link className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white" to="/business-industrial/listings">Create listing</Link></div><div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[['Listings', data.metrics.listingCount, 'text-slate-900'], ['Drafts', data.metrics.draftCount, 'text-amber-600'], ['Pending review', data.metrics.pendingReviewCount, 'text-amber-600'], ['Open incidents', data.metrics.openIncidentCount, 'text-red-600']].map(([label, value, color]) => <div className="rounded-xl bg-white p-5 shadow-sm dark:bg-slate-900" key={String(label)}><p className="text-sm text-slate-500">{label}</p><p className={`mt-2 text-3xl font-semibold ${color}`}>{value}</p></div>)}</div><section className="mt-8 rounded-xl bg-white p-5 shadow-sm dark:bg-slate-900"><h2 className="font-semibold">Dedicated B&amp;I stores</h2>{data.stores.length ? <ul className="mt-3 space-y-2">{data.stores.map((store) => <li className="flex justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800" key={store.id}><span>{store.storeName}</span><span className="text-slate-500">{store.status}</span></li>)}</ul> : <p className="mt-3 text-sm text-slate-500">No dedicated seller store is connected yet. Open Stores to connect one.</p>}</section></div>;
+  const [loading, setLoading] = useState(true);
+
+  const load = () => {
+    setLoading(true);
+    setError('');
+    void fetchWithAuth<Workspace>('/api/business-industrial/workspace')
+      .then((result) => { setData(result); setError(''); })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load workspace'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div className="space-y-6">
+      <WorkspacePageHeader
+        eyebrow="Business & Industrial vertical"
+        title="Operational overview"
+        subtitle="Manage industrial catalog data, compliance evidence, shipping readiness, and dedicated seller stores."
+      >
+        {has('business_industrial.listings.create') ? (
+          <Link
+            className="inline-flex min-h-11 items-center rounded-lg px-4 py-2 text-sm font-semibold text-white"
+            style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-primary-fg)' }}
+            to="/business-industrial/listings/editor"
+          >
+            Create listing
+          </Link>
+        ) : null}
+      </WorkspacePageHeader>
+
+      {error ? <ErrorState message={error} onRetry={load} /> : null}
+      {loading && !data ? <LoadingPlaceholder label="Loading Business and Industrial workspace" rows={4} /> : null}
+      {data ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {METRICS.map((metric) => (
+              <Link key={metric.key} to={metric.to} className="block focus:outline-none focus:ring-2" style={{ ['--tw-ring-color' as string]: 'var(--brand-primary)' }}>
+                <Card className="h-full transition-colors hover:border-slate-300 dark:hover:border-slate-600">
+                  <CardContent className="p-5">
+                    <p className="text-sm text-slate-500">{metric.label}</p>
+                    <p className={`mt-2 text-3xl font-semibold ${metric.tone === 'destructive' ? 'text-red-600' : metric.tone === 'warning' ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'}`}>
+                      {data.metrics[metric.key]}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-semibold">Dedicated B&amp;I stores</h2>
+              <Link className="text-sm font-medium" style={{ color: 'var(--brand-primary)' }} to="/business-industrial/stores">Manage stores</Link>
+            </div>
+            {data.stores.length ? (
+              <ul className="mt-3 space-y-2">
+                {data.stores.map((store) => (
+                  <li className="flex justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800" key={store.id}>
+                    <span>{store.storeName}</span>
+                    <Badge variant={store.status === 'active' ? 'success' : 'secondary'}>{store.status}</Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState title="No dedicated seller store is connected yet" description="Open Stores to connect a Business & Industrial eBay seller." />
+            )}
+          </section>
+        </>
+      ) : null}
+      {!loading && !error && !data ? <FeedbackPanel tone="warning">Workspace metrics are unavailable.</FeedbackPanel> : null}
+    </div>
+  );
 }

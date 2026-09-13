@@ -2,7 +2,7 @@ import { Check, ChevronDown, ChevronUp, Filter, Loader2, RotateCcw, Search, X } 
 import { useEffect, useMemo, useState } from 'react';
 import type { CatalogConfig, CatalogFacets, CatalogFilters, FacetBucket } from './catalogTypes';
 
-type Props = { config: CatalogConfig; filters: CatalogFilters; facets: CatalogFacets | null; facetsError?: string; onChange: (patch: Partial<CatalogFilters>) => void; onReset: () => void };
+type Props = { config: CatalogConfig; filters: CatalogFilters; facets: CatalogFacets | null; facetsError?: string; compact?: boolean; onChange: (patch: Partial<CatalogFilters>) => void; onReset: () => void };
 type FacetSectionProps = { title: string; buckets: FacetBucket[]; selected: string[]; loading?: boolean; defaultExpanded?: boolean; valueLabels?: Record<string, string>; onChange: (values: string[]) => void };
 
 function toggle(values: string[], value: string) { return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]; }
@@ -34,13 +34,13 @@ function FacetSection({ title, buckets, selected, loading = false, defaultExpand
   );
 }
 
-function activeFilterCount(filters: CatalogFilters) {
+export function activeFilterCount(filters: CatalogFilters) {
   const arrayCount = Object.entries(filters).reduce((total, [key, value]) => total + (key !== 'attributes' && Array.isArray(value) ? value.length : 0), 0);
   const attributeCount = Object.values(filters.attributes).reduce((total, values) => total + values.length, 0);
   return arrayCount + attributeCount + [filters.minPrice, filters.maxPrice, filters.importedFrom, filters.importedTo].filter(Boolean).length + Number(filters.hasImage) + Number(filters.hasPrice);
 }
 
-export default function CatalogFilterControls({ config, filters, facets, facetsError = '', onChange, onReset }: Props) {
+export default function CatalogFilterControls({ config, filters, facets, facetsError = '', compact = false, onChange, onReset }: Props) {
   const isBusinessIndustrial = config.vertical === 'business_industrial';
   const primaryFields: Array<{ key: keyof CatalogFilters; label: string; buckets: FacetBucket[]; expanded?: boolean }> = isBusinessIndustrial ? [
     { key: 'brands', label: 'Brand / manufacturer', buckets: facets?.brands || [], expanded: true },
@@ -60,7 +60,7 @@ export default function CatalogFilterControls({ config, filters, facets, facetsE
   const loading = facets === null && !facetsError;
   const renderFacet = (field: { key: keyof CatalogFilters; label: string; buckets: FacetBucket[]; expanded?: boolean }) => { const selected = (filters[field.key] as string[] | undefined) || []; return <FacetSection key={String(field.key)} title={field.label} buckets={field.buckets} selected={selected} loading={loading} defaultExpanded={field.expanded} onChange={(values) => onChange({ [field.key]: values } as Partial<CatalogFilters>)} />; };
   return (
-    <aside className="w-full shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:w-72" aria-label="Catalog filters">
+    <aside className={compact ? 'w-full' : 'hidden w-full shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:block lg:w-72'} aria-label="Catalog filters">
       <div className="mb-3 flex items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Filter size={16} /> Filters{count ? <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">{count}</span> : null}</h2><button type="button" onClick={onReset} disabled={!count} className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 disabled:opacity-40 dark:hover:text-white"><RotateCcw size={13} /> Reset</button></div>
       {loading ? <div className="mb-3 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-500 dark:bg-slate-800/70"><Loader2 size={13} className="animate-spin" /> Loading filter options…</div> : null}
       {facetsError ? <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300" role="alert">{facetsError}</div> : null}

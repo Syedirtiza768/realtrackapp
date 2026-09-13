@@ -33,9 +33,13 @@ Inline updates delegate to the vertical domain service. Quarantined or manual-re
 
 The operation permissions are `fashion.catalog.export|delete|assign_team|manage_policies` and the corresponding `business_industrial.catalog.*` permissions. Schema changes are delivered through the additive migrations `1790300000000` through `1790800000000`; production startup runs pending migrations before serving traffic.
 
+## Presentation
+
+The shared workspace is table-first. Title and summary sit above the primary add action, search, active filters, results toolbar, and table. Desktop keeps a filter column; viewports below `lg` open filters in an accessible drawer. The results table contains its own horizontal scrolling. An empty catalog is distinct from a filtered search with no matches. Selection is page-local and clears when the organization, query, filters, sort, or page change. Export and bulk actions expose pending labels, and bulk APIs that return per-record `results` show failed ids. Publish job UI maps queue statuses to submitted, processing, published, partially failed, and failed, and closing the panel does not cancel the job.
+
 ## Verification
 
-Focused `CatalogWorkspaceService` authorization tests pass, and the frontend production build passes. The backend build still reports the pre-existing syntax/type errors in `backend/src/scripts/backfill-brand-images.ts`; no catalog or vertical module errors were reported.
+Focused `CatalogWorkspaceService` authorization tests pass, and the frontend production build passes. On 2026-09-13 the mocked B&I catalog browser script passed (table identity, Manufacturer/MPN/inventory/shipping labels, no Motors Make/Fitment copy, mobile Filters drawer, refresh, quick view, and publish job phases). That run is fixture-backed, not live API integration. The backend build still reports the pre-existing syntax/type errors in `backend/src/scripts/backfill-brand-images.ts`; no catalog or vertical module errors were reported.
 
 ## Runtime dependencies
 
