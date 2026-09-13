@@ -141,12 +141,6 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
     });
   }, [open, mode, storeProfiles, selectedAccount, selectedMarketplace, item]);
 
-  if (!open) return null;
-  const blockingErrors = messages(validation?.blockingErrors);
-  const warnings = messages(validation?.warnings);
-  const canValidate = Boolean(item && selectedAccount?.marketplaceId && !busy);
-  const canPublishSingle = Boolean(item && selectedAccount?.marketplaceId && validation && blockingErrors.length === 0 && !busy);
-  const canPublishBulk = storeIds.length > 0 && storeIds.length <= 10 && !busy;
   const policyOverrides = useMemo(() => ({
     fulfillmentPolicyId: profiles.fulfillmentPolicyId,
     paymentPolicyId: profiles.paymentPolicyId,
@@ -156,6 +150,13 @@ export default function BusinessIndustrialPublishModal({ open, item, listingIds,
     requestedPaymentPolicyName: profiles.paymentProfileName || undefined,
     requestedReturnPolicyName: profiles.returnProfileName || undefined,
   }), [profiles, connectedLocationKey]);
+
+  if (!open) return null;
+  const blockingErrors = messages(validation?.blockingErrors);
+  const warnings = messages(validation?.warnings);
+  const canValidate = Boolean(item && selectedAccount?.marketplaceId && !busy);
+  const canPublishSingle = Boolean(item && selectedAccount?.marketplaceId && validation && blockingErrors.length === 0 && !busy);
+  const canPublishBulk = storeIds.length > 0 && storeIds.length <= 10 && !busy;
 
   const selectedTarget = selectedAccount?.marketplaceId ? {
     ebayAccountId: selectedAccount.id,

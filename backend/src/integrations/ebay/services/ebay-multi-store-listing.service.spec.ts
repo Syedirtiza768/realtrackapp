@@ -143,4 +143,26 @@ describe('EbayMultiStoreListingService bulk publish', () => {
       }),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('normalizes target error payloads for shared catalog progress', async () => {
+    const { service, targetRepo } = setup();
+    (service as any).jobRepo.findOne = jest.fn().mockResolvedValue({ id: 'job-1' });
+    (targetRepo as any).find = jest.fn().mockResolvedValue([{
+      id: 'target-1',
+      catalogProductId: 'catalog-1',
+      ebayAccountId: 'account-1',
+      marketplaceId: 'EBAY_US',
+      vertical: 'business_industrial',
+      status: 'failed',
+      errorPayload: { message: 'eBay rejected the category' },
+      ebayAccount: { primaryStoreId: 'store-1', primaryStore: { storeName: 'B&I Store' } },
+    }]);
+
+    const [target] = await service.getJobTargets('job-1', 'org-1');
+
+    expect(target).toEqual(expect.objectContaining({
+      errorMessage: 'eBay rejected the category',
+      lastErrorMessage: 'eBay rejected the category',
+    }));
+  });
 });

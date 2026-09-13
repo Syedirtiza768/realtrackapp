@@ -119,6 +119,7 @@ export type CatalogFacetsResponse = {
   shippingProfiles: FacetBucket[];
   stockLevels: FacetBucket[];
   catalogStatuses: FacetBucket[];
+  validationStatuses: FacetBucket[];
   attributeFacets: Record<string, FacetBucket[]>;
   priceRange: { min: number | null; max: number | null };
 };
@@ -134,16 +135,16 @@ const ATTRIBUTE_KEYS: Record<ProductVertical, string[]> = {
     'manufacturer',
     'model',
     'mpn',
-    'testingStatus',
-    'functionalStatus',
     'inventoryMode',
-    'serializedUnitCount',
-    'restrictedCategoryCleared',
-    'includedComponents',
-    'missingParts',
-    'dispatchLocation',
-    'readinessScore',
-    'seoScore',
+    'shippingMode',
+    'inputVoltage',
+    'inputFrequency',
+    'mounting',
+    'countryOfOrigin',
+    'ratedVoltage',
+    'ratedCurrent',
+    'series',
+    'enclosureRating',
   ],
   fashion: [
     'brand',
@@ -399,6 +400,7 @@ export class CatalogWorkspaceService {
       shippingProfiles,
       stockLevels,
       catalogStatuses,
+      validationStatuses,
       priceRaw,
       totalFiltered,
     ] = await Promise.all([
@@ -416,7 +418,33 @@ export class CatalogWorkspaceService {
         .orderBy('count', 'DESC')
         .limit(100)
         .getRawMany<{ id: string; value: string; count: string }>(),
-      run('p.conditionId'),
+      // B&I (and some imports) store human labels with null condition IDs.
+      // Facet on the coalesced display value so filters stay populated.
+      base
+        .clone()
+        .select(
+          "coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))",
+          'value',
+        )
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(
+          "(p.condition_label IS NOT NULL AND p.condition_label != '') OR (p.condition_id IS NOT NULL AND p.condition_id != '')",
+        )
+        .groupBy(
+          "coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))",
+        )
+        .orderBy('count', 'DESC')
+        .limit(100)
+        .getRawMany<{ value: string; count: string }>()
+        .then((rows) =>
+          rows
+            .filter((row) => row.value != null && String(row.value).trim())
+            .map((row) => ({
+              value: String(row.value),
+              label: label(String(row.value)),
+              count: Number(row.count) || 0,
+            })),
+        ),
       run('p.partType'),
       run('p.sourceFile'),
       run('p.format'),
@@ -463,6 +491,7 @@ export class CatalogWorkspaceService {
           count: 0,
         })),
       ),
+      run('p.verticalValidationStatus'),
       base
         .clone()
         .select(`MIN(${SAFE_PRICE})`, 'min')
@@ -483,7 +512,8 @@ export class CatalogWorkspaceService {
       queryTimeMs: Date.now() - started,
       brands,
       categories: categoriesRaw.map((row) => ({
-        value: row.value || row.id,
+        // Filter by the stable category ID while keeping the human name visible.
+        value: row.id || row.value,
         label: row.value || row.id,
         count: Number(row.count) || 0,
       })),
@@ -504,6 +534,7 @@ export class CatalogWorkspaceService {
         ...entry,
         count: safeStatusCounts[entry.value] ?? 0,
       })),
+      validationStatuses,
       attributeFacets,
       priceRange: {
         min: priceRaw?.min == null ? null : Number(priceRaw.min),
@@ -819,8 +850,18 @@ export class CatalogWorkspaceService {
       ).setParameter('catalogExact', q);
     }
     this.inFilter(qb, 'p.brand', dto.brands, 'catalogBrands');
-    this.inFilter(qb, 'p.categoryId', dto.categories, 'catalogCategories');
-    this.inFilter(qb, 'p.conditionId', dto.conditions, 'catalogConditions');
+    const categories = split(dto.categories);
+    if (categories.length)
+      qb.andWhere(
+        '(p.categoryId IN (:...catalogCategories) OR p.categoryName IN (:...catalogCategories))',
+        { catalogCategories: categories },
+      );
+    const conditions = split(dto.conditions);
+    if (conditions.length)
+      qb.andWhere(
+        '(p.conditionId IN (:...catalogConditions) OR p.conditionLabel IN (:...catalogConditions))',
+        { catalogConditions: conditions },
+      );
     this.inFilter(qb, 'p.partType', dto.types, 'catalogTypes');
     this.inFilter(qb, 'p.sourceFile', dto.sourceFiles, 'catalogSourceFiles');
     this.inFilter(qb, 'p.format', dto.formats, 'catalogFormats');
@@ -875,6 +916,12 @@ export class CatalogWorkspaceService {
           this.publishedParameters(scope, vertical),
         );
     }
+    this.inFilter(
+      qb,
+      'p.verticalValidationStatus',
+      dto.validationStatuses,
+      'catalogValidationStatuses',
+    );
     if (dto.importedFrom)
       qb.andWhere('p.createdAt >= :catalogImportedFrom', {
         catalogImportedFrom: dto.importedFrom,
@@ -1053,7 +1100,9 @@ export class CatalogWorkspaceService {
         conditionLabel: product.conditionLabel,
         price: product.price,
         quantity: product.quantity,
-        imageUrls: product.imageUrls ?? [],
+        imageUrls: (product.imageUrls ?? [])
+          .map((url) => String(url || '').trim())
+          .filter((url) => Boolean(url) && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/api/'))),
         categoryId: product.categoryId,
         categoryName: product.categoryName,
         partType: product.partType,
@@ -1155,6 +1204,11 @@ export class CatalogWorkspaceService {
     scope: Scope,
     vertical: ProductVertical,
   ): Promise<FacetBucket[]> {
+    // TypeORM expands `:...values` to an empty `IN ()` clause when the
+    // caller has no accessible stores. A user with no publication-store
+    // access should still receive the catalog's product/vertical facets;
+    // marketplace facets are simply empty in that scope.
+    if (scope.accessibleStoreIds?.length === 0) return [];
     const qb = base
       .clone()
       .innerJoin(
@@ -1194,7 +1248,12 @@ export class CatalogWorkspaceService {
     const keys = ATTRIBUTE_KEYS[vertical]
       .map((key) => `'${key.replace(/'/g, "''")}'`)
       .join(', ');
-    const [sql, params] = base.clone().select('p').getQueryAndParameters();
+    // Select the JSON column explicitly so the derived table has a stable alias.
+    // Selecting the full entity gives TypeORM a generated p_vertical_attributes alias.
+    const [sql, params] = base
+      .clone()
+      .select('p.verticalAttributes', 'vertical_attributes')
+      .getQueryAndParameters();
     const rawRows: unknown = await this.productRepo.query(
       `select attrs.key as "key", values.value as "value", count(*)::int as "count" from (${sql}) filtered cross join lateral jsonb_each(coalesce(filtered.vertical_attributes, '{}'::jsonb)) attrs cross join lateral jsonb_array_elements_text(case when jsonb_typeof(attrs.value) = 'array' then attrs.value else jsonb_build_array(attrs.value #>> '{}') end) values where attrs.key in (${keys}) group by attrs.key, values.value order by attrs.key, count(*) desc`,
       params,

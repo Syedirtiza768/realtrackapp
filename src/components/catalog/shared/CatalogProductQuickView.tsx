@@ -1,16 +1,20 @@
-import { ArrowDown, ArrowUp, Copy, ExternalLink, ImagePlus, Save, Trash2, X, ZoomIn } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ExternalLink, ImagePlus, Save, Send, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import ImageUploadZone from '../../listings/ImageUploadZone';
+import ImageZoom from '../../ui/ImageZoom';
 import OptimizedImage from '../../ui/OptimizedImage';
-import { patchCatalogProduct } from './catalogApi';
-import type { CatalogConfig } from './catalogTypes';
-import type { CatalogItem } from './catalogTypes';
+import CatalogImageGallery from './CatalogImageGallery';
+import { getCatalogProduct, patchCatalogProduct } from './catalogApi';
+import type { CatalogConfig, CatalogItem } from './catalogTypes';
 
 type Props = {
   config: CatalogConfig;
   item: CatalogItem | null;
+  organizationId: string | null;
+  canPublish?: boolean;
   onClose: () => void;
   onSaved: (item: CatalogItem) => void;
+  onPublish?: (item: CatalogItem) => void;
 };
 
 type Draft = {
@@ -34,7 +38,7 @@ function makeDraft(item: CatalogItem): Draft {
     price: item.price == null ? '' : String(item.price),
     quantity: item.quantity == null ? '' : String(item.quantity),
     categoryName: item.categoryName || item.categoryId || '',
-    imageUrls: [...item.imageUrls],
+    imageUrls: [...new Set(item.imageUrls.filter(Boolean))].slice(0, 24),
     verticalAttributes: { ...item.verticalAttributes },
   };
 }
@@ -43,26 +47,54 @@ function attributeText(value: unknown) {
   return Array.isArray(value) ? value.join(', ') : value == null ? '' : String(value);
 }
 
-export default function CatalogProductQuickView({ config, item, onClose, onSaved }: Props) {
+function statusClass(status: string) {
+  if (status === 'published' || status === 'active') return 'text-emerald-700 dark:text-emerald-300';
+  if (status === 'failed' || status === 'blocked') return 'text-red-700 dark:text-red-300';
+  return 'text-slate-600 dark:text-slate-300';
+}
+
+export default function CatalogProductQuickView({ config, item, organizationId, canPublish = false, onClose, onSaved, onPublish }: Props) {
+  const [detail, setDetail] = useState<CatalogItem | null>(null);
   const [draft, setDraft] = useState<Draft | null>(item ? makeDraft(item) : null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
-  const [zoom, setZoom] = useState<string | null>(null);
-  const readOnly = Boolean(item?.manualReview || (item && config.protectedStatuses.includes(item.verticalValidationStatus)));
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [uploadZoneKey, setUploadZoneKey] = useState(0);
+  const effectiveItem = detail || item;
+  const images = useMemo(() => draft ? [...new Set(draft.imageUrls.filter(Boolean))].slice(0, 24) : [], [draft]);
+  const readOnly = Boolean(effectiveItem?.manualReview || (effectiveItem && config.protectedStatuses.includes(effectiveItem.verticalValidationStatus)));
 
   useEffect(() => {
+    setDetail(null);
     setDraft(item ? makeDraft(item) : null);
     setMessage('');
-  }, [item]);
+    setZoomIndex(null);
+    setActiveImageIndex(0);
+    setUploadZoneKey(0);
+    if (!item) return undefined;
+    let cancelled = false;
+    void getCatalogProduct(config, item.id, organizationId).then((result) => {
+      if (!cancelled) {
+        setDetail(result);
+        setDraft(makeDraft(result));
+      }
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [config, item, organizationId]);
 
-  if (!item || !draft) return null;
+  useEffect(() => {
+    if (activeImageIndex >= images.length) setActiveImageIndex(Math.max(0, images.length - 1));
+  }, [activeImageIndex, images.length]);
+
+  if (!effectiveItem || !draft) return null;
   const update = (patch: Partial<Draft>) => setDraft((current) => current ? { ...current, ...patch } : current);
   const updateAttribute = (key: string, value: string) => update({ verticalAttributes: { ...draft.verticalAttributes, [key]: value } });
   const save = async () => {
     setSaving(true);
     setMessage('');
     try {
-      const saved = await patchCatalogProduct(config, item.id, {
+      const saved = await patchCatalogProduct(config, effectiveItem.id, {
         title: draft.title.trim(),
         description: draft.description,
         brand: draft.brand.trim(),
@@ -70,9 +102,11 @@ export default function CatalogProductQuickView({ config, item, onClose, onSaved
         price: draft.price === '' ? undefined : Number(draft.price),
         quantity: draft.quantity === '' ? undefined : Number(draft.quantity),
         categoryName: draft.categoryName.trim(),
-        imageUrls: draft.imageUrls,
+        imageUrls: images,
         verticalAttributes: draft.verticalAttributes,
-      });
+      }, organizationId);
+      setDetail(saved);
+      setDraft(makeDraft(saved));
       onSaved(saved);
       setMessage('Saved');
     } catch (error) {
@@ -81,30 +115,20 @@ export default function CatalogProductQuickView({ config, item, onClose, onSaved
       setSaving(false);
     }
   };
-  const moveImage = (index: number, direction: -1 | 1) => {
-    const next = [...draft.imageUrls];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    update({ imageUrls: next });
-  };
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50" role="dialog" aria-modal="true" aria-label="Catalog product quick view">
-      <div className="h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-2xl dark:bg-slate-900">
-        <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wide text-slate-500">{config.label} quick view</p><h2 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{item.title || 'Untitled product'}</h2><p className="mt-1 text-xs text-slate-500">{item.sku || 'No SKU'} · {item.publicationStatus}</p></div><button type="button" onClick={onClose} aria-label="Close quick view" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X /></button></div>
+      <div className="h-full w-full max-w-3xl overflow-y-auto bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-6">
+        <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wide text-slate-500">{config.label} quick view</p><h2 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{effectiveItem.title || 'Untitled product'}</h2><p className="mt-1 text-xs text-slate-500">{effectiveItem.sku || 'No SKU'} · {effectiveItem.publicationStatus}{detail ? '' : ' · loading latest details…'}</p></div><button type="button" onClick={onClose} aria-label="Close quick view" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X /></button></div>
         {message ? <div className="mb-4 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200" role="status">{message}</div> : null}
         {readOnly ? <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">This product is on a review or quarantine hold. Editing and publishing are disabled until the vertical workflow releases it.</div> : null}
-        <section className="space-y-3" aria-label="Product fields">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Title<input disabled={readOnly} value={draft.title} onChange={(event) => update({ title: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label>
-          <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Brand<input disabled={readOnly} value={draft.brand} onChange={(event) => update({ brand: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-200">MPN<input disabled={readOnly} value={draft.mpn} onChange={(event) => update({ mpn: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label></div>
-          <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Price<input disabled={readOnly} type="number" min="0" step="0.01" value={draft.price} onChange={(event) => update({ price: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Quantity<input disabled={readOnly} type="number" min="0" value={draft.quantity} onChange={(event) => update({ quantity: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Category<input disabled={readOnly} value={draft.categoryName} onChange={(event) => update({ categoryName: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label></div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Description<textarea disabled={readOnly} rows={5} value={draft.description} onChange={(event) => update({ description: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label>
-        </section>
-        <section className="mt-6" aria-label="Vertical attributes"><h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Vertical attributes</h3><div className="grid gap-3 sm:grid-cols-2">{config.quickAttributes.map((key) => <label key={key} className="text-xs font-medium text-slate-600 dark:text-slate-300">{config.attributes.find((attribute) => attribute.key === key)?.label || key}<input disabled={readOnly} value={attributeText(draft.verticalAttributes[key])} onChange={(event) => updateAttribute(key, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal dark:border-slate-600 dark:bg-slate-800" /></label>)}</div></section>
-        <section className="mt-6" aria-label="Image management"><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Images ({draft.imageUrls.length}/24)</h3><ImagePlus size={17} className="text-slate-400" /></div><div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{draft.imageUrls.map((url, index) => <div key={url + index} className="group relative overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"><button type="button" onClick={() => setZoom(url)} className="block h-24 w-full" aria-label="Zoom image"><OptimizedImage src={url} alt="" variant="small" className="h-full w-full object-cover" /></button>{!readOnly ? <div className="absolute inset-x-1 bottom-1 flex justify-between opacity-0 transition group-hover:opacity-100"><button type="button" onClick={() => moveImage(index, -1)} className="rounded bg-white/90 p-1" title="Move left"><ArrowUp size={13} /></button><button type="button" onClick={() => moveImage(index, 1)} className="rounded bg-white/90 p-1" title="Move right"><ArrowDown size={13} /></button><button type="button" onClick={() => update({ imageUrls: draft.imageUrls.filter((_, imageIndex) => imageIndex !== index) })} className="rounded bg-white/90 p-1 text-red-600" title="Remove image"><Trash2 size={13} /></button><button type="button" onClick={() => void navigator.clipboard?.writeText(url)} className="rounded bg-white/90 p-1" title="Copy image URL"><Copy size={13} /></button></div> : null}</div>)}</div>{!readOnly ? <div className="mt-3"><ImageUploadZone maxImages={Math.max(0, 24 - draft.imageUrls.length)} onImagesChange={(images) => update({ imageUrls: [...draft.imageUrls, ...images.map((image) => image.cdnUrl)] })} /><p className="mt-2 text-xs text-slate-500">Uploaded assets are added to this product when you save. The existing storage permission still applies.</p></div> : null}</section>
-        <div className="mt-6 flex flex-wrap justify-between gap-2 border-t border-slate-200 pt-4 dark:border-slate-700"><a href={config.editorUrl(item.id)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"><ExternalLink size={15} /> Full editor</a><button type="button" disabled={readOnly || saving} onClick={() => void save()} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {saving ? 'Saving…' : 'Save changes'}</button></div>
+        <section className="mb-6" aria-label="Product images"><div className="mb-2 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Images ({images.length}/24)</h3><p className="text-xs text-slate-500">All stored images are available here. Select a thumbnail or open the viewer for full-screen navigation.</p></div><ImagePlus size={17} className="text-slate-400" /></div><div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60"><div className="flex min-h-[260px] items-center justify-center overflow-hidden rounded-lg bg-white dark:bg-slate-900 sm:min-h-[330px]">{images.length ? <button type="button" className="h-full w-full" onClick={() => setZoomIndex(activeImageIndex)} aria-label={`Open image ${activeImageIndex + 1} of ${images.length}`}><OptimizedImage src={images[activeImageIndex]} alt={`${effectiveItem.title || 'Product'} image ${activeImageIndex + 1}`} variant="medium" className="h-full w-full [&>img]:h-full [&>img]:w-full [&>img]:object-contain" /></button> : <p className="text-sm text-slate-500">No images uploaded.</p>}</div>{images.length > 1 ? <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="All product images">{images.map((url, index) => <button type="button" key={`${url}-${index}`} onClick={() => setActiveImageIndex(index)} className={'h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white dark:bg-slate-900 ' + (index === activeImageIndex ? 'border-cyan-500' : 'border-transparent')} aria-label={`Select image ${index + 1} of ${images.length}`}><OptimizedImage src={url} alt={`${effectiveItem.title || 'Product'} thumbnail ${index + 1}`} variant="thumb" className="h-full w-full [&>img]:h-full [&>img]:w-full [&>img]:object-cover" /></button>)}</div> : null}</div></section>
+        <section className="space-y-3" aria-label="Product fields"><label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Title<input disabled={readOnly} value={draft.title} onChange={(event) => update({ title: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Brand<input disabled={readOnly} value={draft.brand} onChange={(event) => update({ brand: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-200">MPN<input disabled={readOnly} value={draft.mpn} onChange={(event) => update({ mpn: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label></div><div className="grid gap-3 sm:grid-cols-3"><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Price<input disabled={readOnly} type="number" min="0" step="0.01" value={draft.price} onChange={(event) => update({ price: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Quantity<input disabled={readOnly} type="number" min="0" value={draft.quantity} onChange={(event) => update({ quantity: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label><label className="text-sm font-medium text-slate-700 dark:text-slate-200">Category<input disabled={readOnly} value={draft.categoryName} onChange={(event) => update({ categoryName: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-800 dark:bg-slate-800" /></label></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700"><p className="text-xs font-medium text-slate-500">Condition</p><p className="mt-1 text-slate-800 dark:text-slate-100">{(effectiveItem.conditionLabel || effectiveItem.conditionId || '—').replace(/_/g, ' ')}</p></div><div className="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700"><p className="text-xs font-medium text-slate-500">Images</p><p className="mt-1 text-slate-800 dark:text-slate-100">{images.length} available</p></div></div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Description<textarea disabled={readOnly} rows={5} value={draft.description} onChange={(event) => update({ description: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-800" /></label></section>
+        <section className="mt-6" aria-label="Vertical attributes"><h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">{config.label} attributes</h3><div className="grid gap-3 sm:grid-cols-2">{config.attributes.map((attribute) => <label key={attribute.key} className="text-xs font-medium text-slate-600 dark:text-slate-300">{attribute.label}<input disabled={readOnly} value={attributeText(draft.verticalAttributes[attribute.key])} onChange={(event) => updateAttribute(attribute.key, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal dark:border-slate-600 dark:bg-slate-800" /></label>)}</div></section>
+        <section className="mt-6" aria-label="Image management"><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Manage image order</h3><span className="text-xs text-slate-500">First image is primary</span></div><CatalogImageGallery images={images} editable={!readOnly} onChange={(next) => { update({ imageUrls: next }); setActiveImageIndex(0); }} onZoom={(url) => setZoomIndex(Math.max(0, images.indexOf(url)))} />{!readOnly ? <div className="mt-3">{images.length < 24 ? <ImageUploadZone key={uploadZoneKey} maxImages={24 - images.length} onImagesChange={(uploaded) => { const next = [...new Set([...images, ...uploaded.map((image) => image.cdnUrl)])].slice(0, 24); update({ imageUrls: next }); setUploadZoneKey((key) => key + 1); }} /> : <p className="text-xs text-slate-500">Maximum of 24 images reached.</p>}<p className="mt-2 text-xs text-slate-500">Uploaded assets are added when you save. Existing storage permissions still apply.</p></div> : null}</section>
+        {effectiveItem.publications.length ? <section className="mt-6 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Marketplace publications"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Marketplace publications</h3><div className="mt-2 space-y-2">{effectiveItem.publications.map((publication) => <div key={publication.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-slate-700 dark:text-slate-200">{publication.storeName} · {publication.marketplaceId}</span><span className={statusClass(publication.listingStatus)}>{publication.listingStatus}</span></div>)}</div></section> : null}
+        <div className="mt-6 flex flex-wrap justify-between gap-2 border-t border-slate-200 pt-4 dark:border-slate-700"><div className="flex flex-wrap gap-2"><a href={config.editorUrl(effectiveItem.id)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"><ExternalLink size={15} /> Full editor</a>{canPublish && !readOnly && effectiveItem.publicationStatus !== 'blocked' && effectiveItem.verticalValidationStatus === 'approved' && onPublish ? <button type="button" onClick={() => onPublish(effectiveItem)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"><Send size={15} /> Validate &amp; publish</button> : null}</div><button type="button" disabled={readOnly || saving} onClick={() => void save()} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {saving ? 'Saving…' : 'Save changes'}</button></div>
       </div>
-      {zoom ? <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6" onClick={() => setZoom(null)}><OptimizedImage src={zoom} alt="Catalog product" variant="large" className="max-h-full max-w-full object-contain" /><ZoomIn className="absolute right-5 top-5 text-white" /></div> : null}
+      {zoomIndex != null && images.length ? <ImageZoom images={images} index={zoomIndex} onClose={() => setZoomIndex(null)} /> : null}
     </div>
   );
 }

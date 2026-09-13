@@ -1,26 +1,19 @@
 # Current State
 
 **2026-09-13 (deployed to `app.omnicoreholding.com`)** — The B&I
-catalog now follows the Auto Parts table-first catalog interface and reads its
-filters from the fields actually populated in production. The API adds a
-validation-status facet/filter; the UI exposes eBay category, review status,
+catalog follows the Auto Parts table-first catalog interface and reads its
+filters from fields actually populated in production. Facets include brand,
+eBay category, condition (label when ID is null), review/validation status,
 stock, and populated B&I attributes while omitting automotive and empty legacy
-facets. Results include manufacturer, model, category family, created date,
-summary counts, quick view/editing, bulk operations, export, and approval-gated
-publish progress. The quick view hydrates the canonical product, shows all
-stored images in an Auto Parts-style viewer/lightbox, and supports image
-ordering/upload. Single publish runs account-targeted B&I validation with
-visible blockers/warnings; bulk publish targets dedicated B&I stores and keeps
-server-side approval/category/policy checks. The facet endpoint also handles
-accounts with no accessible publication stores safely: marketplace facets are
-empty while populated B&I product/attribute facets remain available. Production verification confirmed healthy backend/database
-checks, the public catalog route, protected API routing, and the compiled
-frontend/backend feature markers.
-
-The B&I publish dialog now reads policies from the selected dedicated eBay
-account's cache, shows fulfillment/return/payment profiles plus the connected
-inventory location, and persists those target values through validation and the
-publish worker; bulk targets continue to use each connected store's defaults.
+facets. Results show manufacturer/brand, model, category family, condition,
+image count, created date, assignment, validation, and publishing state.
+Quick view hydrates the canonical product, shows every stored image with
+thumbnail/lightbox navigation, and supports image ordering/upload. Single
+publish loads the selected dedicated store's policies and inventory location,
+passes those overrides through validation and the publish worker, and shows
+blockers/warnings; bulk publish uses each selected store's defaults. Facets
+remain available when the account has no publication stores (marketplace facet
+empty). Catalog image URLs are filtered to http(s) or `/api/` proxy paths.
 
 **2026-09-13** — Shared catalog filters now use loading-safe, searchable checkbox
 facets with collapsed secondary groups; category facet selections match the

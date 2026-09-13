@@ -17,6 +17,7 @@ export type CatalogFilters = {
   shippingProfiles: string[];
   stockLevels: CatalogStock[];
   catalogStatuses: string[];
+  validationStatuses: string[];
   minPrice: string;
   maxPrice: string;
   hasImage: boolean;
@@ -27,7 +28,7 @@ export type CatalogFilters = {
 };
 
 export const EMPTY_CATALOG_FILTERS: CatalogFilters = {
-  brands: [], categories: [], conditions: [], types: [], sourceFiles: [], formats: [], locations: [], mpns: [], teamIds: [], marketplaces: [], shippingProfiles: [], stockLevels: [], catalogStatuses: [], minPrice: '', maxPrice: '', hasImage: false, hasPrice: false, importedFrom: '', importedTo: '', attributes: {},
+  brands: [], categories: [], conditions: [], types: [], sourceFiles: [], formats: [], locations: [], mpns: [], teamIds: [], marketplaces: [], shippingProfiles: [], stockLevels: [], catalogStatuses: [], validationStatuses: [], minPrice: '', maxPrice: '', hasImage: false, hasPrice: false, importedFrom: '', importedTo: '', attributes: {},
 };
 
 export type FacetBucket = { value: string; label?: string; count: number };
@@ -85,6 +86,7 @@ export type CatalogItem = {
 };
 
 export type CatalogResponse = { vertical: ProductVertical; total: number; limit: number; offset: number; nextCursor: string | null; queryTimeMs: number; items: CatalogItem[] };
+export type CatalogSummary = { vertical: ProductVertical; organizationId: string; total: number; withImages: number; missingImages: number; published: number };
 export type CatalogFacets = {
   vertical: ProductVertical;
   totalFiltered: number;
@@ -102,6 +104,7 @@ export type CatalogFacets = {
   shippingProfiles: FacetBucket[];
   stockLevels: FacetBucket[];
   catalogStatuses: FacetBucket[];
+  validationStatuses: FacetBucket[];
   attributeFacets: Record<string, FacetBucket[]>;
   priceRange: { min: number | null; max: number | null };
 };
@@ -112,7 +115,7 @@ export type CatalogConfig = {
   accent: string;
   route: string;
   editorUrl: (id?: string) => string;
-  attributes: Array<{ key: string; label: string }>;
+  attributes: Array<{ key: string; label: string; valueLabels?: Record<string, string> }>;
   quickAttributes: string[];
   protectedStatuses: string[];
 };

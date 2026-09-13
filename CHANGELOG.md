@@ -22,6 +22,14 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+- **B&I catalog condition and brand filters:** Business & Industrial facets now
+  aggregate condition from `condition_label` when `condition_id` is null (the
+  production B&I shape), and condition filters match either field. The sidebar
+  exposes brand/manufacturer and condition alongside category, review status,
+  stock, and populated B&I attributes. Results and quick view show condition
+  and image counts; the publish modal no longer violates React hooks order when
+  closed.
+
 - **B&I connected-store publishing:** The Business & Industrial catalog publish
   dialog now loads synced policies from the dedicated connected eBay account,
   displays the selected store's fulfillment/return/payment profiles and
