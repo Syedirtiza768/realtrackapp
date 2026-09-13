@@ -17,6 +17,13 @@ store's defaults. Production verification on 2026-09-13 confirmed healthy
 backend/database checks, HTTP 200 catalog route, scoped facets (77 B&I rows),
 and a logged-in catalog UI with populated filters plus a 12-image quick view.
 
+**2026-09-13** — Empty B&I catalog for multi-org users such as
+`bniadmin@realtrack.local` was caused by auth preferring Super Admin
+(`role === 'admin'`) over the owned `business-industrial-*` workspace. Login
+now stores `mk_preferred_vertical`, org selection prefers the matching vertical
+workspace, and `BusinessIndustrialShell` auto-selects the owned B&I organization
+so catalog search scopes to the B&I product set.
+
 **2026-09-13** — Shared catalog filters now use loading-safe, searchable checkbox
 facets with collapsed secondary groups; category facet selections match the
 server's ID filter, imported-to dates include the chosen day, and partial eBay

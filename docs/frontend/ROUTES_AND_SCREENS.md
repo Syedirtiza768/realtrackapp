@@ -169,7 +169,9 @@ A 401 from a Fashion page preserves the Fashion login route. A Fashion-authentic
 
 The B&I route tree uses a separate shell with an Outlet-based child route tree
 and preserves its login path on a 401. It never grants access to automotive or
-Fashion permissions.
+Fashion permissions. `BusinessIndustrialShell` forces the active organization to
+the user's owned `business-industrial-*` workspace so catalog/search APIs do not
+scope to Super Admin when the account is a member of both.
 
 Business Industrial image intake accepts a public Google Drive folder or a local
 directory/drop, previews source images, uploads in API-sized batches, queues

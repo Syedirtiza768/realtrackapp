@@ -2,6 +2,13 @@
 
 > Fashion/B&I completion record (2026-09-10): see the vertical architecture, security, API, route, and setup documentation for the deployed workspace behavior and operational prerequisites.
 
+- **B&I catalog empty for multi-org admins (2026-09-13):** `bniadmin@realtrack.local`
+  (and similar users with Super Admin + B&I membership) no longer land on the Super
+  Admin organization when using `/business-industrial/*`. Login stores
+  `mk_preferred_vertical`, org selection prefers the matching vertical workspace
+  (owned B&I first), and `BusinessIndustrialShell` auto-selects the B&I workspace
+  so catalog search scopes to the 77 B&I products instead of an empty Super Admin org.
+
 - **B&I catalog publish readiness (2026-09-13):** Publish modal now loads
   shipping/return/payment profiles through the same `/stores/:id/profiles`
   path Auto Parts uses (with B&I account-policy fallback), defaults from the
