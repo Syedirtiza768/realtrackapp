@@ -1,5 +1,27 @@
 # Current State
 
+**2026-09-14 (B&I taxonomy hardening)** — Business & Industrial image intake
+tries the AI-provided category search first, then deliberate combinations of
+manufacturer, model, part type, category-family label, and source part name.
+The live eBay taxonomy remains authoritative: a category is accepted only after
+leaf verification and item-aspect retrieval. This improves B&I coverage without
+inventing category IDs or weakening publish validation.
+
+**2026-09-14 (Fashion photos-first Add Item)** — Fashion Add Item collects a
+complete garment photo set before optional identification, reuses existing
+storage and OpenAI vision, keeps photos when analysis fails, and persists
+category-aware Fashion attributes on `vertical_attributes`. Confirmed user
+edits and `_` identification metadata survive save/reopen. No schema
+migration was added. Marketplace publish still requires authenticity approval
+and the `multi_vertical_catalog` flag; this session does not deploy or publish
+live listings. Local verification: focused Jest suites passed; frontend
+`tsc -b` and `vite build` passed. Authenticated Add Item, live vision, camera
+capture, and save/reopen against a running API were not exercised because
+Docker, PostgreSQL, Redis, and the Nest process were unavailable on this
+machine. `npx nest build` currently fails on pre-existing ingestion files
+(`pipeline.service.ts` marketplace TDZ and `pipeline.processor.ts` conflict
+markers), not on the Fashion vertical sources.
+
 **2026-09-13 (light theme default)** — Branding defaults to `themeMode: light`.
 The document starts with `data-theme="light"` and a light `theme-color`. Fashion
 login and the shared change-password page (B&I / Auto Parts / Fashion) use a

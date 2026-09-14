@@ -3,13 +3,19 @@ import {
   ConflictException,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -21,17 +27,20 @@ import { CatalogProduct } from '../catalog-import/entities/catalog-product.entit
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import { FashionReview } from './entities/fashion-review.entity.js';
 import {
+  AnalyzeFashionImagesDto,
   CreateFashionDraftDto,
   FashionReviewDto,
   FashionRoleDto,
   FashionStoreConfigDto,
   FashionStoreAccessDto,
   FashionUserCreateDto,
+  GenerateFashionListingDto,
   UpdateFashionDraftDto,
 } from './fashion.dto.js';
 import { VerticalsService } from './verticals.service.js';
 import { FashionListingsService } from './fashion-listings.service.js';
 import { FashionUsersService } from './fashion-users.service.js';
+import { FashionImageAnalysisService } from './fashion-image-analysis.service.js';
 
 @Controller('fashion')
 @RequirePermissions('fashion.access')
@@ -46,6 +55,7 @@ export class FashionController {
     private readonly reviewRepo: Repository<FashionReview>,
     private readonly fashionListings: FashionListingsService,
     private readonly fashionUsers: FashionUsersService,
+    private readonly fashionImages: FashionImageAnalysisService,
   ) {}
 
   @Get('workspace')
@@ -194,6 +204,35 @@ export class FashionController {
     @Query('organizationId') organizationId?: string,
   ) {
     return this.fashionListings.detail(user, id, organizationId);
+  }
+
+  @Post('listings/photos')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('fashion.access', 'fashion.listings.create')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('files', 24))
+  uploadPhotos(
+    @CurrentUser() user: User,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Query('organizationId') organizationId?: string,
+  ) {
+    return this.fashionImages.uploadPhotos(user, files, organizationId);
+  }
+
+  @Post('listings/analyze-images')
+  @RequirePermissions('fashion.access', 'fashion.listings.create')
+  analyzeImages(
+    @CurrentUser() user: User,
+    @Body() dto: AnalyzeFashionImagesDto,
+    @Query('organizationId') organizationId?: string,
+  ) {
+    return this.fashionImages.analyze(user, dto, organizationId);
+  }
+
+  @Post('listings/generate-content')
+  @RequirePermissions('fashion.access', 'fashion.listings.create')
+  generateContent(@Body() dto: GenerateFashionListingDto) {
+    return this.fashionImages.generateListing(dto);
   }
 
   @Post('listings')

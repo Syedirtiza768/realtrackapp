@@ -42,6 +42,7 @@ export function activeFilterCount(filters: CatalogFilters) {
 
 export default function CatalogFilterControls({ config, filters, facets, facetsError = '', compact = false, onChange, onReset }: Props) {
   const isBusinessIndustrial = config.vertical === 'business_industrial';
+  const isFashion = config.vertical === 'fashion';
   const primaryFields: Array<{ key: keyof CatalogFilters; label: string; buckets: FacetBucket[]; expanded?: boolean }> = isBusinessIndustrial ? [
     { key: 'brands', label: 'Brand / manufacturer', buckets: facets?.brands || [], expanded: true },
     { key: 'categories', label: 'eBay category', buckets: facets?.categories || [], expanded: true },
@@ -52,7 +53,7 @@ export default function CatalogFilterControls({ config, filters, facets, facetsE
     { key: 'brands', label: 'Brand', buckets: facets?.brands || [], expanded: true }, { key: 'categories', label: 'Category', buckets: facets?.categories || [], expanded: true }, { key: 'conditions', label: 'Condition', buckets: facets?.conditions || [] }, { key: 'catalogStatuses', label: 'Catalog status', buckets: facets?.catalogStatuses || [] }, { key: 'stockLevels', label: 'Stock', buckets: facets?.stockLevels || [] },
   ];
   const additionalFields: Array<{ key: keyof CatalogFilters; label: string; buckets: FacetBucket[] }> = [
-    ...(isBusinessIndustrial ? [] : [{ key: 'types' as const, label: 'Type', buckets: facets?.types || [] }, { key: 'sourceFiles' as const, label: 'Source file', buckets: facets?.sourceFiles || [] }, { key: 'formats' as const, label: 'Format', buckets: facets?.formats || [] }, { key: 'locations' as const, label: 'Location', buckets: facets?.locations || [] }, { key: 'mpns' as const, label: 'MPN', buckets: facets?.mpns || [] }, { key: 'shippingProfiles' as const, label: 'Shipping policy', buckets: facets?.shippingProfiles || [] }]),
+    ...(isBusinessIndustrial || isFashion ? [] : [{ key: 'types' as const, label: 'Type', buckets: facets?.types || [] }, { key: 'sourceFiles' as const, label: 'Source file', buckets: facets?.sourceFiles || [] }, { key: 'formats' as const, label: 'Format', buckets: facets?.formats || [] }, { key: 'locations' as const, label: 'Location', buckets: facets?.locations || [] }, { key: 'mpns' as const, label: 'MPN', buckets: facets?.mpns || [] }, { key: 'shippingProfiles' as const, label: 'Shipping policy', buckets: facets?.shippingProfiles || [] }]),
     { key: 'teamIds', label: 'Team', buckets: facets?.teams || [] },
     { key: 'marketplaces', label: 'Marketplace', buckets: facets?.marketplaces || [] },
   ];

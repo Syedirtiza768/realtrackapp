@@ -266,7 +266,7 @@ export default defineConfig({
 
 ## Fashion workspace components (2026-09-09)
 
-src/components/fashion contains FashionLoginPage, FashionShell, FashionDashboardPage, FashionListingsPage, FashionImportPage, FashionReviewPage, FashionStoresPage, and FashionUsersPage. These components use the existing authenticated fetch wrapper but never render inside the automotive Shell.
+src/components/fashion contains FashionLoginPage, FashionShell (VerticalWorkspaceShell with Add Item), FashionDashboardPage, FashionCatalogPage, FashionListingEditorPage, FashionPhotoSet, FashionListingPublishPanel, FashionImportPage, FashionReviewPage, FashionStoresPage, FashionUsersPage, FashionIncidentsPage, and FashionSettingsPage. These components use the existing authenticated fetch wrapper but never render inside the automotive Shell.
 
 ## Business & Industrial workspace components (2026-09-09)
 

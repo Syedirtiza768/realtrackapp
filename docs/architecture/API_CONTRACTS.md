@@ -18,6 +18,17 @@
 
 ---
 
+## FEBEST pre-enriched import
+
+The protected pipeline upload accepts `importMode=pre_enriched_febest_v1` in addition to `legacy_gridx`. The FEBEST mode requires exact `Manifest`, `Products`, and `Fitments` sheets and is revalidated server-side before a BullMQ job is created.
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| POST | `/api/pipeline/pre-enriched-febest/dry-run` | `pipeline.run` | Validates the exact workbook schema and returns errors, warnings, counts, and `readyForImport`; performs no DB or eBay writes |
+| POST | `/api/pipeline/upload` | `pipeline.run` | Accepts `importMode=pre_enriched_febest_v1`; invalid or non-ready workbooks are rejected before enqueue |
+
+Trusted-mode worker behavior: approved HTML, official image URLs, item specifics, and accepted fitments are persisted as draft catalog/listing rows only after collision preflight. It bypasses legacy generation and the mandatory optimization queue; publication is never performed by this mode.
+
 ## Authentication
 
 All endpoints require authentication unless marked with `@Public()` decorator.
@@ -625,6 +636,9 @@ All Fashion routes remain under the normal /api prefix and require JWT plus the 
 | GET | /api/fashion/workspace | fashion.dashboard.view | Fashion metrics and enabled stores |
 | GET | /api/fashion/listings | fashion.listings.view | Organization-scoped Fashion catalog |
 | POST/PATCH | /api/fashion/listings and /api/fashion/listings/:id | fashion.listings.create/update | Create or edit a Fashion draft |
+| POST | /api/fashion/listings/photos | fashion.listings.create | Multipart Fashion garment photo upload via existing storage; returns CDN URLs |
+| POST | /api/fashion/listings/analyze-images | fashion.listings.create | Analyze a complete photo set; `confirmedKeys` and saved `_confirmedKeys` are not overwritten; photos are kept if analysis fails |
+| POST | /api/fashion/listings/generate-content | fashion.listings.create | Build Fashion title/description from confirmed attributes and reported defects |
 | POST | /api/fashion/listings/:id/review | fashion.review | Approve or reject authenticity review |
 | GET | /api/fashion/listings/:id/review | fashion.authenticity.review | Read private review metadata |
 | POST | /api/fashion/listings/:id/quarantine | fashion.incidents.manage | Local quarantine; remote takedown is reported unavailable unless an integration supports it |

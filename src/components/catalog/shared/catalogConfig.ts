@@ -38,6 +38,19 @@ export const CATALOG_CONFIGS: Record<ProductVertical, CatalogConfig> = {
     ], quickAttributes: ['categoryFamily', 'manufacturer', 'model', 'mpn', 'inventoryMode', 'shippingMode'], protectedStatuses: ['quarantined'], filterLabels: { brands: 'Manufacturer' },
   },
   fashion: {
-    vertical: 'fashion', label: 'Fashion', accent: 'pink', route: '/fashion/catalog', editorUrl: (id) => id ? `/fashion/listings/${encodeURIComponent(id)}/edit` : '/fashion/listings/new', attributes: [{ key: 'brand', label: 'Brand' }, { key: 'department', label: 'Department' }, { key: 'productType', label: 'Product type' }, { key: 'size', label: 'Size' }, { key: 'color', label: 'Color' }, { key: 'material', label: 'Material' }, { key: 'style', label: 'Style' }, { key: 'authenticityStatus', label: 'Authenticity' }, { key: 'variantAvailability', label: 'Variant availability' }], quickAttributes: ['brand', 'department', 'productType', 'size', 'color', 'material'], protectedStatuses: ['quarantined'],
+    vertical: 'fashion', label: 'Fashion', accent: 'pink', route: '/fashion/catalog', editorUrl: (id) => id ? `/fashion/listings/${encodeURIComponent(id)}/edit` : '/fashion/listings/new', addLabel: 'Add Item', searchPlaceholder: 'Search SKU, title, brand, category, attributes…', attributes: [
+      { key: 'brand', label: 'Brand' },
+      { key: 'department', label: 'Department' },
+      { key: 'itemType', label: 'Item type' },
+      { key: 'productType', label: 'Product type' },
+      { key: 'categoryFamily', label: 'Fashion category', valueLabels: { clothing: 'Clothing', footwear: 'Footwear', accessories: 'Accessories' } },
+      { key: 'size', label: 'Label size' },
+      { key: 'color', label: 'Primary color' },
+      { key: 'material', label: 'Material' },
+      { key: 'style', label: 'Style' },
+      { key: 'pattern', label: 'Pattern' },
+      { key: 'authenticityStatus', label: 'Authenticity' },
+      { key: 'variantAvailability', label: 'Variant availability' },
+    ], quickAttributes: ['brand', 'department', 'itemType', 'size', 'color', 'material'], protectedStatuses: ['quarantined'],
   },
 };

@@ -227,7 +227,7 @@ module-name/
 
 ## Fashion vertical boundary (2026-09-09)
 
-The Fashion path is a distinct frontend route tree backed by /api/fashion controllers. Auth/RBAC is shared, while Fashion roles, review records, store configuration, and OAuth state are explicitly vertical-aware. Automotive remains the default for legacy rows and routes.
+The Fashion path is a distinct frontend route tree backed by /api/fashion controllers. Auth/RBAC is shared, while Fashion roles, review records, store configuration, and OAuth state are explicitly vertical-aware. Photos-first Add Item uploads through existing storage, optionally identifies a garment with the shared vision provider, and persists category-aware attributes on `catalog_products.vertical_attributes`. Automotive remains the default for legacy rows and routes.
 
 ## Business & Industrial boundary (2026-09-09)
 

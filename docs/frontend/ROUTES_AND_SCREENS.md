@@ -40,6 +40,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | `/catalog/products/:productId/publish/ebay` | `EbayPublishWizardPage` | `ebay.publish` | Publish to eBay |
 | `/ingestion` | `IngestionManager` | `ingestion.view` | Ingestion dashboard |
 | `/pipeline` | `PipelinePage` | `pipeline.view` | Team-scoped bulk upload (product vertical + condition + team), pipeline queue table (`UPL-*` IDs, status filter), job detail via `?job=` |
+| `/pipeline` (FEBEST mode) | `PipelinePage` | `pipeline.run` | Select `pre_enriched_febest_v1`; client checks exact Manifest/Products/Fitments sheet names and the server dry-run validator rechecks the workbook before enqueue |
 | `/fitment` | `FitmentManager` | `fitment.view` | Fitment management |
 | `/fitment/vin` | `VinListingsPage` | `fitment.view` | VIN lookup |
 | `/inventory` | `InventoryManager` | `inventory.view` | One row per SKU; upload photos on detail modal; **Fetch details** (vision: OEM+brand+photos) + **Send to pipeline** (`inventory.enrich`) |
@@ -140,9 +141,12 @@ Fashion has a separate shell and login boundary rather than reusing the automoti
 | Route | Component | Permission | Purpose |
 |-------|-----------|------------|---------|
 | /fashion/login | FashionLoginPage | public | Fashion-specific login on the shared light canvas |
-| /fashion | FashionDashboardPage | fashion.dashboard.view | Fashion metrics and stores |
-| /fashion/catalog | FashionCatalogPage | fashion.listings.view | Shared catalog workspace with searchable/collapsible facets, quick view, drag-reorder images, bulk actions, export, and publish progress |
-| /fashion/listings | FashionListingsPage | fashion.listings.view | Fashion draft creation/list |
+| /fashion | FashionDashboardPage | fashion.dashboard.view | Fashion metrics, stores, and Add Item |
+| /fashion/catalog | FashionCatalogPage | fashion.listings.view | Shared catalog workspace; Add Item opens the photos-first editor |
+| /fashion/listings | FashionCatalogPage | fashion.listings.view | Alias of `/fashion/catalog` |
+| /fashion/listings/new | FashionListingEditorPage | fashion.listings.create | Photos-first Add Item: collect photos, optional identification, category-aware Fashion fields, save |
+| /fashion/listings/:id | FashionListingEditorPage | fashion.listings.view | Reopen a saved Fashion item |
+| /fashion/listings/:id/edit | FashionListingEditorPage | fashion.listings.update | Edit a saved Fashion item |
 | /fashion/import | FashionImportPage | fashion.import | CSV/XLSX Fashion import |
 | /fashion/review | FashionReviewPage | fashion.review | Explicit authenticity approval |
 | /fashion/stores | FashionStoresPage | fashion.stores.view | Fashion seller connections and store enablement |

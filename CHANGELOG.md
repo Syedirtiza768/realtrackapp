@@ -1,5 +1,15 @@
 # Changelog
 
+- **Fashion photos-first item workflow (2026-09-14):** Fashion Add Item now
+  collects a complete garment photo set (camera, upload, or both) before
+  optional identification. Existing OpenAI vision and storage services analyze
+  all photos together, suggest Fashion category/attributes without inventing
+  label data, preserve user edits on re-analysis, and keep photos when AI
+  fails so manual entry still works. Category-aware clothing, footwear, and
+  accessory fields persist on `catalog_products.vertical_attributes`. Listing
+  text uses confirmed Fashion facts and reported defects. Auto Parts and
+  Business & Industrial workflows are unchanged.
+
 - **Public homepage redesign (2026-09-14):** Replaced the public `/` overview
   with an editorial, responsive commerce-operations story: illustrative
   product subjects for Auto Parts, Business & Industrial, and Fashion; a

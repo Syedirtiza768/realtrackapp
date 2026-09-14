@@ -24,6 +24,7 @@ import { BusinessIndustrialIncident } from './entities/business-industrial-incid
 import { FashionController } from './fashion.controller.js';
 import { FashionUsersService } from './fashion-users.service.js';
 import { FashionListingsService } from './fashion-listings.service.js';
+import { FashionImageAnalysisService } from './fashion-image-analysis.service.js';
 import { BusinessIndustrialController } from './business-industrial.controller.js';
 import { VerticalsController } from './verticals.controller.js';
 import { VerticalsService } from './verticals.service.js';
@@ -88,6 +89,7 @@ import { BusinessIndustrialImageIntakeProcessor } from './business-industrial-im
     EbayVariantPublishingService,
     FashionUsersService,
     FashionListingsService,
+    FashionImageAnalysisService,
     BusinessIndustrialService,
     BusinessIndustrialUsersService,
     BusinessIndustrialIncidentNotifications,
@@ -98,6 +100,7 @@ import { BusinessIndustrialImageIntakeProcessor } from './business-industrial-im
     VerticalsService,
     EbayVariantPublishingService,
     FashionListingsService,
+    FashionImageAnalysisService,
     BusinessIndustrialService,
   ],
 })

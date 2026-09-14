@@ -38,6 +38,12 @@ import {
   isRestrictedBusinessIndustrialFamily,
   validateBusinessIndustrialAttributes,
 } from './business-industrial.config.js';
+import {
+  buildFashionListingContent,
+  fashionAspectsFromAttributes,
+  isFashionMetaKey,
+  validateFashionAttributes,
+} from './fashion.config.js';
 import { ProductFamily } from './entities/product-family.entity.js';
 import { ProductVariant } from './entities/product-variant.entity.js';
 import { VariantMarketplaceMapping } from './entities/variant-marketplace-mapping.entity.js';
@@ -358,13 +364,24 @@ export class VerticalsService {
         );
       }
     }
-    if (
-      params.vertical === 'fashion' &&
-      params.product.verticalValidationStatus !== 'approved'
-    ) {
-      blockingErrors.push(
-        'Fashion authenticity/compliance review must be approved before publishing',
+    if (params.vertical === 'fashion') {
+      const fashion = validateFashionAttributes(
+        params.product.verticalAttributes ?? {},
       );
+      for (const error of fashion.errors) {
+        blockingErrors.push(`Invalid Fashion attributes: ${error}`);
+      }
+      warnings.push(...fashion.warnings);
+      if (params.product.verticalValidationStatus !== 'approved') {
+        blockingErrors.push(
+          'Fashion authenticity/compliance review must be approved before publishing',
+        );
+      }
+      if (params.product.manualReview) {
+        blockingErrors.push(
+          'Fashion listing is quarantined and cannot be published',
+        );
+      }
     }
     const categoryId =
       params.listing?.categoryId?.trim() ||
@@ -384,7 +401,11 @@ export class VerticalsService {
       : null;
     if (!categoryId)
       blockingErrors.push(
-        'An eBay leaf category is required before publishing a non-automotive product',
+        params.vertical === 'fashion'
+          ? 'An eBay Fashion leaf category is required before publishing'
+          : params.vertical === 'business_industrial'
+            ? 'An eBay Business & Industrial leaf category is required before publishing'
+            : 'An eBay leaf category is required before publishing',
       );
 
     const conditionId = (
@@ -453,11 +474,25 @@ export class VerticalsService {
       }
     }
 
+    const fashionContent =
+      params.vertical === 'fashion'
+        ? buildFashionListingContent({
+            brand: params.product.brand,
+            title: params.listing?.title || params.product.title,
+            attributes: productAttributes.attributes,
+            conditionLabel:
+              params.listing?.conditionLabel || params.product.conditionLabel,
+          })
+        : null;
     const title =
-      params.listing?.title?.trim() || params.product.title?.trim() || '';
+      params.listing?.title?.trim() ||
+      params.product.title?.trim() ||
+      fashionContent?.title ||
+      '';
     const description =
       params.listing?.description?.trim() ||
       params.product.description?.trim() ||
+      fashionContent?.description ||
       title;
     if (!title) blockingErrors.push('A product title is required');
     if (
@@ -679,8 +714,12 @@ export class VerticalsService {
     listing: ListingRecord | null,
     attributes: ProductAttributes,
   ): Record<string, string[]> {
+    if (product.vertical === 'fashion') {
+      return fashionAspectsFromAttributes(attributes, listing?.cBrand ?? product.brand);
+    }
     const result: Record<string, string[]> = {};
     for (const [key, value] of Object.entries(attributes)) {
+      if (isFashionMetaKey(key)) continue;
       const values = Array.isArray(value) ? value : [String(value)];
       if (values.length && values.every((item) => item.trim().length > 0))
         result[key] = values;
