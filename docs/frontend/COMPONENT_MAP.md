@@ -43,6 +43,7 @@ QueryProvider (TanStack Query)
         └── Router (React Router)
             └── Routes
                 ├── Public Routes (no Shell)
+                │   ├── /
                 │   ├── /login
                 │   ├── /register
                 │   ├── /forgot-password
@@ -140,6 +141,8 @@ src/components/
 │   ├── EbayPreviewPage.tsx   # eBay listing preview; edit mode uses RichTextDescriptionEditor for seller description
 │   └── EditListingPanel.tsx
 ├── image-drive/        # Image Drive folder browser and recursive image upload
+├── landing/            # Public editorial overview, workflow demo, and workspace selection
+│   └── LandingPage.tsx
 └── channels/           # Channels
     ├── PublishModal.tsx        # eBay multi-store publish — store selection only, hands off to PublishProgressPanel
     └── EbayOAuthCallback.tsx

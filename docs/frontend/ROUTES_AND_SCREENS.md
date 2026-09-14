@@ -17,7 +17,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | Route | Component | Purpose |
 |-------|-----------|---------|
 
-| `/` | `LandingPage` | Public Omni Core overview with links to the Auto Parts, Business & Industrial, and Fashion workspaces |
+| `/` | `LandingPage` | Public connected-commerce overview with illustrative product stories, interactive intake/enrich/review/publish walkthrough, FAQ, and links to the Auto Parts, Business & Industrial, and Fashion workspaces |
 
 | `/login` | `LoginPage` | General/Auto Parts login; returns to `/auto-parts` after sign-in |
 | `/auto-parts/login` | `LoginPage` | Explicit Auto Parts login; returns to `/auto-parts` after sign-in |

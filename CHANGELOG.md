@@ -1,5 +1,13 @@
 # Changelog
 
+- **Public homepage redesign (2026-09-14):** Replaced the public `/` overview
+  with an editorial, responsive commerce-operations story: illustrative
+  product subjects for Auto Parts, Business & Industrial, and Fashion; a
+  keyboard-operable intake/enrich/review/publish walkthrough; synthetic
+  catalog statuses; FAQ accordion; mobile navigation; and workspace links.
+  The page keeps branding overrides, existing protected routes, and the
+  general sign-in/privacy destinations unchanged.
+
 - **Light theme default (2026-09-13):** Workspaces now default to light
   (`data-theme="light"`, slate canvas, light browser `theme-color`). Fashion
   login and the shared first-login password page (including B&I) use the same
