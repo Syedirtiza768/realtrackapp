@@ -5,7 +5,7 @@
 
 ## What It Is
 
-RealTrackApp (DB/internal name: **listingpro**) is a multi-channel **automotive parts listing & operations platform**. It ingests product data (CSV/catalog import, images, spreadsheets), enriches it with AI, manages fitment/compatibility, and publishes/syncs listings to marketplaces (primarily **eBay**), while handling orders, inventory, pricing, dashboards, automation, and audit.
+Omni Core (DB/internal name: **listingpro**) is a multi-channel **listing & operations platform**, with automotive parts as the legacy vertical and additive eBay Business & Industrial and Fashion pilots. It ingests product data (CSV/catalog import, images, spreadsheets), enriches it with AI, manages fitment/compatibility, and publishes/syncs listings to marketplaces (primarily **eBay**), while handling orders, inventory, pricing, dashboards, automation, and audit.
 
 ## Tech Stack
 
@@ -92,7 +92,13 @@ Browser → host nginx → backend (`/api/storage/serve/{s3Key}`) → S3 (us-eas
 
 The frontend's `toProxyUrl()` (`src/lib/imageUrl.ts`) rewrites S3 image URLs to
 `/api/storage/serve/{key}` proxy paths so the browser reuses its existing
-connection to the app origin (no separate DNS/TLS to S3). The host nginx caches
+connection to the app origin (no separate DNS/TLS to S3). For supported raster
+originals, it first requests the sibling `.webp` key (for example,
+`photo.jpg` → `photo.webp`). The backend redirects to the original
+extension when that WebP object is unavailable, so the optimization is
+opportunistic and never makes an image depend on a generated sibling.
+Every non-WebP upload is also processed into a canonical sibling WebP (including sources smaller than the resize threshold). The eBay catalog publish resolver performs a verified sibling check, so new eBay payloads use WebP without emitting a broken URL when a legacy object is incomplete. The original remains preserved for live eBay listings during the storage migration.
+The host nginx caches
 these responses for 30 days (`proxy_cache_path /tmp/nginx-image-cache`,
 1 GB, `proxy_cache_use_stale error timeout updating`). First request = MISS
 (backend streams from S3, ~100ms), all subsequent = HIT (~16ms, served from
@@ -122,7 +128,9 @@ worker (concurrency 15) so most never hit the on-demand path. The queue uses
 `removeOnComplete`/`removeOnFail` (1-day age) so `jobId` dedup doesn't block
 legitimate re-queues after a Redis restart or re-import.
 
-External (eBay CDN) image URLs are passed through unchanged — no proxy routing.
+External (eBay CDN) image URLs are passed through unchanged — no proxy routing
+or WebP rewriting. Raw frontend image tags that can receive S3-backed URLs use
+the same `toProxyUrl()` utility; local blob/data previews are unchanged.
 
 For FEBI/Febi Bilstein and Lemförder products, the catalog import and eBay
 publish boundary reduce the source gallery to one primary image. eBay URLs with
@@ -234,6 +242,43 @@ Full inventory: [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
 | `delisted` | Removed from marketplace |
 | `archived` | Historical record only |
 
+### B&I image-to-draft branch (2026-09-10)
+
+The B&I image intake path is organization-scoped and separate from the legacy
+global Image Drive persistence. The frontend preserves folder-relative paths;
+the backend groups final numeric dot-suffix folders into one base part, stores
+assets in S3, and queues a sequential vision/OCR worker. The worker resolves
+only verified eBay leaf categories and item-specific metadata, then the operator
+applies a group into the existing B&I draft/review/publish lifecycle.
+
+### B&I public Google Drive pilot (2026-09-11)
+
+The B&I image intake controller accepts a public Drive folder URL and enqueues
+the existing BullMQ intake worker. The worker selects up to 200 direct item
+folders and downloads every supported image in each folder, bounded by the
+5,000-image job safety cap. Each source is converted to canonical WebP with
+Sharp, stored in S3, and all stored assets are carried into the catalog item;
+vision sends a bounded 12-image evidence slice to control payload size. The
+worker runs explicit GPT-5.6 Luna vision, evidence-bound text enrichment, and
+the shared eBay Browse plus pricing-analysis pipeline. AI runs are recorded in
+ai_run_logs, so polling can aggregate tokens and estimated USD cost without a
+new cost table. Reruns merge by normalized base part SKU, preserving decimal
+dot-suffix folders as multiple physical instances. Drafts are written to the
+existing B&I catalog path and mirrored to listing_records so Catalog and
+Inventory share the same reviewable SKU. GOOGLE_DRIVE_API_KEY is required for
+the server-side Drive API call; missing configuration fails the job before any
+AI spend.
+
 ---
 
 *Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*
+
+### Shared vertical catalog workspace (2026-09-12)
+
+The common catalog module reads the existing `catalog_products` projection
+through one server-side query contract for Fashion and Business & Industrial.
+It owns pagination, full-dataset search, suggestions, facets, publication
+summaries, CSV export, and cross-record catalog actions. It does not replace
+vertical domain services: Fashion and B&I services remain the authority for
+validation, review, quarantine, and edit semantics. Automotive keeps its
+existing CatalogManager/search path for compatibility with legacy listing rows.

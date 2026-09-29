@@ -20,6 +20,7 @@ import ActiveFilterTags from './ActiveFilterTags';
 import CatalogInventoryDetailModal from './CatalogInventoryDetailModal';
 import PublishModal, { type PublishStartParams } from '../channels/PublishModal';
 import PublishProgressPanel, { type PublishJob } from './PublishProgressPanel';
+import PartsBazar360BulkPublish from '../channels/PartsBazar360BulkPublish';
 import ExportTemplatesModal from './ExportTemplatesModal';
 import BulkPolicyEditModal from './BulkPolicyEditModal';
 import CatalogFilterBar from './CatalogFilterBar';
@@ -609,7 +610,8 @@ export default function CatalogManager() {
         />
 
         {moreMenuOpen && selectedIds.size > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <PartsBazar360BulkPublish listingIds={Array.from(selectedIds)} />
             {canDeleteListings && (
               <button
                 type="button"

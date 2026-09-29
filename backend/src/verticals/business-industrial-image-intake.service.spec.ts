@@ -4,6 +4,7 @@ type IntakeGroup = {
   id: string;
   detectionStatus: string;
   rawFolderNames: string[];
+  updatedAt?: Date;
 };
 
 describe('BusinessIndustrialImageIntakeService retry lifecycle', () => {
@@ -45,6 +46,10 @@ describe('BusinessIndustrialImageIntakeService retry lifecycle', () => {
         ),
     };
     const service = new BusinessIndustrialImageIntakeService(
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -56,6 +61,9 @@ describe('BusinessIndustrialImageIntakeService retry lifecycle', () => {
       jobRepo as never,
       groupRepo as never,
       assetRepo as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
     (service as unknown as { findJob: jest.Mock }).findJob = jest
       .fn()
@@ -93,6 +101,26 @@ describe('BusinessIndustrialImageIntakeService retry lifecycle', () => {
     );
   });
 
+  it('recovers a stale processing group when a partial job is restarted', async () => {
+    const stale = {
+      id: 'stale',
+      detectionStatus: 'processing',
+      rawFolderNames: ['BNI-3'],
+      updatedAt: new Date(Date.now() - 16 * 60 * 1000),
+    };
+    const { service, queue, groupRepo } = setup([stale]);
+
+    await service.startJob({} as never, 'job-1');
+
+    expect(stale.detectionStatus).toBe('pending');
+    expect(groupRepo.save).toHaveBeenCalledWith(stale);
+    expect(queue.add).toHaveBeenCalledWith(
+      'detect',
+      { jobId: 'job-1' },
+      expect.any(Object),
+    );
+  });
+
   it('preserves successful groups and processes only pending or failed groups', async () => {
     const done = {
       id: 'done',
@@ -122,5 +150,48 @@ describe('BusinessIndustrialImageIntakeService retry lifecycle', () => {
     expect(job.processedImages).toBe(5);
     expect(job.status).toBe('completed');
     expect(groupRepo.count).toHaveBeenCalled();
+  });
+
+  it('broadens taxonomy queries with deliberate B&I family context', () => {
+    const { service } = setup([]);
+    const queries = (
+      service as unknown as {
+        businessIndustrialCategoryQueries: (
+          candidate: Record<string, unknown>,
+          basePartName: string,
+        ) => string[];
+      }
+    ).businessIndustrialCategoryQueries(
+      {
+        categorySearchQuery: 'Siemens LOGO programmable logic controller',
+        brand: 'Siemens',
+        model: 'LOGO! 12/24RC',
+        partType: 'Programmable Logic Controller',
+        categoryFamily: 'industrial_automation',
+      },
+      'BNI-1',
+    );
+
+    expect(queries).toEqual([
+      'Siemens LOGO programmable logic controller',
+      'Siemens LOGO! 12/24RC Programmable Logic Controller Industrial automation & controls',
+      'Programmable Logic Controller Industrial automation & controls',
+      'LOGO! 12/24RC Programmable Logic Controller',
+      'BNI-1 Industrial automation & controls',
+    ]);
+  });
+
+  it('builds a deterministic BNI SKU from the base folder and strips the BNI folder prefix', () => {
+    const { service } = setup([]);
+    const sku = (
+      service as unknown as {
+        catalogSkuFromFolderName: (folderName: string) => string;
+      }
+    ).catalogSkuFromFolderName;
+
+    expect(sku('BNI-20')).toBe('BNI-20');
+    expect(sku('RHINO AutomationDirect PS24-075D 75W 24VDC 3A DIN')).toBe(
+      'BNI-rhinoautomationdirectps24075d75w24vdc3adin',
+    );
   });
 });

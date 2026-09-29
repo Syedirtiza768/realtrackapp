@@ -61,6 +61,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Cap backend so a spike is contained here instead of kernel-OOM-killing Postgres/MariaDB/other stacks.
+    mem_limit: ${BACKEND_MEM_LIMIT:-1800m}
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,9 +72,10 @@ services:
       NODE_ENV: production
       # Catalog CSV import loads the full file into JS heap (see CsvImportProcessor); default ~2GB OOMs on large files
       # Prefer IPv4 for outbound HTTPS (Docker Desktop IPv6 to OpenRouter often ETIMEDOUT)
-      NODE_OPTIONS: "${NODE_OPTIONS:---max-old-space-size=1536 --dns-result-order=ipv4first --no-network-family-autoselection}"
+      NODE_OPTIONS: "${NODE_OPTIONS:---max-old-space-size=1280 --dns-result-order=ipv4first --no-network-family-autoselection}"
       # Use compose `environment` only; do not read a host .env file in the container
       IGNORE_ENV_FILE: "true"
+      BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH: true
       PORT: 4191
       # Database
       DB_HOST: postgres
@@ -95,6 +98,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS:-14400}
       ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
+      LEGACY_AUTOMOTIVE_ORGANIZATION_ID: ${LEGACY_AUTOMOTIVE_ORGANIZATION_ID:-}
       # Demo user seeding (enabled by default; set false to disable)
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
       DEFAULT_SUPER_ADMIN_EMAIL: ${DEFAULT_SUPER_ADMIN_EMAIL:-admin@realtrack.local}
@@ -106,7 +110,7 @@ services:
       # Pipeline project root (scripts, output, env files)
       PIPELINE_PROJECT_ROOT: /app
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8050,https://mhn.realtrackapp.com,http://mhn.realtrackapp.com}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8050,https://app.omnicoreholding.com,http://app.omnicoreholding.com}
       # Frontend base URL (used for OAuth redirect back)
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-}
       # OpenRouter AI (OpenAI-compatible API)
@@ -121,6 +125,10 @@ services:
       OPENAI_MODEL_BULK: ${OPENAI_MODEL_BULK:-deepseek/deepseek-chat-v3-0324}
       OPENAI_MODEL_TEXT: ${OPENAI_MODEL_TEXT:-openai/gpt-4o-mini}
       OPENAI_MODEL_ESCALATION: ${OPENAI_MODEL_ESCALATION:-google/gemini-2.5-flash}
+      # B&I image intake uses an explicit multimodal/text model.
+      BUSINESS_INDUSTRIAL_AI_MODEL: ${BUSINESS_INDUSTRIAL_AI_MODEL:-openai/gpt-5.6-luna-20260709}
+      # Required only for the public Google Drive folder pilot.
+      GOOGLE_DRIVE_API_KEY: ${GOOGLE_DRIVE_API_KEY:-}
       OPENAI_MODEL_FLAGSHIP_MIN_PRICE: ${OPENAI_MODEL_FLAGSHIP_MIN_PRICE:-200}
       AI_FITMENT_MIN_ROWS: ${AI_FITMENT_MIN_ROWS:-5}
       AI_AUTO_APPROVE_MIN_SCORE: ${AI_AUTO_APPROVE_MIN_SCORE:-85}
@@ -169,6 +177,10 @@ services:
       EBAY_DAILY_PUBLISH_TARGET_LIMIT: ${EBAY_DAILY_PUBLISH_TARGET_LIMIT:-5000}
       EBAY_DEV_ID: ${EBAY_DEV_ID:-}
       EBAY_ENVIRONMENT: ${EBAY_ENVIRONMENT:-SANDBOX}
+      EBAY_LISTING_API_MODE: ${EBAY_LISTING_API_MODE:-inventory}
+      # Publish to PartsBazar360 (push channel). Off until the key is set.
+      PARTSBAZAR360_API_KEY: ${PARTSBAZAR360_API_KEY:-}
+      PARTSBAZAR360_API_URL: ${PARTSBAZAR360_API_URL:-https://partsbazar360.com/api}
       # Published-listings Trading mirror sync cadence (set DISABLED=1 to no-op the job body)
       PUBLISHED_LISTINGS_SYNC_CRON: ${PUBLISHED_LISTINGS_SYNC_CRON:-*/15 * * * *}
       PUBLISHED_LISTINGS_SYNC_DISABLED: ${PUBLISHED_LISTINGS_SYNC_DISABLED:-0}
@@ -176,6 +188,7 @@ services:
       PUBLISHED_LISTINGS_SCRAPE_ENRICH: ${PUBLISHED_LISTINGS_SCRAPE_ENRICH:-0}
       PUBLISHED_LISTINGS_ON_DEMAND_ENRICH: ${PUBLISHED_LISTINGS_ON_DEMAND_ENRICH:-0}
       EBAY_REDIRECT_URI: ${EBAY_REDIRECT_URI:-}
+      EBAY_WEBHOOK_SECRET: ${EBAY_WEBHOOK_SECRET:-}
       # SellerPundit (optional eBay connection source — set in project root .env)
       SELLERPUNDIT_API_BASE_URL: ${SELLERPUNDIT_API_BASE_URL:-https://authentication.sellerpundit.com/api/v1}
       SELLERPUNDIT_MARKETPLACES_URL: ${SELLERPUNDIT_MARKETPLACES_URL:-https://marketplaces.sellerpundit.com}

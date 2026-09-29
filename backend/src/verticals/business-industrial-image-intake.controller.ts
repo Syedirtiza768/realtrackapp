@@ -29,6 +29,7 @@ import {
   CreateBusinessIndustrialDriveIntakeJobDto,
 } from './business-industrial-image-intake.dto.js';
 import { BusinessIndustrialImageIntakeService } from './business-industrial-image-intake.service.js';
+import { IMAGE_UPLOAD_MULTER_OPTIONS } from '../storage/upload-limits.js';
 
 @ApiTags('business-industrial-image-intake')
 @ApiBearerAuth()
@@ -89,7 +90,7 @@ export class BusinessIndustrialImageIntakeController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('business_industrial.import')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FilesInterceptor('files', 50))
+  @UseInterceptors(FilesInterceptor('files', 50, IMAGE_UPLOAD_MULTER_OPTIONS))
   upload(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,

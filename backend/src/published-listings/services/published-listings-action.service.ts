@@ -4,10 +4,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
+import { EbayTradingPublishService } from '../../channels/ebay/ebay-trading-publish.service.js';
 import { EbayPublishService } from '../../channels/ebay/ebay-publish.service.js';
 import { ListingActionLogWriterService } from '../../integrations/ebay/services/listing-action-log-writer.service.js';
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
@@ -25,6 +27,8 @@ export class PublishedListingsActionService {
   private readonly logger = new Logger(PublishedListingsActionService.name);
 
   constructor(
+    private readonly config: ConfigService,
+    private readonly tradingApi: EbayTradingPublishService,
     @InjectRepository(EbayPublishedListing)
     private readonly listingRepo: Repository<EbayPublishedListing>,
     @InjectRepository(EbayListingChannel)
@@ -36,6 +40,15 @@ export class PublishedListingsActionService {
     private readonly actionLog: ListingActionLogWriterService,
     private readonly sync: PublishedListingsSyncService,
   ) {}
+
+  private usesTradingApi(): boolean {
+    return (
+      this.config
+        .get<string>('EBAY_LISTING_API_MODE', 'inventory')
+        ?.trim()
+        .toLowerCase() === 'trading'
+    );
+  }
 
   /**
    * Trading SellerList sync historically stored offerId=null. Resolve a live
@@ -132,64 +145,88 @@ export class PublishedListingsActionService {
     };
 
     const storeId = listing.storeId;
-
-    if (
-      dto.title != null ||
-      dto.description != null ||
-      dto.imageUrls != null ||
-      dto.itemSpecifics != null
-    ) {
-      const current = await this.inventoryApi.getItem(storeId, listing.sku);
-      const updatedItem = {
-        ...current,
-        product: {
-          ...current.product,
-          ...(dto.title != null ? { title: dto.title } : {}),
-          ...(dto.description != null ? { description: dto.description } : {}),
-          ...(dto.imageUrls != null ? { imageUrls: dto.imageUrls } : {}),
-          ...(dto.itemSpecifics != null ? { aspects: dto.itemSpecifics } : {}),
-        },
-      };
-      await this.inventoryApi.createOrReplaceItem(
-        storeId,
-        listing.sku,
-        updatedItem,
-      );
-
-      if (listing.offerId && dto.description != null) {
-        await this.inventoryApi.updateOffer(storeId, listing.offerId, {
-          listingDescription: dto.description,
-        });
-      }
-    }
-
-    if (dto.price != null || dto.quantity != null) {
-      const offerId = await this.resolveOfferId(listing);
-      if (!offerId) {
+    if (this.usesTradingApi()) {
+      if (!listing.ebayItemId) {
         throw new BadRequestException(
-          'Listing has no offer ID for price/qty update — sync Inventory offers for this SKU first',
+          'Listing has no eBay item ID for Trading API revision',
         );
       }
-      await this.inventoryApi.bulkUpdatePriceQuantity(storeId, [
+      await this.tradingApi.reviseFixedPriceItem(
+        storeId,
+        listing.ebayItemId,
         {
-          offers: [
-            {
-              offerId,
-              ...(dto.price != null
-                ? {
-                    price: {
-                      value: String(dto.price),
-                      currency: listing.currency ?? 'USD',
-                    },
-                  }
-                : {}),
-              ...(dto.quantity != null
-                ? { availableQuantity: dto.quantity }
-                : {}),
-            },
-          ],
+          title: dto.title,
+          description: dto.description,
+          price: dto.price,
+          quantity:
+            dto.quantity != null
+              ? Math.max(0, dto.quantity) + Math.max(0, listing.quantitySold)
+              : undefined,
+          currency: listing.currency,
+          imageUrls: dto.imageUrls,
+          itemSpecifics: dto.itemSpecifics,
         },
-      ]);
+        listing.marketplaceId,
+      );
+    } else {
+      if (
+        dto.title != null ||
+        dto.description != null ||
+        dto.imageUrls != null ||
+        dto.itemSpecifics != null
+      ) {
+        const current = await this.inventoryApi.getItem(storeId, listing.sku);
+        const updatedItem = {
+          ...current,
+          product: {
+            ...current.product,
+            ...(dto.title != null ? { title: dto.title } : {}),
+            ...(dto.description != null ? { description: dto.description } : {}),
+            ...(dto.imageUrls != null ? { imageUrls: dto.imageUrls } : {}),
+            ...(dto.itemSpecifics != null ? { aspects: dto.itemSpecifics } : {}),
+          },
+        };
+        await this.inventoryApi.createOrReplaceItem(
+          storeId,
+          listing.sku,
+          updatedItem,
+        );
+
+        if (listing.offerId && dto.description != null) {
+          await this.inventoryApi.updateOffer(storeId, listing.offerId, {
+            listingDescription: dto.description,
+          });
+        }
+      }
+
+      if (dto.price != null || dto.quantity != null) {
+        const offerId = await this.resolveOfferId(listing);
+        if (!offerId) {
+          throw new BadRequestException(
+            'Listing has no offer ID for price/qty update — sync Inventory offers for this SKU first',
+          );
+        }
+        await this.inventoryApi.bulkUpdatePriceQuantity(storeId, [
+          {
+            offers: [
+              {
+                offerId,
+                ...(dto.price != null
+                  ? {
+                      price: {
+                        value: String(dto.price),
+                        currency: listing.currency ?? 'USD',
+                      },
+                    }
+                  : {}),
+                ...(dto.quantity != null
+                  ? { availableQuantity: dto.quantity }
+                  : {}),
+              },
+            ],
+          },
+        ]);
+      }
     }
 
     await this.sync.syncListingById(listing.id, organizationId);
@@ -250,7 +287,7 @@ export class PublishedListingsActionService {
       where: { id, organizationId },
     });
     if (!listing) throw new NotFoundException('Published listing not found');
-    if (!listing.offerId) {
+    if (!this.usesTradingApi() && !listing.offerId) {
       throw new BadRequestException(
         'Listing has no offer ID — cannot update policies',
       );
@@ -303,28 +340,53 @@ export class PublishedListingsActionService {
     }
 
     const before = listing.listingPolicies ?? {};
+    let newPolicies: Record<string, unknown>;
 
-    // PUT replaces the entire offer, so fetch the existing offer first to
-    // preserve pricing, category, quantity, etc.
-    const existingOffer = await this.inventoryApi.getOffer(
-      storeId,
-      listing.offerId,
-    );
+    if (this.usesTradingApi()) {
+      if (!listing.ebayItemId) {
+        throw new BadRequestException(
+          'Listing has no eBay item ID — cannot update Trading API policies',
+        );
+      }
+      newPolicies = {
+        ...listing.listingPolicies,
+        ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
+        ...(paymentPolicyId ? { paymentPolicyId } : {}),
+        ...(returnPolicyId ? { returnPolicyId } : {}),
+      };
+      await this.tradingApi.reviseFixedPriceItem(
+        storeId,
+        listing.ebayItemId,
+        {
+          shippingProfileId: fulfillmentPolicyId,
+          paymentProfileId: paymentPolicyId,
+          returnProfileId: returnPolicyId,
+        },
+        marketplaceId,
+      );
+    } else {
+      // PUT replaces the entire offer, so fetch the existing offer first to
+      // preserve pricing, category, quantity, etc.
+      const existingOffer = await this.inventoryApi.getOffer(
+        storeId,
+        listing.offerId!,
+      );
 
-    const newPolicies = {
-      ...existingOffer.listingPolicies,
-      ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
-      ...(paymentPolicyId ? { paymentPolicyId } : {}),
-      ...(returnPolicyId ? { returnPolicyId } : {}),
-    };
+      newPolicies = {
+        ...existingOffer.listingPolicies,
+        ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
+        ...(paymentPolicyId ? { paymentPolicyId } : {}),
+        ...(returnPolicyId ? { returnPolicyId } : {}),
+      };
 
-    await this.inventoryApi.updateOffer(storeId, listing.offerId, {
-      ...existingOffer,
-      listingPolicies: newPolicies,
-    });
+      await this.inventoryApi.updateOffer(storeId, listing.offerId!, {
+        ...existingOffer,
+        listingPolicies: newPolicies,
+      });
 
-    // Re-publish the offer so the policy change goes live on eBay
-    await this.inventoryApi.publishOffer(storeId, listing.offerId);
+      // Re-publish the offer so the policy change goes live on eBay
+      await this.inventoryApi.publishOffer(storeId, listing.offerId!);
+    }
 
     this.logger.log(
       `Updated policies on ${listing.sku} (${listing.offerId}): ` +
@@ -373,11 +435,23 @@ export class PublishedListingsActionService {
       where: { id, organizationId },
     });
     if (!listing) throw new NotFoundException('Published listing not found');
-    if (!listing.offerId) {
-      throw new BadRequestException('Listing has no offer ID');
+    if (this.usesTradingApi()) {
+      if (!listing.ebayItemId) {
+        throw new BadRequestException(
+          'Listing has no eBay item ID for Trading API end request',
+        );
+      }
+      await this.tradingApi.endFixedPriceItem(
+        listing.storeId,
+        listing.ebayItemId,
+        listing.marketplaceId,
+      );
+    } else {
+      if (!listing.offerId) {
+        throw new BadRequestException('Listing has no offer ID');
+      }
+      await this.inventoryApi.withdrawOffer(listing.storeId, listing.offerId);
     }
-
-    await this.inventoryApi.withdrawOffer(listing.storeId, listing.offerId);
 
     listing.listingStatus = 'ended';
     listing.lastSyncedAt = new Date();

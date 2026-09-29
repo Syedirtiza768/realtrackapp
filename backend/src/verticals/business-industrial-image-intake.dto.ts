@@ -9,7 +9,7 @@ import {
   IsString,
   IsUrl,
   IsBoolean,
-  Max,
+
   MaxLength,
   Min,
   MinLength,
@@ -40,7 +40,6 @@ export class CreateBusinessIndustrialDriveIntakeJobDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(200)
   maxItems?: number;
 
   @IsOptional()
@@ -84,13 +83,14 @@ export class ApplyBusinessIndustrialImageIntakeGroupDto {
   model?: string;
 
   @IsOptional()
-  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(40)
   conditionId?: string;
 
+  @IsOptional()
   @IsString()
+  @MinLength(1)
   @MaxLength(200)
   mpn?: string;
 

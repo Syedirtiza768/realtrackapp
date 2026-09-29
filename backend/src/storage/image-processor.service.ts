@@ -37,6 +37,17 @@ const VARIANTS: ImageVariant[] = [
 const MAX_ORIGINAL_DIMENSION = 2048;
 const MAX_PIXEL_COUNT = 4096 * 4096;
 
+// sharp/libvips allocates outside the V8 heap, so --max-old-space-size does not
+// bound it. Cap libvips threads and its operation cache so bursts of image work
+// cannot push the container into the kernel OOM killer. This is process-wide:
+// image-optimizer.service.ts shares the same sharp module.
+sharp.concurrency(Math.max(1, Number(process.env.SHARP_CONCURRENCY ?? '1') || 1));
+sharp.cache({
+  memory: Math.max(8, Number(process.env.SHARP_CACHE_MB ?? '32') || 32),
+  files: 0,
+  items: 50,
+});
+
 @Injectable()
 export class ImageProcessorService {
   private readonly logger = new Logger(ImageProcessorService.name);

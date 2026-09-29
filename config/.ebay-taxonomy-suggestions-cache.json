@@ -1,0 +1,3611 @@
+{
+  "version": 2,
+  "scopes": {
+    "EBAY_MOTORS_US:production": {
+      "suggestions": {
+        "0::siemens logo 12/24rc 6ed1 052-1md00-0ba6 dm8 12/24r 6ed1 055-1mb00-0ba1 plc": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789318313160
+        },
+        "0::danfoss vlt 2800 vlt2815pt4b20str1dbf00a00c0 195n1039 variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789318352642
+        },
+        "0::sennheiser guideport sr 3200-2 cell transmitter 500193": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789318389985
+        },
+        "0::crestron cnxrmc-lv audio video control processor": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789318420845
+        },
+        "0::bose freespace iza 250-lz integrated zone amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789318448321
+        },
+        "0::koyo directlogic 06 do-06dr plc controller f0-04ad-1 f0-4ad2da-2": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789318487328
+        },
+        "0::moorgen mrl059 high power dimming actuator 4 channel 400w": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789318525747
+        },
+        "0::hager tya606b knx 6 channel actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789318556692
+        },
+        "0::lutron qsps-dh-1 series 24v dc din rail power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789318591761
+        },
+        "0::hager tyf642f knx 8 channel switching actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789318629442
+        },
+        "0::rhino ps24-075d 75w 24vdc 3a industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789318662303
+        },
+        "0::moorgen mrl005 leading edge dimmer 2 channel 200w mo-bus": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789318695215
+        },
+        "0::moorgen mrl001 4 channel 10a switch actuator module mo-bus": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789318729215
+        },
+        "0::ateis ida8sab networked voice alarm public address slave unit": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789318759890
+        },
+        "0::rcf dx2006 audio processor rackmount": {
+          "result": {
+            "categoryId": "123445",
+            "categoryName": "Audio/MIDI Interfaces"
+          },
+          "cachedAt": 1789318787581
+        },
+        "0::bose freespace model 8/32 system controller": {
+          "result": {
+            "categoryId": "116852",
+            "categoryName": "Power Cables & Connectors"
+          },
+          "cachedAt": 1789318813214
+        },
+        "0::bose panaray system digital controller ii am294961_02": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789318845630
+        },
+        "0::bose 502c systems controller commercial sound equipment": {
+          "result": {
+            "categoryId": "14990",
+            "categoryName": "Home Speakers & Subwoofers"
+          },
+          "cachedAt": 1789318870911
+        },
+        "0::ateis spag2-1480 single channel power amplifier rack mount": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789318908101
+        },
+        "0::ateis spa-2120 two-channel pa power amplifier 70v 100v": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789318936393
+        },
+        "0::ateis spa-2120 two channel pa power amplifier 70v 100v rack mount": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789318972609
+        },
+        "0::bose powershare ps604a adaptable power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789319008832
+        },
+        "0::powersoft ottocanali 1204 8 channel power amplifier 70v 100v": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789319044918
+        },
+        "0::mk ha1950 white 2-gang 2-way wall light switch": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789319079668
+        },
+        "0::schneider electric altivar atv310h075n4a 0.75 kw vfd": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789319118680
+        },
+        "0::abb bw 340 m/tpn enclosed rotary switch disconnector": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789319153874
+        },
+        "0::yaskawa vs-606v7 cimr-v7cc40p7 variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789319187500
+        },
+        "0::cosel paa300f-24 24v 14a ac-dc power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789319217988
+        },
+        "0::mk 16a 250v electrical wall socket receptacle": {
+          "result": {
+            "categoryId": "259280",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789319248456
+        },
+        "0::mk 13a 250v wall socket gold faceplate 32042pl 31926pl": {
+          "result": {
+            "categoryId": "67279",
+            "categoryName": "Plugs, Jacks & Wall Plates"
+          },
+          "cachedAt": 1789319282747
+        },
+        "0::45a 250v ac double pole switch neon indicator white": {
+          "result": {
+            "categoryId": "260828",
+            "categoryName": "Switch Accessories"
+          },
+          "cachedAt": 1789319318854
+        },
+        "0::siemens logo programmable logic controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789357355046
+        },
+        "100::control arms, ball joints & assemblies": {
+          "result": {
+            "categoryId": "33580",
+            "categoryName": "Control Arms, Ball Joints & Assemblies"
+          },
+          "cachedAt": 1789385908747
+        },
+        "100::suspension and steering": {
+          "result": {
+            "categoryId": "33580",
+            "categoryName": "Control Arms, Ball Joints & Assemblies"
+          },
+          "cachedAt": 1789385921846
+        },
+        "100::tie rods": {
+          "result": {
+            "categoryId": "33593",
+            "categoryName": "Tie Rods & Steering Linkages"
+          },
+          "cachedAt": 1789388069928
+        },
+        "100::general automotive parts": {
+          "result": {
+            "categoryId": "9886",
+            "categoryName": "Other Car & Truck Parts & Accessories"
+          },
+          "cachedAt": 1789388618078
+        },
+        "100::transfer cases": {
+          "result": {
+            "categoryId": "34210",
+            "categoryName": "Other Car Manuals"
+          },
+          "cachedAt": 1789389152258
+        },
+        "100::control arms": {
+          "result": {
+            "categoryId": "33580",
+            "categoryName": "Control Arms, Ball Joints & Assemblies"
+          },
+          "cachedAt": 1789389153509
+        },
+        "100::ball joints": {
+          "result": {
+            "categoryId": "33580",
+            "categoryName": "Control Arms, Ball Joints & Assemblies"
+          },
+          "cachedAt": 1789389160481
+        },
+        "100::suspension": {
+          "result": {
+            "categoryId": "33590",
+            "categoryName": "Shocks, Struts & Assemblies"
+          },
+          "cachedAt": 1789391147749
+        },
+        "100::strut mounts": {
+          "result": {
+            "categoryId": "33590",
+            "categoryName": "Shocks, Struts & Assemblies"
+          },
+          "cachedAt": 1789391214633
+        },
+        "100::wheels & rims": {
+          "result": {
+            "categoryId": "179679",
+            "categoryName": "Wheels"
+          },
+          "cachedAt": 1789392801906
+        },
+        "0::siemens logo! 12/24rc 6ed1 052-1md00-0ba6 dm8 12/24r 6ed1 055-1mb00-0ba1 plc": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789495403989
+        },
+        "0::crestron cnxrmclv audio video matrix switcher": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789495516807
+        },
+        "0::koyo directlogic 06 do-06dr plc with fo-4ad2da-2 and fo-04ad-1 modules": {
+          "result": {
+            "categoryId": "36802",
+            "categoryName": "Other Automation Equipment"
+          },
+          "cachedAt": 1789495595038
+        },
+        "0::moorgen mrl059 4 channel 400w high power dimming actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789495630535
+        },
+        "0::lutron qsps-dh-1 power supply 24v dc": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789495701911
+        },
+        "0::hager tyf642f knx 8-channel actuator": {
+          "result": {
+            "categoryId": "181714",
+            "categoryName": "PLC Input & Output Modules"
+          },
+          "cachedAt": 1789495737726
+        },
+        "0::rhino automationdirect ps24-075d 75w 24v dc industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789495772921
+        },
+        "0::moorgen mrl005 leading edge dimmer 2 channel 200w": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789495814139
+        },
+        "0::moorgen mrl001 4 channel 10a switch actuator mo-bus": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789495844977
+        },
+        "0::rcf dx2006 audio processor rackmount 2 input 6 output": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789495913423
+        },
+        "0::ateis spag2-1480 single channel power amplifier 480w": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789496030705
+        },
+        "0::ateis spa-2120 two-channel pa power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789496055596
+        },
+        "0::ateis spa-2120 two channel pa power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789496082981
+        },
+        "0::bose ps604a powershare adaptable power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789496116239
+        },
+        "0::powersoft ottocanali 1204 8 channel 70v 100v power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789496149839
+        },
+        "0::mk ha1950 electrical wall switch assembly faceplate": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789496182431
+        },
+        "0::abb bw 340 m/tpn rotary switch enclosure 40a 400v": {
+          "result": {
+            "categoryId": "55824",
+            "categoryName": "Electrical Panel & Distribution Boards"
+          },
+          "cachedAt": 1789496237615
+        },
+        "0::yaskawa vs-606v7 cimr-v7cc40p7 400v 3 phase variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789496272347
+        },
+        "0::cosel paa300f-24 24v 14a industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789496299351
+        },
+        "0::mk white electrical wall socket faceplate assembly 16a 250v": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789496325349
+        },
+        "0::mk electric 13a 250v wall socket switch faceplate assembly": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789496358181
+        },
+        "0::45a 250v ac dp double pole wall switch neon indicator": {
+          "result": {
+            "categoryId": "260828",
+            "categoryName": "Switch Accessories"
+          },
+          "cachedAt": 1789496388553
+        },
+        "0::automated logic zn551 bacnet controller": {
+          "result": {
+            "categoryId": "53296",
+            "categoryName": "HVAC & Refrigeration: Controls & Circuit Boards"
+          },
+          "cachedAt": 1789496410088
+        },
+        "0::puls sl10.100 24v dc 10a industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789496441878
+        },
+        "0::phoenix contact quint-ps-1ac-240ac/24dc/10 2938604 din rail power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789496477630
+        },
+        "0::siemens rdf301 hvac room controller thermostat ac 230v": {
+          "result": {
+            "categoryId": "115949",
+            "categoryName": "Programmable Thermostats"
+          },
+          "cachedAt": 1789496506158
+        },
+        "0::mk honeywell mh4709blkc shaver outlet transformer 230v": {
+          "result": {
+            "categoryId": "260831",
+            "categoryName": "Power Transformers"
+          },
+          "cachedAt": 1789496534652
+        },
+        "0::bosch bni-35 large water filter pressure washer accessory": {
+          "result": {
+            "categoryId": "50388",
+            "categoryName": "Pressure Washers"
+          },
+          "cachedAt": 1789496556444
+        },
+        "0::fuji electric hh64p 100v relay": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789496577616
+        },
+        "0::mk electric 4x-4855-02x0 230v 20va shaver supply socket transformer": {
+          "result": {
+            "categoryId": "260831",
+            "categoryName": "Power Transformers"
+          },
+          "cachedAt": 1789496607901
+        },
+        "0::abb sace t1n 100 3 pole fixed thermomagnetic circuit breaker 1sda061801r1": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789496633736
+        },
+        "0::siemens rdu340 flush mounted room thermostat hvac": {
+          "result": {
+            "categoryId": "115949",
+            "categoryName": "Programmable Thermostats"
+          },
+          "cachedAt": 1789496660188
+        },
+        "0::schneider electric altivar 12 atv12hu15m2 ac speed drive": {
+          "result": {
+            "categoryId": "42894",
+            "categoryName": "General Purpose AC Drives"
+          },
+          "cachedAt": 1789496694013
+        },
+        "0::mitsubishi electric freqrol-e500 fr-e520-1.5k 1.5kw ac inverter vfd": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789496726914
+        },
+        "0::abb psr30-600-81 1sfa896109r8100 soft starter": {
+          "result": {
+            "categoryId": "25414",
+            "categoryName": "Other Test Equipment Parts & Accessories"
+          },
+          "cachedAt": 1789496758379
+        },
+        "0::pilz pnoz m1p 773100 modular safety controller": {
+          "result": {
+            "categoryId": "65464",
+            "categoryName": "Safety Relays"
+          },
+          "cachedAt": 1789496786800
+        },
+        "0::iai robo cylinder rcs-c-ra45-i-30-cc-0 cc-link controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789496819559
+        },
+        "0::yaskawa v1000 cimr-vt2a0004baa variable frequency drive ac inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789496851223
+        },
+        "0::abb fh204 ac 2csf204006r2630 63a 100ma 415v 4 pole residual current circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789496884508
+        },
+        "0::abb fh204 ac 2csf204006r3400 40a 300ma 4 pole rccb": {
+          "result": {
+            "categoryId": "181680",
+            "categoryName": "IEC & NEMA Contactors"
+          },
+          "cachedAt": 1789496911841
+        },
+        "0::ifm bni-48 a300 underspeed monitor relay da0001": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789496936387
+        },
+        "0::abb sace tmax t1f/c 160 25a 3 pole molded case circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789496971833
+        },
+        "0::siemens sinamics v20 6sl3210-5be31-1uv0 variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789497006737
+        },
+        "0::wöhner aes 3x51 14x51 50a 690v 3 pole fuseholder": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789497053232
+        },
+        "0::legrand 230v ac modular relay 800 ms": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789497086090
+        },
+        "0::relpol gz14 electromechanical relay 6a 300vac": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789497111426
+        },
+        "0::fuji electric fa hh54p dc100/110v miniature industrial relay": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789497147473
+        },
+        "0::finder 62.33.9.048.0360 48v dc 3no power relay": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789497168181
+        },
+        "0::berger lahr tlc411f tlc411 f industrial automation controller 0063441100006": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789497189935
+        },
+        "0::abb acs480-04-12a7-4 variable frequency drive 400/480v 12.6a": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789497219588
+        },
+        "0::phoenix contact elr w3/9-400 2964173 electronic motor starter": {
+          "result": {
+            "categoryId": "181699",
+            "categoryName": "Combination Starters"
+          },
+          "cachedAt": 1789497251501
+        },
+        "0::mean well dr-120-24 24v 5a din rail power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789497277053
+        },
+        "0::siemens micromaster 440 6se6440-2ab13-7aa1 variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789497316195
+        },
+        "0::legrand dpx3 160 3p 420042 40a circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789497348112
+        },
+        "0::trend iqeco 35 iqe35-1201u50035 controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789497376431
+        },
+        "0::mitsubishi fr-e720-0.2k freqrol-e700 3-phase inverter vfd": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789497397665
+        },
+        "0::abb tmax t1b 160 40a circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789497426449
+        },
+        "0::schneider electric compact nsx400f micrologic 2.3 400a circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789497460107
+        },
+        "0::abb sace tmax t5d 400 400a molded case circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789497495836
+        },
+        "0::bni-67 industrial electrical heating element assembly guarded heater": {
+          "result": {
+            "categoryId": "92078",
+            "categoryName": "Other Electrical Equipment & Supplies"
+          },
+          "cachedAt": 1789497528372
+        },
+        "0::mitsubishi mr-j2s-70b-s211 ac servo amplifier": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789497548608
+        },
+        "0::yamatake sdc21 c215ga00101 process controller": {
+          "result": {
+            "categoryId": "181723",
+            "categoryName": "PLC Temperature Modules"
+          },
+          "cachedAt": 1789497576812
+        },
+        "0::mitsubishi mr-c10a 100w ac servo drive amplifier": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789497607468
+        },
+        "0::abb tmax t1b 160 16a circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789497642040
+        },
+        "0::yokogawa dynaserv ub5c dd servo actuator": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789497676124
+        },
+        "0::siemens sinamics v20 6sl3210-5bb21-5uv0 variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789497709886
+        },
+        "0::priva compri hx hx3 building automation controller": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789497746431
+        },
+        "0::abb slc270 70a 2-pole circuit breaker 120/240v 10ka": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789497780158
+        },
+        "0::abb sace tmax t5h 400 molded case circuit breaker 400 a": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789497814260
+        },
+        "0::nsk esa-j2014bf4-21.1 servo motor controller cc-link": {
+          "result": {
+            "categoryId": "124603",
+            "categoryName": "Servo Motors"
+          },
+          "cachedAt": 1789497847360
+        },
+        "0::omron cp1l-el20dt1-d sysmac plc programmable controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789497869405
+        },
+        "0::jung 2116.10 reg instabus eib switching blind actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789497897573
+        },
+        "0::allen-bradley stratix 8000 1783-ms10t ethernet managed switch": {
+          "result": {
+            "categoryId": "181717",
+            "categoryName": "PLC Ethernet & Communication"
+          },
+          "cachedAt": 1789497936415
+        },
+        "0::interel sps-a2d24a70037-1040 12v 2a power supply": {
+          "result": {
+            "categoryId": "31510",
+            "categoryName": "Laptop Power Adapters/Chargers"
+          },
+          "cachedAt": 1789497964840
+        },
+        "0::siglent sds1072cml+ digital storage oscilloscope 70 mhz": {
+          "result": {
+            "categoryId": "104247",
+            "categoryName": "Oscilloscopes & Vectorscopes"
+          },
+          "cachedAt": 1789497989172
+        },
+        "0::nissei v-xy 4002 200v motor driver": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789498023149
+        },
+        "0::vislink bni-106 satellite finder test instrument": {
+          "result": {
+            "categoryId": "67882",
+            "categoryName": "Signal Finders"
+          },
+          "cachedAt": 1789498059458
+        },
+        "0::rkb k5 karaoke professional digital audio processor rack mount": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789498090296
+        },
+        "0::alto d14 4-channel professional direct box": {
+          "result": {
+            "categoryId": "4785",
+            "categoryName": "Live & Studio Mixers"
+          },
+          "cachedAt": 1789498130903
+        },
+        "0::bose freespace iza 2120-hz integrated zone amplifier rack mount": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498165442
+        },
+        "0::yamaha gc2020c compressor limiter rack unit": {
+          "result": {
+            "categoryId": "3278",
+            "categoryName": "Other Pro Audio Equipment"
+          },
+          "cachedAt": 1789498196065
+        },
+        "0::digmex audio dmx ca-8150a 8 channel rack mount power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789498230667
+        },
+        "0::bose freespace dxa 2120 digital mixer amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498259455
+        },
+        "0::dbx 223xl stereo 2-way mono 3-way crossover": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789498292575
+        },
+        "0::3g audio digital karaoke pre-amplifier rack mount": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498328813
+        },
+        "0::stork pl2.8-s2 two channel smps power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789498365489
+        },
+        "0::elan hd series hdc2000 hdc2001 multi-zone audio controller": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498394854
+        },
+        "0::amperes electronics ls 4816 speaker line surveillance unit": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789498428316
+        },
+        "0::ateis spag2-2120 dual channel power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498461506
+        },
+        "0::ateis spag2-1240 single channel power amplifier 240w rms": {
+          "result": {
+            "categoryId": "18795",
+            "categoryName": "Car Amplifiers"
+          },
+          "cachedAt": 1789498499780
+        },
+        "0::ateis spag2-1360 single channel power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498523459
+        },
+        "0::bosch lbb 4422/10 nl-4827hg-10 power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498546737
+        },
+        "0::ampere electronics zs5602 6 channel paging zone selector": {
+          "result": {
+            "categoryId": "81741",
+            "categoryName": "Other Home Stereo Components"
+          },
+          "cachedAt": 1789498581156
+        },
+        "0::amperes electronics zs5602 paging zone selector": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789498603311
+        },
+        "0::amperes electronics ps9400 24v dc regulated power supply 5a rack mount": {
+          "result": {
+            "categoryId": "181993",
+            "categoryName": "Adjustable Power Supplies"
+          },
+          "cachedAt": 1789498628983
+        },
+        "0::jvc xv-y360 5.1 channel hdmi dvd player": {
+          "result": {
+            "categoryId": "175711",
+            "categoryName": "DVD & Blu-ray Players"
+          },
+          "cachedAt": 1789498653791
+        },
+        "0::amperes electronics am6000 6 channel amplifier monitor panel": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789498686273
+        },
+        "0::ampers electronics ps9400 24v dc regulated rack mount power supply": {
+          "result": {
+            "categoryId": "181993",
+            "categoryName": "Adjustable Power Supplies"
+          },
+          "cachedAt": 1789498722068
+        },
+        "0::ateis spag2-1480 single channel power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498747219
+        },
+        "0::amperes electronics ax700 automatic standby amplifier changeover unit": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789498783745
+        },
+        "0::amperes electronics mx2222 12 input pre-amplifier mixer": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789498808852
+        },
+        "0::amperes vr7610 100w rack mounted zone volume controller": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789498837650
+        },
+        "0::amperes vr7610 100w 6 zone rack mounted volume controller": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789498863639
+        },
+        "0::amperes electronics bc 9730 24v dc automatic battery charger 30a rack mount": {
+          "result": {
+            "categoryId": "162046",
+            "categoryName": "Chargers & Cradles"
+          },
+          "cachedAt": 1789498890209
+        },
+        "0::amperes electronics ep1200 emergency paging panel": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789498925953
+        },
+        "0::bosch plena lbb 1965/00 message manager": {
+          "result": {
+            "categoryId": "63941",
+            "categoryName": "Automatic Levels"
+          },
+          "cachedAt": 1789498952160
+        },
+        "0::bosch lbb 4428/00 power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789498978741
+        },
+        "0::bosch lbb 4424/10 700w 48v audio power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789499013516
+        },
+        "0::inter-m pw-642 program timer rackmount": {
+          "result": {
+            "categoryId": "100501",
+            "categoryName": "Audio for Video"
+          },
+          "cachedAt": 1789499046206
+        },
+        "0::evc-7790 dr-320 digital recorder": {
+          "result": {
+            "categoryId": "15199",
+            "categoryName": "Recorders"
+          },
+          "cachedAt": 1789499070353
+        },
+        "0::amperes px2400s 480w public address power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789499096507
+        },
+        "0::amperes qp 2500 quantum 2000 series public address power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789499152852
+        },
+        "0::rediroom redi1uk rediroom cart mobile medical cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789499207746
+        },
+        "0::rediroom rdi-2 rediroom cart red1uk": {
+          "result": {
+            "categoryId": "115753",
+            "categoryName": "Kitchen Carts"
+          },
+          "cachedAt": 1789499244181
+        },
+        "0::rediroom red1uk rediroom cart mobile medical cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789499268788
+        },
+        "0::rediroom rdi-4 medical cart redi1uk": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789499295744
+        },
+        "0::rediroom rdi-5 rediroom cart redi1uk": {
+          "result": {
+            "categoryId": "71483",
+            "categoryName": "Shopping Carts & Baskets"
+          },
+          "cachedAt": 1789499330888
+        },
+        "0::rediroom rdi-6 redroom cart redi1uk": {
+          "result": {
+            "categoryId": "71483",
+            "categoryName": "Shopping Carts & Baskets"
+          },
+          "cachedAt": 1789499364061
+        },
+        "0::rediroom rdi-7 rediroom cart redi1wuk": {
+          "result": {
+            "categoryId": "115753",
+            "categoryName": "Kitchen Carts"
+          },
+          "cachedAt": 1789499398101
+        },
+        "0::rediroom rdi-8 rediroom cart medical equipment cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789499423859
+        },
+        "0::rediroom rdi-9 rediroom cart red1uk": {
+          "result": {
+            "categoryId": "115753",
+            "categoryName": "Kitchen Carts"
+          },
+          "cachedAt": 1789499447381
+        },
+        "0::rediroom rdi-10 medical cart redi1uk": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789499471509
+        },
+        "0::rediroom rdi-11 redi1uk rediroom cart medical equipment": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789499510414
+        },
+        "0::clinell rediroom cart redi1uk medical isolation cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789499542734
+        },
+        "100::maserati tail light assembly 2014 maserati rear right tail light assembly 670008481 oem used": {
+          "result": {
+            "categoryId": "33716",
+            "categoryName": "Tail Light Assemblies"
+          },
+          "cachedAt": 1789545718949
+        },
+        "100::maserati infotainment screen 2014 maserati infotainment screen 670034541 oem used": {
+          "result": {
+            "categoryId": "174119",
+            "categoryName": "Car Stereos & Head Units"
+          },
+          "cachedAt": 1789545719423
+        },
+        "100::maserati subwoofer 2014 maserati subwoofer 670005164 oem used": {
+          "result": {
+            "categoryId": "179671",
+            "categoryName": "Speakers"
+          },
+          "cachedAt": 1789545725941
+        },
+        "100::maserati automatic gearbox assembly 2014 maserati automatic gearbox assembly 670002340 oem used": {
+          "result": {
+            "categoryId": "171115",
+            "categoryName": "Automatic Transmission"
+          },
+          "cachedAt": 1789545777646
+        },
+        "0::sennheiser guideport sr 3200-2 500193 rack mount audio unit": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789546252476
+        },
+        "0::sennheiser guideport sr 3200-2 500193 rackmount analog audio unit": {
+          "result": {
+            "categoryId": "123445",
+            "categoryName": "Audio/MIDI Interfaces"
+          },
+          "cachedAt": 1789546281427
+        },
+        "0::sennheiser guideport sr 3200-2 rack mount audio unit 500193": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789546337943
+        },
+        "0::sennheiser guideport sr 3200-2 analog audio rackmount unit": {
+          "result": {
+            "categoryId": "123445",
+            "categoryName": "Audio/MIDI Interfaces"
+          },
+          "cachedAt": 1789546368877
+        },
+        "0::crestron cnxrmclv audio video control unit": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789546424659
+        },
+        "0::crestron cnxrmclv audio video interface unit": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789546456126
+        },
+        "0::crestron cnxrmclv audio video control interface": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789546485344
+        },
+        "0::bose freespace iza 190-hz integrated zone amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789546578285
+        },
+        "0::koyo directlogic 06 do-06dr plc f0-4ad2da-2 f0-04ad-1": {
+          "result": {
+            "categoryId": "36802",
+            "categoryName": "Other Automation Equipment"
+          },
+          "cachedAt": 1789546645740
+        },
+        "0::koyo directlogic 06 d0-06dr plc f0-04ad analog modules": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789546675742
+        },
+        "0::moorgen mrl059 high power dimming actuator 4 channel 400w mo-bus": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789546704077
+        },
+        "0::hager tya606b 6 channel knx actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789546828660
+        },
+        "0::lutron qsps-dh-1-60 24v dc power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789546856963
+        },
+        "0::lutron qsps-dh-1-75 24v dc 2.5a power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789546889781
+        },
+        "0::lutron qsps-dh-1-75 24v dc power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789546915823
+        },
+        "0::hager tyf642f knx 8 channel actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789546941180
+        },
+        "0::rhino automationdirect ps24-075d 75w industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789546992221
+        },
+        "0::ateis ida8sab networked voice alarm public address slave rack unit": {
+          "result": {
+            "categoryId": "11899",
+            "categoryName": "Other Fire Protection Equipment"
+          },
+          "cachedAt": 1789547100206
+        },
+        "0::rcf dx2006 audio processor rack mount": {
+          "result": {
+            "categoryId": "123445",
+            "categoryName": "Audio/MIDI Interfaces"
+          },
+          "cachedAt": 1789547120332
+        },
+        "0::x8 professional digital reverb mix system rack mount audio processor": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789547143327
+        },
+        "0::bose panaray system digital controller ii rackmount audio controller": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789547199699
+        },
+        "0::ateis spa-2120 pa power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789547277872
+        },
+        "0::powersoft ottocanali 1204 8 channel rack mount power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789547423612
+        },
+        "0::powersoft ottocanali 1204 multi-channel power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789547458255
+        },
+        "0::mk ha1950 electrical wall plate terminal assembly": {
+          "result": {
+            "categoryId": "55824",
+            "categoryName": "Electrical Panel & Distribution Boards"
+          },
+          "cachedAt": 1789547488302
+        },
+        "0::abb bw 340 m/tpn ip65 enclosed electrical switch": {
+          "result": {
+            "categoryId": "260828",
+            "categoryName": "Switch Accessories"
+          },
+          "cachedAt": 1789547541739
+        },
+        "0::yaskawa vs-606v7 cimr-v7cc40p7 variable frequency drive 400v 1.1kw": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789547570821
+        },
+        "0::cosel paa300f-24 24v 14a power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789547598029
+        },
+        "0::mk 4821tp 16a 250v electrical wall socket receptacle": {
+          "result": {
+            "categoryId": "259280",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789547622212
+        },
+        "0::mk 13a 250v switched socket faceplate": {
+          "result": {
+            "categoryId": "1461",
+            "categoryName": "Other Collectible Tools"
+          },
+          "cachedAt": 1789547643282
+        },
+        "0::45a 250v ac double pole neon wall switch white faceplate": {
+          "result": {
+            "categoryId": "26211",
+            "categoryName": "Toggle Switches"
+          },
+          "cachedAt": 1789547667483
+        },
+        "0::automated logic zn551 bacnet controller type 002102": {
+          "result": {
+            "categoryId": "53296",
+            "categoryName": "HVAC & Refrigeration: Controls & Circuit Boards"
+          },
+          "cachedAt": 1789547692359
+        },
+        "0::danfoss vlt 2800 vlt2815pt4b20str1dbf00a00c0 195n1039 ac drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789547707606
+        },
+        "0::puls sl10.100 24v 10a industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789547718759
+        },
+        "0::phoenix contact quint industrial power supply 24 vdc 10 a 2938604": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789547748422
+        },
+        "0::sennheiser guideport sr 3200-2 500193 analog audio unit": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789547760188
+        },
+        "0::siemens rdf301 hvac room controller thermostat": {
+          "result": {
+            "categoryId": "53302",
+            "categoryName": "HVAC & Refrigeration Thermostats"
+          },
+          "cachedAt": 1789547776974
+        },
+        "0::sennheiser guideport sr 3200-2 500193": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789547787747
+        },
+        "0::bosch large water filter accessory pressure washer": {
+          "result": {
+            "categoryId": "50388",
+            "categoryName": "Pressure Washers"
+          },
+          "cachedAt": 1789547820829
+        },
+        "0::sennheiser guideport sr 3200-2 500193 audio distribution unit": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789547847530
+        },
+        "0::fuji electric hh64p relay 100v 50/60hz": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789547848192
+        },
+        "0::sennheiser guideport sr 3200-2 rackmount analog audio unit": {
+          "result": {
+            "categoryId": "123445",
+            "categoryName": "Audio/MIDI Interfaces"
+          },
+          "cachedAt": 1789547876135
+        },
+        "0::mk electric 4x-4855-02x0 shaver supply unit isolating transformer 230v 20va": {
+          "result": {
+            "categoryId": "139844",
+            "categoryName": "Shaver Accessories"
+          },
+          "cachedAt": 1789547881119
+        },
+        "0::abb sace tmax t1n 100 3 pole circuit breaker 1sda061801r1": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789547906018
+        },
+        "0::crestron cnxrmclv audio video routing control unit": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789547935410
+        },
+        "0::schneider electric altivar 12 atv12hu15m2 1.5 kw ac drive vfd": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789547963231
+        },
+        "0::crestron cnxrmc lv audio video control unit": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789547965605
+        },
+        "0::mitsubishi freqrol-e500 fr-e520-1.5k variable frequency drive inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789547993849
+        },
+        "0::crestron cnxrmclv audio video distribution control unit": {
+          "result": {
+            "categoryId": "185065",
+            "categoryName": "Other Smart Home Electronics"
+          },
+          "cachedAt": 1789547994277
+        },
+        "0::abb psr30-600-81 30a soft starter 24vdc": {
+          "result": {
+            "categoryId": "181702",
+            "categoryName": "Reduced Voltage/Soft Starters"
+          },
+          "cachedAt": 1789548027904
+        },
+        "0::pilz pnoz m1p 773100 safety control module": {
+          "result": {
+            "categoryId": "65464",
+            "categoryName": "Safety Relays"
+          },
+          "cachedAt": 1789548059243
+        },
+        "0::danfoss vlt 2800 195n1039 variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789556782159
+        },
+        "0::danfoss vlt 2800 vlt2815pt4b20str1dbf00a00c0 195n1039 drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789556815919
+        },
+        "0::sennheiser guideport sr 3200-2 sr 3200-2 cell transmitter 500193": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789556842485
+        },
+        "0::sennheiser guideport sr 3200-2 cell transmitter rack unit": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789556846784
+        },
+        "0::koyo directlogic 06 do-06dr plc with f0-4ad2da-2 and f0-04ad-1 modules": {
+          "result": {
+            "categoryId": "36802",
+            "categoryName": "Other Automation Equipment"
+          },
+          "cachedAt": 1789556935082
+        },
+        "0::hager tya606b knx 6 channel switching actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789556997194
+        },
+        "0::koyo directlogic 06 d0-06dr plc f0-4ad2da-2 f0-04ad-1": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789557008317
+        },
+        "0::lutron qsps-dh-1-60 power supply": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789557025985
+        },
+        "0::automationdirect koyo directlogic 06 d0-06dr plc analog i/o modules": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789557042586
+        },
+        "0::hager tyf642f knx 8-channel switching actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789557052155
+        },
+        "0::ateis ida8sab networked voice alarm public address slave controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789557199740
+        },
+        "0::lutron qsps-dh-1-75 24 vdc power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789557236737
+        },
+        "0::lutron qsps-dh-1-75 24v dc power supply 100-277v ac": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789557265507
+        },
+        "0::bose panaray system digital controller ii rackmount audio controller am294961_02": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789557305169
+        },
+        "0::bose 502c systems controller commercial audio equipment": {
+          "result": {
+            "categoryId": "47091",
+            "categoryName": "Speakers"
+          },
+          "cachedAt": 1789557331741
+        },
+        "0::rhino ps24-075d 75w 24v 3a industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789557349631
+        },
+        "0::rhino ps24-075d 75w industrial power supply 24v 3a": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789557398348
+        },
+        "0::ateis spa-2120 2-channel pa power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789557414736
+        },
+        "0::powersoft ottocanali 1204 8-channel 70v 100v rack power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789557467673
+        },
+        "0::mk ha1950 electrical wall switch white faceplate": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789557498412
+        },
+        "0::rack mount digital reverb mix system audio processor": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789557523152
+        },
+        "0::abb bw 340 m/tpn enclosed switch disconnector 40a": {
+          "result": {
+            "categoryId": "185135",
+            "categoryName": "Disconnectors & Load Switches"
+          },
+          "cachedAt": 1789557543991
+        },
+        "0::bose panaray system digital controller ii rack mount audio controller": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789557578730
+        },
+        "0::bose 502c systems controller commercial audio rackmount": {
+          "result": {
+            "categoryId": "123445",
+            "categoryName": "Audio/MIDI Interfaces"
+          },
+          "cachedAt": 1789557609077
+        },
+        "0::mk 48211pl electrical wall socket outlet 16a 250v": {
+          "result": {
+            "categoryId": "259280",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789557619325
+        },
+        "0::mk 13a 250v wall socket switch assembly": {
+          "result": {
+            "categoryId": "259281",
+            "categoryName": "Electrical Switches & Dimmers"
+          },
+          "cachedAt": 1789557639719
+        },
+        "0::45a 250v double pole neon rocker switch white faceplate": {
+          "result": {
+            "categoryId": "58167",
+            "categoryName": "Rocker Switches"
+          },
+          "cachedAt": 1789557666034
+        },
+        "0::ateis spa-2120 two channel pa power amplifier 70v 100v": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789557694411
+        },
+        "0::puls sl 10.100 24v 10a industrial power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789557721927
+        },
+        "0::phoenix contact quint-ps-1ac-240ac/24dc/10 2938604 power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789557757915
+        },
+        "0::siemens rdf301 hvac room thermostat controller": {
+          "result": {
+            "categoryId": "53302",
+            "categoryName": "HVAC & Refrigeration Thermostats"
+          },
+          "cachedAt": 1789557793497
+        },
+        "0::bosch bni-35 large water filter accessory": {
+          "result": {
+            "categoryId": "20684",
+            "categoryName": "Water Filters"
+          },
+          "cachedAt": 1789557844305
+        },
+        "0::powersoft ottocanali 1204 power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789557844359
+        },
+        "0::avant k63610 chm/a/d shaver supply unit fuji electric hh64p relay": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789557871590
+        },
+        "0::mk ha1950 electrical wall switch assembly white faceplate": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789557875642
+        },
+        "0::mk shavers only 115v 230v electrical outlet transformer 4x-4855-02x0": {
+          "result": {
+            "categoryId": "260831",
+            "categoryName": "Power Transformers"
+          },
+          "cachedAt": 1789557894244
+        },
+        "0::schneider electric altivar atv310h075n4a 0.75 kw vfd ac drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789557899043
+        },
+        "0::abb sace t1n 100 3 pole molded case circuit breaker 1sda061801r1": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789557925764
+        },
+        "0::abb bw 340 m/tpn enclosed switch disconnector ip65 40a": {
+          "result": {
+            "categoryId": "185135",
+            "categoryName": "Disconnectors & Load Switches"
+          },
+          "cachedAt": 1789557927510
+        },
+        "0::siemens rdu340 flush mounted room thermostat hvac controller": {
+          "result": {
+            "categoryId": "115949",
+            "categoryName": "Programmable Thermostats"
+          },
+          "cachedAt": 1789557952228
+        },
+        "0::schneider electric altivar 12 atv12hu15m2 ac speed drive variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789557986355
+        },
+        "0::mk electric 48211pl 16a 250v wall socket outlet": {
+          "result": {
+            "categoryId": "259280",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789558010714
+        },
+        "0::mitsubishi fr-e520-1.5k freqrol-e500 1.5kw vfd inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558015696
+        },
+        "0::mk 13a 250v switched wall socket faceplate 32042pl": {
+          "result": {
+            "categoryId": "53112",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789558031233
+        },
+        "0::abb psr30-600-81 30a soft starter 1sfa896109r8100": {
+          "result": {
+            "categoryId": "181702",
+            "categoryName": "Reduced Voltage/Soft Starters"
+          },
+          "cachedAt": 1789558044747
+        },
+        "0::45a 250v ac double pole neon indicator wall switch": {
+          "result": {
+            "categoryId": "260828",
+            "categoryName": "Switch Accessories"
+          },
+          "cachedAt": 1789558049684
+        },
+        "0::pilz pnoz m1p 773100 programmable safety controller module": {
+          "result": {
+            "categoryId": "65464",
+            "categoryName": "Safety Relays"
+          },
+          "cachedAt": 1789558074898
+        },
+        "0::iai robo cylinder controller 106010010048011": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789558104591
+        },
+        "0::phoenix contact quint-ps-100-240ac/24dc/10 2938604 power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789558126517
+        },
+        "0::yaskawa v1000 cimr-vt2a0004baa 200-240v 3-phase ac drive inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558130758
+        },
+        "0::abb fh204 ac 2csf204006r2630 4 pole 63a rccb": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558157850
+        },
+        "0::mk honeywell mh4709blkc shaver outlet transformer 115/230v 230v input": {
+          "result": {
+            "categoryId": "260831",
+            "categoryName": "Power Transformers"
+          },
+          "cachedAt": 1789558191507
+        },
+        "0::bosch large water filter accessory bni-35 aqt pressure washer": {
+          "result": {
+            "categoryId": "50388",
+            "categoryName": "Pressure Washers"
+          },
+          "cachedAt": 1789558213377
+        },
+        "0::ifm electronic a300 underspeed monitor da0001": {
+          "result": {
+            "categoryId": "71393",
+            "categoryName": "Speed Controls"
+          },
+          "cachedAt": 1789558214063
+        },
+        "0::fuji electric hh64p 100v 50/60hz relay contactor": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789558246692
+        },
+        "0::abb sace tmax t1f/c 160 3 pole molded case circuit breaker 25a": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558253556
+        },
+        "0::mk electric k63610 230v 20va shaver socket transformer assembly": {
+          "result": {
+            "categoryId": "260831",
+            "categoryName": "Power Transformers"
+          },
+          "cachedAt": 1789558276533
+        },
+        "0::wöhner aes 3x51 14x51 50a 690v 3-pole fuse holder": {
+          "result": {
+            "categoryId": "260824",
+            "categoryName": "Fuse Accessories"
+          },
+          "cachedAt": 1789558316846
+        },
+        "0::legrand 230v ac relay contactor module a1=800ms": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789558348060
+        },
+        "0::abb sace t1n 100 3 pole circuit breaker 1sda061801r1": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558358661
+        },
+        "0::siemens rdu340 flush mounted hvac room thermostat": {
+          "result": {
+            "categoryId": "115949",
+            "categoryName": "Programmable Thermostats"
+          },
+          "cachedAt": 1789558390020
+        },
+        "0::fuji electric fa hh54p relay dc100/110v": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789558403845
+        },
+        "0::schneider electric altivar 12 atv12hu15m2 1.5 kw 2 hp ac variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558420500
+        },
+        "0::mitsubishi freqrol-e500 fr-e520-1.5k 1.5 kw variable frequency drive inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558450800
+        },
+        "0::berger lahr tlc411f industrial controller 230 vac": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789558457463
+        },
+        "0::abb psr30-600-81 soft starter 30a": {
+          "result": {
+            "categoryId": "181702",
+            "categoryName": "Reduced Voltage/Soft Starters"
+          },
+          "cachedAt": 1789558479231
+        },
+        "0::abb acs480-04-12a7-4 variable frequency drive inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558484694
+        },
+        "0::phoenix contact elr w3/9-400 2964173 electronic reversing module": {
+          "result": {
+            "categoryId": "78193",
+            "categoryName": "Other Motor Controls"
+          },
+          "cachedAt": 1789558509498
+        },
+        "0::iai robo cylinder rcs-rra45 controller cc-link": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789558532152
+        },
+        "0::yaskawa v1000 cimr-vt2a0004baa variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558555476
+        },
+        "0::siemens micromaster 440 6se6440-2ab13-7aa1 vfd": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558558350
+        },
+        "0::abb fh204 ac 4-pole rccb rcd 63a 100ma 2csf204006r2630": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558582448
+        },
+        "0::legrand dpx3 160 3p 4 200 42 40a circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558589452
+        },
+        "0::abb fh204 ac 2csf204006r3400 4 pole 40a 300ma rccb rcd": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558610122
+        },
+        "0::ifm electronic a300 underspeed monitor relay mo3672 da0001": {
+          "result": {
+            "categoryId": "181696",
+            "categoryName": "Time Delay Relays"
+          },
+          "cachedAt": 1789558637733
+        },
+        "0::mitsubishi fr-e720-0.2k freqrol-e700 inverter vfd": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789558644575
+        },
+        "0::abb slc270 70a 2-pole circuit breaker 120/240v": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558695210
+        },
+        "0::abb sace tmax t5h 400 400a molded case circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789558728223
+        },
+        "0::wöhner bni-51 3 pole 50a 690v fuse switch holder 14x51": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789558747771
+        },
+        "0::esa nsk esa-j2014bf4-21.1 2-51038-700 cc-link motor controller": {
+          "result": {
+            "categoryId": "124603",
+            "categoryName": "Servo Motors"
+          },
+          "cachedAt": 1789558760606
+        },
+        "0::legrand 230v ac din rail relay control module a1 800ms": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789558770625
+        },
+        "0::omron cp1l-el20dt1-d sysmac programmable controller plc": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789558785873
+        },
+        "0::relpol gzt4 relay socket 6a 300vac": {
+          "result": {
+            "categoryId": "181697",
+            "categoryName": "Relay Accessories"
+          },
+          "cachedAt": 1789558808939
+        },
+        "0::rediroom red1uk rediroom cart mobile medical equipment cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789558844967
+        },
+        "0::finder 62.33.9.048.0360 48v dc power relay 16a 250v ac": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789558864759
+        },
+        "0::rediroom cart red1uk medical equipment cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789558868293
+        },
+        "0::clinell rediroom cart redi1uk mobile patient isolation cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789558892411
+        },
+        "0::accura 2350 1pcsh-630a 630a electrical module": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789558914973
+        },
+        "0::rootech accura 2350-dcm d1000033 process control equipment": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789558928955
+        },
+        "0::roottech accura 2350 3psc-125a-90 rj12 tester": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789558946603
+        },
+        "0::vislink video exciter broadcast rf equipment bni-106.3": {
+          "result": {
+            "categoryId": "3319",
+            "categoryName": "Other Production & Editing"
+          },
+          "cachedAt": 1789558975903
+        },
+        "0::roototech accura 2350 3p-250a-105 250a 105mm": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789558978324
+        },
+        "0::bosch vip x1600 b video encoder chassis": {
+          "result": {
+            "categoryId": "46974",
+            "categoryName": "Camera & Video Systems"
+          },
+          "cachedAt": 1789559003271
+        },
+        "0::roottech accura 2350-dcm d1000029 process control equipment dc controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789559092596
+        },
+        "0::yahoo japan bb bni-224 pcmcia wireless lan card ieee 802.11b": {
+          "result": {
+            "categoryId": "42196",
+            "categoryName": "Laptop Network Cards"
+          },
+          "cachedAt": 1789559108106
+        },
+        "0::roottech accura 2350 3p-250a-105 250a 105mm meter": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789559118168
+        },
+        "0::rootech accura 2350-dcm d100033 process control controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789559143117
+        },
+        "0::roottech bni-225 bridge-socket industrial automation module": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789559158032
+        },
+        "0::siemens logo! 12/24rc plc 6ed1 052-1md00-0ba6 dm8 12/24r 6ed1 055-1mb00-0ba1": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789559888029
+        },
+        "0::sennheiser guideport sr 3200-2 500193 cell transmitter": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789559946935
+        },
+        "0::koyo directlogic 06 d0-06dr plc with analog i/o modules": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789560181700
+        },
+        "0::moorgen mrl059 4 channel high power dimming actuator 400w": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789560213642
+        },
+        "0::hager tya606b knx 6 channel relay actuator": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789560305257
+        },
+        "0::bose 502c systems controller audio equipment": {
+          "result": {
+            "categoryId": "47091",
+            "categoryName": "Speakers"
+          },
+          "cachedAt": 1789560418789
+        },
+        "0::rhino ps24-075d 75w industrial power supply 24vdc 3a": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789560484709
+        },
+        "0::ateis spa-2120 dual channel pa power amplifier 70v 100v": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789560511046
+        },
+        "0::rhino ps24-075d 75w industrial power supply": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789560526084
+        },
+        "0::moorgen mrl001 4 channel 10a switch actuator mo-bus module": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789560587235
+        },
+        "0::mk ha1950 20a 250v double pole wall switch white plate": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789560601123
+        },
+        "0::schneider electric altivar atv310h075n4a variable frequency drive 0.75 kw": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789560630228
+        },
+        "0::abb bw 340 m/tpn enclosed rotary switch disconnector ip65": {
+          "result": {
+            "categoryId": "92078",
+            "categoryName": "Other Electrical Equipment & Supplies"
+          },
+          "cachedAt": 1789560659615
+        },
+        "0::rack mount professional digital reverb mixer audio processor bx8": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789560684687
+        },
+        "0::yaskawa vs-606v7 cimr-v7cc40p7 variable frequency drive 400v 3 phase": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789560694496
+        },
+        "0::mk 48211pl 16a 250v wall socket receptacle": {
+          "result": {
+            "categoryId": "259280",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789560726319
+        },
+        "0::mk 13a 250v switched wall socket faceplate gold white 32042pl": {
+          "result": {
+            "categoryId": "53112",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789560753382
+        },
+        "0::bose 502c systems controller commercial audio rack mount": {
+          "result": {
+            "categoryId": "61336",
+            "categoryName": "Speaker Mounts & Stands"
+          },
+          "cachedAt": 1789560772961
+        },
+        "0::45a 250v ac double pole neon wall switch": {
+          "result": {
+            "categoryId": "259281",
+            "categoryName": "Electrical Switches & Dimmers"
+          },
+          "cachedAt": 1789560777459
+        },
+        "0::automated logic zn551 bacnet controller building automation": {
+          "result": {
+            "categoryId": "53296",
+            "categoryName": "HVAC & Refrigeration: Controls & Circuit Boards"
+          },
+          "cachedAt": 1789560804852
+        },
+        "0::siemens rdf301 hvac room thermostat controller 230v": {
+          "result": {
+            "categoryId": "53302",
+            "categoryName": "HVAC & Refrigeration Thermostats"
+          },
+          "cachedAt": 1789560901070
+        },
+        "0::mk by honeywell mh4709blkc shaver outlet transformer 230v": {
+          "result": {
+            "categoryId": "260831",
+            "categoryName": "Power Transformers"
+          },
+          "cachedAt": 1789560932975
+        },
+        "0::bosch large water filter accessory aqt pressure washer": {
+          "result": {
+            "categoryId": "50388",
+            "categoryName": "Pressure Washers"
+          },
+          "cachedAt": 1789560955731
+        },
+        "0::powersoft ottocanali 1204 rackmount amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789560984154
+        },
+        "0::fuji electric hh64p 100v 50/60hz relay": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789560988372
+        },
+        "0::mk electric k63610 shaver socket transformer 115v 230v 20va": {
+          "result": {
+            "categoryId": "260831",
+            "categoryName": "Power Transformers"
+          },
+          "cachedAt": 1789561016896
+        },
+        "0::mk electric ha1950 20ax 250v wall switch red indicator": {
+          "result": {
+            "categoryId": "260828",
+            "categoryName": "Switch Accessories"
+          },
+          "cachedAt": 1789561044206
+        },
+        "0::schneider electric altivar atv310h075n4a 0.75 kw variable frequency drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789561070409
+        },
+        "0::abb bw 340 m/tpn enclosed rotary disconnect switch 40a 690v ip65": {
+          "result": {
+            "categoryId": "260828",
+            "categoryName": "Switch Accessories"
+          },
+          "cachedAt": 1789561098772
+        },
+        "0::schneider electric altivar 12 atv12hu15m2 ac speed drive 1.5 kw": {
+          "result": {
+            "categoryId": "42894",
+            "categoryName": "General Purpose AC Drives"
+          },
+          "cachedAt": 1789561103098
+        },
+        "0::mitsubishi freqrol-e500 fr-e520-1.5k 1.5kw vfd inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789561130779
+        },
+        "0::abb psr30-600-81 30a soft starter 208-600v ac 24v dc": {
+          "result": {
+            "categoryId": "181702",
+            "categoryName": "Reduced Voltage/Soft Starters"
+          },
+          "cachedAt": 1789561159772
+        },
+        "0::cosel paa300f-24 24v 14a enclosed power supply": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789561161440
+        },
+        "0::pilz pnoz m1p 773100 safety relay controller": {
+          "result": {
+            "categoryId": "65464",
+            "categoryName": "Safety Relays"
+          },
+          "cachedAt": 1789561187835
+        },
+        "0::mk 48211pl 16a 250v white wall socket": {
+          "result": {
+            "categoryId": "53112",
+            "categoryName": "Electrical Outlets & Receptacles"
+          },
+          "cachedAt": 1789561199006
+        },
+        "0::iai robo cylinder rcs-c-r45-i-30-cc-0 controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789561219569
+        },
+        "0::mk gold finish 13a 250v electrical wall plate socket switch assembly": {
+          "result": {
+            "categoryId": "43412",
+            "categoryName": "Wall Plates & Outlet Covers"
+          },
+          "cachedAt": 1789561226294
+        },
+        "0::yaskawa v1000 cimr-vt2a0004baa ac drive inverter": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789561243906
+        },
+        "0::45a 250v double pole neon indicator wall switch": {
+          "result": {
+            "categoryId": "260828",
+            "categoryName": "Switch Accessories"
+          },
+          "cachedAt": 1789561252377
+        },
+        "0::abb fh204 ac 2csf204006r2630 63a 100ma 4 pole rccb": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789561272720
+        },
+        "0::abb fh204 ac 2csf204006r3400 4 pole rccb 40a 300ma": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789561302303
+        },
+        "0::ifm electronic bni-48 a300 underspeed monitor relay da0001": {
+          "result": {
+            "categoryId": "181696",
+            "categoryName": "Time Delay Relays"
+          },
+          "cachedAt": 1789561330079
+        },
+        "0::phoenix contact quint-ps-100-240ac/24dc/10 24vdc 10a power supply 2938604": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789561343019
+        },
+        "0::abb tmax t1b 160 40a molded case circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789561353440
+        },
+        "0::schneider electric compact nsx400f micrologic 2.3 3 pole circuit breaker 160 400a": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789561388272
+        },
+        "0::abb sace tmax t5d 400 3 pole molded case circuit breaker 400a": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789561418945
+        },
+        "0::industrial guarded electrical heater assembly bni-67": {
+          "result": {
+            "categoryId": "92078",
+            "categoryName": "Other Electrical Equipment & Supplies"
+          },
+          "cachedAt": 1789561448611
+        },
+        "0::berger lahr tlc411 f industrial controller 230 vac": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789561450227
+        },
+        "0::abb acs480-04-12a7-4 variable frequency drive ac drive": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789561477458
+        },
+        "0::yamatake sdc21 c215ga00101 industrial process controller": {
+          "result": {
+            "categoryId": "181723",
+            "categoryName": "PLC Temperature Modules"
+          },
+          "cachedAt": 1789561501682
+        },
+        "0::phoenix contact elr w3/9-400 2964173 electronic load relay module": {
+          "result": {
+            "categoryId": "36328",
+            "categoryName": "General Purpose Relays"
+          },
+          "cachedAt": 1789561502758
+        },
+        "0::mitsubishi melservo mr-c10a 100w ac servo drive amplifier": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789561546037
+        },
+        "0::yokogawa dynaserv ub5c dd servo actuator drive": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789561608109
+        },
+        "0::trend iqeco 35 iqe35-1201u50035 building automation controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789561622564
+        },
+        "0::priva compri hx hx3 industrial controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789561665709
+        },
+        "0::rediroom rdi-4 rediroom cart redi1uk": {
+          "result": {
+            "categoryId": "71483",
+            "categoryName": "Shopping Carts & Baskets"
+          },
+          "cachedAt": 1789561696573
+        },
+        "0::schneider electric compact nsx400f micrologic 2.3 400a 3 pole circuit breaker": {
+          "result": {
+            "categoryId": "185134",
+            "categoryName": "Circuit Breakers"
+          },
+          "cachedAt": 1789561707533
+        },
+        "0::rediroom rdi-5 redi1uk medical isolation cart": {
+          "result": {
+            "categoryId": "257864",
+            "categoryName": "Surgical Gowns"
+          },
+          "cachedAt": 1789561723822
+        },
+        "0::rediroom rdi-6 rediroom cart redi1uk": {
+          "result": {
+            "categoryId": "71483",
+            "categoryName": "Shopping Carts & Baskets"
+          },
+          "cachedAt": 1789561752890
+        },
+        "0::industrial guarded electrical heating assembly wire mesh enclosure bni-67": {
+          "result": {
+            "categoryId": "42886",
+            "categoryName": "Electrical Boxes & Enclosures"
+          },
+          "cachedAt": 1789561769286
+        },
+        "0::rediroom rdi-7 medical cart redi1uk": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789561778927
+        },
+        "0::rootech accura md-gas combustible gas detector module tgs 813": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789561952749
+        },
+        "0::mitsubishi melservo mr-c10a ac servo amplifier 100w": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789561996420
+        },
+        "0::rkc instrument thv-1p2020-8*hn-1 temperature controller": {
+          "result": {
+            "categoryId": "181723",
+            "categoryName": "PLC Temperature Modules"
+          },
+          "cachedAt": 1789562002806
+        },
+        "0::accura 2350 1pscsh-630a 630a electrical module": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562026530
+        },
+        "0::roototech accura 2350 3p-250a-105 250a 105mm rj12 industrial electrical module": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562047500
+        },
+        "0::roottech accura 2350 3psc-60a-75 electrical module": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562066018
+        },
+        "0::siemens sinamics v20 6sl3210-5bb21-5uv0 ac drive 2 hp": {
+          "result": {
+            "categoryId": "78192",
+            "categoryName": "Variable Frequency Drives"
+          },
+          "cachedAt": 1789562084939
+        },
+        "0::rootech accura 2750lcg rg000051 industrial controller module": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562088263
+        },
+        "0::priva compri hx3 industrial controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562114956
+        },
+        "0::roottech accura 2350 1pscsh-800a 800a rj12a rj12b": {
+          "result": {
+            "categoryId": "58319",
+            "categoryName": "Switch Modules"
+          },
+          "cachedAt": 1789562122897
+        },
+        "0::rootech accura md-gas combustible gas detector controller tgs 813": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789562146481
+        },
+        "0::roottech accura 2350 h-800a rj12a rj12b electronic unit": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562174230
+        },
+        "0::rootech gvv module accura 2350 bni-90": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562197111
+        },
+        "0::accura 2350 3p-100a-75 100a 75mm three phase electrical monitor": {
+          "result": {
+            "categoryId": "181709",
+            "categoryName": "HMI & Open Interface Panels"
+          },
+          "cachedAt": 1789562217773
+        },
+        "0::nsk esa-j2014bf4-21.1 2-51038-700 motor controller cc-link": {
+          "result": {
+            "categoryId": "124603",
+            "categoryName": "Servo Motors"
+          },
+          "cachedAt": 1789562240184
+        },
+        "0::accura 2350 h-800a rootech industrial monitoring unit rj12": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562246016
+        },
+        "0::omron cp1l-el20dt1-d programmable controller plc": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562262216
+        },
+        "0::rootech accura md-gas tgs 813 combustible gas detector 24vdc": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789562267118
+        },
+        "0::jung 2116.10 reg schaltaktor jalousieaktor instabus eib": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562287845
+        },
+        "0::accura 2350 3p-125a-90 125a 90mm rj12a rj12b electrical meter": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562295748
+        },
+        "0::jung 2116 10 reg eib instabus schaltaktor jalousieaktor": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562315133
+        },
+        "0::roottech accura 2350 3p-125a-90 125a 90mm meter": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789562326912
+        },
+        "0::allen-bradley stratix 8000 1783-ms10t managed ethernet switch": {
+          "result": {
+            "categoryId": "181717",
+            "categoryName": "PLC Ethernet & Communication"
+          },
+          "cachedAt": 1789562338686
+        },
+        "0::accura 2350 1pcsh-630a 630a electrical module rj12": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562348253
+        },
+        "0::rootech accura md-gas combustible gas detector controller": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789562372428
+        },
+        "0::accura 2350 3p-125a-90 125a 90mm electrical module": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789562398621
+        },
+        "0::interel sps-a2d24a70037-1010 12v 2a power supply": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562435818
+        },
+        "0::rootech accura 2350 1psgsh-630a 630a electrical module": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562449531
+        },
+        "0::siglent sds1072cml+ 70 mhz 1 gsa/s digital storage oscilloscope": {
+          "result": {
+            "categoryId": "104247",
+            "categoryName": "Oscilloscopes & Vectorscopes"
+          },
+          "cachedAt": 1789562456918
+        },
+        "0::accura bni-160 battery tester 3psc-60a-75": {
+          "result": {
+            "categoryId": "79845",
+            "categoryName": "Battery Testers"
+          },
+          "cachedAt": 1789562469842
+        },
+        "0::nissan corporation motor driver v-xy 4002 200v": {
+          "result": {
+            "categoryId": "181732",
+            "categoryName": "General Purpose Motors"
+          },
+          "cachedAt": 1789562481432
+        },
+        "0::rootech accura 2350-dcm d1000027 process control module": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562493900
+        },
+        "0::vislink bni-106 sat finder satellite signal finder test instrument": {
+          "result": {
+            "categoryId": "67882",
+            "categoryName": "Signal Finders"
+          },
+          "cachedAt": 1789562511526
+        },
+        "0::accura 2350 1p-125a-60 125a 60mm electrical monitoring unit": {
+          "result": {
+            "categoryId": "181709",
+            "categoryName": "HMI & Open Interface Panels"
+          },
+          "cachedAt": 1789562516293
+        },
+        "0::rootetech accura 2350 3p-250a-105 250a 105mm electrical monitoring unit": {
+          "result": {
+            "categoryId": "181709",
+            "categoryName": "HMI & Open Interface Panels"
+          },
+          "cachedAt": 1789562539077
+        },
+        "0::vislink bni-106.1 video exciter": {
+          "result": {
+            "categoryId": "21517",
+            "categoryName": "Video Monitors"
+          },
+          "cachedAt": 1789562539947
+        },
+        "0::rootech accura 2350 1psc-60a-50 60a 50mm electrical component": {
+          "result": {
+            "categoryId": "124603",
+            "categoryName": "Servo Motors"
+          },
+          "cachedAt": 1789562558525
+        },
+        "0::vislink sat finder system 3 bni-106.2": {
+          "result": {
+            "categoryId": "171223",
+            "categoryName": "Study Guides & Test Prep"
+          },
+          "cachedAt": 1789562572994
+        },
+        "0::accura 2350 3p-125a-90 125a 90mm rj12 industrial electrical monitor": {
+          "result": {
+            "categoryId": "181709",
+            "categoryName": "HMI & Open Interface Panels"
+          },
+          "cachedAt": 1789562579693
+        },
+        "0::vislink video exciter broadcast rf transmitter 9-36v dc": {
+          "result": {
+            "categoryId": "149958",
+            "categoryName": "Audio/Video Transmitters"
+          },
+          "cachedAt": 1789562600485
+        },
+        "0::accura 2350 3p-125a-90 125a 90mm rj12 electrical module": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789562604510
+        },
+        "0::vislink bni-106.4 sat finder satellite signal meter": {
+          "result": {
+            "categoryId": "67882",
+            "categoryName": "Signal Finders"
+          },
+          "cachedAt": 1789562629334
+        },
+        "0::rootech accura md-gas combustible gas detector tgs 813": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789562632009
+        },
+        "0::rkb k5 karaoke professional digital audio processor audio preamplifier": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789562672134
+        },
+        "0::accura 2350 3p-250a-105 250a 105mm measurement instrument": {
+          "result": {
+            "categoryId": "26261",
+            "categoryName": "Other Business & Industrial"
+          },
+          "cachedAt": 1789562690098
+        },
+        "0::alto d14 4-channel professional direct box rackmount audio equipment": {
+          "result": {
+            "categoryId": "4785",
+            "categoryName": "Live & Studio Mixers"
+          },
+          "cachedAt": 1789562704011
+        },
+        "0::accura 2350 3psc-60a-75 three-phase current sensor 60a 75mm": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789562717316
+        },
+        "0::bose freespace iza 2120-hz integrated zone amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789562732386
+        },
+        "0::roottech accura 2350 1pscsh-800a 800a rj12 energy meter": {
+          "result": {
+            "categoryId": "92078",
+            "categoryName": "Other Electrical Equipment & Supplies"
+          },
+          "cachedAt": 1789562742727
+        },
+        "0::rootech accura md-gas tgs 813 gas detector controller": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789562765082
+        },
+        "0::dmx dismex audio ca-8150a rack mount power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789562783656
+        },
+        "0::rootech accura 2350-dcm d1000093 dc power monitor": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562792427
+        },
+        "0::rootech accura 2750pc-100a r7000143 industrial controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562814715
+        },
+        "0::rootech accura 2750pc-30a r5000142 motor protection relay controller": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562837432
+        },
+        "0::accura bni-176 electronic lcd display module pcb assembly": {
+          "result": {
+            "categoryId": "181887",
+            "categoryName": "LCD Display Modules"
+          },
+          "cachedAt": 1789562860682
+        },
+        "0::rootech accura 2350 gw module bni-177": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562884214
+        },
+        "0::stork pl2.8-s2 class i smps power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789562893216
+        },
+        "0::accura 2350 3p-125a-90 125a 90mm electrical monitoring device": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789562902896
+        },
+        "0::elan hdc2000 hdc2001 hd series multi-zone audio distribution controller": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789562925960
+        },
+        "0::rootech gw module accura 2350 industrial module rj12": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789562930007
+        },
+        "0::rootech accura md-gas bni-180 combustible gas sensor controller tgs 813": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789562959655
+        },
+        "0::amperes electronics ls4816 speaker line surveillance 16 channel 100v line unit": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789562961738
+        },
+        "0::accura 2350 3p-125a-90 125a 90mm electrical monitoring module rj12": {
+          "result": {
+            "categoryId": "78191",
+            "categoryName": "Servo Drives & Amplifiers"
+          },
+          "cachedAt": 1789562986832
+        },
+        "0::ateis spag2-2120 dual channel power amplifier 120w 25v 50v 100v": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789562988683
+        },
+        "0::rootech accura 2350-dcm d1000032 process control equipment dc module": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789563016318
+        },
+        "0::accura 2350 3p-250a-105 250a 105mm 3-phase module": {
+          "result": {
+            "categoryId": "181709",
+            "categoryName": "HMI & Open Interface Panels"
+          },
+          "cachedAt": 1789563042905
+        },
+        "0::ateis spag2-1240 single channel power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563063291
+        },
+        "0::rootech accura 2350 800a 1pscsh-800a rj12a rj12b": {
+          "result": {
+            "categoryId": "58319",
+            "categoryName": "Switch Modules"
+          },
+          "cachedAt": 1789563070050
+        },
+        "0::accura 2350 3p-100a-75 3-phase 100a energy meter": {
+          "result": {
+            "categoryId": "4678",
+            "categoryName": "Other Test Meters & Detectors"
+          },
+          "cachedAt": 1789563088795
+        },
+        "0::ateis spag2-1240 single channel power amplifier 240w": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563093281
+        },
+        "0::rootech accura md-gas gas sensor measuring equipment tgs 813": {
+          "result": {
+            "categoryId": "57520",
+            "categoryName": "Other Sensors"
+          },
+          "cachedAt": 1789563118036
+        },
+        "0::rkc thv-1pz020-8*hn-1 thyristor power controller 20a": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789563148815
+        },
+        "0::ateis spag2-1360 single channel power amplifier 360w": {
+          "result": {
+            "categoryId": "18795",
+            "categoryName": "Car Amplifiers"
+          },
+          "cachedAt": 1789563156039
+        },
+        "0::rootech accura md-gas tgs 813 combustible gas detector controller": {
+          "result": {
+            "categoryId": "50965",
+            "categoryName": "Gas Detectors & Monitors"
+          },
+          "cachedAt": 1789563185757
+        },
+        "0::ateis spag2-1360 single channel power amplifier 360w 100v": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563197425
+        },
+        "0::rootech accura md-gas tgs 813 gas sensor module": {
+          "result": {
+            "categoryId": "57520",
+            "categoryName": "Other Sensors"
+          },
+          "cachedAt": 1789563215952
+        },
+        "0::bosch lbb 4422/10 50v four-channel power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563228204
+        },
+        "0::bosch vip-x1600-b vip x1600 b video encoder base system": {
+          "result": {
+            "categoryId": "175725",
+            "categoryName": "Other Surveillance Parts & Accessories"
+          },
+          "cachedAt": 1789563247219
+        },
+        "0::amperes electronics zs5602 6 channel paging zone selector": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789563264466
+        },
+        "0::bosch vip-x1600-b vip x1600 b base system video encoder": {
+          "result": {
+            "categoryId": "175725",
+            "categoryName": "Other Surveillance Parts & Accessories"
+          },
+          "cachedAt": 1789563281975
+        },
+        "0::bosch vip-x1600-xfb vip x1600 xf base system video encoder": {
+          "result": {
+            "categoryId": "175725",
+            "categoryName": "Other Surveillance Parts & Accessories"
+          },
+          "cachedAt": 1789563313909
+        },
+        "0::jvc xv-y360 5.1ch hdmi dvd player": {
+          "result": {
+            "categoryId": "175711",
+            "categoryName": "DVD & Blu-ray Players"
+          },
+          "cachedAt": 1789563338138
+        },
+        "0::crestron ccs-uc-codec-200 video conferencing codec": {
+          "result": {
+            "categoryId": "61834",
+            "categoryName": "Conference Equipment"
+          },
+          "cachedAt": 1789563346804
+        },
+        "0::amperes electronics ps9400 24v dc regulated power supply": {
+          "result": {
+            "categoryId": "181993",
+            "categoryName": "Adjustable Power Supplies"
+          },
+          "cachedAt": 1789563401503
+        },
+        "0::peavey cab 160 mediamatrix cobranet audio output bridge": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789563404494
+        },
+        "0::peavey cab 16o cobranet audio interface 16 output rack unit": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789563438572
+        },
+        "0::ampers electronics ax700 automatic standby amplifier changeover unit": {
+          "result": {
+            "categoryId": "58278",
+            "categoryName": "Panel Meters"
+          },
+          "cachedAt": 1789563460651
+        },
+        "0::bosch vip x1600 xf vip-x1600-xfb f01u165101 video encoder base system": {
+          "result": {
+            "categoryId": "175725",
+            "categoryName": "Other Surveillance Parts & Accessories"
+          },
+          "cachedAt": 1789563469763
+        },
+        "0::extron dvs 605 digital video scaler": {
+          "result": {
+            "categoryId": "21169",
+            "categoryName": "Distribution Switchers & Routers"
+          },
+          "cachedAt": 1789563494158
+        },
+        "0::vr7610 100w rack mounted zone volume controller": {
+          "result": {
+            "categoryId": "183068",
+            "categoryName": "PC & Console VR Headsets"
+          },
+          "cachedAt": 1789563520437
+        },
+        "0::crestron ccs-uc-codec-200 pn6506310 collaboration system codec": {
+          "result": {
+            "categoryId": "61834",
+            "categoryName": "Conference Equipment"
+          },
+          "cachedAt": 1789563525581
+        },
+        "0::amperes vr7610 100w rack mounted 6 zone volume controller": {
+          "result": {
+            "categoryId": "23791",
+            "categoryName": "Signal Processors/Rack Effects"
+          },
+          "cachedAt": 1789563542679
+        },
+        "0::crestron ccs-uc-codec-200 hd collaboration system video conferencing codec": {
+          "result": {
+            "categoryId": "61834",
+            "categoryName": "Conference Equipment"
+          },
+          "cachedAt": 1789563558773
+        },
+        "0::amperes electronics bc 9730 automatic battery charger 24v dc 30a rack mount": {
+          "result": {
+            "categoryId": "162046",
+            "categoryName": "Chargers & Cradles"
+          },
+          "cachedAt": 1789563573616
+        },
+        "0::bosch vip x1600 b rackmount video processing chassis": {
+          "result": {
+            "categoryId": "175725",
+            "categoryName": "Other Surveillance Parts & Accessories"
+          },
+          "cachedAt": 1789563590780
+        },
+        "0::amperes electronics ep1200 emergency paging panel microphone": {
+          "result": {
+            "categoryId": "29946",
+            "categoryName": "Microphones & Wireless Systems"
+          },
+          "cachedAt": 1789563601687
+        },
+        "0::fsr co-2001 compass presentation switcher rackmount video audio switcher": {
+          "result": {
+            "categoryId": "21169",
+            "categoryName": "Distribution Switchers & Routers"
+          },
+          "cachedAt": 1789563629836
+        },
+        "0::bosch plena lbb 1965/00 message manager public address controller": {
+          "result": {
+            "categoryId": "183837",
+            "categoryName": "Other Access Control Equipment"
+          },
+          "cachedAt": 1789563641091
+        },
+        "0::bosch lbb 4428/00 power amplifier rack mount": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563678096
+        },
+        "0::bosch lbb 4428/00 rack-mount audio power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563713765
+        },
+        "0::bosch lbb 4428/00 rack mount audio amplifier 800va 700w": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563748726
+        },
+        "0::bosch ltc 5231/90 video distribution amplifier": {
+          "result": {
+            "categoryId": "39803",
+            "categoryName": "Signal Amplifiers & Filters"
+          },
+          "cachedAt": 1789563775395
+        },
+        "0::bosch lbb 4428/00 rack mount audio power amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563779219
+        },
+        "0::bosch lbb 4424/10 48v rack mount amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563810449
+        },
+        "0::bosch lbb 4424/10 hr amp3 amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789563851979
+        },
+        "0::inter-m pw-642 program timer rack mount": {
+          "result": {
+            "categoryId": "100501",
+            "categoryName": "Audio for Video"
+          },
+          "cachedAt": 1789563885760
+        },
+        "0::roottech bni-225 bridge-socket industrial interface module": {
+          "result": {
+            "categoryId": "181708",
+            "categoryName": "PLC Processors"
+          },
+          "cachedAt": 1789563903105
+        },
+        "0::evc-7790 dr-320 evc digital recorder": {
+          "result": {
+            "categoryId": "11724",
+            "categoryName": "Camcorders"
+          },
+          "cachedAt": 1789563919380
+        },
+        "0::rootech accura md-gas gas detection controller tgs 813 bni-226": {
+          "result": {
+            "categoryId": "57520",
+            "categoryName": "Other Sensors"
+          },
+          "cachedAt": 1789563928567
+        },
+        "0::rkc thv-1p2020 industrial power controller 4-20ma 100-240vac": {
+          "result": {
+            "categoryId": "181922",
+            "categoryName": "Switching Mode Power Supplies"
+          },
+          "cachedAt": 1789563961706
+        },
+        "0::amperes px2400s 480w rms public address power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789563979665
+        },
+        "0::rediroom rdi-9 medical cart redi1uk": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789563998017
+        },
+        "0::amperes qp 2500 500w 100v public address power amplifier": {
+          "result": {
+            "categoryId": "163896",
+            "categoryName": "Amplifiers"
+          },
+          "cachedAt": 1789564011362
+        },
+        "0::rediroom rdi-10 rediroom cart mobile medical cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564028716
+        },
+        "0::rediroom redi1uk medical cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564058581
+        },
+        "0::bosch lbb 4422/10 audio amplifier": {
+          "result": {
+            "categoryId": "14970",
+            "categoryName": "Amplifiers & Preamps"
+          },
+          "cachedAt": 1789564065234
+        },
+        "0::clinell rediroom redi11uk mobile patient isolation cart": {
+          "result": {
+            "categoryId": "184505",
+            "categoryName": "Patient Lifts & Slings"
+          },
+          "cachedAt": 1789564088397
+        },
+        "0::rediroom redi1uk rediroom cart gama healthcare": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564095351
+        },
+        "0::rediroom red1uk mobile medical cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564125260
+        },
+        "0::rediroom red1uk rediroom cart medical equipment cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564150869
+        },
+        "0::rediroom rdi-5 redi1uk rediroom cart medical equipment cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564223863
+        },
+        "0::rediroom rdi-6 rediroom cart medical equipment cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564253034
+        },
+        "0::rediroom rdi-7 rediroom cart redi1uk medical cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564285322
+        },
+        "0::rediroom rdi-8 rediroom cart": {
+          "result": {
+            "categoryId": "115753",
+            "categoryName": "Kitchen Carts"
+          },
+          "cachedAt": 1789564315444
+        },
+        "0::rediroom rdi-9 red11uk rediroom cart": {
+          "result": {
+            "categoryId": "115753",
+            "categoryName": "Kitchen Carts"
+          },
+          "cachedAt": 1789564346278
+        },
+        "0::rediroom rdi-10 rediroom cart redi1uk mobile medical cart": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564371659
+        },
+        "0::rediroom rdi-11 medical cart redi1uk": {
+          "result": {
+            "categoryId": "184501",
+            "categoryName": "Medical Carts & Stands"
+          },
+          "cachedAt": 1789564399875
+        },
+        "0::yamatake sdc21 c215ga00101 digital process controller": {
+          "result": {
+            "categoryId": "181723",
+            "categoryName": "PLC Temperature Modules"
+          },
+          "cachedAt": 1789575372135
+        },
+        "0::ebay motors > parts & accessories > wheel bearings & hubs": {
+          "result": null,
+          "cachedAt": 1789887398799
+        },
+        "0::exotic vehicles brake caliper": {
+          "result": {
+            "categoryId": "1461",
+            "categoryName": "Other Collectible Tools"
+          },
+          "cachedAt": 1789982402441
+        },
+        "0::ebay motors > parts & accessories > engine & cooling": {
+          "result": null,
+          "cachedAt": 1790100684304
+        },
+        "0::ebay motors > parts & accessories > steering & suspension": {
+          "result": {
+            "categoryId": "82592",
+            "categoryName": "Ointments, Creams & Oils"
+          },
+          "cachedAt": 1790109747799
+        },
+        "0::premium quality new aftermarket products piston ring set": {
+          "result": {
+            "categoryId": "97126",
+            "categoryName": "Other Heavy Equipment Parts & Accessories"
+          },
+          "cachedAt": 1790604294262
+        },
+        "0::ebay motors > parts & accessories > brakes": {
+          "result": null,
+          "cachedAt": 1790659162624
+        },
+        "0::2017-2020 bmw g30 520i 530i g32 320i 330i 2.0l turbo engine oem": {
+          "result": null,
+          "cachedAt": 1790674382749
+        },
+        "0::2018-2021 mercedes w205 c200 w213 e200 1.5l turbo engine oem m264.915": {
+          "result": null,
+          "cachedAt": 1790674918637
+        }
+      },
+      "aspects": {},
+      "compatibility": {},
+      "dailyUsage": {
+        "2026-09-29": 3
+      }
+    }
+  }
+}

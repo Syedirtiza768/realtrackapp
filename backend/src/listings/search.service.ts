@@ -448,6 +448,9 @@ export class SearchService {
       if (hasQuery) {
         qb.addSelect(`similarity(r.title, :q)`, 'titleSim');
       }
+      if (sort === 'stock_asc' || sort === 'stock_desc') {
+        qb.addSelect(SAFE_QTY, 'sortQty');
+      }
 
       const [innerSql, innerParams] = qb.getQueryAndParameters();
       const orderSql = this.buildDedupOrderSql(sort, hasQuery);
@@ -479,8 +482,8 @@ export class SearchService {
         case 'price_desc':
           qb.orderBy(SAFE_PRICE, 'DESC', 'NULLS LAST');
           break;
-        case 'newest':
-          qb.orderBy('r.importedAt', 'DESC');
+        case 'oldest':
+          qb.orderBy('r.importedAt', 'ASC');
           break;
         case 'title_asc':
           qb.orderBy('r.title', 'ASC', 'NULLS LAST');
@@ -490,6 +493,16 @@ export class SearchService {
           break;
         case 'sku_asc':
           qb.orderBy('r."customLabelSku"', 'ASC', 'NULLS LAST');
+          break;
+        case 'sku_desc':
+          qb.orderBy('r."customLabelSku"', 'DESC', 'NULLS LAST');
+          break;
+        // team / condition / stock / status / ebay / image sorts are only
+        // implemented for the SKU-grouped path the catalog grid uses; other
+        // (ungrouped) callers fall back to newest-first.
+        case 'newest':
+        default:
+          qb.orderBy('r.importedAt', 'DESC');
           break;
       }
       qb.addOrderBy('r.id', 'ASC'); // stable tie-breaker
@@ -1344,6 +1357,17 @@ export class SearchService {
   private buildDedupOrderSql(sort: string, hasQuery: boolean): string {
     const price = `NULLIF(REPLACE(sub."r_startPrice", ',', '.'), '')::numeric`;
     const tie = `sub."r_id" ASC`;
+    const hasImage = `(COALESCE(btrim(sub."r_itemPhotoUrl"), '') <> '')`;
+    const hasEbay = `(COALESCE(btrim(sub."r_ebayListingId"), '') <> '')`;
+    const isPublished = `(
+      sub."r_status" = 'published'
+      OR sub."r_publishedAt" IS NOT NULL
+      OR ${hasEbay}
+      OR COALESCE(btrim(sub."r_shopifyProductId"), '') <> ''
+      OR sub."hasChannelInstance"
+      OR sub."hasEbayPublishedListing"
+    )`;
+    const statusRank = `(CASE WHEN ${isPublished} THEN 2 WHEN ${hasImage} THEN 1 ELSE 0 END)`;
     switch (sort) {
       case 'relevance':
         return hasQuery
@@ -1359,6 +1383,36 @@ export class SearchService {
         return `sub."r_title" DESC NULLS LAST, ${tie}`;
       case 'sku_asc':
         return `sub."r_customLabelSku" ASC NULLS LAST, ${tie}`;
+      case 'sku_desc':
+        return `sub."r_customLabelSku" DESC NULLS LAST, ${tie}`;
+      case 'oldest':
+        return `sub."r_importedAt" ASC, ${tie}`;
+      case 'team_asc':
+        return `sub."teamName" ASC NULLS LAST, ${tie}`;
+      case 'team_desc':
+        return `sub."teamName" DESC NULLS LAST, ${tie}`;
+      case 'condition_asc':
+        return `NULLIF(btrim(sub."r_conditionId"), '') ASC NULLS LAST, ${tie}`;
+      case 'condition_desc':
+        return `NULLIF(btrim(sub."r_conditionId"), '') DESC NULLS LAST, ${tie}`;
+      case 'stock_asc':
+        return `sub."sortQty" ASC, ${tie}`;
+      case 'stock_desc':
+        return `sub."sortQty" DESC, ${tie}`;
+      // published (2) > ready_to_publish (1) > need_images (0), mirroring
+      // deriveCatalogStatus() on the outer-query columns.
+      case 'status_asc':
+        return `${statusRank} ASC, ${tie}`;
+      case 'status_desc':
+        return `${statusRank} DESC, ${tie}`;
+      case 'ebay_asc':
+        return `${hasEbay} ASC, ${tie}`;
+      case 'ebay_desc':
+        return `${hasEbay} DESC, ${tie}`;
+      case 'image_asc':
+        return `${hasImage} ASC, ${tie}`;
+      case 'image_desc':
+        return `${hasImage} DESC, ${tie}`;
       case 'newest':
       default:
         return `sub."r_importedAt" DESC, ${tie}`;

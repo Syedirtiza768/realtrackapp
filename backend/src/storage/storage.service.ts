@@ -86,6 +86,51 @@ export class StorageService {
     return this.bucket;
   }
 
+  /**
+   * Hostnames that refer to the configured bucket. Production stores images
+   * only in `solarrisebackupbucket-<12-digit account>`, but older rows still
+   * cite the retired `solarrisebackupbucket` hostname. Those are the same
+   * keyspace and must not be treated as an external download source.
+   */
+  private hostMatchesConfiguredBucket(host: string): boolean {
+    const h = host.toLowerCase();
+    if (this.cdnDomain && h === this.cdnDomain.toLowerCase()) return true;
+    return this.configuredBucketHostnames().some((name) =>
+      new RegExp(
+        `^${this.escapeRegExp(name)}\\.s3(?:[.-][a-z0-9-]+)*\\.amazonaws\\.com$`,
+      ).test(h),
+    );
+  }
+
+  private configuredBucketHostnames(): string[] {
+    const bucket = this.bucket.toLowerCase();
+    const names = new Set<string>([bucket]);
+    const match = bucket.match(/^(solarrisebackupbucket)(?:-\d{12})?$/);
+    if (match) {
+      names.add('solarrisebackupbucket');
+      names.add(bucket);
+    }
+    return [...names];
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /** True when the URL uses the retired bucket hostname we now alias. */
+  isLegacyBucketAliasUrl(url: string): boolean {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      const configured = this.bucket.toLowerCase();
+      if (!/^solarrisebackupbucket-\d{12}$/.test(configured)) return false;
+      return /^solarrisebackupbucket\.s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com$/.test(
+        host,
+      );
+    } catch {
+      return false;
+    }
+  }
+
   /** True if the object lives under the logical `temp/` folder (supports optional root prefix). */
   isTempKey(s3Key: string): boolean {
     return this.relativeKey(s3Key).startsWith('temp/');
@@ -147,6 +192,21 @@ export class StorageService {
       chunks.push(Buffer.from(chunk as Uint8Array));
     }
     return Buffer.concat(chunks);
+  }
+
+  /**
+   * Generate a short-lived signed GET URL for trusted downstream consumers
+   * such as AI vision providers when the bucket itself is private.
+   */
+  async generateDownloadUrl(
+    key: string,
+    expiresIn = this.signedUrlExpiry,
+  ): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    return getSignedUrl(this.s3, command, { expiresIn });
   }
 
   /**
@@ -359,25 +419,37 @@ export class StorageService {
         // cleanup, or the URL was copied from another product without
         // re-mirroring. Fall through to re-download if missing.
         if (existingKey && !this.isTempKey(existingKey)) {
+          const canonicalUrl = this.getCdnUrl(existingKey);
           const exists = await this.objectExists(existingKey);
-          if (!exists) {
-            // Try .webp variant (originals are often converted)
-            const webpKey = existingKey.replace(/\.[a-z0-9]+$/i, '.webp');
-            const webpExists = await this.objectExists(webpKey);
-            if (webpExists) {
-              out[i] = { url: this.getCdnUrl(webpKey), s3Key: webpKey };
-              return;
-            }
-            this.logger.warn(
-              `mirrorRemoteImages: permanent key ${existingKey} not found in S3 — will attempt re-download`,
-            );
-            // Fall through to re-download from original source URL
-          } else {
-            out[i] = { url: u, s3Key: existingKey };
+          if (exists) {
+            out[i] = { url: canonicalUrl, s3Key: existingKey };
             return;
           }
+          // Try .webp variant (originals are often converted)
+          const webpKey = existingKey.replace(/\.[a-z0-9]+$/i, '.webp');
+          const webpExists = await this.objectExists(webpKey);
+          if (webpExists) {
+            out[i] = { url: this.getCdnUrl(webpKey), s3Key: webpKey };
+            return;
+          }
+          // Retired hostname is the same bucket. Repoint to the configured
+          // account-qualified host instead of HTTP-fetching a dead alias.
+          if (this.isLegacyBucketAliasUrl(u)) {
+            this.logger.warn(
+              `mirrorRemoteImages: alias URL ${u.slice(0, 80)} → ${canonicalUrl.slice(0, 80)}`,
+            );
+            out[i] = { url: canonicalUrl, s3Key: existingKey };
+            return;
+          }
+          this.logger.warn(
+            `mirrorRemoteImages: permanent key ${existingKey} not found in S3 — will attempt re-download`,
+          );
+          // Fall through to re-download from original source URL
         } else {
-          out[i] = { url: u, s3Key: existingKey };
+          out[i] = {
+            url: existingKey ? this.getCdnUrl(existingKey) : u,
+            s3Key: existingKey,
+          };
           return;
         }
       }
@@ -506,11 +578,7 @@ export class StorageService {
     try {
       const parsed = new URL(url);
       const host = parsed.hostname.toLowerCase();
-      if (this.cdnDomain && host === this.cdnDomain.toLowerCase()) {
-        return parsed.pathname.replace(/^\//, '');
-      }
-      const bucketHost = `${this.bucket.toLowerCase()}.s3`;
-      if (host.includes(bucketHost)) {
+      if (this.hostMatchesConfiguredBucket(host)) {
         return parsed.pathname.replace(/^\//, '');
       }
     } catch {
@@ -521,13 +589,10 @@ export class StorageService {
 
   private urlLooksLikeOurBucket(url: string): boolean {
     try {
-      const host = new URL(url).hostname.toLowerCase();
-      if (host.includes(`${this.bucket.toLowerCase()}.s3`)) return true;
-      if (this.cdnDomain && host === this.cdnDomain.toLowerCase()) return true;
+      return this.hostMatchesConfiguredBucket(new URL(url).hostname);
     } catch {
-      /* ignore */
+      return false;
     }
-    return false;
   }
 
   private extFromUrlOrMime(url: string, mime: string): string {

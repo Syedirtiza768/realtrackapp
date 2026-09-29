@@ -718,6 +718,7 @@ describe('ListingBuilderService', () => {
     });
 
     expect(result.publishRequest.aspects.Brand).toEqual(['Unbranded']);
+    expect(result.publishRequest.aspects.UPC).toEqual(['Does not apply']);
     expect(result.warnings).toContainEqual(
       expect.stringContaining('Unbranded'),
     );

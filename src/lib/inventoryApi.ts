@@ -211,6 +211,7 @@ export interface InventoryFilters {
   maxPrice: string;
   minWeight: string;
   maxWeight: string;
+  hasPrice: boolean;
   // Existing single-select (kept for backward compat)
   status: string;
   missingImages: boolean;
@@ -232,6 +233,7 @@ export const INVENTORY_EMPTY_FILTERS: InventoryFilters = {
   maxPrice: '',
   minWeight: '',
   maxWeight: '',
+  hasPrice: false,
   status: '',
   missingImages: false,
   make: '',
@@ -253,6 +255,7 @@ export function countInventoryActiveFilters(f: InventoryFilters): number {
   if (f.maxPrice) count++;
   if (f.minWeight) count++;
   if (f.maxWeight) count++;
+  if (f.hasPrice) count++;
   if (f.status) count++;
   if (f.missingImages) count++;
   if (f.make) count++;
@@ -285,6 +288,10 @@ export interface InventoryListingsParams {
   maxPrice?: number;
   minWeight?: number;
   maxWeight?: number;
+  /** '1' = only parts that have a price */
+  hasPrice?: string;
+  /** `<column>_<asc|desc>`; unset = newest first */
+  sort?: string;
   enabled?: boolean;
 }
 
@@ -293,6 +300,7 @@ export function inventoryFiltersToParams(
   search: string,
   page: number,
   limit: number,
+  sort?: string,
 ): InventoryListingsParams {
   return {
     page,
@@ -315,6 +323,8 @@ export function inventoryFiltersToParams(
     maxPrice: f.maxPrice ? parseFloat(f.maxPrice) : undefined,
     minWeight: f.minWeight ? parseFloat(f.minWeight) : undefined,
     maxWeight: f.maxWeight ? parseFloat(f.maxWeight) : undefined,
+    hasPrice: f.hasPrice ? '1' : undefined,
+    sort: sort || undefined,
   };
 }
 
@@ -342,6 +352,8 @@ function buildInventoryQueryString(params: InventoryListingsParams): string {
   if (params.maxPrice != null) qs.set('maxPrice', String(params.maxPrice));
   if (params.minWeight != null) qs.set('minWeight', String(params.minWeight));
   if (params.maxWeight != null) qs.set('maxWeight', String(params.maxWeight));
+  if (params.hasPrice) qs.set('hasPrice', params.hasPrice);
+  if (params.sort) qs.set('sort', params.sort);
   return qs.toString();
 }
 

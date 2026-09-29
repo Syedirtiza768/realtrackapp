@@ -49,6 +49,14 @@ import {
   parsePipelineUploadRows,
   validatePipelineGridxHeaders,
 } from './pipeline-gridx-format.js';
+import {
+  parsePreEnrichedFebestWorkbook,
+  PRE_ENRICHED_FEBEST_MODE,
+} from './pre-enriched-febest.js';
+import {
+  DEFAULT_PRODUCT_VERTICAL,
+  type ProductVertical,
+} from '../verticals/vertical.types.js';
 
 const SINGLE_LISTING_DEFAULT_PRICE = 100;
 const SINGLE_LISTING_DEFAULT_QUANTITY = 1;
@@ -88,6 +96,10 @@ export interface PipelineUploadProfileOptions {
   paymentPolicyId?: string;
   returnPolicyId?: string;
 }
+
+export type PipelineImportMode =
+  | 'legacy_gridx'
+  | typeof PRE_ENRICHED_FEBEST_MODE;
 
 export interface CreatePipelineJobDto {
   originalFilename: string;
@@ -193,6 +205,8 @@ export class PipelineService {
     manageAllTeams = false,
     profileOptions?: PipelineUploadProfileOptions,
     user?: User,
+    vertical: ProductVertical = DEFAULT_PRODUCT_VERTICAL,
+    importMode: PipelineImportMode = 'legacy_gridx',
   ): Promise<PipelineJob> {
     await this.heavyJobLimiter.assertPipelineSlotAvailable();
 
@@ -205,6 +219,16 @@ export class PipelineService {
       );
     }
 
+    if (vertical !== DEFAULT_PRODUCT_VERTICAL) {
+      const multiVerticalEnabled = await this.featureFlagService.isEnabled(
+        'multi_vertical_catalog',
+      );
+      if (!multiVerticalEnabled) {
+        throw new ServiceUnavailableException(
+          'The selected product vertical is not enabled for this workspace.',
+        );
+      }
+    }
     if (!teamId) {
       throw new BadRequestException('teamId is required');
     }
@@ -217,17 +241,58 @@ export class PipelineService {
       );
     }
 
-    // Reject GridX uploads with missing/corrupted headers before enqueueing
-    // (prevents all-zero prices / empty PicURL from bad Part-2 spreadsheets).
-    // parsePipelineUploadRows already drops Excel-hidden rows so soft-deleted
-    // / Hide Rows content cannot pass validation as if it were live inventory.
+    const normalizedImportMode = importMode?.trim() || 'legacy_gridx';
+    if (
+      normalizedImportMode !== 'legacy_gridx' &&
+      normalizedImportMode !== PRE_ENRICHED_FEBEST_MODE
+    ) {
+      throw new BadRequestException(
+        `Invalid importMode. Allowed: legacy_gridx, ${PRE_ENRICHED_FEBEST_MODE}`,
+      );
+    }
+
+    // Reject uploads with missing/corrupted headers before enqueueing.
+    // The explicit FEBEST mode uses its exact three-sheet schema instead of
+    // the legacy first-non-instruction GridX fallback.
     let hiddenRowsSkipped = 0;
+    let preEnrichedSummary: Record<string, unknown> | undefined;
     try {
-      hiddenRowsSkipped = countHiddenDataRowsInUpload(fileBuffer);
-      const rows = parsePipelineUploadRows(fileBuffer);
-      const headerCheck = validatePipelineGridxHeaders(rows);
-      if (!headerCheck.ok) {
-        throw new BadRequestException(headerCheck.message);
+      if (normalizedImportMode === PRE_ENRICHED_FEBEST_MODE) {
+        const validation = parsePreEnrichedFebestWorkbook(fileBuffer);
+        if (!validation.ok) {
+          throw new BadRequestException(
+            `Invalid ${PRE_ENRICHED_FEBEST_MODE} workbook: ${validation.errors
+              .slice(0, 5)
+              .map(
+                (issue) =>
+                  `${issue.sheet}${issue.row ? `:${issue.row}` : ''} ${issue.message}`,
+              )
+              .join('; ')}`,
+          );
+        }
+        if (!validation.readyForImport) {
+          throw new BadRequestException(
+            `${PRE_ENRICHED_FEBEST_MODE} workbook is not ready for import. Run the dry-run validator and resolve its blockers before enqueueing.`,
+          );
+        }
+        const manifestMarketplace = validation.manifest.Marketplace;
+        if (
+          manifestMarketplace &&
+          manifestMarketplace !== profileOptions?.marketplace &&
+          manifestMarketplace !== 'EBAY_MOTORS_US'
+        ) {
+          throw new BadRequestException(
+            `Manifest Marketplace ${manifestMarketplace} does not match upload marketplace ${profileOptions?.marketplace}`,
+          );
+        }
+        preEnrichedSummary = validation.summary;
+      } else {
+        hiddenRowsSkipped = countHiddenDataRowsInUpload(fileBuffer);
+        const rows = parsePipelineUploadRows(fileBuffer);
+        const headerCheck = validatePipelineGridxHeaders(rows);
+        if (!headerCheck.ok) {
+          throw new BadRequestException(headerCheck.message);
+        }
       }
       if (hiddenRowsSkipped > 0) {
         this.logger.warn(
@@ -314,6 +379,7 @@ export class PipelineService {
         teamId,
         conditionLabel: conditionLabel.trim(),
         marketplace,
+        vertical,
         storeId,
         shippingProfileName: shippingProfileName.trim(),
         returnProfileName: returnProfileName.trim(),
@@ -325,8 +391,17 @@ export class PipelineService {
         ...(hiddenRowsSkipped > 0
           ? {
               stageDetails: {
+                importMode: normalizedImportMode,
                 hiddenRowsSkipped,
                 note: 'Excel-hidden rows were detected at upload and will be ignored during enrichment',
+              },
+            }
+          : {}),
+        ...(!hiddenRowsSkipped && preEnrichedSummary
+          ? {
+              stageDetails: {
+                importMode: normalizedImportMode,
+                preEnrichedValidation: preEnrichedSummary,
               },
             }
           : {}),
@@ -342,7 +417,12 @@ export class PipelineService {
 
     await this.jobRepo.update(placeholder.id, { storedFilePath: storedPath });
     const saved = await this.jobRepo.findOneByOrFail({ id: placeholder.id });
-    return this.enqueuePipelineJob(saved, storedPath, originalFilename);
+    return this.enqueuePipelineJob(
+      saved,
+      storedPath,
+      originalFilename,
+      normalizedImportMode,
+    );
   }
 
   /**
@@ -394,6 +474,7 @@ export class PipelineService {
     saved: PipelineJob,
     filePath: string,
     originalFilename: string,
+    importMode: PipelineImportMode = 'legacy_gridx',
   ): Promise<PipelineJob> {
     try {
       await this.pipelineQueue.add(
@@ -402,6 +483,7 @@ export class PipelineService {
           jobId: saved.id,
           filePath,
           originalFilename,
+          importMode,
         },
         {
           // Deterministic BullMQ id: a duplicate enqueue for the same pipeline
@@ -803,6 +885,7 @@ export class PipelineService {
         totalParts: job.totalParts,
         conditionLabel: job.conditionLabel,
         marketplace: job.marketplace,
+        vertical: job.vertical ?? DEFAULT_PRODUCT_VERTICAL,
         store: store ?? null,
         shippingProfileName: job.shippingProfileName,
         returnProfileName: job.returnProfileName,

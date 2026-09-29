@@ -149,6 +149,81 @@ function mapListingStatus(
   return 'draft';
 }
 
+/**
+ * "Has price" = the same test computeMissingFields() uses for its `Price`
+ * flag: a non-blank startPrice text or a numeric startPriceNum.
+ */
+const inventoryHasPriceSql = (a: string) =>
+  `NOT (COALESCE(btrim(${a}."startPrice"), '') = '' AND ${a}."startPriceNum" IS NULL)`;
+
+/**
+ * SQL sort key per inventory table column, over the `ranked` CTE rows
+ * (alias `f`, joined to `pj` = the row's pipeline job). Derived columns mirror
+ * their JS counterparts: Validation ↔ computeMissingFields() (issue count),
+ * Enrichment ↔ InventoryAutoTriggerService.deriveStatus(), Status ↔
+ * mapListingStatus(), Fitments ↔ max(part_fitments, catalog fitment_data).
+ */
+function inventorySortKeySql(column: string): string {
+  const blank = (col: string) => `COALESCE(btrim(f."${col}"), '') = ''`;
+  const flag = (cond: string) => `(CASE WHEN ${cond} THEN 1 ELSE 0 END)`;
+  const imageCount = `(SELECT COUNT(*) FROM unnest(string_to_array(COALESCE(f."itemPhotoUrl", ''), '|')) u WHERE btrim(u) <> '')`;
+  const enrichmentRank = `(CASE
+    WHEN f."enrichmentStage" IN ('vision_lookup','enrichment','generating_us','generating_au','generating_de') THEN 2
+    WHEN f."enrichmentStage" = 'completed' THEN 4
+    WHEN f."enrichmentStage" = 'needs_review' THEN 3
+    WHEN f."enrichmentStage" = 'failed' THEN 5
+    WHEN pj.id IS NOT NULL THEN (CASE
+      WHEN pj.optimization_status IN ('pending','running') THEN 2
+      WHEN pj.optimization_status = 'completed' THEN 4
+      WHEN pj.optimization_status = 'needs_review' THEN 3
+      WHEN pj.optimization_status = 'failed' THEN 5
+      WHEN pj.status = 'completed' THEN 4
+      WHEN pj.status = 'failed' THEN 5
+      ELSE 2 END)
+    WHEN ${imageCount} >= 2 THEN 1
+    ELSE 0 END)`;
+
+  switch (column) {
+    case 'image':
+      return imageCount;
+    case 'sku':
+      return `LOWER(f."customLabelSku")`;
+    case 'brand':
+      return `LOWER(COALESCE(NULLIF(btrim(f."cBrand"), ''), 'Generic'))`;
+    case 'location':
+      return `(CASE WHEN f."origin" = 'add_part' THEN LOWER(NULLIF(btrim(f."location"), '')) END)`;
+    case 'team':
+      return `(SELECT LOWER(t.name) FROM teams t WHERE t.id = f."team_id")`;
+    case 'fitments':
+      return `GREATEST(
+        (SELECT COUNT(*) FROM part_fitments pf WHERE pf.listing_id = f.id)::int,
+        COALESCE((SELECT CASE WHEN jsonb_typeof(cp.fitment_data) = 'array' THEN jsonb_array_length(cp.fitment_data) END
+                  FROM catalog_products cp WHERE cp.sku = f."customLabelSku" LIMIT 1), 0))`;
+    case 'validation':
+      return `(${[
+        flag(blank('title')),
+        flag(blank('cBrand')),
+        flag(`${blank('cOeOemPartNumber')} AND ${blank('cManufacturerPartNumber')}`),
+        flag(`${imageCount} < 2`),
+        flag(`${blank('startPrice')} AND f."startPriceNum" IS NULL`),
+        flag(`${blank('quantity')} AND f."quantityNum" IS NULL`),
+        flag(`${blank('categoryId')} AND ${blank('categoryName')}`),
+        flag(blank('description')),
+      ].join(' + ')})`;
+    case 'price':
+      // Text fallback is regex-guarded so a dirty startPrice can't fail the query.
+      return `COALESCE(f."startPriceNum", CASE WHEN btrim(f."startPrice") ~ '^[0-9]+([.,][0-9]+)?$' THEN REPLACE(btrim(f."startPrice"), ',', '.')::numeric END)`;
+    case 'status':
+      return `(CASE f.status WHEN 'published' THEN 2 WHEN 'ready' THEN 1 ELSE 0 END)`;
+    case 'enrichment':
+      return enrichmentRank;
+    case 'catalog':
+      return flag(`${enrichmentRank} = 4`);
+    default:
+      return 'NULL';
+  }
+}
+
 @Injectable()
 export class InventoryWorkbenchService {
   private readonly logger = new Logger(InventoryWorkbenchService.name);
@@ -408,7 +483,20 @@ export class InventoryWorkbenchService {
       params.push(query.maxWeight);
     }
 
+    if (query.hasPrice === '1') {
+      whereClauses.push(inventoryHasPriceSql('l'));
+    }
+
     const whereSql = whereClauses.join(' AND ');
+
+    // `<column>_<asc|desc>`; validated against INVENTORY_SORT_MODES by the DTO,
+    // so the parsed column/direction are safe to interpolate.
+    const sortMatch = /^([a-z]+)_(asc|desc)$/.exec(query.sort ?? '');
+    const sortKeySql = sortMatch ? inventorySortKeySql(sortMatch[1]) : null;
+    const sortDir = sortMatch?.[2] === 'desc' ? 'DESC' : 'ASC';
+    const orderSql = sortKeySql
+      ? `sort_key ${sortDir} NULLS LAST, "importedAt" DESC, id ASC`
+      : `"importedAt" DESC`;
 
     const countSql = `
       WITH filtered AS (
@@ -445,6 +533,7 @@ export class InventoryWorkbenchService {
       ),
       ranked AS (
         SELECT f.id, f."importedAt",
+          ${sortKeySql ?? 'NULL'} AS sort_key,
           ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
             ORDER BY
@@ -453,10 +542,11 @@ export class InventoryWorkbenchService {
               f."importedAt" DESC
           ) AS rn
         FROM filtered f
+        LEFT JOIN pipeline_jobs pj ON pj.id = f."pipeline_job_id"
       )
       SELECT id FROM ranked
       WHERE rn = 1
-      ORDER BY "importedAt" DESC
+      ORDER BY ${orderSql}
       LIMIT $${paramIdx++} OFFSET $${paramIdx++}
     `;
 
@@ -2496,6 +2586,9 @@ export class InventoryWorkbenchService {
           addParam(`l."weight" >= $?`, query.minWeight);
         if (query.maxWeight != null)
           addParam(`l."weight" <= $?`, query.maxWeight);
+      }
+      if (exclude !== 'hasPrice' && query.hasPrice === '1') {
+        clauses.push(inventoryHasPriceSql('l'));
       }
 
       return { sql: clauses.join(' AND '), params };

@@ -176,22 +176,25 @@ export class StoresService {
   }> {
     const store = await this.getStore(storeId);
 
-    // Shipping profiles: first from local table, then fall back to eBay fulfillment policies
-    let shippingProfiles: Array<{
+    // Shipping profiles include both local reusable profiles and synced eBay
+    // fulfillment policies. The catalog bulk editor needs the complete set so
+    // an operator can select a policy that is not mirrored locally.
+    type ShippingProfileOption = {
       id: string;
       name: string;
       carrier: string;
       service: string;
       costType: string;
       ebayPolicyId?: string;
-    }> = [];
+      shippingCost?: number;
+      currency?: string;
+    };
+    let shippingProfiles: ShippingProfileOption[] = [];
     const localShipping = await this.shippingProfileRepo.find({
       where: { active: true },
       order: { isDefault: 'DESC', name: 'ASC' },
     });
-    if (localShipping.length > 0) {
-      shippingProfiles = localShipping;
-    }
+    shippingProfiles = localShipping;
 
     // For eBay stores, also fetch fulfillment/return/payment policies
     let returnProfiles: Array<{
@@ -218,50 +221,58 @@ export class StoresService {
           order: { isDefault: 'DESC', name: 'ASC' },
         });
 
-        // Fulfillment policies as shipping profiles (fallback if no local shipping profiles)
+        // Fulfillment policies are also shipping profiles. Prefer the synced
+        // eBay option when a local profile has the same name, because it carries
+        // the policy ID required by marketplace publishing.
         const fulfillPolicies = policies.filter(
           (p) => p.policyType === 'fulfillment',
         );
-        if (shippingProfiles.length === 0 && fulfillPolicies.length > 0) {
-          shippingProfiles = fulfillPolicies.map((p) => {
-            // Extract shipping cost from raw_payload
-            let shippingCost: number | undefined;
-            let currency: string | undefined;
-            try {
-              const raw = p.rawPayload;
-              const shippingOptions = raw?.shippingOptions as
-                | Array<Record<string, unknown>>
-                | undefined;
-              if (shippingOptions?.[0]?.shippingServices) {
-                const services = shippingOptions[0].shippingServices as Array<
-                  Record<string, unknown>
-                >;
-                if (services[0]?.shippingCost) {
-                  const cost = services[0].shippingCost as {
-                    value?: string;
-                    currency?: string;
-                  };
-                  shippingCost = cost.value
-                    ? parseFloat(cost.value)
-                    : undefined;
-                  currency = cost.currency;
-                }
+        const ebayShippingProfiles = fulfillPolicies.map((p) => {
+          // Extract shipping cost from raw_payload
+          let shippingCost: number | undefined;
+          let currency: string | undefined;
+          try {
+            const raw = p.rawPayload;
+            const shippingOptions = raw?.shippingOptions as
+              | Array<Record<string, unknown>>
+              | undefined;
+            if (shippingOptions?.[0]?.shippingServices) {
+              const services = shippingOptions[0].shippingServices as Array<
+                Record<string, unknown>
+              >;
+              if (services[0]?.shippingCost) {
+                const cost = services[0].shippingCost as {
+                  value?: string;
+                  currency?: string;
+                };
+                shippingCost = cost.value
+                  ? parseFloat(cost.value)
+                  : undefined;
+                currency = cost.currency;
               }
-            } catch (e) {
-              // Ignore parsing errors
             }
-            return {
-              id: p.id,
-              name: p.name,
-              carrier: '',
-              service: '',
-              costType: '',
-              ebayPolicyId: p.ebayPolicyId,
-              shippingCost,
-              currency,
-            };
-          });
+          } catch (e) {
+            // Ignore parsing errors
+          }
+          return {
+            id: p.id,
+            name: p.name,
+            carrier: '',
+            service: '',
+            costType: '',
+            ebayPolicyId: p.ebayPolicyId,
+            shippingCost,
+            currency,
+          } satisfies ShippingProfileOption;
+        });
+        const byName = new Map<string, ShippingProfileOption>();
+        for (const profile of [...ebayShippingProfiles, ...shippingProfiles]) {
+          const key = profile.name.trim().toLocaleLowerCase();
+          if (key && !byName.has(key)) byName.set(key, profile);
         }
+        shippingProfiles = [...byName.values()].sort((left, right) =>
+          left.name.localeCompare(right.name),
+        );
 
         returnProfiles = policies
           .filter((p) => p.policyType === 'return')

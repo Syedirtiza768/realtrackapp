@@ -15,7 +15,7 @@ import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-c
 import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
 import { FashionReview } from './entities/fashion-review.entity.js';
 import { VerticalsService } from './verticals.service.js';
-import { validateVerticalAttributes } from './vertical.config.js';
+import { validateFashionAttributes } from './fashion.config.js';
 import {
   CreateFashionDraftDto,
   FashionReviewDto,
@@ -528,7 +528,7 @@ export class FashionListingsService {
   }
 
   private attributes(input: Record<string, unknown>) {
-    const result = validateVerticalAttributes('fashion', input);
+    const result = validateFashionAttributes(input);
     if (result.errors.length) throw new ConflictException(result.errors);
     return result.attributes;
   }

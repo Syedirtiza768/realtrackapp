@@ -20,6 +20,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PipelineService } from './pipeline.service.js';
 import type { CreateSingleListingDto } from './pipeline.service.js';
+import type { PipelineImportMode } from './pipeline.service.js';
+import {
+  parsePreEnrichedFebestWorkbook,
+  PRE_ENRICHED_FEBEST_MODE,
+} from './pre-enriched-febest.js';
 import { SingleListingFormService } from './services/single-listing-form.service.js';
 import type { PartLookupDto } from './services/single-listing-form.service.js';
 import { AddIntakePartDto } from './dto/add-intake-part.dto.js';
@@ -38,6 +43,11 @@ import {
 import { User } from '../auth/entities/user.entity.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { TeamsService } from '../teams/teams.service.js';
+import {
+  DEFAULT_PRODUCT_VERTICAL,
+  isProductVertical,
+  type ProductVertical,
+} from '../verticals/vertical.types.js';
 
 /**
  * PipelineController — REST endpoints for the enrichment pipeline.
@@ -189,7 +199,8 @@ export class PipelineController {
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Upload an Excel/CSV file and start enrichment pipeline',
+    summary:
+      'Upload an Excel/CSV file and start the enrichment pipeline; supports legacy_gridx and pre_enriched_febest_v1',
   })
   async uploadAndStart(
     @UploadedFile() file: Express.Multer.File,
@@ -203,6 +214,8 @@ export class PipelineController {
     @Body('fulfillmentPolicyId') fulfillmentPolicyId: string | undefined,
     @Body('paymentPolicyId') paymentPolicyId: string | undefined,
     @Body('returnPolicyId') returnPolicyId: string | undefined,
+    @Body('vertical') verticalRaw: string | undefined,
+    @Body('importMode') importModeRaw: string | undefined,
     @CurrentUser() user: User,
   ) {
     if (!file) {
@@ -212,6 +225,13 @@ export class PipelineController {
       throw new BadRequestException('marketplace must be US, UK, AU, or DE');
     }
     const marketplaceCode = marketplace.trim() as PipelineMarketplaceCode;
+    const verticalValue = verticalRaw?.trim() || DEFAULT_PRODUCT_VERTICAL;
+    if (!isProductVertical(verticalValue)) {
+      throw new BadRequestException(
+        'vertical must be automotive, business_industrial, or fashion',
+      );
+    }
+    const vertical = verticalValue;
 
     const manageAllTeams = await this.rbac.userHasPermission(
       user.id,
@@ -235,11 +255,36 @@ export class PipelineController {
         returnPolicyId: returnPolicyId?.trim(),
       },
       user,
+      vertical,
+      (importModeRaw?.trim() || 'legacy_gridx') as PipelineImportMode,
     );
 
     return { job };
   }
 
+  @Post('pre-enriched-febest/dry-run')
+  @Throttle({ medium: { limit: 5, ttl: 60_000 } })
+  @RequirePermissions('pipeline.run')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Validate a pre_enriched_febest_v1 workbook without creating a job or writing production data',
+  })
+  async dryRunPreEnrichedFebest(
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    const validation = parsePreEnrichedFebestWorkbook(file.buffer);
+    return {
+      mode: PRE_ENRICHED_FEBEST_MODE,
+      filename: file.originalname,
+      validation,
+    };
+  }
   @Get('single-listing/brands')
   @RequirePermissions('listings.create')
   @ApiOperation({

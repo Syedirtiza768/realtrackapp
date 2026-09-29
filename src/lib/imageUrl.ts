@@ -74,11 +74,10 @@ export function toBackendProxyPath(url: string | null | undefined): string {
   try {
     const parsed = new URL(url);
     const host = parsed.hostname;
-    const isOurS3 =
-      host.includes('amazonaws.com') ||
-      host.includes('realtrack-images') ||
-      host.includes('cloudfront');
-    if (isOurS3) {
+    const isOurS3 = isFirstPartyS3Host(host);
+    const isOurCdn =
+      host.includes('realtrack-images') || host.endsWith('.cloudfront.net');
+    if (isOurS3 || isOurCdn) {
       const path = parsed.pathname.replace(/^\//, '');
       return `/api/storage/serve/${path}`;
     }
@@ -149,15 +148,28 @@ export function isOurCdnUrl(url: string): boolean {
   try {
     const host = new URL(url).hostname;
     return (
+      isFirstPartyS3Host(host) ||
       host.includes('realtrack-images') ||
-      host.includes('cloudfront') ||
-      host.includes('amazonaws.com')
+      host.endsWith('.cloudfront.net')
     );
   } catch {
     return false;
   }
 }
 
+/**
+ * Only proxy S3 buckets owned by this application. A generic `amazonaws.com`
+ * check is unsafe here: legacy imports can contain public S3 URLs from a
+ * different bucket, while the backend proxy can read only its configured
+ * bucket (`solarrisebackupbucket` or its account-qualified replacement in
+ * production). Those URLs must stay direct or the browser asks the proxy for
+ * an object that does not exist there.
+ */
+function isFirstPartyS3Host(host: string): boolean {
+  return /^(?:solarrisebackupbucket(?:-\d{12})?|realtrack-images)\.s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com$/i.test(
+    host,
+  );
+}
 /**
  * React onError handler that falls back through variant chain:
  * derived variant → original URL → empty string (shows fallback).

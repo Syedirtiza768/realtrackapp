@@ -48,4 +48,16 @@ describe('vertical configuration', () => {
     ]);
     expect(result.attributes.manufacturer).toBe('Acme');
   });
+
+  it('keeps Fashion identification metadata keys instead of camel-casing them', () => {
+    const result = validateVerticalAttributes('fashion', {
+      color: 'Navy',
+      _suggestedKeys: ['color'],
+      _confirmedKeys: ['brand'],
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.attributes._suggestedKeys).toEqual(['color']);
+    expect(result.attributes._confirmedKeys).toEqual(['brand']);
+    expect(result.attributes.SuggestedKeys).toBeUndefined();
+  });
 });

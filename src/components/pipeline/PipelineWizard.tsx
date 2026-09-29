@@ -27,7 +27,7 @@ import type { PipelineJob, PipelineJobStatus } from '../../types/pipeline';
 import { PIPELINE_STAGES } from '../../types/pipeline';
 import { listTeams, PIPELINE_CONDITIONS, type PipelineConditionLabel } from '../../lib/teamsApi';
 import { useQuery } from '@tanstack/react-query';
-import ImageEnrichmentPanel from './ImageEnrichmentPanel';
+import ImageEnrichmentPanel, { type ImageDriveCoverageSummary } from './ImageEnrichmentPanel';
 import EnrichmentStatusPanel from './EnrichmentStatusPanel';
 import OptimizationStatusPanel, { useOptimizationDownloadGate } from './OptimizationStatusPanel';
 
@@ -671,14 +671,14 @@ export function ProcessingStep({ jobId, onBack }: { jobId: string; onBack: () =>
         </Card>
       )}
 
-      {/* Image Enrichment */}
+      {/* Image Drive coverage and resolved output images */}
       <ImageEnrichmentPanel
         jobId={job.id}
         jobStatus={job.status}
-        parts={job.status === 'completed' && job.totalParts > 0 ? Array.from({ length: Math.min(job.totalParts, 50) }, (_, i) => ({
-          partNumber: `PART-${job.id.slice(0, 6)}-${i + 1}`,
-          title: `${job.originalFilename} Part #${i + 1}`,
-        })) : undefined}
+        imageCoverage={
+          (job.stageDetails?.imageDrive as { imageCoverage?: ImageDriveCoverageSummary } | undefined)
+            ?.imageCoverage
+        }
       />
 
       <button onClick={onBack} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200 transition">

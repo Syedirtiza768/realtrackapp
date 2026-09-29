@@ -1,6 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { fetchWithAuth } from '../../lib/authApi';
 import { useAuth } from '../auth/AuthContext';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import FeedbackPanel from '../ui/FeedbackPanel';
+import WorkspacePageHeader from '../layout/WorkspacePageHeader';
+import { EmptyState, ErrorState, LoadingPlaceholder } from '../ui/StatusBlock';
 
 type Assignment = { storeId: string; accessLevel: string };
 type BusinessIndustrialUser = { userId: string; email: string; name: string | null; roleSlug: string; roleName: string; active: boolean; storeAssignments: Assignment[] };
@@ -20,10 +24,11 @@ function MemberEditor({ member, stores, storesReady, onSaved, onClose }: { membe
   const [error, setError] = useState('');
   const self = user?.id === member.userId;
   const unknownStores = storeIds.filter((id) => !stores.some((store) => store.id === id));
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
 
-  async function save(action: 'role' | 'stores' | 'deactivate') {
+  async function save(action: 'role' | 'stores' | 'deactivate', confirmed = false) {
     if (busy || !member.active || (action === 'role' && (!permissions.includes('business_industrial.roles.manage') || self)) || (action === 'deactivate' && self) || (action === 'stores' && (!storesReady || unknownStores.length))) return;
-    if (action === 'deactivate' && !window.confirm('Deactivate ' + member.email + '? This revokes their account access.')) return;
+    if (action === 'deactivate' && !confirmed) { setConfirmDeactivate(true); return; }
     setBusy(action); setError('');
     try {
       await fetchWithAuth('/api/business-industrial/users/' + encodeURIComponent(member.userId) + '/' + action, {
@@ -54,6 +59,16 @@ function MemberEditor({ member, stores, storesReady, onSaved, onClose }: { membe
       {!self && <button className={button + ' text-red-700 dark:text-red-400'} onClick={() => void save('deactivate')}>{busy === 'deactivate' ? 'Deactivating…' : 'Deactivate user'}</button>}
     </fieldset>
     {!member.active && <p className="mt-3 text-sm text-slate-500">This user is inactive.</p>}
+    <ConfirmDialog
+      open={confirmDeactivate}
+      title="Deactivate this account?"
+      description={'Deactivate ' + member.email + '? This revokes their Business & Industrial access and does not grant Automotive or Fashion permissions to anyone else.'}
+      confirmLabel="Deactivate user"
+      tone="danger"
+      busy={busy === 'deactivate'}
+      onClose={() => setConfirmDeactivate(false)}
+      onConfirm={() => { setConfirmDeactivate(false); void save('deactivate', true); }}
+    />
   </section>;
 }
 
@@ -102,20 +117,20 @@ export default function BusinessIndustrialUsersPage() {
   }
 
   if (!canManage) return <p role="alert">You do not have permission to manage Business &amp; Industrial users.</p>;
-  return <div><h1 className="text-3xl font-semibold">Business &amp; Industrial users</h1><p className="mt-2 text-slate-500">Create workspace accounts, assign vertical roles and dedicated store access, or revoke access without granting Automotive or Fashion permissions.</p>
-    {message && <p role="status" className="mt-4 text-sm text-emerald-700 dark:text-emerald-400">{message}</p>}
-    {error && <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-400">{error}</p>}
-    {storeError && <p role="alert" className="mt-3 text-sm text-amber-700">Store assignments unavailable: {storeError}</p>}
-    <div className="my-5 flex gap-3"><button className={button + ' bg-cyan-600 text-white'} disabled={!!selected || creating || showCreate} onClick={() => { setShowCreate(true); setMessage(''); }}>Create user</button><button className={button} disabled={loading || creating || !!selected || showCreate} onClick={() => setRevision((value) => value + 1)}>Refresh users</button></div>
-    {showCreate && <form onSubmit={(event) => void create(event)} className="mb-6 space-y-4 rounded-xl bg-white p-5 dark:bg-slate-900"><h2 className="font-semibold">New B&amp;I account</h2><fieldset disabled={creating} className="grid gap-4 sm:grid-cols-2">
+  return <div className="space-y-5"><WorkspacePageHeader title="Business &amp; Industrial users" subtitle="Create workspace accounts, assign vertical roles and dedicated store access, or revoke access without granting Automotive or Fashion permissions." />
+    {message && <FeedbackPanel tone="success">{message}</FeedbackPanel>}
+    {error && <ErrorState message={error} onRetry={() => setRevision((value) => value + 1)} />}
+    {storeError && <FeedbackPanel tone="warning">Store assignments unavailable: {storeError}</FeedbackPanel>}
+    <div className="flex gap-3"><button className={button} style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-primary-fg)' }} disabled={!!selected || creating || showCreate} onClick={() => { setShowCreate(true); setMessage(''); }}>Create user</button><button className={button} disabled={loading || creating || !!selected || showCreate} onClick={() => setRevision((value) => value + 1)}>Refresh users</button></div>
+    {showCreate && <form onSubmit={(event) => void create(event)} className="mb-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900"><h2 className="font-semibold">New B&amp;I account</h2><fieldset disabled={creating} className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm">Name<input className={field} value={name} maxLength={200} onChange={(event) => setName(event.target.value)} /></label>
       <label className="text-sm">Email<input className={field} type="email" value={email} required maxLength={200} onChange={(event) => setEmail(event.target.value)} /></label>
       <label className="text-sm">Temporary password<input className={field} type="password" value={password} required minLength={12} maxLength={72} onChange={(event) => setPassword(event.target.value)} /><span className="text-xs text-slate-500">At least 12 characters; the user must change it after first sign-in.</span></label>
       <label className="text-sm">B&amp;I role<select className={field} value={role} disabled={!canRoles} onChange={(event) => setRole(event.target.value)}>{roles.map((value) => <option key={value} value={value}>{labelOf(value)}</option>)}</select></label>
       {storesReady && <div className="sm:col-span-2"><p className="mb-2 text-sm font-medium">Initial dedicated store assignments</p>{stores.map((store) => <label key={store.id} className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={storeIds.includes(store.id)} onChange={(event) => setStoreIds((ids) => event.target.checked ? [...ids, store.id] : ids.filter((id) => id !== store.id))} />{store.storeName}</label>)}{!stores.length && <p className="text-sm text-slate-500">No dedicated B&amp;I stores connected yet.</p>}</div>}
-    </fieldset><div className="flex gap-3"><button type="submit" className={button + ' bg-cyan-600 text-white'} disabled={creating}>{creating ? 'Creating…' : 'Create B&I user'}</button><button type="button" className={button} disabled={creating} onClick={() => { setShowCreate(false); setPassword(''); }}>Cancel</button></div></form>}
-    {loading && <p role="status">Loading B&amp;I users…</p>}
-    {!loading && !error && <div className="space-y-3">{users.map((member) => <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-white p-4 dark:bg-slate-900" key={member.userId}><div><p className="font-medium">{member.name || member.email}</p><p className="text-sm text-slate-500">{member.email} · {member.roleName || labelOf(member.roleSlug)} · {member.active ? 'Active' : 'Inactive'}</p><p className="text-xs text-slate-500">{member.storeAssignments?.length ?? 0} explicit dedicated store assignments</p></div><button className={button} disabled={!!selected || showCreate} onClick={() => { setSelected(member); setMessage(''); }}>Manage user</button></div>)}{!users.length && <p className="rounded-xl bg-white p-5 text-sm text-slate-500 dark:bg-slate-900">No B&amp;I workspace members found. Create the first account above.</p>}</div>}
+    </fieldset><div className="flex gap-3">        <button type="submit" className={button} style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-primary-fg)' }} disabled={creating}>{creating ? 'Creating…' : 'Create B&I user'}</button><button type="button" className={button} disabled={creating} onClick={() => { setShowCreate(false); setPassword(''); }}>Cancel</button></div></form>}
+    {loading && <LoadingPlaceholder label="Loading B&I users" />}
+    {!loading && !error && <div className="space-y-3">{users.map((member) => <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900" key={member.userId}><div><p className="font-medium">{member.name || member.email}</p><p className="text-sm text-slate-500">{member.email} · {member.roleName || labelOf(member.roleSlug)} · {member.active ? 'Active' : 'Inactive'}</p><p className="text-xs text-slate-500">{member.storeAssignments?.length ?? 0} explicit dedicated store assignments</p></div><button className={button} disabled={!!selected || showCreate} onClick={() => { setSelected(member); setMessage(''); }}>Manage user</button></div>)}{!users.length && <EmptyState title="No B&I workspace members found" description="Create the first account above." />}</div>}
     {selected && <MemberEditor member={selected} stores={stores} storesReady={storesReady} onSaved={saved} onClose={() => setSelected(null)} />}
   </div>;
 }

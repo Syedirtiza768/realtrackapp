@@ -19,7 +19,7 @@ export default function FashionDashboardPage() {
     return () => controller.abort();
   }, [revision]);
   const actions = [
-    ['/fashion/listings/new', 'Create listing', 'fashion.listings.create'],
+    ['/fashion/listings/new', 'Add Item', 'fashion.listings.create'],
     ['/fashion/import', 'Import catalog', 'fashion.import'],
     ['/fashion/review', 'Review authenticity', 'fashion.authenticity.review'],
     ['/fashion/stores', 'Manage stores', 'fashion.stores.view'],
@@ -27,7 +27,7 @@ export default function FashionDashboardPage() {
   return <div>
     <p className="text-sm font-medium text-pink-600">Fashion vertical</p>
     <h1 className="mt-1 text-3xl font-semibold">Fashion overview</h1>
-    <p className="mt-2 text-slate-500">Manage your catalog, authenticity reviews, and seller stores.</p>
+    <p className="mt-2 text-slate-500">Identify garments from photos, complete Fashion attributes, and manage authenticity reviews and seller stores.</p>
     <div className="mt-5 flex flex-wrap gap-3">{actions.filter(([, , permission]) => permissions.includes(permission)).map(([path, label]) => <Link key={path} className="rounded-lg border border-pink-300 px-4 py-2 text-sm font-semibold text-pink-600 dark:border-pink-800 dark:text-pink-300" to={path}>{label}</Link>)}</div>
     {error && <p role="alert" className="mt-5 rounded-lg bg-red-500/10 p-4 text-red-600">{error} <button className="ml-2 underline" onClick={() => setRevision((value) => value + 1)}>Retry</button></p>}
     {!data && !error && <p role="status" className="mt-5 text-slate-500">Loading Fashion workspace…</p>}

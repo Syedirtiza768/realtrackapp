@@ -40,6 +40,7 @@
 |-----|---------|---------|
 | `JWT_SECRET` | _(required)_ | JWT signing secret (**secret**) |
 | `JWT_EXPIRY_SECONDS` | `14400` (4h) | Access token lifetime in seconds |
+| `LEGACY_AUTOMOTIVE_ORGANIZATION_ID` | _(required for legacy Auto Parts data)_ | Limits legacy `NULL`-organization catalog/listing rows to members of one configured organization. New interactive automotive rows are organization-tagged. |
 | `ALLOW_PUBLIC_REGISTRATION` | `false` in production | If `true`, `POST /api/auth/register` is allowed; new users get Viewer role |
 | `RBAC_SYNC_PERMISSIONS` | `true` | Sync permission registry → DB on startup |
 | `SEED_DEMO_USERS` | If `true` (non-prod), seed default users |
@@ -58,7 +59,8 @@ authentication. This is not a secret or an environment override.
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `CORS_ORIGIN` | localhost:8050, mhn.realtrackapp.com | Comma-separated allow-list |
+| `CORS_ORIGIN` | localhost:8050, app.omnicoreholding.com | Comma-separated allow-list |
+| `FRONTEND_BASE_URL` | `https://app.omnicoreholding.com` in production; `http://localhost:3911` otherwise | Base URL used by the eBay OAuth callback. Set explicitly for non-standard deployments. |
 | `PORT` | `4191` | Backend listen port |
 | `FRONTEND_PORT` | `8050` | Docker frontend host port |
 | `BACKEND_PORT_EXTERNAL` | `4191` | Docker backend host port |
@@ -76,6 +78,13 @@ authentication. This is not a secret or an environment override.
 
 ## eBay Developer API
 
+## B&I image intake pilot
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| BUSINESS_INDUSTRIAL_AI_MODEL | openai/gpt-5.6-luna-20260709 | Explicit OpenRouter model for B&I image detection and listing enrichment |
+| GOOGLE_DRIVE_API_KEY | — | Secret. Google Drive API key used only by the public-folder B&I pilot importer |
+
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `EBAY_CLIENT_ID` | — | **Secret.** App ID |
@@ -83,7 +92,7 @@ authentication. This is not a secret or an environment override.
 | `EBAY_DEV_ID` | — | **Secret.** Dev ID |
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
-| `EBAY_REDIRECT_URI` | — | OAuth redirect/RuName |
+| `EBAY_REDIRECT_URI` | eBay OAuth-enabled RuName | RuName passed to eBay; do not set this to the callback URL. Update the RuName’s Accept URL in the eBay Developer Portal to `https://app.omnicoreholding.com/api/integrations/ebay/oauth/callback`. |
 | `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `AE_Dubai` | Auto-provisioned inventory location key |
 | `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Dubai Warehouse` | Ship-from line 1 |
 | `EBAY_DEFAULT_INVENTORY_CITY` | `Dubai` | Ship-from city |
@@ -108,12 +117,19 @@ authentication. This is not a secret or an environment override.
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `AWS_S3_BUCKET` | `solarrisebackupbucket` | Bucket |
+| `AWS_S3_BUCKET` | `solarrisebackupbucket-<account>` in production | Bucket. Live traffic uses the account-qualified name only; the retired `solarrisebackupbucket` hostname is an alias. |
 | `AWS_S3_PREFIX` | `mhn/` | Key prefix |
 | `AWS_S3_REGION` | `us-east-1` | Region |
 | `AWS_ACCESS_KEY_ID` | — | **Secret** |
 | `AWS_SECRET_ACCESS_KEY` | — | **Secret** |
 | `S3_BUCKET` / `S3_PREFIX` / `S3_REGION` | — | Legacy aliases |
+
+Presigned browser uploads also require the S3 bucket CORS policy to allow the
+frontend origins (`https://app.omnicoreholding.com`,
+`https://mhn.realtrackapp.com`, and the other production hosts in
+`docs/architecture/deployment.md`) with `PUT` and the `Content-Type` request
+header. Updating backend `CORS_ORIGIN` alone does not update S3 CORS. The live
+bucket had no CORS rules until 2026-09-13.
 
 ## Node / Runtime
 
@@ -154,3 +170,21 @@ authentication. This is not a secret or an environment override.
 
 *Reorganized: 2026-06-06.*
 | `EBAY_DAILY_PUBLISH_TARGET_LIMIT` | `5000` | Organization-wide UTC-day quota for durable eBay listing/store publish targets; maximum 5,000 |
+
+## B&I image intake pilot
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| BUSINESS_INDUSTRIAL_AI_MODEL | openai/gpt-5.6-luna-20260709 | Explicit OpenRouter model for B&I image detection and listing enrichment |
+| GOOGLE_DRIVE_API_KEY | — | Secret. Google Drive API key used only by the public-folder B&I pilot importer |
+
+## Fashion admin seed variables
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| FASHION_SEED_ADMIN_EMAIL | required by seed command | Email for the idempotent Fashion admin seed |
+| FASHION_SEED_ADMIN_PASSWORD | required by seed command | Initial password only; minimum 12 characters; never logged or reset on rerun |
+| FASHION_SEED_ADMIN_NAME | Fashion Admin | Display name for a newly created seed user |
+| FASHION_AI_MODEL | optional | Vision model override for Fashion garment identification; otherwise the shared vision router/default is used |
+
+Run backend npm run seed:fashion-admin only after reviewing the target database and environment. It is not a production migration or deploy approval.

@@ -75,6 +75,44 @@ describe('CatalogWorkspaceService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('returns empty marketplace facets without querying an empty store list', async () => {
+    const { service, queryBuilder } = makeService();
+    const result = await (service as unknown as {
+      marketplaceFacets: (base: unknown, scope: unknown, vertical: string) => Promise<unknown[]>;
+    }).marketplaceFacets(queryBuilder, {
+      organizationId: 'org-2',
+      teamIds: [],
+      manageAllTeams: true,
+      accessibleStoreIds: [],
+    }, 'business_industrial');
+    expect(result).toEqual([]);
+    expect(queryBuilder.getRawMany).toBeUndefined();
+  });
+
+  it('matches condition filters against either condition id or label', async () => {
+    const { service, queryBuilder } = makeService({ manageAllTeams: true });
+    const applySearchAndFilters = (
+      service as unknown as {
+        applySearchAndFilters: (
+          qb: typeof queryBuilder,
+          vertical: string,
+          dto: { conditions?: string },
+          scope: { organizationId: string; teamIds: string[]; manageAllTeams: boolean },
+        ) => void;
+      }
+    ).applySearchAndFilters.bind(service);
+    applySearchAndFilters(
+      queryBuilder,
+      'business_industrial',
+      { conditions: 'USED,3000' },
+      { organizationId: 'org-2', teamIds: [], manageAllTeams: true },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(p.conditionId IN (:...catalogConditions) OR p.conditionLabel IN (:...catalogConditions))',
+      { catalogConditions: ['USED', '3000'] },
+    );
+  });
+
   it.each(['fashion', 'business_industrial'] as const)(
     'fails closed when %s bulk delete targets a published product',
     async (vertical) => {

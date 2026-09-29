@@ -45,10 +45,11 @@ services:
       retries: 5
 
   redis:
+    # BullMQ queue metadata must not be evicted under memory pressure.
     command: >
       redis-server
       --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
 
   backend:
@@ -67,5 +68,10 @@ services:
       REDIS_SOCKET_ADAPTER: ${REDIS_SOCKET_ADAPTER:-true}
       SCHEDULER_LEADER_ENABLED: ${SCHEDULER_LEADER_ENABLED:-true}
       MAX_CONCURRENT_PIPELINE_JOBS: ${MAX_CONCURRENT_PIPELINE_JOBS:-2}
+      LISTING_OPTIMIZATION_CONCURRENCY: ${LISTING_OPTIMIZATION_CONCURRENCY:-1}
+      LISTING_OPTIMIZATION_PRODUCT_CONCURRENCY: ${LISTING_OPTIMIZATION_PRODUCT_CONCURRENCY:-1}
+      LISTING_OPTIMIZATION_BATCH_SIZE: ${LISTING_OPTIMIZATION_BATCH_SIZE:-1}
       MAX_CONCURRENT_CATALOG_IMPORTS: ${MAX_CONCURRENT_CATALOG_IMPORTS:-2}
+      # Public-folder B&I intake; pass through the host secret without committing it.
+      GOOGLE_DRIVE_API_KEY: ${GOOGLE_DRIVE_API_KEY:-}
     # Scale with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --scale backend=2

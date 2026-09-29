@@ -1,4 +1,184 @@
+
 # Changelog
+
+## 2026-09-23 — Automotive pipeline publishing reliability
+
+- Production eBay publishing is configured for Trading API mode. New fixed-price listings use AddFixedPriceItem; published-listing edits, price/quantity changes, business-policy changes, and end-listing actions use Trading API calls against the stored eBay item ID.
+- Reduced listing-optimization retry fan-out to one product at a time and increased the backend database pool from 10/2 to 25/5 after a transient pool-exhaustion failure. The five affected products were retried successfully; they remain in the existing manual-review gate.
+
+
+## 2026-09-16 — Business & Industrial intake throughput
+
+- The production B&I Drive intake worker now permits two concurrent root jobs. Image identity remains idempotent by intake job and source path, so retries do not duplicate already-ingested assets.
+
+- **Faster visible drafts and catalog header controls (2026-09-16):** Public
+  Drive intake now processes two folders concurrently, downloads four images
+  per folder concurrently with bounded retries, and creates each folder's draft
+  as soon as its complete image set is retained. Incomplete folders remain
+  retryable instead of producing partial drafts. The shared catalog table now
+  exposes direct column sorting and filters for MPN, category, condition,
+  price/stock, images, import date, and publication status. Production also
+  moved the three current Drive jobs and their 22 existing drafts from the
+  Super Admin organization into the dedicated B&I workspace; no marketplace
+  publication was performed.
+
+- **B&I catalog isolation and tenant repair (2026-09-16):** Business &
+  Industrial catalog publication joins now require an exact B&I vertical and
+  organization match; legacy null-vertical/null-organization compatibility is
+  retained only for Automotive. Image intake inventory mirrors now inherit the
+  authoritative catalog product organization and match existing rows by
+  organization + vertical + SKU. Production repaired 77 unambiguous historical
+  B&I mirrors to their matching catalog-product organization; no marketplace
+  publication was performed.
+
+- **B&I publish-readiness repair (2026-09-16):** New image-intake drafts now
+  persist dispatch location, shipping coverage, parcel dimensions/weight and
+  units, enriched item specifics, a separate MPN (model fallback, then
+  `Does Not Apply`), Type, and a normalized condition. Blank linked inventory
+  values no longer mask populated catalog Brand/MPN/Type values. Added an
+  idempotent backfill for all existing B&I catalog rows and their inventory
+  projections; it performs no marketplace publication.
+
+- **B&I exact-folder Drive intake and MPN/SKU preservation (2026-09-16):** Drive intake now processes every direct source folder with supported images, preserves decimal folder suffixes as part of the independent listing identity, generates `BNI-<exact-folder-name>` SKUs, keeps MPN in its dedicated field, retains all available folder images, and overwrites same-SKU enrichment in place without publishing. Automatic draft enrichment also runs for confidence-gated detections so the catalog receives the full source set for operator publishing readiness.
+
+
+- **B&I catalog published status + backfill (2026-09-15):** `/business-industrial/catalog` was forcing Unpublished for operators with an empty store-access list (`AND 1 = 0`), even when live `ebay_listing_channels` and `listing_records."ebayListingId"` rows existed. Catalog search now keeps Published from live channels (including null vertical), `catalog_products.ebay_item_id`, and matching listing records. Successful eBay publishes stamp `ebay_item_id`. Historical live rows are repaired by `scripts/backfill-catalog-publication-status.sql`.
+
+- **eBay 25002 core-fitment retry actually strips optional fields (2026-09-15):** Production FEBEST publishes (SKUs such as `1921-G01LH`) failed with Inventory error 25002 after the compatibility PUT and readback succeeded. European catalog trims/engines (`sDrive 18 d`, `BMW B47 D20 A`) and a `Submodel` property are not valid US Motors compatibility fields, and the documented retry was rewriting the same payload. Publish now retries once with unique Make/Model/Year only, omits `Submodel` from the Inventory API payload, and uses that reduced projection for offer refresh.
+
+- **B&I catalog filter placement parity (2026-09-14):** The Business & Industrial catalog now follows Auto Parts placement with a horizontal quick-filter bar below search and a left-side advanced-filter drawer at desktop and mobile widths. Existing filter state, URL/session persistence, bulk actions, and catalog data are unchanged; no listings were published.
+
+- **B&I intake identifiers and catalog navigation (2026-09-14):** Image-intake
+  drafts now persist MPN separately and generate deterministic `BNI-` SKUs from
+  the normalized base folder name; final numeric dot suffixes remain grouped as
+  physical instances. Removed operator-facing model/token/cost details from
+  intake responses and screens, made intake run/group lists independently
+  scrollable, and added a desktop filter toggle plus contained sticky-header
+  scrolling to the shared catalog workspace. No listings were published.
+
+- **B&I bulk publish profile selection (2026-09-14):** The selected-listings
+  publish dialog now loads the complete connected-store profile/policy options,
+  lets the operator choose shared shipping, payment, and return profiles before
+  a future publish click, and carries the selected names into each durable target
+  for store-specific policy-ID resolution. This change does not submit or
+  publish any listing by itself.
+
+- **B&I eBay condition normalization (2026-09-14):** Preserved imported eBay
+  condition ID 3000 as USED_EXCELLENT instead of collapsing it to ID 5000,
+  which eBay rejects for categories such as Switching Mode Power Supplies.
+  Publish projection validation now infers missing generic-used IDs and selects
+  a supported condition from the live category policy within the same used,
+  new, refurbished, or parts family.
+
+- **B&I catalog publication state and policy selectors (2026-09-14):** Catalog
+  rows now reconcile current and legacy live eBay records, expose Published,
+  Unpublished, and Blocked filters, and provide a usable published-item URL.
+  Bulk policy editing now uses complete connected-store shipping, payment, and
+  return profile dropdowns instead of free-text inputs.
+
+- **Temporary B&I publish bypass (2026-09-14):** Added the reversible
+  `BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH` switch for operator-led
+  publishing. When enabled, the B&I UI and eBay publish endpoints do not
+  require compliance approval, and multi-selected B&I records can receive bulk
+  policy/profile edits; review records and other publishing safeguards remain
+  unchanged.
+
+- **Private S3 eBay image publishing fix (2026-09-14):** eBay Picture Services
+  now receives private first-party S3 image bytes through the multipart
+  `create_image_from_file` endpoint, while the durable source URL remains the
+  cache key. This avoids eBay's failed anonymous fetch of private presigned
+  URLs without making the image bucket public or persisting signed URLs.
+
+- **B&I taxonomy hardening (2026-09-14):** Business & Industrial image intake
+  now tries the AI category query first and then deterministic family/type
+  query variants when eBay suggestions are too narrow. Every result is still
+  verified as an eBay leaf and receives live item-aspect metadata; the fallback
+  broadens search vocabulary but never invents a category ID. No marketplace
+  publishing is performed by intake.
+
+- **FEBEST pre-enriched import and source audit (2026-09-14):** Added the explicit `pre_enriched_febest_v1` pipeline mode, exact three-sheet server validator plus dry-run endpoint, draft-only collision-checked worker path, and upload UI selector. The deterministic FEBEST audit ingests 4,599 unique source rows, enumerates 20,102 official catalog items, captures official evidence for 4,591 products, applies the approved 30% AED markup with recorded Google Finance FX, and produces 533,612 accepted US-MVL fitment rows plus a separate 1,102,126-row review audit. The run remains DRAFT/BLOCKED for 886 products without accepted US-MVL mappings and 8 unresolved evidence/image rows; no production writes or eBay publishing were performed.
+
+- **Fashion photos-first item workflow (2026-09-14):** Fashion Add Item now
+  collects a complete garment photo set (camera, upload, or both) before
+  optional identification. Existing OpenAI vision and storage services analyze
+  all photos together, suggest Fashion category/attributes without inventing
+  label data, preserve user edits on re-analysis, and keep photos when AI
+  fails so manual entry still works. Category-aware clothing, footwear, and
+  accessory fields persist on `catalog_products.vertical_attributes`. Listing
+  text uses confirmed Fashion facts and reported defects. Auto Parts and
+  Business & Industrial workflows are unchanged.
+
+- **Public homepage redesign (2026-09-14):** Replaced the public `/` overview
+  with an editorial, responsive commerce-operations story: illustrative
+  product subjects for Auto Parts, Business & Industrial, and Fashion; a
+  keyboard-operable intake/enrich/review/publish walkthrough; synthetic
+  catalog statuses; FAQ accordion; mobile navigation; and workspace links.
+  The page keeps branding overrides, existing protected routes, and the
+  general sign-in/privacy destinations unchanged.
+
+- **Light theme default (2026-09-13):** Workspaces now default to light
+  (`data-theme="light"`, slate canvas, light browser `theme-color`). Fashion
+  login and the shared first-login password page (including B&I) use the same
+  light card pattern as B&I login. Dark remains available from Client Settings.
+  Existing `client_settings.themeMode = dark` rows are migrated to `light`.
+
+- **B&I mobile and cross-platform layout (2026-09-13):** Business & Industrial
+  (and the shared catalog used by Fashion) now use a 16px type floor, notch
+  safe-area padding, 44px touch targets, stacked phone toolbars, card catalog
+  results below `lg`, and full-screen/bottom-sheet dialogs. Login, editor
+  measurement+unit fields, stores, and publish/quick-view panels no longer
+  force page-level horizontal overflow on ~360px viewports.
+
+- **B&I Auto Parts layout alignment (2026-09-13):** Business & Industrial now
+  uses the Auto Parts sidebar/drawer workspace chrome, shared page primitives,
+  and catalog presentation patterns while keeping its server-backed catalog,
+  editor payload, review, import, intake, store, incident, and permission
+  rules unchanged. Overview Create listing opens `/business-industrial/listings/editor`.
+
+> Fashion/B&I completion record (2026-09-10): see the vertical architecture, security, API, route, and setup documentation for the deployed workspace behavior and operational prerequisites.
+
+- **B&I publish validation blockers (2026-09-13):** Recent
+  `No targets passed validation` failures for `bniadmin` were caused by a missing
+  merchant inventory location on the native-OAuth B&I store plus null catalog
+  prices on most SKUs. Production now has `AE_Dubai` provisioned and mapped on
+  all B&I marketplaces. Native policy sync and validate now auto-ensure an
+  inventory location (same as SellerPundit). Publish/validation UI surfaces the
+  real `errors`/`failures` detail instead of only the generic message. 72/77
+  catalog rows still need a positive price before they can queue.
+
+- **B&I catalog empty for multi-org admins (2026-09-13):** `bniadmin@realtrack.local`
+  (and similar users with Super Admin + B&I membership) no longer land on the Super
+  Admin organization when using `/business-industrial/*`. Login stores
+  `mk_preferred_vertical`, org selection prefers the matching vertical workspace
+  (owned B&I first), and `BusinessIndustrialShell` auto-selects the B&I workspace
+  so catalog search scopes to the 77 B&I products instead of an empty Super Admin org.
+
+- **B&I catalog publish readiness (2026-09-13):** Publish modal now loads
+  shipping/return/payment profiles through the same `/stores/:id/profiles`
+  path Auto Parts uses (with B&I account-policy fallback), defaults from the
+  connected store marketplace mapping, and multi-store selection. Production
+  B&I store config was marked dedicated (`ownerVertical` /
+  `enabledVerticals`), catalog products were moved into the B&I workspace org
+  with the connected store, and all 77 compliance reviews were approved so
+  valid listings can enter the publish flow.
+
+- **B&I catalog publish modal Auto Parts parity (2026-09-13):** The Business
+  & Industrial publish modal now supports multi-store single-mode publishing
+  (checkboxes, not radio), select all/deselect all, a profile source store
+  selector when multiple stores are selected, and a wider `max-w-2xl` dialog
+  to prevent policy selector clipping. Selected stores each receive the
+  listing with shared connected-store policy and inventory-location overrides.
+  The bulk mode uses each selected store's own synced defaults. This matches
+  the Auto Parts `PublishModal` workflow while preserving B&I's server-side
+  validation and durable queue architecture.
+
+- **B&I Drive public-download compatibility:** The Drive pilot now uses each
+  image's public `webContentLink` before the API media endpoint, allowing
+  link-shared images with Drive security-update protection to be downloaded,
+  converted to WebP, and processed on the server.
+- **B&I draft score persistence:** Normalized 0–100 SEO/readiness scores to
+  Catalog's 0–1 numeric ratio columns and serialize them back as percentages in
+  the B&I API, preventing pilot draft creation numeric overflows.
 
 - **eBay publish failure repair:** Motors publish now verifies a category as a leaf before creating the offer, persists the resolved category across `catalog_products` and SKU-linked `listing_records`, and uses the known publishable leaf `9886` when taxonomy is unavailable. Listing construction falls back from a missing historical source-listing row to the canonical catalog product, and non-Motors marketplaces no longer receive reconstructed Motors fitment rows. Duplicate errors are permanently classified as skipped when the referenced eBay item is already published in the same local account channel. Added the dry-run/apply/requeue maintenance script `scripts/repair-ebay-publish-failures.mjs` (including explicit SKU retry and known-duplicate reconciliation modes) for deterministic recent failures; account limits and recalled-item policy blocks remain explicitly classified instead of being blindly retried.
 
@@ -12,9 +192,190 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
-- **Image Drive thumbnail visibility:** Folder APIs now return CDN URLs for generated thumbnail keys, and raw Image Drive thumbnails are routed through the backend image proxy.
-- **Pipeline Image Drive auto-attachment:** Bulk pipeline finalization now resolves manufacturer/OEM part numbers against Image Drive folders, replaces warehouse/bin placeholders, prepends matched CDN image URLs, preserves valid source URLs, updates listing and catalog image fields, and records match/link counts.
+- **Jeep teardown image host repoint (2026-09-13):** Pipeline job `UPL-2026-000146` (`JEEP-2218-WHITE-*`, including `JEEP-2218-WHITE-RD13`) stored image URLs on the retired `solarrisebackupbucket.s3.amazonaws.com` host. Rows were repointed onto `solarrisebackupbucket-<account>.s3.amazonaws.com` with the same object keys. The objects already existed; Auto Parts serving failed because the live bucket policy only granted the app account `mhn/business-industrial/*`. That policy now also allows `mhn/catalog-images/*`, `mhn/temp/*`, `mhn/originals/*`, and `mhn/image-drive/*`. The live bucket had no CORS configuration, so Inventory Details browser `PUT`s failed as `S3 upload network error` on every SKU; CORS now allows the production frontend origins (`app.omnicoreholding.com`, `mhn.realtrackapp.com`, and related hosts) with `PUT`/`Content-Type`. Image mirroring treats the legacy hostname as an alias of the configured bucket. Maintenance: `scripts/repoint-s3-bucket-alias-urls.mjs`.
+
+- **Publish build dependencies:** Added the safe eBay category util, `PublishRequest.vertical`, and validated fitment-source option required by the B&I listing builder.
+
+
+
+- **B&I catalog condition and brand filters:** Business & Industrial facets now
+  aggregate condition from `condition_label` when `condition_id` is null (the
+  production B&I shape), and condition filters match either field. The sidebar
+  exposes brand/manufacturer and condition alongside category, review status,
+  stock, and populated B&I attributes. Results and quick view show condition
+  and image counts; the publish modal no longer violates React hooks order when
+  closed. Facet queries now build a fresh scoped QueryBuilder per aggregation,
+  and category/condition `OR` predicates are fully parenthesized so they cannot
+  escape organization/vertical filters and leak automotive facet values into B&I.
+
+- **B&I connected-store publishing:** The Business & Industrial catalog publish
+  dialog now loads synced policies from the dedicated connected eBay account,
+  displays the selected store's fulfillment/return/payment profiles and
+  inventory location, and sends those values through validation and the durable
+  publish worker. Queued targets retain the selection so a stale catalog
+  profile cannot replace the connected-store mapping.
+
+- **B&I facet availability fix:** Corrected the shared catalog facet query for
+  users with no accessible publication stores. It now returns populated product
+  and vertical-attribute facets with an empty marketplace facet instead of
+  emitting invalid PostgreSQL `IN ()` SQL and hiding every filter behind an
+  error banner.
+
+- **B&I catalog detail and publishing parity:** The shared Business & Industrial
+  catalog quick view now hydrates the canonical product detail, displays every
+  stored image in a primary viewer plus thumbnail strip, and opens the reusable
+  full-screen lightbox with keyboard/arrow navigation and zoom. Added a
+  B&I-specific account-aware publish dialog: single listings run the existing
+  server validation and show blockers/warnings before enqueueing, while bulk
+  selections target up to ten dedicated B&I stores and retain server-side
+  approval/category/policy checks. Publish progress now shows target counts,
+  daily capacity, and published/skipped/failed target states.
+
+- **Catalog image delivery:** Fixed shared image URL normalization so only
+  configured first-party S3/CDN hosts use the application proxy. Legacy or
+  external S3 URLs from other buckets now remain on their source URL instead
+  of being rewritten to the production bucket, while the account-qualified
+  production bucket remains recognized and proxied instead of being loaded as
+  a private direct S3 URL. This restores complete galleries across all catalog
+  verticals after the bucket migration.
+- **B&I catalog Auto Parts parity:** Reworked `/business-industrial/catalog`
+  around the Auto Parts catalog header, actions, result density, summary, bulk
+  operations, quick view, and filtered-result feedback. Added a first-class
+  `validationStatuses` catalog query/facet and replaced empty or automotive
+  filter fields with populated B&I facets derived from the production
+  attribute contract (category family, manufacturer, model, MPN, inventory and
+  shipping modes, voltage/frequency, mounting, origin, series, and enclosure
+  rating). B&I rows now expose their manufacturer/model/category-family data
+  and created date directly in the results table.
+  Refresh now invalidates catalog, facet, and summary requests instead of
+  replacing state with dependency-equivalent values. Deployed to
+  `app.omnicoreholding.com` on 2026-09-13 and verified through container health,
+  public-route, protected-API, and compiled-bundle checks.
+
+- **Catalog facet reliability:** Fixed the shared vertical facet query to select
+  JSON attributes with a stable alias, preventing the facet endpoint from
+  failing and leaving every filter empty.
+- **Catalog image reorder fallback:** Updated the shared gallery for wrapped
+  layouts and added visible left/right controls so image order can be changed
+  with drag, keyboard, or explicit buttons before saving.
+
+- **Auto Parts catalog image save:** Fixed the Inventory Details modal to use the automotive listing image endpoints for reorder/remove and uploads instead of sending an automotive catalog-product ID to the vertical catalog patch route. The modal now reloads the persisted listing image order.
+
+- **Shared catalog filter and publishing fixes:** Corrected category facet values so selected categories filter by their stable ID while remaining readable in active chips, made the end-date filter inclusive, and added loading skeletons, checkbox facets, facet search, collapsed secondary filters, and clear counts to the Fashion/B&I workspace. Publish jobs now stop polling on completed_with_errors and expose normalized per-target eBay error messages.
+
+- **Shared catalog image ordering:** Replaced the quick-view arrow controls with the Auto Parts-style drag-and-drop image gallery. The first image is explicitly marked primary, keyboard reordering is supported, uploads are deduplicated between batches, and the saved order is shared by all verticals using CatalogWorkspace.
+
+- **Auto Parts catalog navigation:** Corrected the sidebar Catalog target so it
+  resolves to `/auto-parts/catalog` instead of duplicating the workspace prefix
+  as `/auto-parts/auto-parts/catalog`.
+
+- **Shared catalog workspace scope and publish UX:** Catalog search, facets,
+  suggestions, inline edits, and CSV export now include the active organization
+  when multiple workspaces are available. The filter panel exposes all server
+  facet fields plus price/import-date filters, and publish actions are shown or
+  gated according to the existing compliance approval requirement.
+
+- **Shared vertical catalog parity:** Added canonical `/fashion/catalog` and
+  `/business-industrial/catalog` workspaces with legacy `/listings` aliases.
+  Fashion and Business & Industrial now use one server-side catalog_products
+  search/facet/suggest contract with URL/session state, responsive filters,
+  quick view editing, image upload/reorder/remove/zoom, bulk team/policy/delete
+  actions, filtered or selected CSV export, publication summaries limited to
+  authorized stores, and durable bulk-publish progress. New catalog mutations
+  are audit logged, quarantine-safe, organization/vertical/team scoped, and
+  protected by vertical catalog permissions. No schema migration was required.
+
+- **eBay OAuth callback origin:** The B&I store connection flow now returns to
+  the canonical `https://app.omnicoreholding.com` origin in production when
+  `FRONTEND_BASE_URL` is unset, while preserving the local Vite callback
+  default during development.
+
+- **eBay OAuth authorize redirect:** The B&I store connection preserves the
+  eBay OAuth-enabled RuName in `EBAY_REDIRECT_URI`; the RuName’s Accept URL
+  must be updated in the eBay Developer Portal to the canonical production
+  callback instead of the retired `mhn.realtrackapp.com` hostname.
+
+- **B&I public Drive pilot and Luna enrichment:** Added a protected
+  POST /api/business-industrial/image-intake/jobs/from-drive endpoint and
+  frontend controls for a server-side full-root import. The worker processes every direct folder, retains all supported images, and converts images to WebP before S3,
+  uses openai/gpt-5.6-luna-20260709 for vision plus listing copy, aggregates
+  token/cost totals from ai_run_logs, and projects reviewable drafts into both
+  B&I Catalog and shared Inventory. The pilot requires GOOGLE_DRIVE_API_KEY
+  and never auto-publishes.
+
+- **Vertical routing and authorization remediation:** Canonicalized the full Auto Parts workspace under `/auto-parts/*` with legacy redirects, protected every settings child route, required both inventory-view and listing-update permissions for inventory editing, preserved Fashion/B&I deep links, added shared permission-aware workspace switching and account replacement controls, and fixed B&I navigation visibility. Generic automotive catalog/listing/search APIs now enforce organization, vertical, store, and team scope—including ID/SKU mutations, exports, revisions, and sibling synchronization—with legacy NULL rows limited to a configured owner organization. Auto Parts login now asserts its backend permission, JWT query tokens are SSE-only, and logout revokes new token session IDs in Redis until expiry.
+
+- **Public vertical landing:** Replaced the root redirect into Business & Industrial with a responsive public Omni Core landing page that explains the platform and links to the Auto Parts, Business & Industrial, and Fashion workspaces. Auto Parts authentication now returns to its explicit dashboard route, and the shared Auto Parts home navigation no longer loops back to the public landing page.
+- **Business & Industrial routing:** Repaired the dedicated B&I route tree so the overview and child workflows render inside the B&I shell instead of showing an empty main area caused by unmatched nested absolute routes.
+
+- **B&I comprehensive completion audit and deployment:** Completed the manual listing workflow with full edit hydration, HTTPS images, explicit category-supported eBay conditions, seller selection, live leaf-category search, required item specifics, the full validated technical/certification/lot/freight schema, correct per-target validation parsing, and terminal publish-job tracking. Aligned B&I manager store authorization across workspace and eBay APIs, made image-intake retries use unique queue attempts while preserving successful/draft-created groups, exposed failed-group retry and condition confirmation, hardened DTO limits, and added retry/eBay validation regression coverage. Deployed the isolated release `/home/ubuntu/realtrackapp-bi-complete-20260910-01` to `app.omnicoreholding.com` on 2026-09-10; Docker health, migrations, public routes, and authenticated B&I APIs were verified.
+
+- **B&I AI image intake:** Added Image Drive-style folder upload for Business & Industrial, dot-suffix instance grouping, organization-scoped S3 assets, queued vision/OCR identification, verified eBay leaf-category/aspect resolution, confidence and warning review, Excel export, and one-click draft creation into the existing compliance/eBay publish workflow. AI never auto-publishes and unverified identifiers/specifications/prices remain manual-review items.
+
+
+- **Omni Core vertical entry points:** The domain root `/` opens Business & Industrial. Auto Parts remains fully available at `/auto-parts` with `/auto-parts/login`; cross-workspace navigation is permission-aware.
+
+- **Business & Industrial completion and Omni Core deployment:** Completed the dedicated B&I login/password-change flow, strict organization and vertical isolation, temporary-password user administration with dedicated-store assignments, full technical/serialized listing editor, import monitoring with retry/cancel/error reporting, seller policy/category metadata, publish-job/channel controls, verified eBay offer withdrawal with retry/escalation and release gating, and quarantine edit locks. Backend and frontend production builds pass; focused vertical/auth regression coverage is green. Deployed to `app.omnicoreholding.com` while preserving Automotive and Fashion behavior.
+
+- **Omni Core rebrand:** Standardized user-facing login, shell, vertical workspaces, client-settings defaults, API metadata, AI provider metadata, policy labels, and privacy copy on “Omni Core”. Added an idempotent migration that updates only legacy default client-branding rows; internal package, database, storage, and legacy account identifiers remain unchanged for compatibility.
+
+- **Fashion vertical workspace:** Added dedicated Fashion login/navigation, Fashion RBAC roles and server-side vertical permission gates, organization-scoped drafts and bulk import, private authenticity review/evidence, publish blocking until approval, local quarantine, Fashion store configuration, isolated eBay OAuth seller-account checks, and an idempotent Fashion admin seed command. Migrations and live deployment remain review-gated.
+
+- **Business & Industrial vertical workspace:** Added a separate B&I login/navigation surface, explicit category-family and measurement-unit validation, inventory/lot and shipping fields, organization-scoped review, private serialized units, verified incident quarantine, dedicated eBay OAuth/publish routes, isolated RBAC roles, richer import mapping, focused validator tests, and an idempotent B&I admin seed command. The shared worker fails closed on approval, quarantine, category, or shipping gaps.
+
+- **Production hostname cutover:** Updated the default CORS/WebSocket origins, privacy-policy link, operational scripts, and deployment documentation from mhn.realtrackapp.com to app.omnicoreholding.com. The live EC2 nginx site and TLS certificate were cut over separately.
+
+
+- **Explicit eBay vertical pilots:** Added additive `automotive`, `business_industrial`, and `fashion` routing across catalog intake, pipeline jobs, publish targets, store configuration, category metadata, and Inventory API item groups. The `multi_vertical_catalog` flag remains disabled by default; automotive behavior and legacy jobs remain the safe fallback.
+
 ### Fixed
+- **S3 image WebP preference:** Centralized frontend image URL handling now
+  requests a sibling `.webp` object for S3/CloudFront JPEG, PNG, GIF, BMP, HEIC,
+  and AVIF images. The public storage proxy redirects to the original image when
+  that WebP object is unavailable, preserving reliable rendering and correct
+  cache keys. Raw S3-capable image tags now use the same utility; external URLs
+  and local previews are unchanged.
+
+- **eBay compatibility publish fallback:** When eBay returns error `25002` stating that all compatibility rows are invalid after Inventory API readback succeeds, the publish retry now removes unverified optional Trim/Engine/notes fields, refreshes the offer projection, and verifies against the accepted core Make/Model/Year payload.
+- **eBay Motors category mismatch prevention:** Publish enrichment now applies deterministic part keywords to legacy rows at the final boundary and persists the correction across the catalog and SKU-linked source listings. Coolant-hose listings resolve to live Car & Truck Motors leaf `33601` (`Coolant Hoses`) instead of a valid-but-wrong motorcycle `Radiators` leaf such as `177983`, preventing category-scoped compatibility rejection.
+- **eBay inventory-location country guard:** Publish location resolution now treats `default`, `USA`, and other legacy US placeholders as invalid for this UAE account, accepts only an enabled UAE merchant location, and provisions/uses the required Dubai location `AE_Dubai` when needed. If eBay cannot verify or provision a UAE location, the publish fails closed instead of submitting a US location.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
+- **eBay stale-offer recovery:** Superior and other Inventory API publishes now
+  recover once from eBay error 25713 (This Offer is not available) by purging
+  the stale offer/item, restoring compatibility, and creating a fresh offer.
+  Targeted durable-job recovery recognizes the same failure class.
+
+- **Pipeline Image Drive auto-attachment:** Bulk pipeline finalization now resolves manufacturer/OEM part numbers against Image Drive folders, replaces warehouse/bin placeholders, prepends matched CDN image URLs, preserves valid source URLs, updates listing and catalog image fields, and records match/link counts.
+- **Image Drive thumbnail visibility:** Folder APIs now return CDN URLs for generated thumbnail keys, and raw Image Drive thumbnails are routed through the backend image proxy.
+
+- **eBay publishing validation:** Publish requests now supply `UPC: Does not apply`
+  when a source row has no barcode, omit status-blind legacy fitment rows that
+  are not proven valid in the active MVL, and replace stale generic Engine
+  categories on non-engine parts with the verified Motors leaf `9886`. The
+  image sanitizer expands the known PartsFinder `{col}` primary-image template
+  and rejects unresolved URL templates before eBay Picture Services sees them.
+
+- **Existing Febi/Lemforder gallery backfill:** Added the guarded
+  `backend/src/scripts/backfill-brand-images.ts` maintenance runner. It keeps
+  one shared resolution-aware source image in existing listing/catalog records,
+  revises published Inventory API listings and discovers/revises unmapped
+  legacy published eBay item IDs through Trading API, read-backing each result
+  to require exactly one image. Dry-run is the default and apply writes a JSON
+  backup before any database mutation.
+
+- **eBay publish worker split-brain and image resilience:** Production deploys
+  now remove stale Compose one-off backend containers and verify that only
+  named Compose backend consumers remain. eBay Picture Services retries
+  transient upload failures, skips an invalid source image when other images
+  remain usable, and preserves fail-closed behavior for fatal errors. Publish
+  retry classification now treats Inventory-managed `21919474`/`21919233`,
+  policy restrictions, category/condition failures, and SKU collisions as
+  permanent instead of retrying them as transient outages. Added the
+  job-scoped, dry-run-by-default `scripts/requeue-ebay-publish-job.mjs` so
+  incident recovery cannot accidentally sweep unrelated SKU/date ranges.
+  Production Redis now uses BullMQ-safe `noeviction` instead of an LRU policy.
+
 - **Organization-wide publishing access:** All RBAC roles now retain the
   listing/channel/eBay publish permissions, active users receive all-store
   access, and new users inherit the same access. Inactive users remain blocked.
@@ -146,6 +507,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Filter state lost on navigation:** Filters, search, sort, and pagination now persist via `sessionStorage` across SPA navigation. Enhanced `useUrlFilters` hook with optional `storageKey` parameter — URL params take priority for bookmarked/shared links, sessionStorage provides fallback for back/forward navigation. Applied to all 9 filtered pages: Catalog, Inventory, Pipeline, Published Listings, Orders, Notifications, Motors Dashboard, Review Queue, Audit Trail. Catalog `ActiveFilters` (25 fields) additionally persisted via `useSessionState` hook.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Image Drive folder drag-and-drop:** Bound the browser's `webkitGetAsEntry()` call to its `DataTransferItem` and handle `dragenter` so dropped folders are read reliably by Chromium instead of failing before the upload request is sent.
 
 - **S3 orphan image cleanup & root-cause prevention:** Audited 1,106,359 S3 objects under `mhn/` against all DB references (`image_assets`, `catalog_products.image_urls`, `listing_records.itemPhotoUrl`, `master_products.image_urls`), including derived variants (`_thumb`/`_sm`/`_medium`/`_lg.webp`). Found and deleted 170,418 truly orphaned objects (~51 GB) across `temp/` (16K), `catalog-images/pipeline-images/` (117K), `catalog-images/c61dfa85.../` pipeline UUID (26K), `catalog-images/inventory/` (7.5K), and others. Root cause: the intake form (`single-listing-form.service.ts:390`) set `listingId` on `image_assets` rows without calling `confirmUpload()` to move the S3 object from `temp/` to `originals/`, so the CleanupProcessor's orphan filter (`listingId: IsNull()`) never matched them. Fixes: (1) `CleanupProcessor` now has a third pass that finds temp/ assets with `listingId IS NOT NULL` and moves them to `originals/` via `confirmUpload()`; (2) `SingleListingFormService` now moves S3 objects from `temp/` to `originals/` when setting `listingId`; (3) `StorageService.buildDurableKey()` added as public wrapper for `withKeyPrefix()`; (4) healed/ key prefix bug fixed — `healIfReferenced()` now uses `buildDurableKey()` so healed objects land at `mhn/catalog-images/healed/...` instead of outside the prefix; (5) S3 lifecycle policy applied: `mhn/temp/` objects auto-expire after 3 days as a safety net. Also backfilled `listing_records.itemPhotoUrl` from `catalog_products.image_urls` (27,343 rows populated, 900 remain NULL with no matching product). Removed 943 broken `catalog-images/healed/` URL references from `catalog_products.image_urls`.
@@ -166,6 +530,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Bounded listing-page scrape enrichment (no Trading):** When `PUBLISHED_LISTINGS_SCRAPE_ENRICH=1`, thin published listings can be backfilled from the public `listingUrl` HTML (gallery / description / specifics / fitment) after Browse. Detail on-demand via `PUBLISHED_LISTINGS_ON_DEMAND_ENRICH=1` (skips Trading). `PUBLISHED_LISTINGS_SKIP_TRADING_ENRICH=1` avoids GetItem while usage limits are hot. Browse now also maps `localizedAspects` → `itemSpecifics`.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Corrected inventory/catalog photo updates appeared not to upload:** `StorageService.mirrorRemoteImages` wrote durable copies under deterministic `catalog-images/{namespace}/{index}` keys. Inventory “Attach photos” only mirrors the *new* batch (always starting at index 0), so a corrected second upload overwrote the same CDN URL as the first photo; `updateListingImages` then deduped it away (`if (!merged.includes(url))`). Catalog replace-at-index hit the same trap via `PIPELINE_MIRROR_SKIP_EXISTING`. Keys are now hashed from the source URL/temp key so a new photo always gets a distinct durable URL while same-source pipeline re-runs still skip. Regression: `storage.service.spec.ts`.
 - **Catalog edit version conflict looked like a hard error:** Saving price + shipping could hit optimistic-lock `409` and show a red "modified since you loaded it" banner. Save now puts the listing first (then catalog), auto-retries once with a fresh version, and shows a calm amber notice asking to save again if needed.
 - **Catalog edit: shipping saved but price stayed $100:** Selecting an eBay store in `CatalogInventoryDetailModal` re-ran the draft init effect (`selectedStoreId` dep) and wiped in-progress price/qty edits before save. Shipping still persisted because policy state lived in a separate `profiles` object. Fix: seed the field draft once on entering edit mode; apply store policy defaults without resetting `initialProfiles` or the draft; also map product-detail inline `price` → API `startPrice`. Live proof: BLA-18758–18762 (2026-07-23) revisions show shipping updated while `startPrice` remained `100.00`.
@@ -181,6 +548,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Gemini title slots for Position + Part Name:** Pipeline GridX titles still follow `[Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used`, but **Position** and **Part Name** are now batched through OpenRouter `google/gemini-3.1-flash-lite` (heuristic `extractPosition` / `cleanPartName` remain fallbacks). Enterprise US/AU optimization uses the same lane via `TitlePositionPartNamePipeline` and assembles titles with `buildStructuredEbayTitle`. Year/Make/Model/OEM/`OEM Used` stay deterministic. Env: `PIPELINE_TITLE_SLOT_*`, `TITLE_POSITION_PART_NAME_*`.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Manual listing title edits reverted after save:** Catalog product PATCH always synced *every* field onto matching `listing_records`, including `title`. The inventory/catalog editors saved a corrected title only onto the listing row, so the next brand/image/country PATCH (or a same-save brand+title edit) stomped the listing title back to the stale `catalog_products.title`. Sync now writes only fields present in the PATCH DTO, uses `update()` so listing `@VersionColumn` is not bumped mid-save, and the editors also persist title onto the catalog product. Files: `catalog-product.service.ts`, `CatalogInventoryDetailModal.tsx`, `CatalogProductDetail.tsx`.
 - **Trading rate-limit sync no longer wipes active listings:** When GetSellerList/ActiveList threw (e.g. eBay usage limit), sync treated the empty result as a live set, pruned every active row to `ended`, and advanced `lastSuccessfulSyncAt` — Salvage went to API total 0. Full sync now skips prune + watermark update unless Trading returns a successful live fetch (`liveFetchOk`).
 - **Published listings API defaults to Blackline + Salvage, active, in-stock only:** Omitting `storeId`/`storeSlug` now scopes results to [blacklineusedautoparts](https://www.ebay.com/str/blacklineusedautoparts) + [salvagea](https://www.ebay.com/str/salvagea) (`storeSlug` default `salvagea,blackline`, overridable via `PUBLISHED_LISTINGS_DEFAULT_STORE_SLUGS` or `storeSlug=all`). Active results also require `quantityAvailable > 0`. The in-app Published Listings page passes `storeSlug=all` so operators can still browse every connected store.
@@ -235,6 +605,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Store-scoped published-listings endpoints:** `GET /api/stores/:storeId/listings/published` and `GET /api/stores/:storeId/listings/published/:id` return the complete published listing data (title, price, images, item specifics, shipping/return policies, compatibility, health flags) currently live for a given connected store, sourced from the local `ebay_published_listings` mirror kept in sync by `PublishedListingsSyncService`. New `StorePublishedListingsController` (`backend/src/published-listings/store-published-listings.controller.ts`) reuses `PublishedListingsService.list`/`getById` with a new `storeId` filter, enforcing the same `published_listings.view` permission and per-user `StoreAccessService.assertStoreAccess` check as the existing org-wide `/api/published-listings` routes.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Add Part duplicate-save race:** `/listings/new` warehouse intake now allocates `sourceRowNumber` from a PostgreSQL sequence (`warehouse_intake_row_seq`) instead of `MAX(sourceRowNumber)+1`, preventing concurrent saves from colliding on `uq_listing_source_row`. Generated-SKU duplicate conflicts also retry automatically before returning an error. Migration: `1789100000000-CreateWarehouseIntakeRowSequence`.
 - **Pipeline category/title guard for overlapping part keywords:** Category relevance checks now choose the most specific deterministic keyword match and override valid-but-wrong automotive categories before persistence (e.g. Center Console Armrest no longer lands in Door Panels). Updated US/AU/DE helper category IDs away from retired leaves, made the script-side Motors guard conservative around verified current IDs, and added duplicate title phrase rejection/cleanup for generated titles (A Pillar A Pillar, Center Console Center Console, etc.). Production remediation for pipeline 52292964-b8c5-4443-a076-088ed292a5a1 corrected 38 category rows and 26 duplicate-title rows across both listing_records and catalog_products; deterministic category mismatches and duplicate title phrases now verify at zero for that batch.
 - **Pipeline generic part-identity guard:** Follow-up on pipeline 52292964-b8c5-4443-a076-088ed292a5a1 found rows whose extracted type was only Part, Not Specified, Miscellaneous, or Automotive but whose categories had been promoted to Fuel Injectors, ECUs, Hood Panels, Liftgates, etc. Script and backend category guards now reject generic identities unless a trusted deterministic keyword confirms the part family, reject broad/root IDs (6000, 262124, 262320), and fall back to publishable leaf 9886 for reviewable unknowns. Production remediation updated 48 listing rows and 49 catalog rows; generic titles now avoid those placeholder terms, Door Body/Radiator/Hardware rows use safer categories, and verification shows zero generic-to-specific category rows left in that batch.
@@ -254,6 +627,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Catalog high-volume eBay publishing:** Catalog pagination now supports 500 rows (`GET /api/listings/search` accepts `limit=500`). A bulk action submits up to 500 listings once to `POST /api/ebay/listings/publish-bulk`; the server persists one `ebay_listing_jobs` row plus per-listing/per-store targets and queues them through BullMQ at concurrency 5. Jobs survive browser closure, expose live target polling, retry transient failures up to four times with exponential backoff, preserve per-store outcomes, and enforce an organization-wide UTC-day quota of at most 5,000 listing/store targets (`EBAY_DAILY_PUBLISH_TARGET_LIMIT`, capped at 5,000). Progress polling has publish-specific throttle overrides without weakening other application routes.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Pipeline title sanitization — VIN/duplicate make-model stripping + eBay title template:** Pipeline listings (e.g. job `572e96dd`) had titles like `2005-2015 AUDI Q7 Wauay54l98d068586, Audi, Q7, Ultrasonic Sensor 8E0054635A OEM` containing VIN numbers and duplicate make/model in the title. Root cause: the source spreadsheet's raw data (including VINs) was passed through to the AI enrichment prompt, which faithfully included it in the title. No existing guard stripped VINs from titles. Fix: (1) Added `sanitizeTitle()` to `listing-guards.ts` — deterministic regex-based stripping of VIN blocks (17-char alphanumeric + ", Make, Model, " duplicates). Integrated into `applyListingGuards()` as `TITLE_SANITIZED` fix. (2) Updated all 3 enrichment prompt templates and compliance service title prompt with the eBay title structure: `[Year Range] [Make] [Model/Generation] [Position] [Part Name] [OEM Part Number] OEM Used` — VINs and duplicate make/model are forbidden; OEM part numbers are required. (3) Added VIN to `TITLE_FORBIDDEN_PATTERNS` in `ebay-compliance.service.ts`. (4) Added `POST /catalog-products/sanitize-titles` endpoint for retroactive bulk cleanup. (5) Production: rebuilt all 766 titles for job `572e96dd` following the template (e.g. `2005-2015 Audi Q7 Ultrasonic Sensor 8E0054635A OEM Used`) — 766 listing_records + 766 catalog_products, 0 remaining VINs, all ≤80 chars.
 - **Catalog bulk publish transient recovery and throttle safety:** Bulk publishing now uses one durable job-submission request rather than one request per listing. BullMQ retries only transient SellerPundit/eBay failures (`Product not found`, Core Inventory 500, timeout, rate-limit, and `Too Many Requests`) with exponential backoff. `CatalogManager` keys the progress panel by publish-job ID so a new job cannot inherit stale listing state.
 - **eBay error 25005 follow-up — root category was not publishable:** Pipeline job `1c3a0f2a` contained 903 Audi listings and exposed that the emergency category fallback `6000` is the Motors Parts & Accessories root, not a leaf accepted by eBay Inventory. Changed the hardcoded emergency fallback in `EnterpriseListingIntelligenceService.getFallbackLeafCategory()` to proven leaf `9886` (`Other Car & Truck Parts & Accessories`) while retaining subtree-based leaf discovery as the preferred path. Repaired both `listing_records` and `catalog_products` for the affected pipeline before republishing to BLACKLINEAUTOPARTS and Primemotive.
@@ -301,12 +677,18 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Image reorder and remove:** Drag-and-drop reordering of listing images via `@dnd-kit/sortable`. Remove button on each thumbnail. "Save image order" button updates the pipe-delimited URL string and syncs `image_assets.sort_order` for eBay publish. New `PATCH /inventory/listings/:id/images/reorder` endpoint.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Pipeline upload 503:** Upload no longer counts queued `pending` jobs against `MAX_CONCURRENT_PIPELINE_JOBS` (only actively processing stages). Stale jobs with no progress for 6h are auto-failed to free slots. Upload UI now shows the backend error message (e.g. capacity reached) instead of generic "503 Service Unavailable".
  `POST /api/inventory/inline-enrich` enqueues BullMQ `auto-enrich` (no blocking HTTP). `updateListingImages` auto-enqueues at 2+ photos. `POST /api/inventory/listings/:id/retry-enrichment` forces re-run. `enrichmentStage=failed` on errors; `needs_review` when category ID or fitment missing after run.
 - **eBay Taxonomy 429 during inline enrich:** Category suggestions retry with exponential backoff; in-memory cache + 800ms spacing between US/AU/DE lookups. Improved category query strings (skip generic `OEM` part type).
 - **Inline enrich fitment:** Runs `FitmentDiscoveryService` and writes `catalog_products.fitmentData`. `completed` requires both resolved `categoryId` and fitment rows.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **SKU allocation race condition:** Replaced application-level `readMax + check + retry` SKU allocation with a PostgreSQL `SEQUENCE` (`sku_seq`). Concurrent listing creation now gets guaranteed-unique `BLA-XXXXX` SKUs via `nextval()`. Removed `GET /pipeline/single-listing/next-sku` endpoint (SKU is now assigned server-side at save time). Frontend shows "Auto-assigned on save" instead of a pre-fetched SKU. Migration `1785200000000-CreateSkuSequence` seeds the sequence from existing data.
 - **Catalog product field persistence:** Fixed field name mismatch where frontend sent `countryOfManufacture` but backend expected `countryOfOrigin`. Added missing `cMaterial`, `cPlacement`, `countryOfOrigin`, and `conditionLabel` columns to `listing_records` entity. Updated `syncToListingRecord()` to sync these fields from catalog products to listing records. Migration `1785100000000-AddFieldsToListingRecord`.
 
@@ -315,6 +697,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Published Listings Management Module:** Central dashboard at `/published-listings` with Inventory API sync, **Trading API GetSellerList fallback** for legacy listings, **Browse API competitor pricing**, health flags (including price vs market), bulk actions, audit revisions, and scheduled 6h sync. Permissions: `published_listings.view|sync|manage|bulk`. Migration `1785000000000-PublishedListingsModule`.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Pipeline jobs queued serially:** BullMQ `pipeline` worker concurrency was hardcoded to `1`, so only one enrichment job ran at a time even when `MAX_CONCURRENT_PIPELINE_JOBS` allowed two. Worker concurrency now follows `MAX_CONCURRENT_PIPELINE_JOBS` (default `2`); per-job progress debouncing is isolated for safe parallel runs. (`PipelineProcessor`)
 - **Per-marketplace category resolution & fitment (US/AU/DE):** Inline enrichment now resolves each marketplace's eBay category against its **own category tree** (US→`0`, AU→`15`, DE→`77`) instead of always using the US tree. Empty category resolution no longer silently marks enrichment `completed` — it now surfaces `needs_review`. Inline enrichment also upserts the `catalog_products` master row so the catalog detail page has a `categoryId`/`fitmentData` source even without a batch pipeline run. (`InventoryWorkbenchService.inlineEnrichListing`)
 - **AU category tree ID corrected:** `CategoryLookupService.KNOWN_TREE_IDS.EBAY_AU` was `'100'` but eBay's `get_default_category_tree_id` for `EBAY_AU` returns `'15'`. AU category lookups now return correct results (e.g. `261899 Fuel Vapour Canisters`). (`CategoryLookupService`)
@@ -346,6 +731,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Catalog column** replaces Pipeline column in the inventory table.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Inventory auto-enrich trigger:** When a listing reaches **2+ images**, a background BullMQ job auto-fires vision lookup (part#/brand discovery) followed by pipeline enrichment (US/AU/DE). No button clicks needed. Added `enrichmentStatus` (idle/ready/enriching/completed/failed) to the workbench list + detail endpoints, a polling endpoint, and animated status badges in the table. (`InventoryAutoTriggerService`, `auto-enrich` job handler)
 - **Inventory multi-marketplace editor (`/inventory/:id/edit`):** New full-page editor replacing the read-only modal. Shows 3 tabs (US/AU/DE) with editable title, description, price, quantity, and condition. Store selector dropdown scoped to user's accessible eBay stores, with cascading payment/return/fulfillment policy dropdowns from cached policy data. Part summary card shows SKU, brand, category, images, fitments. **Save persists** edits to sibling `listing_records` + `catalog_products.optimization_payload`. Accessible via "Open full editor →" link in the detail modal. (`InventoryEditorService`, `InventoryListingEditor`, `MarketplaceVersionEditor`, `StorePolicySelector`)
 - **Direct publish from editor:** New `POST /inventory/:id/publish` endpoint auto-creates a catalog product (if needed) and invokes the multi-store publish flow. UI policy selections are saved to `listing_store_overrides` and applied at publish via `ListingBuilderService`. Sticky publish action bar at the bottom of the editor shows target marketplaces and per-target progress (queued → success/failed/skipped). (`InventoryPublishService`, `PublishActionBar`)
@@ -358,6 +746,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Composite unique index on `listing_records` (`customLabelSku`, `marketplace`):** Replaced the single-column unique index on `customLabelSku` with a composite index that allows the same SKU to have separate listing records per marketplace. Migration `1783000000000-ListingSkuMarketplaceUniqueIndex`.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Pipeline catalog publish readiness (images + identity):** Enrichment cache keys now include intake fingerprint (part name, seller note, upload URLs) so the same MPN with different warehouse identity is not reused as stale AI copy. Source/upload images are preserved when the image API fails; `propagateSourceImages` copies intake photos onto `catalog_products.image_urls` and all US/AU/DE `listing_records` after pipeline save. Catalog master upsert uses **US output only** (DE/AU no longer overwrite shared title/images). Listing upserts keep existing `itemPhotoUrl` when pipeline output is empty.
 - **Inventory Fetch details restored (vision-first):** `/inventory` again supports per-row and bulk **Fetch details** using OEM + brand + photos together (vision-first AI). Updates title, category, brand, model, and SEO-oriented description notes on the draft before **Send to pipeline**. `lookupPart()` now runs vision when 2+ images are present; OEM text is only used when no photos are supplied.
 - **Add Part (`/listings/new`) 500 on second part:** Warehouse intake used a fixed `sourceRowNumber=0` for every part, violating `uq_listing_source_row`. Each intake now gets the next row index; duplicate-key errors return 409 with a clear message.
@@ -380,17 +771,26 @@ for every meaningful change (Continuous Documentation Protocol).
 - **Job attribution:** Pipeline, ingestion, and catalog-import uploads record `createdBy` from JWT; review endpoints record reviewer id.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Pipeline listing records not saved to catalog:** `orIgnore()` on listing record inserts silently skipped all rows when `customLabelSku` already existed in `listing_records` (due to `idx_listing_sku_unique_active` partial unique index). Replaced with raw SQL upsert (`ON CONFLICT ("customLabelSku") WHERE ... DO UPDATE SET`) to properly update existing records with the new `pipeline_job_id`.
 - **Multi-user P1.3:** `createdBy` wired on all job creation/mutation paths (ingestion, pipeline, catalog-import start/retry/cancel, motors product create, fitment bulk-import queue); legacy null `createdBy` backfilled on retry/cancel/start; review reject records `reviewedBy`.
 - **Multi-user Phase 1:** Partial unique index on active listing SKUs; pessimistic lock + retry on create; `version` required for PATCH status and optional per-id in bulk update; ingestion/pipeline/catalog job lists scoped by `createdBy` (admins with `users.view` see all).
 - **Security:** Removed DEBUG JWT/secret logging from auth module and JWT strategy.
 - **CURRENT_TRUE_STATE_OF_APPLICATION.md**: Comprehensive codebase analysis document covering architecture, database, APIs, frontend, backend, integrations, deployment, testing, and documentation accuracy. Generated 2026-06-11.
 
-### Fixed (Documentation)
+### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+ (Documentation)
 - **Corrected documentation counts**: Migrations (21→27), entities (~79→82), permissions (~90→73), backend specs (9→24), e2e tests (1→0). Updated across ARCHITECTURE.md, CONTEXT.md, CURRENT_STATE.md, KNOWN_ISSUES.md, AGENT_SYSTEM_MEMORY.md, DATABASE_SCHEMA.md, AUTH_RBAC.md, FEATURE_REGISTRY.md.
 - **Added new security finding**: DEBUG JWT logging in `auth.service.ts` and `jwt.strategy.ts` exposes full tokens to console. Added as R3b to KNOWN_ISSUES.md.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **User management (`/settings/users`) create/role assign failures:** `POST /api/rbac/users`
   and `PATCH /api/rbac/users/:id/role` returned 400 because inline DTOs lacked
   `class-validator` decorators and were rejected by the global `ValidationPipe`. Added
@@ -439,6 +839,9 @@ for every meaningful change (Continuous Documentation Protocol).
   `PIPELINE_AI_CONCURRENCY`, `PIPELINE_LOCALIZATION_CONCURRENCY`, etc.
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - **Pipeline zombie jobs after Docker restart:** On backend boot, pipeline jobs still
   marked in-flight but absent from the BullMQ queue are failed with a retry hint
   instead of showing endless `enrichment` at 0/N. Stats API now returns
@@ -536,6 +939,9 @@ for every meaningful change (Continuous Documentation Protocol).
   page; SellerPundit badge on store detail (native listing/order sync hidden).
 
 ### Fixed
+- **eBay legacy inventory-location placeholder:** Publish location resolution now treats the literal default key as a legacy placeholder and uses the required enabled Dubai location AE_Dubai instead; location-list selection applies the same rule.
+- **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
+
 - OpenRouter AI calls now use **MiniMax M3 only** (`minimax/minimax-m3`):
   enrichment pipeline no longer falls back to GPT-4o/GPT-5.x; pipeline script
   routes through `OPENAI_BASE_URL`; model env vars added to `backend/.env`.

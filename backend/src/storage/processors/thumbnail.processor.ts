@@ -22,7 +22,15 @@ export interface DriveVariantJobData {
   s3Key: string;
 }
 
-@Processor('storage-thumbnails', { concurrency: 15 })
+// Each job decodes a full-size original and encodes four WebP variants inside
+// the API process. 15 parallel jobs pushed the 4 GB host into the OOM killer,
+// which restarted the backend and surfaced as 502s. Keep this low.
+const THUMBNAIL_WORKER_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.STORAGE_THUMBNAIL_CONCURRENCY ?? '3') || 3,
+);
+
+@Processor('storage-thumbnails', { concurrency: THUMBNAIL_WORKER_CONCURRENCY })
 export class ThumbnailProcessor extends WorkerHost {
   private readonly logger = new Logger(ThumbnailProcessor.name);
 

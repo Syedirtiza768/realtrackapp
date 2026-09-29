@@ -45,7 +45,8 @@ export function getFitmentValidationStatus(
 
 /**
  * Soft-invalid (`needs_review`) and hard-rejected rows must not be sent to eBay.
- * Untagged legacy rows (no status) are left alone so previously working publishes keep working.
+ * Untagged legacy rows can be retained for non-publish workflows, but publish
+ * callers can require explicit MVL validation with selectPublishFitmentSource.
  */
 export function isUnpublishableFitmentRow(
   raw: Record<string, unknown>,
@@ -58,11 +59,13 @@ export function isUnpublishableFitmentRow(
  * Choose fitment source for publish payloads.
  * Prefer explicitly `valid` fitment_rows; if rows are status-tagged but none are valid,
  * omit compatibility rather than falling back to status-blind fitment_data.
- * Untagged legacy data still uses fitment_data → fitment_rows as before.
+ * With requireValidated=true, untagged legacy data is also omitted because
+ * eBay rejects rows whose Make/Model/Year are not in the active MVL.
  */
 export function selectPublishFitmentSource(
   fitmentData: Record<string, unknown>[] | null | undefined,
   fitmentRows: Record<string, unknown>[] | null | undefined,
+  options?: { requireValidated?: boolean },
 ): Record<string, unknown>[] | undefined {
   const rows = Array.isArray(fitmentRows) ? fitmentRows : [];
   const data = Array.isArray(fitmentData) ? fitmentData : [];
@@ -72,13 +75,23 @@ export function selectPublishFitmentSource(
   );
   if (validRows.length > 0) return validRows;
 
-  const hasStatusTaggedRows = rows.some((row) =>
-    Boolean(getFitmentValidationStatus(row)),
+  // Some enriched catalog rows store the validation status on fitmentData
+  // rather than materializing fitmentRows. Treat that explicit status as
+  // authoritative too; only status-blind legacy data is unsafe to publish.
+  const validData = data.filter(
+    (row) => getFitmentValidationStatus(row) === 'valid',
   );
+  if (validData.length > 0) return validData;
+
+  const hasStatusTaggedRows =
+    rows.some((row) => Boolean(getFitmentValidationStatus(row))) ||
+    data.some((row) => Boolean(getFitmentValidationStatus(row)));
   if (hasStatusTaggedRows) {
     // All tagged rows are needs_review/rejected — do not resurrect them via fitment_data.
     return undefined;
   }
+
+  if (options?.requireValidated) return undefined;
 
   if (data.length > 0) return data;
   if (rows.length > 0) return rows;
@@ -273,8 +286,6 @@ export function fitmentDataToCompatibilityPayload(
 
     const trim = getString(raw, ['Trim', 'trim']) || undefined;
     const engine = getString(raw, ['Engine', 'engine']) || undefined;
-    const submodel =
-      getString(raw, ['Submodel', 'submodel', 'SubModel']) || undefined;
     const notes = normalizeNotes(raw);
 
     for (const year of years) {
@@ -285,7 +296,8 @@ export function fitmentDataToCompatibilityPayload(
       ];
       if (trim) properties.push({ name: 'Trim', value: trim });
       if (engine) properties.push({ name: 'Engine', value: engine });
-      if (submodel) properties.push({ name: 'Submodel', value: submodel });
+      // US Motors Inventory API compatibility properties are Year/Make/Model/Trim/Engine.
+      // Submodel is local catalog evidence only; sending it invalidates the whole row.
 
       const rowKey = properties
         .map((property) => `${property.name}:${property.value}`)
@@ -297,6 +309,71 @@ export function fitmentDataToCompatibilityPayload(
         ...(notes ? { notes } : {}),
       });
     }
+  }
+
+  if (compatibleProducts.length === 0) return undefined;
+  return { compatibleProducts };
+}
+
+const CORE_COMPATIBILITY_PROPERTY_NAMES = new Set(['make', 'model', 'year']);
+
+function propertyByName(
+  row: EbayCompatibilityPayload['compatibleProducts'][number],
+  name: string,
+): string {
+  const wanted = name.toLowerCase();
+  for (const property of row.compatibilityProperties ?? []) {
+    if (property.name.trim().toLowerCase() !== wanted) continue;
+    const value = property.value?.trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+/** True when a payload includes notes or optional Trim/Engine/Submodel fields. */
+export function compatibilityHasOptionalFields(
+  payload?: EbayCompatibilityPayload | null,
+): boolean {
+  for (const row of payload?.compatibleProducts ?? []) {
+    if (row.notes?.trim()) return true;
+    for (const property of row.compatibilityProperties ?? []) {
+      const name = property.name.trim().toLowerCase();
+      if (name && !CORE_COMPATIBILITY_PROPERTY_NAMES.has(name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Reduce an Inventory API compatibility payload to unique Make/Model/Year rows.
+ * Used when eBay accepts the PUT but rejects publish with error 25002 because
+ * Trim/Engine/notes are not in the live US Motors vocabulary.
+ */
+export function toCoreCompatibilityPayload(
+  payload?: EbayCompatibilityPayload | null,
+): EbayCompatibilityPayload | undefined {
+  if (!payload?.compatibleProducts?.length) return undefined;
+
+  const seenRows = new Set<string>();
+  const compatibleProducts: EbayCompatibilityPayload['compatibleProducts'] =
+    [];
+
+  for (const row of payload.compatibleProducts) {
+    const make = propertyByName(row, 'Make');
+    const model = propertyByName(row, 'Model');
+    const year = propertyByName(row, 'Year');
+    if (!make || !model || !year) continue;
+
+    const rowKey = `make:${make.toLowerCase()}|model:${model.toLowerCase()}|year:${year.toLowerCase()}`;
+    if (seenRows.has(rowKey)) continue;
+    seenRows.add(rowKey);
+    compatibleProducts.push({
+      compatibilityProperties: [
+        { name: 'Make', value: make },
+        { name: 'Model', value: model },
+        { name: 'Year', value: year },
+      ],
+    });
   }
 
   if (compatibleProducts.length === 0) return undefined;

@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { toProxyUrl } from '../../lib/imageUrl';
 
 interface Props {
   images: string[];
@@ -176,7 +177,7 @@ export default function ImageZoom({ images, index, onClose }: Props) {
       )}
 
       <img
-        src={images[current]}
+        src={toProxyUrl(images[current])}
         alt=""
         draggable={false}
         onClick={(e) => e.stopPropagation()}

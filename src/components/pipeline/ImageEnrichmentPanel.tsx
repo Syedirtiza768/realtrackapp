@@ -46,6 +46,16 @@ interface PartImageResult {
   skipReason?: string;
 }
 
+export interface ImageDriveCoverageSummary {
+  totalListings: number;
+  listingsWithImages: number;
+  listingsMissingImages: number;
+  outputFilesUpdated?: number;
+  outputRowsUpdated?: number;
+  missingParts?: Array<{ sku: string | null; partNumber: string | null }>;
+  missingPartsTruncated?: boolean;
+}
+
 interface ImageEnrichmentProgress {
   totalParts: number;
   processedParts: number;
@@ -83,10 +93,12 @@ export default function ImageEnrichmentPanel({
   jobId,
   jobStatus,
   parts,
+  imageCoverage,
 }: {
   jobId: string;
   jobStatus: string;
   parts?: Array<{ partNumber: string; title: string; brand?: string; mpn?: string }>;
+  imageCoverage?: ImageDriveCoverageSummary;
 }) {
   const [progress, setProgress] = useState<ImageEnrichmentProgress | null>(null);
   const [results, setResults] = useState<PartImageResult[]>([]);
@@ -137,12 +149,16 @@ export default function ImageEnrichmentPanel({
           >
             <div className="flex items-center gap-2">
               <ImageIcon className="h-5 w-5 text-purple-400" />
-              Image Enrichment
-              {progress && (
+              {imageCoverage ? 'Image Drive' : 'Image Enrichment'}
+              {imageCoverage ? (
+                <Badge variant={imageCoverage.listingsMissingImages > 0 ? 'destructive' : 'success'}>
+                  {imageCoverage.listingsWithImages}/{imageCoverage.totalListings} with images
+                </Badge>
+              ) : progress ? (
                 <Badge variant="secondary">
                   {progress.enrichedParts}/{progress.totalParts} enriched
                 </Badge>
-              )}
+              ) : null}
             </div>
             {expanded ? <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
           </CardTitle>
@@ -150,8 +166,48 @@ export default function ImageEnrichmentPanel({
 
         {expanded && (
           <CardContent className="space-y-4">
+            {imageCoverage && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <MiniStat label="Listings" value={String(imageCoverage.totalListings)} color="text-slate-600 dark:text-slate-200" />
+                  <MiniStat label="Images attached" value={String(imageCoverage.listingsWithImages)} color="text-green-400" />
+                  <MiniStat label="Missing images" value={String(imageCoverage.listingsMissingImages)} color={imageCoverage.listingsMissingImages > 0 ? 'text-amber-500' : 'text-green-400'} />
+                </div>
+                {imageCoverage.listingsMissingImages > 0 ? (
+                  <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                    <p>
+                      Image Drive has no matching photos for {imageCoverage.listingsMissingImages} listing(s).
+                      Add images under a folder linked to the part number or SKU before running this pipeline again.
+                    </p>
+                    {!!imageCoverage.missingParts?.length && (
+                      <ul className="mt-2 list-disc pl-5 text-xs">
+                        {imageCoverage.missingParts.slice(0, 8).map((part, index) => (
+                          <li key={index}>
+                            {[part.sku, part.partNumber].filter(Boolean).join(' · ')}
+                          </li>
+                        ))}
+                        {(imageCoverage.missingPartsTruncated || imageCoverage.listingsMissingImages > imageCoverage.missingParts.length) && (
+                          <li>More missing parts are not shown here.</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-green-700 dark:text-green-300">
+                    Every listing has at least one resolved image.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {jobStatus === 'completed' && !imageCoverage && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Image coverage was not recorded for this older pipeline job.
+              </p>
+            )}
+
             {/* Progress stats */}
-            {progress && (
+            {!imageCoverage && progress && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <MiniStat label="Processed" value={`${progress.processedParts}/${progress.totalParts}`} color="text-slate-600 dark:text-slate-200" />
                 <MiniStat label="Enriched" value={String(progress.enrichedParts)} color="text-green-400" />

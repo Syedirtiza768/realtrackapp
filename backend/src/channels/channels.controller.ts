@@ -157,6 +157,7 @@ export class ChannelsController {
       dto.listingId,
       dto.channels,
       dto.overrides,
+      dto.storeId,
     );
   }
 
@@ -184,7 +185,11 @@ export class ChannelsController {
   @RequirePermissions('channels.publish')
   @ApiOperation({ summary: 'Publish multiple listings to multiple channels' })
   bulkPublish(@Body() dto: BulkPublishDto) {
-    return this.channelsService.bulkPublish(dto.listingIds, dto.channels);
+    return this.channelsService.bulkPublish(
+      dto.listingIds,
+      dto.channels,
+      dto.storeId,
+    );
   }
 
   // ─── Demo store setup ───

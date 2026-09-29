@@ -66,6 +66,8 @@ import FashionListingEditorPage from './components/fashion/FashionListingEditorP
 import FashionIncidentsPage from './components/fashion/FashionIncidentsPage';
 import FashionSettingsPage from './components/fashion/FashionSettingsPage';
 import FashionPasswordPage from './components/fashion/FashionPasswordPage';
+import FashionCapturePage from './components/fashion/FashionCapturePage';
+import FashionIntakePage from './components/fashion/FashionIntakePage';
 import BusinessIndustrialLoginPage from './components/business-industrial/BusinessIndustrialLoginPage';
 import BusinessIndustrialShell from './components/business-industrial/BusinessIndustrialShell';
 import BusinessIndustrialDashboardPage from './components/business-industrial/BusinessIndustrialDashboardPage';
@@ -137,7 +139,7 @@ function LegacyAutoPartsRedirect() {
     if (legacyAutoRoute) {
         return <Navigate to={`/auto-parts${pathname}${search}${hash}`} replace />;
     }
-    return <div className="min-h-screen bg-slate-950 p-10 text-center text-slate-300"><h1 className="text-2xl font-semibold">Page not found</h1><Link to="/" className="mt-4 inline-block text-blue-400">Return to Omni Core</Link></div>;
+    return <div className="min-h-screen bg-slate-50 p-10 text-center text-slate-600 dark:bg-slate-950 dark:text-slate-300"><h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">Page not found</h1><Link to="/" className="mt-4 inline-block text-blue-600 dark:text-blue-400">Return to Omni Core</Link></div>;
 }
 
 
@@ -180,6 +182,10 @@ function App() {
                 }>
                    <Route index element={<ProtectedRoute permissions={['fashion.dashboard.view']} loginPath="/fashion/login"><FashionDashboardPage /></ProtectedRoute>} />
                    <Route path="listings/new" element={<ProtectedRoute permissions={['fashion.listings.create']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
+                    {/* Quick capture: phone-first photo slots, batch SKU, measurement chart, background identification */}
+                    <Route path="capture" element={<ProtectedRoute permissions={['fashion.listings.create']} loginPath="/fashion/login"><FashionCapturePage /></ProtectedRoute>} />
+                    {/* Intake history: paginated capture log with batch/status filters */}
+                    <Route path="intake" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionIntakePage /></ProtectedRoute>} />
                     <Route path="catalog" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionCatalogPage /></ProtectedRoute>} />
                     <Route path="listings" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionCatalogPage /></ProtectedRoute>} />
                    <Route path="listings/:id" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
@@ -210,7 +216,7 @@ function App() {
                     <Route path="stores" element={<ProtectedRoute permissions={['business_industrial.stores.view']} loginPath="/business-industrial/login"><BusinessIndustrialStoresPage /></ProtectedRoute>} />
                     <Route path="incidents" element={<ProtectedRoute permissions={['business_industrial.incidents.view']} loginPath="/business-industrial/login"><BusinessIndustrialIncidentsPage /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute permissions={['business_industrial.users.manage']} loginPath="/business-industrial/login"><BusinessIndustrialUsersPage /></ProtectedRoute>} />
-                    <Route path="*" element={<div><h1 className="text-2xl font-semibold">Business &amp; Industrial page not found</h1><Link to="/business-industrial" className="mt-4 inline-block text-cyan-700">Return to overview</Link></div>} />
+                    <Route path="*" element={<div><h1 className="text-2xl font-semibold">Business &amp; Industrial page not found</h1><Link to="/business-industrial" className="mt-4 inline-block" style={{ color: 'var(--brand-primary)' }}>Return to overview</Link></div>} />
                 </Route>
                 <Route path="*" element={<LegacyAutoPartsRedirect />} />
             </Routes>

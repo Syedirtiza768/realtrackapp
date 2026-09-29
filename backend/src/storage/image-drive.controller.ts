@@ -22,6 +22,7 @@ import {
   type DriveFolderEntry,
 } from './image-drive.service.js';
 import { StorageService } from './storage.service.js';
+import { IMAGE_UPLOAD_MULTER_OPTIONS } from './upload-limits.js';
 import {
   BulkDeleteFilesDto,
   CreateFolderDto,
@@ -102,7 +103,7 @@ export class ImageDriveController {
   @Post('folders/:folderId/upload')
   @RequirePermissions('image_drive.upload')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FilesInterceptor('files', 50))
+  @UseInterceptors(FilesInterceptor('files', 50, IMAGE_UPLOAD_MULTER_OPTIONS))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload files to a folder' })
   async uploadToFolder(
@@ -162,7 +163,7 @@ export class ImageDriveController {
   @Post('upload')
   @RequirePermissions('image_drive.upload')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FilesInterceptor('files', 50))
+  @UseInterceptors(FilesInterceptor('files', 50, IMAGE_UPLOAD_MULTER_OPTIONS))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary:
@@ -234,7 +235,7 @@ export class ImageDriveController {
   @Post('upload-folder')
   @RequirePermissions('image_drive.upload')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FilesInterceptor('files', 50))
+  @UseInterceptors(FilesInterceptor('files', 50, IMAGE_UPLOAD_MULTER_OPTIONS))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary:

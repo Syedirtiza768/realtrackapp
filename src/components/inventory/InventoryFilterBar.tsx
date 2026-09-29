@@ -216,6 +216,22 @@ export default function InventoryFilterBar({
         )}
       </FilterDropdown>
 
+      {/* Has Price */}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={filters.hasPrice}
+        onClick={() => onChange((prev) => ({ ...prev, hasPrice: !prev.hasPrice }))}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+          filters.hasPrice
+            ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+        }`}
+      >
+        {filters.hasPrice && <Check size={12} />}
+        Has Price
+      </button>
+
       {/* Advanced Filters toggle */}
       <button
         type="button"

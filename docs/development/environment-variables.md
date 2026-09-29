@@ -1,5 +1,7 @@
 > ⚠️ MOVED → [/docs/operations/ENVIRONMENT_VARIABLES.md](../operations/ENVIRONMENT_VARIABLES.md) (2026-06-06)
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 # Environment Variables
 
 Source of truth: `.env.example` (copy to `.env`). Docker passes these via
@@ -41,6 +43,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | Var | Purpose |
 |-----|---------|
 | `JWT_SECRET` | **Required.** JWT signing secret (**secret**) |
+| `LEGACY_AUTOMOTIVE_ORGANIZATION_ID` | UUID of the organization authorized to access pre-tenancy Auto Parts rows whose `organization_id` is `NULL`. Required while legacy rows remain unbackfilled. |
 | `RBAC_SYNC_PERMISSIONS` | If `true`, sync permission registry → DB on startup |
 | `SEED_DEMO_USERS` | If `true` (non-prod), seed default users |
 | `DEFAULT_SUPER_ADMIN_EMAIL` / `_PASSWORD` | Seed super admin (**secret pw**) |
@@ -53,7 +56,8 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `CORS_ORIGIN` | localhost:8050, mhn.realtrackapp.com | Comma-separated allow-list |
+| `CORS_ORIGIN` | localhost:8050, app.omnicoreholding.com | Comma-separated allow-list |
+| `FRONTEND_BASE_URL` | `https://app.omnicoreholding.com` in production; `http://localhost:3911` otherwise | Base URL used by the eBay OAuth callback. Set explicitly for non-standard deployments. |
 | `PORT` | `4191` | Backend listen port |
 | `FRONTEND_PORT` | `8050` | Docker frontend host port |
 | `BACKEND_PORT_EXTERNAL` | `4191` | Docker backend host port |
@@ -96,7 +100,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_DEV_ID` | — | **Secret.** Dev ID |
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
-| `EBAY_REDIRECT_URI` | — | OAuth redirect/RuName |
+| `EBAY_REDIRECT_URI` | eBay OAuth-enabled RuName | RuName passed to eBay; do not set this to the callback URL. Update the RuName’s Accept URL in the eBay Developer Portal to `https://app.omnicoreholding.com/api/integrations/ebay/oauth/callback`. |
 | `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `AE_Dubai` | Key used when auto-provisioning an inventory location |
 | `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Dubai Warehouse` | Ship-from line 1 for auto-created locations |
 | `EBAY_DEFAULT_INVENTORY_CITY` | `Dubai` | Ship-from city |
@@ -138,16 +142,25 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `SELLERPUNDIT_POLICY_SYNC_MAX_AGE_HOURS` | `24` | TTL before publish re-syncs policies |
 | `SELLERPUNDIT_PUBLISH_FALLBACK` | `auto` | `auto` = try SP bulk-create then fall back to direct eBay on platform SQL error; `direct_ebay` = skip SP publish; `sellerpundit` = SP only |
 
+## Signed B&I enforcement webhook
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `EBAY_WEBHOOK_SECRET` | — | Shared HMAC secret for `POST /api/business-industrial/webhooks/ebay-enforcement`; empty disables the endpoint |
+
 ## AWS S3 / storage
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `AWS_S3_BUCKET` | `solarrisebackupbucket` | Bucket |
+| `AWS_S3_BUCKET` | `solarrisebackupbucket-<account>` in production | Bucket. Live traffic uses the account-qualified name only; the retired `solarrisebackupbucket` hostname is an alias. |
 | `AWS_S3_PREFIX` | `mhn/` | Key prefix |
 | `AWS_S3_REGION` | `us-east-1` | Region |
 | `AWS_ACCESS_KEY_ID` | — | **Secret** |
 | `AWS_SECRET_ACCESS_KEY` | — | **Secret** |
 | `S3_BUCKET` / `S3_PREFIX` / `S3_REGION` | — | Legacy aliases |
+
+Presigned browser uploads require S3 bucket CORS (`PUT` + `Content-Type`) for
+the same frontend origins as `CORS_ORIGIN`. Backend CORS alone is not enough.
 
 ## Node / runtime
 
@@ -209,3 +222,22 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 
 > When adding a new env var: add it to `.env.example`, wire it in
 > `docker-compose.yml` if containerized, and document it here.
+
+## Fashion admin seed
+
+| Var | Purpose |
+|-----|---------|
+| FASHION_SEED_ADMIN_EMAIL | Required by backend npm run seed:fashion-admin |
+| FASHION_SEED_ADMIN_PASSWORD | Required initial password, minimum 12 characters; never reset or logged on rerun |
+| FASHION_SEED_ADMIN_NAME | Optional display name for a newly created user |
+| FASHION_SEED_ADMIN_ORGANIZATION_NAME | Optional name for a newly created workspace |
+| FASHION_AI_MODEL | Optional Fashion vision model override |
+
+## Business & Industrial admin seed
+
+| Var | Purpose |
+|-----|---------|
+| BUSINESS_INDUSTRIAL_SEED_ADMIN_EMAIL | Required by backend npm run seed:business-industrial-admin |
+| BUSINESS_INDUSTRIAL_SEED_ADMIN_PASSWORD | Required initial password, minimum 12 characters; never reset or logged on rerun |
+| BUSINESS_INDUSTRIAL_SEED_ADMIN_NAME | Optional display name for a newly created user |
+| BUSINESS_INDUSTRIAL_SEED_ADMIN_ORGANIZATION_NAME | Optional name for a newly created workspace |

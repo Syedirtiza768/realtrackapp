@@ -1,6 +1,8 @@
 # Testing
 
-> **Note**: Lightweight stub. RealTrackApp has sparse automated test coverage.
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
+> **Note**: Lightweight stub. Omni Core has sparse automated test coverage.
 > For the definition of done, see this file's checklist.
 
 ---
@@ -21,6 +23,14 @@ npm run test:e2e       # E2E tests
 
 # Multi-user concurrency regression (subset)
 npm test -- --testPathPatterns="job-visibility|scheduler-leader|heavy-job-limiter|listings.concurrency"
+
+# B&I catalog UI with mocked authenticated API responses
+# Requires a running frontend (default http://127.0.0.1:3923). Optional:
+#   CATALOG_UI_URL
+#   CATALOG_PLAYWRIGHT_PATH  (default .codex-fashion-test-runtime/node_modules/playwright/index.mjs)
+#   CATALOG_CHROME_PATH      (default Google Chrome on Windows)
+# Last local run 2026-09-13: PASS (mocked API only; not live backend integration)
+node scripts/test-business-industrial-catalog-ui.mjs
 
 # Load baseline (requires k6 — see docs/load/README.md)
 k6 run scripts/load/k6-baseline.mjs

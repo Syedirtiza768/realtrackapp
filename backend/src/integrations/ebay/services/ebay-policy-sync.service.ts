@@ -253,6 +253,15 @@ export class EbayPolicySyncService {
     // live hard-gate watermark. Policy sync must not hide the SellerList mirror.
     await this.accountRepo.save(account);
 
+    // Native Account API location lists are often empty for new B&I sellers.
+    // Ensure/create a merchant location the same way SellerPundit accounts do.
+    const stillMissingLocation = (
+      await this.mpRepo.find({ where: { ebayAccountId } })
+    ).some((row) => !row.defaultInventoryLocationKey);
+    if (stillMissingLocation) {
+      await this.hydrateInventoryLocationsFromStore(account);
+    }
+
     await this.logWriter.write({
       organizationId,
       userId: userId ?? null,

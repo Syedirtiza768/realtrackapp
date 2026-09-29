@@ -4,14 +4,18 @@
  * ────────────────────────────────────────────────────────── */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-  ChannelConnection,
-  ChannelKey,
-  ChannelListingInfo,
-  ChannelOverrides,
-  PublishResponse,
-  ChannelActionResponse,
-  SkuChannelStatus,
+import {
+  ALL_CHANNELS,
+  type BulkPublishResponse,
+  type ChannelConnection,
+  type ChannelKey,
+  type ChannelListingInfo,
+  type ChannelListingStatus,
+  type ChannelOverrides,
+  type PartsBazarStatus,
+  type PublishResponse,
+  type ChannelActionResponse,
+  type SkuChannelStatus,
 } from '../types/channels';
 import { fetchWithAuth } from './authApi';
 
@@ -55,9 +59,29 @@ export async function disconnectChannel(connectionId: string): Promise<void> {
 
 /* ── Per-SKU channel statuses ─────────────────────────────── */
 
+/**
+ * The backend reports listing_channel_instances.sync_status; the UI speaks in
+ * ChannelListingStatus. Without this mapping a synced listing had no badge
+ * style at all.
+ */
+const SYNC_STATUS_TO_UI: Record<string, ChannelListingStatus> = {
+  synced: 'active',
+  pending: 'publishing',
+  publishing: 'publishing',
+  error: 'failed',
+  ended: 'ended',
+  draft: 'draft',
+};
+
 /** Get channel listing statuses for a specific SKU */
 export async function getListingChannels(listingId: string): Promise<ChannelListingInfo[]> {
-  return fetchJson<ChannelListingInfo[]>(`/channels/listings/${listingId}/channels`);
+  const rows = await fetchJson<Array<Omit<ChannelListingInfo, 'status'> & { status: string }>>(
+    `/channels/listings/${listingId}/channels`,
+  );
+  return rows.map((row) => ({
+    ...row,
+    status: SYNC_STATUS_TO_UI[row.status] ?? (row.status as ChannelListingStatus),
+  }));
 }
 
 /* ── Publishing ───────────────────────────────────────────── */
@@ -67,11 +91,14 @@ export async function publishToChannels(
   listingId: string,
   channels: ChannelKey[],
   overrides?: Partial<Record<ChannelKey, ChannelOverrides>>,
+  /** Target one specific store when a channel has several. */
+  storeId?: string,
 ): Promise<PublishResponse> {
   return postJson<PublishResponse>('/channels/publish-multi', {
     listingId,
     channels,
     overrides,
+    storeId,
   });
 }
 
@@ -95,10 +122,12 @@ export async function endOnChannel(
 export async function retryOnChannel(
   listingId: string,
   channel: ChannelKey,
+  storeId?: string,
 ): Promise<PublishResponse> {
   return postJson<PublishResponse>('/channels/publish-multi', {
     listingId,
     channels: [channel],
+    storeId,
   });
 }
 
@@ -106,11 +135,33 @@ export async function retryOnChannel(
 export async function bulkPublish(
   listingIds: string[],
   channels: ChannelKey[],
-): Promise<{ queued: number }> {
-  return postJson<{ queued: number }>('/channels/bulk-publish', {
+  storeId?: string,
+): Promise<BulkPublishResponse> {
+  return postJson<BulkPublishResponse>('/channels/bulk-publish', {
     listingIds,
     channels,
+    storeId,
   });
+}
+
+/* ── PartsBazar360 ────────────────────────────────────────── */
+
+/** Is PartsBazar360 publishing configured, and which sellers are linked? */
+export async function getPartsBazarStatus(): Promise<PartsBazarStatus> {
+  return fetchJson<PartsBazarStatus>('/channels/partsbazar360/status');
+}
+
+/** Link a PartsBazar360 seller as a publish destination (verified live). */
+export async function connectPartsBazar(input: {
+  storeName: string;
+  sellerStoreId: string;
+}): Promise<{ connectionId: string; storeId: string; seller: { id: string; name: string } | null }> {
+  return postJson('/channels/partsbazar360/connect', input);
+}
+
+/** Re-check a listing's import state on PartsBazar360. */
+export async function refreshPartsBazarListing(listingId: string): Promise<void> {
+  await postJson(`/channels/partsbazar360/listings/${listingId}/refresh`);
 }
 
 /* ─── React Hooks ─────────────────────────────────────────── */
@@ -142,6 +193,33 @@ export function useConnections() {
   }, [refetch]);
 
   return { connections: data, loading, error, refetch };
+}
+
+/** Hook: PartsBazar360 configuration and linked sellers */
+export function usePartsBazarStatus() {
+  const [status, setStatus] = useState<PartsBazarStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getPartsBazarStatus();
+      if (mountedRef.current) setStatus(data);
+    } catch {
+      if (mountedRef.current) setStatus(null);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    refetch();
+    return () => { mountedRef.current = false; };
+  }, [refetch]);
+
+  return { status, loading, refetch };
 }
 
 /** Hook: get per-SKU channel statuses merged with connections */
@@ -177,8 +255,7 @@ export function mergeSkuChannelStatuses(
   connections: ChannelConnection[],
   channelListings: ChannelListingInfo[],
 ): SkuChannelStatus[] {
-  const ALL: ChannelKey[] = ['ebay', 'shopify'];
-  return ALL.map((ch) => {
+  return ALL_CHANNELS.map((ch) => {
     const conn = connections.find((c) => c.channel === ch && c.status === 'active');
     const listing = channelListings.find((l) => l.channel === ch);
     return {

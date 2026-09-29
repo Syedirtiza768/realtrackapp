@@ -40,6 +40,7 @@ export class PricingAnalysisPipeline {
    * Generate a pricing suggestion for a product.
    */
   async suggestPrice(input: {
+    model?: string;
     productTitle: string;
     partNumber: string;
     brand: string;
@@ -85,6 +86,7 @@ export class PricingAnalysisPipeline {
     });
 
     const response = await this.openai.chat({
+      ...(input.model ? { model: input.model } : {}),
       systemPrompt,
       userPrompt,
       jsonMode: true,

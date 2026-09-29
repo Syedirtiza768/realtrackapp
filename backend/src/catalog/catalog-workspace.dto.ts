@@ -141,6 +141,11 @@ export class CatalogQueryDto {
   catalogStatus?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  validationStatuses?: string;
+
+  @IsOptional()
   @IsISO8601()
   importedFrom?: string;
 

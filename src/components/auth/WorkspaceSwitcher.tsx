@@ -23,7 +23,7 @@ export default function WorkspaceSwitcher() {
 
   return (
     <details className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
         <Building2 size={15} />
         Switch workspace
         <ChevronDown size={14} className="transition-transform group-open:rotate-180" />

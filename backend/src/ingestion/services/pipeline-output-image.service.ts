@@ -4,6 +4,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as XLSX from 'xlsx';
 import { StorageService } from '../../storage/storage.service.js';
+import {
+  mergeImageUrls,
+  parseImageUrlPipe,
+} from '../utils/pipeline-image-matching.util.js';
 
 const S3_PATH_COLUMN = 'S3 Image Path';
 const IMAGE_MIRROR_CONCURRENCY = 6;
@@ -54,7 +58,7 @@ export class PipelineOutputImageService {
 
     const files = fs
       .readdirSync(outputDir)
-      .filter((f) => /\.xlsx$/i.test(f) && !f.startsWith('~$'));
+      .filter((f) => /\.(?:xlsx|csv)$/i.test(f) && !f.startsWith('~$'));
 
     if (files.length === 0) {
       this.logger.warn(`Job ${jobId}: No output XLSX files to mirror images`);
@@ -84,6 +88,122 @@ export class PipelineOutputImageService {
     this.logger.log(
       `Job ${jobId}: Mirrored images for ${totalMirrored}/${totalRows} listing rows across ${files.length} output file(s)`,
     );
+  }
+
+  /** Mirror approved direct image URLs for a trusted pre-enriched import. */
+  async mirrorApprovedImageUrls(
+    jobId: string,
+    sku: string,
+    urls: string[],
+  ): Promise<{ urls: string[]; s3Keys: string[] }> {
+    const remoteUrls = urls.filter((url) => /^https?:\/\//i.test(url));
+    if (!this.shouldMirror() || remoteUrls.length === 0) {
+      return { urls, s3Keys: [] };
+    }
+    const skuPart = sku.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const results = await this.storageService.mirrorRemoteImages(
+      remoteUrls,
+      `pipeline-images/${jobId.slice(0, 8)}/${skuPart}`,
+      IMAGE_MIRROR_CONCURRENCY,
+    );
+    return {
+      urls: results.map((result) => result.url),
+      s3Keys: results
+        .map((result) => result.s3Key)
+        .filter((key): key is string => Boolean(key)),
+    };
+  }
+
+  /**
+   * Add images resolved during catalog import and Image Drive finalization to
+   * the downloadable listing files. Pipeline exports are CSV in fast mode, so
+   * this runs after persistence and mirrors the same SKU-scoped data the app
+   * displays.
+   */
+  async applyResolvedImagesToOutputDir(
+    jobId: string,
+    outputDir: string,
+    imagesBySku: ReadonlyMap<string, readonly string[]>,
+  ): Promise<{ filesUpdated: number; rowsUpdated: number }> {
+    if (!fs.existsSync(outputDir) || imagesBySku.size === 0) {
+      return { filesUpdated: 0, rowsUpdated: 0 };
+    }
+
+    const files = fs
+      .readdirSync(outputDir)
+      .filter((file) => /\.(?:xlsx|csv)$/i.test(file) && !file.startsWith('~$'));
+    let filesUpdated = 0;
+    let rowsUpdated = 0;
+
+    for (const file of files) {
+      const fullPath = path.join(outputDir, file);
+      const wb = XLSX.readFile(fullPath);
+      const sheetName = wb.SheetNames.includes('Listings')
+        ? 'Listings'
+        : wb.SheetNames[0];
+      const ws = sheetName ? wb.Sheets[sheetName] : undefined;
+      if (!sheetName || !ws) continue;
+
+      const rows = XLSX.utils.sheet_to_json(ws, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      const headerIdx = this.findHeaderRow(rows);
+      if (headerIdx < 0) continue;
+
+      const headers = rows[headerIdx].map((header) => String(header ?? '').trim());
+      const skuIdx = this.colIdx(headers, 'customlabel');
+      const titleIdx = this.colIdx(headers, 'title');
+      const relationshipIdx = headers.findIndex((header) =>
+        /^relationship$/i.test(header),
+      );
+      const imageColIdxs = headers
+        .map((header, index) => (this.isImageColumn(header) ? index : -1))
+        .filter((index) => index >= 0);
+      if (skuIdx < 0 || titleIdx < 0 || imageColIdxs.length === 0) continue;
+
+      let fileRowsUpdated = 0;
+      for (let rowIdx = headerIdx + 1; rowIdx < rows.length; rowIdx++) {
+        const row = rows[rowIdx];
+        if (!row?.length || !String(row[titleIdx] ?? '').trim()) continue;
+        if (
+          relationshipIdx >= 0 &&
+          String(row[relationshipIdx] ?? '').trim() === 'Compatibility'
+        ) {
+          continue;
+        }
+
+        const sku = String(row[skuIdx] ?? '').trim().toLowerCase();
+        const resolvedUrls = imagesBySku.get(sku);
+        if (!sku || !resolvedUrls?.length) continue;
+
+        const existingUrls = imageColIdxs.flatMap((columnIndex) =>
+          parseImageUrlPipe(String(row[columnIndex] ?? '')),
+        );
+        const mergedUrls = mergeImageUrls(resolvedUrls, existingUrls);
+        if (mergedUrls.join('|') === existingUrls.join('|')) continue;
+
+        while (row.length < headers.length) row.push('');
+        this.writeImageColumns(row, imageColIdxs, mergedUrls);
+        fileRowsUpdated++;
+      }
+
+      if (fileRowsUpdated === 0) continue;
+      this.writeRowsToFile(wb, sheetName, rows, fullPath);
+      filesUpdated++;
+      rowsUpdated += fileRowsUpdated;
+    }
+
+    this.logger.log(
+      'Job ' +
+        jobId +
+        ': Wrote resolved images to ' +
+        rowsUpdated +
+        ' output row(s) across ' +
+        filesUpdated +
+        ' file(s)',
+    );
+    return { filesUpdated, rowsUpdated };
   }
 
   private async mirrorImagesInWorkbook(
@@ -207,11 +327,24 @@ export class PipelineOutputImageService {
       await Promise.all(slice.map((idx) => mirrorRow(idx)));
     }
 
-    const outWs = XLSX.utils.aoa_to_sheet(rows);
-    wb.Sheets[sheetName] = outWs;
-    XLSX.writeFile(wb, filePath);
+    this.writeRowsToFile(wb, sheetName, rows, filePath);
 
     return { mirrored, rows: listingRowIndices.length };
+  }
+
+  private writeRowsToFile(
+    wb: XLSX.WorkBook,
+    sheetName: string,
+    rows: string[][],
+    filePath: string,
+  ): void {
+    const outWs = XLSX.utils.aoa_to_sheet(rows);
+    wb.Sheets[sheetName] = outWs;
+    if (/\.csv$/i.test(filePath)) {
+      fs.writeFileSync(filePath, XLSX.utils.sheet_to_csv(outWs), 'utf8');
+      return;
+    }
+    XLSX.writeFile(wb, filePath);
   }
 
   private findHeaderRow(rows: string[][]): number {

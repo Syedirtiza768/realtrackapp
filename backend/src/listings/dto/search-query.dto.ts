@@ -6,6 +6,37 @@
 import { IsOptional, IsInt, IsString, IsIn, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
+/**
+ * Sortable modes. Every catalog table column has an `_asc` / `_desc` pair;
+ * `newest` / `oldest` are the Date Added pair and `relevance` is only
+ * meaningful alongside a text query.
+ */
+export const SEARCH_SORT_MODES = [
+  'relevance',
+  'newest',
+  'oldest',
+  'price_asc',
+  'price_desc',
+  'title_asc',
+  'title_desc',
+  'sku_asc',
+  'sku_desc',
+  'team_asc',
+  'team_desc',
+  'condition_asc',
+  'condition_desc',
+  'stock_asc',
+  'stock_desc',
+  'status_asc',
+  'status_desc',
+  'ebay_asc',
+  'ebay_desc',
+  'image_asc',
+  'image_desc',
+] as const;
+
+export type SearchSortMode = (typeof SEARCH_SORT_MODES)[number];
+
 export class SearchQueryDto {
   /* -- Pagination ----------------------------------------- */
   @IsOptional()
@@ -155,21 +186,6 @@ export class SearchQueryDto {
 
   /* -- Sorting -------------------------------------------- */
   @IsOptional()
-  @IsIn([
-    'relevance',
-    'price_asc',
-    'price_desc',
-    'newest',
-    'title_asc',
-    'title_desc',
-    'sku_asc',
-  ])
-  sort?:
-    | 'relevance'
-    | 'price_asc'
-    | 'price_desc'
-    | 'newest'
-    | 'title_asc'
-    | 'title_desc'
-    | 'sku_asc';
+  @IsIn(SEARCH_SORT_MODES)
+  sort?: SearchSortMode;
 }

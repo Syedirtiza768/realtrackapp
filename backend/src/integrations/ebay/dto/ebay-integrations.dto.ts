@@ -38,6 +38,35 @@ export class EbayPublishTargetDto {
 
   @IsString()
   marketplaceId!: string;
+
+  /** Optional connected-store policy/location values selected for this target. */
+  @IsOptional()
+  @IsString()
+  fulfillmentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  returnPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  merchantLocationKey?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedFulfillmentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedPaymentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedReturnPolicyName?: string;
 }
 
 export class EbayPublishJobDto {
@@ -78,6 +107,19 @@ export class EbayBulkPublishJobDto {
   @ArrayMaxSize(10)
   @IsUUID(undefined, { each: true })
   storeIds!: string[];
+
+  /** Optional shared profile names applied to every selected listing/store target. */
+  @IsOptional()
+  @IsString()
+  requestedFulfillmentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedPaymentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedReturnPolicyName?: string;
 
   @IsOptional()
   @IsString()

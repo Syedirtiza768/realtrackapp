@@ -5,7 +5,7 @@ import { fashionError, publishFashionListing, validateFashionListing, type Fashi
 interface Props { listings: FashionListing[]; account?: FashionAccount; dirty?: boolean }
 
 export default function FashionListingPublishPanel({ listings, account, dirty = false }: Props) {
-  const { permissions } = useAuth();
+  const { permissions, activeOrganizationId } = useAuth();
   const [busy, setBusy] = useState(false);
   const [reports, setReports] = useState<{ id: string; title: string; results: FashionValidation[]; error?: string }[]>([]);
   const [messages, setMessages] = useState<string[]>([]);
@@ -29,7 +29,7 @@ export default function FashionListingPublishPanel({ listings, account, dirty = 
     for (const listing of listings) {
       if (currentContext.current !== startedContext) break;
       try {
-        const response = await validateFashionListing(listing.id, account);
+        const response = await validateFashionListing(listing.id, account, activeOrganizationId);
         const expectedKey = `${account.id}:${account.marketplaceId}`;
         next.push({ id: listing.id, title: listing.title, results: response.results.filter((result) => result.key === expectedKey) });
       } catch (error) { next.push({ id: listing.id, title: listing.title, results: [], error: fashionError(error) }); }
@@ -47,7 +47,7 @@ export default function FashionListingPublishPanel({ listings, account, dirty = 
       if (currentContext.current !== startedContext) break;
       try {
         keys.current[listing.id] ??= crypto.randomUUID();
-        const result = await publishFashionListing(listing.id, account, keys.current[listing.id]);
+        const result = await publishFashionListing(listing.id, account, keys.current[listing.id], activeOrganizationId);
         if (result.skippedTargets?.length) {
           allQueued = false;
           next.push(`${listing.title}: target skipped — ${result.skippedTargets.flatMap((target) => target.errors).join('; ')}`);

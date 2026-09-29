@@ -1,3 +1,4 @@
+import type { ProductVertical } from '../../verticals/vertical.types.js';
 import {
   Column,
   CreateDateColumn,
@@ -223,6 +224,10 @@ export class PipelineJob {
   /** Target marketplace for this upload (US, UK, AU, DE). */
   @Column({ type: 'varchar', length: 3, nullable: true })
   marketplace!: string | null;
+
+  /** Frozen at ingestion so retries cannot silently switch workflows. */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  vertical!: ProductVertical | null;
 
   /** Provisioning store — source of business policies and cross-list anchor. */
   @Column({ name: 'store_id', type: 'uuid', nullable: true })

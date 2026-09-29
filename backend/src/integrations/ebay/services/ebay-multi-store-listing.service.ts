@@ -17,6 +17,33 @@ import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.
 const MAX_BULK_LISTINGS = 500;
 const MAX_DAILY_PUBLISH_TARGETS = 5_000;
 
+type PublishTargetInput = {
+  ebayAccountId: string;
+  marketplaceId: string;
+  fulfillmentPolicyId?: string;
+  paymentPolicyId?: string;
+  returnPolicyId?: string;
+  merchantLocationKey?: string;
+  requestedFulfillmentPolicyName?: string;
+  requestedPaymentPolicyName?: string;
+  requestedReturnPolicyName?: string;
+};
+
+function targetPolicyOverrides(target: Partial<PublishTargetInput>): Record<string, string> {
+  const values: Record<string, string | undefined> = {
+    fulfillmentPolicyId: target.fulfillmentPolicyId,
+    paymentPolicyId: target.paymentPolicyId,
+    returnPolicyId: target.returnPolicyId,
+    merchantLocationKey: target.merchantLocationKey,
+    requestedFulfillmentPolicyName: target.requestedFulfillmentPolicyName,
+    requestedPaymentPolicyName: target.requestedPaymentPolicyName,
+    requestedReturnPolicyName: target.requestedReturnPolicyName,
+  };
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => typeof value === 'string' && value.trim()),
+  ) as Record<string, string>;
+}
+
 @Injectable()
 export class EbayMultiStoreListingService {
   constructor(
@@ -60,6 +87,7 @@ export class EbayMultiStoreListingService {
     requestedByUserId: string;
     listingIds: string[];
     storeIds: string[];
+    policyOverrides?: Pick<PublishTargetInput, 'requestedFulfillmentPolicyName' | 'requestedPaymentPolicyName' | 'requestedReturnPolicyName'>;
     idempotencyKey?: string;
   }): Promise<{
     job: EbayListingJob;
@@ -167,6 +195,7 @@ export class EbayMultiStoreListingService {
         idempotencyKey: input.idempotencyKey ?? null,
       }),
     );
+    const sharedPolicyOverrides = targetPolicyOverrides(input.policyOverrides ?? {});
 
     const targets = resolvedProducts.flatMap((product) =>
       accounts.map((account) =>
@@ -181,7 +210,12 @@ export class EbayMultiStoreListingService {
               ? account.primaryStore.config.marketplace
               : 'EBAY_US'),
           status: 'pending',
-          resultPayload: { sourceListingId: product.sourceListingId },
+          resultPayload: {
+            sourceListingId: product.sourceListingId,
+            ...(Object.keys(sharedPolicyOverrides).length
+              ? { policyOverrides: sharedPolicyOverrides }
+              : {}),
+          },
         }),
       ),
     );
@@ -224,7 +258,7 @@ export class EbayMultiStoreListingService {
   async validateTargets(input: {
     organizationId: string;
     catalogProductId: string;
-    targets: { ebayAccountId: string; marketplaceId: string }[];
+    targets: PublishTargetInput[];
   }) {
     const results: Record<string, unknown>[] = [];
     for (const t of input.targets) {
@@ -234,6 +268,7 @@ export class EbayMultiStoreListingService {
         catalogProductId: input.catalogProductId,
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
+        policyOverrides: targetPolicyOverrides(t),
       });
       results.push({ key, ...v });
     }
@@ -245,7 +280,7 @@ export class EbayMultiStoreListingService {
     requestedByUserId: string;
     catalogProductId: string;
     sourceListingId?: string;
-    targets: { ebayAccountId: string; marketplaceId: string }[];
+    targets: PublishTargetInput[];
     idempotencyKey?: string;
   }): Promise<{
     job: EbayListingJob;
@@ -279,6 +314,7 @@ export class EbayMultiStoreListingService {
         catalogProductId: input.catalogProductId,
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
+        policyOverrides: targetPolicyOverrides(t),
       });
       if (v.status === 'blocked') {
         skipped.push({
@@ -291,9 +327,15 @@ export class EbayMultiStoreListingService {
       }
     }
     if (!eligible.length) {
+      const detail = skipped
+        .flatMap((row) => row.errors)
+        .filter((message) => typeof message === 'string' && message.trim())
+        .slice(0, 8)
+        .join('; ');
       throw new BadRequestException({
-        message:
-          'No targets passed validation — fix errors or deselect blocked stores.',
+        message: detail
+          ? `No targets passed validation — ${detail}`
+          : 'No targets passed validation — fix errors or deselect blocked stores.',
         failures: skipped,
       });
     }
@@ -328,6 +370,9 @@ export class EbayMultiStoreListingService {
         status: 'pending',
         resultPayload: {
           sourceListingId: input.sourceListingId ?? input.catalogProductId,
+          ...(Object.keys(targetPolicyOverrides(t)).length
+            ? { policyOverrides: targetPolicyOverrides(t) }
+            : {}),
         },
       });
       targets.push(await this.targetRepo.save(row));
@@ -359,7 +404,13 @@ export class EbayMultiStoreListingService {
       relations: ['ebayAccount', 'ebayAccount.primaryStore'],
       order: { createdAt: 'ASC' },
     });
-    return rows.map((t) => ({
+   return rows.map((t) => {
+     const payload = t.errorPayload as { message?: unknown; errors?: unknown } | null;
+      const directMessage = typeof payload?.message === 'string' && payload.message.trim() ? payload.message.trim() : null;
+      const errorMessage = directMessage || (Array.isArray(payload?.errors)
+        ? payload.errors.map((error) => typeof error === 'string' ? error : (error as { message?: unknown })?.message).filter((message): message is string => typeof message === 'string' && message.trim().length > 0).join('; ') || null
+        : null);
+     return {
       id: t.id,
       catalogProductId: t.catalogProductId,
       ebayAccountId: t.ebayAccountId,
@@ -370,6 +421,9 @@ export class EbayMultiStoreListingService {
       status: t.status,
       resultPayload: t.resultPayload,
       errorPayload: t.errorPayload,
-    }));
+        errorMessage,
+        lastErrorMessage: errorMessage,
+      };
+    });
   }
 }

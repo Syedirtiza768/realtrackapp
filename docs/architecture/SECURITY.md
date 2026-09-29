@@ -1,5 +1,7 @@
 # Security
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Consolidated from `docs/operations/security-checklist.md` (60 lines) and security sections of `docs/RBAC_AND_SECURITY.md` — 2026-05-29.
 > For the auth/RBAC architecture, see [AUTH_RBAC.md](AUTH_RBAC.md).
 > For known risks, see [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
@@ -36,8 +38,8 @@ Global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`). DTOs
 Configured from `CORS_ORIGIN` (comma-separated) or built-in defaults:
 - `http://localhost:3911` (Vite dev)
 - `http://localhost:8050` (Docker frontend)
-- `https://mhn.realtrackapp.com`
-- `http://mhn.realtrackapp.com`
+- `https://app.omnicoreholding.com`
+- `http://app.omnicoreholding.com`
 
 ### Password Security
 
@@ -97,11 +99,13 @@ Run before every production deployment.
 
 ## Outstanding Security Gaps
 
-- No server-side token revocation (logout is client-only).
-- Tenant/org row-level isolation inconsistent (prior audit).
-- Test coverage too low to catch authz regressions automatically.
-- No refresh-token rotation; tokens remain valid until expiry.
-- eBay OAuth token refresh fragile against live API.
+- Legacy automotive rows still use nullable tenancy columns. Access is now
+  restricted to members of one configured legacy organization, but a future
+  reviewed data migration should backfill ownership and make the columns
+  non-null where operationally possible.
+- No refresh-token rotation; access tokens remain valid until expiry unless
+  their `jti` is revoked on logout.
+- eBay OAuth token refresh remains dependent on live provider behavior.
 
 Tracked in: [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
 
@@ -123,3 +127,77 @@ Tracked in: [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
 ---
 
 *Consolidated & reorganized: 2026-06-06.*
+
+## Fashion isolation and authenticity controls (2026-09-09)
+
+Fashion access is denied at login and at every controller through fashion.access and more specific Fashion permissions. Organization and store checks are performed server-side; vertical values from the browser are not trusted to grant access. eBay OAuth state carries the vertical, new Fashion stores are tagged Fashion, and the callback rejects a seller account already connected in the workspace so one seller cannot be reused across verticals.
+
+Fashion review evidence is stored as private object keys in fashion_reviews and omitted from listing/catalog responses. Approval requires an explicit authenticityConfirmed=true. Publish projection blocks any Fashion product that is not approved, including quarantined products. Quarantine is local and fail-closed: the current integration reports that a remote eBay takedown action is unavailable rather than claiming universal webhook or takedown support.
+
+## Business & Industrial controls (2026-09-09)
+
+B&I DTOs allowlist the explicit category family, measurable values with units,
+inventory/lot relationships, testing evidence, restricted-category clearance,
+compatibility claims, and shipping coverage. Private serialized numbers are
+stored in `business_industrial_units` and public responses expose only optional
+public serials. Review approval requires provenance, specifications, testing,
+and (where applicable) restricted-category confirmation; publish validation
+also requires a mapped eBay leaf category, shipping evidence, and a dedicated
+B&I seller store.
+
+Verified incidents are idempotent by organization and external event ID. They
+quarantine local catalog/review state immediately. Tracked eBay Inventory API
+offers are withdrawn and re-read until `UNPUBLISHED` is verified; missing,
+unauthorized, or failed targets remain escalated with sanitized attempt history
+and can be retried by an authorized B&I administrator. Release is blocked until
+all remote targets are verified, and quarantined listings cannot be edited or
+approved while locked.
+
+B&I login accepts an explicit `vertical=business_industrial` assertion and the
+server checks the matching permission before issuing a token. B&I account
+creation is organization-scoped, assigns only B&I roles, requires a temporary
+password change, and permits only dedicated B&I store assignments. Private
+serial numbers are never returned from public listing responses.
+
+### B&I image intake controls (2026-09-10)
+
+Image intake jobs, groups, and assets are filtered by the resolved organization
+on every request. Upload paths are normalized and reject traversal, absolute
+paths, unsupported files, files over 25 MB, and runs over 5,000 images. Source
+images are stored below a job-specific B&I S3 prefix rather than in the legacy
+global Image Drive tables. The vision prompt forbids invented identifiers,
+specifications, compatibility, certifications, conditions, and prices. eBay
+categories are accepted only after Taxonomy confirms a leaf; otherwise the
+group remains a manual-review item. Applying a group creates a draft only;
+existing provenance/specification/testing approval and dedicated-store publish
+gates still apply. A group linked to a draft rejects additional intake uploads
+so its evidence cannot silently diverge from the catalog record.
+
+Retries use a unique BullMQ attempt ID and process only `pending` or `failed`
+groups. Completed, reviewable, and draft-created results are preserved,
+preventing repeated AI cost and accidental replacement of reviewed evidence.
+Manual listing DTOs cap image arrays at 24 validated HTTP(S) URLs.
+
+Drive completion can refresh prices only from the shared eBay Browse and
+pricing-analysis services; it never writes a zero price when evidence is
+unavailable. The completion runner uses an existing authorized B&I admin user
+identity and does not extract or create credentials. It creates drafts and
+inventory projections but does not publish to eBay; provenance,
+specification, testing, restricted-category, and dedicated-store gates remain
+authoritative.
+
+### Shared catalog controls (2026-09-12)
+
+The Fashion and Business & Industrial catalog workspaces use a shared backend
+service but retain vertical-specific edit/review/publish authorities. Search,
+facets, suggestions, detail, bulk actions, and CSV export resolve the caller’s
+organization before querying `catalog_products`, require the expected vertical,
+limit team visibility to unassigned or caller-accessible teams, and filter
+publication summaries/facets to accessible stores. Requested team filters and
+store targets are rejected when unauthorized rather than silently broadened.
+
+Inline updates delegate to the vertical service. Bulk delete is a soft-delete
+lifecycle transition and fails closed for published, quarantined, or manual-review
+records. The quick view never renders private review evidence or serialized
+unit secrets. Fashion bulk publish requires approved products and dedicated
+Fashion stores; B&I publish retains its existing compliance and incident gates.

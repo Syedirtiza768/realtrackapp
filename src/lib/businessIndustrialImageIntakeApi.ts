@@ -23,11 +23,6 @@ export interface ImageIntakeJob {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  aiModel?: string;
-  aiInputTokens?: number;
-  aiOutputTokens?: number;
-  aiCostUsd?: number;
-  aiRuns?: number;
   webpStorage?: boolean;
 }
 
@@ -96,14 +91,14 @@ export async function createImageIntakeJob(sourceRootName: string, organizationI
 
 export async function createDriveImageIntakeJob(
   folderUrl: string,
-  maxItems = 200,
+  maxItems: number | undefined = undefined,
   skipFolderNames: string[] = [],
   autoCreateDrafts = true,
   organizationId?: string | null,
 ): Promise<ImageIntakeJob> {
   return fetchWithAuth<ImageIntakeJob>(withOrganization(API + '/jobs/from-drive', organizationId), {
     method: 'POST',
-    body: JSON.stringify({ folderUrl, maxItems, skipFolderNames, autoCreateDrafts }),
+    body: JSON.stringify({ folderUrl, ...(maxItems ? { maxItems } : {}), skipFolderNames, autoCreateDrafts }),
   });
 }
 

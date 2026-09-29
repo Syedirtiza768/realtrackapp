@@ -43,11 +43,18 @@ import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as XLSX from 'xlsx';
+import {
+  parsePreEnrichedFebestWorkbook,
+  PRE_ENRICHED_FEBEST_MODE,
+  type PreEnrichedFebestFitment,
+} from '../pre-enriched-febest.js';
+import type { PipelineImportMode } from '../pipeline.service.js';
 
 export interface PipelineJobData {
   jobId: string;
   filePath: string;
   originalFilename: string;
+  importMode?: PipelineImportMode;
 }
 
 /**
@@ -183,6 +190,29 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
 
     await this.updateStatus(jobId, 'uploading');
 
+    const dbJob = await this.jobRepo.findOneBy({ id: jobId });
+    const importMode =
+      job.data.importMode ??
+      (dbJob?.stageDetails?.importMode as PipelineImportMode | undefined);
+    if (importMode === PRE_ENRICHED_FEBEST_MODE) {
+      try {
+        await this.runPreEnrichedFebestImport(
+          jobId,
+          filePath,
+          job.data.originalFilename,
+        );
+        this.logger.log(`Pipeline job=${jobId} trusted FEBEST import completed`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Pipeline job=${jobId} trusted FEBEST import failed: ${message}`);
+        await this.fail(jobId, message);
+        throw err;
+      } finally {
+        this.clearJobProgress(jobId);
+      }
+      return;
+    }
+
     // Resolve paths across Docker (/app) and local backend/ working directories.
     const projectRoot = resolvePipelineProjectRoot();
     const scriptPath = path.resolve(
@@ -205,7 +235,6 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     fs.mkdirSync(outputDir, { recursive: true });
 
     try {
-      const dbJob = await this.jobRepo.findOneBy({ id: jobId });
       const forceVision = Boolean(dbJob?.stageDetails?.forceVision);
 
       // Spawn the pipeline script with environment overrides
@@ -309,6 +338,292 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
    * catalog import (MVL validation + upsert) → link/propagate images → completed.
    * Shared by the full pipeline run and the resume-import path.
    */
+  /**
+   * Import an already-reviewed FEBEST workbook without invoking the legacy
+   * generator, AI enrichment, or mandatory optimization queue. The workbook
+   * validator is the gate; this method only persists rows after a complete
+   * preflight collision check and keeps every listing in draft status.
+   */
+  private async runPreEnrichedFebestImport(
+    jobId: string,
+    filePath: string,
+    originalFilename: string,
+  ): Promise<void> {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`FEBEST workbook not found: ${filePath}`);
+    }
+
+    const validation = parsePreEnrichedFebestWorkbook(fs.readFileSync(filePath));
+    if (!validation.ok || !validation.readyForImport) {
+      const detail = validation.errors
+        .slice(0, 8)
+        .map((issue) => `${issue.sheet}${issue.row ? `:${issue.row}` : ''} ${issue.message}`)
+        .join('; ');
+      throw new Error(
+        `Cannot import ${PRE_ENRICHED_FEBEST_MODE}: workbook is not ready${detail ? ` — ${detail}` : ''}`,
+      );
+    }
+
+    const job = await this.jobRepo.findOneByOrFail({ id: jobId });
+    const manifestMarketplace = validation.manifest.Marketplace;
+    const expectedMarketplace =
+      manifestMarketplace === 'EBAY_MOTORS_US' ? 'US' : manifestMarketplace;
+    if (job.marketplace && expectedMarketplace && job.marketplace !== expectedMarketplace) {
+      throw new Error(
+        `Workbook marketplace ${manifestMarketplace} does not match job marketplace ${job.marketplace}`,
+      );
+    }
+
+    const skus = validation.products.map((product) => product.sku);
+    const [existingProducts, existingListings] = await Promise.all([
+      skus.length ? this.productRepo.find({ where: { sku: In(skus) } }) : [],
+      skus.length ? this.listingRepo.find({ where: { customLabelSku: In(skus) } }) : [],
+    ]);
+    const existingProductBySku = new Map<string, CatalogProduct>(
+      existingProducts.map(
+        (product): [string, CatalogProduct] => [product.sku ?? '', product],
+      ),
+    );
+    const existingListingBySku = new Map<string, ListingRecord>(
+      existingListings.map(
+        (listing): [string, ListingRecord] => [listing.customLabelSku ?? '', listing],
+      ),
+    );
+    const conflicts: string[] = [];
+    for (const product of validation.products) {
+      const existingProduct = existingProductBySku.get(product.sku);
+      const existingListing = existingListingBySku.get(product.sku);
+      const sameProduct = existingProduct?.sourceDataHash === product.evidenceHash;
+      const sameListing =
+        existingListing?.pipelineJobId === jobId ||
+        (existingListing?.sourceFileName === originalFilename &&
+          existingListing.sourceRowNumber === product.rowNumber &&
+          existingListing.sheetName === 'Products');
+      if ((existingProduct && !sameProduct) || (existingListing && !sameListing)) {
+        conflicts.push(
+          `${product.sku}: existing catalog/listing row is not an idempotent match`,
+        );
+      }
+    }
+    if (conflicts.length > 0) {
+      throw new Error(
+        `Pre-enriched FEBEST import blocked by ${conflicts.length} SKU collision(s): ${conflicts
+          .slice(0, 10)
+          .join('; ')}`,
+      );
+    }
+
+    const fitmentsBySku = new Map<string, PreEnrichedFebestFitment[]>();
+    for (const fitment of validation.fitments) {
+      if (fitment.validationStatus !== 'accepted') continue;
+      const rows = fitmentsBySku.get(fitment.sku) ?? [];
+      rows.push(fitment);
+      fitmentsBySku.set(fitment.sku, rows);
+    }
+    const conditionLabels: Record<string, string> = {
+      '1000': 'New',
+      '2500': 'Remanufactured',
+      '3000': 'Used',
+    };
+    const specificText = (specifics: Record<string, unknown>, names: string[]) => {
+      for (const name of names) {
+        const value = specifics[name];
+        if (Array.isArray(value)) {
+          const first = value.find((entry) => String(entry ?? '').trim());
+          if (first != null) return String(first).trim();
+        } else if (String(value ?? '').trim()) {
+          return String(value).trim();
+        }
+      }
+      return '';
+    };
+
+    let insertedProducts = 0;
+    let insertedListings = 0;
+    await this.productRepo.manager.transaction(async (manager) => {
+      const productsRepo = manager.getRepository(CatalogProduct);
+      const listingsRepo = manager.getRepository(ListingRecord);
+      for (const product of validation.products) {
+        const salePrice = product.price;
+        if (salePrice == null) {
+          throw new Error(`Missing validated price for ${product.sku}`);
+        }
+        const acceptedFitments = fitmentsBySku.get(product.sku) ?? [];
+        const specifics = product.itemSpecifics;
+        const mirroredImages = await this.pipelineOutputImages.mirrorApprovedImageUrls(
+          jobId,
+          product.sku,
+          product.imageUrls,
+        );
+        const imageUrls = mirroredImages.urls;
+        const fitmentPayload = acceptedFitments.map((fitment) => ({
+          year: fitment.year,
+          make: fitment.make,
+          model: fitment.model,
+          trim: fitment.trim,
+          engine: fitment.engine,
+          submodel: fitment.submodel,
+          bodyStyle: fitment.bodyStyle,
+          drivetrain: fitment.drivetrain,
+          notes: fitment.notes,
+          sourceApplicationId: fitment.sourceApplicationId,
+          sourceUrl: fitment.sourceUrl,
+          marketplace: fitment.marketplace,
+        }));
+        const approvedPayload = {
+          importMode: PRE_ENRICHED_FEBEST_MODE,
+          sourceRecordId: product.sourceRecordId,
+          evidenceHash: product.evidenceHash,
+          descriptionHtml: product.descriptionHtml,
+          description: product.description,
+          itemSpecifics: specifics,
+          officialImageUrls: product.imageUrls,
+          mirroredImageUrls: imageUrls,
+          mirroredImageS3Keys: mirroredImages.s3Keys,
+          acceptedFitments: fitmentPayload,
+          qualityStatus: validation.manifest.QualityStatus ?? 'READY',
+        };
+        const existingProduct = existingProductBySku.get(product.sku);
+        const existingListing = existingListingBySku.get(product.sku);
+        const sameProduct = existingProduct?.sourceDataHash === product.evidenceHash;
+        const sameListing =
+          existingListing?.pipelineJobId === jobId ||
+          (existingListing?.sourceFileName === originalFilename &&
+            existingListing.sourceRowNumber === product.rowNumber &&
+            existingListing.sheetName === 'Products');
+        if (!sameProduct) {
+          const catalog = productsRepo.create({
+            sku: product.sku,
+            mpn: product.partNumber,
+            mpnNormalized: product.partNumber.toUpperCase(),
+            title: product.title,
+            titleNormalized: product.title.toLowerCase(),
+            description: product.description,
+            brand: product.brand,
+            brandNormalized: product.brand.toUpperCase(),
+            partType: specificText(specifics, ['Type', 'Part Type']),
+            placement: specificText(specifics, ['Placement', 'Position']),
+            material: specificText(specifics, ['Material']),
+            features: JSON.stringify(specifics.Features ?? specifics.FeaturesAndBenefits ?? ''),
+            oemPartNumber: specificText(specifics, ['OE/OEM Part Number', 'OE Number', 'OEM Number']),
+            price: salePrice,
+            quantity: product.quantity,
+            conditionId: product.conditionId,
+            conditionLabel: conditionLabels[product.conditionId] ?? product.conditionId,
+            categoryId: product.categoryId,
+            imageUrls,
+            fitmentData: fitmentPayload,
+            fitmentRows: fitmentPayload,
+            fitmentStatus: 'validated',
+            fitmentConfidence: 1,
+            ebayValidationStatus: 'validated',
+            sourceDataHash: product.evidenceHash,
+            sourceFile: originalFilename,
+            sourceRow: product.rowNumber,
+            pipelineJobId: jobId,
+            teamId: job.teamId,
+            vertical: job.vertical ?? 'automotive',
+            verticalAttributes: approvedPayload as any,
+            verticalValidationStatus: 'validated',
+            optimizationStatus: 'not_applicable_trusted_import',
+            optimizationVersion: 1,
+            optimizedAt: new Date(),
+            optimizedTitle: product.title,
+            optimizedDescription: product.descriptionHtml,
+            optimizationPayload: approvedPayload,
+            optimizationErrors: [],
+            optimizationWarnings: [],
+            manualReview: false,
+          });
+          await productsRepo.save(catalog);
+          insertedProducts += 1;
+        }
+        if (!sameListing) {
+          const listing = listingsRepo.create({
+            organizationId: null,
+            vertical: job.vertical ?? 'automotive',
+            verticalAttributes: approvedPayload,
+            sourceFileName: originalFilename,
+            sourceFilePath: filePath,
+            sheetName: 'Products',
+            sourceRowNumber: product.rowNumber,
+            origin: ListingOrigin.PIPELINE_IMPORT,
+            action: 'Add',
+            customLabelSku: product.sku,
+            categoryId: product.categoryId,
+            title: product.title,
+            startPrice: salePrice.toFixed(2),
+            startPriceNum: salePrice,
+            quantity: String(product.quantity),
+            quantityNum: product.quantity,
+            itemPhotoUrl: imageUrls.join('|'),
+            conditionId: product.conditionId,
+            conditionLabel: conditionLabels[product.conditionId] ?? product.conditionId,
+            description: product.descriptionHtml,
+            format: 'FixedPrice',
+            duration: 'GTC',
+            shippingProfileName: job.shippingProfileName,
+            returnProfileName: job.returnProfileName,
+            paymentProfileName: job.paymentProfileName,
+            cBrand: product.brand,
+            cType: specificText(specifics, ['Type', 'Part Type']),
+            cFeatures: JSON.stringify(specifics.Features ?? specifics.FeaturesAndBenefits ?? ''),
+            cManufacturerPartNumber: product.partNumber,
+            cOeOemPartNumber: specificText(specifics, ['OE/OEM Part Number', 'OE Number', 'OEM Number']),
+            cMaterial: specificText(specifics, ['Material']),
+            cPlacement: specificText(specifics, ['Placement', 'Position']),
+            countryOfOrigin: null,
+            pipelineJobId: jobId,
+            teamId: job.teamId,
+            marketplace: job.marketplace ?? 'US',
+            status: 'draft',
+            enrichmentStage: 'trusted_import',
+            version: 1,
+            deletedAt: null,
+            updatedBy: null,
+            publishedAt: null,
+            ebayListingId: null,
+            shopifyProductId: null,
+          });
+          await listingsRepo.save(listing);
+          insertedListings += 1;
+        }
+      }
+    });
+
+    await this.jobRepo.update(jobId, {
+      status: 'completed',
+      totalParts: validation.products.length,
+      processedParts: validation.products.length,
+      enrichedCount: validation.products.length,
+      fallbackCount: 0,
+      optimizationStatus: 'not_applicable_trusted_import',
+      optimizationProcessed: validation.products.length,
+      optimizationTotal: validation.products.length,
+      optimizationPassCount: validation.products.length,
+      optimizationReviewCount: 0,
+      optimizationBlockCount: 0,
+      completedAt: new Date(),
+      stageDetails: {
+        ...(job.stageDetails ?? {}),
+        importMode: PRE_ENRICHED_FEBEST_MODE,
+        subStage: 'trusted_import_completed',
+        trustedImport: {
+          manifestMarketplace,
+          sourceHash: validation.manifest.SourceHash,
+          runHash: validation.manifest.RunHash,
+          productRows: validation.products.length,
+          acceptedFitmentRows: validation.summary.acceptedFitmentRows,
+          insertedProducts,
+          insertedListings,
+          collisionPolicy: 'no_overwrite_idempotent_source_hash_only',
+          listingStatus: 'draft',
+          publication: 'not_performed',
+        },
+      },
+    } as any);
+  }
+
   private async runPostEnrichmentImport(
     jobId: string,
     outputDir: string,
@@ -330,6 +645,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
     await this.linkUploadedImages(jobId);
     await this.propagateSourceImages(jobId);
     await this.syncPipelineImageDrive(jobId);
+    await this.syncResolvedImagesToOutput(jobId, outputDir);
 
     await this.updateStatus(jobId, 'completed');
 
@@ -1177,6 +1493,106 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
   }
 
   /**
+   * Reconcile catalog and listing images into generated files after Image Drive
+   * finalization. The pipeline creates CSV exports, which are the deliverables
+   * users download; without this pass those files can omit images already linked
+   * to the corresponding catalog/listing rows.
+   */
+  private async syncResolvedImagesToOutput(
+    jobId: string,
+    outputDir: string,
+  ): Promise<void> {
+    const [listings, products] = await Promise.all([
+      this.listingRepo.find({ where: { pipelineJobId: jobId } }),
+      this.productRepo.find({ where: { pipelineJobId: jobId } }),
+    ]);
+    const productsBySku = new Map<string, CatalogProduct>();
+    for (const product of products) {
+      const sku = product.sku?.trim().toLowerCase();
+      if (sku) productsBySku.set(sku, product);
+    }
+
+    const imagesBySku = new Map<string, string[]>();
+    const missingParts: Array<{ sku: string | null; partNumber: string | null }> =
+      [];
+    let listingsWithImages = 0;
+
+    for (const listing of listings) {
+      const sku = listing.customLabelSku?.trim() ?? '';
+      const product = sku ? productsBySku.get(sku.toLowerCase()) : undefined;
+      const urls = mergeImageUrls(
+        parseImageUrlPipe(listing.itemPhotoUrl),
+        product?.imageUrls ?? [],
+      );
+      if (urls.length > 0) {
+        listingsWithImages++;
+        if (sku) imagesBySku.set(sku.toLowerCase(), urls);
+        const imagePipe = urls.join('|');
+        if (listing.itemPhotoUrl !== imagePipe) {
+          listing.itemPhotoUrl = imagePipe;
+          await this.listingRepo.save(listing);
+        }
+        continue;
+      }
+
+      missingParts.push({
+        sku: sku || null,
+        partNumber:
+          listing.cManufacturerPartNumber?.trim() ||
+          listing.cOeOemPartNumber?.trim() ||
+          null,
+      });
+    }
+
+    const output = await this.pipelineOutputImages.applyResolvedImagesToOutputDir(
+      jobId,
+      outputDir,
+      imagesBySku,
+    );
+    const latestJob = await this.jobRepo.findOneBy({ id: jobId });
+    const stageDetails = latestJob?.stageDetails ?? {};
+    const currentImageDrive =
+      stageDetails.imageDrive &&
+      typeof stageDetails.imageDrive === 'object' &&
+      !Array.isArray(stageDetails.imageDrive)
+        ? (stageDetails.imageDrive as Record<string, unknown>)
+        : {};
+
+    await this.jobRepo.update(jobId, {
+      stageDetails: {
+        ...stageDetails,
+        imageDrive: {
+          ...currentImageDrive,
+          imageCoverage: {
+            totalListings: listings.length,
+            listingsWithImages,
+            listingsMissingImages: missingParts.length,
+            outputFilesUpdated: output.filesUpdated,
+            outputRowsUpdated: output.rowsUpdated,
+            missingParts: missingParts.slice(0, 50),
+            missingPartsTruncated: missingParts.length > 50,
+            synchronizedAt: new Date().toISOString(),
+          },
+        },
+      },
+    } as any);
+
+    if (missingParts.length > 0) {
+      this.logger.warn(
+        'Job ' +
+          jobId +
+          ': Image coverage is ' +
+          listingsWithImages +
+          '/' +
+          listings.length +
+          '; ' +
+          missingParts.length +
+          ' listing(s) have no catalog or Image Drive image',
+      );
+    }
+  }
+
+  /**
    * Attach Image Drive images to every bulk pipeline listing whose manufacturer
    * or OEM part number resolves to a folder. Explicit single-source uploads
    * keep their intentional job-wide image behavior.
@@ -1200,6 +1616,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
       .flatMap((listing) => [
         listing.cManufacturerPartNumber?.trim(),
         listing.cOeOemPartNumber?.trim(),
+        listing.customLabelSku?.trim(),
       ])
       .filter((partNumber): partNumber is string => Boolean(partNumber));
 
@@ -1241,6 +1658,7 @@ export class PipelineProcessor extends WorkerHost implements OnModuleInit {
         const normalizedPartNumbers = [
           listing.cManufacturerPartNumber?.trim(),
           listing.cOeOemPartNumber?.trim(),
+          listing.customLabelSku?.trim(),
         ]
           .filter((partNumber): partNumber is string => Boolean(partNumber))
           .map((partNumber) =>

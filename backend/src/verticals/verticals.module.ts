@@ -24,6 +24,16 @@ import { BusinessIndustrialIncident } from './entities/business-industrial-incid
 import { FashionController } from './fashion.controller.js';
 import { FashionUsersService } from './fashion-users.service.js';
 import { FashionListingsService } from './fashion-listings.service.js';
+import { FashionImageAnalysisService } from './fashion-image-analysis.service.js';
+import { FashionIntakeController } from './fashion-intake.controller.js';
+import {
+  FASHION_INTAKE_QUEUE,
+  FashionIntakeService,
+} from './fashion-intake.service.js';
+import { FashionIntakeProcessor } from './fashion-intake.processor.js';
+import { FashionIntakeImagesService } from './fashion-intake-images.service.js';
+import { FashionWarehouse } from './entities/fashion-warehouse.entity.js';
+import { FashionSkuCounter } from './entities/fashion-sku-counter.entity.js';
 import { BusinessIndustrialController } from './business-industrial.controller.js';
 import { VerticalsController } from './verticals.controller.js';
 import { VerticalsService } from './verticals.service.js';
@@ -55,7 +65,16 @@ import { BusinessIndustrialImageIntakeProcessor } from './business-industrial-im
         removeOnFail: { count: 100 },
       },
     }),
+    BullModule.registerQueue({
+      name: FASHION_INTAKE_QUEUE,
+      defaultJobOptions: {
+        removeOnComplete: { count: 200 },
+        removeOnFail: { count: 200 },
+      },
+    }),
     TypeOrmModule.forFeature([
+      FashionWarehouse,
+      FashionSkuCounter,
       Store,
       ConnectedEbayAccount,
       CatalogProduct,
@@ -80,6 +99,7 @@ import { BusinessIndustrialImageIntakeProcessor } from './business-industrial-im
   controllers: [
     VerticalsController,
     FashionController,
+    FashionIntakeController,
     BusinessIndustrialController,
     BusinessIndustrialImageIntakeController,
   ],
@@ -88,6 +108,10 @@ import { BusinessIndustrialImageIntakeProcessor } from './business-industrial-im
     EbayVariantPublishingService,
     FashionUsersService,
     FashionListingsService,
+    FashionImageAnalysisService,
+    FashionIntakeService,
+    FashionIntakeProcessor,
+    FashionIntakeImagesService,
     BusinessIndustrialService,
     BusinessIndustrialUsersService,
     BusinessIndustrialIncidentNotifications,
@@ -98,6 +122,7 @@ import { BusinessIndustrialImageIntakeProcessor } from './business-industrial-im
     VerticalsService,
     EbayVariantPublishingService,
     FashionListingsService,
+    FashionImageAnalysisService,
     BusinessIndustrialService,
   ],
 })
