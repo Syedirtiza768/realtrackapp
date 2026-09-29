@@ -257,6 +257,24 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | PATCH | `/api/channels/ebay/offers/price-quantity` | Update price/qty on live offers |
 | DELETE | `/api/channels/ebay/offers/:offerId` | End listing (withdraw offer) |
 
+### PartsBazar360 (push channel)
+
+**Base**: `/api/channels` (`channels.*`) — publishes listings into partsbazar360.com; see
+[integrations/partsbazar360-publish.md](../integrations/partsbazar360-publish.md).
+
+| Method | Path | Description | Permission |
+|--------|------|-------------|------------|
+| GET | `/api/channels/partsbazar360/status` | `{ configured, apiUrl, stores[] }` — whether `PARTSBAZAR360_API_KEY` is set and which sellers are linked | channels.view |
+| POST | `/api/channels/partsbazar360/connect` | Link a seller (`{ storeName, sellerStoreId }`); verified live against `…/listings/health?storeId=` before anything is saved; idempotent per seller | channels.manage |
+| POST | `/api/channels/partsbazar360/listings/:listingId/refresh` | Re-check import state on PartsBazar360 and update the channel instance | channels.publish |
+| POST | `/api/channels/publish-multi` | `channels: ['partsbazar360']`; optional `storeId` targets one linked seller (otherwise the latest active connection) | channels.publish |
+| POST | `/api/channels/bulk-publish` | Same, for many listings; optional `storeId`. Returns `{ total, enqueued, errors[] }` | channels.publish |
+| POST | `/api/channels/listings/:listingId/channel/partsbazar360/end` | Takes the offer off sale on PartsBazar360 (calls the receiver) | channels.publish |
+| POST | `/api/channels/:connectionId/test` | For this channel: live health check against PartsBazar360 | channels.manage |
+
+`storeId` on `publish-multi`/`bulk-publish` (new, optional) applies to every channel: the job
+now publishes to that store rather than the connection's primary store.
+
 ---
 
 ## Product Verticals

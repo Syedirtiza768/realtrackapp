@@ -5,14 +5,15 @@
  * ────────────────────────────────────────────────────────── */
 
 /* ── Channel identifiers ──────────────────────────────────── */
-export type ChannelKey = 'ebay' | 'shopify';
+export type ChannelKey = 'ebay' | 'shopify' | 'partsbazar360';
 
 export const CHANNEL_META: Record<ChannelKey, { label: string; color: string; icon: string }> = {
   ebay:    { label: 'eBay',    color: '#0064D2', icon: '🛒' },
   shopify: { label: 'Shopify', color: '#96BF48', icon: '🟢' },
+  partsbazar360: { label: 'PartsBazar360', color: '#0F766E', icon: '🔧' },
 };
 
-export const ALL_CHANNELS: ChannelKey[] = ['ebay', 'shopify'];
+export const ALL_CHANNELS: ChannelKey[] = ['ebay', 'shopify', 'partsbazar360'];
 
 /* ── Connection (tenant-level) ────────────────────────────── */
 export type ConnectionStatus = 'active' | 'expired' | 'revoked' | 'error';
@@ -79,6 +80,28 @@ export interface PublishResult {
 
 export interface PublishResponse {
   results: PublishResult[];
+}
+
+/* ── PartsBazar360 (push channel) ─────────────────────────── */
+export interface PartsBazarStore {
+  storeId: string;
+  connectionId: string;
+  storeName: string;
+  sellerStoreId: string | null;
+  status: string;
+}
+
+export interface PartsBazarStatus {
+  /** False until PARTSBAZAR360_API_KEY is set on the RealTrack server. */
+  configured: boolean;
+  apiUrl: string;
+  stores: PartsBazarStore[];
+}
+
+export interface BulkPublishResponse {
+  total: number;
+  enqueued: number;
+  errors: string[];
 }
 
 /* ── Update / End ─────────────────────────────────────────── */

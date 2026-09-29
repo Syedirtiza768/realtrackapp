@@ -143,6 +143,23 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `SELLERPUNDIT_PUBLISH_FALLBACK` | `auto` | `auto` = try SP bulk-create then fall back to direct eBay on platform SQL error; `direct_ebay` = skip SP publish; `sellerpundit` = SP only |
 
 ## Signed B&I enforcement webhook
+## PartsBazar360 publishing (push channel)
+
+Publishes listings into partsbazar360.com. Feature is off until the key is set. See
+[integrations/partsbazar360-publish.md](../integrations/partsbazar360-publish.md).
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `PARTSBAZAR360_API_KEY` | — | **Secret.** Must equal `REALTRACK_PUSH_API_KEY` on partsbazar360.com. Unset ⇒ Settings shows "not enabled" and publishes fail fast |
+| `PARTSBAZAR360_API_URL` | `https://partsbazar360.com/api` | API base (nginx strips `/api`). Point at a staging host for trials |
+| `PARTSBAZAR360_IMAGE_BASE_URL` | `FRONTEND_BASE_URL` | Public origin of this app; first-party photos are sent to PartsBazar360 as `<origin>/api/storage/serve/<key>` (the route is public). Must be reachable from the internet |
+| `PARTSBAZAR360_MIRROR_IMAGES` | `true` | Download external photos, convert to WebP and store them in S3 before publishing. `false` = send external URLs as-is |
+| `PARTSBAZAR360_TIMEOUT_MS` | `30000` | Per-request timeout |
+| `PARTSBAZAR360_MAX_ATTEMPTS` | `3` | Attempts on 429/502/503/504 or network errors (`Retry-After` honored) |
+| `PARTSBAZAR360_RETRY_BASE_MS` | `1000` | Exponential backoff base |
+| `PARTSBAZAR360_CONFIRM_TRIES` | `5` | Status polls inside the publish job before handing off to the delayed re-check |
+| `PARTSBAZAR360_CONFIRM_INTERVAL_MS` | `3000` | Gap between those polls |
+
 
 | Var | Default | Purpose |
 |-----|---------|---------|

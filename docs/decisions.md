@@ -1,6 +1,6 @@
 # Decision log
 
-**Last reviewed:** 2026-08-17
+**Last reviewed:** 2026-09-29
 
 Running log of non-obvious decisions, workarounds, and their reasons. Newest first.
 Add an entry whenever a change is driven by something that isn't obvious from the
@@ -22,6 +22,33 @@ Format:
 ```
 
 ---
+
+## 2026-09-29 — Publish to PartsBazar360 is a push channel with no adapter, and the receiver reuses the pull pipeline
+**Decision:** (1) `partsbazar360` is a channel that *pushes* to PartsBazar360's authenticated
+`/integrations/realtrack/listings` endpoint, authenticated by a server-side shared secret
+(`PARTSBAZAR360_API_KEY`), not per-user OAuth tokens. (2) It is not registered as a
+`ChannelAdapter`; `ChannelsService` routes it to `PartsBazar360Service` at the few places that
+would need an adapter (test, end, inventory sync). (3) Channel demo mode does not apply to it.
+(4) Bulk inventory sync is a no-op for this channel. (5) Only MVL-validated fitment is sent.
+(6) `publish-multi`/`bulk-publish` accept an optional `storeId`, and the publish job now honors it.
+**Why:** (1) There is one trust relationship (RealTrack → its own marketplace), and a per-user
+token would just be a copy of a secret we already hold. (2) `syncConnectionInventory` sends a
+placeholder quantity of 1 for every instance and `ChannelsService.publishListing` short-circuits
+to a *simulated* publish while `CHANNEL_DEMO_MODE` is on (its default) — either would silently
+corrupt or fake a real storefront. (4) Same reason. (5) Matches what eBay publish already refuses
+to send; the receiver has its own lower-confidence title inference when we send `null`.
+(6) Several PartsBazar sellers can be linked, and "latest connection wins" would publish to the
+wrong one; the eBay branch of the job previously ignored any store choice, so the id is now
+passed through for both.
+Also: photos are resolved to RealTrack's public serve URL after an S3 existence check (exact key, else
+`.webp`), and `temp/` keys are skipped — found when the first real listing had 12 photos that no longer
+existed, and the rest stored `.jpg` names for objects that are `.webp`.
+Later the same day: external photos are mirrored to S3 as WebP rather than hot-linked (NAPA Canada returned
+403 to servers and hot-linked third-party URLs can vanish), and a listing with no obtainable photo is
+taken off the storefront rather than shown imageless.
+**Revisit when:** PartsBazar360 needs per-listing stock/price push on edit (currently re-publish),
+or a second push destination appears — at that point extract a shared "push channel" base rather
+than copying `PartsBazar360Service`.
 
 ## 2026-08-17 — Make eBay publish retries duplicate-aware and source-fallback-safe
 **Decision:** Treat an explicit existing-eBay-listing response as a skipped duplicate

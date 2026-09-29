@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-09-29 — Publish listings directly to partsbazar360.com
+
+- New `partsbazar360` channel (`backend/src/channels/partsbazar360/`) that pushes listings into partsbazar360.com through its authenticated `/integrations/realtrack/listings` endpoint. Enable with `PARTSBAZAR360_API_KEY` (same value as `REALTRACK_PUSH_API_KEY` on partsbazar360.com); unset, the feature stays off.
+- Settings → Channels → PartsBazar360 links a seller by its store ID on PartsBazar360 (verified live before saving). Publish from the listing detail Channels tile, or for a selection via the catalog bulk bar → More → Publish to PartsBazar360.
+- Publishes are asynchronous on the receiver: the job polls for the outcome, then a delayed re-check finishes it. The instance ends `synced`, or `error` with a readable reason (e.g. non-English title, no stock). Only MVL-validated fitment is sent; listings with no title, price ≤ 0 or no usable image are refused before any request.
+- `publish-multi` / `bulk-publish` accept an optional `storeId` to choose the destination store; the publish job now honors it for eBay as well (it previously always used the connection's primary store).
+- Ending a listing on this channel now takes it off sale on PartsBazar360. Bulk inventory sync is a no-op for it (re-publish to push stock/price).
+- Channel panel: backend sync statuses (`synced`/`error`/`pending`) are now mapped to the UI's `active`/`failed`/`publishing`; previously a synced listing rendered with no badge style. Settings' Channels tab refreshes silently after linking a seller instead of flashing a spinner.
+- Photos are verified in S3 and sent as public `/api/storage/serve/...` URLs (the bucket is private and originals are often converted to `.webp`); missing or `temp/` photos are dropped and a listing with none left is refused.
+- All photos sent to PartsBazar360 are now WebP in S3: external photos (NAPA, eBay) are downloaded, converted (≤1600 px) and stored; JPG/PNG-only originals get a WebP copy; NAPA Canada photos are read from NAPA Online (same ids, no server-side block). A listing with no obtainable photo is refused and, if live, taken off PartsBazar360.
+- Deployed to production and verified with one live listing (BLA-18425 → Blackline on partsbazar360.com); see `docs/integrations/partsbazar360-publish.md`.
+
 - **Fashion photos-first item workflow (2026-09-14):** Fashion Add Item now
   collects a complete garment photo set (camera, upload, or both) before
   optional identification. Existing OpenAI vision and storage services analyze

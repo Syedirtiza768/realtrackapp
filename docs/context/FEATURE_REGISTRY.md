@@ -44,6 +44,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | eBay/marketplace preview | `/auto-parts/preview`, `/auto-parts/catalog/products/:id` (edit) | `listings` | Implemented | Listing preview; seller description edits use Visual (WYSIWYG) + HTML toggle (`RichTextDescriptionEditor`) |
 | Channels (multi-marketplace) | — | `channels` | Partial | Shopify/Amazon/Walmart scaffolding |
 | AI enhancements (approve/apply) | — | `channels` (`ai-enhancement.controller`) | Partial | |
+| Publish to PartsBazar360 | Settings → Channels (link seller); listing detail → Channels tile; catalog bulk bar → More | `channels/partsbazar360` | Implemented (deployed and verified with one live listing 2026-09-29) | Push channel into partsbazar360.com via its authenticated `/integrations/realtrack/listings` endpoint; async import with status polling; only MVL-validated fitment; needs a title, price > 0 and an image; stock/price changes require re-publish. See `docs/integrations/partsbazar360-publish.md` |
 | Bulk actions | `/auto-parts/bulk-actions` | `listings` | Partial | `listings.update` |
 | Automation rules | `/auto-parts/automation` | `automation` | Partial | Rule engine |
 | Templates | `/auto-parts/templates` | `templates` | Implemented | Listing templates |

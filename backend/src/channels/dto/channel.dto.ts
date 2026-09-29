@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsUrl,
+  IsUUID,
   IsArray,
   IsObject,
   ArrayMinSize,
@@ -54,6 +55,11 @@ export class PublishMultiDto {
     string,
     { price?: number; title?: string; quantity?: number }
   >;
+
+  /** Publish to one specific store (needed to pick between several destinations). */
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
 }
 
 export class BulkPublishDto {
@@ -66,6 +72,10 @@ export class BulkPublishDto {
   @IsString({ each: true })
   @ArrayMinSize(1)
   channels!: string[];
+
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
 }
 
 export class SyncInventoryDto {

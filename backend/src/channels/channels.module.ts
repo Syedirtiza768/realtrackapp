@@ -54,6 +54,10 @@ import { EbayCategory } from '../listings/entities/ebay-category.entity.js';
 import { EbayHostedImage } from '../integrations/ebay/entities/ebay-hosted-image.entity.js';
 import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { FitmentModule } from '../fitment/fitment.module.js';
+import { StorageModule } from '../storage/storage.module.js';
+import { PartsBazar360Client } from './partsbazar360/partsbazar360.client.js';
+import { PartsBazar360Controller } from './partsbazar360/partsbazar360.controller.js';
+import { PartsBazar360Service } from './partsbazar360/partsbazar360.service.js';
 
 @Module({
   imports: [
@@ -83,6 +87,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
     forwardRef(() => FitmentModule),
+    StorageModule,
   ],
   controllers: [
     ChannelsController,
@@ -91,6 +96,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     EbayPublishController,
     StoreAccessController,
     EbayCategoryController,
+    PartsBazar360Controller,
   ],
   providers: [
     ChannelsService,
@@ -118,6 +124,8 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     EbaySellAccountApiService,
     EbayPaReturnPolicyService,
     EbayCategoryKeywordAuditService,
+    PartsBazar360Client,
+    PartsBazar360Service,
   ],
   exports: [
     ChannelsService,

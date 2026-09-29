@@ -24,6 +24,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { startEbayOAuth } from '../../lib/ebayIntegrationsApi';
 import StoreDefaultPoliciesTab from './StoreDefaultPoliciesTab';
+import PartsBazar360SetupCard from '../channels/PartsBazar360SetupCard';
 import { authPost, fetchWithAuth } from '../../lib/authApi';
 import { changeOwnPassword } from '../../lib/rbacApi';
 
@@ -846,6 +847,7 @@ const CHANNEL_INFO: Record<string, { label: string; color: string; logo: string 
     shopify: { label: 'Shopify', color: '#96BF48', logo: '🟢' },
     amazon:  { label: 'Amazon',  color: '#FF9900', logo: '📦' },
     walmart: { label: 'Walmart', color: '#0071CE', logo: '🏪' },
+    partsbazar360: { label: 'PartsBazar360', color: '#0F766E', logo: '🔧' },
 };
 
 function ChannelConnectionsTab() {
@@ -860,8 +862,9 @@ function ChannelConnectionsTab() {
     const [legacyToken, setLegacyToken] = useState('');
     const [importingToken, setImportingToken] = useState(false);
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
+    /** `silent` refreshes in place; a full-tab spinner would unmount child cards that hold their own state. */
+    const fetchData = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const [connRes, storeRes] = await Promise.all([
                 fetchWithAuth<ChannelConn[]>('/api/channels?userId=system'),
@@ -1075,6 +1078,8 @@ function ChannelConnectionsTab() {
                     </div>
                 </CardContent>
             </Card>
+
+            <PartsBazar360SetupCard onConnected={() => void fetchData(true)} />
 
             {/* Connected Channels */}
             <div className="space-y-4">

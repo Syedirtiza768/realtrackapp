@@ -14,6 +14,7 @@ import { ChannelWebhookLog } from './entities/channel-webhook-log.entity';
 import { Store } from './entities/store.entity';
 import { TokenEncryptionService } from './token-encryption.service';
 import { EbayAdapter } from './adapters/ebay/ebay.adapter';
+import { PartsBazar360Service } from './partsbazar360/partsbazar360.service';
 
 const stubAdapter = () => ({
   publishListing: jest.fn(),
@@ -28,6 +29,10 @@ describe('ChannelsService — multi-store webhooks', () => {
   let service: ChannelsService;
   let webhookLogRepo: Record<string, jest.Mock>;
   let storeRepoMock: Record<string, jest.Mock>;
+  let connectionRepoMock: Record<string, jest.Mock>;
+  let instanceRepoMock: Record<string, jest.Mock>;
+  let queueMock: { add: jest.Mock };
+  let partsbazar: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     storeRepoMock = {
@@ -36,6 +41,7 @@ describe('ChannelsService — multi-store webhooks', () => {
 
     const connectionRepo = {
       find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(),
       findOneBy: jest.fn(),
       create: jest.fn((d: any) => ({ ...d })),
       save: jest.fn((d: any) => Promise.resolve(d)),
@@ -57,6 +63,14 @@ describe('ChannelsService — multi-store webhooks', () => {
       find: jest.fn().mockResolvedValue([]),
     };
 
+    connectionRepoMock = connectionRepo as unknown as Record<string, jest.Mock>;
+    instanceRepoMock = instanceRepo as unknown as Record<string, jest.Mock>;
+    queueMock = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+    partsbazar = {
+      end: jest.fn().mockResolvedValue({ success: true }),
+      testConnection: jest.fn().mockResolvedValue({ ok: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChannelsService,
@@ -73,7 +87,7 @@ describe('ChannelsService — multi-store webhooks', () => {
           useValue: webhookLogRepo,
         },
         { provide: getRepositoryToken(Store), useValue: storeRepoMock },
-        { provide: getQueueToken('channels'), useValue: { add: jest.fn() } },
+        { provide: getQueueToken('channels'), useValue: queueMock },
         {
           provide: TokenEncryptionService,
           useValue: { encrypt: jest.fn(), decrypt: jest.fn() },
@@ -84,6 +98,7 @@ describe('ChannelsService — multi-store webhooks', () => {
           useValue: { get: jest.fn().mockReturnValue('true') },
         },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: PartsBazar360Service, useValue: partsbazar },
       ],
     }).compile();
 
@@ -148,5 +163,85 @@ describe('ChannelsService — multi-store webhooks', () => {
         storeId: null,
       }),
     );
+  });
+
+  /* ─── PartsBazar360 push channel ─── */
+
+  describe('PartsBazar360 channel', () => {
+    const pbConnection = { id: 'conn-pb', channel: 'partsbazar360', status: 'active' };
+    const pbStore = { id: 'store-pb', connectionId: 'conn-pb', channel: 'partsbazar360' };
+
+    it('publishMulti targets the requested store, not the latest connection', async () => {
+      storeRepoMock.findOne.mockResolvedValue(pbStore);
+      connectionRepoMock.findOne.mockResolvedValue(pbConnection);
+      instanceRepoMock.findOne.mockResolvedValue(null);
+
+      const result = await service.publishMulti(
+        'listing-1',
+        ['partsbazar360'],
+        undefined,
+        'store-pb',
+      );
+
+      expect(storeRepoMock.findOne).toHaveBeenCalledWith({
+        where: { id: 'store-pb', channel: 'partsbazar360' },
+      });
+      expect(connectionRepoMock.findOne).toHaveBeenCalledWith({
+        where: { id: 'conn-pb', status: 'active' },
+      });
+      expect(queueMock.add).toHaveBeenCalledWith(
+        'publish',
+        expect.objectContaining({ connectionId: 'conn-pb', storeId: 'store-pb' }),
+        expect.any(Object),
+      );
+      expect(instanceRepoMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ storeId: 'store-pb', channel: 'partsbazar360' }),
+      );
+      expect(result.results).toEqual([{ channel: 'partsbazar360', jobId: 'job-1' }]);
+    });
+
+    it('publishMulti refuses a store that belongs to another channel', async () => {
+      storeRepoMock.findOne.mockResolvedValue(null);
+      const result = await service.publishMulti(
+        'listing-1',
+        ['partsbazar360'],
+        undefined,
+        'some-ebay-store',
+      );
+      expect(queueMock.add).not.toHaveBeenCalled();
+      expect(result.results[0].error).toMatch(/not a partsbazar360 store/);
+    });
+
+    it('endChannelListing takes the listing off PartsBazar360 instead of only flagging it locally', async () => {
+      instanceRepoMock.findOne.mockResolvedValue({ id: 'i1', syncStatus: 'synced' });
+      await expect(
+        service.endChannelListing('listing-1', 'partsbazar360'),
+      ).resolves.toEqual({ success: true });
+      expect(partsbazar.end).toHaveBeenCalledWith('listing-1');
+      expect(instanceRepoMock.save).not.toHaveBeenCalled();
+    });
+
+    it('testConnection delegates to a live PartsBazar360 health check', async () => {
+      connectionRepoMock.findOneBy.mockResolvedValue(pbConnection);
+      await expect(service.testConnection('conn-pb', 'user-1')).resolves.toEqual({
+        ok: true,
+      });
+      expect(partsbazar.testConnection).toHaveBeenCalledWith('conn-pb');
+    });
+
+    it('inventory sync is a no-op so placeholder quantities never overwrite real stock', async () => {
+      connectionRepoMock.findOneBy.mockResolvedValue(pbConnection);
+      await expect(service.syncConnectionInventory('conn-pb')).resolves.toEqual({
+        succeeded: 0,
+        failed: 0,
+      });
+      expect(instanceRepoMock.find).not.toHaveBeenCalled();
+    });
+
+    it('has no OAuth flow and says how to connect instead', () => {
+      expect(() => service.getAuthUrl('partsbazar360', 'state')).toThrow(
+        'POST /channels/partsbazar360/connect',
+      );
+    });
   });
 });

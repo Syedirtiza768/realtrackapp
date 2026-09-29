@@ -17,6 +17,8 @@ import { Store } from './entities/store.entity.js';
 import { TokenEncryptionService } from './token-encryption.service.js';
 import { EbayAdapter } from './adapters/ebay/ebay.adapter.js';
 import type { ChannelAdapter, TokenSet } from './channel-adapter.interface.js';
+import { PartsBazar360Service } from './partsbazar360/partsbazar360.service.js';
+import { PARTSBAZAR360_CHANNEL } from './partsbazar360/partsbazar360.types.js';
 
 @Injectable()
 export class ChannelsService {
@@ -38,6 +40,7 @@ export class ChannelsService {
     private readonly ebayAdapter: EbayAdapter,
     private readonly config: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly partsbazar: PartsBazar360Service,
   ) {
     this.adapters = new Map<string, ChannelAdapter>([
       ['ebay', this.ebayAdapter],
@@ -50,6 +53,13 @@ export class ChannelsService {
 
   private getAdapter(channel: string): ChannelAdapter {
     const adapter = this.adapters.get(channel);
+    if (!adapter && channel === PARTSBAZAR360_CHANNEL) {
+      // Push channel: server-side shared secret, no OAuth, no adapter. Routed
+      // through PartsBazar360Service wherever a call would need one.
+      throw new BadRequestException(
+        'PartsBazar360 does not use OAuth. Link a seller with POST /channels/partsbazar360/connect.',
+      );
+    }
     if (!adapter) {
       throw new BadRequestException(`Unsupported channel: ${channel}`);
     }
@@ -201,6 +211,10 @@ export class ChannelsService {
     });
     if (!conn)
       throw new NotFoundException(`Connection ${connectionId} not found`);
+
+    if (conn.channel === PARTSBAZAR360_CHANNEL) {
+      return this.partsbazar.testConnection(conn.id);
+    }
 
     try {
       const tokens = this.decryptTokens(conn);
@@ -448,6 +462,8 @@ export class ChannelsService {
       string,
       { price?: number; title?: string; quantity?: number }
     >,
+    /** Target one specific store; otherwise the latest active connection wins. */
+    storeId?: string,
   ): Promise<{
     results: Array<{ channel: string; jobId?: string; error?: string }>;
   }> {
@@ -457,10 +473,24 @@ export class ChannelsService {
     for (const channel of channels) {
       try {
         // Find an active connection for this channel
-        const connection = await this.connectionRepo.findOne({
-          where: { channel, status: 'active' },
-          order: { createdAt: 'DESC' },
-        });
+        const targetStore = storeId
+          ? await this.storeRepo.findOne({ where: { id: storeId, channel } })
+          : null;
+        if (storeId && !targetStore) {
+          results.push({
+            channel,
+            error: `Store ${storeId} is not a ${channel} store`,
+          });
+          continue;
+        }
+        const connection = targetStore
+          ? await this.connectionRepo.findOne({
+              where: { id: targetStore.connectionId, status: 'active' },
+            })
+          : await this.connectionRepo.findOne({
+              where: { channel, status: 'active' },
+              order: { createdAt: 'DESC' },
+            });
 
         if (!connection) {
           results.push({
@@ -476,6 +506,7 @@ export class ChannelsService {
             connectionId: connection.id,
             listingId,
             overrides: overrides?.[channel],
+            storeId: targetStore?.id,
           },
           {
             attempts: 3,
@@ -486,10 +517,12 @@ export class ChannelsService {
         );
 
         // Resolve the primary store for this connection
-        const store = await this.storeRepo.findOne({
-          where: { connectionId: connection.id },
-          order: { isPrimary: 'DESC', createdAt: 'ASC' },
-        });
+        const store =
+          targetStore ??
+          (await this.storeRepo.findOne({
+            where: { connectionId: connection.id },
+            order: { isPrimary: 'DESC', createdAt: 'ASC' },
+          }));
         if (!store) {
           results.push({
             channel,
@@ -579,6 +612,11 @@ export class ChannelsService {
       );
     }
 
+    if (channel === PARTSBAZAR360_CHANNEL) {
+      // Actually take it off the storefront, not just mark it locally.
+      return this.partsbazar.end(listingId);
+    }
+
     instance.syncStatus = 'ended';
     await this.instanceRepo.save(instance);
     return { success: true };
@@ -589,12 +627,18 @@ export class ChannelsService {
   async bulkPublish(
     listingIds: string[],
     channels: string[],
+    storeId?: string,
   ): Promise<{ total: number; enqueued: number; errors: string[] }> {
     let enqueued = 0;
     const errors: string[] = [];
 
     for (const listingId of listingIds) {
-      const result = await this.publishMulti(listingId, channels);
+      const result = await this.publishMulti(
+        listingId,
+        channels,
+        undefined,
+        storeId,
+      );
       for (const r of result.results) {
         if (r.jobId) {
           enqueued++;
@@ -754,6 +798,13 @@ export class ChannelsService {
     const conn = await this.connectionRepo.findOneBy({ id: connectionId });
     if (!conn)
       throw new NotFoundException(`Connection ${connectionId} not found`);
+
+    if (conn.channel === PARTSBAZAR360_CHANNEL) {
+      // Stock and price reach PartsBazar360 by re-publishing the listing (the
+      // receiver keys on the listing id). There is no bulk quantity feed, and
+      // the placeholder quantity below would overwrite real stock with 1.
+      return { succeeded: 0, failed: 0 };
+    }
 
     const adapter = this.getAdapter(conn.channel);
     const tokens = await this.getValidTokens(conn);

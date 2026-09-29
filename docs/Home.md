@@ -1,6 +1,6 @@
 # RealTrackApp — Map of Content
 
-**Last reviewed:** 2026-08-06
+**Last reviewed:** 2026-09-29
 
 Entry point for the vault. RealTrackApp (DB name `listingpro` — see
 [[areas/database-and-jobs|database-and-jobs]] for the branding note) is a full-stack
@@ -75,6 +75,7 @@ treat the older one as a historical snapshot rather than current truth:
 - Integration: [[integrations/partsbazar360-trading-enrichment|integrations/partsbazar360-trading-enrichment.md]] —
   see [[areas/ebay-and-partsbazar360-integration]] for the orientation summary
 - Ops: [[operations/SETUP|operations/SETUP.md]], [[operations/TESTING|operations/TESTING.md]],
+- Integration (push, RealTrack → partsbazar360.com): [[integrations/partsbazar360-publish|integrations/partsbazar360-publish.md]]
   [[operations/TROUBLESHOOTING|operations/TROUBLESHOOTING.md]], [[operations/api-users|operations/api-users.md]]
 - Model comparison work: [[model-comparison/REPORT|model-comparison/REPORT.md]]
 
