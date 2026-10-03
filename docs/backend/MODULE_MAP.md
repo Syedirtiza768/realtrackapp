@@ -221,7 +221,7 @@ TypeORM CLI configuration for migrations. `autoLoadEntities: true`, `migrations:
 - **automation**: `automation.controller.ts`, automation rules
 - **templates**: `template.controller.ts`, listing templates
 - **notifications**: `notifications.controller.ts`, `notifications.gateway.ts` (Socket.IO)
-- **storage**: `storage.controller.ts`, thumbnail + cleanup processors
+- **storage**: `storage.controller.ts`, thumbnail + cleanup processors | same-origin proxy for official NAPA catalog images
 - **health**: `health.controller.ts` (@Public, @nestjs/terminus)
 - **pricing-intelligence**: `pricing-intelligence.controller.ts`
 - **common/openai**: `openai.service.ts`, `openai-queue.service.ts`

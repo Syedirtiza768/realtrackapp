@@ -90,6 +90,11 @@ RealTrackApp (DB/internal name: **listingpro**) is a multi-channel **automotive 
 
 Browser → host nginx → backend (`/api/storage/serve/{s3Key}`) → S3 (us-east-1).
 
+Official NAPA catalog images use the same-origin route
+`/api/storage/napa-image/{imageId}`. The backend fixes the upstream host to
+NAPA Online, validates numeric image IDs and accepted presets, and streams
+bounded image responses; nginx caches successful responses for 30 days.
+
 The frontend's `toProxyUrl()` (`src/lib/imageUrl.ts`) rewrites S3 image URLs to
 `/api/storage/serve/{key}` proxy paths so the browser reuses its existing
 connection to the app origin (no separate DNS/TLS to S3). The host nginx caches

@@ -459,6 +459,86 @@ export class StorageController {
   }
 
   /**
+   * Public proxy for NAPA catalog images. The numeric ID is the only caller-
+   * controlled input; host, path, format, and size are fixed or allowlisted.
+   */
+  @Get('napa-image/:imageId')
+  @Public()
+  @SkipThrottle({ short: true, medium: true, long: true })
+  @HttpCode(HttpStatus.OK)
+  async serveNapaImage(
+    @Param('imageId') imageId: string,
+    @Query('preset') requestedPreset: string | undefined,
+    @Res() res: Response,
+  ) {
+    if (!/^[0-9]{1,16}$/.test(imageId)) {
+      throw new NotFoundException('NAPA image not found');
+    }
+
+    const allowedPresets = new Set([
+      'webproof',
+      'webprooflarge',
+      'webproofxlarge',
+    ]);
+    const preset =
+      requestedPreset && allowedPresets.has(requestedPreset)
+        ? requestedPreset
+        : 'webprooflarge';
+    const imageUrl = new URL(
+      'https://media.napaonline.com/is/image/GenuinePartsCompany/' +
+        imageId +
+        '/',
+    );
+    imageUrl.searchParams.set('format', 'webp');
+    imageUrl.searchParams.set('preset', preset);
+
+    try {
+      const upstream = await fetch(imageUrl, {
+        redirect: 'error',
+        signal: AbortSignal.timeout(15_000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; OmniCore-image-proxy/1.0)',
+          Accept: 'image/webp,image/*;q=0.8',
+        },
+      });
+      if (!upstream.ok) {
+        throw new NotFoundException('NAPA image unavailable');
+      }
+
+      const contentType = (upstream.headers.get('content-type') ?? '')
+        .split(';', 1)[0]
+        .trim()
+        .toLowerCase();
+      if (!['image/webp', 'image/jpeg', 'image/png'].includes(contentType)) {
+        throw new NotFoundException('NAPA image unavailable');
+      }
+
+      const contentLength = Number(upstream.headers.get('content-length') ?? 0);
+      if (contentLength > 8 * 1024 * 1024) {
+        throw new NotFoundException('NAPA image is too large');
+      }
+
+      const image = Buffer.from(await upstream.arrayBuffer());
+      if (image.length === 0 || image.length > 8 * 1024 * 1024) {
+        throw new NotFoundException('NAPA image unavailable');
+      }
+
+      res.set({
+        'Content-Type': contentType,
+        'Content-Length': String(image.length),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Access-Control-Allow-Origin': '*',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      return res.status(HttpStatus.OK).send(image);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.warn('NAPA image fetch failed for id=' + imageId);
+      throw new NotFoundException('NAPA image unavailable');
+    }
+  }
+
+  /**
    * Stream an S3 object to the Express response with long-lived cache
    * headers. Throws on missing object (NoSuchKey) so the caller can react.
    */

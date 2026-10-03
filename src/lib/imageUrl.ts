@@ -27,9 +27,43 @@
  */
 export function toProxyUrl(url: string | null | undefined): string {
   if (!url) return '';
-  const proxyPath = toBackendProxyPath(url);
+  const browserSafeUrl = toNapaImageProxyUrl(url);
+  if (browserSafeUrl !== url) return browserSafeUrl;
+  const proxyPath = toBackendProxyPath(browserSafeUrl);
   if (proxyPath) return proxyPath;
-  return url;
+  return browserSafeUrl;
+}
+
+/**
+ * Keep official NAPA catalog images on the app origin. The backend accepts
+ * only a numeric Genuine Parts image ID and an allowlisted preset.
+ */
+function toNapaImageProxyUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host !== 'media.napacanada.com' && host !== 'media.napaonline.com') {
+      return url;
+    }
+
+    const imageMatch = parsed.pathname.match(
+      new RegExp('^/is/image/GenuinePartsCompany/([0-9]+)/?$', 'i'),
+    );
+    if (!imageMatch) return url;
+
+    const allowedPresets = new Set([
+      'webproof',
+      'webprooflarge',
+      'webproofxlarge',
+    ]);
+    const requestedPreset = parsed.searchParams.get('preset');
+    const preset = allowedPresets.has(requestedPreset ?? '')
+      ? requestedPreset
+      : 'webprooflarge';
+    return '/api/storage/napa-image/' + imageMatch[1] + '?preset=' + preset;
+  } catch {
+    return url;
+  }
 }
 
 /**

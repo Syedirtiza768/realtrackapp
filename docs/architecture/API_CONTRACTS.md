@@ -507,6 +507,10 @@ GET list, PUT `/:id/read`, PUT `/read-all`, DELETE `/:id`. WebSocket on `notific
 
 GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
 
+| Method | Path | Description | Access |
+|--------|------|-------------|--------|
+| GET | `/api/storage/napa-image/:imageId` | Proxy an official NAPA image by numeric ID; optional `preset` is allowlisted | Public |
+
 ### Image Drive
 
 **Base**: `/api/image-drive` | `image_drive.*`
