@@ -18,6 +18,7 @@ import { EbayCompatibilityReconciliationService } from './ebay-compatibility-rec
 import { EbayTaxonomyApiService } from './ebay-taxonomy-api.service.js';
 import { EbayTaxonomyCacheService } from './ebay-taxonomy-cache.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
+import { EbayTradingApiService } from './ebay-trading-api.service.js';
 import { EbaySellAccountApiService } from '../../integrations/ebay/services/ebay-sell-account-api.service.js';
 import { EbayPaReturnPolicyService } from '../../integrations/ebay/services/ebay-pa-return-policy.service.js';
 import {
@@ -58,6 +59,7 @@ import {
   isEbayInvalidItemConditionError,
   isEbayAvailabilityMissingTransientError,
   isEbayOfferAlreadyExistsError,
+  isEbayOfferUnavailableError,
   isEbayPartsAccessoriesReturnPolicyError,
   isEbayRecoverableBusinessPolicyError,
   isEbaySellingLimitError,
@@ -85,11 +87,13 @@ import {
   localizeAspectsForMarketplace,
 } from './ebay-listing-aspects.util.js';
 import {
+  compatibilityHasOptionalFields,
   fitmentDataToCompatibilityPayload,
   getFitmentValidationStatus,
   isSameMakeVariant,
   parseFitmentEntry,
   selectPublishFitmentSource,
+  toCoreCompatibilityPayload,
 } from '../../fitment/fitment-mvl.util.js';
 import { EbayMvlService } from '../../fitment/ebay-mvl.service.js';
 import { conflictSafeSkuFor } from './ebay-sku.util.js';
@@ -224,6 +228,7 @@ export class EbayPublishService {
   constructor(
     private readonly config: ConfigService,
     private readonly inventoryApi: EbayInventoryApiService,
+    private readonly tradingApi: EbayTradingApiService,
     private readonly taxonomyApi: EbayTaxonomyApiService,
     private readonly taxonomyCache: EbayTaxonomyCacheService,
     private readonly auth: EbayAuthService,
@@ -270,8 +275,16 @@ export class EbayPublishService {
     sku?: string,
   ): Promise<LeafCategoryResolution> {
     const normalizedCategoryId = categoryId?.trim() ?? '';
-    if (!normalizedCategoryId) {
-      return { id: normalizedCategoryId, name: '', usedFallback: false };
+    if (!/^\d{1,10}$/.test(normalizedCategoryId)) {
+      const fallback = {
+        id: FALLBACK_MOTORS_CATEGORY.id,
+        name: FALLBACK_MOTORS_CATEGORY.name,
+        usedFallback: true,
+      };
+      this.logger.warn(
+        `${normalizedCategoryId ? `Invalid` : `Missing`} eBay Motors category ID${normalizedCategoryId ? ` "${normalizedCategoryId}"` : ''}${sku ? ` for SKU ${sku}` : ''}; using fallback leaf ${fallback.id}`,
+      );
+      return fallback;
     }
 
     const cached = this.leafCategoryCache.get(normalizedCategoryId);
@@ -800,13 +813,23 @@ export class EbayPublishService {
     );
 
     if (!listing) {
+      const catalog = await this.resolveCatalogProductForPublish(
+        req.listingId,
+        req.sku,
+      );
+      const skuLooksLikeListingId =
+        !req.sku?.trim() || req.sku === req.listingId;
+      const sku = skuLooksLikeListingId
+        ? catalog?.sku?.trim() || req.sku
+        : req.sku.trim();
       const desc = buildEbayListingDescription({
         description: req.description,
         title: req.title,
-        sku: req.sku,
+        sku,
       });
       return {
         ...req,
+        sku,
         condition: mappedCondition,
         description: desc.description,
       };
@@ -1022,6 +1045,25 @@ export class EbayPublishService {
     return null;
   }
 
+  private shouldUseTradingApi(req: PublishRequest): boolean {
+    const mode = this.config
+      .get<string>('EBAY_LISTING_API_MODE', 'trading')
+      .trim()
+      .toLowerCase();
+    const isFebest = Object.entries(req.aspects ?? {}).some(
+      ([name, values]) =>
+        /^(brand|manufacturer|hersteller)$/i.test(name.trim()) &&
+        (values ?? []).some(
+          (value) => String(value).trim().toLowerCase() === 'febest',
+        ),
+    );
+
+    // Trading API is the default so new listings remain Seller Hub-editable.
+    // Inventory API remains an explicit mode for controlled compatibility;
+    // existing offer-backed channels are routed through their owning API below.
+    return isFebest || mode === 'trading';
+  }
+
   /**
    * Publish a listing to one or more eBay stores.
    * Returns per-store success/failure results.
@@ -1159,6 +1201,13 @@ export class EbayPublishService {
           });
           if (catalog) {
             let dirty = false;
+            if (
+              firstSuccess?.listingId &&
+              catalog.ebayItemId !== firstSuccess.listingId
+            ) {
+              catalog.ebayItemId = firstSuccess.listingId;
+              dirty = true;
+            }
             if (
               listing.shippingProfileName?.trim() &&
               listing.shippingProfileName.trim() !==
@@ -1427,10 +1476,16 @@ export class EbayPublishService {
       );
       req = { ...req, compatibility: undefined };
     }
-    if (marketplaceId === 'EBAY_MOTORS_US' && req.categoryId) {
-      const resolved = await this.ensureLeafCategoryId(req.categoryId, req.sku);
-      if (resolved.id !== req.categoryId) {
+    if (marketplaceId === 'EBAY_MOTORS_US') {
+      const currentCategoryId = req.categoryId?.trim() ?? '';
+      const resolved = await this.ensureLeafCategoryId(
+        currentCategoryId,
+        req.sku,
+      );
+      if (resolved.id !== currentCategoryId) {
         await this.persistResolvedCategory(req, resolved);
+      }
+      if (req.categoryId !== resolved.id) {
         req = { ...req, categoryId: resolved.id };
       }
     }
@@ -1446,6 +1501,56 @@ export class EbayPublishService {
           `SKU ${req.sku}: no structured fitment rows found for Motors category ${req.categoryId} — publishing with description-only fitment. Run optimization to add structured compatibility.`,
         );
       }
+    }
+
+    const existingChannel = account
+      ? await this.channelRepo.findOne({
+          where: {
+            ebayAccountId: account.id,
+            marketplaceId,
+            internalSku: req.sku,
+          },
+          order: { updatedAt: 'DESC' },
+        })
+      : null;
+
+    // Inventory API offers cannot be revised through Trading API. Preserve
+    // their offer identity and use updateOffer for live listings, or publish
+    // the same offer again when eBay reports that it is unpublished.
+    if (existingChannel?.offerId && existingChannel.ebayInventorySku) {
+      const inventoryReq = account
+        ? await this.enrichPoliciesFromMarketplace(account, store, req)
+        : await this.enrichPoliciesFromStoreOnly(store, req);
+      return this.reviseExistingInventoryListing(
+        store,
+        storeId,
+        inventoryReq,
+        account,
+        existingChannel,
+      );
+    }
+
+    // Trading API listings are editable in Seller Hub. FEBEST always uses
+    // this path; the global switch remains available for a controlled
+    // account-wide migration/canary.
+    if (this.shouldUseTradingApi(req)) {
+      this.logger.log(
+        `Using eBay Trading API for ${req.aspects?.Brand?.[0] ?? 'configured mode'} SKU ${req.sku}`,
+      );
+      const tradingReq = account
+        ? await this.enrichPoliciesFromMarketplace(account, store, req)
+        : await this.enrichPoliciesFromStoreOnly(store, req);
+      if (existingChannel?.listingId) {
+        return this.reviseExistingTradingListing(
+          store,
+          storeId,
+          tradingReq,
+          account,
+          marketplaceId,
+          existingChannel,
+        );
+      }
+      return this.publishViaTradingApi(store, storeId, tradingReq, account);
     }
 
     // eBay inventory SKUs are account-scoped. Before either the SellerPundit
@@ -1590,6 +1695,473 @@ export class EbayPublishService {
     return directResult.success
       ? { ...directResult, effectiveSku: req.sku }
       : directResult;
+  }
+
+  private tradingConditionId(condition: EbayConditionEnum): number {
+    switch (mapToEbayConditionEnum(condition)) {
+      case 'NEW':
+        return 1000;
+      case 'NEW_OTHER':
+        return 1500;
+      case 'FOR_PARTS_OR_NOT_WORKING':
+        return 7000;
+      case 'MANUFACTURER_REFURBISHED':
+      case 'CERTIFIED_REFURBISHED':
+      case 'EXCELLENT_REFURBISHED':
+      case 'VERY_GOOD_REFURBISHED':
+      case 'GOOD_REFURBISHED':
+      case 'SELLER_REFURBISHED':
+        return 2000;
+      default:
+        return 3000;
+    }
+  }
+
+  private async reviseExistingInventoryListing(
+    store: Store,
+    storeId: string,
+    req: PublishRequest,
+    account: ConnectedEbayAccount | null,
+    channel: EbayListingChannel,
+  ): Promise<PublishResult> {
+    const offerId = channel.offerId;
+    const sku = channel.ebayInventorySku?.trim();
+    try {
+      if (!offerId || !sku) {
+        throw new BadRequestException(
+          `The existing eBay channel for SKU ${req.sku} is missing its Inventory API offer mapping.`,
+        );
+      }
+      const inventoryReq = sku === req.sku ? req : { ...req, sku };
+      if (account?.connectionSource === 'sellerpundit') {
+        await this.sellerpunditTokens.ensureFreshAccessToken(account.id, {
+          force: true,
+        });
+      }
+
+      const marketplaceId = this.resolvePublishMarketplaceId(account, store);
+      const expectedOffer = this.buildOffer(inventoryReq, store);
+      let currentOffer: EbayOffer | null = null;
+      let staleOfferConfirmedEnded = false;
+      try {
+        currentOffer = await this.inventoryApi.getOffer(storeId, offerId);
+      } catch (error: unknown) {
+        if (!isEbayOfferUnavailableError(error)) throw error;
+        if (!channel.listingId) {
+          throw new BadRequestException(
+            `eBay offer ${offerId} is unavailable and has no mapped listing ID; replacement stopped to avoid creating a duplicate.`,
+          );
+        }
+        const linkedListing = await this.tradingApi.getItemDetails(
+          storeId,
+          channel.listingId,
+          this.resolvePublishMarketplaceId(account, store),
+        );
+        const linkedStatus = String(
+          linkedListing.listingStatus ?? '',
+        ).toUpperCase();
+        if (linkedStatus !== 'COMPLETED' && linkedStatus !== 'ENDED') {
+          throw new BadRequestException(
+            `eBay offer ${offerId} is unavailable, but linked listing ${channel.listingId} is ${linkedStatus || 'unknown'}; replacement is allowed only after eBay confirms the listing has ended.`,
+          );
+        }
+        staleOfferConfirmedEnded = true;
+        this.logger.warn(
+          `eBay confirmed linked listing ${channel.listingId} ended while Inventory offer ${offerId} is unavailable; creating a replacement offer for SKU ${sku}.`,
+        );
+      }
+      if (
+        !staleOfferConfirmedEnded &&
+        (currentOffer?.sku !== sku ||
+          currentOffer?.marketplaceId !== expectedOffer.marketplaceId)
+      ) {
+        throw new BadRequestException(
+          `The stored eBay offer ${offerId} no longer matches SKU ${sku} and marketplace ${marketplaceId}; publishing stopped to avoid changing a different listing.`,
+        );
+      }
+      const offerStatus = staleOfferConfirmedEnded
+        ? 'UNPUBLISHED'
+        : String(currentOffer?.status ?? '').toUpperCase();
+      if (offerStatus !== 'PUBLISHED' && offerStatus !== 'UNPUBLISHED') {
+        throw new BadRequestException(
+          `eBay returned an unrecognized status (${offerStatus || 'missing'}) for offer ${offerId}; publishing stopped to avoid creating a duplicate listing.`,
+        );
+      }
+      let listingId =
+        offerStatus === 'PUBLISHED'
+          ? currentOffer?.listingId ??
+            currentOffer?.listing?.listingId ??
+            channel.listingId ??
+            ''
+          : '';
+      if (offerStatus === 'PUBLISHED' && !listingId) {
+        throw new BadRequestException(
+          `eBay reports offer ${offerId} as published but returned no listing ID. Refresh the eBay channel mapping before retrying.`,
+        );
+      }
+
+      const validationError = this.validateDirectOffer(expectedOffer, store);
+      if (validationError) throw new BadRequestException(validationError);
+
+      await this.inventoryApi.createOrReplaceItem(
+        storeId,
+        sku,
+        this.buildInventoryItem(inventoryReq, store),
+      );
+      await this.syncInventoryCompatibility(storeId, inventoryReq);
+      let publishedOfferId = offerId;
+      try {
+        if (staleOfferConfirmedEnded) {
+          throw new Error(
+            'This Offer is not available (25713) after confirming the linked listing ended.',
+          );
+        }
+        await this.inventoryApi.updateOffer(
+          storeId,
+          publishedOfferId,
+          expectedOffer,
+        );
+        await this.refreshPublishedOfferCompatibility(
+          storeId,
+          publishedOfferId,
+          inventoryReq,
+        );
+
+        if (offerStatus === 'UNPUBLISHED') {
+          const published = await this.publishOfferWithRetries(
+            storeId,
+            publishedOfferId,
+            store,
+            account,
+            inventoryReq,
+          );
+          listingId = published.listingId;
+        }
+      } catch (error: unknown) {
+        if (
+          offerStatus !== 'UNPUBLISHED' ||
+          !isEbayOfferUnavailableError(error)
+        ) {
+          throw error;
+        }
+
+        this.logger.warn(
+          `eBay offer ${publishedOfferId} for SKU ${sku} is unavailable; replacing only that unpublished offer and retaining the Inventory SKU.`,
+        );
+        await this.inventoryApi
+          .deleteOffer(storeId, publishedOfferId)
+          .catch((deleteError) => {
+            if (
+              !this.isEbayNotFound(deleteError) &&
+              !isEbayOfferUnavailableError(deleteError)
+            ) {
+              throw deleteError;
+            }
+            this.logger.warn(
+              `eBay no longer exposes unavailable offer ${publishedOfferId}; trying a fresh offer for SKU ${sku}.`,
+            );
+          });
+        let replacementStatus: string;
+        let replacementListingId: string | undefined;
+        try {
+          const replacement = await this.inventoryApi.createOffer(
+            storeId,
+            expectedOffer,
+          );
+          publishedOfferId = replacement.offerId;
+          replacementStatus = 'UNPUBLISHED';
+        } catch (createError: unknown) {
+          if (!isEbayOfferAlreadyExistsError(createError)) throw createError;
+          const existingId = extractEbayErrorParameter(
+            createError,
+            'offerId',
+          );
+          let existingOffer: EbayOffer | undefined;
+          if (existingId) {
+            existingOffer = await this.inventoryApi.getOffer(
+              storeId,
+              existingId,
+            );
+          } else {
+            const { offers } = await this.inventoryApi.getOffersBySku(
+              storeId,
+              sku,
+            );
+            const matches = offers.filter(
+              (candidate) =>
+                candidate.sku === sku &&
+                candidate.marketplaceId === expectedOffer.marketplaceId,
+            );
+            if (matches.length !== 1) throw createError;
+            existingOffer = matches[0];
+          }
+          if (
+            existingOffer.sku !== sku ||
+            existingOffer.marketplaceId !== expectedOffer.marketplaceId
+          ) {
+            throw new BadRequestException(
+              `eBay's existing offer does not match SKU ${sku} and marketplace ${expectedOffer.marketplaceId}; recovery stopped.`,
+            );
+          }
+          if (!existingOffer.offerId && !existingId) {
+            throw new BadRequestException(
+              `eBay returned an existing offer for SKU ${sku} without its offer ID; recovery stopped.`,
+            );
+          }
+          publishedOfferId = existingOffer.offerId ?? existingId!;
+          replacementStatus = String(
+            existingOffer.status ?? '',
+          ).toUpperCase();
+          if (
+            replacementStatus !== 'PUBLISHED' &&
+            replacementStatus !== 'UNPUBLISHED'
+          ) {
+            throw new BadRequestException(
+              `eBay returned status ${replacementStatus || 'unknown'} for existing offer ${publishedOfferId}; recovery stopped.`,
+            );
+          }
+          await this.inventoryApi.updateOffer(
+            storeId,
+            publishedOfferId,
+            expectedOffer,
+          );
+          if (replacementStatus === 'PUBLISHED') {
+            replacementListingId =
+              existingOffer.listingId ?? existingOffer.listing?.listingId;
+            if (!replacementListingId) {
+              throw new BadRequestException(
+                `eBay reports existing offer ${publishedOfferId} as published without a listing ID; recovery stopped.`,
+              );
+            }
+          }
+          this.logger.warn(
+            `Reusing verified ${replacementStatus} offer ${publishedOfferId} for SKU ${sku} after eBay rejected a duplicate offer creation.`,
+          );
+        }
+        await this.refreshPublishedOfferCompatibility(
+          storeId,
+          publishedOfferId,
+          inventoryReq,
+        );
+        if (replacementStatus === 'PUBLISHED') {
+          listingId = replacementListingId!;
+        } else {
+          const published = await this.publishOfferWithRetries(
+            storeId,
+            publishedOfferId,
+            store,
+            account,
+            inventoryReq,
+          );
+          listingId = published.listingId;
+        }
+      }
+
+      await this.verifyPublishedProjection(
+        storeId,
+        publishedOfferId,
+        listingId,
+        inventoryReq,
+        store,
+      );
+      channel.internalSku = req.sku;
+      channel.ebayInventorySku = sku;
+      channel.offerId = publishedOfferId;
+      channel.listingId = listingId;
+      channel.channelPrice = String(req.price);
+      channel.channelQuantity = req.quantity;
+      channel.listingStatus = 'published';
+      channel.lastRevisedAt = new Date();
+      channel.lastSyncedAt = new Date();
+      channel.lastErrorCode = null;
+      channel.lastErrorMessage = null;
+      await this.channelRepo.save(channel);
+
+      return {
+        storeId,
+        storeName: store.storeName,
+        success: true,
+        offerId: publishedOfferId,
+        listingId,
+        effectiveSku: sku,
+      };
+    } catch (error: unknown) {
+      return this.formatDirectPublishFailure(
+        store,
+        storeId,
+        req,
+        error,
+        account,
+      );
+    }
+  }
+
+  private async reviseExistingTradingListing(
+    store: Store,
+    storeId: string,
+    req: PublishRequest,
+    account: ConnectedEbayAccount | null,
+    marketplaceId: string,
+    channel: EbayListingChannel,
+  ): Promise<PublishResult> {
+    if (!channel.listingId) {
+      return {
+        storeId,
+        storeName: store.storeName,
+        success: false,
+        error: `The existing eBay channel for SKU ${req.sku} has no listing ID.`,
+      };
+    }
+    try {
+      if (account?.connectionSource === 'sellerpundit') {
+        await this.sellerpunditTokens.ensureFreshAccessToken(account.id, {
+          force: true,
+        });
+      }
+      await this.tradingApi.reviseFixedPriceItem(
+        storeId,
+        channel.listingId,
+        {
+          title: req.title,
+          description: req.description,
+          categoryId: req.categoryId,
+          price: req.price,
+          quantity: req.quantity,
+          currency: req.currency ?? this.mpConfig.require(marketplaceId).currency,
+          imageUrls: req.imageUrls,
+          itemSpecifics: localizeAspectsForMarketplace(
+            req.aspects,
+            marketplaceId,
+          ),
+          compatibility: req.compatibility,
+        },
+        marketplaceId,
+      );
+      channel.internalSku = req.sku;
+      channel.channelPrice = String(req.price);
+      channel.channelQuantity = req.quantity;
+      channel.listingStatus = 'published';
+      channel.lastRevisedAt = new Date();
+      channel.lastSyncedAt = new Date();
+      channel.lastErrorCode = null;
+      channel.lastErrorMessage = null;
+      await this.channelRepo.save(channel);
+      return {
+        storeId,
+        storeName: store.storeName,
+        success: true,
+        listingId: channel.listingId,
+        effectiveSku: req.sku,
+      };
+    } catch (error: unknown) {
+      return this.formatDirectPublishFailure(
+        store,
+        storeId,
+        req,
+        error,
+        account,
+      );
+    }
+  }
+
+  private async publishViaTradingApi(
+    store: Store,
+    storeId: string,
+    req: PublishRequest,
+    account?: ConnectedEbayAccount | null,
+  ): Promise<PublishResult> {
+    if ((req.listingFormat ?? 'FIXED_PRICE') !== 'FIXED_PRICE') {
+      return {
+        storeId,
+        storeName: store.storeName,
+        success: false,
+        error: 'Trading API migration mode currently supports fixed-price listings only',
+      };
+    }
+
+    try {
+      if (account?.connectionSource === 'sellerpundit') {
+        await this.sellerpunditTokens.ensureFreshAccessToken(account.id, {
+          force: true,
+        });
+      }
+
+      const storeConfig = (store.config ?? {}) as Record<string, unknown>;
+      const locationKey =
+        req.merchantLocationKey?.trim() ||
+        store.locationKey?.trim() ||
+        (typeof storeConfig.locationKey === 'string'
+          ? storeConfig.locationKey.trim()
+          : '');
+      const liveLocation = locationKey
+        ? await this.inventoryApi.getLocation(storeId, locationKey).catch(() => null)
+        : null;
+      const address = liveLocation?.location?.address;
+      const location =
+        liveLocation?.name?.trim() ||
+        address?.city?.trim() ||
+        (typeof storeConfig.location === 'string'
+          ? storeConfig.location.trim()
+          : '') ||
+        store.storeName;
+      const marketplaceId = this.resolvePublishMarketplaceId(
+        account,
+        store,
+      );
+      const country =
+        address?.country?.trim() ||
+        (marketplaceId === 'EBAY_GB'
+          ? 'GB'
+          : marketplaceId === 'EBAY_DE'
+            ? 'DE'
+            : marketplaceId === 'EBAY_AU'
+              ? 'AU'
+              : 'US');
+      const created = await this.tradingApi.addFixedPriceItem(
+        storeId,
+        {
+          title: req.title,
+          description: req.description,
+          categoryId: req.categoryId,
+          conditionId: this.tradingConditionId(req.condition),
+          quantity: req.quantity,
+          price: req.price,
+          currency:
+            req.currency ?? this.mpConfig.require(marketplaceId).currency,
+          sku: req.sku,
+          imageUrls: req.imageUrls,
+          itemSpecifics: localizeAspectsForMarketplace(
+            req.aspects,
+            marketplaceId,
+          ),
+          compatibility: req.compatibility,
+          listingDuration: req.listingDuration ?? 'GTC',
+          location,
+          country,
+          postalCode: address?.postalCode?.trim() || null,
+          conditionDescription: req.conditionDescription,
+          paymentProfileId: req.paymentPolicyId,
+          shippingProfileId: req.fulfillmentPolicyId,
+          returnProfileId: req.returnPolicyId,
+        },
+        marketplaceId,
+      );
+      return {
+        storeId,
+        storeName: store.storeName,
+        success: true,
+        listingId: created.itemId,
+        effectiveSku: req.sku,
+      };
+    } catch (error: unknown) {
+      return this.formatDirectPublishFailure(
+        store,
+        storeId,
+        req,
+        error,
+        account,
+      );
+    }
   }
 
   private async publishViaDirectEbay(
@@ -3207,9 +3779,23 @@ export class EbayPublishService {
     try {
       return await this.publishOfferWithTitlePropagationRetry(storeId, offerId);
     } catch (publishErr: unknown) {
-      // Handle "All compatibilities are invalid" (error 25002) by clearing
-      // stale compatibility from the inventory item and retrying once.
+      // Handle "All compatibilities are invalid" (error 25002). Inventory PUT
+      // can persist Trim/Engine/Submodel values that US Motors later rejects
+      // at publishOffer. Retry once with unique Make/Model/Year only.
       if (isEbayInvalidCompatibilitiesError(publishErr)) {
+        const coreCompatibility = toCoreCompatibilityPayload(req.compatibility);
+        if (
+          coreCompatibility &&
+          compatibilityHasOptionalFields(req.compatibility)
+        ) {
+          this.logger.warn(
+            `Publish for offer ${offerId} (SKU ${req.sku}) rejected due to invalid compatibilities — retrying with core Make/Model/Year`,
+          );
+          req.compatibility = coreCompatibility;
+          await this.syncInventoryCompatibility(storeId, req);
+          return this.publishOfferWithTitlePropagationRetry(storeId, offerId);
+        }
+
         this.logger.warn(
           `Publish for offer ${offerId} (SKU ${req.sku}) rejected due to invalid compatibilities — reconciling and retrying`,
         );

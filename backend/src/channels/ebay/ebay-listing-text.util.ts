@@ -389,7 +389,7 @@ export function buildEbayListingTitle(
     return { title, warnings };
   }
 
-  // The title visible in RealTrack is the source of truth. Re-composing a
+  // The title visible in Omni Core is the source of truth. Re-composing a
   // non-empty stored title at publish time makes the live eBay listing differ
   // from the reviewed/approved system record. Structured fields are fallback
   // inputs only, never an implicit title override.

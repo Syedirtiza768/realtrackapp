@@ -14,6 +14,13 @@
 
 ### eBay specifics
 
+- Standard new single-item fixed-price listings use Trading API
+  `AddFixedPriceItem` by default, with `Item.SKU` retained as the seller's
+  Custom Label and `InventoryTrackingMethod=ItemID` so Seller Hub can manage
+  them. Set `EBAY_LISTING_API_MODE=inventory` to opt new listings on this path
+  into the Inventory API. Existing offer-backed channels continue through the
+  Inventory API for in-place changes; multi-SKU variation-family item groups
+  also remain on their dedicated Inventory API flow.
 - OAuth: `ebay-integrations-oauth.service.ts`; callback route is `@Public()`
   (frontend `/channels/ebay/callback`).
 - Tokens encrypted/stored in `EbayOauthToken` / `ConnectedEbayAccount`;

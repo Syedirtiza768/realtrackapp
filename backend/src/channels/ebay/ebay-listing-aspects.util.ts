@@ -94,7 +94,8 @@ export function buildListingAspects(input: {
   setAspect('Brand', input.brand);
   setAspect('MPN', input.mpn);
   setAspect('Type', input.partType);
-  setAspect('UPC', input.upc);
+  // eBay accepts this documented value when the source has no barcode.
+  setAspect('UPC', input.upc?.trim() || 'Does not apply');
   setAspect('OE/OEM Part Number', input.oeOemPartNumber);
 
   // Always sanitize — existing/req aspects may carry raw OEM descriptions > 65 chars

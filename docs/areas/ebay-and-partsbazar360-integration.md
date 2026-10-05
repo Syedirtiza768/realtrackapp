@@ -1,6 +1,6 @@
 # eBay integration & the PartsBazar360 relationship
 
-**Last reviewed:** 2026-09-29
+**Last reviewed:** 2026-10-05
 
 ## eBay
 RealTrackApp's core purpose is eBay automotive-parts listing management: multi-store
@@ -17,6 +17,7 @@ entries):
   purge-and-recreate-offer retry, not just a plain retry.
 - Item-specific values are sanitized to eBay's 65-character aspect limit before
   publish.
+- Standard new fixed-price single-item listings use Trading API by default, retaining the seller SKU while identifying the listing by Item ID for Seller Hub management. EBAY_LISTING_API_MODE=inventory is an explicit override. Existing Inventory offer-backed listings continue through Inventory API for edits; multi-SKU variation-family listings keep their separate Inventory API flow.
 - Inventory location defaults to Dubai / `AE_Dubai`, not Houston / `US_77001`; see
   [[../context/CURRENT_STATE|CURRENT_STATE.md]] (reason for the Dubai default
   itself isn't documented anywhere found in this repo — TODO below).

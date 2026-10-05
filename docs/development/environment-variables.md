@@ -100,6 +100,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_DEV_ID` | — | **Secret.** Dev ID |
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
+| `EBAY_LISTING_API_MODE` | `trading` | Standard new single-item listings use Trading API AddFixedPriceItem by default; set inventory to opt this path into Inventory API. Existing Inventory offer-backed edits and multi-SKU variation groups keep their existing Inventory API flows. |
 | `EBAY_REDIRECT_URI` | eBay OAuth-enabled RuName | RuName passed to eBay; do not set this to the callback URL. Update the RuName’s Accept URL in the eBay Developer Portal to `https://app.omnicoreholding.com/api/integrations/ebay/oauth/callback`. |
 | `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `AE_Dubai` | Key used when auto-provisioning an inventory location |
 | `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Dubai Warehouse` | Ship-from line 1 for auto-created locations |
