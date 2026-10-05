@@ -7,6 +7,11 @@
   now reads those objects with its own credentials and uploads their bytes to
   EPS. External URLs continue through URL upload; failed listings can be
   retried after deployment without opening the bucket to public access.
+- Production backend image `realtrackapp-backend:eps-15305b43` passed health
+  checks. A canary and the remaining original job completed 50/50 targets;
+  a separate newer job completed the overlapping 71/71 targets. All 121
+  successful targets have distinct eBay listing IDs, and the deployed backend
+  logged no further image-hosting failures during verification.
 
 ## 2026-10-05 — eBay Trading API publishing
 

@@ -15,6 +15,21 @@
 | 401 loops in UI | Expired/invalid JWT | Re-login; check `JWT_SECRET` unchanged across restarts |
 | CORS errors | Origin not allow-listed | Add to `CORS_ORIGIN` |
 | Migration fails midway | Non-reversible/partial | `migrationsTransactionMode: 'each'` isolates each; fix + re-run |
+| eBay publish reports EPS 400 “No valid image can be downloaded” | First-party S3 image is private, while the running backend still uses URL upload | Deploy the EPS file-upload fix; check the backend image contains `create_image_from_file`, then use the scoped retry below |
+
+---
+
+## Retry an eBay picture-upload failure
+
+`scripts/requeue-ebay-publish-job.mjs` is read-only by default. Run it inside
+the backend container with `--job-id=<uuid>` to inspect only failed targets
+classified as recoverable. Add `--target-id=<uuid>` to canary one target. After
+checking the canary's successful eBay listing ID, run with `--apply` and
+`--confirm-job-id=<same uuid>` to requeue the remaining failures. The utility
+backs up selected target rows in `/app/output` before writing and excludes
+successful targets and unknown failure classes. Check newer jobs for the same
+catalog product, eBay account, and marketplace before retrying an old job;
+an already successful retry should not be submitted again.
 
 ---
 
