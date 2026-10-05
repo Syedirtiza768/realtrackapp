@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, type Type } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { InjectQueue } from '@nestjs/bullmq';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Cron } from '@nestjs/schedule';
@@ -8,8 +9,6 @@ import { FeatureFlagService } from '../common/feature-flags/feature-flag.service
 import { SchedulerLeaderService } from '../common/scheduler/scheduler-leader.service.js';
 import { EbayInventoryApiService } from '../channels/ebay/ebay-inventory-api.service.js';
 import { EbayTradingApiService } from '../channels/ebay/ebay-trading-api.service.js';
-import { PartsBazar360Service } from '../channels/partsbazar360/partsbazar360.service.js';
-import { PARTSBAZAR360_CHANNEL } from '../channels/partsbazar360/partsbazar360.types.js';
 import { ChannelSyncStatus } from './entities/index.js';
 import { STOCK_CHANGED_EVENT } from './stock-ledger.service.js';
 import { StockScope } from './stock-access.service.js';
@@ -17,6 +16,13 @@ import { StockScope } from './stock-access.service.js';
 export const STOCK_CHANNEL_SYNC_QUEUE = 'stock-channel-sync';
 /** Global kill switch. Even when on, each store's policy.push_enabled must also be on. */
 export const STOCK_CHANNEL_PUSH_FLAG = 'stock_channel_push';
+/** Same value as PARTSBAZAR360_CHANNEL; kept local so StockModule builds without that integration. */
+const PARTSBAZAR360_CHANNEL = 'partsbazar360';
+
+interface PartsBazarQuantityPush {
+  publish(connectionId: string, listingId: string, overrides: { quantity: number }): Promise<unknown>;
+  end(listingId: string): Promise<unknown>;
+}
 
 export type ChannelTarget =
   | { kind: 'ebay_offer'; offerId: string; sku: string | null; publishedListingId: string; channelQty: number }
@@ -53,7 +59,7 @@ export class ChannelStockSyncService {
     private readonly leader: SchedulerLeaderService,
     private readonly ebayInventory: EbayInventoryApiService,
     private readonly ebayTrading: EbayTradingApiService,
-    private readonly pb360: PartsBazar360Service,
+    private readonly moduleRef: ModuleRef,
     @InjectQueue(STOCK_CHANNEL_SYNC_QUEUE) private readonly queue: Queue,
   ) {}
 
@@ -233,13 +239,31 @@ export class ChannelStockSyncService {
     for (const t of targets) {
       if (t.kind === 'ebay_item') await this.reviseTradingQuantity(storeId, t.itemId, qty, t.marketplaceId);
       if (t.kind === 'pb360') {
-        if (qty > 0) await this.pb360.publish(t.connectionId, t.listingId, { quantity: qty });
-        else await this.pb360.end(t.listingId);
+        const pb360 = this.partsBazar();
+        if (qty > 0) await pb360.publish(t.connectionId, t.listingId, { quantity: qty });
+        else await pb360.end(t.listingId);
       }
     }
     const published = targets.filter((t) => t.kind !== 'pb360').map((t) => (t as { publishedListingId: string }).publishedListingId);
     if (published.length)
       await this.db.query(`UPDATE ebay_published_listings SET quantity_available = $2, updated_at = now() WHERE id = ANY($1::uuid[])`, [published, qty]);
+  }
+
+  /**
+   * PartsBazar360 is an optional integration: it is resolved lazily (same module instance
+   * Nest registered) so StockModule also builds and runs in deployments without it.
+   */
+  private partsBazar(): PartsBazarQuantityPush {
+    const specifier = '../channels/partsbazar360/partsbazar360.service.js';
+    let cls: Type<unknown> | undefined;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      cls = (require(specifier) as { PartsBazar360Service?: Type<unknown> }).PartsBazar360Service;
+    } catch {
+      cls = undefined;
+    }
+    if (!cls) throw new Error('The PartsBazar360 integration is not available in this build');
+    return this.moduleRef.get(cls, { strict: false }) as PartsBazarQuantityPush;
   }
 
   /**

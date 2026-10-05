@@ -99,7 +99,7 @@ desired              = min(desired, max_qty)           (if set);  0 for non-acti
 - How quantity is pushed to each channel:
   - **eBay Inventory API offers:** `bulkUpdatePriceQuantity`, 25 per call.
   - **eBay Trading listings** (item-ID tracked): `ReviseFixedPriceItem` with Quantity. Out-of-stock control must be enabled on the eBay account for quantity 0 to keep the listing alive.
-  - **PartsBazar360:** `publish(..., {quantity})`, or `end()` at 0.
+  - **PartsBazar360:** `publish(..., {quantity})`, or `end()` at 0. The service is resolved lazily through `ModuleRef`, so StockModule also builds where that integration is absent; a push to a PartsBazar360 store then fails with a clear error. The Trading-API revise is guarded the same way.
 - Triggers:
   - `stock.changed` enqueues a debounced (3 s, per-org jobId) sweep on queue `stock-channel-sync`, with concurrency 1.
   - A leader-elected cron runs every 2 minutes as a safety net.

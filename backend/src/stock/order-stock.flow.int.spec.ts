@@ -228,6 +228,23 @@ describeIt('Order stock flows (PostgreSQL integration)', () => {
     expect(row).toEqual({ status: 'failed', attempts: 1, last_error: 'eBay 500', dirty: true });
   });
 
+  it('pushes PartsBazar360 quantities through the lazily resolved integration', async () => {
+    const s = await setup();
+    await ops.receive(s.scope, { itemId: s.itemId, warehouseId: s.warehouseId, quantity: 4 });
+    const [{ id: pbStore }] = await ds.query(`INSERT INTO stores (organization_id, channel) VALUES ($1, 'partsbazar360') RETURNING id`, [s.orgId]);
+    await ds.query(`INSERT INTO store_warehouse_links (organization_id, store_id, warehouse_id) VALUES ($1,$2,$3)`, [s.orgId, pbStore, s.warehouseId]);
+    await ds.query(`INSERT INTO store_stock_policies (store_id, organization_id, push_enabled) VALUES ($1, $2, true)`, [pbStore, s.orgId]);
+    await ds.query(`INSERT INTO listing_channel_instances (listing_id, connection_id, store_id, channel) VALUES ($1, gen_random_uuid(), $2, 'partsbazar360')`, [s.catalogProductId, pbStore]);
+    await ds.query(`INSERT INTO channel_stock_sync_state (store_id, inventory_item_id, organization_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [pbStore, s.itemId, s.orgId]);
+    const pb = { publish: jest.fn(async () => ({})), end: jest.fn(async () => ({})) };
+    const moduleRef = { get: jest.fn(() => pb) };
+    const pushing = new ChannelStockSyncService(ds, { isEnabled: async () => true } as never, {} as never, {} as never, {} as never, moduleRef as never, { add: jest.fn() } as never);
+    await pushing.sweep(s.orgId);
+    expect(pb.publish).toHaveBeenCalledWith(expect.any(String), s.catalogProductId, { quantity: 4 });
+    const [row] = await ds.query(`SELECT status, pushed_qty FROM channel_stock_sync_state WHERE store_id = $1`, [pbStore]);
+    expect(row).toEqual({ status: 'synced', pushed_qty: 4 });
+  });
+
   it('applies count variances, parking large ones for approval', async () => {
     const s = await setup();
     await ops.receive(s.scope, { itemId: s.itemId, warehouseId: s.warehouseId, locationId: s.locationId, quantity: 30 });
