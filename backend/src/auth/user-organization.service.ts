@@ -42,7 +42,7 @@ export class UserOrganizationService {
   }
 
   /**
-   * Ensures the user belongs to at least one RealTrack workspace (internal tenant).
+   * Ensures the user belongs to at least one Omni Core workspace (internal tenant).
    * This is not an eBay identifier — sellers only use Sign in with eBay for store identity.
    */
   async ensureDefaultForUser(userId: string): Promise<UserOrganizationSummary> {

@@ -1,3 +1,4 @@
+import type { ProductVertical } from '../../verticals/vertical.types.js';
 import {
   Column,
   CreateDateColumn,
@@ -53,6 +54,13 @@ export class CatalogImport {
   /** User-defined mapping: { csvColumn: catalogField } */
   @Column({ name: 'column_mapping', type: 'jsonb', nullable: true })
   columnMapping!: Record<string, string> | null;
+
+  /** Immutable vertical selected at intake; omitted legacy imports resolve to automotive. */
+  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId!: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  vertical!: ProductVertical | null;
 
   /* ── Processing status ─────────────────────────────────── */
 

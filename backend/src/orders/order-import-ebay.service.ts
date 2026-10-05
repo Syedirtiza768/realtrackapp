@@ -1,7 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Store } from '../channels/entities/store.entity.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayFulfillmentApiService } from '../channels/ebay/ebay-fulfillment-api.service.js';
@@ -20,7 +19,7 @@ import type {
  *  - Scheduled import (every 15min via scheduler)
  *  - Manual trigger via controller
  *  - Per-store import with since-date windowing
- *  - Emits 'order.new' event for inventory deduction
+ *  - New orders trigger 'order.new' (emitted by OrdersService.importOrder) for stock allocation
  */
 @Injectable()
 export class EbayOrderImportService {
@@ -35,7 +34,6 @@ export class EbayOrderImportService {
     private readonly orderRepo: Repository<Order>,
     private readonly fulfillmentApi: EbayFulfillmentApiService,
     private readonly ordersService: OrdersService,
-    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -201,7 +199,7 @@ export class EbayOrderImportService {
     const total = ebayOrder.pricingSummary.total.value;
     const currency = ebayOrder.pricingSummary.total.currency;
 
-    const order = await this.ordersService.importOrder({
+    await this.ordersService.importOrder({
       channel: 'ebay',
       connectionId: store.connectionId,
       storeId: store.id,
@@ -218,13 +216,7 @@ export class EbayOrderImportService {
       orderedAt: new Date(ebayOrder.creationDate),
     });
 
-    // Emit event for inventory deduction
-    this.eventEmitter.emit('order.new', {
-      orderId: order.id,
-      storeId: store.id,
-      channel: 'ebay',
-      total,
-    });
+    // OrdersService.importOrder emits 'order.new' (stock allocation) for new orders.
 
     return true;
   }

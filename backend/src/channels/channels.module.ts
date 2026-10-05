@@ -32,9 +32,12 @@ import { EbayAuthService } from './ebay/ebay-auth.service.js';
 import { EbayInventoryApiService } from './ebay/ebay-inventory-api.service.js';
 import { EbayTaxonomyApiService } from './ebay/ebay-taxonomy-api.service.js';
 import { EbayTaxonomyCacheService } from './ebay/ebay-taxonomy-cache.service.js';
+import { EbaySellingMetadataService } from './ebay/ebay-selling-metadata.service.js';
 import { EbayFulfillmentApiService } from './ebay/ebay-fulfillment-api.service.js';
 import { EbayBrowseApiService } from './ebay/ebay-browse-api.service.js';
 import { EbayTradingApiService } from './ebay/ebay-trading-api.service.js';
+import { EbayMediaApiService } from './ebay/ebay-media-api.service.js';
+import { EbayCompatibilityReconciliationService } from './ebay/ebay-compatibility-reconciliation.service.js';
 import { EbayPublishService } from './ebay/ebay-publish.service.js';
 import { EbayPublishController } from './ebay/ebay-publish.controller.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
@@ -48,7 +51,13 @@ import { EbayPaReturnPolicyService } from '../integrations/ebay/services/ebay-pa
 import { EbayCategoryKeywordAuditService } from './ebay/ebay-category-keyword-audit.service.js';
 import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
 import { EbayCategory } from '../listings/entities/ebay-category.entity.js';
+import { EbayHostedImage } from '../integrations/ebay/entities/ebay-hosted-image.entity.js';
+import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { FitmentModule } from '../fitment/fitment.module.js';
+import { StorageModule } from '../storage/storage.module.js';
+import { PartsBazar360Client } from './partsbazar360/partsbazar360.client.js';
+import { PartsBazar360Controller } from './partsbazar360/partsbazar360.controller.js';
+import { PartsBazar360Service } from './partsbazar360/partsbazar360.service.js';
 
 @Module({
   imports: [
@@ -70,12 +79,15 @@ import { FitmentModule } from '../fitment/fitment.module.js';
       ShippingProfile,
       EbayCategoryMapping,
       EbayCategory,
+      EbayHostedImage,
+      EbayListingChannel,
     ]),
     SellerpunditModule,
     BullModule.registerQueue({ name: 'channels' }),
     BullModule.registerQueue({ name: 'inventory' }),
     FeatureFlagModule,
     forwardRef(() => FitmentModule),
+    StorageModule,
   ],
   controllers: [
     ChannelsController,
@@ -84,6 +96,7 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     EbayPublishController,
     StoreAccessController,
     EbayCategoryController,
+    PartsBazar360Controller,
   ],
   providers: [
     ChannelsService,
@@ -99,15 +112,20 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     EbayAuthService,
     EbayInventoryApiService,
     EbayTaxonomyCacheService,
+    EbaySellingMetadataService,
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,
     EbayTradingApiService,
+    EbayMediaApiService,
+    EbayCompatibilityReconciliationService,
     EbayPublishService,
     EbayMarketplaceConfigService,
     EbaySellAccountApiService,
     EbayPaReturnPolicyService,
     EbayCategoryKeywordAuditService,
+    PartsBazar360Client,
+    PartsBazar360Service,
   ],
   exports: [
     ChannelsService,
@@ -119,15 +137,19 @@ import { FitmentModule } from '../fitment/fitment.module.js';
     EbayAuthService,
     EbayInventoryApiService,
     EbayTaxonomyCacheService,
+    EbaySellingMetadataService,
     EbayTaxonomyApiService,
     EbayFulfillmentApiService,
     EbayBrowseApiService,
     EbayTradingApiService,
+    EbayMediaApiService,
+    EbayCompatibilityReconciliationService,
     EbayPublishService,
     EbayPaReturnPolicyService,
     TokenEncryptionService,
     StoreAccessService,
     EbayCategoryKeywordAuditService,
+    PartsBazar360Service,
   ],
 })
 export class ChannelsModule {}

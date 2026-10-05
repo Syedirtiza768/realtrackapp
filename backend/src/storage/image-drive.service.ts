@@ -37,6 +37,11 @@ export interface BatchLookupResult {
   [partNumber: string]: DriveFileEntry[];
 }
 
+export interface AddFileResult {
+  entry: DriveFileEntry;
+  created: boolean;
+}
+
 @Injectable()
 export class ImageDriveService {
   private readonly logger = new Logger(ImageDriveService.name);
@@ -86,7 +91,9 @@ export class ImageDriveService {
         totalSizeBytes: folder.totalSizeBytes,
         createdAt: folder.createdAt,
         updatedAt: folder.updatedAt,
-        thumbnailUrls: thumbs.map((t) => t.s3KeyThumb || t.cdnUrl),
+        thumbnailUrls: thumbs.map((t) =>
+          t.s3KeyThumb ? this.storageService.getCdnUrl(t.s3KeyThumb) : t.cdnUrl,
+        ),
       });
     }
 
@@ -229,7 +236,9 @@ export class ImageDriveService {
       totalSizeBytes: saved.totalSizeBytes,
       createdAt: saved.createdAt,
       updatedAt: saved.updatedAt,
-      thumbnailUrls: thumbAssets.map((t) => t.s3KeyThumb || t.cdnUrl),
+      thumbnailUrls: thumbAssets.map((t) =>
+        t.s3KeyThumb ? this.storageService.getCdnUrl(t.s3KeyThumb) : t.cdnUrl,
+      ),
     };
   }
 
@@ -286,6 +295,12 @@ export class ImageDriveService {
       where: { nameNormalized: normalized },
     });
     if (existing) {
+      if (linkedPartNumber?.trim() && !existing.linkedPartNumberNormalized) {
+        existing.linkedPartNumber = linkedPartNumber.trim();
+        existing.linkedPartNumberNormalized =
+          ImageDriveService.normalizePartNumber(linkedPartNumber);
+        await this.folderRepo.save(existing);
+      }
       return {
         id: existing.id,
         name: existing.name,
@@ -363,6 +378,49 @@ export class ImageDriveService {
       .execute();
 
     return this.toFileEntry(saved);
+  }
+
+  /**
+   * Add a folder-upload asset without failing a retry that contains the same
+   * relative path. Existing flat uploads retain their original behavior via
+   * addFile(); only recursive folder imports use this idempotent variant.
+   */
+  async addFileIfMissing(
+    folderId: string,
+    data: {
+      filename: string;
+      s3Key: string;
+      cdnUrl: string;
+      mimeType: string;
+      fileSizeBytes: number;
+    },
+  ): Promise<AddFileResult> {
+    const existing = await this.assetRepo.findOne({
+      where: { folderId, s3Key: data.s3Key },
+      withDeleted: false,
+    });
+    if (existing) {
+      return { entry: this.toFileEntry(existing), created: false };
+    }
+
+    try {
+      return {
+        entry: await this.addFile(folderId, data),
+        created: true,
+      };
+    } catch (error) {
+      // A concurrent chunk can win the unique insert between the lookup and
+      // addFile(). Re-read the row so retries remain safe without swallowing
+      // unrelated database errors.
+      const concurrent = await this.assetRepo.findOne({
+        where: { folderId, s3Key: data.s3Key },
+        withDeleted: false,
+      });
+      if (concurrent) {
+        return { entry: this.toFileEntry(concurrent), created: false };
+      }
+      throw error;
+    }
   }
 
   async updateFileVariants(

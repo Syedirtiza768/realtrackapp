@@ -42,6 +42,17 @@ export interface EbayInventoryItem {
   };
 }
 
+export interface EbayInventoryItemGroup {
+  inventoryItemGroupKey?: string;
+  variantSKUs: string[];
+  title: string;
+  description: string;
+  imageUrls?: string[];
+  variesBy: {
+    specifications: Array<{ name: string; values: string[] }>;
+    aspectsImageVariesBy?: string;
+  };
+}
 export type EbayConditionEnum =
   | 'NEW'
   | 'LIKE_NEW'
@@ -97,6 +108,8 @@ export interface EbayOffer {
   };
   /** Listing duration (e.g. 'GTC' for Good 'Til Cancelled) */
   listingDuration?: string;
+  /** Whether eBay catalog product details should be copied into the listing. */
+  includeCatalogProductDetails?: boolean;
   /** eBay-format vehicle compatibility */
   compatibility?: EbayCompatibilityPayload;
 }

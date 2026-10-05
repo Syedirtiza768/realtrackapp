@@ -19,6 +19,9 @@ export interface OrderItem {
   unitPrice: string;
   totalPrice: string;
   fulfilled: boolean;
+  /** Set by warehouse stock allocation; see STOCK_STATUS_LABEL in stockApi. */
+  inventoryItemId?: string | null;
+  stockStatus?: string | null;
   createdAt: string;
 }
 

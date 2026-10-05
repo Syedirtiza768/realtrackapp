@@ -64,6 +64,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    applyBrandingToDocument(getDefaultBranding());
     void refresh();
   }, [refresh]);
 
@@ -77,7 +78,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (branding.themeMode !== 'system') return;
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = () => applyBrandingToDocument(branding);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);

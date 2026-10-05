@@ -679,7 +679,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                                 type="text"
                                 value={skuValue}
                                 onChange={(e) => setSkuValue(e.target.value)}
-                                placeholder="e.g. BLA-18699"
+                                placeholder="e.g. BLAP-18699"
                                 className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 font-mono text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 autoFocus
                                 onKeyDown={(e) => {

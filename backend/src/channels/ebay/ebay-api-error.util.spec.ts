@@ -1,5 +1,6 @@
 import {
   formatEbayApiError,
+  isEbayAvailabilityMissingTransientError,
   isEbayInvalidAccessTokenError,
   isEbayPartsAccessoriesReturnPolicyError,
   isEbayRecoverableBusinessPolicyError,
@@ -54,5 +55,16 @@ describe('formatEbayApiError', () => {
       },
     };
     expect(isEbayInvalidAccessTokenError(err)).toBe(true);
+  });
+
+  it('detects transient availability propagation errors', () => {
+    const err = {
+      response: {
+        data: {
+          errors: [{ errorId: 25604, message: 'Availability not found' }],
+        },
+      },
+    };
+    expect(isEbayAvailabilityMissingTransientError(err)).toBe(true);
   });
 });

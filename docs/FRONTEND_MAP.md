@@ -396,6 +396,10 @@ export default defineConfig({
 
 ---
 
+## Warehouse stock UI (2026-10-05)
+
+`src/components/stock/` contains `StockWorkspace` and one file per tab: Overview, Items (+ `StockItemDrawer`), Orders, Procurement, Documents, Warehouses, Movements and SetupPanel. It also contains `stockUi.tsx`, which holds the shared primitives and the `useLoad`/`useAction` hooks. The API client is `src/lib/stockApi.ts`. Routes are listed in [frontend/ROUTES_AND_SCREENS.md](frontend/ROUTES_AND_SCREENS.md#warehouse-stock-routes-2026-10-05).
+
 ## Related Documentation
 
 - **API Map**: `/docs/API_MAP.md`

@@ -15,6 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Response } from 'express';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -53,6 +54,7 @@ export class PipelineController {
     private readonly singleListingForm: SingleListingFormService,
     private readonly rbac: RbacService,
     private readonly teamsService: TeamsService,
+    private readonly events: EventEmitter2,
   ) {}
 
   @Post('jobs/:id/enterprise-optimize')
@@ -280,8 +282,29 @@ export class PipelineController {
     summary:
       'Warehouse intake — save part type, condition, price, and identity as draft inventory',
   })
-  async addIntakePart(@Body() body: AddIntakePartDto) {
-    return this.singleListingForm.createIntakePart(body);
+  async addIntakePart(
+    @Body() body: AddIntakePartDto,
+    @CurrentUser() user: User,
+  ) {
+    const result = await this.singleListingForm.createIntakePart(body);
+    const listing = result.listing;
+    if (listing.customLabelSku) {
+      // Warehouse stock (StockModule) receives the part into the default warehouse;
+      // ignored when the user's workspace has not set up stock. `location` doubles as bin code.
+      this.events.emit('stock.intake.received', {
+        userId: user.id,
+        sku: listing.customLabelSku,
+        vertical: 'automotive',
+        quantity: listing.quantityNum ?? 1,
+        listingRecordId: listing.id,
+        title: listing.title,
+        imageUrl: listing.itemPhotoUrl?.split('|')[0] ?? null,
+        binCode: body.location ?? null,
+        conditionId: body.conditionId,
+        idempotencyKey: `auto-parts-intake:${listing.id}`,
+      });
+    }
+    return result;
   }
 
   @Post('single')

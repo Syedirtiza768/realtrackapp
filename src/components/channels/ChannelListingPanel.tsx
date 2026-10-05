@@ -23,8 +23,11 @@ import {
 } from '../../types/channels';
 import {
   useConnections,
+  usePartsBazarStatus,
   useSkuChannels,
   mergeSkuChannelStatuses,
+  publishToChannels,
+  refreshPartsBazarListing,
   updateOnChannel,
   endOnChannel,
   retryOnChannel,
@@ -39,6 +42,11 @@ export default function ChannelListingPanel({ listingId, onPublish }: Props) {
   const { connections } = useConnections();
   const { listings, loading, refetch } = useSkuChannels(listingId);
   const [busy, setBusy] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const { status: partsbazar } = usePartsBazarStatus();
+  const [partsbazarStoreId, setPartsbazarStoreId] = useState('');
+  const partsbazarStores = (partsbazar?.stores ?? []).filter((s) => s.status === 'active');
+  const selectedPartsbazarStore = partsbazarStoreId || partsbazarStores[0]?.storeId;
 
   const statuses: SkuChannelStatus[] = mergeSkuChannelStatuses(connections, listings);
 
@@ -48,7 +56,13 @@ export default function ChannelListingPanel({ listingId, onPublish }: Props) {
       try {
         if (action === 'update') await updateOnChannel(listingId, channel);
         if (action === 'end') await endOnChannel(listingId, channel);
-        if (action === 'retry') await retryOnChannel(listingId, channel);
+        if (action === 'retry') {
+          await retryOnChannel(
+            listingId,
+            channel,
+            channel === 'partsbazar360' ? selectedPartsbazarStore : undefined,
+          );
+        }
         await refetch();
       } catch {
         // error is shown in the tile via lastError on refetch
@@ -56,8 +70,42 @@ export default function ChannelListingPanel({ listingId, onPublish }: Props) {
         setBusy(null);
       }
     },
-    [listingId, refetch],
+    [listingId, refetch, selectedPartsbazarStore],
   );
+
+  /* PartsBazar360 is a direct push channel: publish here instead of opening the eBay store modal. */
+  const publishToPartsBazar = useCallback(async () => {
+    setBusy('publish-partsbazar360');
+    setPanelError(null);
+    try {
+      const res = await publishToChannels(
+        listingId,
+        ['partsbazar360'],
+        undefined,
+        selectedPartsbazarStore,
+      );
+      const failure = res.results.find((r) => r.error);
+      if (failure) setPanelError(failure.error ?? 'Could not queue the publish');
+      await refetch();
+    } catch (err) {
+      setPanelError(err instanceof Error ? err.message : 'Could not queue the publish');
+    } finally {
+      setBusy(null);
+    }
+  }, [listingId, selectedPartsbazarStore, refetch]);
+
+  const refreshPartsBazar = useCallback(async () => {
+    setBusy('refresh-partsbazar360');
+    setPanelError(null);
+    try {
+      await refreshPartsBazarListing(listingId);
+      await refetch();
+    } catch (err) {
+      setPanelError(err instanceof Error ? err.message : 'Could not refresh status');
+    } finally {
+      setBusy(null);
+    }
+  }, [listingId, refetch]);
 
   if (loading) {
     return (
@@ -81,16 +129,34 @@ export default function ChannelListingPanel({ listingId, onPublish }: Props) {
         )}
       </div>
 
+      {panelError && (
+        <div className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1">{panelError}</div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {statuses.map((s) => (
-          <ChannelTile
-            key={s.channel}
-            status={s}
-            busy={busy}
-            onAction={handleAction}
-            onPublish={onPublish ? () => onPublish(listingId) : undefined}
-          />
-        ))}
+        {statuses.map((s) =>
+          s.channel === 'partsbazar360' ? (
+            <ChannelTile
+              key={s.channel}
+              status={s}
+              busy={busy}
+              onAction={handleAction}
+              onPublish={publishToPartsBazar}
+              onRefresh={refreshPartsBazar}
+              stores={partsbazarStores.map((st) => ({ id: st.storeId, name: st.storeName }))}
+              storeId={selectedPartsbazarStore}
+              onStoreChange={setPartsbazarStoreId}
+            />
+          ) : (
+            <ChannelTile
+              key={s.channel}
+              status={s}
+              busy={busy}
+              onAction={handleAction}
+              onPublish={onPublish ? () => onPublish(listingId) : undefined}
+            />
+          ),
+        )}
       </div>
     </div>
   );
@@ -103,11 +169,21 @@ function ChannelTile({
   busy,
   onAction,
   onPublish,
+  onRefresh,
+  stores,
+  storeId,
+  onStoreChange,
 }: {
   status: SkuChannelStatus;
   busy: string | null;
   onAction: (action: 'update' | 'end' | 'retry', channel: ChannelKey) => void;
   onPublish?: () => void;
+  /** Re-check an in-flight publish (channels that confirm asynchronously). */
+  onRefresh?: () => void;
+  /** Destinations, when a channel has several to pick from. */
+  stores?: Array<{ id: string; name: string }>;
+  storeId?: string;
+  onStoreChange?: (storeId: string) => void;
 }) {
   const meta = CHANNEL_META[status.channel];
   const listingStatus = status.listing?.status ?? 'not_listed';
@@ -161,11 +237,31 @@ function ChannelTile({
         </a>
       )}
 
+      {/* Destination picker (only when there is a real choice) */}
+      {stores && stores.length > 1 && onStoreChange && (
+        <select
+          value={storeId}
+          onChange={(e) => onStoreChange(e.target.value)}
+          className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-900"
+        >
+          {stores.map((st) => (
+            <option key={st.id} value={st.id}>
+              {st.name}
+            </option>
+          ))}
+        </select>
+      )}
+
       {/* Action buttons */}
       <div className="flex items-center gap-1.5 pt-1">
         {/* Not listed → Publish */}
         {(listingStatus === 'not_listed' || listingStatus === 'ended') && status.connected && onPublish && (
-          <ActionButton icon={<Send size={11} />} label="Publish" onClick={onPublish} busy={false} />
+          <ActionButton
+            icon={<Send size={11} />}
+            label="Publish"
+            onClick={onPublish}
+            busy={busy === `publish-${status.channel}`}
+          />
         )}
 
         {/* Active → Update / End */}
@@ -202,6 +298,14 @@ function ChannelTile({
           <div className="flex items-center gap-1.5 text-xs text-blue-400">
             <Loader2 size={11} className="animate-spin" />
             Publishing…
+            {onRefresh && (
+              <ActionButton
+                icon={<RefreshCw size={11} />}
+                label="Check"
+                onClick={onRefresh}
+                busy={busy === `refresh-${status.channel}`}
+              />
+            )}
           </div>
         )}
       </div>

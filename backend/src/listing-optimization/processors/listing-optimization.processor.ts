@@ -2,6 +2,7 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { ListingOptimizationService } from '../listing-optimization.service.js';
+import { EbayFitmentPublishService } from '../ebay-fitment-publish.service.js';
 
 export interface ListingOptimizationJobData {
   /** Pipeline-job-scoped optimization: optimizes every product in the job. */
@@ -11,6 +12,8 @@ export interface ListingOptimizationJobData {
   marketplace?: 'US' | 'DE' | 'AU';
   /** Regenerate even if already optimizationStatus='completed' with a matching source data hash. */
   force?: boolean;
+  /** After optimization, sync validated fitment to published eBay channels. */
+  publishAfterOptimization?: boolean;
 }
 
 // Multiple pipeline jobs' optimizations can run side by side — each job/
@@ -32,7 +35,10 @@ const CONCURRENCY = Math.max(
 export class ListingOptimizationProcessor extends WorkerHost {
   private readonly logger = new Logger(ListingOptimizationProcessor.name);
 
-  constructor(private readonly optimization: ListingOptimizationService) {
+  constructor(
+    private readonly optimization: ListingOptimizationService,
+    private readonly ebayFitmentPublish: EbayFitmentPublishService,
+  ) {
     super();
   }
 
@@ -47,6 +53,12 @@ export class ListingOptimizationProcessor extends WorkerHost {
         await this.optimization.optimizeProduct(productId, marketplace, {
           force,
         });
+        if (job.data.publishAfterOptimization) {
+          await this.ebayFitmentPublish.publishValidatedFitment(
+            productId,
+            marketplace,
+          );
+        }
         this.logger.log(
           `Completed listing optimization for product ${productId} [${marketplace}]`,
         );

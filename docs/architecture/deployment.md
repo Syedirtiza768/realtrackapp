@@ -36,11 +36,18 @@ Four Docker Compose services (`docker-compose.yml`):
 - Backend container: `NODE_ENV=production`, `IGNORE_ENV_FILE=true` (config comes
   from compose `environment`, not a mounted `.env`), `PORT=4191`,
   `PIPELINE_PROJECT_ROOT=/app`.
+- Pipeline path resolution validates that the configured root contains
+  `scripts/ebay-enrichment-pipeline.mjs`; if the variable is missing or stale,
+  it falls back to the backend working directory and then its parent. This
+  keeps Docker runs rooted at `/app` and local `backend/` runs rooted at the
+  repository checkout.
 - `NODE_OPTIONS=--max-old-space-size=1536` (default, AWS t3.medium / 4 GB RAM) —
   large CSV catalog imports load the file into the V8 heap. Raise on larger
   instances (e.g. `3072` on t3.large). Includes IPv4-first DNS for Docker.
 - Postgres container: `shared_buffers=128MB`, `max_connections=50` (t3.medium).
-- Redis container: `maxmemory 128mb`, `allkeys-lru`.
+- Redis container: `maxmemory 256mb`, `noeviction`. BullMQ requires
+  `noeviction` so queue metadata cannot be silently evicted under cache
+  pressure; the `redisdata` volume preserves queue state across restarts.
 - `JWT_SECRET` is **required** (compose fails fast if unset).
 - `DB_MIGRATIONS_RUN=true` by default → migrations run on backend boot.
 - Postgres seeds from `listingpro.dump` on first volume init (idempotent-ish;
@@ -49,6 +56,10 @@ Four Docker Compose services (`docker-compose.yml`):
 - Durable eBay bulk publishing uses the existing Redis/BullMQ service and
   `ebay_listing_jobs` tables. `EBAY_DAILY_PUBLISH_TARGET_LIMIT` defaults to and
   is hard-capped at 5,000 listing/store targets per organization per UTC day.
+- Pending catalog fitment publishing uses the `listing-optimization` queue.
+  `backend/src/scripts/queue-pending-fitment-publish.ts --apply` enqueues
+  forced MVL validation jobs; only validated rows are synchronized to already
+  published eBay channels, while rejected/review-only rows remain unpublished.
 
 ## Healthchecks
 
@@ -80,3 +91,7 @@ is a shell deploy helper. nginx config also at repo-root `nginx.conf`.
 ## Operational runbook
 
 Step-by-step deploy/rollback: [/docs/operations/deployment-runbook.md](../operations/deployment-runbook.md).
+
+The eBay inventory-location reconciliation fix was deployed to the production
+backend with a backend-only Docker rebuild on 2026-08-21; the production health
+endpoint and running compiled markers were verified afterward.

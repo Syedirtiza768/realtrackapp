@@ -23,7 +23,11 @@ import type {
 } from '../../channels/ebay/ebay-api.types.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import { EbayPublishedListingSyncLog } from '../entities/ebay-published-listing-sync-log.entity.js';
-import { preferRicherImageUrls } from '../../channels/ebay/ebay-listing-images.util.js';
+import {
+  isSingleImageBrand,
+  preferRicherImageUrls,
+  selectPrimaryImageForBrand,
+} from '../../channels/ebay/ebay-listing-images.util.js';
 import { PublishedListingsHealthService } from './published-listings-health.service.js';
 import { PublishedListingsEnrichmentService } from './published-listings-enrichment.service.js';
 
@@ -555,10 +559,18 @@ export class PublishedListingsSyncService {
       (offer.offerId ? channelByOffer.get(offer.offerId) : undefined) ??
       (offer.listingId ? channelByListing.get(offer.listingId) : undefined);
 
-    const imageUrls = preferRicherImageUrls(
+    const mergedImageUrls = preferRicherImageUrls(
       extracted.imageUrls,
       existing?.imageUrls,
     );
+    const imageUrls = isSingleImageBrand(
+      extracted.itemSpecifics?.Brand?.[0] ?? extracted.title,
+    )
+      ? selectPrimaryImageForBrand(
+          mergedImageUrls,
+          extracted.itemSpecifics?.Brand?.[0] ?? extracted.title,
+        )
+      : mergedImageUrls;
     const listingStatus = this.health.mapOfferStatus(offer);
     const healthFlags = this.health.computeHealthFlags({
       title: extracted.title,
@@ -901,9 +913,18 @@ export class PublishedListingsSyncService {
       imageUrls.push(...nextImages);
     }
 
+    const storedImageUrls = isSingleImageBrand(
+      itemSpecifics.Brand?.[0] ?? enrichedTitle,
+    )
+      ? selectPrimaryImageForBrand(
+          imageUrls,
+          itemSpecifics.Brand?.[0] ?? enrichedTitle,
+        )
+      : imageUrls;
+
     const healthFlags = this.health.computeHealthFlags({
       title: enrichedTitle,
-      imageUrls,
+      imageUrls: storedImageUrls,
       itemSpecifics,
       compatibility,
       quantityAvailable: row?.quantityAvailable ?? 0,
@@ -940,7 +961,7 @@ export class PublishedListingsSyncService {
           marketplaceId,
           account.environment,
         ),
-      imageUrls,
+      imageUrls: storedImageUrls,
       itemSpecifics,
       compatibility,
       healthFlags,
@@ -1167,6 +1188,13 @@ export class PublishedListingsSyncService {
     if (item.viewCount != null) performanceMetrics.viewCount = item.viewCount;
     if (item.watchCount != null)
       performanceMetrics.watchCount = item.watchCount;
+
+    imageUrls = isSingleImageBrand(itemSpecifics.Brand?.[0] ?? enrichedTitle)
+      ? selectPrimaryImageForBrand(
+          imageUrls,
+          itemSpecifics.Brand?.[0] ?? enrichedTitle,
+        )
+      : imageUrls;
 
     const healthFlags = this.health.computeHealthFlags({
       title: enrichedTitle,

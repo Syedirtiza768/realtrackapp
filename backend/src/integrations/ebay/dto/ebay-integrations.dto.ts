@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 
 export class EbayOAuthStartDto {
-  /** RealTrack workspace (internal). Omit to use the user's default workspace. */
+  /** Omni Core workspace (internal). Omit to use the user's default workspace. */
   @IsOptional()
   @IsUUID()
   organizationId?: string;
@@ -26,7 +26,7 @@ export class EbayOAuthStartDto {
   @IsIn(['sandbox', 'production'])
   environment!: 'sandbox' | 'production';
 
-  /** Optional label in RealTrack; defaults to eBay username after OAuth. */
+  /** Optional label in Omni Core; defaults to eBay username after OAuth. */
   @IsOptional()
   @IsString()
   accountDisplayName?: string;
@@ -38,6 +38,35 @@ export class EbayPublishTargetDto {
 
   @IsString()
   marketplaceId!: string;
+
+  /** Optional connected-store policy/location values selected for this target. */
+  @IsOptional()
+  @IsString()
+  fulfillmentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  returnPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
+  merchantLocationKey?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedFulfillmentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedPaymentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedReturnPolicyName?: string;
 }
 
 export class EbayPublishJobDto {

@@ -17,10 +17,10 @@ export class ClientSettings {
   @Index('idx_client_settings_org', { unique: true })
   organizationId: string | null;
 
-  @Column({ type: 'varchar', length: 200, default: 'RealTrackApp' })
+  @Column({ type: 'varchar', length: 200, default: 'Omni Core' })
   appName: string;
 
-  @Column({ type: 'varchar', length: 200, default: 'RealTrack' })
+  @Column({ type: 'varchar', length: 200, default: 'Omni Core' })
   clientName: string;
 
   @Column({ type: 'varchar', length: 80, nullable: true })
@@ -44,7 +44,7 @@ export class ClientSettings {
   @Column({ type: 'varchar', length: 20, default: '#0ea5e9' })
   accentColor: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'dark' })
+  @Column({ type: 'varchar', length: 20, default: 'light' })
   themeMode: string;
 
   @Column({ type: 'varchar', length: 40, default: 'slate' })

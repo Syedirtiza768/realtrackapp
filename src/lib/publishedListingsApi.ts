@@ -224,3 +224,40 @@ export function useBulkPublishedListings() {
     },
   });
 }
+
+export async function downloadPublishedListingsCsv(
+  query: PublishedListingsQuery = {},
+): Promise<void> {
+  const token = localStorage.getItem('mk_auth_token');
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(
+    `${API}/published-listings/export${buildQuery(query as Record<string, string | number | undefined>)}`,
+    { headers },
+  );
+
+  if (res.status === 401) {
+    localStorage.removeItem('mk_auth_token');
+    localStorage.removeItem('mk_auth_user');
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (!res.ok) {
+    throw new Error(`Export failed: ${res.status} ${res.statusText}`);
+  }
+
+  const blob = await res.blob();
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `published-listings-export-${dateStr}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

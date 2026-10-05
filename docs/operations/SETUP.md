@@ -109,6 +109,10 @@ docker compose up -d --build
 curl http://localhost:4191/api/health  # verify
 ```
 
+Production note (2026-08-21): the eBay inventory-location reconciliation fix
+was deployed with a backend-only Docker rebuild and the backend health endpoint
+was verified before retrying Superior Auto Parts publication.
+
 For high-volume eBay publishing, Redis must remain persistent and healthy so
 durable jobs can resume after backend restarts. The optional
 `EBAY_DAILY_PUBLISH_TARGET_LIMIT` setting defaults to 5,000 and cannot raise the

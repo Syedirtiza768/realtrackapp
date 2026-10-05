@@ -22,7 +22,7 @@
 | ingestion | 3 | IngestionJob, PipelineJob, AiResult |
 | motors-intelligence | 10 | MotorsProduct, ProductCandidate, ExtractedAttribute, ValidationResult, ReviewTask, ListingGeneration, CorrectionRule, EbayAspectRequirement, EbayCategoryMapping, MotorsFeedbackLog |
 | channels | 7 | ChannelConnection, ChannelListing, ChannelWebhookLog, ListingChannelInstance, Store, AiEnhancement, DemoSimulationLog |
-| integrations/ebay | 14 | ConnectedEbayAccount, EbayAccountMarketplace, EbayOauthToken, EbayBusinessPolicy, EbayListingJob, EbayListingJobTarget, EbayListingChannel, EbayListingSyncLog, EbayApiAuditLog, EbayApiError, InternalStore, InventoryMovement, ListingActionLog, ListingStoreOverride |
+| integrations/ebay | 15 | ConnectedEbayAccount, EbayAccountMarketplace, EbayOauthToken, EbayBusinessPolicy, EbayHostedImage, EbayListingJob, EbayListingJobTarget, EbayListingChannel, EbayListingSyncLog, EbayApiAuditLog, EbayApiError, InternalStore, InventoryMovement, ListingActionLog, ListingStoreOverride |
 | inventory | 3 | InventoryEvent, InventoryLedger, StoreInventoryAllocation |
 | orders | 2 | Order, OrderItem |
 | dashboard | 3 | AuditLog, DashboardCache, SalesRecord |

@@ -134,6 +134,33 @@ export class AiRunLogService {
     await this.repo.save(latest);
   }
 
+  async getBatchTotals(batchId: string): Promise<{
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    runs: number;
+  }> {
+    const row = await this.repo
+      .createQueryBuilder('l')
+      .select('COALESCE(SUM(l.input_tokens), 0)', 'inputTokens')
+      .addSelect('COALESCE(SUM(l.output_tokens), 0)', 'outputTokens')
+      .addSelect('COALESCE(SUM(l.cost_usd), 0)', 'costUsd')
+      .addSelect('COUNT(*)', 'runs')
+      .where('l.batch_id = :batchId', { batchId })
+      .getRawOne<{
+        inputTokens: string;
+        outputTokens: string;
+        costUsd: string;
+        runs: string;
+      }>();
+    return {
+      inputTokens: Number(row?.inputTokens ?? 0),
+      outputTokens: Number(row?.outputTokens ?? 0),
+      costUsd: Number(row?.costUsd ?? 0),
+      runs: Number(row?.runs ?? 0),
+    };
+  }
+
   async getSegmentStats(sinceDays = 30): Promise<
     Array<{
       segmentKey: string;

@@ -14,12 +14,12 @@ class ErrorBoundary extends React.Component<
     render() {
         if (this.state.error) {
             return (
-                <div style={{ padding: 40, color: '#f87171', fontFamily: 'monospace', background: '#0f172a', minHeight: '100vh' }}>
+                <div style={{ padding: 40, color: '#b91c1c', fontFamily: 'monospace', background: '#f8fafc', minHeight: '100vh' }}>
                     <h1 style={{ fontSize: 24, marginBottom: 16 }}>Runtime Error</h1>
                     <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                         {this.state.error.message}
                     </pre>
-                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#94a3b8', marginTop: 12, fontSize: 12 }}>
+                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#475569', marginTop: 12, fontSize: 12 }}>
                         {this.state.error.stack}
                     </pre>
                 </div>

@@ -49,8 +49,12 @@ export async function fetchWithAuth<T = unknown>(
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('mk_auth_user');
     // Redirect to login (unless already on login page)
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login';
+    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/fashion/login') && !window.location.pathname.startsWith('/business-industrial/login')) {
+      window.location.href = window.location.pathname.startsWith('/fashion')
+        ? '/fashion/login'
+        : window.location.pathname.startsWith('/business-industrial')
+          ? '/business-industrial/login'
+          : '/login';
     }
     throw new Error('Session expired. Please log in again.');
   }
@@ -146,8 +150,12 @@ export async function fetchDownloadResponse(url: string): Promise<Response> {
   if (res.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('mk_auth_user');
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login';
+    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/fashion/login') && !window.location.pathname.startsWith('/business-industrial/login')) {
+      window.location.href = window.location.pathname.startsWith('/fashion')
+        ? '/fashion/login'
+        : window.location.pathname.startsWith('/business-industrial')
+          ? '/business-industrial/login'
+          : '/login';
     }
     throw new Error('Session expired. Please log in again.');
   }

@@ -1,6 +1,8 @@
 import type { EbayPublishedListing } from './entities/ebay-published-listing.entity.js';
 import {
+  isSingleImageBrand,
   preferLargeEbayImageUrl,
+  selectPrimaryImageForBrand,
   sanitizeEbayImageUrls,
 } from '../channels/ebay/ebay-listing-images.util.js';
 
@@ -202,14 +204,18 @@ export function toPublishedListingApiResponse(
     ? listing.description
     : null;
   const descriptionText = descriptionHtml ? stripHtml(descriptionHtml) : null;
-  const imageUrls = orderImageUrlsForConsumer(listing.imageUrls ?? []);
+  const specifics = listing.itemSpecifics ?? {};
+  const brand = firstSpecific(specifics, SPECIFIC_KEYS.brand);
+  const orderedImages = orderImageUrlsForConsumer(listing.imageUrls ?? []);
+  const imageUrls = isSingleImageBrand(brand ?? listing.title)
+    ? selectPrimaryImageForBrand(orderedImages, brand ?? listing.title)
+    : orderedImages;
   const images: PublishedListingImageMeta[] = imageUrls.map((url, index) => ({
     url,
     source: classifyImageSource(url),
     sortOrder: index,
     isPrimary: index === 0,
   }));
-  const specifics = listing.itemSpecifics ?? {};
 
   return {
     ...listing,
@@ -219,7 +225,7 @@ export function toPublishedListingApiResponse(
     storeSlug: options?.storeSlug ?? null,
     imageUrls,
     images,
-    brand: firstSpecific(specifics, SPECIFIC_KEYS.brand),
+    brand,
     mpn: firstSpecific(specifics, SPECIFIC_KEYS.mpn),
     oeNumbers: allSpecifics(specifics, SPECIFIC_KEYS.oe),
     salvageDetails: extractSalvageDetails(specifics),

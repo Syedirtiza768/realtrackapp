@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
 import { EBAY_INTEGRATIONS_REDIS } from '../ebay-integrations-redis.connection.js';
 import { Inject } from '@nestjs/common';
 import type Redis from 'ioredis';
@@ -14,6 +15,7 @@ export interface EbayOAuthPendingPayload {
   environment: 'sandbox' | 'production';
   scopes: string[];
   accountDisplayName: string;
+  vertical?: ProductVertical;
 }
 
 @Injectable()

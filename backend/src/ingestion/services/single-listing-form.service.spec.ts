@@ -3,6 +3,13 @@ import {
   PART_LOOKUP_MIN_VISION_IMAGES,
   type CreateIntakePartDto,
 } from './single-listing-form.service.js';
+import { SKU_PREFIX } from '../constants/automotive-oem-brands.js';
+
+describe('SingleListingFormService SKU allocation', () => {
+  it('uses the BLAP namespace for newly allocated Add Part SKUs', () => {
+    expect(SKU_PREFIX).toBe('BLAP');
+  });
+});
 
 /**
  * createIntakePart no longer requires photos at submission time — parts

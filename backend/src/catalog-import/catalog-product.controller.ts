@@ -30,9 +30,12 @@ export class CatalogProductController {
   ) {}
 
   @Get()
-  async list(@Query() query: Record<string, string | undefined>) {
+  async list(
+    @Query() query: Record<string, string | undefined>,
+    @CurrentUser() user: User,
+  ) {
     const params = parseCatalogProductListQuery(query);
-    return this.productService.findAll(params);
+    return this.productService.findAll(params, user);
   }
 
   @Patch('by-sku/:sku')
@@ -40,23 +43,28 @@ export class CatalogProductController {
   async updateBySku(
     @Param('sku') sku: string,
     @Body() dto: Record<string, unknown>,
+    @CurrentUser() user: User,
   ) {
-    return this.productService.updateBySku(sku, dto);
+    return this.productService.updateBySku(sku, dto, user);
   }
 
   @Get(':id')
-  async getOne(@Param('id') id: string) {
-    return this.productService.findOne(id);
+  async getOne(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.productService.findOne(id, user);
   }
 
   @Patch(':id')
   @RequirePermissions('catalog.update')
-  async update(@Param('id') id: string, @Body() dto: Record<string, unknown>) {
-    return this.productService.update(id, dto);
+  async update(
+    @Param('id') id: string,
+    @Body() dto: Record<string, unknown>,
+    @CurrentUser() user: User,
+  ) {
+    return this.productService.update(id, dto, user);
   }
 
   @Post('fix-condition-titles')
-  @RequirePermissions('catalog.update')
+  @RequirePermissions('catalog.clear')
   async fixConditionTitles(@Body() body: { pipelineJobId: string }) {
     return this.productService.bulkFixConditionMismatchTitles(
       body.pipelineJobId,
@@ -64,13 +72,13 @@ export class CatalogProductController {
   }
 
   @Post('sanitize-titles')
-  @RequirePermissions('catalog.update')
+  @RequirePermissions('catalog.clear')
   async sanitizeTitles(@Body() body: { pipelineJobId: string }) {
     return this.productService.bulkSanitizeTitles(body.pipelineJobId);
   }
 
   @Post('backfill-categories')
-  @RequirePermissions('catalog.update')
+  @RequirePermissions('catalog.clear')
   async backfillCategories(
     @Body()
     body: {
@@ -121,12 +129,15 @@ export class CatalogProductController {
     @Res() res: express.Response,
   ) {
     let products = body.ids?.length
-      ? await this.productService.findByIds(body.ids)
+      ? await this.productService.findByIds(body.ids, user)
       : [];
 
     // Also support listing record IDs — look up by SKU
     if (body.listingIds?.length && products.length === 0) {
-      products = await this.productService.findByListingIds(body.listingIds);
+      products = await this.productService.findByListingIds(
+        body.listingIds,
+        user,
+      );
     }
 
     if (!products.length) {

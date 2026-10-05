@@ -1,6 +1,6 @@
 # RealTrackApp — Map of Content
 
-**Last reviewed:** 2026-08-06
+**Last reviewed:** 2026-09-29
 
 Entry point for the vault. RealTrackApp (DB name `listingpro` — see
 [[areas/database-and-jobs|database-and-jobs]] for the branding note) is a full-stack
@@ -43,6 +43,10 @@ this.
 - [[context/FEATURE_REGISTRY|context/FEATURE_REGISTRY.md]] — feature-by-feature
   maturity tracking
 
+- Warehouse stock (implemented 2026-10-05): [[architecture/WAREHOUSE_INVENTORY|architecture/WAREHOUSE_INVENTORY.md]]
+  — ledger, warehouses/bins, orders, procurement (stock not on hand), channel quantity sync; plan and history in
+  [[planning/INVENTORY_AND_WAREHOUSE_PLAN|planning/INVENTORY_AND_WAREHOUSE_PLAN.md]]
+
 ## Pre-existing deep-dive docs (not rewritten here — dates matter)
 The `docs/` tree has multiple generations of architecture documentation. When two
 files cover the same topic, prefer whichever has the newer modification date and
@@ -75,6 +79,7 @@ treat the older one as a historical snapshot rather than current truth:
 - Integration: [[integrations/partsbazar360-trading-enrichment|integrations/partsbazar360-trading-enrichment.md]] —
   see [[areas/ebay-and-partsbazar360-integration]] for the orientation summary
 - Ops: [[operations/SETUP|operations/SETUP.md]], [[operations/TESTING|operations/TESTING.md]],
+- Integration (push, RealTrack → partsbazar360.com): [[integrations/partsbazar360-publish|integrations/partsbazar360-publish.md]]
   [[operations/TROUBLESHOOTING|operations/TROUBLESHOOTING.md]], [[operations/api-users|operations/api-users.md]]
 - Model comparison work: [[model-comparison/REPORT|model-comparison/REPORT.md]]
 

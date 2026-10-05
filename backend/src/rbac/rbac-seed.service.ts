@@ -116,8 +116,7 @@ export class RbacSeedService {
       const name = this.config.get<string>(spec.nameEnv) ?? spec.defaultName;
 
       let user = await this.userRepo.findOne({ where: { email } });
-      const storeAccessAll =
-        spec.slug === ROLE_SLUGS.SUPER_ADMIN || spec.slug === ROLE_SLUGS.ADMIN;
+      const storeAccessAll = true;
       if (!user) {
         user = await this.userRepo.save(
           this.userRepo.create({
@@ -133,7 +132,7 @@ export class RbacSeedService {
       } else {
         user.role = spec.legacyRole;
         user.active = true;
-        if (storeAccessAll) user.storeAccessAll = true;
+        user.storeAccessAll = storeAccessAll;
         await this.userRepo.save(user);
       }
 

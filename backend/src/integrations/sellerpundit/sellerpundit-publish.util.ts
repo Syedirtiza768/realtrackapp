@@ -48,6 +48,18 @@ export function isSellerpunditRecoverableEbayPublishError(
 ): boolean {
   const text = sellerpunditErrorText(error, errors);
   if (!text.trim()) return false;
+  // SellerPundit can proxy legacy Trading ReviseItem failures for listings
+  // that are actually managed by eBay's Inventory API. Retrying through the
+  // direct Inventory API preserves the source listing projection and avoids
+  // asking Trading to mutate an unsupported representation.
+  if (
+    /21919474|inventory-based listing management is not currently supported/i.test(
+      text,
+    ) ||
+    /21919233|maximum compatibilities/i.test(text)
+  ) {
+    return true;
+  }
   if (
     /non-compliant domestic return policy/i.test(text) ||
     /parts\.?&.?accessories return policy/i.test(text) ||
@@ -106,10 +118,15 @@ export function shouldFallbackFromSellerpunditBulkCreate(
     platformError?: boolean;
   },
 ): boolean {
-  if (result.success || fallbackMode === 'sellerpundit') return false;
+  if (result.success) return false;
+  // These legacy Trading errors are recoverable through the direct Inventory
+  // API even when the account is configured to prefer SellerPundit bulk create.
+  if (isSellerpunditRecoverableEbayPublishError(result.error, result.errors)) {
+    return true;
+  }
+  if (fallbackMode === 'sellerpundit') return false;
   return (
     result.platformError === true ||
-    isSellerpunditBulkCreatePlatformError(result.error, result.errors) ||
-    isSellerpunditRecoverableEbayPublishError(result.error, result.errors)
+    isSellerpunditBulkCreatePlatformError(result.error, result.errors)
   );
 }

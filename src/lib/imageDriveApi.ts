@@ -1,4 +1,5 @@
 import { fetchWithAuth } from './authApi';
+import type { ImageDriveFolderFile } from './imageDriveUpload';
 
 const API = '/api';
 
@@ -187,6 +188,114 @@ export async function uploadAutoCreate(
     xhr.onerror = () => reject(new Error('Upload network error'));
     xhr.send(formData);
   });
+}
+
+export interface FolderUploadResult {
+  uploaded: number;
+  skipped: number;
+  unassigned: number;
+  folders: Array<{
+    folderName: string;
+    partNumber: string | null;
+    uploaded: number;
+  }>;
+}
+
+const FOLDER_UPLOAD_BATCH_SIZE = 50;
+
+async function uploadFolderBatch(
+  files: ImageDriveFolderFile[],
+  topLevelFolderName: string,
+  onProgress?: (pct: number) => void,
+): Promise<FolderUploadResult> {
+  const formData = new FormData();
+  formData.append('topLevelFolderName', topLevelFolderName);
+  formData.append(
+    'filePaths',
+    JSON.stringify(files.map((item) => item.relativePath)),
+  );
+  for (const item of files) {
+    // The path is sent separately so Multer never has to interpret a browser
+    // supplied filename as a directory or S3 key.
+    formData.append('files', item.file, item.file.name);
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/image-drive/upload-folder`);
+
+    const token = localStorage.getItem('mk_auth_token');
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    if (onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as FolderUploadResult);
+        } catch {
+          reject(new Error('Upload response was not valid JSON'));
+        }
+      } else {
+        reject(new Error(`Folder upload failed: ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Folder upload network error'));
+    xhr.send(formData);
+  });
+}
+
+/** Upload a directory tree in API-sized chunks while preserving progress. */
+export async function uploadFolder(
+  files: ImageDriveFolderFile[],
+  onProgress?: (pct: number) => void,
+): Promise<FolderUploadResult> {
+  if (files.length === 0) {
+    return { uploaded: 0, skipped: 0, unassigned: 0, folders: [] };
+  }
+
+  const topLevelFolderName = files[0].relativePath.split(/[\\/]/)[0] || 'Folder Upload';
+  const batches: ImageDriveFolderFile[][] = [];
+  for (let i = 0; i < files.length; i += FOLDER_UPLOAD_BATCH_SIZE) {
+    batches.push(files.slice(i, i + FOLDER_UPLOAD_BATCH_SIZE));
+  }
+
+  const merged: FolderUploadResult = {
+    uploaded: 0,
+    skipped: 0,
+    unassigned: 0,
+    folders: [],
+  };
+  const folderByKey = new Map<string, FolderUploadResult['folders'][number]>();
+
+  for (const [index, batch] of batches.entries()) {
+    const result = await uploadFolderBatch(batch, topLevelFolderName, (pct) => {
+      onProgress?.(
+        Math.round(((index + pct / 100) / batches.length) * 100),
+      );
+    });
+    merged.uploaded += result.uploaded;
+    merged.skipped += result.skipped;
+    merged.unassigned += result.unassigned;
+    for (const folder of result.folders) {
+      const key = folder.partNumber
+        ? folder.partNumber.toLowerCase().replace(/[\s\-_./\\]+/g, '')
+        : `folder:${folder.folderName.toLowerCase()}`;
+      const existing = folderByKey.get(key);
+      if (existing) existing.uploaded += folder.uploaded;
+      else folderByKey.set(key, { ...folder });
+    }
+  }
+
+  merged.folders = [...folderByKey.values()];
+  onProgress?.(100);
+  return merged;
 }
 
 export async function deleteFile(fileId: string): Promise<void> {

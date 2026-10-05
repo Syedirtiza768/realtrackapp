@@ -315,6 +315,11 @@ docker/
 
 ---
 
+### Warehouse stock (2026-10-05)
+- Backend: `backend/src/stock/` (start at `stock-ledger.service.ts`)
+- Frontend: `src/components/stock/StockWorkspace.tsx`, `src/lib/stockApi.ts`
+- Design: `docs/architecture/WAREHOUSE_INVENTORY.md`
+
 ## Navigation Tips
 
 1. **Finding a feature**: Check `src/App.tsx` (frontend routes) or `backend/src/app.module.ts` (backend modules)

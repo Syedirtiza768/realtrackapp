@@ -1,5 +1,7 @@
 # System Map
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Moved from `docs/CODEMAP.md` (2026-05-29).
 > This is the anchor reference for navigating the entire codebase.
 > For architecture overview, see [/docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md).
@@ -52,8 +54,8 @@ F:\apps\realtrackapp\
 ```
 src/components/
 ├── auth/               # Login, register, forgot password
-├── layout/             # Shell, navigation, layout components
-├── ui/                 # Reusable UI components (buttons, inputs, etc.)
+├── layout/             # Auto Parts Shell, VerticalWorkspaceShell, page headers
+├── ui/                 # Reusable UI (Card, Badge, Field, FeedbackPanel, ConfirmDialog)
 ├── dashboard/          # Dashboard, KPIs, charts
 ├── listings/           # Listing editor, revision history
 ├── catalog/            # Catalog manager, bulk actions, eBay publish
@@ -71,6 +73,7 @@ src/components/
 ├── audit/              # Audit trail
 ├── sku/                # SKU detail page
 ├── preview/            # eBay listing preview
+├── image-drive/        # Image Drive folder browser and recursive image upload
 └── channels/           # eBay OAuth callback
 ```
 
@@ -96,6 +99,7 @@ src/components/
 | `pricingApi.ts` | Pricing intelligence API |
 | `templateApi.ts` | Templates API |
 | `pipelineApi.ts` | Pipeline API |
+| `imageDriveApi.ts` | Image Drive folder/file APIs and chunked folder-tree uploads |
 | `listingGenerationApi.ts` | AI listing generation API |
 | `rbacApi.ts` | RBAC admin API |
 | `clientBrandingApi.ts` | Client branding API |
@@ -107,6 +111,7 @@ src/components/
 | `ebayFileExchangeParser.ts` | eBay file parsing |
 | `catalogDestructiveUi.ts` | Deprecated; use RBAC for delete UI |
 | `listingsQueryHooks.ts` | React Query hooks for listings |
+| `imageDriveUpload.ts` | Browser directory traversal and upload-path helpers |
 
 ### Contexts (`src/contexts/`)
 
@@ -181,7 +186,7 @@ module-name/
 | **automation** | `automation/` | `automation.controller.ts` | Automation rules |
 | **templates** | `templates/` | `template.controller.ts` | Listing templates |
 | **notifications** | `notifications/` | `notifications.controller.ts`, `notifications.gateway.ts` | WebSocket notifications |
-| **storage** | `storage/` | `storage.controller.ts`, `processors/thumbnail.processor.ts`, `processors/cleanup.processor.ts` | S3 assets, thumbnails |
+| **storage** | `storage/` | `storage.controller.ts`, `image-drive.controller.ts`, `image-drive.service.ts`, `utils/image-drive-folder-upload.util.ts`, `processors/thumbnail.processor.ts`, `processors/cleanup.processor.ts` | S3 assets, thumbnails, Image Drive folder-tree uploads, and part-number lookup |
 | **health** | `health/` | `health.controller.ts` | Health checks (@Public) |
 | **pricing-intelligence** | `pricing-intelligence/` | `pricing-intelligence.controller.ts` | Pricing rules |
 | **common/openai** | `common/openai/` | `openai-queue.service.ts` | OpenAI client, queued calls |
@@ -219,3 +224,37 @@ module-name/
 ---
 
 *Last updated: 2026-06-11. Reorganized: 2026-06-06.*
+
+## Fashion vertical boundary (2026-09-09)
+
+The Fashion path is a distinct frontend route tree backed by /api/fashion controllers. Auth/RBAC is shared, while Fashion roles, review records, store configuration, and OAuth state are explicitly vertical-aware. Photos-first Add Item uploads through existing storage, optionally identifies a garment with the shared vision provider, and persists category-aware attributes on `catalog_products.vertical_attributes`. Automotive remains the default for legacy rows and routes.
+
+## Business & Industrial boundary (2026-09-09)
+
+The B&I path is a distinct frontend route tree at `/business-industrial` backed
+by `BusinessIndustrialController` and a dedicated eBay controller. It uses
+organization-scoped `CatalogProduct` rows plus review, serialized-unit, and
+incident tables. Its role namespace, category families, measurement units,
+shipping checks, and dedicated eBay seller ownership are separate from
+automotive and Fashion. The shared publish worker reuses the B&I projection and
+fails closed on approval, quarantine, category, or shipping gaps.
+
+The B&I image-intake branch adds organization-scoped upload job/group/asset
+tables, `business-industrial-image-intake.controller.ts`, the sequential
+`business-industrial-image-intake` worker, and the frontend
+`/business-industrial/image-intake` screen. It feeds verified category metadata
+into the existing B&I draft, compliance, and eBay publish path.
+
+## Shared catalog workspace boundary (2026-09-12)
+
+Fashion and Business & Industrial now converge on a shared catalog read/write
+surface at their canonical catalog routes. `CatalogWorkspaceService` owns the
+common server-side projection query, facets, suggestions, CSV export, audit
+logging, and authorization scope; `FashionListingsService` and
+`BusinessIndustrialService` remain authorities for vertical validation, review,
+quarantine, and single-record edit rules. Existing automotive CatalogManager
+and APIs remain intact, so legacy automotive data is not widened into the
+non-automotive workspaces. The React `CatalogWorkspace` presents those APIs
+with Auto Parts-style toolbar density, a mobile filter drawer, and publish-job
+phases; B&I wraps it in `VerticalWorkspaceShell` without changing payload or
+permission contracts.

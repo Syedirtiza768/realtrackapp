@@ -24,32 +24,38 @@ export interface AuthUser {
   roleSlug: string;
   roleName: string;
   active: boolean;
+  passwordChangeRequired?: boolean;
   permissions: string[];
   lastLoginAt?: string | null;
   createdAt?: string;
   sidebarModules?: string[];
 }
 
+export interface OrganizationSummary {
+  organizationId: string;
+  name: string;
+  slug: string;
+  role: string;
+}
+
 interface MeResponse {
   user: AuthUser;
-  organizations: {
-    organizationId: string;
-    name: string;
-    slug: string;
-    role: string;
-  }[];
+  organizations: OrganizationSummary[];
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   permissions: string[];
+  organizations: OrganizationSummary[];
+  activeOrganizationId: string | null;
   sidebarModules: string[];
   loading: boolean;
   initializing: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, vertical?: 'automotive' | 'fashion' | 'business_industrial') => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
+  selectOrganization: (organizationId: string) => void;
   requestPasswordReset: (email: string) => Promise<void>;
   refreshSession: () => Promise<void>;
   isAuthenticated: boolean;
@@ -72,6 +78,42 @@ function persistUser(user: AuthUser | null) {
 }
 
 const SIDEBAR_MODULES_KEY = "mk_sidebar_modules";
+const ORGANIZATION_KEY = "mk_active_organization_id";
+const VERTICAL_KEY = "mk_preferred_vertical";
+
+type PreferredVertical = 'automotive' | 'fashion' | 'business_industrial';
+
+function verticalOrgPrefix(vertical: PreferredVertical | null | undefined) {
+  if (vertical === 'business_industrial') return 'business-industrial-';
+  if (vertical === 'fashion') return 'fashion-';
+  return null;
+}
+
+function pickPreferredOrganization(
+  organizations: OrganizationSummary[],
+  current: string | null,
+  preferredVertical?: PreferredVertical | null,
+) {
+  if (!organizations.length) return null;
+  const prefix = verticalOrgPrefix(preferredVertical);
+  if (prefix) {
+    const verticalOrgs = organizations.filter((item) => item.slug.startsWith(prefix));
+    if (verticalOrgs.length) {
+      if (current && verticalOrgs.some((item) => item.organizationId === current)) return current;
+      const owned = verticalOrgs.find((item) => item.role === 'owner');
+      return (owned ?? verticalOrgs[0]).organizationId;
+    }
+  }
+  if (current && organizations.some((item) => item.organizationId === current)) return current;
+  return (
+    organizations.find((item) => item.slug.startsWith('business-industrial-'))?.organizationId
+    ?? organizations.find((item) => item.slug.startsWith('fashion-'))?.organizationId
+    ?? organizations.find((item) => item.role === 'owner')?.organizationId
+    ?? organizations.find((item) => item.role === 'admin')?.organizationId
+    ?? organizations[0]?.organizationId
+    ?? null
+  );
+}
 
 function persistSidebarModules(modules: string[]) {
   localStorage.setItem(SIDEBAR_MODULES_KEY, JSON.stringify(modules));
@@ -100,6 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [sidebarModules, setSidebarModules] = useState<string[]>(() =>
     loadSidebarModules(),
+  );
+  const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
+  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(() =>
+    localStorage.getItem(ORGANIZATION_KEY),
   );
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(
@@ -135,7 +181,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       persistUser(data.user);
       setToken(currentToken);
+      setOrganizations(data.organizations);
+      setActiveOrganizationId((current) => {
+        const preferredVertical = (localStorage.getItem(VERTICAL_KEY) as PreferredVertical | null) || null;
+        const preferred = pickPreferredOrganization(data.organizations, current, preferredVertical);
+        if (preferred) localStorage.setItem(ORGANIZATION_KEY, preferred);
+        else localStorage.removeItem(ORGANIZATION_KEY);
+        return preferred;
+      });
 
+      if (data.user.passwordChangeRequired) {
+        setSidebarModules([]);
+        persistSidebarModules([]);
+        return;
+      }
       // Fetch sidebar module visibility
       try {
         const sidebar = await fetchWithAuth<{ visibleModules: string[] }>(
@@ -162,14 +221,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refreshSession();
   }, [refreshSession]);
 
+  const selectOrganization = useCallback((organizationId: string) => {
+    if (!organizations.some((item) => item.organizationId === organizationId)) return;
+    setActiveOrganizationId(organizationId);
+    localStorage.setItem(ORGANIZATION_KEY, organizationId);
+  }, [organizations]);
+
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, vertical?: 'automotive' | 'fashion' | 'business_industrial') => {
       setLoading(true);
       try {
         const res = await fetch(`${API}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, ...(vertical ? { vertical } : {}) }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -177,6 +242,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const data = await res.json();
         localStorage.setItem(TOKEN_KEY, data.accessToken);
+        if (vertical) localStorage.setItem(VERTICAL_KEY, vertical);
+        else localStorage.removeItem(VERTICAL_KEY);
+        // Force org re-pick for the login vertical instead of keeping a stale Super Admin workspace.
+        if (vertical === 'business_industrial' || vertical === 'fashion') {
+          localStorage.removeItem(ORGANIZATION_KEY);
+          setActiveOrganizationId(null);
+        }
         setToken(data.accessToken);
         await refreshSession();
       } finally {
@@ -222,10 +294,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setToken(null);
     setUser(null);
+    setOrganizations([]);
+    setActiveOrganizationId(null);
     setSidebarModules([]);
     persistUser(null);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(SIDEBAR_MODULES_KEY);
+    localStorage.removeItem(ORGANIZATION_KEY);
+    localStorage.removeItem(VERTICAL_KEY);
   }, [token]);
 
   const requestPasswordReset = useCallback(async (email: string) => {
@@ -246,12 +322,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         token,
         permissions,
+        organizations,
+        activeOrganizationId,
         sidebarModules,
         loading,
         initializing,
         login,
         register,
         logout,
+        selectOrganization,
         requestPasswordReset,
         refreshSession,
         isAuthenticated: !!token && !!user,

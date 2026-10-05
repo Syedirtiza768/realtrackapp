@@ -1,5 +1,7 @@
 # Database Schema
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Consolidated from `docs/DATABASE_MAP.md` (513 lines, entity-focused) and `docs/architecture/database.md` (108 lines, engine/ORM config focused) — 2026-05-29. Updated: 2026-06-11.
 
 ---
@@ -49,7 +51,7 @@ Grouped by module:
 | ingestion | `IngestionJob`, `PipelineJob`, `AiResult` |
 | motors-intelligence | `MotorsProduct`, `ProductCandidate`, `ExtractedAttribute`, `ValidationResult`, `ReviewTask`, `ListingGeneration`, `CorrectionRule`, `EbayAspectRequirement`, `EbayCategoryMapping`, `MotorsFeedbackLog` |
 | channels | `ChannelConnection`, `ChannelListing`, `ChannelWebhookLog`, `ListingChannelInstance`, `Store`, `AiEnhancement`, `DemoSimulationLog` |
-| integrations/ebay | `ConnectedEbayAccount`, `EbayAccountMarketplace`, `EbayOauthToken`, `EbayBusinessPolicy`, `EbayListingJob`, `EbayListingJobTarget`, `EbayListingChannel`, `EbayListingSyncLog`, `EbayApiAuditLog`, `EbayApiError`, `InternalStore`, `InventoryMovement`, `ListingActionLog`, `ListingStoreOverride` |
+| integrations/ebay | `ConnectedEbayAccount`, `EbayAccountMarketplace`, `EbayOauthToken`, `EbayBusinessPolicy`, `EbayHostedImage`, `EbayListingJob`, `EbayListingJobTarget`, `EbayListingChannel`, `EbayListingSyncLog`, `EbayApiAuditLog`, `EbayApiError`, `InternalStore`, `InventoryMovement`, `ListingActionLog`, `ListingStoreOverride` |
 | inventory | `InventoryEvent`, `InventoryLedger`, `StoreInventoryAllocation` |
 | orders | `Order`, `OrderItem` |
 | dashboard | `AuditLog`, `DashboardCache`, `SalesRecord` |
@@ -150,6 +152,13 @@ Grouped by module:
 #### `internal_stores`
 `id`, `connectedEbayAccountId` FK, `name`, `storeType`, `marketplaceId`, `isDefault`, `settings` (jsonb)
 
+#### `ebay_hosted_images`
+Store-scoped mapping from a source image URL to the eBay Picture Services URL
+used by Inventory API and SellerPundit publishes. The unique
+`(store_id, source_url)` key prevents repeated uploads; `expiration_date`
+tracks eBay's unused-image expiration response so stale cache entries can be
+replaced.
+
 ### Orders Module
 
 #### `orders`
@@ -176,6 +185,26 @@ Grouped by module:
 
 ---
 
+## Product Vertical Pilot Tables and Columns
+
+`AddProductVerticals1790300000000` is additive and must be applied through
+TypeORM migrations; `DB_SYNCHRONIZE` remains disabled.
+
+- `stores.vertical_config` stores enabled/default/workflow vertical settings.
+- `catalog_products.organization_id`, `vertical`, `vertical_attributes`, and
+  `vertical_validation_status` carry explicit product routing and validation.
+- `listing_records.vertical` and `vertical_attributes` preserve the same
+  routing at the source-listing boundary.
+- `catalog_imports.vertical`, `pipeline_jobs.vertical`,
+  `ebay_listing_job_targets.vertical`, and `ebay_listing_channels.vertical`
+  keep background work and publish state vertical-aware.
+- `product_families` groups non-automotive products for variation publishing;
+  `product_variants` stores SKU-level price, quantity, identifiers, images, and
+  variation attributes; `variant_marketplace_mappings` stores per-account
+  offer/listing state; and `product_marketplace_categories` caches
+  marketplace/category/aspect/condition metadata.
+
+Legacy rows may remain null and resolve to automotive in application code.
 ## Migrations
 
 Location: `backend/src/migrations/` (27 files). `migrationsTransactionMode: 'each'`.
@@ -251,3 +280,74 @@ Entities with `@DeleteDateColumn` automatically exclude soft-deleted rows. Use `
 ---
 
 *Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*
+
+## Fashion vertical schema (2026-09-09)
+
+The additive vertical migration adds explicit vertical and vertical_attributes fields to catalog/listing/import/job tables, per-store vertical_config, and product family/variant/category metadata tables. Fashion garment identification stores category-aware clothing/footwear/accessory attributes plus `_` review-metadata keys (`_suggestedKeys`, `_confirmedKeys`, `_analysisStatus`, and related flags) in `catalog_products.vertical_attributes` JSON; underscore-prefixed keys are stored as-is and are not camel-cased. No additional table or migration was required. Migration 1790400000000-CreateFashionWorkspaceSecurity adds fashion_reviews with organization_id, catalog_product_id, status, authenticity_confirmed, private evidence_keys, reviewer, notes, and timestamps. Evidence keys are never returned by public listing payloads.
+
+CatalogProduct retains the existing global SKU uniqueness constraint during the pilot. Fashion endpoints reject an existing SKU rather than overwriting another vertical. DB_SYNCHRONIZE remains disabled; neither vertical migration has been run by this implementation.
+
+## Business & Industrial vertical schema (2026-09-09)
+
+Migration `1790500000000-BusinessIndustrialWorkspaceSecurity` adds three
+organization-scoped tables: `business_industrial_reviews` for provenance,
+specification, testing, restricted-category, evidence, and risk decisions;
+`business_industrial_units` for serialized inventory with private serials kept
+out of public listing payloads; and `business_industrial_incidents` for verified
+counterfeit, intellectual-property, product-safety, recall, and other
+enforcement signals. Unique organization/product and organization/serial/event
+constraints make review and incident ingestion idempotent.
+
+The migration is additive and is not run by this change. Remote eBay takedown
+attempts are recorded as structured incident targets for authorized manual
+completion; local quarantine is immediate and fail-closed.
+
+## B&I Drive pilot projection (2026-09-11)
+
+The public-folder pilot intentionally adds no new tables or columns. It reuses
+the image-intake job/group/asset tables above, the existing ai_run_logs
+aggregation for token/cost reporting, and the existing catalog_products records
+created by B&I draft application. Each created draft is also mirrored to the
+existing organization-scoped listing_records table with
+vertical=business_industrial, status=draft, the WebP image URLs, and the
+enrichment payload. This keeps the pilot visible in the shared Inventory
+workbench while preserving the normal review and eBay publish gates.
+
+## B&I image intake schema (2026-09-10)
+
+Migration `1790800000000-CreateBusinessIndustrialImageIntake` adds three
+organization-scoped tables. `business_industrial_image_intake_jobs` tracks the
+folder upload and sequential worker progress. `business_industrial_image_intake_groups`
+stores one base part per run, all raw instance folder names/suffixes, AI
+identification, confidence, category suggestions, item-specific metadata,
+warnings, and the linked B&I draft. `business_industrial_image_intake_assets`
+stores source folder/path and B&I-owned S3/CDN metadata for each image.
+
+The group uniqueness key is `(job_id, base_part_normalized)` and the asset key
+is `(job_id, relative_path)`. All three tables cascade from the organization;
+assets are never read through the legacy global Image Drive tables. The
+migration is additive and requires the normal production migration approval.
+
+## Warehouse inventory schema (2026-10-05)
+
+Migration `1791100000000-CreateWarehouseInventory` (additive). The design is in [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md).
+
+| Table | Purpose / key constraints |
+|---|---|
+| `warehouses` | `UNIQUE(organization_id, code)`; one `is_default` per org (partial unique); `ebay_merchant_location_key`; `legacy_fashion_warehouse_id` |
+| `warehouse_locations` | Bins; `UNIQUE(warehouse_id, code)`; type storage/receiving/staging/returns/quarantine |
+| `suppliers` | `UNIQUE(organization_id, code)`; `supports_dropship`, `default_lead_time_days` |
+| `inventory_items` | SKU master; `UNIQUE(organization_id, sku)`; nullable FKs to `catalog_products`, `listing_records`, `product_variants`; `tracking_mode`, `sourcing_mode`, weighted-average `unit_cost` |
+| `inventory_item_sources` | Supplier offer per item; `UNIQUE(inventory_item_id, supplier_id)`; `fulfillment_mode` ship_to_warehouse/dropship |
+| `stock_levels` | Projection; `UNIQUE NULLS NOT DISTINCT (inventory_item_id, warehouse_id, location_id)`; CHECKs non-negative and `reserved + damaged <= on_hand`; `available` generated |
+| `inventory_units` | Serial/one-off units; unique private serial per org; `source_ref` (e.g. `bi_unit:<id>`) |
+| `stock_documents` / `stock_document_lines` | receipt/transfer/adjustment/count/purchase_order; numbers from `stock_document_seq` (`RCV-`, `TRF-`, `ADJ-`, `CNT-`, `PO-`) |
+| `stock_movements` | Append-only ledger (trigger `trg_stock_movements_append_only`; purge needs `SET LOCAL stock.allow_purge = 'on'`); unique `idempotency_key`; `operation_key` |
+| `stock_reservations` | Per order line / bin / unit; active → picked → shipped / released |
+| `procurement_requests` | open → ordered → received / dropshipped → fulfilled / cancelled; links to PO and PO line, order and order line |
+| `store_warehouse_links`, `store_stock_policies` | Store ↔ warehouse priority; push (default off), buffer, max, sourced-quantity cap |
+| `channel_stock_sync_state` | PK (store_id, inventory_item_id); dirty flag = outbox; desired/pushed/channel qty |
+| `user_warehouse_assignments` | Optional per-user warehouse restriction |
+| `order_items` (+2 cols) | `inventory_item_id`, `stock_status` |
+
+Legacy `inventory_ledger`, `inventory_events`, `inventory_movements` and `store_inventory_allocations` are **superseded (2026-10-05)** but not dropped.

@@ -1,10 +1,17 @@
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CatalogProduct } from '../../../catalog-import/entities/catalog-product.entity.js';
 import { ListingRecord } from '../../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../../storage/entities/image-asset.entity.js';
-import { sanitizeEbayImageUrls } from '../../../channels/ebay/ebay-listing-images.util.js';
+import { StorageService } from '../../../storage/storage.service.js';
+import {
+  flattenImageUrlInputs,
+  isSingleImageBrand,
+  sanitizeEbayImageUrls,
+  selectPrimaryImageForBrand,
+} from '../../../channels/ebay/ebay-listing-images.util.js';
 
 /** Filter out S3 temp-path URLs that may have been deleted after cleanup.
  *  Returns only durable URLs (catalog-images/, originals/, etc). If all URLs
@@ -36,6 +43,8 @@ export interface CatalogPublishSnapshot {
   conditionId: string | null;
   conditionLabel: string | null;
   imageUrls: string[];
+  /** Frozen product vertical; omitted legacy snapshots resolve to automotive. */
+  vertical?: ProductVertical | null;
 }
 
 export interface ResolvedCatalogPublishSource {
@@ -54,6 +63,7 @@ export class CatalogPublishResolverService {
     private readonly listingRepo: Repository<ListingRecord>,
     @InjectRepository(ImageAsset)
     private readonly assetRepo: Repository<ImageAsset>,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -109,12 +119,20 @@ export class CatalogPublishResolverService {
       );
     }
 
-    const imageUrls = await this.resolveImageUrls(
+    const imageBrand = resolvedFromListingId
+      ? (listingRecord?.cBrand ?? catalogProduct?.brand)
+      : (catalogProduct?.brand ?? listingRecord?.cBrand);
+    const resolvedImageUrls = await this.resolveImageUrls(
       catalogProduct,
       listingRecord,
       warnings,
       resolvedFromListingId,
+      imageBrand,
     );
+
+    const imageUrls = isSingleImageBrand(imageBrand)
+      ? selectPrimaryImageForBrand(resolvedImageUrls, imageBrand)
+      : resolvedImageUrls;
 
     const preferListing = <T>(
       listingValue: T | null | undefined,
@@ -166,6 +184,7 @@ export class CatalogPublishResolverService {
       ),
       conditionLabel: catalogProduct?.conditionLabel ?? null,
       imageUrls,
+      vertical: catalogProduct?.vertical ?? listingRecord?.vertical ?? null,
     };
 
     return { snapshot, catalogProduct, listingRecord, warnings };
@@ -176,6 +195,7 @@ export class CatalogPublishResolverService {
     listingRecord: ListingRecord | null,
     warnings: string[],
     preferListingRecord = false,
+    brandOrTitle?: string | null,
   ): Promise<string[]> {
     const candidates: string[] = [];
 
@@ -229,9 +249,20 @@ export class CatalogPublishResolverService {
       }
     }
 
-    const sanitized = sanitizeEbayImageUrls(candidates);
+    const sanitized = sanitizeEbayImageUrls(
+      candidates,
+      isSingleImageBrand(brandOrTitle)
+        ? {
+            maxImages: Math.max(flattenImageUrlInputs(candidates).length, 1),
+          }
+        : undefined,
+    );
     warnings.push(...sanitized.warnings);
-    return sanitized.imageUrls;
+    return Promise.all(
+      sanitized.imageUrls.map((url) =>
+        this.storageService.getPreferredImageUrl(url),
+      ),
+    );
   }
 
   /**
@@ -253,9 +284,10 @@ export class CatalogPublishResolverService {
       );
     }
 
-    const imageUrls = sanitizeEbayImageUrls(
-      filterTempUrls(listing.itemPhotoUrl),
-    ).imageUrls;
+    const listingImages = filterTempUrls(listing.itemPhotoUrl);
+    const imageUrls = isSingleImageBrand(listing.cBrand)
+      ? selectPrimaryImageForBrand(listingImages, listing.cBrand)
+      : sanitizeEbayImageUrls(listingImages).imageUrls;
 
     const title =
       listing.title?.trim() ||
@@ -282,6 +314,8 @@ export class CatalogPublishResolverService {
       returnProfile: listing.returnProfileName,
       paymentProfile: listing.paymentProfileName,
       imageUrls,
+      vertical: listing.vertical,
+      verticalAttributes: listing.verticalAttributes ?? {},
       sourceFile: listing.sourceFileName,
       sourceRow: listing.sourceRowNumber,
     });
@@ -298,10 +332,16 @@ export class CatalogPublishResolverService {
     warnings: string[],
   ): Promise<CatalogProduct> {
     let dirty = false;
-    const listingImages = sanitizeEbayImageUrls(
-      filterTempUrls(listing.itemPhotoUrl),
-    ).imageUrls;
+    const rawListingImages = filterTempUrls(listing.itemPhotoUrl);
+    const listingImages = isSingleImageBrand(listing.cBrand)
+      ? selectPrimaryImageForBrand(rawListingImages, listing.cBrand)
+      : sanitizeEbayImageUrls(rawListingImages).imageUrls;
 
+    if (!product.vertical && listing.vertical) {
+      product.vertical = listing.vertical;
+      product.verticalAttributes = listing.verticalAttributes ?? {};
+      dirty = true;
+    }
     if (!product.imageUrls?.length && listingImages.length) {
       product.imageUrls = listingImages;
       dirty = true;

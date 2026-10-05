@@ -1,6 +1,6 @@
 # UI/UX Guidelines
 
-> **Note**: Lightweight stub. No formal UI/UX guidelines exist for RealTrackApp.
+> **Note**: Lightweight stub. No formal UI/UX guidelines exist for Omni Core.
 > The design system is implemented via Tailwind CSS utility classes and Lucide React icons.
 
 ## Design System
@@ -36,7 +36,7 @@
 
 ## Design Conventions
 
-- Dark theme shell with light content cards
+- Light theme by default (`data-theme="light"`). Dark and system remain selectable in Client Settings.
 - Tab-based navigation for multi-section pages
 - Modal dialogs for create/edit flows
 - Toast notifications for success/error feedback
@@ -58,8 +58,8 @@
 
 ## Known Issues
 
-- **Branding inconsistency**: Shell shows "RealTrackApp", login screen shows "ListingPro"
-- **Theme inconsistency**: SkuDetailPage historically used light theme vs dark everywhere else (verify current state)
+- **Branding**: Shell, login, and vertical workspaces use "Omni Core"
+- **Theme**: Default is light. SkuDetailPage historically used light cards against a dark shell (verify current state).
 
 ---
 

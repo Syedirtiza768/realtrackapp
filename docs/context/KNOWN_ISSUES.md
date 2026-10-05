@@ -83,6 +83,56 @@
 
 **Files**: `src/components/catalog/PublishProgressPanel.tsx`, `src/components/catalog/CatalogManager.tsx`
 
+### R19: Stale eBay Inventory Location Keys Caused Publish Error 25002
+
+**Type**: Integration reliability bug
+**Severity**: High
+**Status**: Fix deployed to production (2026-08-21); safe retry ready
+
+**Description**: The publish path trusted `ebay_account_marketplaces.default_inventory_location_key` and only checked eBay for a location when the database value was empty. If eBay deleted or disabled that location independently, offer creation succeeded but `publishOffer` failed for every listing with error 25002: `Location information not found`.
+
+**Resolution**: The final publish boundary now verifies the configured key against eBay, filters disabled locations, selects an enabled existing location or provisions the Dubai default `AE_Dubai`, caches the account-level verification briefly during bulk jobs, and persists a repaired marketplace default. The backend was rebuilt and restarted in production on 2026-08-21; the affected Superior Auto Parts batch is ready for retry.
+
+**Files**: `backend/src/channels/ebay/ebay-inventory-api.service.ts`, `backend/src/channels/ebay/ebay-publish.service.ts`
+
+### R20: Account-Scoped eBay SKU Collisions Could Cross-Project Listing Data
+
+**Type**: Data-integrity bug
+**Severity**: Critical
+**Status**: Fixed in code; production repair batch in progress (2026-08-24)
+
+**Description**: eBay Inventory SKUs are scoped to the seller account, not to
+an individual catalog product. A reused SKU could therefore point at an
+unrelated remote item. The old compatibility fresh-SKU recovery copied that
+remote item, which could publish the wrong title, images, aspects, and
+description for the requested part.
+
+**Resolution**: The publish boundary now performs a fail-closed remote SKU
+ownership check before either direct Inventory API or SellerPundit writes. A
+canonical `BLA-<suffix>` collision deterministically tries the postfix-free
+`BLAP-<suffix>` alternate only after proving that eBay has no item or offer
+under that alternate; a second collision remains a hard failure. A successful
+publish is also read back and checked for title, description, image count,
+policy IDs, location, and compatibility. Fresh-SKU recovery now requires a
+canonical local inventory payload and refuses to derive one from a remote item
+after a collision. The read-only production audit is
+  `backend/src/scripts/audit-add-part-ebay.ts`; it covers individual Add Part/New
+  listings while excluding pipeline, FEBI/FEBI Bilstein, and Lemförder/Lemforder.
+  Internal warehouse-bin values such as `BL2A-R3-ZC-S5-L-B8` are deliberately
+  treated as inventory metadata rather than eBay merchant addresses; the audit
+  validates the configured eBay location key (`AE_Dubai`) separately.
+
+The production repair runner is serial and dry-run by default. Its apply mode
+persists the effective `BLAP-` SKU and new eBay offer/listing IDs transactionally,
+retries bounded eBay availability-propagation failures, and removes only
+unpublished/no-listing partial recovery offers/items that were proven to be
+created by that run. Published or ambiguous remote offers are never deleted.
+
+**Files**: `backend/src/channels/ebay/ebay-publish.service.ts`,
+`backend/src/channels/ebay/ebay-compatibility-reconciliation.service.ts`,
+`backend/src/scripts/audit-add-part-ebay.ts`,
+`backend/src/scripts/repair-add-part-ebay.ts`
+
 ### R16: Empty ebay_category_mappings Caused Invalid Category Publishes
 
 **Type**: Bug  

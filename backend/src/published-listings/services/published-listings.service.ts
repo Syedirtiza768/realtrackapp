@@ -94,6 +94,148 @@ export class PublishedListingsService {
     const limit = Math.min(query.limit ?? 50, 200);
     const offset = (page - 1) * limit;
 
+    const qb = await this.buildListQuery(organizationId, user, query, accessibleStores);
+    const [items, total] = await qb.skip(offset).take(limit).getManyAndCount();
+    return { items, total, page, limit };
+  }
+
+  async exportCsv(
+    organizationId: string,
+    user: User,
+    query: PublishedListingsQueryDto,
+  ): Promise<string> {
+    const accessibleStores = await this.storeAccess.getAccessibleStoreIds(user);
+    const exportQuery = { ...query, status: query.status ?? 'all' };
+    const qb = await this.buildListQuery(organizationId, user, exportQuery, accessibleStores);
+    qb.limit(10000);
+
+    const items = await qb.getMany();
+
+    const headers = [
+      'eBay Item ID',
+      'Title',
+      'SKU',
+      'Price',
+      'Currency',
+      'Qty Available',
+      'Qty Sold',
+      'Status',
+      'Format',
+      'Condition',
+      'Category',
+      'Store',
+      'Account',
+      'Marketplace',
+      'Listing URL',
+      'Brand',
+      'MPN',
+      'OE Numbers',
+      'Listed From',
+      'Listed Until',
+      'Last Synced',
+    ];
+
+    const escape = (v: unknown) => {
+      if (v == null) return '';
+      const s = String(v);
+      if (s.includes(',') || s.includes('"') || s.includes('\n'))
+        return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+
+    const rows = items.map((r) => {
+      const specifics = (r.itemSpecifics ?? {}) as Record<string, string[]>;
+      const brand = this.firstSpecificFromItem(specifics, ['brand', 'manufacturer', 'marque']);
+      const mpn = this.firstSpecificFromItem(specifics, [
+        'manufacturer part number',
+        'mpn',
+        'mfr part number',
+        'manufacturer part no',
+      ]);
+      const oeNumbers = this.allSpecificsFromItem(specifics, [
+        'oe/oem number',
+        'oem number',
+        'oe number',
+        'oe/oem part number',
+        'interchange part number',
+        'other part number',
+      ]);
+
+      return [
+        escape(r.ebayItemId),
+        escape(r.title),
+        escape(r.sku),
+        escape(r.price),
+        escape(r.currency),
+        escape(r.quantityAvailable),
+        escape(r.quantitySold),
+        escape(r.listingStatus),
+        escape(r.listingFormat),
+        escape(r.condition),
+        escape(r.categoryName),
+        escape(r.accountDisplayName),
+        escape(r.accountDisplayName),
+        escape(r.marketplaceId),
+        escape(r.listingUrl),
+        escape(brand),
+        escape(mpn),
+        escape(oeNumbers.join('; ')),
+        escape(r.ebayStartTime),
+        escape(r.ebayEndTime),
+        escape(r.lastSyncedAt),
+      ].join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
+  }
+
+  private firstSpecificFromItem(
+    specifics: Record<string, string[]>,
+    keys: string[],
+  ): string | null {
+    const entries = Object.entries(specifics ?? {});
+    for (const want of keys) {
+      const hit = entries.find(([k]) => k.trim().toLowerCase() === want);
+      const vals = hit?.[1];
+      if (Array.isArray(vals)) {
+        const v = vals.find((x) => typeof x === 'string' && x.trim());
+        if (v?.trim()) return v.trim();
+      }
+    }
+    return null;
+  }
+
+  private allSpecificsFromItem(
+    specifics: Record<string, string[]>,
+    keys: string[],
+  ): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const entries = Object.entries(specifics ?? {});
+    for (const want of keys) {
+      const hit = entries.find(([k]) => k.trim().toLowerCase() === want);
+      const vals = hit?.[1];
+      if (Array.isArray(vals)) {
+        for (const v of vals) {
+          if (typeof v === 'string' && v.trim()) {
+            const key = v.trim().toLowerCase();
+            if (!seen.has(key)) {
+              seen.add(key);
+              out.push(v.trim());
+            }
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  private async buildListQuery(
+    organizationId: string,
+    user: User,
+    query: PublishedListingsQueryDto,
+    accessibleStores: Set<string>,
+  ) {
     const qb = this.listingRepo
       .createQueryBuilder('l')
       .innerJoin(ConnectedEbayAccount, 'cea', 'cea.id = l.ebayAccountId')
@@ -101,11 +243,12 @@ export class PublishedListingsService {
 
     if (!user.storeAccessAll) {
       if (accessibleStores.size === 0) {
-        return { items: [], total: 0, page, limit };
+        qb.andWhere('1 = 0');
+      } else {
+        qb.andWhere('l.storeId IN (:...storeIds)', {
+          storeIds: [...accessibleStores],
+        });
       }
-      qb.andWhere('l.storeId IN (:...storeIds)', {
-        storeIds: [...accessibleStores],
-      });
     }
 
     if (query.ebayAccountId) {
@@ -124,9 +267,10 @@ export class PublishedListingsService {
     );
     if (slugStoreIds) {
       if (slugStoreIds.length === 0) {
-        return { items: [], total: 0, page, limit };
+        qb.andWhere('1 = 0');
+      } else {
+        qb.andWhere('l.storeId IN (:...slugStoreIds)', { slugStoreIds });
       }
-      qb.andWhere('l.storeId IN (:...slugStoreIds)', { slugStoreIds });
     }
 
     if (query.offerId) {
@@ -235,11 +379,9 @@ export class PublishedListingsService {
     };
     const sortCol = sortMap[query.sortBy ?? 'updated'] ?? 'l.updatedAt';
     const sortDir = query.sortDir === 'asc' ? 'ASC' : 'DESC';
-    // Stable pagination: always break ties on id so page windows do not drift.
     qb.orderBy(sortCol, sortDir).addOrderBy('l.id', sortDir);
 
-    const [items, total] = await qb.skip(offset).take(limit).getManyAndCount();
-    return { items, total, page, limit };
+    return qb;
   }
 
   /**

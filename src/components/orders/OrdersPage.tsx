@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { getOrders, getOrder, getOrderStats } from '../../lib/ordersApi';
+import { STOCK_STATUS_LABEL } from '../../lib/stockApi';
 import { useUrlFilters } from '../../hooks/useUrlFilters';
 
 /* --- Types --- */
@@ -43,6 +44,8 @@ interface OrderItem {
     unitPrice: string;
     totalPrice: string;
     fulfilled: boolean;
+    /** Warehouse stock allocation status (StockModule). */
+    stockStatus?: string | null;
 }
 
 interface OrderDetail extends OrderSummary {
@@ -486,6 +489,11 @@ export default function OrdersPage() {
                                                             <td className="py-2 px-3">
                                                                 <p className="text-slate-600 dark:text-slate-200">{item.title}</p>
                                                                 {item.sku && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">SKU: {item.sku}</p>}
+                                                                {item.stockStatus && (
+                                                                    <p className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${['backorder', 'unmatched'].includes(item.stockStatus) ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300' : item.stockStatus === 'awaiting_procurement' ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
+                                                                        Stock: {STOCK_STATUS_LABEL[item.stockStatus] ?? item.stockStatus}
+                                                                    </p>
+                                                                )}
                                                             </td>
                                                             <td className="py-2 px-3 text-center text-slate-500 dark:text-slate-300">{item.quantity}</td>
                                                             <td className="py-2 px-3 text-right text-slate-600 dark:text-slate-200">{fmtCurrency(item.totalPrice)}</td>

@@ -82,4 +82,22 @@ describe('published-listings-response.util', () => {
   it('returns null salvageDetails when no provenance specifics exist', () => {
     expect(extractSalvageDetails({ Brand: ['x'] })).toBeNull();
   });
+
+  it('exposes one highest-resolution image for FEBI published listings', () => {
+    const listing = {
+      title: 'FEBI Engine Mount 12345',
+      imageUrls: [
+        'https://i.ebayimg.com/00/s/NTAyWDUzMA==/z/a/$_1.JPG',
+        'https://i.ebayimg.com/00/s/MTUwMFgxNTAw/z/b/$_1.JPG',
+      ],
+      itemSpecifics: { Brand: ['FEBI'] },
+    } as EbayPublishedListing;
+
+    const mapped = toPublishedListingApiResponse(listing);
+
+    expect(mapped.imageUrls).toEqual([
+      'https://i.ebayimg.com/00/s/MTUwMFgxNTAw/z/b/$_1.JPG',
+    ]);
+    expect(mapped.images[0].isPrimary).toBe(true);
+  });
 });

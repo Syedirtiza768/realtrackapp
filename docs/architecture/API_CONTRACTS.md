@@ -1,5 +1,7 @@
 # API Contracts
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Consolidated from `docs/API_MAP.md` (557 lines) and `docs/architecture/api-map.md` — 2026-05-29.
 > Complete API endpoint reference. All routes under global prefix `/api` (set in `main.ts`).
 
@@ -15,6 +17,17 @@
 - **Swagger**: Available at `/api/docs` (non-production only)
 
 ---
+
+## FEBEST pre-enriched import
+
+The protected pipeline upload accepts `importMode=pre_enriched_febest_v1` in addition to `legacy_gridx`. The FEBEST mode requires exact `Manifest`, `Products`, and `Fitments` sheets and is revalidated server-side before a BullMQ job is created.
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| POST | `/api/pipeline/pre-enriched-febest/dry-run` | `pipeline.run` | Validates the exact workbook schema and returns errors, warnings, counts, and `readyForImport`; performs no DB or eBay writes |
+| POST | `/api/pipeline/upload` | `pipeline.run` | Accepts `importMode=pre_enriched_febest_v1`; invalid or non-ready workbooks are rejected before enqueue |
+
+Trusted-mode worker behavior: approved HTML, official image URLs, item specifics, and accepted fitments are persisted as draft catalog/listing rows only after collision preflight. It bypasses legacy generation and the mandatory optimization queue; publication is never performed by this mode.
 
 ## Authentication
 
@@ -244,7 +257,47 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | PATCH | `/api/channels/ebay/offers/price-quantity` | Update price/qty on live offers |
 | DELETE | `/api/channels/ebay/offers/:offerId` | End listing (withdraw offer) |
 
+### PartsBazar360 (push channel)
+
+**Base**: `/api/channels` (`channels.*`) — publishes listings into partsbazar360.com; see
+[integrations/partsbazar360-publish.md](../integrations/partsbazar360-publish.md).
+
+| Method | Path | Description | Permission |
+|--------|------|-------------|------------|
+| GET | `/api/channels/partsbazar360/status` | `{ configured, apiUrl, stores[] }` — whether `PARTSBAZAR360_API_KEY` is set and which sellers are linked | channels.view |
+| POST | `/api/channels/partsbazar360/connect` | Link a seller (`{ storeName, sellerStoreId }`); verified live against `…/listings/health?storeId=` before anything is saved; idempotent per seller | channels.manage |
+| POST | `/api/channels/partsbazar360/listings/:listingId/refresh` | Re-check import state on PartsBazar360 and update the channel instance | channels.publish |
+| POST | `/api/channels/publish-multi` | `channels: ['partsbazar360']`; optional `storeId` targets one linked seller (otherwise the latest active connection) | channels.publish |
+| POST | `/api/channels/bulk-publish` | Same, for many listings; optional `storeId`. Returns `{ total, enqueued, errors[] }` | channels.publish |
+| POST | `/api/channels/listings/:listingId/channel/partsbazar360/end` | Takes the offer off sale on PartsBazar360 (calls the receiver) | channels.publish |
+| POST | `/api/channels/:connectionId/test` | For this channel: live health check against PartsBazar360 | channels.manage |
+
+`storeId` on `publish-multi`/`bulk-publish` (new, optional) applies to every channel: the job
+now publishes to that store rather than the connection's primary store.
+
 ---
+
+## Product Verticals
+
+**Base**: `/api/verticals` | protected by RBAC
+
+| Method | Path | Description | Permission |
+|--------|------|-------------|------------|
+| GET | `/api/verticals/profiles` | List supported vertical profiles and attribute fields | catalog.view |
+| GET | `/api/verticals/stores` | List organization eBay stores with vertical configuration | settings.view |
+| GET | `/api/verticals/stores/:storeId/config` | Read a store's enabled/default/workflow vertical config | settings.view |
+| PATCH | `/api/verticals/stores/:storeId/config` | Update store vertical configuration | settings.manage |
+| GET | `/api/verticals/catalog/:productId/category-metadata` | Read marketplace category/aspect/condition metadata | catalog.view |
+| POST | `/api/verticals/families` | Create a non-automotive product family | catalog.update |
+| GET | `/api/verticals/families/:familyId/variants` | List family variants | catalog.view |
+| POST | `/api/verticals/families/:familyId/variants` | Create a family variant | catalog.update |
+| POST | `/api/verticals/variant-mappings` | Create or persist a variant marketplace mapping | ebay.publish |
+| POST | `/api/verticals/families/:familyId/publish` | Upsert Inventory API items/offers, create an item group, and publish the family | ebay.publish |
+
+The catalog upload endpoint also accepts multipart field `vertical`; omitted or
+legacy values resolve to `automotive`. Non-automotive publishing is fail-closed
+when `multi_vertical_catalog` is disabled and never receives Motors fitment or
+category fallback behavior.
 
 ## eBay Integrations
 
@@ -272,6 +325,7 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | GET | `/api/published-listings` | List/filter published listings | published_listings.view |
+| GET | `/api/published-listings/export` | Export published listings as CSV (query params match list endpoint) | published_listings.export |
 | GET | `/api/published-listings/summary` | Dashboard counts | published_listings.view |
 | GET | `/api/published-listings/sync-logs` | Sync job history | published_listings.view |
 | GET | `/api/published-listings/stores` | Connected stores with listing counts | published_listings.view |
@@ -366,6 +420,7 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 | DELETE | `/api/inventory/listings/:listingId` | Soft-delete inventory listing | inventory.delete |
 | POST | `/api/inventory/listings/bulk-delete` | Soft-delete multiple inventory listings (`{ ids }`) | inventory.delete |
 | PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing | listings.update |
+| PATCH | `/api/inventory/listings/:listingId/images/reorder` | Reorder or remove the complete image URL array for an automotive listing; the first image is primary | listings.update |
 | POST | `/api/inventory/part-lookup` | Vision-first fetch details for one listing (OEM + brand + 2+ photos → title, category, SEO notes) | inventory.enrich |
 | POST | `/api/inventory/part-lookup/bulk` | Vision-first fetch details for multiple listings | inventory.enrich |
 | POST | `/api/inventory/inline-enrich` | **Complete inline enrichment:** vision part lookup + EnrichmentPipeline + AI content generation for US/AU/DE. Creates marketplace listing records directly — no pipeline job. | inventory.enrich |
@@ -506,6 +561,11 @@ GET list, PUT `/:id/read`, PUT `/read-all`, DELETE `/:id`. WebSocket on `notific
 **Base**: `/api/storage` | `storage.*`
 
 GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
+The public `GET /api/storage/serve/{s3Key}` image proxy prefers a sibling
+`.webp` object for original JPEG/PNG/GIF/BMP/HEIC/AVIF keys and responds with
+a temporary redirect to the original key when the WebP object is absent.
+Responsive `_thumb.webp`, `_sm.webp`, `_medium.webp`, and `_lg.webp`
+requests retain their existing on-demand self-healing behavior.
 
 | Method | Path | Description | Access |
 |--------|------|-------------|--------|
@@ -524,6 +584,7 @@ GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
 | GET | `/api/image-drive/folders/:id/files` | List files in folder (paginated) | image_drive.view |
 | POST | `/api/image-drive/folders/:id/upload` | Upload files to folder (multipart, up to 50) | image_drive.upload |
 | POST | `/api/image-drive/upload` | Upload with auto-create folder (folderId="auto") | image_drive.upload |
+| POST | `/api/image-drive/upload-folder` | Upload up to 50 images from a folder-tree chunk; `filePaths` preserves relative paths and part-number directories are mapped to linked Image Drive folders | image_drive.upload |
 | DELETE | `/api/image-drive/files/:id` | Delete single file (+ S3 cleanup) | image_drive.manage |
 | GET | `/api/image-drive/files/:id` | Get single file details | image_drive.view |
 | POST | `/api/image-drive/files/bulk-delete` | Bulk delete files by IDs | image_drive.manage |
@@ -531,6 +592,12 @@ GET list, POST `/upload`, GET `/:id`, GET `/:id/download`, DELETE `/:id`.
 | POST | `/api/image-drive/lookup` | Batch lookup by part numbers | image_drive.view |
 | GET | `/api/image-drive/search` | Search folders by name or linked part number | image_drive.view |
 | GET | `/api/image-drive/stats` | Get stats (totalFolders, totalFiles, totalSizeBytes) | image_drive.view |
+
+`POST /api/image-drive/upload-folder` accepts multipart `files`, a JSON
+`filePaths` array aligned with those files, and `topLevelFolderName`. The
+frontend chunks larger folder trees into requests of 50 files or fewer. The
+response reports `uploaded`, retry-safe `skipped`, `unassigned`, and per-folder
+counts.
 
 ### Feature Flags ⚠️
 
@@ -579,4 +646,196 @@ Located in `src/lib/`:
 
 ---
 
-*Consolidated & reorganized: 2026-06-06. Updated: 2026-07-29.*
+*Consolidated & reorganized: 2026-06-06. Updated: 2026-08-19.*
+
+## Fashion workspace API
+
+All Fashion routes remain under the normal /api prefix and require JWT plus the listed Fashion permission.
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| POST | /api/auth/login with vertical=fashion | fashion.access | Fashion-specific login authorization |
+| GET | /api/fashion/workspace | fashion.dashboard.view | Fashion metrics and enabled stores |
+| GET | /api/fashion/listings | fashion.listings.view | Organization-scoped Fashion catalog |
+| POST/PATCH | /api/fashion/listings and /api/fashion/listings/:id | fashion.listings.create/update | Create or edit a Fashion draft |
+| POST | /api/fashion/listings/photos | fashion.listings.create | Multipart Fashion garment photo upload via existing storage; returns CDN URLs |
+| POST | /api/fashion/listings/analyze-images | fashion.listings.create | Analyze a complete photo set; `confirmedKeys` and saved `_confirmedKeys` are not overwritten; photos are kept if analysis fails |
+| POST | /api/fashion/listings/generate-content | fashion.listings.create | Build Fashion title/description from confirmed attributes and reported defects |
+| POST | /api/fashion/listings/:id/review | fashion.review | Approve or reject authenticity review |
+| GET | /api/fashion/listings/:id/review | fashion.authenticity.review | Read private review metadata |
+| POST | /api/fashion/listings/:id/quarantine | fashion.incidents.manage | Local quarantine; remote takedown is reported unavailable unless an integration supports it |
+| GET/PATCH | /api/fashion/stores and /api/fashion/stores/:storeId/config | fashion.stores.view/settings.manage | View and configure Fashion store enablement |
+| POST | /api/fashion/ebay/oauth/start | fashion.stores.manage | Start a vertical-tagged eBay OAuth flow |
+| POST | /api/fashion/ebay/listings/validate or /publish | fashion.publish | Validate or enqueue an approved Fashion listing against Fashion-enabled seller targets |
+| GET | /api/fashion/users | fashion.users.manage | List Fashion workspace members |
+| PATCH | /api/fashion/users/:userId/role | fashion.roles.manage | Assign a Fashion role |
+
+Catalog import upload/start accepts Fashion only when the caller has fashion.import; non-Fashion imports still require catalog.import. Vertical is selected server-side from the request and persisted on the import.
+
+## Business & Industrial workspace API (2026-09-09)
+
+All B&I routes are organization-scoped, require JWT, and use the dedicated
+`business_industrial.*` permission namespace. The local workspace is separate
+from automotive and Fashion; eBay seller accounts are tagged with an owning
+vertical during OAuth.
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| GET | `/api/business-industrial/workspace` | business_industrial.dashboard.view | Metrics, category families, and authorized stores |
+| GET | `/api/business-industrial/categories` | business_industrial.listings.view | Deliberate category-family choices |
+| GET/POST/PATCH | `/api/business-industrial/listings[/:id]` | business_industrial.listings.view/create/update | Create and edit explicit B&I drafts |
+| GET/POST | `/api/business-industrial/review[/listings/:id/review]` | business_industrial.review / review.private | Review queue and private evidence record |
+| POST | `/api/business-industrial/listings/:id/quarantine` | business_industrial.incidents.manage | Immediate local quarantine plus verified eBay offer withdrawal where a tracked offer exists |
+| POST | `/api/business-industrial/units/:unitId/allocate` or `/sold` | business_industrial.listings.update | Atomically allocate a serialized unit to an authorized B&I store, then mark it sold once |
+| POST | `/api/business-industrial/webhooks/ebay-enforcement` | signed public webhook (`EBAY_WEBHOOK_SECRET`) | Verify an eBay enforcement signal, quarantine local state, and attempt verified remote withdrawal |
+| GET/POST/POST | `/api/business-industrial/incidents`, `/incidents/:id/takedown`, `/incidents/:id/release` | business_industrial.incidents.view/manage/release | Verified incident intake, retryable takedown, release, and audit state |
+| GET | `/api/business-industrial/stores` | business_industrial.stores.view | List dedicated B&I seller stores |
+| POST | `/api/business-industrial/ebay/oauth/start` | business_industrial.stores.manage | Start vertical-tagged eBay OAuth |
+| GET | `/api/business-industrial/ebay/accounts` and `/accounts/:id/policies` | business_industrial.stores.view | List dedicated seller accounts and read stored marketplace policies |
+| POST | `/api/business-industrial/ebay/accounts/:id/policies/sync` | business_industrial.stores.manage | Synchronize payment, return, and fulfillment policies |
+| GET | `/api/business-industrial/ebay/accounts/:id/categories` and `/categories/:categoryId/metadata` | business_industrial.listings.view | Search category leaves and retrieve required aspects/policies |
+| POST | `/api/business-industrial/ebay/listings/validate`, `/publish`, `/publish-bulk` | business_industrial.publish | Validate or enqueue approved listings against B&I stores |
+| GET | `/api/business-industrial/ebay/listing-jobs/:id` and `/listings` | business_industrial.listings.view | Inspect publish jobs and organization-scoped publication channels |
+| POST | `/api/business-industrial/ebay/listings/:id/end` | business_industrial.publish | End a B&I publication and verify the remote offer is unpublished |
+| GET/POST/PATCH | `/api/business-industrial/users`, `/users/:userId/role`, `/users/:userId/deactivate`, `/users/:userId/stores` | business_industrial.users.manage | Create temporary-password accounts, role-manage, assign dedicated stores, or deactivate B&I members |
+
+B&I publishing fails closed unless the product is approved, not quarantined,
+has a mapped eBay leaf category, complete measurement units, and the required
+shipping evidence. Verified incidents quarantine local state immediately. For
+tracked Inventory API offers, the integration withdraws the offer and re-reads
+it until eBay reports `UNPUBLISHED`; failed or untracked targets remain
+escalated with retry evidence. Signed enforcement webhooks remain fail-closed
+until `EBAY_WEBHOOK_SECRET` is configured.
+
+The catalog publish dialog reads the selected account's cached policies from
+`/accounts/:id/policies` and sends optional connected-store target fields
+(`fulfillmentPolicyId`, `paymentPolicyId`, `returnPolicyId`, profile names, and
+`merchantLocationKey`) with single-target validation/publish requests. The
+durable target stores these values in its JSON result payload and the worker
+applies them when building the offer, so connected-store mappings take
+precedence over stale catalog profile text. Bulk publish continues to resolve
+each selected store's marketplace defaults server-side.
+
+## B&I AI image intake (2026-09-10)
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| POST/GET | `/api/business-industrial/image-intake/jobs` | business_industrial.import | Create and list organization-scoped image intake runs |
+| GET | `/api/business-industrial/image-intake/jobs/:id` | business_industrial.import | Read upload and AI-processing progress |
+| POST | `/api/business-industrial/image-intake/jobs/:id/upload` | business_industrial.import | Upload up to 50 images with relative folder paths per request |
+| POST | `/api/business-industrial/image-intake/jobs/:id/start` | business_industrial.import | Queue sequential vision/OCR identification |
+| GET | `/api/business-industrial/image-intake/jobs/:id/groups` and `/groups/:id` | business_industrial.import | Review grouped parts, source folders, evidence images, confidence, warnings, category, and item specifics |
+| GET | `/api/business-industrial/image-intake/jobs/:id/export.xlsx` | business_industrial.import | Export Listings, Source Folders, and Image Assets worksheets |
+| POST | `/api/business-industrial/image-intake/groups/:id/apply` | business_industrial.listings.create | Create one B&I draft from a reviewed image group |
+
+The upload contract preserves relative paths and treats a final numeric dot
+suffix as an instance marker (`Valve.1` and `Valve.2` belong to `Valve`). AI
+identification, price estimates, and categories are advisory. Draft creation
+requires a deliberate B&I category family and may carry a reviewer-confirmed
+eBay condition ID; existing B&I compliance approval and eBay publish validation
+remain mandatory before publication. Starting a partial/failed job creates a
+new queue attempt and processes only pending or failed groups; completed groups
+are preserved.
+
+The listing validation endpoint returns one `results[]` entry per seller target,
+with its own `blockingErrors` and `warnings`. Publishing fails closed when the
+explicit condition ID is not supported by the selected eBay leaf category.
+
+Serialized unit transitions are conditional database updates: only `available`
+units can be allocated and only `allocated` units can be sold, preventing double
+allocation or sale under concurrent requests. Private serial values are returned
+only through the private review endpoint.
+
+## Generic Auto Parts API scope (2026-09-11)
+
+`/api/catalog-products*`, `/api/listings*`, and listing search/facet/export
+queries are Auto Parts APIs. Authenticated requests are filtered server-side by
+the user’s organization memberships, `vertical=automotive`, and existing
+store/team access. Lookup-by-ID/SKU, edits, status changes, deletion, restore,
+bulk profile changes, exports, revisions, and SKU sibling synchronization use
+the same boundary and return not-found for inaccessible rows.
+
+Historical rows with nullable organization/vertical fields are compatibility
+data, not globally shared data: NULL-organization rows are included only when
+the requester belongs to `LEGACY_AUTOMOTIVE_ORGANIZATION_ID`. New interactive
+listing records are written with organization ownership and an automotive
+vertical. Global catalog maintenance endpoints (`fix-condition-titles`,
+`sanitize-titles`, and `backfill-categories`) require `catalog.clear`.
+
+## B&I image intake Drive extension (2026-09-11)
+
+POST /api/business-industrial/image-intake/jobs/from-drive requires
+business_industrial.import and accepts folderUrl, optional maxItems from 1 to
+200, optional skipFolderNames, and autoCreateDrafts. It queues the server-side worker, which prefers
+BNI-1…BNI-N direct child folders, caps images at 12 per item, converts sources
+to WebP before S3, and runs the same vision/enrichment flow. Job polling
+returns aiInputTokens, aiOutputTokens, aiCostUsd, aiRuns, aiModel, and webpStorage.
+Drafts are projected into shared listing_records and never
+published automatically.
+The create, list, polling, group review, apply, upload, start, and export
+endpoints accept organizationId and enforce the selected organization boundary.
+For link-shared Drive files, the worker prefers each file's public
+`webContentLink` for binary download and falls back to Drive `files.get` media;
+this supports Drive security-update links when API-key media access is rejected.
+B&I API score fields remain percentages from 0–100; Catalog persists the same
+values as 0–1 ratios in its `numeric(5,4)` score columns.
+
+## Shared vertical catalog API (2026-09-12)
+
+The NestJS `CatalogModule` exposes the same contract for Fashion and Business & Industrial while retaining the vertical-specific domain services for edits, review, quarantine, and publish eligibility.
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| GET | `/api/fashion/catalog/search` or `/api/business-industrial/catalog/search` | `<vertical>.access` + `<vertical>.listings.view` | Server-side search, pagination (`limit` 1–500, `offset`), sort, facets, q, price/image/stock/date/team/store filters, and `validationStatuses`. |
+| GET | `.../search/suggest` | view | Debounced SKU/title/brand/category/MPN suggestions scoped to the caller. |
+| GET | `.../search/facets` | view | Filtered common, vertical-attribute, team, marketplace, stock, catalog-status, validation-status, and price facets. |
+| GET | `.../products/:id` | view | Common product projection, safe review status, team metadata, and authorized publication summaries. |
+| PATCH | `.../products/:id` | `<vertical>.listings.update` | Inline common-field/attribute/image updates delegated to the vertical service. |
+| POST | `.../bulk/team` | `<vertical>.catalog.assign_team` | Assign selected IDs to an authorized active team or unassign. |
+| POST | `.../bulk/policies` | `<vertical>.catalog.manage_policies` | Apply shipping/payment/return profiles to selected IDs. |
+| POST | `.../bulk/delete` | `<vertical>.catalog.delete` | Soft-delete selected unpublished, non-quarantined catalog products; published items fail closed. |
+| POST | `.../export` | `<vertical>.catalog.export` | Server-side CSV of the filtered dataset or explicit product IDs; private evidence is excluded. |
+| POST | `/api/fashion/ebay/listings/publish-bulk` | `fashion.access` + `fashion.publish` | Durable Fashion multi-store publish job for approved products and dedicated Fashion stores. |
+
+All query/body DTOs are strict under the global `ValidationPipe`. Every query resolves organization membership, vertical, team scope, and accessible store IDs server-side. Publication facets and summaries never count or expose channels from inaccessible stores. Quarantined/manual-review records cannot be inline-edited, bulk-mutated, or published through the shared workspace.
+Facet category buckets return the stable category ID as `value` and the human category name as `label`; the query accepts either ID or legacy name values for compatibility with saved links. Imported date bounds are ISO timestamps, with the client sending the day after `importedTo` because the server applies an exclusive upper bound. The publish-job target response includes the original `errorPayload` plus normalized `errorMessage`/`lastErrorMessage` fields, and `completed_with_errors` is terminal. When the caller has no accessible publication stores, the marketplace facet is returned as an empty array rather than generating an invalid empty `IN ()` predicate; other product and vertical-attribute facets remain available.
+
+For Business & Industrial, the curated attribute-facet allowlist follows the
+fields populated by the importer and image-intake pipeline:
+`categoryFamily`, `manufacturer`, `model`, `mpn`, `inventoryMode`,
+`shippingMode`, `inputVoltage`, `inputFrequency`, `mounting`,
+`countryOfOrigin`, `ratedVoltage`, `ratedCurrent`, `series`, and
+`enclosureRating`. Empty automotive fields are not presented in the B&I UI.
+
+All query/body DTOs are strict under the global `ValidationPipe`. Every query resolves organization membership, vertical, team scope, and accessible store IDs server-side. Publication facets and summaries never count or expose channels from inaccessible stores. Quarantined/manual-review records cannot be inline-edited, bulk-mutated, or published through the shared workspace.
+
+## Warehouse stock (`/api/stock`)
+
+Added 2026-10-05. Design: [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md). Every route takes an optional `organizationId` query param (active workspace). The class-level guard is `stock.view`; route-level permissions are listed below. The 409 `INSUFFICIENT_STOCK` body is `{ message, code, details[] }`.
+
+| Method & path | Permission | Notes |
+|---|---|---|
+| `GET summary` · `GET setup/status` | view | KPIs; `initialized` flag |
+| `POST setup/bootstrap` `{dryRun, openingBalances?, claimUnscopedAutomotive?, defaultWarehouseCode?, defaultWarehouseName?}` | warehouses.manage | Idempotent backfill; dry run rolls back |
+| `GET/POST warehouses` · `PATCH warehouses/:id` | view / warehouses.manage | |
+| `GET/POST warehouses/:id/locations` · `POST …/locations/generate {aisles[], racks, shelves, prefix?}` · `PATCH locations/:id` | view / warehouses.manage | Bins |
+| `GET stores` · `PUT stores/:storeId/links {links[]}` · `PATCH stores/:storeId/policy` | view / warehouses.manage / channel_sync.manage | Store ↔ warehouse links, push policy |
+| `GET/PUT users/:userId/warehouses` | warehouses.manage | Warehouse restriction |
+| `GET items?q&warehouseId&filter&sourcingMode&status&sort&dir&limit&offset` · `POST items` · `GET/PATCH items/:id` | view / receive | SKU master + aggregates |
+| `GET/PUT items/:id/sources` · `DELETE items/:id/sources/:sourceId` | view / procure | Supplier offers |
+| `POST scan {code}` | view | SKU/barcode → item, bin, unit |
+| `POST receive` · `POST move` · `POST adjust` · `POST damage` | receive / move / adjust / adjust | `idempotencyKey` supported on receive/adjust/move |
+| `GET documents?type&status&warehouseId&supplierId` · `GET documents/:id` · `POST documents/:id/cancel` | view / move | |
+| `POST adjustments` · `POST adjustments/:id/approve` | adjust / adjust.approve | |
+| `POST transfers` · `POST transfers/:id/ship` · `POST transfers/:id/receive {lines[]}` | move / move / receive | In-transit as inbound |
+| `POST counts` · `PUT counts/:id/lines` · `POST counts/:id/submit` | count | Blind count |
+| `GET movements?itemId&warehouseId&type&orderId&documentId&from&to` | view | Ledger |
+| `GET reports/valuation` · `GET reports/aging` | valuation.view / view | |
+| `GET/POST suppliers` · `PATCH suppliers/:id` | view / procure | |
+| `GET procurement/summary` · `GET/POST procurement/requests` · `PATCH procurement/requests/:id` · `POST …/:id/cancel` · `POST …/:id/dropship` | view / procure | Stock to acquire |
+| `GET/POST procurement/reorder` | view / procure | Reorder-point suggestions |
+| `POST purchase-orders` · `POST purchase-orders/from-requests` · `POST purchase-orders/:id/order` · `POST …/:id/receive` · `POST …/:id/cancel` | procure / receive | Receive-to-order |
+| `GET orders/exceptions` · `GET orders/pick-list?warehouseId` · `GET orders/:orderId` · `POST orders/:orderId/allocate` · `POST orders/:orderId/pick` · `POST orders/:orderId/lines/:orderItemId/link {itemId}` | view / fulfil | |
+| `GET channel-sync?storeId&status&driftOnly` · `GET channel-sync/summary` · `POST channel-sync/resync?storeId` | view / channel_sync.manage | Shadow vs pushed quantities |
+
+The Orders API now returns `order_items.inventoryItemId` and `stockStatus`.

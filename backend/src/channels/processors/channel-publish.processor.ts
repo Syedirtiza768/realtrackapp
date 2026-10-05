@@ -11,6 +11,11 @@ import { Store } from '../entities/store.entity.js';
 import { EbayPublishService } from '../ebay/ebay-publish.service.js';
 import { sanitizeEbayImageUrls } from '../ebay/ebay-listing-images.util.js';
 import { mapToEbayConditionEnum } from '../ebay/ebay-listing-condition.util.js';
+import {
+  PARTSBAZAR360_STATUS_JOB,
+  PartsBazar360Service,
+} from '../partsbazar360/partsbazar360.service.js';
+import { PARTSBAZAR360_CHANNEL } from '../partsbazar360/partsbazar360.types.js';
 
 /**
  * BullMQ processor for the `channels` queue.
@@ -24,6 +29,7 @@ export class ChannelPublishProcessor extends WorkerHost {
   constructor(
     private readonly channelsService: ChannelsService,
     private readonly ebayPublish: EbayPublishService,
+    private readonly partsbazar: PartsBazar360Service,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
     @InjectRepository(ChannelConnection)
@@ -49,6 +55,12 @@ export class ChannelPublishProcessor extends WorkerHost {
         await this.handleUpdate(job);
         break;
 
+      case PARTSBAZAR360_STATUS_JOB: {
+        const data = job.data as { instanceId: string; attempt?: number };
+        await this.partsbazar.reconcile(data.instanceId, data.attempt);
+        break;
+      }
+
       default:
         this.logger.warn(`Unknown channel job type: ${job.name}`);
     }
@@ -61,9 +73,10 @@ export class ChannelPublishProcessor extends WorkerHost {
       connectionId: string;
       listingId: string;
       overrides?: { price?: number; title?: string; quantity?: number };
+      storeId?: string;
     }>,
   ): Promise<void> {
-    const { connectionId, listingId, overrides } = job.data;
+    const { connectionId, listingId, overrides, storeId } = job.data;
     this.logger.log(
       `Publishing listing ${listingId} to connection ${connectionId}`,
     );
@@ -75,10 +88,28 @@ export class ChannelPublishProcessor extends WorkerHost {
 
     const conn = await this.connectionRepo.findOneBy({ id: connectionId });
 
+    if (conn?.channel === PARTSBAZAR360_CHANNEL) {
+      // Push channel with its own status tracking; it must not fall through to
+      // the eBay-shaped bookkeeping below (publishedAt / listing.published).
+      const instance = await this.partsbazar.publish(
+        connectionId,
+        listingId,
+        overrides,
+      );
+      if (instance.syncStatus === 'synced') {
+        this.eventEmitter.emit('listing.published', {
+          listingId,
+          channel: PARTSBAZAR360_CHANNEL,
+          title: listing.title,
+        });
+      }
+      return;
+    }
+
     try {
       if (conn?.channel === 'ebay') {
         const store = await this.storeRepo.findOne({
-          where: { connectionId },
+          where: storeId ? { id: storeId, connectionId } : { connectionId },
           order: { isPrimary: 'DESC', createdAt: 'ASC' },
         });
         if (!store) {
@@ -197,6 +228,13 @@ export class ChannelPublishProcessor extends WorkerHost {
     const listing = await this.listingRepo.findOneBy({ id: listingId });
     if (!listing) {
       throw new Error(`Listing ${listingId} not found`);
+    }
+
+    const conn = await this.connectionRepo.findOneBy({ id: connectionId });
+    if (conn?.channel === PARTSBAZAR360_CHANNEL) {
+      // The receiver upserts on the listing id, so an update is a re-publish.
+      await this.partsbazar.publish(connectionId, listingId);
+      return;
     }
 
     const listingData: Record<string, unknown> = {

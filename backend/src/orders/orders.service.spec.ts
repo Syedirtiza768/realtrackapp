@@ -5,6 +5,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrdersService } from './orders.service';
 import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
@@ -35,8 +36,10 @@ describe('OrdersService (regression)', () => {
   let service: OrdersService;
   let orderRepo: Record<string, jest.Mock>;
   let itemRepo: Record<string, jest.Mock>;
+  let events: { emit: jest.Mock };
 
   beforeEach(async () => {
+    events = { emit: jest.fn() };
     orderRepo = {
       find: jest.fn(),
       findOne: jest.fn(),
@@ -68,6 +71,7 @@ describe('OrdersService (regression)', () => {
         OrdersService,
         { provide: getRepositoryToken(Order), useValue: orderRepo },
         { provide: getRepositoryToken(OrderItem), useValue: itemRepo },
+        { provide: EventEmitter2, useValue: events },
       ],
     }).compile();
 
@@ -147,6 +151,27 @@ describe('OrdersService (regression)', () => {
     });
     expect(orderRepo.create).toHaveBeenCalled();
     expect(itemRepo.save).toHaveBeenCalledTimes(1);
+    // Stock allocation (StockModule) listens for this on every new order.
+    expect(events.emit).toHaveBeenCalledWith('order.new', expect.objectContaining({ orderId: result.id, channel: 'shopify' }));
+  });
+
+  it('importOrder does not emit order.new for a duplicate', async () => {
+    orderRepo.findOne.mockResolvedValue(mockOrder());
+    await service.importOrder({
+      channel: 'ebay',
+      externalOrderId: 'EXT-001',
+      financials: { subtotal: '50', total: '60' },
+      items: [],
+    });
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('emits order.cancelled when an order is cancelled', async () => {
+    const order = mockOrder({ status: 'pending' });
+    orderRepo.findOneBy.mockResolvedValue(order);
+    orderRepo.save.mockImplementation((o) => Promise.resolve(o));
+    await service.transitionStatus('order-1', 'cancelled', 'buyer asked');
+    expect(events.emit).toHaveBeenCalledWith('order.cancelled', { orderId: 'order-1', channel: 'ebay', reason: 'buyer asked' });
   });
 
   /* ─── Shipping ─── */

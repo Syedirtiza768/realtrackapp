@@ -48,4 +48,5 @@ export const AUTOMOTIVE_OEM_BRANDS: readonly string[] = [
   'Volvo',
 ] as const;
 
-export const SKU_PREFIX = 'BLA';
+/** Prefix for automatically allocated Add Part SKUs. */
+export const SKU_PREFIX = 'BLAP';

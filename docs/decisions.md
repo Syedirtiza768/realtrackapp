@@ -1,6 +1,6 @@
 # Decision log
 
-**Last reviewed:** 2026-08-06
+**Last reviewed:** 2026-09-29
 
 Running log of non-obvious decisions, workarounds, and their reasons. Newest first.
 Add an entry whenever a change is driven by something that isn't obvious from the
@@ -22,6 +22,58 @@ Format:
 ```
 
 ---
+
+## 2026-10-05 — Warehouse stock: one ledger, absolute channel pushes, shadow mode, sell-before-you-own
+**Decision:**
+1. A new `stock` module and `/api/stock` prefix were added, rather than extending `inventory/`.
+2. `stock_movements` (append-only) is the source of truth, and `stock_levels` is a projection that `StockLedgerService` alone writes, using READ COMMITTED plus ordered `FOR UPDATE`.
+3. Channels are always sent the absolute computed quantity. Pushes are gated by a global flag and a per-store switch, both off by default.
+4. SKUs have a `sourcing_mode`. Order shortfalls become procurement requests instead of failing. Goods received against a PO are reserved for the waiting order.
+5. Vertical modules talk to stock only through events.
+6. Users with no warehouse assignments see every warehouse.
+
+**Why:**
+1. `inventory/` is the 2,900-line Auto Parts enrichment workbench; mixing stock into it would collide with the naming and the permissions.
+2. Its old ledger was never written by imports or orders. SERIALIZABLE retries badly under bulk receiving, and ordered row locks were proven correct by a last-unit race test.
+3. Deltas drift when eBay has already decremented a sale we have not imported yet. Live quantities must not change until shadow numbers have been reviewed.
+4. Many Auto Parts listings (FEBEST/NAPA catalog parts) are sold before they are bought. "Not on hand" is a normal state, not an error.
+5. This avoids circular Nest module imports and keeps intake working when stock is not set up.
+6. This avoids repeating the 2026-09-15 B&I `AND 1 = 0` empty-scope failure.
+
+## 2026-09-29 — Publish to PartsBazar360 is a push channel with no adapter, and the receiver reuses the pull pipeline
+**Decision:** (1) `partsbazar360` is a channel that *pushes* to PartsBazar360's authenticated
+`/integrations/realtrack/listings` endpoint, authenticated by a server-side shared secret
+(`PARTSBAZAR360_API_KEY`), not per-user OAuth tokens. (2) It is not registered as a
+`ChannelAdapter`; `ChannelsService` routes it to `PartsBazar360Service` at the few places that
+would need an adapter (test, end, inventory sync). (3) Channel demo mode does not apply to it.
+(4) Bulk inventory sync is a no-op for this channel. (5) Only MVL-validated fitment is sent.
+(6) `publish-multi`/`bulk-publish` accept an optional `storeId`, and the publish job now honors it.
+**Why:** (1) There is one trust relationship (RealTrack → its own marketplace), and a per-user
+token would just be a copy of a secret we already hold. (2) `syncConnectionInventory` sends a
+placeholder quantity of 1 for every instance and `ChannelsService.publishListing` short-circuits
+to a *simulated* publish while `CHANNEL_DEMO_MODE` is on (its default) — either would silently
+corrupt or fake a real storefront. (4) Same reason. (5) Matches what eBay publish already refuses
+to send; the receiver has its own lower-confidence title inference when we send `null`.
+(6) Several PartsBazar sellers can be linked, and "latest connection wins" would publish to the
+wrong one; the eBay branch of the job previously ignored any store choice, so the id is now
+passed through for both.
+Also: photos are resolved to RealTrack's public serve URL after an S3 existence check (exact key, else
+`.webp`), and `temp/` keys are skipped — found when the first real listing had 12 photos that no longer
+existed, and the rest stored `.jpg` names for objects that are `.webp`.
+Later the same day: external photos are mirrored to S3 as WebP rather than hot-linked (NAPA Canada returned
+403 to servers and hot-linked third-party URLs can vanish), and a listing with no obtainable photo is
+taken off the storefront rather than shown imageless.
+**Revisit when:** PartsBazar360 needs per-listing stock/price push on edit (currently re-publish),
+or a second push destination appears — at that point extract a shared "push channel" base rather
+than copying `PartsBazar360Service`.
+
+## 2026-08-17 — Make eBay publish retries duplicate-aware and source-fallback-safe
+**Decision:** Treat an explicit existing-eBay-listing response as a skipped duplicate
+when the matching published channel is already recorded, and fall back from a removed
+historical source listing to the canonical catalog product when building a job.
+**Why:** Durable publish jobs can outlive source-row cleanup, and retrying a listing
+that eBay already accepted can create misleading failures or duplicate work.
+**Revisit when:** The publish job model gains a first-class idempotency key shared with eBay.
 
 ## 2026-08-10 — Published-listings prune uses index-only scan + per-txn timeout (not a global timeout bump)
 **Decision:** The `markUnseenActiveAsEnded` prune step runs in its own

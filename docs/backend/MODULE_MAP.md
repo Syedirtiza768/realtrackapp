@@ -1,5 +1,7 @@
 # Module Map
 
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Moved from `docs/BACKEND_MAP.md` (552 lines, 2026-05-29).
 > Complete reference for the NestJS backend structure.
 > For API endpoints, see [/docs/architecture/API_CONTRACTS.md](../architecture/API_CONTRACTS.md).
@@ -221,7 +223,7 @@ TypeORM CLI configuration for migrations. `autoLoadEntities: true`, `migrations:
 - **automation**: `automation.controller.ts`, automation rules
 - **templates**: `template.controller.ts`, listing templates
 - **notifications**: `notifications.controller.ts`, `notifications.gateway.ts` (Socket.IO)
-- **storage**: `storage.controller.ts`, thumbnail + cleanup processors | same-origin proxy for official NAPA catalog images
+- **storage**: `storage.controller.ts`, `image-drive.controller.ts`, `image-drive.service.ts`, `utils/image-drive-folder-upload.util.ts`, thumbnail + cleanup processors | S3 assets, thumbnails, flat Image Drive folders, recursive folder-tree uploads, and part-number lookup; same-origin proxy for official NAPA catalog images
 - **health**: `health.controller.ts` (@Public, @nestjs/terminus)
 - **pricing-intelligence**: `pricing-intelligence.controller.ts`
 - **common/openai**: `openai.service.ts`, `openai-queue.service.ts`
@@ -261,3 +263,70 @@ Applied in order in `app.module.ts`:
 ---
 
 *Reorganized: 2026-06-06.*
+
+## Fashion vertical module (2026-09-09)
+
+backend/src/verticals contains VerticalsModule, FashionController, FashionListingsService, FashionImageAnalysisService, VerticalsService, FashionReview, and the vertical configuration/DTOs. FashionController owns organization-scoped drafts, photo upload, multi-image identification, listing-text generation, review decisions, private evidence metadata, quarantine, store configuration, and Fashion role administration. Photo storage reuses StorageService and ImageProcessorService; identification reuses OpenAiService vision and EbayTaxonomyApiService. The eBay integration module exposes the vertical-tagged Fashion OAuth start route while the shared callback preserves the destination.
+
+## Business & Industrial vertical module (2026-09-09)
+
+`backend/src/verticals/business-industrial.controller.ts` and
+`business-industrial.service.ts` own the organization-scoped B&I workspace,
+explicit category-family/specification validation, review records, serialized
+units, local quarantine, verified incident intake, dedicated stores, and
+vertical-role administration. `business-industrial.config.ts` is the
+deliberate attribute/unit contract; `business-industrial-import.ts` is the
+allowlisted spreadsheet mapper. The eBay integration adds
+`controllers/business-industrial-ebay.controller.ts` for vertical-tagged OAuth
+and approved publish jobs. `1790500000000-BusinessIndustrialWorkspaceSecurity`
+contains the additive persistence tables.
+
+## B&I image intake (2026-09-10)
+
+`business-industrial-image-intake.controller.ts` exposes the protected upload,
+progress, group review, Excel export, and draft-application routes.
+`business-industrial-image-intake.service.ts` owns organization isolation,
+folder-instance grouping, S3 persistence, centralized vision calls, eBay
+Taxonomy leaf/aspect resolution, AI audit logging, draft creation, and export.
+`business-industrial-image-intake.processor.ts` runs the
+`business-industrial-image-intake` BullMQ queue sequentially to control model
+and taxonomy rate limits.
+
+The same service exposes a bounded public-Drive pilot route. It enumerates
+server-side Drive children using GOOGLE_DRIVE_API_KEY, downloads up to 200 item
+folders and every supported image up to the 5,000-image job cap, canonicalizes
+images to WebP before S3, invokes openai/gpt-5.6-luna-20260709 for vision,
+evidence-bound listing copy, and the shared Browse-backed price suggestion, and
+aggregates spend from ai_run_logs. Decimal dot-suffix folders are grouped as
+instances of the normalized base SKU. Successful draft application writes both
+the B&I CatalogProduct and a shared ListingRecord inventory projection; reruns
+merge new assets into the existing normalized catalog SKU.
+
+## Shared catalog module (2026-09-12)
+
+`backend/src/catalog/catalog.module.ts` registers the shared
+`CatalogWorkspaceService` and vertical controllers. Search, suggest, facets,
+detail, inline patch, bulk team/policy/delete, and server-side CSV export use
+the common `catalog_products` projection while delegating vertical edits to
+FashionListingsService and BusinessIndustrialService. Publication summaries
+join only organization/vertical-matching eBay channels whose stores are
+accessible to the caller. Fashion bulk publish is exposed through the existing
+durable eBay multi-store job service.
+
+## Stock module (2026-10-05)
+
+`backend/src/stock/` — `StockModule` (imports Auth, Channels, Notifications, FeatureFlag, Scheduler; registers BullMQ queue `stock-channel-sync`).
+
+| File | Responsibility |
+|---|---|
+| `stock-ledger.service.ts` | The only writer of `stock_levels`/`stock_movements`. It handles locking, invariants, idempotency, the outbox and the legacy quantity projection |
+| `stock-access.service.ts` | Org + warehouse scoping |
+| `warehouses.service.ts`, `suppliers.service.ts`, `inventory-items.service.ts` | Warehouses/bins/store links/policies; suppliers/sources; SKU master, search, detail, scan |
+| `stock-operations.service.ts` | Receive, adjust, move, damage; transfers; counts; adjustment approval; document and ledger listing |
+| `reservations.service.ts`, `order-stock.service.ts` | Allocation primitive; order event listeners, pick, ship, release, backorder retry |
+| `procurement.service.ts` | Procurement requests, purchase orders, receive-to-order, dropship, reorder |
+| `channel-stock-sync.service.ts` + `.processor.ts` | Desired quantity, targets, push or shadow, crons |
+| `stock-setup.service.ts`, `stock-reports.service.ts`, `stock-intake.listener.ts` | Bootstrap; reports; vertical intake events |
+| `stock.controller.ts`, `stock-procurement.controller.ts` | `/api/stock/*` |
+
+Design: [../architecture/WAREHOUSE_INVENTORY.md](../architecture/WAREHOUSE_INVENTORY.md).

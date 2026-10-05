@@ -21,16 +21,16 @@ export type PublicBranding = {
 };
 
 const DEFAULT_BRANDING: PublicBranding = {
-  appName: 'RealTrackApp',
-  clientName: 'RealTrack',
-  shortName: 'RT',
+  appName: 'Omni Core',
+  clientName: 'Omni Core',
+  shortName: 'OC',
   logoUrl: null,
   faviconUrl: null,
   loginLogoUrl: null,
   primaryColor: '#2563eb',
   secondaryColor: '#1e293b',
   accentColor: '#0ea5e9',
-  themeMode: 'dark',
+  themeMode: 'light',
   footerText: null,
   poweredByVisible: false,
 };
@@ -64,10 +64,20 @@ export async function fetchPublicBranding(): Promise<PublicBranding> {
 function resolveThemeMode(themeMode: string): 'light' | 'dark' {
   if (themeMode === 'light') return 'light';
   if (themeMode === 'dark') return 'dark';
-  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    return 'light';
+  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
   }
-  return 'dark';
+  return 'light';
+}
+
+function setThemeColor(resolved: 'light' | 'dark'): void {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+  }
+  meta.content = resolved === 'dark' ? '#0f172a' : '#f8fafc';
 }
 
 /** Apply theme tokens to document root (login + shell). */
@@ -92,6 +102,7 @@ export function applyBrandingToDocument(branding: PublicBranding): void {
   const resolved = resolveThemeMode(branding.themeMode);
   root.setAttribute('data-theme', resolved);
   root.style.colorScheme = resolved;
+  setThemeColor(resolved);
 
   if (branding.faviconUrl) {
     let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");

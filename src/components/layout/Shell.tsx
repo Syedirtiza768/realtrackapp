@@ -25,11 +25,14 @@ import {
   ShoppingBag,
   ListChecks,
   HardDrive,
+  Warehouse,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useBranding } from "../../contexts/BrandingContext";
 import { usePermissions } from "../../hooks/usePermissions";
+import { toProxyUrl } from "../../lib/imageUrl";
+import WorkspaceSwitcher from "../auth/WorkspaceSwitcher";
 
 type NavItem = {
   icon: typeof LayoutDashboard;
@@ -47,6 +50,14 @@ const NAV_ITEMS: NavItem[] = [
     permission: "dashboard.view",
     moduleKey: "",
   },
+  {
+    icon: ShoppingBag,
+    label: "B&I workspace",
+    path: "/business-industrial",
+    permission: "business_industrial.access",
+    moduleKey: "business-industrial",
+  },
+
   {
     icon: Camera,
     label: "Ingestion",
@@ -91,7 +102,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     icon: Database,
-    label: "Catalog",
+   label: "Catalog",
     path: "/catalog",
     permission: "catalog.view",
     moduleKey: "catalog",
@@ -116,6 +127,13 @@ const NAV_ITEMS: NavItem[] = [
     path: "/inventory",
     permission: "inventory.view",
     moduleKey: "inventory",
+  },
+  {
+    icon: Warehouse,
+    label: "Stock",
+    path: "/stock",
+    permission: "stock.view",
+    moduleKey: "stock",
   },
   {
     icon: ListChecks,
@@ -249,7 +267,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const shortLabel = (branding.shortName || branding.appName || "RT")
     .slice(0, 2)
     .toUpperCase();
-  const appTitle = branding.appName || "RealTrackApp";
+  const appTitle = branding.appName || "Omni Core";
 
   const sidebarModuleSet = useMemo(
     () => new Set(sidebarModules),
@@ -269,7 +287,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
   const handleLogout = async () => {
     await logout();
-    navigate("/login");
+    navigate("/auto-parts/login");
   };
 
   return (
@@ -278,7 +296,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         <h1 className="text-lg lg:text-xl font-bold tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
           {branding.logoUrl ? (
             <img
-              src={branding.logoUrl}
+              src={toProxyUrl(branding.logoUrl)}
               alt=""
               className="w-8 h-8 rounded-md object-contain shrink-0"
             />
@@ -299,11 +317,17 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
         {visibleNav.map((item) => {
-          const isActive = location.pathname === item.path;
+          const targetPath = item.path === "/business-industrial"
+            ? item.path
+            : item.moduleKey === ""
+              ? "/auto-parts"
+              : `/auto-parts${item.path}`;
+          const isActive = location.pathname === targetPath ||
+            (targetPath !== "/auto-parts" && location.pathname.startsWith(`${targetPath}/`));
           return (
             <Link
               key={item.path}
-              to={item.path}
+              to={targetPath}
               onClick={onNavClick}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
                                 min-h-[44px]
@@ -331,6 +355,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
       </nav>
 
       <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+        <WorkspaceSwitcher />
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-slate-300 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
             {(user?.name ?? user?.email ?? "?").charAt(0).toUpperCase()}

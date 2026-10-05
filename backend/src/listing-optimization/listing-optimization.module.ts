@@ -13,6 +13,7 @@ import { FitmentDiscoveryService } from './fitment-discovery.service.js';
 import { ListingOptimizationService } from './listing-optimization.service.js';
 import { ListingOptimizationProcessor } from './processors/listing-optimization.processor.js';
 import { TitleVerificationService } from './title-verification/title-verification.service.js';
+import { EbayFitmentPublishService } from './ebay-fitment-publish.service.js';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { TitleVerificationService } from './title-verification/title-verificatio
     ListingOptimizationProcessor,
     EnterpriseListingIntelligenceService,
     TitleVerificationService,
+    EbayFitmentPublishService,
   ],
   exports: [
     ListingOptimizationService,

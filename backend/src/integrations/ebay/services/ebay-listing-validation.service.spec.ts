@@ -7,6 +7,7 @@ import type { SellerpunditTokenSyncService } from '../../sellerpundit/sellerpund
 import type { EbayInventoryApiService } from '../../../channels/ebay/ebay-inventory-api.service.js';
 import type { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
 import type { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.js';
+import type { VerticalsService } from '../../../verticals/verticals.service.js';
 import { EbayListingValidationService } from './ebay-listing-validation.service.js';
 
 /* ── Helpers ── */
@@ -59,6 +60,10 @@ describe('EbayListingValidationService', () => {
   let sellerpunditPolicies: { ensurePoliciesFresh: jest.Mock };
   let sellerpunditTokens: { validateAccountEbayToken: jest.Mock };
   let inventoryApi: { ensureMerchantLocation: jest.Mock };
+  let verticals: {
+    resolveVertical: jest.Mock;
+    buildPublishProjection: jest.Mock;
+  };
   let publishResolver: { resolve: jest.Mock };
   let marketplaceConfig: { get: jest.Mock };
 
@@ -89,6 +94,10 @@ describe('EbayListingValidationService', () => {
         supportsMotorsFitment: true,
       }),
     };
+    verticals = {
+      resolveVertical: jest.fn().mockReturnValue('automotive'),
+      buildPublishProjection: jest.fn(),
+    };
 
     svc = new EbayListingValidationService(
       marketplaceConfig as unknown as EbayMarketplaceConfigService,
@@ -97,6 +106,7 @@ describe('EbayListingValidationService', () => {
       sellerpunditTokens as unknown as SellerpunditTokenSyncService,
       inventoryApi as unknown as EbayInventoryApiService,
       publishResolver as unknown as CatalogPublishResolverService,
+      verticals as unknown as VerticalsService,
       accountRepo,
       mpRepo,
     );
@@ -174,6 +184,34 @@ describe('EbayListingValidationService', () => {
     expect(result.errors).toContainEqual(
       expect.stringContaining('inventory location'),
     );
+  });
+
+  it('accepts connected-store policy and location overrides', async () => {
+    accountRepo.findOne = jest.fn().mockResolvedValue({
+      id: 'acct-1',
+      connectionStatus: 'active',
+      connectionSource: 'ebay',
+    });
+    mpRepo.findOne = jest.fn().mockResolvedValue({
+      enabled: true,
+      defaultFulfillmentPolicyId: null,
+      defaultPaymentPolicyId: null,
+      defaultReturnPolicyId: null,
+      defaultInventoryLocationKey: null,
+    });
+
+    const result = await svc.validatePublish({
+      ...baseParams,
+      policyOverrides: {
+        fulfillmentPolicyId: 'fp-connected',
+        paymentPolicyId: 'pp-connected',
+        returnPolicyId: 'rp-connected',
+        merchantLocationKey: 'location-connected',
+      },
+    });
+
+    expect(result.errors).not.toContainEqual(expect.stringContaining('policy'));
+    expect(result.errors).not.toContainEqual(expect.stringContaining('inventory location'));
   });
 
   it('errors for missing SKU', async () => {

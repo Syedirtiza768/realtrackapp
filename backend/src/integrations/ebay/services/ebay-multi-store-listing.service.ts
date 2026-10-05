@@ -17,6 +17,33 @@ import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.
 const MAX_BULK_LISTINGS = 500;
 const MAX_DAILY_PUBLISH_TARGETS = 5_000;
 
+type PublishTargetInput = {
+  ebayAccountId: string;
+  marketplaceId: string;
+  fulfillmentPolicyId?: string;
+  paymentPolicyId?: string;
+  returnPolicyId?: string;
+  merchantLocationKey?: string;
+  requestedFulfillmentPolicyName?: string;
+  requestedPaymentPolicyName?: string;
+  requestedReturnPolicyName?: string;
+};
+
+function targetPolicyOverrides(target: PublishTargetInput): Record<string, string> {
+  const values: Record<string, string | undefined> = {
+    fulfillmentPolicyId: target.fulfillmentPolicyId,
+    paymentPolicyId: target.paymentPolicyId,
+    returnPolicyId: target.returnPolicyId,
+    merchantLocationKey: target.merchantLocationKey,
+    requestedFulfillmentPolicyName: target.requestedFulfillmentPolicyName,
+    requestedPaymentPolicyName: target.requestedPaymentPolicyName,
+    requestedReturnPolicyName: target.requestedReturnPolicyName,
+  };
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => typeof value === 'string' && value.trim()),
+  ) as Record<string, string>;
+}
+
 @Injectable()
 export class EbayMultiStoreListingService {
   constructor(
@@ -124,6 +151,7 @@ export class EbayMultiStoreListingService {
     const resolvedProducts: Array<{
       sourceListingId: string;
       catalogProductId: string;
+      vertical: import('../../../verticals/vertical.types.js').ProductVertical;
     }> = [];
     const skipped: Array<{ listingId: string; reason: string }> = [];
     for (const listingId of listingIds) {
@@ -138,6 +166,7 @@ export class EbayMultiStoreListingService {
       resolvedProducts.push({
         sourceListingId: listingId,
         catalogProductId: resolved.snapshot.catalogProductId,
+        vertical: resolved.snapshot.vertical ?? 'automotive',
       });
     }
 
@@ -172,6 +201,7 @@ export class EbayMultiStoreListingService {
           listingJobId: savedJob.id,
           catalogProductId: product.catalogProductId,
           ebayAccountId: account.id,
+          vertical: product.vertical,
           marketplaceId:
             account.primaryStore?.ebayMarketplaceId ??
             (typeof account.primaryStore?.config?.marketplace === 'string'
@@ -221,7 +251,7 @@ export class EbayMultiStoreListingService {
   async validateTargets(input: {
     organizationId: string;
     catalogProductId: string;
-    targets: { ebayAccountId: string; marketplaceId: string }[];
+    targets: PublishTargetInput[];
   }) {
     const results: Record<string, unknown>[] = [];
     for (const t of input.targets) {
@@ -231,6 +261,7 @@ export class EbayMultiStoreListingService {
         catalogProductId: input.catalogProductId,
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
+        policyOverrides: targetPolicyOverrides(t),
       });
       results.push({ key, ...v });
     }
@@ -242,7 +273,7 @@ export class EbayMultiStoreListingService {
     requestedByUserId: string;
     catalogProductId: string;
     sourceListingId?: string;
-    targets: { ebayAccountId: string; marketplaceId: string }[];
+    targets: PublishTargetInput[];
     idempotencyKey?: string;
   }): Promise<{
     job: EbayListingJob;
@@ -259,6 +290,10 @@ export class EbayMultiStoreListingService {
     const canonicalProductId = await this.resolveCanonicalProductId(
       input.catalogProductId,
     );
+    const source = await this.publishResolver.resolve(
+      input.sourceListingId ?? input.catalogProductId,
+    );
+    const vertical = source?.snapshot.vertical ?? 'automotive';
 
     const eligible: { ebayAccountId: string; marketplaceId: string }[] = [];
     const skipped: {
@@ -272,6 +307,7 @@ export class EbayMultiStoreListingService {
         catalogProductId: input.catalogProductId,
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
+        policyOverrides: targetPolicyOverrides(t),
       });
       if (v.status === 'blocked') {
         skipped.push({
@@ -284,9 +320,15 @@ export class EbayMultiStoreListingService {
       }
     }
     if (!eligible.length) {
+      const detail = skipped
+        .flatMap((row) => row.errors)
+        .filter((message) => typeof message === 'string' && message.trim())
+        .slice(0, 8)
+        .join('; ');
       throw new BadRequestException({
-        message:
-          'No targets passed validation — fix errors or deselect blocked stores.',
+        message: detail
+          ? `No targets passed validation — ${detail}`
+          : 'No targets passed validation — fix errors or deselect blocked stores.',
         failures: skipped,
       });
     }
@@ -315,11 +357,15 @@ export class EbayMultiStoreListingService {
       const row = this.targetRepo.create({
         listingJobId: savedJob.id,
         catalogProductId: canonicalProductId,
+        vertical,
         ebayAccountId: t.ebayAccountId,
         marketplaceId: t.marketplaceId,
         status: 'pending',
         resultPayload: {
           sourceListingId: input.sourceListingId ?? input.catalogProductId,
+          ...(Object.keys(targetPolicyOverrides(t)).length
+            ? { policyOverrides: targetPolicyOverrides(t) }
+            : {}),
         },
       });
       targets.push(await this.targetRepo.save(row));
@@ -351,16 +397,26 @@ export class EbayMultiStoreListingService {
       relations: ['ebayAccount', 'ebayAccount.primaryStore'],
       order: { createdAt: 'ASC' },
     });
-    return rows.map((t) => ({
+   return rows.map((t) => {
+     const payload = t.errorPayload as { message?: unknown; errors?: unknown } | null;
+      const directMessage = typeof payload?.message === 'string' && payload.message.trim() ? payload.message.trim() : null;
+      const errorMessage = directMessage || (Array.isArray(payload?.errors)
+        ? payload.errors.map((error) => typeof error === 'string' ? error : (error as { message?: unknown })?.message).filter((message): message is string => typeof message === 'string' && message.trim().length > 0).join('; ') || null
+        : null);
+     return {
       id: t.id,
       catalogProductId: t.catalogProductId,
       ebayAccountId: t.ebayAccountId,
       marketplaceId: t.marketplaceId,
+      vertical: t.vertical,
       storeId: t.ebayAccount?.primaryStoreId ?? null,
       storeName: t.ebayAccount?.primaryStore?.storeName ?? null,
       status: t.status,
       resultPayload: t.resultPayload,
       errorPayload: t.errorPayload,
-    }));
+        errorMessage,
+        lastErrorMessage: errorMessage,
+      };
+    });
   }
 }

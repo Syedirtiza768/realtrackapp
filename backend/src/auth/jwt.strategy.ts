@@ -6,20 +6,27 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { AuthSessionService } from './auth-session.service.js';
 
 interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  jti?: string;
 }
 
 /**
  * Custom extractor: checks Authorization Bearer header first,
- * then falls back to ?token= query parameter (for EventSource SSE).
+ * then accepts ?token= only on the EventSource progress endpoint.
  */
-const fromAuthHeaderOrQueryParam = (req: Request): string | null => {
+export const fromAuthHeaderOrQueryParam = (req: Request): string | null => {
   const fromHeader = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
   if (fromHeader) return fromHeader;
+  const path = req.originalUrl.split('?')[0] ?? '';
+  const isMotorsProgressStream =
+    req.method === 'GET' &&
+    /\/motors-intelligence\/products\/[^/]+\/progress\/?$/.test(path);
+  if (!isMotorsProgressStream) return null;
   return (req.query as Record<string, string>).token ?? null;
 };
 
@@ -28,6 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     config: ConfigService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    private readonly sessions: AuthSessionService,
   ) {
     const secret = config.get<string>(
       'JWT_SECRET',
@@ -41,6 +49,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<User> {
+    await this.sessions.assertNotRevoked(payload.jti);
     const user = await this.userRepo.findOne({
       where: { id: payload.sub, active: true },
     });
