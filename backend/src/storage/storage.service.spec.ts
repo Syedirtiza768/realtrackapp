@@ -3,19 +3,18 @@ import { createHash } from 'crypto';
 import { StorageService } from './storage.service';
 
 describe('StorageService.mirroredObjectKey', () => {
-  const makeService = (prefix = '') =>
+  const makeService = (prefix = '', bucket = 'test-bucket') =>
     new StorageService(
       {
         get: (key: string, fallback?: string) => {
-          if (key === 'AWS_S3_BUCKET' || key === 'S3_BUCKET')
-            return 'test-bucket';
+          if (key === 'AWS_S3_BUCKET' || key === 'S3_BUCKET') return bucket;
           if (key === 'AWS_S3_PREFIX' || key === 'S3_PREFIX') return prefix;
           if (key === 'AWS_S3_REGION' || key === 'S3_REGION')
             return 'us-east-1';
           return fallback;
         },
       } as unknown as ConfigService,
-      { add: async () => undefined } as unknown as import('bullmq').Queue,
+      { add: () => Promise.resolve() } as unknown as import('bullmq').Queue,
     );
 
   it('uses a source-hash key so two different sources at the same index diverge', () => {
@@ -54,5 +53,15 @@ describe('StorageService.mirroredObjectKey', () => {
       '.webp',
     );
     expect(key.startsWith('mhn/catalog-images/')).toBe(true);
+  });
+
+  it('recognizes the private catalog image URL used by production publishing', () => {
+    const bucket = 'solarrisebackupbucket-530142863136';
+    const key = 'mhn/catalog-images/catalog-product/product-1/image.webp';
+    const svc = makeService('mhn/', bucket);
+
+    expect(svc.keyFromUrl(`https://${bucket}.s3.amazonaws.com/${key}`)).toBe(
+      key,
+    );
   });
 });

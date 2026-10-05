@@ -32,8 +32,14 @@
   `EbayMediaApiService` before either the direct Inventory API or SellerPundit
   publish path runs. The store-scoped `ebay_hosted_images` cache prevents
   repeated uploads on retries and ensures published listings do not depend on
-  AWS S3 URLs remaining accessible. If eBay hosting fails, that store's
-  listing is not published with the source URL as a fallback.
+  AWS S3 URLs remaining accessible. For URLs in the configured S3 bucket,
+  `StorageService.keyFromUrl` resolves the key and `getObjectBuffer` reads the
+  private object with backend credentials. The Media API receives those bytes
+  through multipart `create_image_from_file`; its anonymous URL fetch cannot
+  read a private bucket. External image hosts still use `create_image_from_url`.
+  Transient EPS errors are retried; one rejected source may be skipped when
+  another image succeeds. Authentication and other unexpected errors fail the
+  store publish, and no source URL is substituted for an EPS URL.
 - Durable publish targets retain the original `listing_records.id` in
   `result_payload.sourceListingId`. `CatalogPublishResolverService` therefore
   uses the exact reviewed listing row for title, description, price, quantity,
