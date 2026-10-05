@@ -266,7 +266,7 @@ Applied in order in `app.module.ts`:
 
 ## Fashion vertical module (2026-09-09)
 
-backend/src/verticals contains VerticalsModule, FashionController, FashionListingsService, FashionImageAnalysisService, VerticalsService, FashionReview, and the vertical configuration/DTOs. FashionController owns organization-scoped drafts, photo upload, multi-image identification, listing-text generation, review decisions, private evidence metadata, quarantine, store configuration, and Fashion role administration. Photo storage reuses StorageService and ImageProcessorService; identification reuses OpenAiService vision and EbayTaxonomyApiService. The eBay integration module exposes the vertical-tagged Fashion OAuth start route while the shared callback preserves the destination.
+backend/src/verticals contains VerticalsModule, FashionController, FashionListingsService, FashionImageAnalysisService, VerticalsService, FashionReview, and the vertical configuration/DTOs. FashionController owns organization-scoped drafts, photo upload, multi-image identification, listing-text generation, review decisions, private evidence metadata, quarantine, store configuration, and Fashion role administration. Photo storage reuses StorageService and ImageProcessorService; Fashion vision uses short-lived signed GET URLs for private S3 image keys; identification reuses OpenAiService vision and EbayTaxonomyApiService. The eBay integration module exposes the vertical-tagged Fashion OAuth start route while the shared callback preserves the destination.
 
 ## Business & Industrial vertical module (2026-09-09)
 

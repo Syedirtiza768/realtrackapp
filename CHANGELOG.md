@@ -4,6 +4,10 @@
 
 - Standard new fixed-price single-item listings use Trading API AddFixedPriceItem by default and retain the seller SKU as the custom label. eBay business policy IDs are used for shipping, payment, and returns. Existing Inventory offer-backed edits and multi-SKU variation listings keep their existing Inventory API flows.
 
+## 2026-10-05 — Fashion image analysis S3 access
+
+- Restored the Fashion vision flow's existing signed-download URL call by adding short-lived S3 GET URL generation to StorageService. This uses the configured bucket, key, and signed URL expiry.
+
 ## 2026-10-05 — Warehouse inventory, procurement and channel stock (all verticals)
 
 - New `StockModule` (`/api/stock`) and Stock workspace at `/auto-parts/stock`, `/fashion/stock` and `/business-industrial/stock`. It covers warehouses and bins, a SKU master linked to catalog products, listings and variants, and serial/one-off units. Stock changes are recorded in an append-only movement ledger. It also covers receipts, adjustments with approval, bin moves, damage, transfers with in-transit, blind cycle counts, valuation, aging and a CSV ledger. Design: `docs/architecture/WAREHOUSE_INVENTORY.md`.

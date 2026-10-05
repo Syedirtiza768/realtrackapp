@@ -6,7 +6,7 @@
 |-------------|---------|----------|----------|
 | **eBay Developer API** | OAuth, multi-account/multi-store listing publish, inventory & order sync, business-policy sync | `backend/src/integrations/ebay/`, `channels/ebay/` | `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_DEV_ID`, `EBAY_ENVIRONMENT` (SANDBOX/PRODUCTION), `EBAY_REDIRECT_URI` |
 | **OpenAI** | Image classification (vision), listing text generation, embeddings; calls queued | `common/openai/`, `ingestion/ai/`, `motors-intelligence/` | `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` |
-| **AWS S3** | Product image storage + presigned URLs; thumbnails via Sharp | `storage/`, `@aws-sdk/client-s3` | `AWS_S3_BUCKET`, `AWS_S3_PREFIX`, `AWS_S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (legacy `S3_*` aliases) |
+| **AWS S3** | Product image storage + presigned upload/download URLs; Fashion vision uses short-lived signed GET URLs for private images; thumbnails via Sharp | `storage/`, `@aws-sdk/client-s3` | `AWS_S3_BUCKET`, `AWS_S3_PREFIX`, `AWS_S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (legacy `S3_*` aliases) |
 | **Shopify** | Admin API scaffolding (`@shopify/shopify-api`) | `channels/` | — (Needs verification: not fully wired) |
 
 > eBay is the primary, most fully implemented integration. Shopify/Amazon/Walmart

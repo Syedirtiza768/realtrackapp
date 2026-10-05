@@ -119,6 +119,24 @@ export class StorageService {
   }
 
   /**
+   * Generate a short-lived pre-signed GET URL for a private S3 object.
+   */
+  async generateDownloadUrl(s3Key: string): Promise<string> {
+    const key = s3Key.trim();
+    if (!key) throw new Error('S3 object key is required');
+
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    const downloadUrl = await getSignedUrl(this.s3, command, {
+      expiresIn: this.signedUrlExpiry,
+    });
+
+    this.logger.debug('Generated download URL for key=' + key);
+    return downloadUrl;
+  }
+  /**
    * Generate multiple pre-signed upload URLs in one call.
    */
   async generateBulkUploadUrls(
