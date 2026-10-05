@@ -52,6 +52,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
     "compression": "^1.8.1",
+    "form-data": "^4.0.5",
     "ioredis": "^5.9.3",
     "openai": "^6.25.0",
     "passport": "^0.7.0",

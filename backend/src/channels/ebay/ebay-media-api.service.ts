@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios, { type AxiosResponse } from 'axios';
+import FormData from 'form-data';
 import { Repository } from 'typeorm';
 import { EbayHostedImage } from '../../integrations/ebay/entities/ebay-hosted-image.entity.js';
+import { StorageService } from '../../storage/storage.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
+import { sanitizeEbayImageUrls } from './ebay-listing-images.util.js';
 
 interface EbayImageResponse {
   imageUrl?: string;
@@ -11,8 +14,16 @@ interface EbayImageResponse {
   expirationDate?: string;
 }
 
+interface ImageResolution {
+  sourceUrl: string;
+  hostedUrl?: string;
+  error?: Error;
+}
+
 const IMAGE_CACHE_EXPIRY_BUFFER_MS = 60 * 60 * 1000;
 const IMAGE_UPLOAD_CONCURRENCY = 3;
+const IMAGE_UPLOAD_MAX_ATTEMPTS = 3;
+const IMAGE_UPLOAD_RETRY_DELAYS_MS = [500, 1_500];
 
 /**
  * Uploads listing images to eBay Picture Services (EPS).
@@ -29,6 +40,7 @@ export class EbayMediaApiService {
     private readonly auth: EbayAuthService,
     @InjectRepository(EbayHostedImage)
     private readonly hostedImageRepo: Repository<EbayHostedImage>,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -36,19 +48,64 @@ export class EbayMediaApiService {
    * Already-hosted eBay URLs are passed through without an API call.
    */
   async hostImages(storeId: string, sourceUrls: string[]): Promise<string[]> {
+    const sanitized = sanitizeEbayImageUrls(sourceUrls);
+    if (sanitized.warnings.length) {
+      this.logger.warn(
+        `Image source normalization for store ${storeId}: ${sanitized.warnings.join('; ')}`,
+      );
+    }
     const urls = [
       ...new Set(
-        sourceUrls
+        sanitized.imageUrls
           .map((url) => url?.trim())
           .filter((url): url is string => Boolean(url)),
       ),
     ];
 
-    const hosted = await this.mapWithConcurrency(
+    const resolutions = await this.mapWithConcurrency(
       urls,
       IMAGE_UPLOAD_CONCURRENCY,
-      (sourceUrl) => this.hostImage(storeId, sourceUrl),
+      async (sourceUrl): Promise<ImageResolution> => {
+        try {
+          return {
+            sourceUrl,
+            hostedUrl: await this.hostImage(storeId, sourceUrl),
+          };
+        } catch (error: unknown) {
+          return {
+            sourceUrl,
+            error: error instanceof Error ? error : new Error(String(error)),
+          };
+        }
+      },
     );
+
+    const failures = resolutions.filter(
+      (resolution): resolution is ImageResolution & { error: Error } =>
+        Boolean(resolution.error),
+    );
+    const fatalFailure = failures.find(
+      (resolution) => !this.isRecoverableImageFailure(resolution.error),
+    );
+    if (fatalFailure?.error) throw fatalFailure.error;
+
+    const hosted = resolutions
+      .filter(
+        (resolution): resolution is ImageResolution & { hostedUrl: string } =>
+          typeof resolution.hostedUrl === 'string' &&
+          resolution.hostedUrl.length > 0,
+      )
+      .map(({ hostedUrl }) => hostedUrl);
+
+    if (!hosted.length && failures.length) {
+      throw failures[0].error;
+    }
+
+    if (failures.length) {
+      this.logger.warn(
+        `Skipped ${failures.length} recoverable listing image failure(s) after eBay Picture Services errors for store ${storeId}`,
+      );
+    }
 
     this.logger.debug(
       `Resolved ${hosted.length} listing image(s) to eBay Picture Services for store ${storeId}`,
@@ -73,33 +130,61 @@ export class EbayMediaApiService {
     const apiBaseUrl = await this.auth.getApiBaseUrlForStore(storeId);
     const mediaBaseUrl = this.mediaApiBaseUrl(apiBaseUrl);
 
-    let response: AxiosResponse<EbayImageResponse>;
-    try {
-      response = await axios.post<EbayImageResponse>(
-        `${mediaBaseUrl}/commerce/media/v1_beta/image/create_image_from_url`,
-        { imageUrl: sourceUrl },
-        {
-          timeout: 30_000,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-    } catch (error: unknown) {
-      const status = axios.isAxiosError(error)
-        ? error.response?.status
-        : undefined;
-      const detail =
-        axios.isAxiosError(error) && error.response?.data
-          ? this.readApiError(error.response.data)
-          : error instanceof Error
-            ? error.message
-            : String(error);
-      throw new Error(
-        `eBay Picture Services upload failed${status ? ` (${status})` : ''}: ${detail}`,
-      );
+    let response: AxiosResponse<EbayImageResponse> | undefined;
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= IMAGE_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const storageKey = this.storage.keyFromUrl(sourceUrl);
+        if (storageKey) {
+          const imageBuffer = await this.storage.getObjectBuffer(storageKey);
+          const form = new FormData();
+          form.append('image', imageBuffer, {
+            filename: this.imageFileName(sourceUrl),
+            contentType: this.imageContentType(sourceUrl),
+          });
+          response = await axios.post<EbayImageResponse>(
+            `${mediaBaseUrl}/commerce/media/v1_beta/image/create_image_from_file`,
+            form,
+            {
+              timeout: 30_000,
+              maxBodyLength: Infinity,
+              maxContentLength: Infinity,
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+                ...form.getHeaders(),
+              },
+            },
+          );
+        } else {
+          response = await axios.post<EbayImageResponse>(
+            `${mediaBaseUrl}/commerce/media/v1_beta/image/create_image_from_url`,
+            { imageUrl: sourceUrl },
+            {
+              timeout: 30_000,
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+        }
+        break;
+      } catch (error: unknown) {
+        lastError = error;
+        if (
+          attempt >= IMAGE_UPLOAD_MAX_ATTEMPTS ||
+          !this.isTransientMediaFailure(error)
+        ) {
+          throw this.formatUploadError(error);
+        }
+        await this.sleep(IMAGE_UPLOAD_RETRY_DELAYS_MS[attempt - 1] ?? 1_500);
+      }
+    }
+
+    if (!response) {
+      throw this.formatUploadError(lastError);
     }
 
     const hostedUrl =
@@ -140,6 +225,81 @@ export class EbayMediaApiService {
     );
 
     return hostedUrl;
+  }
+
+  private imageFileName(sourceUrl: string): string {
+    try {
+      const pathname = new URL(sourceUrl).pathname;
+      const filename = decodeURIComponent(
+        pathname.split('/').pop() ?? '',
+      ).trim();
+      return filename || 'listing-image.jpg';
+    } catch {
+      return 'listing-image.jpg';
+    }
+  }
+
+  private imageContentType(sourceUrl: string): string {
+    const filename = this.imageFileName(sourceUrl).toLowerCase();
+    if (filename.endsWith('.webp')) return 'image/webp';
+    if (filename.endsWith('.png')) return 'image/png';
+    if (filename.endsWith('.gif')) return 'image/gif';
+    if (filename.endsWith('.bmp')) return 'image/bmp';
+    if (filename.endsWith('.tif') || filename.endsWith('.tiff')) {
+      return 'image/tiff';
+    }
+    if (filename.endsWith('.avif')) return 'image/avif';
+    if (filename.endsWith('.heic')) return 'image/heic';
+    return 'image/jpeg';
+  }
+
+  private isTransientMediaFailure(error: unknown): boolean {
+    const status = axios.isAxiosError(error)
+      ? error.response?.status
+      : undefined;
+    const code = axios.isAxiosError(error) ? error.code : undefined;
+    const message =
+      error instanceof Error
+        ? error.message.toLowerCase()
+        : String(error).toLowerCase();
+
+    return (
+      [408, 425, 429, 500, 502, 503, 504].includes(status ?? 0) ||
+      ['ECONNABORTED', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN'].includes(
+        code ?? '',
+      ) ||
+      /timeout|timed out|connection reset|socket hang up|upstream/.test(message)
+    );
+  }
+
+  private isRecoverableImageFailure(error: Error): boolean {
+    const message = error.message.toLowerCase();
+    return (
+      /no valid image can be downloaded/.test(message) ||
+      /ebay picture services upload failed \((408|425|429|500|502|503|504)\)/i.test(
+        message,
+      ) ||
+      /timeout|timed out|connection reset|socket hang up|upstream/.test(message)
+    );
+  }
+
+  private formatUploadError(error: unknown): Error {
+    const status = axios.isAxiosError(error)
+      ? error.response?.status
+      : undefined;
+    const detail =
+      axios.isAxiosError(error) && error.response?.data
+        ? this.readApiError(error.response.data)
+        : error instanceof Error
+          ? error.message
+          : String(error);
+    return new Error(
+      `eBay Picture Services upload failed${status ? ` (${status})` : ''}: ${detail}`,
+    );
+  }
+
+  private async sleep(delayMs: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
   }
 
   private cacheEntryIsUsable(entry: EbayHostedImage): boolean {

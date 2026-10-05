@@ -10,6 +10,11 @@ describe('EbayMediaApiService', () => {
     findOne: jest.fn().mockResolvedValue(null),
     upsert: jest.fn().mockResolvedValue(undefined),
   };
+  const storage = {
+    keyFromUrl: jest.fn().mockReturnValue(null),
+    getObjectBuffer: jest.fn(),
+    generateDownloadUrl: jest.fn(),
+  };
   let service: EbayMediaApiService;
 
   beforeEach(() => {
@@ -18,7 +23,42 @@ describe('EbayMediaApiService', () => {
     auth.getApiBaseUrlForStore.mockClear();
     repo.findOne.mockReset().mockResolvedValue(null);
     repo.upsert.mockReset().mockResolvedValue(undefined);
-    service = new EbayMediaApiService(auth as any, repo as any);
+    storage.keyFromUrl.mockReset().mockReturnValue(null);
+    storage.getObjectBuffer.mockReset();
+    storage.generateDownloadUrl.mockReset();
+    service = new EbayMediaApiService(auth as any, repo as any, storage as any);
+  });
+
+  it('uploads private application storage bytes directly to eBay EPS', async () => {
+    storage.keyFromUrl.mockReturnValue('mhn/business-industrial/a.webp');
+    storage.getObjectBuffer.mockResolvedValue(Buffer.from('image-bytes'));
+    const post = jest.spyOn(axios, 'post').mockResolvedValue({
+      data: { imageUrl: 'https://i.ebayimg.com/images/g/signed/s-l1600.jpg' },
+      headers: {},
+    } as any);
+
+    const sourceUrl =
+      'https://solarrisebackupbucket-530142863136.s3.amazonaws.com/mhn/business-industrial/a.webp';
+    await service.hostImages('store-1', [sourceUrl]);
+
+    expect(storage.getObjectBuffer).toHaveBeenCalledWith(
+      'mhn/business-industrial/a.webp',
+    );
+    const [url, body, requestConfig] = post.mock.calls[0] as unknown as [
+      string,
+      { getHeaders: () => Record<string, string> },
+      { headers?: Record<string, string> },
+    ];
+    expect(url).toBe(
+      'https://apim.ebay.com/commerce/media/v1_beta/image/create_image_from_file',
+    );
+    expect(body.getHeaders()['content-type']).toMatch(/^multipart\/form-data;/);
+    expect(requestConfig.headers?.Authorization).toBe('Bearer token');
+    expect(storage.generateDownloadUrl).not.toHaveBeenCalled();
+    expect(repo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceUrl }),
+      ['storeId', 'sourceUrl'],
+    );
   });
 
   it('uploads source URLs to the eBay Media API and uses the maximum-size URL', async () => {
@@ -94,5 +134,61 @@ describe('EbayMediaApiService', () => {
       },
     });
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it('keeps valid images when one source is permanently rejected by EPS', async () => {
+    const post = jest
+      .spyOn(axios, 'post')
+      .mockResolvedValueOnce({
+        data: { imageUrl: 'https://i.ebayimg.com/images/g/valid/s-l1600.jpg' },
+        headers: {},
+      } as any)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('invalid source'), {
+          isAxiosError: true,
+          response: {
+            status: 400,
+            data: {
+              message:
+                'No valid image can be downloaded from provided imageUrl',
+            },
+          },
+        }),
+      );
+
+    const urls = await service.hostImages('store-1', [
+      'https://bucket.example.com/valid.jpg',
+      'https://bucket.example.com/broken.jpg',
+    ]);
+
+    expect(urls).toEqual(['https://i.ebayimg.com/images/g/valid/s-l1600.jpg']);
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries transient EPS failures before succeeding', async () => {
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+    const post = jest
+      .spyOn(axios, 'post')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('upstream unavailable'), {
+          isAxiosError: true,
+          response: { status: 503, data: { message: 'Service unavailable' } },
+        }),
+      )
+      .mockResolvedValueOnce({
+        data: {
+          imageUrl: 'https://i.ebayimg.com/images/g/retried/s-l1600.jpg',
+        },
+        headers: {},
+      } as any);
+
+    const urls = await service.hostImages('store-1', [
+      'https://bucket.example.com/retried.jpg',
+    ]);
+
+    expect(urls).toEqual([
+      'https://i.ebayimg.com/images/g/retried/s-l1600.jpg',
+    ]);
+    expect(post).toHaveBeenCalledTimes(2);
   });
 });
