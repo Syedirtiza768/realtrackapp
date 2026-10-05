@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-05 — Warehouse inventory, procurement and channel stock (all verticals)
+
+- New `StockModule` (`/api/stock`) and Stock workspace at `/auto-parts/stock`, `/fashion/stock` and `/business-industrial/stock`. It covers warehouses and bins, a SKU master linked to catalog products, listings and variants, and serial/one-off units. Stock changes are recorded in an append-only movement ledger. It also covers receipts, adjustments with approval, bin moves, damage, transfers with in-transit, blind cycle counts, valuation, aging and a CSV ledger. Design: `docs/architecture/WAREHOUSE_INVENTORY.md`.
+- **Fix:** imported orders now reserve stock, shipping deducts it, and cancelling releases it. Previously the `order.new` handler reconciled an empty list, so sales never reduced stock. `order.new` is now emitted by `OrdersService.importOrder` for every new order, and `order.cancelled` is new.
+- **Stock that is not on hand:** each SKU is stocked, stock + source, or on demand, and supplier offers can be recorded. A shortfall raises a procurement request. Requests are grouped into purchase orders, and goods received against a PO are reserved for the waiting orders. Suppliers can dropship directly to the buyer. Reorder-point suggestions are included.
+- Channel quantity is computed per store as linked-warehouse availability − buffer + capped supplier quantity. It is pushed to eBay (Inventory API offers / Trading listings) and PartsBazar360 only when the new `stock_channel_push` flag **and** the store's push switch are on. Otherwise it runs in shadow mode with drift reporting.
+- Vertical hooks: Auto Parts warehouse intake and B&I serialized units receive stock automatically once a workspace has run stock setup. The Fashion quick-capture hook ships with the Fashion quick-capture feature.
+- Migration `1791100000000-CreateWarehouseInventory` (additive) and 12 `stock.*` permissions. The legacy `inventory_ledger` / `inventory_events` / `inventory_movements` / `store_inventory_allocations` tables are superseded.
+- Verified with PostgreSQL integration tests (17 passing) and a full migration-chain replay from an empty database. An end-to-end API run and a UI walkthrough were done on an isolated local backend. Not deployed.
+
 ## 2026-09-29 — Publish listings directly to partsbazar360.com
 
 - New `partsbazar360` channel (`backend/src/channels/partsbazar360/`) that pushes listings into partsbazar360.com through its authenticated `/integrations/realtrack/listings` endpoint. Enable with `PARTSBAZAR360_API_KEY` (same value as `REALTRACK_PUSH_API_KEY` on partsbazar360.com); unset, the feature stays off.

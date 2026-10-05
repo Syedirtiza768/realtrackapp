@@ -149,6 +149,14 @@ export class OrdersService {
         shippedAt: order.shippedAt,
       });
     }
+    if (newStatus === 'cancelled') {
+      // StockModule releases reservations and open procurement requests.
+      this.eventEmitter.emit('order.cancelled', {
+        orderId: order.id,
+        channel: order.channel,
+        reason: reason ?? null,
+      });
+    }
 
     return order;
   }
@@ -302,6 +310,14 @@ export class OrdersService {
     this.logger.log(
       `Imported order ${savedOrder.id} from ${data.channel}:${data.externalOrderId} (${data.items.length} items)`,
     );
+
+    // Stock allocation (StockModule) and legacy inventory listeners react to this.
+    this.eventEmitter.emit('order.new', {
+      orderId: savedOrder.id,
+      storeId: savedOrder.storeId,
+      channel: savedOrder.channel,
+      total: savedOrder.totalAmount,
+    });
     return savedOrder;
   }
 }

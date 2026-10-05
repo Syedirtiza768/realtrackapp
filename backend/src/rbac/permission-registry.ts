@@ -115,6 +115,28 @@ const BUSINESS_INDUSTRIAL_ADMIN_ONLY: RoleSlug[] = [
   ROLE_SLUGS.BUSINESS_INDUSTRIAL_ADMIN,
 ];
 
+/** Warehouse stock: shared by Auto Parts, Fashion and B&I roles. */
+const STOCK_VIEW: RoleSlug[] = [
+  ...READ_ONLY,
+  ...FASHION_ALL,
+  ...BUSINESS_INDUSTRIAL_ALL,
+];
+const STOCK_OPERATE: RoleSlug[] = [
+  ...READ_WRITE,
+  ...FASHION_ALL,
+  ...BUSINESS_INDUSTRIAL_ALL,
+];
+const STOCK_MANAGE: RoleSlug[] = [
+  ...MANAGER_UP,
+  ...FASHION_MANAGER_UP,
+  ...BUSINESS_INDUSTRIAL_MANAGER_UP,
+];
+const STOCK_ADMIN: RoleSlug[] = [
+  ...ADMIN_UP,
+  ...FASHION_ADMIN_ONLY,
+  ...BUSINESS_INDUSTRIAL_ADMIN_ONLY,
+];
+
 function p(
   key: string,
   label: string,
@@ -279,6 +301,32 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('inventory.adjust', 'Adjust inventory', 'inventory', MANAGER_UP),
   p('inventory.allocate', 'Allocate inventory', 'inventory', MANAGER_UP),
   p('inventory.reconcile', 'Reconcile inventory', 'inventory', ADMIN_UP),
+
+  // ── Warehouse stock (/api/stock) ──
+  p('stock.view', 'View warehouse stock', 'stock', STOCK_VIEW),
+  p('stock.receive', 'Receive stock and edit SKU stock settings', 'stock', STOCK_OPERATE),
+  p('stock.move', 'Move stock between bins and warehouses', 'stock', STOCK_OPERATE),
+  p('stock.count', 'Perform cycle counts', 'stock', STOCK_OPERATE),
+  p('stock.fulfil', 'Allocate, pick and link order stock', 'stock', STOCK_OPERATE),
+  p(
+    'stock.adjust',
+    'Adjust stock and mark damage',
+    'stock',
+    STOCK_MANAGE,
+    'Adjustments above STOCK_ADJUST_APPROVAL_QTY units wait for stock.adjust.approve.',
+  ),
+  p('stock.adjust.approve', 'Approve large adjustments and count variances', 'stock', STOCK_MANAGE),
+  p('stock.procure', 'Manage suppliers, procurement and purchase orders', 'stock', STOCK_MANAGE),
+  p('stock.valuation.view', 'View stock cost and valuation', 'stock', STOCK_MANAGE),
+  p('stock.serials.private', 'View private serial numbers', 'stock', STOCK_MANAGE),
+  p('stock.warehouses.manage', 'Manage warehouses, bins, store links and stock setup', 'stock', STOCK_ADMIN),
+  p(
+    'stock.channel_sync.manage',
+    'Control channel quantity push',
+    'stock',
+    STOCK_ADMIN,
+    'Enables pushing computed quantities to live stores. Also requires the stock_channel_push feature flag.',
+  ),
 
   // ── Orders ──
   p('orders.view', 'View orders', 'orders', READ_ONLY),
@@ -736,6 +784,7 @@ export const SIDEBAR_MODULE_PERMISSIONS: Record<string, string> = {
   'catalog/import': 'catalog.import',
   'catalog/motors-filters': 'catalog.view',
   inventory: 'inventory.view',
+  stock: 'stock.view',
   'published-listings': 'published_listings.view',
   pipeline: 'pipeline.view',
   preview: 'listings.view',

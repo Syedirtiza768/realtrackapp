@@ -49,6 +49,11 @@ export class FeatureFlagModule implements OnModuleInit {
         'Enable VIN-to-listing enrichment pipeline',
         true,
       ],
+      [
+        'stock_channel_push',
+        'Push warehouse stock quantities to sales channels (each store must also enable push)',
+        false,
+      ],
     ];
 
     try {

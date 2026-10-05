@@ -248,3 +248,15 @@ Permissions returned from `GET /api/auth/me`.
 ---
 
 *Consolidated & reorganized: 2026-06-06. Updated: 2026-08-19.*
+
+## Warehouse stock permissions (2026-10-05)
+
+Twelve `stock.*` keys are registered in `permission-registry.ts` (module `stock`). They are granted to the Auto Parts role groups and to the Fashion and B&I roles, so all three workspaces share one stock system. The defaults are:
+- **view:** read roles and all vertical roles;
+- **receive/move/count/fulfil:** read-write roles and all vertical roles;
+- **adjust, adjust.approve, procure, valuation.view, serials.private:** managers (including vertical managers);
+- **warehouses.manage, channel_sync.manage:** admins (including vertical admins).
+
+The sidebar module key `stock` maps to `stock.view`.
+
+Users are scoped per warehouse through `user_warehouse_assignments`: no rows means all warehouses, and any rows restrict the user to those warehouses. Adjustments and count variances above `STOCK_ADJUST_APPROVAL_QTY` units need `stock.adjust.approve`. See [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md#8-rbac).

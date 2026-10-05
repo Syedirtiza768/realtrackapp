@@ -52,6 +52,19 @@ Derived from the route table (`src/App.tsx`), backend modules, and the prior
 | Feature flags | — | `common/feature-flags` | Partial | Admin-gated; route on `/api/api/feature-flags` ⚠️ |
 | Health checks | — | `health` | Implemented | `@Public()` |
 
+## Warehouse stock and procurement (2026-10-05)
+
+Shared by Auto Parts, Fashion and B&I at `/<workspace>/stock`. Design: [../architecture/WAREHOUSE_INVENTORY.md](../architecture/WAREHOUSE_INVENTORY.md).
+- Warehouses and bins (grid generator, printable bin labels). Stock per SKU per bin. Serial and one-off unit tracking.
+- Receive, adjust (with approval over a threshold), bin moves, damage/quarantine, transfers with in-transit, and blind cycle counts.
+- Orders reserve stock automatically. Pick lists are grouped by warehouse and bin. Shipping deducts stock, and cancelling releases it.
+- **Selling stock you don't hold yet:** SKUs can be *stocked*, *stock + source*, or *on demand*.
+  - A shortfall raises a procurement request with the best supplier offer.
+  - Requests become purchase orders. Received goods are reserved straight to the waiting order.
+  - Suppliers can dropship directly to the buyer.
+- Channel quantity per store = linked warehouse stock − buffer + capped supplier quantity. It runs in shadow mode until push is enabled per store.
+- Weighted-average cost, valuation and aging reports, and a CSV-exportable ledger.
+
 ## For each major module — quick reference
 
 For purpose, key files, data flow, DB tables, permissions, and extension notes

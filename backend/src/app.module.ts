@@ -43,6 +43,7 @@ import { PublishedListingsModule } from './published-listings/published-listings
 import { TeamsModule } from './teams/teams.module.js';
 import { VerticalsModule } from './verticals/verticals.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { StockModule } from './stock/stock.module.js';
 
 @Module({
   imports: [
@@ -129,6 +130,7 @@ import { CatalogModule } from './catalog/catalog.module.js';
     TeamsModule,
     VerticalsModule,
     CatalogModule,
+    StockModule,
   ],
   controllers: [AppController],
   providers: [

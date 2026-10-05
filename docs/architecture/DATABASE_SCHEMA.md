@@ -327,3 +327,27 @@ The group uniqueness key is `(job_id, base_part_normalized)` and the asset key
 is `(job_id, relative_path)`. All three tables cascade from the organization;
 assets are never read through the legacy global Image Drive tables. The
 migration is additive and requires the normal production migration approval.
+
+## Warehouse inventory schema (2026-10-05)
+
+Migration `1791100000000-CreateWarehouseInventory` (additive). The design is in [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md).
+
+| Table | Purpose / key constraints |
+|---|---|
+| `warehouses` | `UNIQUE(organization_id, code)`; one `is_default` per org (partial unique); `ebay_merchant_location_key`; `legacy_fashion_warehouse_id` |
+| `warehouse_locations` | Bins; `UNIQUE(warehouse_id, code)`; type storage/receiving/staging/returns/quarantine |
+| `suppliers` | `UNIQUE(organization_id, code)`; `supports_dropship`, `default_lead_time_days` |
+| `inventory_items` | SKU master; `UNIQUE(organization_id, sku)`; nullable FKs to `catalog_products`, `listing_records`, `product_variants`; `tracking_mode`, `sourcing_mode`, weighted-average `unit_cost` |
+| `inventory_item_sources` | Supplier offer per item; `UNIQUE(inventory_item_id, supplier_id)`; `fulfillment_mode` ship_to_warehouse/dropship |
+| `stock_levels` | Projection; `UNIQUE NULLS NOT DISTINCT (inventory_item_id, warehouse_id, location_id)`; CHECKs non-negative and `reserved + damaged <= on_hand`; `available` generated |
+| `inventory_units` | Serial/one-off units; unique private serial per org; `source_ref` (e.g. `bi_unit:<id>`) |
+| `stock_documents` / `stock_document_lines` | receipt/transfer/adjustment/count/purchase_order; numbers from `stock_document_seq` (`RCV-`, `TRF-`, `ADJ-`, `CNT-`, `PO-`) |
+| `stock_movements` | Append-only ledger (trigger `trg_stock_movements_append_only`; purge needs `SET LOCAL stock.allow_purge = 'on'`); unique `idempotency_key`; `operation_key` |
+| `stock_reservations` | Per order line / bin / unit; active → picked → shipped / released |
+| `procurement_requests` | open → ordered → received / dropshipped → fulfilled / cancelled; links to PO and PO line, order and order line |
+| `store_warehouse_links`, `store_stock_policies` | Store ↔ warehouse priority; push (default off), buffer, max, sourced-quantity cap |
+| `channel_stock_sync_state` | PK (store_id, inventory_item_id); dirty flag = outbox; desired/pushed/channel qty |
+| `user_warehouse_assignments` | Optional per-user warehouse restriction |
+| `order_items` (+2 cols) | `inventory_item_id`, `stock_status` |
+
+Legacy `inventory_ledger`, `inventory_events`, `inventory_movements` and `store_inventory_allocations` are **superseded (2026-10-05)** but not dropped.

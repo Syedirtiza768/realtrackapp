@@ -457,6 +457,16 @@ docker compose logs --since 10m backend
 
 ---
 
+## Warehouse stock rollout (2026-10-05)
+
+1. Deploy. Migration `1791100000000-CreateWarehouseInventory` runs on boot and is additive only. Requires PostgreSQL >= 15 (prod: 16).
+2. For each workspace, a user with `stock.warehouses.manage` opens **Stock** and runs **Preview** (dry run), reviews the counts and conflicts, then runs **Set up stock**.
+3. Add bins and suppliers. Set `sourcing_mode` and supplier offers for parts that are bought to order.
+4. Leave stores in shadow mode for a week. In **Warehouses & channels → Channel quantity check**, compare "stock says" with "channel shows".
+5. Enable the `stock_channel_push` feature flag, then enable push one store at a time.
+
+See [architecture/WAREHOUSE_INVENTORY.md](architecture/WAREHOUSE_INVENTORY.md).
+
 ## Related Documentation
 
 - **Environment Variables**: `/docs/development/environment-variables.md`

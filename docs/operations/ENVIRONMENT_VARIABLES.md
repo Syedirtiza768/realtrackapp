@@ -188,3 +188,13 @@ bucket had no CORS rules until 2026-09-13.
 | FASHION_AI_MODEL | optional | Vision model override for Fashion garment identification; otherwise the shared vision router/default is used |
 
 Run backend npm run seed:fashion-admin only after reviewing the target database and environment. It is not a production migration or deploy approval.
+
+## Warehouse stock (2026-10-05)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `STOCK_ADJUST_APPROVAL_QTY` | `10` | Adjustments / count variances above this many units (absolute) need `stock.adjust.approve` |
+| `STOCK_IT_DATABASE_URL` | unset | Test-only: disposable PostgreSQL >= 15 for `src/stock/**/*.int.spec.ts` |
+| `STOCK_SCHEMA_DATABASE_URL` | unset | Test-only: restored real schema for the migration round-trip spec |
+
+Feature flag (DB, seeded off): `stock_channel_push` is the global kill switch for pushing quantities to channels.

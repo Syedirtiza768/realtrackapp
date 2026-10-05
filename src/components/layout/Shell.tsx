@@ -25,6 +25,7 @@ import {
   ShoppingBag,
   ListChecks,
   HardDrive,
+  Warehouse,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -126,6 +127,13 @@ const NAV_ITEMS: NavItem[] = [
     path: "/inventory",
     permission: "inventory.view",
     moduleKey: "inventory",
+  },
+  {
+    icon: Warehouse,
+    label: "Stock",
+    path: "/stock",
+    permission: "stock.view",
+    moduleKey: "stock",
   },
   {
     icon: ListChecks,

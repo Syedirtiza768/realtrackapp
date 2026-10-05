@@ -504,6 +504,10 @@ const all = await listingRepo.find({ withDeleted: true });
 
 ---
 
+## Warehouse inventory tables (2026-10-05)
+
+Sixteen new tables plus two `order_items` columns. They are listed in [architecture/DATABASE_SCHEMA.md](architecture/DATABASE_SCHEMA.md#warehouse-inventory-schema-2026-10-05) and designed in [architecture/WAREHOUSE_INVENTORY.md](architecture/WAREHOUSE_INVENTORY.md). `stock_movements` is the source of truth for stock. Product `quantity` columns are a projection for `stocked` items. *Outdated as of 2026-10-05:* `inventory_ledger` / `inventory_events` / `inventory_movements` / `store_inventory_allocations` are legacy and no longer written by new code.
+
 ## Related Documentation
 
 - **Architecture**: `/docs/architecture/overview.md`

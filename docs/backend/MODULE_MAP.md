@@ -312,3 +312,21 @@ FashionListingsService and BusinessIndustrialService. Publication summaries
 join only organization/vertical-matching eBay channels whose stores are
 accessible to the caller. Fashion bulk publish is exposed through the existing
 durable eBay multi-store job service.
+
+## Stock module (2026-10-05)
+
+`backend/src/stock/` — `StockModule` (imports Auth, Channels, Notifications, FeatureFlag, Scheduler; registers BullMQ queue `stock-channel-sync`).
+
+| File | Responsibility |
+|---|---|
+| `stock-ledger.service.ts` | The only writer of `stock_levels`/`stock_movements`. It handles locking, invariants, idempotency, the outbox and the legacy quantity projection |
+| `stock-access.service.ts` | Org + warehouse scoping |
+| `warehouses.service.ts`, `suppliers.service.ts`, `inventory-items.service.ts` | Warehouses/bins/store links/policies; suppliers/sources; SKU master, search, detail, scan |
+| `stock-operations.service.ts` | Receive, adjust, move, damage; transfers; counts; adjustment approval; document and ledger listing |
+| `reservations.service.ts`, `order-stock.service.ts` | Allocation primitive; order event listeners, pick, ship, release, backorder retry |
+| `procurement.service.ts` | Procurement requests, purchase orders, receive-to-order, dropship, reorder |
+| `channel-stock-sync.service.ts` + `.processor.ts` | Desired quantity, targets, push or shadow, crons |
+| `stock-setup.service.ts`, `stock-reports.service.ts`, `stock-intake.listener.ts` | Bootstrap; reports; vertical intake events |
+| `stock.controller.ts`, `stock-procurement.controller.ts` | `/api/stock/*` |
+
+Design: [../architecture/WAREHOUSE_INVENTORY.md](../architecture/WAREHOUSE_INVENTORY.md).

@@ -1,4 +1,5 @@
 import {
+  Boxes,
   ClipboardCheck,
   Database,
   Factory,
@@ -23,6 +24,7 @@ const NAV: Array<VerticalNavItem & { permission: string }> = [
     isActive: (pathname) => pathname === '/business-industrial/catalog' || pathname === '/business-industrial/listings',
   },
   { icon: ImagePlus, label: 'AI image intake', path: '/business-industrial/image-intake', permission: 'business_industrial.import' },
+  { icon: Boxes, label: 'Stock', path: '/business-industrial/stock', permission: 'stock.view' },
   { icon: Upload, label: 'Bulk import', path: '/business-industrial/import', permission: 'business_industrial.import' },
   { icon: ClipboardCheck, label: 'Compliance review', path: '/business-industrial/review', permission: 'business_industrial.review' },
   { icon: Store, label: 'Stores', path: '/business-industrial/stores', permission: 'business_industrial.stores.view' },

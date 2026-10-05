@@ -414,6 +414,13 @@ const listings = await this.listingRepo.find({
 
 ---
 
+### Warehouse stock (updated 2026-10-05)
+- **Fixed in code (not yet deployed):** importing an order never deducted stock. The old `order.new` → `reconcile` handler had an empty `listingIds` list. `StockModule` now reserves stock on `order.new`, deducts it on `order.shipped` and releases it on `order.cancelled`.
+- **Risk — pushing wrong quantities:** channel push is off by default (the global `stock_channel_push` flag plus a per-store switch). Compare shadow quantities before enabling it.
+- **Risk — eBay Trading listings at quantity 0:** these end unless Out-of-Stock Control is enabled on the seller account.
+- **Risk — sourced (supplier) quantity is advertised:** this applies to on-demand/stock + source SKUs, from manually entered supplier availability. It is capped per store (`max_sourceable_qty`, default 5). Keep supplier availability current.
+- **Gap:** no automatic supplier availability feed, no FIFO cost, and no Shopify/Amazon quantity adapters. Legacy inventory tables are not dropped.
+
 ## Risk Matrix
 
 | Risk | Likelihood | Impact | Priority |

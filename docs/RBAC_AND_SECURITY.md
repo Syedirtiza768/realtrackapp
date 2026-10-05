@@ -363,6 +363,12 @@ current list and the (currently DB-only) steps to create one.
 
 ---
 
+### Warehouse stock (2026-10-05)
+- `stock.*` permissions and warehouse scoping are described in [architecture/AUTH_RBAC.md](architecture/AUTH_RBAC.md#warehouse-stock-permissions-2026-10-05).
+- Channel quantity push is protected by two switches: the global `stock_channel_push` flag and the per-store `push_enabled`. Both default off.
+- Private serials are returned only with `stock.serials.private`. Costs are returned only with `stock.valuation.view`.
+- The ledger is append-only, enforced by a DB trigger.
+
 ## Security Checklist (Pre-Deploy)
 
 - [ ] Change `JWT_SECRET` from default/placeholder

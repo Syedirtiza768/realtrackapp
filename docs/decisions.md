@@ -23,6 +23,23 @@ Format:
 
 ---
 
+## 2026-10-05 — Warehouse stock: one ledger, absolute channel pushes, shadow mode, sell-before-you-own
+**Decision:**
+1. A new `stock` module and `/api/stock` prefix were added, rather than extending `inventory/`.
+2. `stock_movements` (append-only) is the source of truth, and `stock_levels` is a projection that `StockLedgerService` alone writes, using READ COMMITTED plus ordered `FOR UPDATE`.
+3. Channels are always sent the absolute computed quantity. Pushes are gated by a global flag and a per-store switch, both off by default.
+4. SKUs have a `sourcing_mode`. Order shortfalls become procurement requests instead of failing. Goods received against a PO are reserved for the waiting order.
+5. Vertical modules talk to stock only through events.
+6. Users with no warehouse assignments see every warehouse.
+
+**Why:**
+1. `inventory/` is the 2,900-line Auto Parts enrichment workbench; mixing stock into it would collide with the naming and the permissions.
+2. Its old ledger was never written by imports or orders. SERIALIZABLE retries badly under bulk receiving, and ordered row locks were proven correct by a last-unit race test.
+3. Deltas drift when eBay has already decremented a sale we have not imported yet. Live quantities must not change until shadow numbers have been reviewed.
+4. Many Auto Parts listings (FEBEST/NAPA catalog parts) are sold before they are bought. "Not on hand" is a normal state, not an error.
+5. This avoids circular Nest module imports and keeps intake working when stock is not set up.
+6. This avoids repeating the 2026-09-15 B&I `AND 1 = 0` empty-scope failure.
+
 ## 2026-09-29 — Publish to PartsBazar360 is a push channel with no adapter, and the receiver reuses the pull pipeline
 **Decision:** (1) `partsbazar360` is a channel that *pushes* to PartsBazar360's authenticated
 `/integrations/realtrack/listings` endpoint, authenticated by a server-side shared secret

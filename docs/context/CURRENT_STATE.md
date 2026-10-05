@@ -1,5 +1,7 @@
 # Current State
 
+**2026-10-05 (warehouse stock — not deployed)** — `StockModule` (`/api/stock`) and the Stock workspace were added for all three verticals. They provide warehouses/bins, a SKU master, an append-only ledger, documents, order reservations, procurement of stock that is not on hand (POs with receive-to-order, dropship), and channel quantity sync. Channel sync runs in shadow mode by default. Order import now reserves stock, and shipping and cancelling update it; before this, sales never deducted stock. Migration `1791100000000` is additive. Each workspace must run **Stock → Set up** after deploy. Verified locally: 17 PostgreSQL integration tests; a full 67-migration replay from an empty DB; an end-to-end API run and UI walkthrough against an isolated backend. Not exercised: live eBay/PartsBazar360 pushes (push stays off), production data backfill. See `docs/architecture/WAREHOUSE_INVENTORY.md`.
+
 **2026-09-14 (B&I taxonomy hardening)** — Business & Industrial image intake
 tries the AI-provided category search first, then deliberate combinations of
 manufacturer, model, part type, category-family label, and source part name.

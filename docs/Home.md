@@ -43,6 +43,10 @@ this.
 - [[context/FEATURE_REGISTRY|context/FEATURE_REGISTRY.md]] — feature-by-feature
   maturity tracking
 
+- Warehouse stock (implemented 2026-10-05): [[architecture/WAREHOUSE_INVENTORY|architecture/WAREHOUSE_INVENTORY.md]]
+  — ledger, warehouses/bins, orders, procurement (stock not on hand), channel quantity sync; plan and history in
+  [[planning/INVENTORY_AND_WAREHOUSE_PLAN|planning/INVENTORY_AND_WAREHOUSE_PLAN.md]]
+
 ## Pre-existing deep-dive docs (not rewritten here — dates matter)
 The `docs/` tree has multiple generations of architecture documentation. When two
 files cover the same topic, prefer whichever has the newer modification date and

@@ -804,3 +804,34 @@ fields populated by the importer and image-intake pipeline:
 `enclosureRating`. Empty automotive fields are not presented in the B&I UI.
 
 All query/body DTOs are strict under the global `ValidationPipe`. Every query resolves organization membership, vertical, team scope, and accessible store IDs server-side. Publication facets and summaries never count or expose channels from inaccessible stores. Quarantined/manual-review records cannot be inline-edited, bulk-mutated, or published through the shared workspace.
+
+## Warehouse stock (`/api/stock`)
+
+Added 2026-10-05. Design: [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md). Every route takes an optional `organizationId` query param (active workspace). The class-level guard is `stock.view`; route-level permissions are listed below. The 409 `INSUFFICIENT_STOCK` body is `{ message, code, details[] }`.
+
+| Method & path | Permission | Notes |
+|---|---|---|
+| `GET summary` · `GET setup/status` | view | KPIs; `initialized` flag |
+| `POST setup/bootstrap` `{dryRun, openingBalances?, claimUnscopedAutomotive?, defaultWarehouseCode?, defaultWarehouseName?}` | warehouses.manage | Idempotent backfill; dry run rolls back |
+| `GET/POST warehouses` · `PATCH warehouses/:id` | view / warehouses.manage | |
+| `GET/POST warehouses/:id/locations` · `POST …/locations/generate {aisles[], racks, shelves, prefix?}` · `PATCH locations/:id` | view / warehouses.manage | Bins |
+| `GET stores` · `PUT stores/:storeId/links {links[]}` · `PATCH stores/:storeId/policy` | view / warehouses.manage / channel_sync.manage | Store ↔ warehouse links, push policy |
+| `GET/PUT users/:userId/warehouses` | warehouses.manage | Warehouse restriction |
+| `GET items?q&warehouseId&filter&sourcingMode&status&sort&dir&limit&offset` · `POST items` · `GET/PATCH items/:id` | view / receive | SKU master + aggregates |
+| `GET/PUT items/:id/sources` · `DELETE items/:id/sources/:sourceId` | view / procure | Supplier offers |
+| `POST scan {code}` | view | SKU/barcode → item, bin, unit |
+| `POST receive` · `POST move` · `POST adjust` · `POST damage` | receive / move / adjust / adjust | `idempotencyKey` supported on receive/adjust/move |
+| `GET documents?type&status&warehouseId&supplierId` · `GET documents/:id` · `POST documents/:id/cancel` | view / move | |
+| `POST adjustments` · `POST adjustments/:id/approve` | adjust / adjust.approve | |
+| `POST transfers` · `POST transfers/:id/ship` · `POST transfers/:id/receive {lines[]}` | move / move / receive | In-transit as inbound |
+| `POST counts` · `PUT counts/:id/lines` · `POST counts/:id/submit` | count | Blind count |
+| `GET movements?itemId&warehouseId&type&orderId&documentId&from&to` | view | Ledger |
+| `GET reports/valuation` · `GET reports/aging` | valuation.view / view | |
+| `GET/POST suppliers` · `PATCH suppliers/:id` | view / procure | |
+| `GET procurement/summary` · `GET/POST procurement/requests` · `PATCH procurement/requests/:id` · `POST …/:id/cancel` · `POST …/:id/dropship` | view / procure | Stock to acquire |
+| `GET/POST procurement/reorder` | view / procure | Reorder-point suggestions |
+| `POST purchase-orders` · `POST purchase-orders/from-requests` · `POST purchase-orders/:id/order` · `POST …/:id/receive` · `POST …/:id/cancel` | procure / receive | Receive-to-order |
+| `GET orders/exceptions` · `GET orders/pick-list?warehouseId` · `GET orders/:orderId` · `POST orders/:orderId/allocate` · `POST orders/:orderId/pick` · `POST orders/:orderId/lines/:orderItemId/link {itemId}` | view / fulfil | |
+| `GET channel-sync?storeId&status&driftOnly` · `GET channel-sync/summary` · `POST channel-sync/resync?storeId` | view / channel_sync.manage | Shadow vs pushed quantities |
+
+The Orders API now returns `order_items.inventoryItemId` and `stockStatus`.

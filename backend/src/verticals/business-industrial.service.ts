@@ -1206,6 +1206,11 @@ export class BusinessIndustrialService {
           }),
         ),
       );
+      // StockModule receives new serials into the default warehouse (if stock is set up).
+      this.events.emit('stock.bi-units.saved', {
+        organizationId,
+        catalogProductId: productId,
+      });
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === '23505')
         throw new ConflictException(

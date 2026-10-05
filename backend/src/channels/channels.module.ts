@@ -149,6 +149,7 @@ import { PartsBazar360Service } from './partsbazar360/partsbazar360.service.js';
     TokenEncryptionService,
     StoreAccessService,
     EbayCategoryKeywordAuditService,
+    PartsBazar360Service,
   ],
 })
 export class ChannelsModule {}

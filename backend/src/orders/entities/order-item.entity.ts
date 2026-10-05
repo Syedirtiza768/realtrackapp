@@ -52,6 +52,17 @@ export class OrderItem {
   @Column({ type: 'boolean', default: false })
   fulfilled!: boolean;
 
+  /** SKU-master row this line consumes (set by StockModule allocation). */
+  @Column({ name: 'inventory_item_id', type: 'uuid', nullable: true })
+  inventoryItemId!: string | null;
+
+  /**
+   * unmatched | reserved | picked | awaiting_procurement | backorder | dropshipped |
+   * shipped | released — maintained by StockModule (OrderStockService).
+   */
+  @Column({ name: 'stock_status', type: 'varchar', length: 24, nullable: true })
+  stockStatus!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }

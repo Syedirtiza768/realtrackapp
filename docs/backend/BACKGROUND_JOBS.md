@@ -49,6 +49,12 @@ All queues run on Redis 7, configured globally in `app.module.ts` via `BullModul
 
 ---
 
+## Stock channel sync (2026-10-05)
+
+- Queue `stock-channel-sync` (concurrency 1). Jobs: `sweep` (debounced per org via jobId `sweep-<orgId>`, 3 s delay, triggered by `stock.changed`) and `drift` (nightly).
+- Cron (leader-only): `stock-channel-sync-sweep` every 2 min, `stock-channel-drift-check` 02:30.
+- Event listeners: `order.new`, `order.cancelled`, `order.shipped`, `stock.received`, `stock.order-line.updated`, `stock.intake.received`, `stock.bi-units.saved`, `stock.fashion-warehouse.saved`.
+
 ## Adding a New Queue
 
 1. Register in the owning module:

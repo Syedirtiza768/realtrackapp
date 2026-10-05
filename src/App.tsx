@@ -37,6 +37,7 @@ import AIUploadWizard from './components/motors/AIUploadWizard';
 import PipelinePage from './components/pipeline/PipelinePage';
 import EbayPreviewPage from './components/preview/EbayPreviewPage';
 import InventoryManager from './components/inventory/InventoryManager';
+import StockWorkspace from './components/stock/StockWorkspace';
 import InventoryListingEditor from './components/inventory/InventoryListingEditor';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
@@ -101,6 +102,8 @@ function AutoPartsRoutes() {
         <Route path="catalog/products/:productId/publish/ebay" element={protect('ebay.publish', <EbayPublishWizardPage />)} />
         <Route path="inventory" element={protect('inventory.view', <InventoryManager />)} />
         <Route path="inventory/:id/edit" element={<ProtectedRoute permissions={['inventory.view', 'listings.update']} mode="all" loginPath="/auto-parts/login"><InventoryListingEditor /></ProtectedRoute>} />
+        {/* Warehouse stock (/api/stock) — shared StockWorkspace, also mounted under /fashion and /business-industrial */}
+        <Route path="stock" element={protect('stock.view', <StockWorkspace vertical="automotive" />)} />
         <Route path="published-listings" element={protect('published_listings.view', <PublishedListingsPage />)} />
         <Route path="published-listings/:id" element={protect('published_listings.view', <PublishedListingDetailPage />)} />
         <Route path="bulk-actions" element={protect('listings.update', <BulkActionsPage />)} />
@@ -180,6 +183,7 @@ function App() {
                 }>
                    <Route index element={<ProtectedRoute permissions={['fashion.dashboard.view']} loginPath="/fashion/login"><FashionDashboardPage /></ProtectedRoute>} />
                    <Route path="listings/new" element={<ProtectedRoute permissions={['fashion.listings.create']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
+                    <Route path="stock" element={<ProtectedRoute permissions={['stock.view']} loginPath="/fashion/login"><StockWorkspace vertical="fashion" /></ProtectedRoute>} />
                     <Route path="catalog" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionCatalogPage /></ProtectedRoute>} />
                     <Route path="listings" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionCatalogPage /></ProtectedRoute>} />
                    <Route path="listings/:id" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
@@ -207,6 +211,7 @@ function App() {
                     <Route path="image-intake" element={<ProtectedRoute permissions={['business_industrial.import']} loginPath="/business-industrial/login"><BusinessIndustrialImageIntakeWorkspacePage /></ProtectedRoute>} />
                     <Route path="import" element={<ProtectedRoute permissions={['business_industrial.import']} loginPath="/business-industrial/login"><BusinessIndustrialImportPage /></ProtectedRoute>} />
                     <Route path="review" element={<ProtectedRoute permissions={['business_industrial.review']} loginPath="/business-industrial/login"><BusinessIndustrialReviewPage /></ProtectedRoute>} />
+                    <Route path="stock" element={<ProtectedRoute permissions={['stock.view']} loginPath="/business-industrial/login"><StockWorkspace vertical="business_industrial" /></ProtectedRoute>} />
                     <Route path="stores" element={<ProtectedRoute permissions={['business_industrial.stores.view']} loginPath="/business-industrial/login"><BusinessIndustrialStoresPage /></ProtectedRoute>} />
                     <Route path="incidents" element={<ProtectedRoute permissions={['business_industrial.incidents.view']} loginPath="/business-industrial/login"><BusinessIndustrialIncidentsPage /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute permissions={['business_industrial.users.manage']} loginPath="/business-industrial/login"><BusinessIndustrialUsersPage /></ProtectedRoute>} />

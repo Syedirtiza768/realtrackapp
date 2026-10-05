@@ -512,6 +512,10 @@ TypeORM CLI configuration for migrations:
 
 ---
 
+## Stock module (2026-10-05)
+
+`backend/src/stock/` provides warehouse inventory, procurement and channel quantity sync. See [backend/MODULE_MAP.md](backend/MODULE_MAP.md#stock-module-2026-10-05) and [architecture/WAREHOUSE_INVENTORY.md](architecture/WAREHOUSE_INVENTORY.md). The `inventory/` module is still the Auto Parts enrichment workbench. Its ledger endpoints (`/api/inventory/:id/adjust|reserve|release|allocations`) are legacy as of 2026-10-05.
+
 ## Global Guards
 
 Applied in order in `app.module.ts`:

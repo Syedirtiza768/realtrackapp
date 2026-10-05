@@ -211,3 +211,13 @@ server-side GOOGLE_DRIVE_API_KEY; it never auto-publishes.
 - Auto Parts settings child routes use the permission keys from
   `SIDEBAR_PERMISSION_MAP`; inventory edit requires both `inventory.view` and
   `listings.update`.
+
+## Warehouse stock routes (2026-10-05)
+
+| Route | Guard | Component |
+|---|---|---|
+| `/auto-parts/stock` | `stock.view` | `StockWorkspace vertical="automotive"` |
+| `/fashion/stock` | `stock.view` | `StockWorkspace vertical="fashion"` |
+| `/business-industrial/stock` | `stock.view` | `StockWorkspace vertical="business_industrial"` |
+
+The tabs are held in `?tab=`: `overview`, `items` (`&item=<id>` opens the drawer), `orders` (`&view=pick|exceptions`), `procurement` (`&view=requests|pos|suppliers|reorder`, `&po=<id>`), `operations` (`&doc=<id>`), `warehouses`, and `movements`. Nav entries labelled "Stock" were added to the Auto Parts, Fashion and B&I shells. The Orders page shows a per-line stock status. See [../architecture/WAREHOUSE_INVENTORY.md](../architecture/WAREHOUSE_INVENTORY.md#9-ui).

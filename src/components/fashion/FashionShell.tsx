@@ -9,6 +9,7 @@ import {
   Upload,
   Users,
   Warehouse,
+  Boxes,
 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
@@ -24,6 +25,7 @@ const NAV: Array<VerticalNavItem & { permission: string }> = [
     isActive: (pathname) => pathname === '/fashion/catalog' || pathname === '/fashion/listings',
   },
   { icon: PackagePlus, label: 'Add Item', path: '/fashion/listings/new', permission: 'fashion.listings.create' },
+  { icon: Boxes, label: 'Stock', path: '/fashion/stock', permission: 'stock.view' },
   { icon: Upload, label: 'Bulk import', path: '/fashion/import', permission: 'fashion.import' },
   { icon: ClipboardCheck, label: 'Authenticity review', path: '/fashion/review', permission: 'fashion.review' },
   { icon: Store, label: 'Stores', path: '/fashion/stores', permission: 'fashion.stores.view' },

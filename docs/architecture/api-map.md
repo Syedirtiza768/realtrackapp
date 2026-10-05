@@ -72,6 +72,10 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 | storage | `storage.controller.ts` | `/storage` | `storage.view` |
 | feature-flags | `feature-flag.controller.ts` | `/api/feature-flags` ⚠️ | `feature_flags.view` |
 
+## Warehouse stock (2026-10-05)
+
+`/api/stock/*` — warehouses, bins, SKU stock, documents, procurement and purchase orders, order stock, and channel quantity sync. The full table is in [API_CONTRACTS.md](API_CONTRACTS.md#warehouse-stock-apistock) and the design is in [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md). This is distinct from `/api/inventory/*` (the Auto Parts enrichment workbench).
+
 ## Auth endpoints (detail)
 
 | Method | Path | Handler | Auth | Purpose |
