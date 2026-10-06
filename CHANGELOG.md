@@ -6,6 +6,7 @@
 - Added a resumable, two-stage production runner for published Inventory-backed listings from the preceding 30 days. It preserves current price, stock, photos, item specifics, compatibility, and business-policy IDs; updates application pointers to the replacement ItemID; and uses batches of up to five while respecting Seller Hub's default ItemID tracking.
 - The disabled multi-vertical variation pilot now fails closed instead of creating new Inventory API item groups until Trading API variation support is ready; production currently has no variant listing mappings.
 - Every replacement receives a new eBay ItemID. The runner caps each apply run at 250 items, can resume from its saved plan, and stops on eBay listing-rate limits. Conversion totals and skips are recorded after the live migration.
+- Migration apply/resume avoids repeated full-seller active-list scans. It checks old and replacement ItemIDs directly, loads a full active-list index only to recover a pending migration with a missing offer, and follows the current published offer ID if a prior rollback recreated that offer.
 
 ## 2026-10-06 — Publish private S3 images through eBay Media API
 
