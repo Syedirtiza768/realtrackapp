@@ -97,7 +97,9 @@ backend with a backend-only Docker rebuild on 2026-08-21; the production health
 endpoint and running compiled markers were verified afterward.
 
 The Trading API migration runner is packaged in the backend image at
-`/app/scripts/migrate-recent-ebay-inventory-listings.mjs`. It uses a small
+`/app/tools/migrate-recent-ebay-inventory-listings.mjs`. The `/app/scripts`
+directory is bind-mounted from the production checkout, so the runner uses a
+separate image path that the mount cannot hide. It uses a small
 NestJS/TypeORM context with only the eBay clients and required repositories, so
 running it does not start the app's queue processors or scheduled jobs. The
 two-stage plan/result files live under persistent `/app/output`; see the

@@ -129,8 +129,8 @@ new eBay ItemID differs from the old one. Apply processes at most 250 listings
 per run and stops when eBay reports a listing-rate limit; rerun it to continue.
 
 ```bash
-docker exec realtrackapp-backend-1 node /app/scripts/migrate-recent-ebay-inventory-listings.mjs --plan
-docker exec realtrackapp-backend-1 node /app/scripts/migrate-recent-ebay-inventory-listings.mjs --apply-plan
+docker exec realtrackapp-backend-1 node /app/tools/migrate-recent-ebay-inventory-listings.mjs --plan
+docker exec realtrackapp-backend-1 node /app/tools/migrate-recent-ebay-inventory-listings.mjs --apply-plan
 ```
 
 Do not remove the saved plan while any channel row has

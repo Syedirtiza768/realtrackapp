@@ -41,7 +41,7 @@ RUN npm prune --omit=dev --no-audit --no-fund
 # Copy compiled output + shared platform data (runtime lookup: /app/shared/...)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/shared ./shared
-COPY --from=builder /app/scripts/migrate-recent-ebay-inventory-listings.mjs ./scripts/
+COPY --from=builder /app/scripts/migrate-recent-ebay-inventory-listings.mjs ./tools/
 
 # Create uploads directory
 RUN mkdir -p uploads/catalog
