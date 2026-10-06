@@ -129,6 +129,7 @@ describe('PublishedListingsActionService offer resolve', () => {
       inventoryApi as never,
       {} as never,
       {} as never,
+      {} as never,
       audit as never,
       actionLog as never,
       sync as never,

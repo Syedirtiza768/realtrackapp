@@ -95,3 +95,10 @@ Step-by-step deploy/rollback: [/docs/operations/deployment-runbook.md](../operat
 The eBay inventory-location reconciliation fix was deployed to the production
 backend with a backend-only Docker rebuild on 2026-08-21; the production health
 endpoint and running compiled markers were verified afterward.
+
+The Trading API migration runner is packaged in the backend image at
+`/app/scripts/migrate-recent-ebay-inventory-listings.mjs`. It uses a small
+NestJS/TypeORM context with only the eBay clients and required repositories, so
+running it does not start the app's queue processors or scheduled jobs. The
+two-stage plan/result files live under persistent `/app/output`; see the
+[production setup steps](../operations/SETUP.md#convert-recent-inventory-managed-ebay-listings).

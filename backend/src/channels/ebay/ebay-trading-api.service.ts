@@ -52,6 +52,16 @@ export interface TradingFixedPriceItemInput {
   paymentProfileId?: string | null;
   shippingProfileId?: string | null;
   returnProfileId?: string | null;
+  immediatePayRequired?: boolean | null;
+  bestOfferEnabled?: boolean | null;
+}
+
+export interface TradingBatchAddResult {
+  messageId: string;
+  success: boolean;
+  itemId?: string;
+  errorCode?: string;
+  error?: string;
 }
 
 export interface TradingFixedPriceRevisionInput {
@@ -151,6 +161,87 @@ function isInvalidCompatibilityResponse(xml: string): boolean {
     /<ErrorCode>\s*21917122\s*<\/ErrorCode>/i.test(xml) ||
     /all compatibilities are invalid/i.test(xml)
   );
+}
+
+function validateFixedPriceItemInput(input: TradingFixedPriceItemInput): void {
+  const categoryId = String(input.categoryId ?? '').trim();
+  if (!/^\d{1,10}$/.test(categoryId)) {
+    throw new Error(
+      'eBay primary category ID is missing or invalid. Select a valid eBay category before publishing.',
+    );
+  }
+  if (!input.imageUrls.length) {
+    throw new Error('Trading API listing requires at least one image URL');
+  }
+  if (!input.sku?.trim()) throw new Error('Trading API listing requires a SKU');
+  if (!input.title?.trim()) throw new Error('Trading API listing requires a title');
+  if (!input.description?.trim()) {
+    throw new Error('Trading API listing requires a description');
+  }
+  if (!Number.isFinite(input.price) || input.price <= 0) {
+    throw new Error('Trading API listing requires a positive price');
+  }
+  if (!Number.isFinite(input.quantity) || input.quantity < 1) {
+    throw new Error('Trading API listing requires an available quantity');
+  }
+}
+
+function fixedPriceItemXml(
+  input: TradingFixedPriceItemInput,
+  includeCompatibility: boolean,
+  includeInventoryTrackingMethod = true,
+): string {
+  validateFixedPriceItemInput(input);
+  if (
+    !input.paymentProfileId ||
+    !input.shippingProfileId ||
+    !input.returnProfileId
+  ) {
+    throw new Error(
+      'Trading API listing requires payment, shipping, and return business policy IDs',
+    );
+  }
+  const coreCompatibility = toCoreCompatibilityPayload(input.compatibility);
+  const pictures = input.imageUrls
+    .map((url) => `      <PictureURL>${xmlText(url)}</PictureURL>`)
+    .join('\n');
+  const profiles = sellerProfilesXml(input);
+  const specifics = itemSpecificsXml(input.itemSpecifics);
+  const immediatePay =
+    input.immediatePayRequired == null
+      ? ''
+      : `    <AutoPay>${input.immediatePayRequired ? 'true' : 'false'}</AutoPay>`;
+  const bestOffer =
+    input.bestOfferEnabled == null
+      ? ''
+      : `    <BestOfferDetails><BestOfferEnabled>${input.bestOfferEnabled ? 'true' : 'false'}</BestOfferEnabled></BestOfferDetails>`;
+  const inventoryTrackingMethod = includeInventoryTrackingMethod
+    ? '    <InventoryTrackingMethod>ItemID</InventoryTrackingMethod>'
+    : '';
+
+  return `<Item>
+    <Title>${xmlText(input.title)}</Title>
+    <Description>${xmlText(input.description)}</Description>
+    <PrimaryCategory><CategoryID>${xmlText(input.categoryId.trim())}</CategoryID></PrimaryCategory>
+    <ConditionID>${input.conditionId}</ConditionID>
+    ${input.conditionDescription ? `<ConditionDescription>${xmlText(input.conditionDescription)}</ConditionDescription>` : ''}
+    <Quantity>${Math.max(1, Math.trunc(input.quantity))}</Quantity>
+    <Currency>${xmlText(input.currency)}</Currency>
+    <StartPrice currencyID="${xmlText(input.currency)}">${input.price.toFixed(2)}</StartPrice>
+    <ListingDuration>${xmlText(input.listingDuration ?? 'GTC')}</ListingDuration>
+    <ListingType>FixedPriceItem</ListingType>
+    <SKU>${xmlText(input.sku)}</SKU>
+    <!-- Keep the seller SKU as an editable custom label; ItemID tracking is the default. -->
+${inventoryTrackingMethod ? `${inventoryTrackingMethod}\n` : ''}${immediatePay ? `${immediatePay}\n` : ''}${bestOffer ? `${bestOffer}\n` : ''}    ${input.location ? `<Location>${xmlText(input.location)}</Location>` : ''}
+    ${input.country ? `<Country>${xmlText(input.country)}</Country>` : ''}
+    ${input.postalCode ? `<PostalCode>${xmlText(input.postalCode)}</PostalCode>` : ''}
+    <PictureDetails>
+${pictures}
+    </PictureDetails>
+${specifics}
+${includeCompatibility ? compatibilityXml(coreCompatibility) : ''}
+${profiles}
+  </Item>`;
 }
 
 function parseActiveListItems(xml: string): TradingSellerListItem[] {
@@ -442,54 +533,19 @@ export class EbayTradingApiService {
     input: TradingFixedPriceItemInput,
     marketplaceId?: string | null,
   ): Promise<{ itemId: string }> {
-    const categoryId = String(input.categoryId ?? '').trim();
-    if (!/^\d{1,10}$/.test(categoryId)) {
-      throw new Error(
-        'eBay primary category ID is missing or invalid. Select a valid eBay category before publishing.',
-      );
-    }
-    if (input.imageUrls.length === 0) {
-      throw new Error('Trading API listing requires at least one image URL');
-    }
-    const pictures = input.imageUrls
-      .map((url) => `      <PictureURL>${xmlText(url)}</PictureURL>`)
-      .join('\n');
     // Trading API validates the whole ItemCompatibilityList against the live
     // Motors vocabulary. Local fitment may contain useful but non-eBay
     // optional values such as Trim, Engine, and notes; sending those values
     // can make every row invalid and prevent the listing itself from being
     // created. Start with the validated core vehicle identity only.
     const coreCompatibility = toCoreCompatibilityPayload(input.compatibility);
-    const profiles = sellerProfilesXml(input);
-    const specifics = itemSpecificsXml(input.itemSpecifics);
-    const buildBody = (includeCompatibility: boolean) => `<?xml version="1.0" encoding="utf-8"?>
+    const buildBody = (
+      includeCompatibility: boolean,
+    ) => `<?xml version="1.0" encoding="utf-8"?>
 <AddFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ErrorLanguage>en_US</ErrorLanguage>
   <WarningLevel>High</WarningLevel>
-  <Item>
-    <Title>${xmlText(input.title)}</Title>
-    <Description>${xmlText(input.description)}</Description>
-    <PrimaryCategory><CategoryID>${xmlText(categoryId)}</CategoryID></PrimaryCategory>
-    <ConditionID>${input.conditionId}</ConditionID>
-    ${input.conditionDescription ? `<ConditionDescription>${xmlText(input.conditionDescription)}</ConditionDescription>` : ''}
-    <Quantity>${Math.max(1, Math.trunc(input.quantity))}</Quantity>
-    <Currency>${xmlText(input.currency)}</Currency>
-    <StartPrice currencyID="${xmlText(input.currency)}">${input.price.toFixed(2)}</StartPrice>
-    <ListingDuration>${xmlText(input.listingDuration ?? 'GTC')}</ListingDuration>
-    <ListingType>FixedPriceItem</ListingType>
-    <SKU>${xmlText(input.sku)}</SKU>
-    <!-- Keep the seller SKU as an editable custom label; identify this listing by ItemID. -->
-    <InventoryTrackingMethod>ItemID</InventoryTrackingMethod>
-    ${input.location ? `<Location>${xmlText(input.location)}</Location>` : ''}
-    ${input.country ? `<Country>${xmlText(input.country)}</Country>` : ''}
-    ${input.postalCode ? `<PostalCode>${xmlText(input.postalCode)}</PostalCode>` : ''}
-    <PictureDetails>
-${pictures}
-    </PictureDetails>
-${specifics}
-${includeCompatibility ? compatibilityXml(coreCompatibility) : ''}
-${profiles}
-  </Item>
+${fixedPriceItemXml(input, includeCompatibility)}
 </AddFixedPriceItemRequest>`;
     let xml = await this.postTradingRequest(
       storeId,
@@ -518,11 +574,90 @@ ${profiles}
     if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
       const message = tradingFailureMessage(xml, 'AddFixedPriceItem failed');
       const code = tagValue(xml, 'ErrorCode');
-      throw new Error(code ? `AddFixedPriceItem failed (${code}): ${message}` : message);
+      throw new Error(
+        code ? `AddFixedPriceItem failed (${code}): ${message}` : message,
+      );
     }
     const itemId = tagValue(xml, 'ItemID');
-    if (!itemId) throw new Error('AddFixedPriceItem succeeded without an ItemID');
+    if (!itemId) {
+      throw new Error('AddFixedPriceItem succeeded without an ItemID');
+    }
     return { itemId };
+  }
+
+  /** Add up to five standard fixed-price items in one Trading API call. */
+  async addFixedPriceItems(
+    storeId: string,
+    inputs: TradingFixedPriceItemInput[],
+    marketplaceId?: string | null,
+  ): Promise<TradingBatchAddResult[]> {
+    if (inputs.length === 0 || inputs.length > 5) {
+      throw new Error('Trading AddItems requires between one and five items');
+    }
+
+    const coreCompatibility = inputs.map((input) =>
+      toCoreCompatibilityPayload(input.compatibility),
+    );
+    const messageIds = inputs.map((_input, index) => `batch-${index + 1}`);
+    const containers = inputs
+      .map(
+        (input, index) => `  <AddItemRequestContainer>
+    <MessageID>${messageIds[index]}</MessageID>
+${fixedPriceItemXml(
+  input,
+  Boolean(coreCompatibility[index]?.compatibleProducts?.length),
+  false,
+)}
+  </AddItemRequestContainer>`,
+      )
+      .join('\n');
+    const xml = await this.postTradingRequest(
+      storeId,
+      'AddItems',
+      `<?xml version="1.0" encoding="utf-8"?>
+<AddItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+${containers}
+</AddItemsRequest>`,
+      marketplaceId,
+    );
+    const responseContainers =
+      xml.match(
+        /<AddItemResponseContainer(?:\s[^>]*)?>[\s\S]*?<\/AddItemResponseContainer>/gi,
+      ) ?? [];
+    const byMessageId = new Map<string, TradingBatchAddResult>();
+    for (const block of responseContainers) {
+      const messageId =
+        tagValue(block, 'CorrelationID') ?? tagValue(block, 'MessageID');
+      if (!messageId) continue;
+      const ack = tagValue(block, 'Ack')?.toLowerCase();
+      const itemId = tagValue(block, 'ItemID') ?? undefined;
+      const errorCode = tagValue(block, 'ErrorCode') ?? undefined;
+      const error = tradingFailureMessage(block, 'AddItems item failed');
+      byMessageId.set(messageId, {
+        messageId,
+        success: Boolean(itemId) && ack !== 'failure',
+        ...(itemId ? { itemId } : {}),
+        ...(errorCode ? { errorCode } : {}),
+        ...(ack === 'failure' || !itemId ? { error } : {}),
+      });
+    }
+
+    const overallFailure = /<Ack>\s*Failure\s*<\/Ack>/i.test(xml);
+    const overallErrorCode = tagValue(xml, 'ErrorCode') ?? undefined;
+    return messageIds.map((messageId) => {
+      const result = byMessageId.get(messageId);
+      if (result) return result;
+      return {
+        messageId,
+        success: false,
+        ...(overallErrorCode ? { errorCode: overallErrorCode } : {}),
+        error: overallFailure
+          ? tradingFailureMessage(xml, 'AddItems failed')
+          : 'AddItems returned no result for this item',
+      };
+    });
   }
 
   /** Revise fields on a legacy fixed-price listing. */
@@ -571,6 +706,38 @@ ${fields.join('\n')}
       const code = tagValue(xml, 'ErrorCode');
       throw new Error(code ? `ReviseFixedPriceItem failed (${code}): ${message}` : message);
     }
+  }
+
+  /** Relist a previously Trading-managed fixed-price item, retaining ItemID tracking. */
+  async relistFixedPriceItem(
+    storeId: string,
+    itemId: string,
+    marketplaceId?: string | null,
+  ): Promise<{ itemId: string }> {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<RelistFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <ItemID>${xmlText(itemId)}</ItemID>
+</RelistFixedPriceItemRequest>`;
+    const xml = await this.postTradingRequest(
+      storeId,
+      'RelistFixedPriceItem',
+      body,
+      marketplaceId,
+    );
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const code = tagValue(xml, 'ErrorCode');
+      const message = tradingFailureMessage(xml, 'RelistFixedPriceItem failed');
+      throw new Error(
+        code ? `RelistFixedPriceItem failed (${code}): ${message}` : message,
+      );
+    }
+    const newItemId = tagValue(xml, 'ItemID');
+    if (!newItemId) {
+      throw new Error('RelistFixedPriceItem succeeded without an ItemID');
+    }
+    return { itemId: newItemId };
   }
 
   /** End a legacy fixed-price listing. */

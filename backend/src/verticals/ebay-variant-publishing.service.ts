@@ -18,7 +18,6 @@ import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-eb
 import { ProductFamily } from './entities/product-family.entity.js';
 import { ProductVariant } from './entities/product-variant.entity.js';
 import { VariantMarketplaceMapping } from './entities/variant-marketplace-mapping.entity.js';
-import type { ProductVertical } from './vertical.types.js';
 
 export type VariantFamilyPublishInput = {
   organizationId: string;
@@ -51,6 +50,8 @@ export class EbayVariantPublishingService {
     private readonly accountRepo: Repository<ConnectedEbayAccount>,
   ) {}
 
+  // Preserve rejected-promise validation semantics for existing callers.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async buildGroupPayload(
     family: ProductFamily,
     variants: ProductVariant[],
@@ -115,6 +116,8 @@ export class EbayVariantPublishingService {
         'The multi_vertical_catalog pilot is disabled',
       );
     }
+    await this.rejectInventoryApiVariationPublishing();
+
     const account = await this.accountRepo.findOneBy({
       id: input.ebayAccountId,
       organizationId: input.organizationId,
@@ -278,5 +281,13 @@ export class EbayVariantPublishingService {
     if (raw.includes('used') || raw === '3000') return 'USED_GOOD';
     if (raw.includes('refurb')) return 'SELLER_REFURBISHED';
     return 'NEW';
+  }
+
+  private rejectInventoryApiVariationPublishing(): Promise<void> {
+    return Promise.reject(
+      new BadRequestException(
+        'eBay multi-variation publishing is paused until it can create Seller Hub-managed Trading API listings.',
+      ),
+    );
   }
 }

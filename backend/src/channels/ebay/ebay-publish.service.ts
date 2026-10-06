@@ -205,10 +205,9 @@ interface LeafCategoryResolution {
 /**
  * EbayPublishService — Multi-store listing publish orchestrator.
  *
- * Orchestrates the eBay 3-step publishing flow across one or more stores:
- *  1. Create/update Inventory Item (PUT /inventory_item/{sku})
- *  2. Create Offer (links item to marketplace + policies)
- *  3. Publish Offer (makes it live)
+ * Creates standard fixed-price listings with the Trading API so Seller Hub
+ * can manage them. Existing offer-backed listings still use their owning
+ * Inventory API for in-place revisions.
  *
  * Supports:
  *  - Multi-store: publish the same product to multiple eBay stores
@@ -1045,23 +1044,12 @@ export class EbayPublishService {
     return null;
   }
 
-  private shouldUseTradingApi(req: PublishRequest): boolean {
-    const mode = this.config
-      .get<string>('EBAY_LISTING_API_MODE', 'trading')
-      .trim()
-      .toLowerCase();
-    const isFebest = Object.entries(req.aspects ?? {}).some(
-      ([name, values]) =>
-        /^(brand|manufacturer|hersteller)$/i.test(name.trim()) &&
-        (values ?? []).some(
-          (value) => String(value).trim().toLowerCase() === 'febest',
-        ),
-    );
-
-    // Trading API is the default so new listings remain Seller Hub-editable.
-    // Inventory API remains an explicit mode for controlled compatibility;
-    // existing offer-backed channels are routed through their owning API below.
-    return isFebest || mode === 'trading';
+  private shouldUseTradingApi(): boolean {
+    // Every new single-item listing created by this publisher must use the
+    // Trading API so Seller Hub can edit it. Existing Inventory API offers
+    // are routed through their owning API before this branch; maintenance and
+    // variation-family flows keep their dedicated Inventory API handling.
+    return true;
   }
 
   /**
@@ -1530,13 +1518,11 @@ export class EbayPublishService {
       );
     }
 
-    // Trading API listings are editable in Seller Hub. FEBEST always uses
-    // this path; the global switch remains available for a controlled
-    // account-wide migration/canary.
-    if (this.shouldUseTradingApi(req)) {
-      this.logger.log(
-        `Using eBay Trading API for ${req.aspects?.Brand?.[0] ?? 'configured mode'} SKU ${req.sku}`,
-      );
+    // New standard listings always use Trading API so they remain editable in
+    // Seller Hub. Existing offer-backed channels returned through the branch
+    // above are revised by the Inventory API that created them.
+    if (this.shouldUseTradingApi()) {
+      this.logger.log(`Using eBay Trading API for SKU ${req.sku}`);
       const tradingReq = account
         ? await this.enrichPoliciesFromMarketplace(account, store, req)
         : await this.enrichPoliciesFromStoreOnly(store, req);

@@ -17,7 +17,7 @@ entries):
   purge-and-recreate-offer retry, not just a plain retry.
 - Item-specific values are sanitized to eBay's 65-character aspect limit before
   publish.
-- Standard new fixed-price single-item listings use Trading API by default, retaining the seller SKU while identifying the listing by Item ID for Seller Hub management. EBAY_LISTING_API_MODE=inventory is an explicit override. Existing Inventory offer-backed listings continue through Inventory API for edits; multi-SKU variation-family listings keep their separate Inventory API flow.
+- All new standard fixed-price single-item listings use Trading API, retaining the seller SKU while identifying the listing by Item ID for Seller Hub management. `EBAY_LISTING_API_MODE` is retired and cannot route new listings through Inventory API. Existing Inventory offer-backed listings continue through Inventory API for in-place edits until migrated. The disabled multi-vertical variation pilot fails closed instead of creating Inventory API groups until Trading API variation support is ready; there are no published variant mappings in production as of 2026-10-06.
 - Inventory location defaults to Dubai / `AE_Dubai`, not Houston / `US_77001`; see
   [[../context/CURRENT_STATE|CURRENT_STATE.md]] (reason for the Dubai default
   itself isn't documented anywhere found in this repo — TODO below).

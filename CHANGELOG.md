@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Move recent eBay listings to Trading API
+
+- All new standard fixed-price eBay listings use Trading API. The retired API-mode override cannot route these listings back to Inventory API. App relisting now withdraws published Inventory offers before deleting and replacing them, with recovery if the Trading request fails.
+- Added a resumable, two-stage production runner for published Inventory-backed listings from the preceding 30 days. It preserves current price, stock, photos, item specifics, compatibility, and business-policy IDs; updates application pointers to the replacement ItemID; and uses batches of up to five while respecting Seller Hub's default ItemID tracking.
+- The disabled multi-vertical variation pilot now fails closed instead of creating new Inventory API item groups until Trading API variation support is ready; production currently has no variant listing mappings.
+- Every replacement receives a new eBay ItemID. The runner caps each apply run at 250 items, can resume from its saved plan, and stops on eBay listing-rate limits. Conversion totals and skips are recorded after the live migration.
+
 ## 2026-10-06 — Publish private S3 images through eBay Media API
 
 - Fixed the repeated EPS 400 `No valid image can be downloaded` failures for

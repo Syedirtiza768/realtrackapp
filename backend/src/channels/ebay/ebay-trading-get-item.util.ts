@@ -13,9 +13,14 @@ export interface TradingItemDetails {
   listingType: string | null;
   listingStatus: string | null;
   listingDuration: string | null;
+  inventoryTrackingMethod: string | null;
   location: string | null;
   country: string | null;
   postalCode: string | null;
+  conditionDescription: string | null;
+  paymentProfileId: string | null;
+  shippingProfileId: string | null;
+  returnProfileId: string | null;
   listingUrl: string | null;
   startTime: string | null;
   endTime: string | null;
@@ -151,6 +156,20 @@ export function parseTradingGetItemResponse(xml: string): TradingItemDetails {
   const primaryCategoryBlock = itemBlock.match(
     /<PrimaryCategory>[\s\S]*?<\/PrimaryCategory>/i,
   )?.[0];
+  const sellerProfilesBlock =
+    itemBlock.match(/<SellerProfiles>[\s\S]*?<\/SellerProfiles>/i)?.[0] ?? '';
+  const paymentProfileBlock =
+    sellerProfilesBlock.match(
+      /<SellerPaymentProfile>[\s\S]*?<\/SellerPaymentProfile>/i,
+    )?.[0] ?? '';
+  const shippingProfileBlock =
+    sellerProfilesBlock.match(
+      /<SellerShippingProfile>[\s\S]*?<\/SellerShippingProfile>/i,
+    )?.[0] ?? '';
+  const returnProfileBlock =
+    sellerProfilesBlock.match(
+      /<SellerReturnProfile>[\s\S]*?<\/SellerReturnProfile>/i,
+    )?.[0] ?? '';
   const priceRaw =
     tagValue(itemBlock, 'BuyItNowPrice') ??
     tagValue(itemBlock, 'CurrentPrice') ??
@@ -170,7 +189,9 @@ export function parseTradingGetItemResponse(xml: string): TradingItemDetails {
     title: tagValue(itemBlock, 'Title'),
     categoryId:
       tagValue(itemBlock, 'PrimaryCategoryID') ??
-      (primaryCategoryBlock ? tagValue(primaryCategoryBlock, 'CategoryID') : null),
+      (primaryCategoryBlock
+        ? tagValue(primaryCategoryBlock, 'CategoryID')
+        : null),
     conditionId: numberOrNull(tagValue(itemBlock, 'ConditionID')),
     quantity: numberOrNull(tagValue(itemBlock, 'Quantity')),
     quantitySold: numberOrNull(tagValue(itemBlock, 'QuantitySold')),
@@ -179,9 +200,14 @@ export function parseTradingGetItemResponse(xml: string): TradingItemDetails {
     listingType: tagValue(itemBlock, 'ListingType'),
     listingStatus: tagValue(itemBlock, 'ListingStatus'),
     listingDuration: tagValue(itemBlock, 'ListingDuration'),
+    inventoryTrackingMethod: tagValue(itemBlock, 'InventoryTrackingMethod'),
     location: tagValue(itemBlock, 'Location'),
     country: tagValue(itemBlock, 'Country'),
     postalCode: tagValue(itemBlock, 'PostalCode'),
+    conditionDescription: tagValue(itemBlock, 'ConditionDescription'),
+    paymentProfileId: tagValue(paymentProfileBlock, 'PaymentProfileID'),
+    shippingProfileId: tagValue(shippingProfileBlock, 'ShippingProfileID'),
+    returnProfileId: tagValue(returnProfileBlock, 'ReturnProfileID'),
     listingUrl: tagValue(itemBlock, 'ViewItemURL'),
     startTime: tagValue(itemBlock, 'StartTime'),
     endTime: tagValue(itemBlock, 'EndTime'),

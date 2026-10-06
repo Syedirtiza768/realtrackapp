@@ -118,6 +118,27 @@ durable jobs can resume after backend restarts. The optional
 `EBAY_DAILY_PUBLISH_TARGET_LIMIT` setting defaults to 5,000 and cannot raise the
 application maximum above 5,000 targets per organization per UTC day.
 
+### Convert recent Inventory-managed eBay listings
+
+After deploying the Trading API release, run the migration from the backend
+container. The plan step only reads eBay and saves a resumable plan under the
+persistent `/app/output` mount. Review its eligible, already-Trading, and
+skipped counts before applying. Applying withdraws each old Inventory offer,
+creates a Trading API replacement, and updates the app's listing mappings. The
+new eBay ItemID differs from the old one. Apply processes at most 250 listings
+per run and stops when eBay reports a listing-rate limit; rerun it to continue.
+
+```bash
+docker exec realtrackapp-backend-1 node /app/scripts/migrate-recent-ebay-inventory-listings.mjs --plan
+docker exec realtrackapp-backend-1 node /app/scripts/migrate-recent-ebay-inventory-listings.mjs --apply-plan
+```
+
+Do not remove the saved plan while any channel row has
+`last_error_code='TRADING_MIGRATION_PENDING'`; rerunning the apply step resumes
+from live offer state and the active eBay listing index. Verify the output
+summary and compare the remaining published `offer_id` mappings for the 30-day
+window before cleaning up the saved plan and result files.
+
 ### PM2 Alternative
 
 ```bash
