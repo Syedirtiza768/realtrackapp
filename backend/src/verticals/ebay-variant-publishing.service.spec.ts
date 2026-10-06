@@ -62,4 +62,26 @@ describe('EbayVariantPublishingService', () => {
       ] as ProductVariant[]),
     ).rejects.toThrow('At least one shared variation aspect is required');
   });
+
+  it('fails closed instead of publishing new Inventory API item groups', async () => {
+    const inventoryApi = {
+      createOrReplaceItem: jest.fn(),
+      createOffer: jest.fn(),
+      createOrReplaceInventoryItemGroup: jest.fn(),
+      publishOfferByInventoryItemGroup: jest.fn(),
+    };
+    const serviceWithPilot = Object.assign(
+      Object.create(EbayVariantPublishingService.prototype),
+      {
+        featureFlags: { isEnabled: jest.fn().mockResolvedValue(true) },
+        inventoryApi,
+      },
+    ) as EbayVariantPublishingService;
+
+    await expect(serviceWithPilot.publishFamily({} as never)).rejects.toThrow(
+      'until it can create Seller Hub-managed Trading API listings',
+    );
+    expect(inventoryApi.createOrReplaceItem).not.toHaveBeenCalled();
+    expect(inventoryApi.createOffer).not.toHaveBeenCalled();
+  });
 });

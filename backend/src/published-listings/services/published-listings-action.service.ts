@@ -9,6 +9,14 @@ import { Repository } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
 import { EbayPublishService } from '../../channels/ebay/ebay-publish.service.js';
+import {
+  EbayTradingApiService,
+  type TradingFixedPriceItemInput,
+} from '../../channels/ebay/ebay-trading-api.service.js';
+import type {
+  EbayCompatibilityPayload,
+  EbayOffer,
+} from '../../channels/ebay/ebay-api.types.js';
 import { ListingActionLogWriterService } from '../../integrations/ebay/services/listing-action-log-writer.service.js';
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
@@ -30,6 +38,7 @@ export class PublishedListingsActionService {
     @InjectRepository(EbayListingChannel)
     private readonly channelRepo: Repository<EbayListingChannel>,
     private readonly inventoryApi: EbayInventoryApiService,
+    private readonly tradingApi: EbayTradingApiService,
     private readonly ebayPublish: EbayPublishService,
     private readonly health: PublishedListingsHealthService,
     private readonly audit: PublishedListingsAuditService,
@@ -418,24 +427,107 @@ export class PublishedListingsActionService {
       where: { id, organizationId },
     });
     if (!listing) throw new NotFoundException('Published listing not found');
-    if (!listing.offerId) {
-      throw new BadRequestException('Listing has no offer ID');
+    const oldItemId = listing.ebayItemId;
+    if (!oldItemId) {
+      throw new BadRequestException('Listing has no eBay item ID');
     }
 
-    const result = await this.inventoryApi.publishOffer(
-      listing.storeId,
-      listing.offerId,
-    );
+    let newItemId: string;
+    const resolvedOfferId =
+      listing.offerId ?? (await this.resolveOfferId(listing));
+    if (resolvedOfferId) {
+      const details = await this.tradingApi.getItemDetails(
+        listing.storeId,
+        oldItemId,
+        listing.marketplaceId,
+      );
+      if (details.listingStatus?.toLowerCase() === 'active') {
+        listing.listingStatus = 'active';
+        listing.lastSyncedAt = new Date();
+        await this.listingRepo.save(listing);
+        return listing;
+      }
+      const offer = await this.inventoryApi.getOffer(
+        listing.storeId,
+        resolvedOfferId,
+      );
+      const input = this.toTradingRelistInput(listing, details, offer);
 
-    listing.ebayItemId = result.listingId ?? listing.ebayItemId;
+      try {
+        if (offer.status?.toUpperCase() === 'PUBLISHED') {
+          await this.inventoryApi.withdrawOffer(
+            listing.storeId,
+            resolvedOfferId,
+          );
+        }
+        await this.inventoryApi.deleteOffer(listing.storeId, resolvedOfferId);
+        const result = await this.tradingApi.addFixedPriceItem(
+          listing.storeId,
+          input,
+          listing.marketplaceId,
+        );
+        newItemId = result.itemId;
+      } catch (error) {
+        const restoredOffer = await this.restoreInventoryOffer(
+          listing,
+          oldItemId,
+          offer,
+          resolvedOfferId,
+        );
+        throw new BadRequestException(
+          `Trading API relist failed; the original Inventory API listing was restored as ${restoredOffer.listingId ?? oldItemId}. ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      listing.offerId = null;
+      listing.price = String(input.price);
+      listing.quantityAvailable = input.quantity;
+      listing.title = input.title;
+      listing.description = input.description;
+      listing.categoryId = input.categoryId;
+      listing.imageUrls = input.imageUrls;
+      listing.itemSpecifics = input.itemSpecifics ?? {};
+      listing.compatibility =
+        (input.compatibility as Record<string, unknown> | null) ?? null;
+      listing.listingPolicies = offer.listingPolicies ?? null;
+    } else {
+      const details = await this.tradingApi.getItemDetails(
+        listing.storeId,
+        oldItemId,
+        listing.marketplaceId,
+      );
+      if (
+        details.inventoryTrackingMethod &&
+        details.inventoryTrackingMethod.toLowerCase() !== 'itemid'
+      ) {
+        throw new BadRequestException(
+          'This ended listing is Inventory API-managed. Refresh its offer mapping before relisting.',
+        );
+      }
+      if (details.listingStatus?.toLowerCase() === 'active') {
+        listing.listingStatus = 'active';
+        listing.lastSyncedAt = new Date();
+        await this.listingRepo.save(listing);
+        return listing;
+      }
+      const result = await this.tradingApi.relistFixedPriceItem(
+        listing.storeId,
+        oldItemId,
+        listing.marketplaceId,
+      );
+      newItemId = result.itemId;
+    }
+
+    listing.ebayItemId = newItemId;
+    listing.offerId = null;
     listing.listingStatus = 'active';
     listing.listingUrl = this.health.buildListingUrl(
-      result.listingId,
+      newItemId,
       listing.marketplaceId,
       'production',
     );
     listing.lastSyncedAt = new Date();
     await this.listingRepo.save(listing);
+    await this.updateChannelAfterRelist(listing, oldItemId, newItemId, null);
 
     await this.audit.writeRevision({
       organizationId,
@@ -443,13 +535,196 @@ export class PublishedListingsActionService {
       ebayAccountId: listing.ebayAccountId,
       userId: user.id,
       actionType: 'relist',
-      ebayItemId: listing.ebayItemId,
+      ebayItemId: oldItemId,
       beforeValue: { listingStatus: 'ended' },
-      afterValue: { listingStatus: 'active', ebayItemId: result.listingId },
+      afterValue: { listingStatus: 'active', ebayItemId: newItemId },
       apiResult: 'success',
     });
 
     return listing;
+  }
+
+  private toTradingRelistInput(
+    listing: EbayPublishedListing,
+    details: Awaited<ReturnType<EbayTradingApiService['getItemDetails']>>,
+    offer: EbayOffer,
+  ): TradingFixedPriceItemInput {
+    const policies = offer.listingPolicies ?? {};
+    const paymentProfileId =
+      policies.paymentPolicyId ?? details.paymentProfileId;
+    const shippingProfileId =
+      policies.fulfillmentPolicyId ?? details.shippingProfileId;
+    const returnProfileId = policies.returnPolicyId ?? details.returnProfileId;
+    if (!paymentProfileId || !shippingProfileId || !returnProfileId) {
+      throw new BadRequestException(
+        'This seller uses eBay business policies. Sync the listing policy IDs before relisting.',
+      );
+    }
+
+    const price =
+      details.price ??
+      Number(offer.pricingSummary?.price?.value ?? listing.price);
+    const quantityFromItem =
+      details.quantity == null
+        ? 0
+        : details.quantity - (details.quantitySold ?? 0);
+    const quantity =
+      quantityFromItem > 0
+        ? quantityFromItem
+        : Number(offer.availableQuantity ?? listing.quantityAvailable);
+    const imageUrls =
+      details.imageUrls.length > 0
+        ? details.imageUrls
+        : (listing.imageUrls ?? []);
+    const itemSpecifics = Object.keys(details.itemSpecifics).length
+      ? details.itemSpecifics
+      : listing.itemSpecifics;
+    const categoryId =
+      details.categoryId ?? offer.categoryId ?? listing.categoryId;
+    const sku = details.sku ?? listing.sku ?? offer.sku;
+    if (
+      !details.title ||
+      !(details.description ?? listing.description) ||
+      !categoryId ||
+      !details.conditionId ||
+      !sku ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      !Number.isFinite(quantity) ||
+      quantity < 1 ||
+      imageUrls.length === 0
+    ) {
+      throw new BadRequestException(
+        'The ended listing is missing required live eBay details for a safe Trading API relist.',
+      );
+    }
+
+    return {
+      title: details.title,
+      description: details.description ?? listing.description ?? '',
+      categoryId,
+      conditionId: details.conditionId,
+      conditionDescription: details.conditionDescription ?? undefined,
+      quantity: Math.trunc(quantity),
+      price,
+      currency:
+        details.currency ??
+        offer.pricingSummary?.price?.currency ??
+        listing.currency,
+      sku,
+      imageUrls,
+      itemSpecifics,
+      compatibility:
+        details.compatibility ??
+        (listing.compatibility as EbayCompatibilityPayload | null),
+      listingDuration: details.listingDuration ?? 'GTC',
+      location: details.location,
+      country: details.country,
+      postalCode: details.postalCode,
+      paymentProfileId,
+      shippingProfileId,
+      returnProfileId,
+      immediatePayRequired: details.listingDetails.immediatePayRequired,
+      bestOfferEnabled: details.listingDetails.bestOfferEnabled,
+    };
+  }
+
+  private async restoreInventoryOffer(
+    listing: EbayPublishedListing,
+    oldItemId: string,
+    offer: EbayOffer,
+    offerId: string,
+  ): Promise<{ listingId?: string }> {
+    let restoredOfferId = offerId;
+    let restoredItemId: string | undefined;
+    try {
+      const existing = await this.inventoryApi.getOffer(
+        listing.storeId,
+        offerId,
+      );
+      if (existing.status?.toUpperCase() === 'PUBLISHED') {
+        restoredItemId =
+          existing.listing?.listingId ?? existing.listingId ?? oldItemId;
+      } else if (existing.status?.toUpperCase() === 'UNPUBLISHED') {
+        const published = await this.inventoryApi.publishOffer(
+          listing.storeId,
+          offerId,
+        );
+        restoredItemId = published.listingId ?? oldItemId;
+      } else {
+        throw new Error(
+          `Cannot safely restore Inventory offer in ${existing.status ?? 'unknown'} state`,
+        );
+      }
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status !== 404) throw error;
+      const payload = { ...offer };
+      delete payload.offerId;
+      delete payload.listing;
+      delete payload.listingId;
+      delete payload.status;
+      const created = await this.inventoryApi.createOffer(
+        listing.storeId,
+        payload,
+      );
+      restoredOfferId = created.offerId;
+      const published = await this.inventoryApi.publishOffer(
+        listing.storeId,
+        restoredOfferId,
+      );
+      restoredItemId = published.listingId ?? oldItemId;
+    }
+    const finalItemId = restoredItemId ?? oldItemId;
+    listing.ebayItemId = finalItemId;
+    listing.offerId = restoredOfferId;
+    listing.listingStatus = 'active';
+    listing.listingUrl = this.health.buildListingUrl(
+      finalItemId,
+      listing.marketplaceId,
+      'production',
+    );
+    listing.lastSyncedAt = new Date();
+    await this.listingRepo.save(listing);
+    await this.updateChannelAfterRelist(
+      listing,
+      oldItemId,
+      finalItemId,
+      restoredOfferId,
+    );
+    return { listingId: finalItemId };
+  }
+
+  private async updateChannelAfterRelist(
+    listing: EbayPublishedListing,
+    oldItemId: string,
+    newItemId: string,
+    offerId: string | null,
+  ): Promise<void> {
+    let channel = listing.ebayListingChannelId
+      ? await this.channelRepo.findOne({
+          where: { id: listing.ebayListingChannelId },
+        })
+      : null;
+    channel ??= await this.channelRepo.findOne({
+      where: { ebayAccountId: listing.ebayAccountId, listingId: oldItemId },
+    });
+    if (!channel) return;
+    channel.listingId = newItemId;
+    channel.offerId = offerId;
+    channel.ebayInventorySku = offerId
+      ? (listing.sku ?? channel.ebayInventorySku)
+      : null;
+    channel.listingUrl = listing.listingUrl;
+    channel.channelPrice = listing.price ?? channel.channelPrice;
+    channel.channelQuantity = listing.quantityAvailable;
+    channel.listingStatus = 'published';
+    channel.lastRevisedAt = new Date();
+    channel.lastSyncedAt = new Date();
+    channel.lastErrorCode = null;
+    channel.lastErrorMessage = null;
+    await this.channelRepo.save(channel);
   }
 
   async refreshListing(

@@ -92,4 +92,26 @@ describe('ebay-trading-get-item.util', () => {
     expect(parsed.description).toBe('<p>Test part</p>');
     expect(parsed.itemSpecifics.Brand).toEqual(['Jeep']);
   });
+
+  it('parses Seller Hub tracking and business policy fields for migration', () => {
+    const parsed = parseTradingGetItemResponse(`<GetItemResponse>
+      <Item>
+        <InventoryTrackingMethod>ItemID</InventoryTrackingMethod>
+        <ConditionDescription>Tested and working</ConditionDescription>
+        <AutoPay>true</AutoPay>
+        <SellerProfiles>
+          <SellerPaymentProfile><PaymentProfileID>pay-1</PaymentProfileID></SellerPaymentProfile>
+          <SellerShippingProfile><ShippingProfileID>ship-1</ShippingProfileID></SellerShippingProfile>
+          <SellerReturnProfile><ReturnProfileID>return-1</ReturnProfileID></SellerReturnProfile>
+        </SellerProfiles>
+      </Item>
+    </GetItemResponse>`);
+
+    expect(parsed.inventoryTrackingMethod).toBe('ItemID');
+    expect(parsed.conditionDescription).toBe('Tested and working');
+    expect(parsed.listingDetails.immediatePayRequired).toBe(true);
+    expect(parsed.paymentProfileId).toBe('pay-1');
+    expect(parsed.shippingProfileId).toBe('ship-1');
+    expect(parsed.returnProfileId).toBe('return-1');
+  });
 });

@@ -122,6 +122,17 @@ function validRequest(overrides: Partial<PublishRequest> = {}): PublishRequest {
 /* ── Tests ── */
 
 describe('EbayPublishService', () => {
+  it('routes every new standard listing through the Trading API', () => {
+    const service = Object.create(
+      EbayPublishService.prototype,
+    ) as EbayPublishService;
+    expect(
+      (
+        service as unknown as { shouldUseTradingApi: () => boolean }
+      ).shouldUseTradingApi(),
+    ).toBe(true);
+  });
+
   describe('conflictSafeSkuFor', () => {
     it('maps canonical BLA SKUs to a deterministic postfix-free BLAP SKU', () => {
       expect(conflictSafeSkuFor('BLA-19279')).toBe('BLAP-19279');
