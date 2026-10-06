@@ -36,7 +36,7 @@ function isTradingApiRateLimit(error) {
   const status = error?.response?.status;
   return (
     status === 429 ||
-    /21919144|10007|call usage limit|rate limit|too many requests/i.test(message(error))
+    /21919144|10007|usage limit|rate limit|too many requests|daily limit|exceeded.*limit/i.test(message(error))
   );
 }
 
@@ -295,6 +295,7 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
     return index;
   };
   let sellerRateLimited = false;
+  let unresolvedMigrationState = false;
 
   for (const entry of plan.alreadyTrading) {
     const channel = await channelRepo.findOneBy({ id: entry.channelId });
@@ -381,6 +382,7 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
           }
           if (error?.response?.status !== 404) {
             results.failed.push({ itemId: entry.itemId, reason: `pending offer state is uncertain; left untouched for a safe retry: ${message(error)}`, restored: false });
+            unresolvedMigrationState = true;
             continue;
           }
           offerPresent = false;
@@ -466,6 +468,7 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
               });
               await channelRepo.save(current);
               results.failed.push({ itemId: entry.itemId, sku: entry.input.sku, reason: current.lastErrorMessage, restored: false });
+              unresolvedMigrationState = true;
             }
             continue;
           }
@@ -518,6 +521,7 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
             row.current.lastErrorMessage = `${failureReason}; restore failed: ${message(error)}`;
             await channelRepo.save(row.current);
             results.failed.push({ itemId: row.entry.itemId, sku: row.entry.input.sku, reason: row.current.lastErrorMessage, restored: false });
+            unresolvedMigrationState = true;
           }
           continue;
         }
@@ -567,6 +571,7 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
             });
             await channelRepo.save(row.current);
             results.failed.push({ itemId: row.entry.itemId, newItemId, sku: row.entry.input.sku, reason: `database mapping failed and the new Trading listing could not be confirmed ended; left pending for safe recovery: ${message(error)}; ${message(endError)}`, restored: false });
+            unresolvedMigrationState = true;
             continue;
           }
           try {
@@ -586,17 +591,19 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
             row.current.lastErrorMessage = `new item ${newItemId}; mapping failed: ${message(error)}; rollback failed: ${message(rollbackError)}`;
             await channelRepo.save(row.current);
             results.failed.push({ itemId: row.entry.itemId, newItemId, sku: row.entry.input.sku, reason: row.current.lastErrorMessage, restored: false });
+            unresolvedMigrationState = true;
           }
         }
       }
       console.log(`Batch complete: ${results.converted.length} converted, ${results.failed.length} failures`);
-      if (sellerRateLimited || results.converted.length >= maxConversions) {
+      if (sellerRateLimited || unresolvedMigrationState || results.converted.length >= maxConversions) {
         break migrationGroups;
       }
     }
   }
 
   const verify = [];
+  let verificationRateLimited = false;
   for (const [key, group] of groups) {
     const first = group[0];
     const groupResults = results.converted.filter(
@@ -605,9 +612,11 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
         row.marketplaceId === first.channel.marketplaceId,
     );
     let activeNewIdsFound = 0;
+    let oldIdsChecked = 0;
     let oldIdsStillActive = 0;
     const verificationErrors = [];
-    for (const row of groupResults) {
+    for (let index = 0; index < groupResults.length; index += 1) {
+      const row = groupResults[index];
       try {
         const current = await tradingApi.getItemDetails(
           row.storeId,
@@ -624,34 +633,61 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
         }
       } catch (error) {
         verificationErrors.push({ itemId: row.newItemId, reason: message(error) });
-      }
-      try {
-        const old = await tradingApi.getItemDetails(
-          row.storeId,
-          row.oldItemId,
-          row.marketplaceId,
-        );
-        if (old.listingStatus?.toLowerCase() === 'active') {
-          oldIdsStillActive += 1;
-          results.failed.push({
-            oldItemId: row.oldItemId,
-            newItemId: row.newItemId,
-            sku: row.sku,
-            reason: 'old ItemID remains active after the Inventory offer was deleted',
-            restored: false,
-          });
+        if (isTradingApiRateLimit(error)) {
+          verificationRateLimited = true;
+          const remaining = groupResults.length - index - 1;
+          if (remaining > 0) {
+            verificationErrors.push({
+              remainingUnverified: remaining,
+              reason: 'stopped item verification after eBay API usage limit',
+            });
+          }
+          break;
         }
-      } catch (error) {
-        verificationErrors.push({ itemId: row.oldItemId, reason: message(error) });
+      }
+      if (index === 0) {
+        try {
+          const old = await tradingApi.getItemDetails(
+            row.storeId,
+            row.oldItemId,
+            row.marketplaceId,
+          );
+          oldIdsChecked += 1;
+          if (old.listingStatus?.toLowerCase() === 'active') {
+            oldIdsStillActive += 1;
+            results.failed.push({
+              oldItemId: row.oldItemId,
+              newItemId: row.newItemId,
+              sku: row.sku,
+              reason: 'sampled old ItemID remains active after the Inventory offer was deleted',
+              restored: false,
+            });
+          }
+        } catch (error) {
+          verificationErrors.push({ itemId: row.oldItemId, reason: message(error) });
+          if (isTradingApiRateLimit(error)) {
+            verificationRateLimited = true;
+            const remaining = groupResults.length - index - 1;
+            if (remaining > 0) {
+              verificationErrors.push({
+                remainingUnverified: remaining,
+                reason: 'stopped item verification after eBay API usage limit',
+              });
+            }
+            break;
+          }
+        }
       }
     }
     verify.push({
       group: key,
       converted: groupResults.length,
       activeNewIdsFound,
+      oldIdsChecked,
       oldIdsStillActive,
       verificationErrors,
     });
+    if (verificationRateLimited) break;
   }
 
   const report = {

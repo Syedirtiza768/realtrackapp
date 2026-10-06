@@ -105,6 +105,8 @@ running it does not start the app's queue processors or scheduled jobs. The
 two-stage plan/result files live under persistent `/app/output`; see the
 [production setup steps](../operations/SETUP.md#convert-recent-inventory-managed-ebay-listings).
 Apply runs avoid scanning every seller's full active inventory: normal
-conversion verifies the old and replacement ItemIDs directly, and a full
-active-list index is loaded only when recovering a pending migration whose old
-offer is no longer available.
+conversion verifies each replacement ItemID directly and samples one old
+ItemID per account/marketplace group. A full active-list index is loaded only
+when recovering a pending migration whose old offer is no longer available.
+Verification stops after the first eBay usage-limit response, and an
+unresolved rollback or pending listing stops later migration batches.
