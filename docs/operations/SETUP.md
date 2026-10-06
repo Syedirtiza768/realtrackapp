@@ -139,8 +139,10 @@ from live offer state. A full active-list index is loaded only when a pending
 migration's old offer is missing and the runner must locate a possible
 replacement by SKU. If rollback recreated an Inventory offer, resume uses its
 current mapped offer ID as long as the original ItemID is still current. Normal
-apply runs verify the old and replacement ItemIDs directly. Verify the output
-summary and compare the remaining published
+apply runs verify each replacement ItemID directly and sample one old ItemID
+per account/marketplace group. Verification stops after an eBay usage-limit
+response, and an unresolved rollback or pending listing stops later migration
+batches. Verify the output summary and compare the remaining published
 `offer_id` mappings for the 30-day window before cleaning up the saved plan and
 result files.
 
