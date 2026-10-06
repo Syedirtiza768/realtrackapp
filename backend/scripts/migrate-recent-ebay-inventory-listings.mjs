@@ -274,15 +274,14 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
   }
 
   const activeByGroup = new Map();
-  let sellerRateLimited = false;
-  for (const [key, group] of groups) {
+  const getActiveIndex = async (key, group) => {
+    if (activeByGroup.has(key)) return activeByGroup.get(key);
     const first = group[0];
     const active = await tradingApi.getAllActiveListings(
       first.storeId,
       first.channel.marketplaceId,
     );
-    activeByGroup.set(key, {
-      byId: new Map(active.map((item) => [item.itemId, item])),
+    const index = {
       bySku: new Map(active.reduce((map, item) => {
         if (!item.sku) return map;
         const rows = map.get(item.sku) ?? [];
@@ -290,9 +289,12 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
         map.set(item.sku, rows);
         return map;
       }, new Map())),
-    });
-    console.log(`Verified active-list index for ${first.accountDisplayName}, ${first.channel.marketplaceId}: ${active.length} active listings`);
-  }
+    };
+    activeByGroup.set(key, index);
+    console.log(`Loaded active-list recovery index for ${first.accountDisplayName}, ${first.channel.marketplaceId}: ${active.length} active listings`);
+    return index;
+  };
+  let sellerRateLimited = false;
 
   for (const entry of plan.alreadyTrading) {
     const channel = await channelRepo.findOneBy({ id: entry.channelId });
@@ -322,19 +324,26 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
   }
 
   migrationGroups: for (const [key, group] of groups) {
-    const { byId, bySku } = activeByGroup.get(key);
+    const first = group[0];
+    let batchNumber = 0;
     for (const batch of takeBatches(group, BATCH_SIZE)) {
+      batchNumber += 1;
+      console.log(`Starting batch ${batchNumber} for ${first.accountDisplayName}, ${first.channel.marketplaceId} (${batch.length} listings)`);
       const ready = [];
       for (const entry of batch) {
         const current = await channelRepo.findOneBy({ id: entry.channel.id });
         if (
           !current ||
           current.listingId !== entry.itemId ||
-          current.offerId !== entry.offerId ||
+          !current.offerId ||
           current.listingStatus !== 'published'
         ) {
           results.skipped.push({ itemId: entry.itemId, reason: 'channel mapping changed after planning' });
           continue;
+        }
+        if (entry.offerId !== current.offerId) {
+          entry.offerId = current.offerId;
+          entry.offer = null;
         }
         const pending = current.lastErrorCode === 'TRADING_MIGRATION_PENDING';
         let oldOffer = entry.offer;
@@ -376,6 +385,7 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
           }
           offerPresent = false;
           const sku = entry.input.sku;
+          const { bySku } = await getActiveIndex(key, group);
           const replacement = (bySku.get(sku) ?? []).find((item) => item.itemId !== entry.itemId);
           if (replacement) {
             const replacementDetails = await tradingApi.getItemDetails(
@@ -589,26 +599,59 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
   const verify = [];
   for (const [key, group] of groups) {
     const first = group[0];
-    try {
-      const active = await tradingApi.getAllActiveListings(
-        first.storeId,
-        first.channel.marketplaceId,
-      );
-      const ids = new Set(active.map((item) => item.itemId));
-      const groupResults = results.converted.filter(
-        (row) =>
-          row.storeId === first.storeId &&
-          row.marketplaceId === first.channel.marketplaceId,
-      );
-      const verified = groupResults.filter((row) => ids.has(row.newItemId)).length;
-      const oldStillActive = groupResults.filter((row) => ids.has(row.oldItemId));
-      verify.push({ group: key, converted: groupResults.length, activeNewIdsFound: verified, oldIdsStillActive: oldStillActive.length });
-      for (const stale of oldStillActive) {
-        results.failed.push({ oldItemId: stale.oldItemId, newItemId: stale.newItemId, sku: stale.sku, reason: 'old ItemID remains active after the Inventory offer was deleted', restored: false });
+    const groupResults = results.converted.filter(
+      (row) =>
+        row.storeId === first.storeId &&
+        row.marketplaceId === first.channel.marketplaceId,
+    );
+    let activeNewIdsFound = 0;
+    let oldIdsStillActive = 0;
+    const verificationErrors = [];
+    for (const row of groupResults) {
+      try {
+        const current = await tradingApi.getItemDetails(
+          row.storeId,
+          row.newItemId,
+          row.marketplaceId,
+        );
+        if (current.listingStatus?.toLowerCase() === 'active') {
+          activeNewIdsFound += 1;
+        } else {
+          verificationErrors.push({
+            itemId: row.newItemId,
+            reason: `new Trading listing status is ${current.listingStatus ?? 'unknown'}`,
+          });
+        }
+      } catch (error) {
+        verificationErrors.push({ itemId: row.newItemId, reason: message(error) });
       }
-    } catch (error) {
-      verify.push({ group: key, error: message(error) });
+      try {
+        const old = await tradingApi.getItemDetails(
+          row.storeId,
+          row.oldItemId,
+          row.marketplaceId,
+        );
+        if (old.listingStatus?.toLowerCase() === 'active') {
+          oldIdsStillActive += 1;
+          results.failed.push({
+            oldItemId: row.oldItemId,
+            newItemId: row.newItemId,
+            sku: row.sku,
+            reason: 'old ItemID remains active after the Inventory offer was deleted',
+            restored: false,
+          });
+        }
+      } catch (error) {
+        verificationErrors.push({ itemId: row.oldItemId, reason: message(error) });
+      }
     }
+    verify.push({
+      group: key,
+      converted: groupResults.length,
+      activeNewIdsFound,
+      oldIdsStillActive,
+      verificationErrors,
+    });
   }
 
   const report = {

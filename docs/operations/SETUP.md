@@ -135,9 +135,14 @@ docker exec realtrackapp-backend-1 node /app/tools/migrate-recent-ebay-inventory
 
 Do not remove the saved plan while any channel row has
 `last_error_code='TRADING_MIGRATION_PENDING'`; rerunning the apply step resumes
-from live offer state and the active eBay listing index. Verify the output
-summary and compare the remaining published `offer_id` mappings for the 30-day
-window before cleaning up the saved plan and result files.
+from live offer state. A full active-list index is loaded only when a pending
+migration's old offer is missing and the runner must locate a possible
+replacement by SKU. If rollback recreated an Inventory offer, resume uses its
+current mapped offer ID as long as the original ItemID is still current. Normal
+apply runs verify the old and replacement ItemIDs directly. Verify the output
+summary and compare the remaining published
+`offer_id` mappings for the 30-day window before cleaning up the saved plan and
+result files.
 
 ### PM2 Alternative
 
