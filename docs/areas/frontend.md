@@ -31,6 +31,13 @@ npm run lint
 npm run preview
 ```
 
+**Status (2026-10-07):** `npm run build` passes on `main` again. It had been failing
+type-checks because `CatalogConfig` lacked the optional `addLabel` / `searchPlaceholder`
+fields that `catalogConfig.ts` sets for Fashion, and the inventory `missing` URL filter
+default was inferred as the literal type `false`. `npm run lint` does not run on `main`:
+there is no ESLint config (`eslint.config.*`) in the repository, so ESLint 9 exits with
+its migration notice.
+
 ## Deep dives (pre-existing, more detail than this note)
 - [[../frontend/ROUTES_AND_SCREENS|Routes and screens]] (most recently updated of the route docs)
 - [[../frontend/COMPONENT_MAP|Component map]]

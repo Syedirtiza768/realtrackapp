@@ -10,7 +10,9 @@ COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 RUN npm install --legacy-peer-deps --no-audit --no-fund
 
 COPY . .
-RUN npx vite build
+# `npm run build` = `tsc -b && vite build`. Running Vite alone skipped type-checking,
+# so images kept building while `main` had type errors (fixed 2026-10-07).
+RUN npm run build
 
 # ── Stage 2: Serve with Nginx ──
 FROM nginx:1.27-alpine AS runner
