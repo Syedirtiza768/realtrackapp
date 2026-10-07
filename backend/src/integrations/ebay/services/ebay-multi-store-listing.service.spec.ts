@@ -11,7 +11,7 @@ function queryBuilder(count: number) {
 }
 
 describe('EbayMultiStoreListingService bulk publish', () => {
-  function setup(todayCount = 0) {
+  function setup(todayCount = 0, inFlight = 0) {
     const jobRepo = {
       findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((value) => value),
@@ -25,17 +25,22 @@ describe('EbayMultiStoreListingService bulk publish', () => {
           id: `target-${index + 1}`,
         })),
       ),
-      createQueryBuilder: jest.fn(() => queryBuilder(todayCount)),
+      createQueryBuilder: jest
+        .fn()
+        .mockImplementationOnce(() => queryBuilder(todayCount))
+        .mockImplementationOnce(() => queryBuilder(inFlight)),
     };
     const accountRepo = {
       find: jest.fn().mockResolvedValue([
         {
           id: 'account-1',
+          connectionSource: 'native_oauth',
           primaryStoreId: 'store-1',
           primaryStore: { ebayMarketplaceId: 'EBAY_US', config: {} },
         },
         {
           id: 'account-2',
+          connectionSource: 'native_oauth',
           primaryStoreId: 'store-2',
           primaryStore: { ebayMarketplaceId: 'EBAY_US', config: {} },
         },
@@ -47,16 +52,27 @@ describe('EbayMultiStoreListingService bulk publish', () => {
       })),
     };
     const publishQueue = { addBulk: jest.fn().mockResolvedValue([]) };
+    const validation = {
+      validatePublish: jest.fn().mockResolvedValue({ status: 'valid' }),
+    };
+    const tradingQuota = {
+      getPublishCapacity: jest.fn().mockResolvedValue({
+        remaining: 5_000,
+        limit: 5_000,
+        reset: new Date('2026-10-08T07:00:00.000Z'),
+      }),
+    };
     const service = new EbayMultiStoreListingService(
       jobRepo as any,
       targetRepo as any,
       accountRepo as any,
       { get: jest.fn((_key, fallback) => fallback) } as any,
-      {} as any,
+      validation as any,
       publishResolver as any,
       publishQueue as any,
+      tradingQuota as any,
     );
-    return { service, targetRepo, publishQueue };
+    return { service, jobRepo, targetRepo, publishQueue, tradingQuota };
   }
 
   it('creates one durable target per listing and store', async () => {
@@ -142,6 +158,45 @@ describe('EbayMultiStoreListingService bulk publish', () => {
         storeIds: ['store-1', 'store-2'],
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects a bulk job before writing targets when eBay has too few calls left', async () => {
+    const { service, targetRepo, publishQueue, tradingQuota } = setup(0, 20);
+    tradingQuota.getPublishCapacity.mockResolvedValue({
+      remaining: 121,
+      limit: 5_000,
+      reset: new Date('2026-10-08T07:00:00.000Z'),
+    });
+
+    await expect(
+      service.createBulkPublishJob({
+        organizationId: 'org-1',
+        requestedByUserId: 'user-1',
+        listingIds: ['listing-1'],
+        storeIds: ['store-1', 'store-2'],
+      }),
+    ).rejects.toThrow(/eBay Trading API allowance is low/);
+    expect(targetRepo.save).not.toHaveBeenCalled();
+    expect(publishQueue.addBulk).not.toHaveBeenCalled();
+  });
+
+  it('rejects a single native publish before writing a job when the allowance is low', async () => {
+    const { service, jobRepo, tradingQuota } = setup(20);
+    tradingQuota.getPublishCapacity.mockResolvedValue({
+      remaining: 120,
+      limit: 5_000,
+      reset: new Date('2026-10-08T07:00:00.000Z'),
+    });
+
+    await expect(
+      service.createPublishJob({
+        organizationId: 'org-1',
+        requestedByUserId: 'user-1',
+        catalogProductId: 'catalog-1',
+        targets: [{ ebayAccountId: 'account-1', marketplaceId: 'EBAY_US' }],
+      }),
+    ).rejects.toThrow(/eBay Trading API allowance is low/);
+    expect(jobRepo.save).not.toHaveBeenCalled();
   });
 
   it('normalizes target error payloads for shared catalog progress', async () => {

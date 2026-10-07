@@ -117,6 +117,32 @@ For high-volume eBay publishing, Redis must remain persistent and healthy so
 durable jobs can resume after backend restarts. The optional
 `EBAY_DAILY_PUBLISH_TARGET_LIMIT` setting defaults to 5,000 and cannot raise the
 application maximum above 5,000 targets per organization per UTC day.
+Native-OAuth single and bulk publishing also check eBay Developer Analytics' live Trading
+API allowance before job creation. The per-organization target cap is not the
+eBay application quota: listing migration, enrichment, reads, and revisions
+share the allowance. If a submission reports low capacity, wait until the
+reset timestamp in that response before resubmitting. Do not assume the reset
+is at UTC midnight; on 2026-10-07 this keyset reported 07:00 UTC. A separate
+migration or enrichment run should leave capacity for queued publish targets.
+The Inventory-to-Trading migration now checks capacity before preflight, apply,
+and each batch, reserving 1,000 calls for publishing. A low-capacity stop during
+apply leaves the migration plan for a later run; do not schedule its resume at UTC midnight
+unless Analytics actually reports that reset time.
+
+For confirmed `AddFixedPriceItem failed (518)` targets, run
+`node /app/tools/requeue-ebay-518-failures.mjs --account-id=<connected-account-uuid> --since-hours=24`
+inside the backend container first. The dry run reports one target per product,
+excludes products with a published channel or another active/successful target,
+and prints eBay's current remaining calls and reset time. After verifying the
+selection and obtaining approval to create live listings, add `--canary --apply`
+and exact `--confirm-account-id=<uuid> --confirm-count=1` for one target.
+Verify its eBay Item ID and channel mapping before running a fresh dry run for
+the remaining products, then apply with the new exact `--confirm-count`.
+The tool saves the original target records under `/app/output` before requeueing.
+If a queue write fails after a target is marked pending, stop and reconcile that
+target's database and BullMQ state before retrying; never blindly rerun the
+whole set. eBay API code 518 is a quota failure; other eBay validation errors
+need separate fixes.
 
 ### Convert recent Inventory-managed eBay listings
 

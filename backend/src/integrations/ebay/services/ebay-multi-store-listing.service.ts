@@ -13,9 +13,13 @@ import { EbayListingJobTarget } from '../entities/ebay-listing-job-target.entity
 import { EbayListingValidationService } from './ebay-listing-validation.service.js';
 import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
 import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
+import { EbayTradingQuotaService } from './ebay-trading-quota.service.js';
 
 const MAX_BULK_LISTINGS = 500;
 const MAX_DAILY_PUBLISH_TARGETS = 5_000;
+// Leave room for Trading reads, revisions, and in-flight calls that share the
+// same application-wide allowance as AddFixedPriceItem.
+const TRADING_CALL_RESERVE = 100;
 
 type PublishTargetInput = {
   ebayAccountId: string;
@@ -57,6 +61,7 @@ export class EbayMultiStoreListingService {
     private readonly validation: EbayListingValidationService,
     private readonly publishResolver: CatalogPublishResolverService,
     @InjectQueue('ebay-listing-publish') private readonly publishQueue: Queue,
+    private readonly tradingQuota: EbayTradingQuotaService,
   ) {}
 
   private dailyTargetLimit(): number {
@@ -80,6 +85,24 @@ export class EbayMultiStoreListingService {
       .andWhere('job.jobType = :jobType', { jobType: 'publish' })
       .andWhere('target.createdAt >= :dayStart', { dayStart })
       .getCount();
+  }
+
+  private async assertTradingCapacity(requestedNativeTargets: number): Promise<void> {
+    if (!requestedNativeTargets) return;
+    const quota = await this.tradingQuota.getPublishCapacity();
+    const inFlight = await this.targetRepo
+      .createQueryBuilder('target')
+      .where('target.status IN (:...statuses)', {
+        statuses: ['pending', 'processing'],
+      })
+      .getCount();
+    if (requestedNativeTargets + inFlight + TRADING_CALL_RESERVE > quota.remaining) {
+      throw new BadRequestException(
+        `eBay Trading API allowance is low (${quota.remaining} call(s) remaining, ` +
+          `${inFlight} publish target(s) already queued). Publishing is paused ` +
+          `until the allowance resets at ${quota.reset.toISOString()}.`,
+      );
+    }
   }
 
   async createBulkPublishJob(input: {
@@ -184,6 +207,12 @@ export class EbayMultiStoreListingService {
         `Daily eBay publish limit exceeded: ${dailyUsed} target(s) already submitted, ${requestedTargets} requested, ${dailyLimit} maximum.`,
       );
     }
+
+    const requestedNativeTargets =
+      resolvedProducts.length *
+      accounts.filter((account) => account.connectionSource === 'native_oauth')
+        .length;
+    await this.assertTradingCapacity(requestedNativeTargets);
 
     const savedJob = await this.jobRepo.save(
       this.jobRepo.create({
@@ -342,6 +371,19 @@ export class EbayMultiStoreListingService {
       });
       if (existing) return { job: existing, skipped: [] };
     }
+
+    const nativeAccounts = await this.accountRepo.find({
+      where: {
+        organizationId: input.organizationId,
+        id: In(eligible.map((target) => target.ebayAccountId)),
+        connectionSource: 'native_oauth',
+      },
+    });
+    await this.assertTradingCapacity(
+      eligible.filter((target) =>
+        nativeAccounts.some((account) => account.id === target.ebayAccountId),
+      ).length,
+    );
 
     const job = this.jobRepo.create({
       organizationId: input.organizationId,
