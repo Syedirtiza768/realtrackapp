@@ -9,12 +9,14 @@ import { EbayTradingApiService } from '/app/dist/src/channels/ebay/ebay-trading-
 import { EbayListingChannel } from '/app/dist/src/integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { ConnectedEbayAccount } from '/app/dist/src/integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayPublishedListing } from '/app/dist/src/published-listings/entities/ebay-published-listing.entity.js';
+import { EbayTradingQuotaService } from '/app/dist/src/integrations/ebay/services/ebay-trading-quota.service.js';
 
 const PLAN_PATH = '/app/output/.recent-ebay-trading-migration-plan.json';
 const RESULT_PATH = '/app/output/.recent-ebay-trading-migration-result.json';
 const WINDOW_DAYS = 30;
 const BATCH_SIZE = 5;
 const MAX_CONVERSIONS_PER_RUN = 250;
+const PUBLISH_CALL_RESERVE = 1_000;
 const now = () => new Date();
 const iso = () => now().toISOString();
 const args = new Set(process.argv.slice(2));
@@ -38,6 +40,17 @@ function isTradingApiRateLimit(error) {
     status === 429 ||
     /21919144|10007|usage limit|rate limit|too many requests|daily limit|exceeded.*limit/i.test(message(error))
   );
+}
+
+async function requireMigrationCapacity(quotaService, expectedCalls, stage) {
+  const quota = await quotaService.getPublishCapacity();
+  if (quota.remaining < expectedCalls + PUBLISH_CALL_RESERVE) {
+    throw new Error(
+      `Trading API allowance is too low for migration ${stage}: ${quota.remaining} calls remain, ` +
+      `${expectedCalls} expected, ${PUBLISH_CALL_RESERVE} reserved for publishing. ` +
+      `Retry after ${quota.reset.toISOString()}`,
+    );
+  }
 }
 
 function takeBatches(items, size) {
@@ -130,7 +143,7 @@ function inputFrom(details, offer, channel) {
   };
 }
 
-async function makePlan({ channelRepo, accountRepo, tradingApi, inventoryApi }) {
+async function makePlan({ channelRepo, accountRepo, tradingApi, inventoryApi, quotaService }) {
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const channels = await channelRepo
     .createQueryBuilder('channel')
@@ -141,6 +154,7 @@ async function makePlan({ channelRepo, accountRepo, tradingApi, inventoryApi }) 
     .orderBy('channel.publishedAt', 'ASC')
     .addOrderBy('channel.id', 'ASC')
     .getMany();
+  await requireMigrationCapacity(quotaService, channels.length, 'preflight');
   const ids = [...new Set(channels.map((channel) => channel.ebayAccountId))];
   const accounts = await accountRepo.find({ where: { id: In(ids) } });
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
@@ -254,10 +268,11 @@ function countBy(items, key) {
   }, {});
 }
 
-async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, inventoryApi }, plan) {
+async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, inventoryApi, quotaService }, plan) {
   if (!Number.isInteger(maxConversions) || maxConversions < 1 || maxConversions > 1000) {
     throw new Error('--max-conversions must be an integer between 1 and 1000');
   }
+  await requireMigrationCapacity(quotaService, maxConversions * 2 + 100, 'apply');
   const results = { converted: [], alreadyTrading: [], skipped: [], failed: [] };
   const accountIds = [...new Set([
     ...plan.entries.map((entry) => entry.channel.ebayAccountId),
@@ -328,6 +343,7 @@ async function applyPlan({ channelRepo, accountRepo, publishedRepo, tradingApi, 
     const first = group[0];
     let batchNumber = 0;
     for (const batch of takeBatches(group, BATCH_SIZE)) {
+      await requireMigrationCapacity(quotaService, BATCH_SIZE * 2 + 10, 'batch');
       batchNumber += 1;
       console.log(`Starting batch ${batchNumber} for ${first.accountDisplayName}, ${first.channel.marketplaceId} (${batch.length} listings)`);
       const ready = [];
@@ -878,8 +894,9 @@ async function main() {
     const accountRepo = app.get(getRepositoryToken(ConnectedEbayAccount));
     const publishedRepo = app.get(getRepositoryToken(EbayPublishedListing));
     const tradingApi = app.get(EbayTradingApiService);
+    const quotaService = app.get(EbayTradingQuotaService);
     const inventoryApi = app.get(EbayInventoryApiService);
-    const services = { channelRepo, accountRepo, publishedRepo, tradingApi, inventoryApi };
+    const services = { channelRepo, accountRepo, publishedRepo, tradingApi, inventoryApi, quotaService };
     if (args.has('--plan')) {
       await makePlan(services);
       return;
