@@ -1,6 +1,6 @@
 # eBay integration & the PartsBazar360 relationship
 
-**Last reviewed:** 2026-10-05
+**Last reviewed:** 2026-10-07
 
 ## eBay
 RealTrackApp's core purpose is eBay automotive-parts listing management: multi-store
@@ -18,6 +18,7 @@ entries):
 - Item-specific values are sanitized to eBay's 65-character aspect limit before
   publish.
 - All new standard fixed-price single-item listings use Trading API, retaining the seller SKU while identifying the listing by Item ID for Seller Hub management. `EBAY_LISTING_API_MODE` is retired and cannot route new listings through Inventory API. Existing Inventory offer-backed listings continue through Inventory API for in-place edits until migrated. The disabled multi-vertical variation pilot fails closed instead of creating Inventory API groups until Trading API variation support is ready; there are no published variant mappings in production as of 2026-10-06.
+- `EbayMultiStoreListingService` checks the application-wide Trading API allowance through `EbayTradingQuotaService` before saving native-OAuth single or bulk publish targets. The existing organization target cap does not represent eBay's shared allowance: migration, enrichment, reads, revisions, and other organizations consume it too. Low allowance returns the reported reset time without producing a failed publish job. The Inventory-to-Trading migration checks the same allowance and reserves 1,000 calls for publishing before preflight, apply, and each batch.
 - Inventory location defaults to Dubai / `AE_Dubai`, not Houston / `US_77001`; see
   [[../context/CURRENT_STATE|CURRENT_STATE.md]] (reason for the Dubai default
   itself isn't documented anywhere found in this repo — TODO below).

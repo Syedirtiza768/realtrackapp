@@ -530,13 +530,18 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 
 | Method | Path | Purpose | Permission |
 |--------|------|---------|------------|
-| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; enforces the 5,000 target/day organization quota | `ebay.publish` |
+| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; enforces the 5,000 target/day organization quota and checks the shared eBay Trading API allowance before creating the job | `ebay.publish` |
 | GET | `/api/ebay/listing-jobs/:id` | Read durable publish-job status | `ebay.view` |
 | GET | `/api/ebay/listing-jobs/:id/targets` | Read per-listing/per-store progress and results | `ebay.view` |
 
 Bulk jobs persist in `ebay_listing_jobs` / `ebay_listing_job_targets` and run
 through the `ebay-listing-publish` BullMQ queue at bounded concurrency. The
 submission request is idempotent when `idempotencyKey` is supplied.
+For native OAuth stores, single and bulk submission reserve the requested targets, already
+pending/processing targets, and 100 calls for other Trading operations against
+eBay Developer Analytics' `AddFixedPriceItem` remaining allowance. Low capacity
+returns a 400 with eBay's reset timestamp; unavailable Analytics returns a 503.
+Neither case persists targets or sends requests to eBay.
 
 ### Automation
 

@@ -40,6 +40,7 @@ import { ListingBuilderService } from './services/listing-builder.service.js';
 import { CatalogPublishResolverService } from './services/catalog-publish-resolver.service.js';
 import { ListingActionLogWriterService } from './services/listing-action-log-writer.service.js';
 import { EbayMultiStoreListingService } from './services/ebay-multi-store-listing.service.js';
+import { EbayTradingQuotaService } from './services/ebay-trading-quota.service.js';
 import { EbayPolicySyncService } from './services/ebay-policy-sync.service.js';
 import { EbaySellAccountApiService } from './services/ebay-sell-account-api.service.js';
 import { EbayListingPublishProcessor } from './processors/ebay-listing-publish.processor.js';
@@ -125,6 +126,7 @@ import { StorageModule } from '../../storage/storage.module.js';
     ListingBuilderService,
     ListingActionLogWriterService,
     EbayMultiStoreListingService,
+    EbayTradingQuotaService,
     EbayPolicySyncService,
     EbaySellAccountApiService,
     EbayListingPublishProcessor,

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-07 — Guard eBay publishing against Trading API exhaustion
+
+- Single and bulk native-OAuth publish submissions now check eBay Developer Analytics for the shared application Trading API allowance before persisting a job. They reserve room for other Trading calls and already queued targets; when capacity is insufficient, the request returns the reset time without generating another failed job.
+- The Inventory-to-Trading migration now checks its expected preflight and apply usage against the same allowance and reserves 1,000 calls for publishing. A dry-run-first recovery tool identifies unique, still-unpublished products affected by error 518 and supports a confirmed canary/requeue.
+
 ## 2026-10-06 — Move recent eBay listings to Trading API
 
 - All new standard fixed-price eBay listings use Trading API. The retired API-mode override cannot route these listings back to Inventory API. App relisting now withdraws published Inventory offers before deleting and replacing them, with recovery if the Trading request fails.

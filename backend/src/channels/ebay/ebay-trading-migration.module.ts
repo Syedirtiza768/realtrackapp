@@ -12,6 +12,7 @@ import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { SellerpunditTokenSyncService } from '../../integrations/sellerpundit/sellerpundit-token-sync.service.js';
 import { EbayPublishedListing } from '../../published-listings/entities/ebay-published-listing.entity.js';
+import { EbayTradingQuotaService } from '../../integrations/ebay/services/ebay-trading-quota.service.js';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { EbayPublishedListing } from '../../published-listings/entities/ebay-pub
     EbayMarketplaceConfigService,
     EbayInventoryApiService,
     EbayTradingApiService,
+    EbayTradingQuotaService,
     {
       provide: SellerpunditTokenSyncService,
       useValue: {
