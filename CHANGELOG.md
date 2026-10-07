@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-07 — Fix frontend build on main
+
+- `npm run build` failed type-checking on `main`. `catalogConfig.ts` sets
+  `addLabel` / `searchPlaceholder` for Fashion, but `CatalogConfig` did not declare them
+  and `CatalogWorkspace` ignored them; both are now optional fields, and the workspace
+  uses them with the previous text as the fallback (Fashion shows "Add Item").
+- `InventoryManager.tsx` inferred the `missing` URL-filter default as the literal type
+  `false`, so toggling "missing images" did not type-check; it is now `boolean`.
+
 ## 2026-10-06 — Move recent eBay listings to Trading API
 
 - All new standard fixed-price eBay listings use Trading API. The retired API-mode override cannot route these listings back to Inventory API. App relisting now withdraws published Inventory offers before deleting and replacing them, with recovery if the Trading request fails.

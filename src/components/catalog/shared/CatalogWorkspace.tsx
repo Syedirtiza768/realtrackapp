@@ -98,7 +98,7 @@ export default function CatalogWorkspace({ config }: Props) {
   const catalogDescription = isBusinessIndustrial
     ? 'Search, review, assign teams, and manage Business & Industrial inventory.'
     : `Search, review, assign teams, and manage ${config.label.toLowerCase()} inventory.`;
-  const addLabel = isBusinessIndustrial ? 'Add Equipment' : `Add ${config.label} item`;
+  const addLabel = config.addLabel || (isBusinessIndustrial ? 'Add Equipment' : `Add ${config.label} item`);
   const filterCount = activeFilterCount(state.filters);
   const hasActiveQuery = Boolean(state.q) || filtersSignature !== JSON.stringify(EMPTY_CATALOG_FILTERS);
   const notify = (text: string, tone: typeof messageTone = 'info') => {
@@ -310,7 +310,7 @@ export default function CatalogWorkspace({ config }: Props) {
           <input
             value={state.input}
             onChange={(event) => setState((current) => ({ ...current, input: event.target.value }))}
-            placeholder="Search SKU, title, brand, MPN, category, attributes…"
+            placeholder={config.searchPlaceholder || 'Search SKU, title, brand, MPN, category, attributes…'}
             className={`min-h-11 w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base shadow-sm outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-white sm:text-sm ${isBusinessIndustrial ? 'focus:border-cyan-500' : 'focus:border-blue-500'}`}
             aria-label="Search catalog"
             list="catalog-suggestions"
