@@ -64,6 +64,20 @@ export const FASHION_FIELD_GROUPS: Array<{ id: string; label: string; fields: Fa
     ],
   },
   {
+    // Mirrors backend fashion.config.ts: eBay item specifics photo identification can fill.
+    id: 'details',
+    label: 'Listing details',
+    fields: [
+      { key: 'countryOfManufacture', label: 'Country of manufacture', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Only from a "Made in" label.' },
+      { key: 'features', label: 'Features', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Visible features such as Pockets, Logo, Hooded.' },
+      { key: 'season', label: 'Season', input: 'text', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'occasion', label: 'Occasion', input: 'text', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'theme', label: 'Theme', input: 'text', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'vintage', label: 'Vintage', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Yes or No.' },
+      { key: 'garmentCare', label: 'Garment care', input: 'text', families: ['clothing'], help: 'Only from a readable care label.' },
+    ],
+  },
+  {
     id: 'measurements',
     label: 'Measurements',
     fields: [

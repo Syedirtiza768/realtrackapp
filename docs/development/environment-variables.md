@@ -249,7 +249,8 @@ the same frontend origins as `CORS_ORIGIN`. Backend CORS alone is not enough.
 | FASHION_SEED_ADMIN_PASSWORD | Required initial password, minimum 12 characters; never reset or logged on rerun |
 | FASHION_SEED_ADMIN_NAME | Optional display name for a newly created user |
 | FASHION_SEED_ADMIN_ORGANIZATION_NAME | Optional name for a newly created workspace |
-| FASHION_AI_MODEL | Optional Fashion vision model override |
+| FASHION_AI_MODEL | Fashion vision model (default `google/gemini-3.1-flash-lite`) |
+| FASHION_AI_FALLBACK_MODEL | Fashion fallback model (default `google/gemma-4-31b-it`; `none` disables) |
 
 ## Business & Industrial admin seed
 

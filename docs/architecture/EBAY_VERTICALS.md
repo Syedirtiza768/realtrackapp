@@ -96,3 +96,14 @@ by this implementation.
 Fashion is available at /fashion/login and uses Fashion-only permissions and roles. Fashion draft listing endpoints are organization scoped; private authenticity evidence is stored in fashion_reviews and omitted from public listing payloads. Photos-first Add Item uploads garment images through existing storage and optionally identifies category and attributes with the shared vision provider; Fashion item specifics are projected from confirmed attributes (not automotive MPN/fitment). A Fashion product must be explicitly approved with authenticity confirmation before the publish projection can proceed. Quarantine blocks publishing locally and reports remote takedown as unavailable unless a supported integration is added.
 
 The Fashion eBay OAuth start route writes vertical context into the Redis OAuth state, creates a Fashion-enabled store, and rejects an eBay seller account already connected in the workspace. The same seller cannot be reused for an automotive or Fashion store. The dedicated seed command provisions the initial Fashion admin without resetting an existing password.
+
+## Fashion item specifics (2026-10-07)
+
+Fashion aspects come only from an explicit attribute to eBay name map
+(`FASHION_ASPECT_NAMES` in `backend/src/verticals/fashion.config.ts`): Brand, Department,
+Type, Size, Size Type, Color, Style, Pattern, Material, Fabric Type, Sleeve Length,
+Neckline, Closure, Fit, Shoe Width, Country/Region of Manufacture, Features, Season,
+Occasion, Theme, Vintage, Garment Care. Unmapped keys such as `itemType`, `composition`,
+measurement values, `categoryFamily` and the defect fields are not sent; defects and
+measurements belong in the description. Values are capped at eBay's 65 characters. See
+docs/decisions.md (2026-10-07).

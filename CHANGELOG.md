@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-10-07 — Fashion identification: Jev-selected model, fallback, fuller autofill
+
+- Fashion photo identification now uses `google/gemini-3.1-flash-lite` with an automatic
+  fallback to `google/gemma-4-31b-it`, chosen by Jev (OpenRouter `/alpha/decisions`) from
+  a 20-model benchmark on 5 labelled garments. Override with `FASHION_AI_MODEL` /
+  `FASHION_AI_FALLBACK_MODEL` (now passed through `docker-compose.yml`).
+- Fixed: a non-JSON or truncated model reply was shown as a successful analysis with
+  empty fields. It now retries on the fallback model, then reports a failure.
+- Fixed: single-garment photo sets could show the "more than one garment" alert.
+- Fixed: AI titles longer than eBay's 80 characters are trimmed on a word boundary
+  before review instead of being cut at publish.
+- Fixed: Fashion item specifics no longer include raw attribute keys, measurements and
+  free-text defect notes; only eBay aspect names are sent, values capped at 65 characters.
+- Added Fashion "Listing details" fields (country of manufacture, features, season,
+  occasion, theme, vintage, garment care), filled by identification, plus department
+  normalization (`Men`/`Women`/...) and `Size Type` / condition autofill. Prompt
+  `fashion-image-identification-v2`.
+- Added `google/gemma-4-31b-it` to the AI cost table (it was logged at gpt-4.1-mini rates).
+
 ## 2026-10-06 — Move recent eBay listings to Trading API
 
 - All new standard fixed-price eBay listings use Trading API. The retired API-mode override cannot route these listings back to Inventory API. App relisting now withdraws published Inventory offers before deleting and replacing them, with recovery if the Trading request fails.

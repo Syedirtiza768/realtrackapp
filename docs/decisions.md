@@ -23,6 +23,51 @@ Format:
 
 ---
 
+## 2026-10-07 — Fashion vision model chosen by Jev from a labelled benchmark; aspects use eBay names only
+
+**Model.** Fashion identification now defaults to `google/gemini-3.1-flash-lite`, with
+`google/gemma-4-31b-it` as an automatic fallback (`FASHION_AI_MODEL` /
+`FASHION_AI_FALLBACK_MODEL`, `none` disables the fallback). Previously Fashion fell
+through to the shared vision route (`OPENAI_VISION_MODEL`).
+
+- Benchmark: 5 real garments with known ground truth (Hugo Boss knit polo L; Hugo Boss
+  merino polo L; Patagonia women's 100% merino cardigan L; Lacoste sweater size "4" with
+  no composition label; L.L.Bean women's 100% wool cardigan with a rotated "LG" label).
+  20 OpenRouter vision models, the production prompt, 2048px WebP like the upload
+  pipeline, up to 3 runs each, scored on brand/size/department/colour/type/material plus
+  "did not invent" checks (composition, care, country).
+- Decision made by **Jev** (`~typesafe/jev-latest` via OpenRouter `/alpha/decisions`, the
+  same contract as `scripts/image-source-ebay.mjs`) from the aggregated evidence:
+  primary gemini-3.1-flash-lite at probability 0.96 (no misses in 5 runs, 100% strict
+  JSON, ~$1.2-1.7 per 1,000 items, 4-10 s). Fallback gemma-4-31b-it was a low-confidence
+  pick (0.29): it omits fields (department once) rather than misreading labels.
+- Rejected: gemini-2.5-flash (read Patagonia "L" as "S" on prompt v2, ~44 s p50 on v1);
+  gpt-4.1-mini (read "LG" as "O LONG"); gpt-6-luna (read "LG" as "L/G" in 2 of 3 runs);
+  gpt-6-luna-pro (read "100% WOOL" as "100% Acrylic" in 2 of 3 runs on prompt v2);
+  qwen3-vl-32b and qwen3.7-flash (invented composition); gpt-5-nano and
+  `typesafe/jev-router` (reasoning exhausted the 2,500-token budget, truncated JSON);
+  claude-haiku-4.5 (never strict JSON, 5x cost).
+- Re-run the benchmark before changing the default; models that rank higher on general
+  leaderboards misread labels here.
+
+**Pipeline gaps fixed in the same change.**
+- A non-JSON or token-truncated reply used to be reported as `status: suggested` with
+  every field empty. Replies are now parsed leniently (`sanitizeJson`); empty or
+  `finish_reason=length` replies count as failures and trigger the fallback.
+- `reviewPhotoSet` comes only from `multipleDifferentItems`. The primary model set it on
+  5 of 15 single-garment sets, which showed the "more than one garment" alert.
+- AI titles are capped at 80 characters on a word boundary at analysis time (models
+  returned up to 106). Before, eBay publish silently cut the approved title.
+- `fashionAspectsFromAttributes` publishes eBay item-specific names only. It previously
+  also sent every unmapped attribute under its raw key (`itemType`, `chestMeasurement`,
+  `categoryFamily`, `stains`, `conditionDetails`...), duplicating Type and pushing
+  measurements and defect notes into specifics, where values over 65 characters fail the
+  publish. Defects stay in the description.
+- Autofill: new "Listing details" fields (country of manufacture, features, season,
+  occasion, theme, vintage, garment care) and prompt rules for `sizeType`, department
+  values and condition. Average autofilled fields per item rose from 16.6 to 21.0 on the
+  benchmark set with no invented materials or care.
+
 ## 2026-10-05 — Warehouse stock: one ledger, absolute channel pushes, shadow mode, sell-before-you-own
 **Decision:**
 1. A new `stock` module and `/api/stock` prefix were added, rather than extending `inventory/`.
