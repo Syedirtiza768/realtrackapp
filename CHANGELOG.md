@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-10-08 — Part lookup respects the vehicle make; catalog photo edits stick
+
+- Part lookup (`SingleListingFormService.lookupPart`) prefers a usable photo
+  identification over an eBay Browse match, because a seller's MPN field can be wrong.
+  A Browse listing may only supply the part identity on an exact MPN match whose
+  vehicle evidence does not contradict the operator-entered vehicle make;
+  aftermarket brands (Bosch, Mopar, Denso…) are not treated as vehicle makes. The
+  make is passed separately from the part brand (`vehicleMake`) to Browse, vision and
+  text lookups.
+- Auto Parts catalog photo editor: photos removed and saved no longer come back from
+  stale `catalog_products.imageUrls`; pending removals are saved before an upload, and
+  duplicate URLs are dropped.
+- In-app links in the Single Listing pipeline and catalog detail modal now include the
+  `/auto-parts` prefix.
+- `usePartLookup` now declares `vehicleMake` / `partType`, which the hotfix passed
+  without a type (the old Vite-only image build did not type-check).
+- This change was first deployed to production on 2026-10-07 as
+  `catalog-photo-part-lookup-20261007` from an untracked copy; this commit puts it in
+  git. See docs/context/CURRENT_STATE.md.
+
 ## 2026-10-07 — Fashion identification: Jev-selected model, fallback, fuller autofill
 
 - Fashion photo identification now uses `google/gemini-3.1-flash-lite` with an automatic

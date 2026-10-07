@@ -292,6 +292,9 @@ export function usePartLookup() {
     mutationFn: (input: {
       partNumber: string;
       brand?: string;
+      /** Vehicle make entered by the operator; kept separate from the part brand. */
+      vehicleMake?: string;
+      partType?: string;
       vin?: string;
       imageUrls?: string[];
     }) => postJson<PartLookupResult>('/pipeline/single-listing/part-lookup', input),

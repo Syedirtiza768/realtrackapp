@@ -173,6 +173,8 @@ export default function SingleListingPipeline() {
         lookup = await partLookupMutation.mutateAsync({
           partNumber: pn,
           brand: effectiveBrand,
+          vehicleMake: vm || undefined,
+          partType,
         });
         setPreview({
           status: 'ready',
@@ -269,7 +271,7 @@ export default function SingleListingPipeline() {
         </h2>
         <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
           GridConnect-style intake — photos optional here; add them on{' '}
-          <Link to="/inventory" className="text-blue-400 hover:underline">
+          <Link to="/auto-parts/inventory" className="text-blue-400 hover:underline">
             Inventory
           </Link>{' '}
           before Fetch details
@@ -440,7 +442,7 @@ export default function SingleListingPipeline() {
               {teams.length === 0 && !teamsLoading && (
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">
                   Create teams in{' '}
-                  <Link to="/settings/teams" className="text-blue-400 hover:underline">
+                  <Link to="/auto-parts/settings/teams" className="text-blue-400 hover:underline">
                     Settings → Teams
                   </Link>
                 </p>
@@ -619,7 +621,7 @@ export default function SingleListingPipeline() {
                   Add photos on Inventory, then Fetch details and Send to pipeline.
                 </p>
                 <Link
-                  to="/inventory"
+                  to="/auto-parts/inventory"
                   className="text-sm text-blue-400 hover:underline font-medium"
                 >
                   Open Inventory →

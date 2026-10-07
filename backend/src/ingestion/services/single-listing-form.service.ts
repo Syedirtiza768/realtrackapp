@@ -67,6 +67,8 @@ export interface PartLookupResult {
 export interface PartLookupDto {
   partNumber: string;
   brand?: string;
+  /** Vehicle make entered by the operator; separate from an aftermarket brand. */
+  vehicleMake?: string;
   vin?: string;
   /** CDN URLs from uploaded listing images — required for automatic vision fallback */
   imageUrls?: string[];
@@ -141,6 +143,7 @@ Return ONLY valid JSON with these keys (use empty string when unknown):
 Rules:
 - Never fabricate exact cross-reference numbers.
 - Mercedes A-numbers, BMW numbers, Toyota/Lexus formats should inform brand/model.
+- When a target vehicle make is supplied, do not infer a part from listings that identify a different make.
 - Chassis codes must match year ranges (Lexus RX AL20 = 2015–2022; AL10 = 2009–2015). Never mix generation codes with incompatible years.
 - Interior/trim parts: mention placement, color/finish, and verify-part-number guidance in the note.
 - If uncertain, use lower confidence and leave fields empty rather than guessing wildly.
@@ -153,6 +156,7 @@ Use the seller hints together with what you see in the images — do not rely on
 Seller hints:
 - Part number / OEM: {partNumberHint}
 - {brandHint}
+- Target vehicle make (when known): {vehicleMakeHint}
 
 You MUST verify image coverage across the set:
 - hasLabelShot: at least ONE image clearly shows a part number stamp, OEM label, barcode, or manufacturer tag
@@ -181,6 +185,50 @@ Rules:
 - imageCoverage must reflect what is actually in the photos
 - The note must be accurate, seller-facing, and ready to paste into a listing description
 - TITLE RULE: partName is for used OEM parts — do NOT include "New" in partName. Use neutral wording (no condition word) or "Used"/"OEM Used".`;
+
+const NON_VEHICLE_PART_LOOKUP_BRANDS = new Set([
+  'acdelco',
+  'bosch',
+  'continental',
+  'delphi',
+  'denso',
+  'genuineoem',
+  'mopar',
+  'motorcraft',
+  'valeo',
+]);
+
+const PART_LOOKUP_VEHICLE_MAKES = [
+  ...AUTOMOTIVE_OEM_BRANDS.filter(
+    (make) =>
+      !NON_VEHICLE_PART_LOOKUP_BRANDS.has(
+        make.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      ),
+  ),
+  // The Add Part brand list intentionally omits some legacy marques.
+  'Plymouth',
+  'Pontiac',
+  'Oldsmobile',
+  'Mercury',
+  'Saturn',
+  'Scion',
+  'Saab',
+];
+
+function normalizeVehicleMake(value: string): string {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (normalized === 'vw') return 'volkswagen';
+  if (normalized === 'chevy') return 'chevrolet';
+  if (normalized === 'mercedes') return 'mercedes benz';
+  return normalized;
+}
+
+function extractVehicleMakeEvidence(value: string): string[] {
+  const normalized = ` ${normalizeVehicleMake(value)} `;
+  return PART_LOOKUP_VEHICLE_MAKES.map(normalizeVehicleMake).filter((make) =>
+    normalized.includes(` ${make} `),
+  );
+}
 
 @Injectable()
 export class SingleListingFormService {
@@ -468,7 +516,7 @@ export class SingleListingFormService {
 
   /**
    * Auto-enrich a newly created intake listing without photos:
-   * eBay Browse API identification (primary) → OpenAI text lookup
+   * make-compatible eBay Browse identification → OpenAI text lookup
    * (fallback) → MVL canonicalization.
    * Best-effort: failures are logged but don't prevent part creation.
    * User-provided fields are never overwritten.
@@ -483,8 +531,13 @@ export class SingleListingFormService {
 
       let oemResult: Partial<PartLookupResult> | null = null;
 
-      // Step 1: eBay Browse identification (deterministic, no AI, no photos)
-      const browseAttempt = await this.runBrowseLookup(partNumber, dto.brand);
+      // Step 1: accept only exact MPN candidates that do not contradict the
+      // vehicle make entered by the operator.
+      const browseAttempt = await this.runBrowseLookup(
+        partNumber,
+        dto.brand,
+        dto.vehicleMake,
+      );
       if (browseAttempt && this.isOemLookupUsable(browseAttempt.result)) {
         oemResult = browseAttempt.result;
       }
@@ -498,6 +551,7 @@ export class SingleListingFormService {
         const lookupDto: PartLookupDto = {
           partNumber,
           brand: dto.brand,
+          vehicleMake: dto.vehicleMake,
           partType: dto.partType,
         };
 
@@ -685,12 +739,12 @@ export class SingleListingFormService {
       .map((u) => u.trim())
       .filter(Boolean);
 
-    // No photo-count gate here: lookupPart identifies the part from the
-    // eBay Browse API by OEM/MPN first, so detection no longer depends on
-    // images. Photos, when present, only feed the vision fallback.
+    // Keep the operator-entered vehicle make separate from the listing's
+    // brand so Browse results can be checked against the intended vehicle.
     const lookup = await this.lookupPart({
       partNumber,
       brand: listing.cBrand?.trim() || undefined,
+      vehicleMake: listing.extractedMake?.trim() || undefined,
       imageUrls,
       partType: listing.cType?.trim() || undefined,
     });
@@ -836,10 +890,55 @@ export class SingleListingFormService {
       .map((u) => u.trim())
       .filter(Boolean);
 
-    // eBay-Browse-first: identify the part from live eBay listings that
-    // carry the same OEM/MPN. Deterministic, photo-independent, and free —
-    // no AI call and no dependency on image quality/coverage.
-    const browseAttempt = await this.runBrowseLookup(partNumber, dto.brand);
+    // Prefer the actual uploaded part photos when they are available. Seller
+    // MPN fields can be wrong, so an exact eBay search result must not overrule
+    // a usable visual identification.
+    let visionAttempt:
+      | {
+          result: Partial<PartLookupResult>;
+          costUsd: number;
+          visionModel: string;
+        }
+      | undefined;
+    if (imageUrls.length >= PART_LOOKUP_MIN_VISION_IMAGES) {
+      try {
+        visionAttempt = await this.runVisionLookup(
+          partNumber,
+          imageUrls,
+          dto.brand,
+          dto.partType,
+          dto.vehicleMake,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Photo part lookup failed for ${partNumber}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    if (
+      visionAttempt &&
+      this.isVisionLookupUsable(visionAttempt.result, partNumber)
+    ) {
+      return {
+        ...(await this.finalizeLookupFields(
+          visionAttempt.result,
+          partNumber,
+          true,
+        )),
+        source: 'vision',
+        aiModel: visionAttempt.visionModel,
+        visionModel: visionAttempt.visionModel,
+        estimatedCostUsd: visionAttempt.costUsd,
+        fallbackUsed: true,
+      };
+    }
+
+    const browseAttempt = await this.runBrowseLookup(
+      partNumber,
+      dto.brand,
+      dto.vehicleMake,
+    );
     if (browseAttempt && this.isOemLookupUsable(browseAttempt.result)) {
       return {
         ...(await this.finalizeLookupFields(
@@ -856,30 +955,8 @@ export class SingleListingFormService {
 
     this.assertAiConfigured();
 
-    // Vision fallback when photos are available: OEM + brand + images together
-    if (imageUrls.length >= PART_LOOKUP_MIN_VISION_IMAGES) {
-      const visionAttempt = await this.runVisionLookup(
-        partNumber,
-        imageUrls,
-        dto.brand,
-        dto.partType,
-      );
-
-      return {
-        ...(await this.finalizeLookupFields(
-          visionAttempt.result,
-          partNumber,
-          true,
-        )),
-        source: 'vision',
-        aiModel: visionAttempt.visionModel,
-        visionModel: visionAttempt.visionModel,
-        estimatedCostUsd: visionAttempt.costUsd,
-        fallbackUsed: true,
-      };
-    }
-
-    // Text-only fallback when no photos (legacy/direct API callers)
+    // Text fallback for photo-less calls or when the available photo evidence
+    // could not be reconciled with the entered part number.
     const oemModel =
       this.config.get<string>('OPENAI_MODEL_TEXT') ||
       this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4o-mini');
@@ -929,17 +1006,66 @@ export class SingleListingFormService {
     return true;
   }
 
+  private isVisionLookupUsable(
+    result: Partial<PartLookupResult>,
+    expectedPartNumber: string,
+  ): boolean {
+    if (!result.partName?.trim() || result.confidence === 'low') return false;
+
+    const returnedPartNumber = result.partNumber?.trim();
+    if (!returnedPartNumber) return true;
+
+    const normalizePartNumber = (value: string) =>
+      this.sanitizePartNumber(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+    return (
+      normalizePartNumber(returnedPartNumber) ===
+      normalizePartNumber(expectedPartNumber)
+    );
+  }
+
+  private browseItemMatchesVehicleMake(
+    item: {
+      title: string;
+      brand: string | null;
+      fitmentHints: Array<{ year?: string; make?: string; model?: string }>;
+    },
+    vehicleMakeHint?: string,
+  ): boolean {
+    if (!vehicleMakeHint?.trim()) return true;
+
+    const expectedMake = normalizeVehicleMake(vehicleMakeHint);
+    const itemText = normalizeVehicleMake(`${item.title} ${item.brand ?? ''}`);
+    if (` ${itemText} `.includes(` ${expectedMake} `)) return true;
+
+    const evidence = new Set<string>();
+    for (const hint of item.fitmentHints ?? []) {
+      // Ignore a lone Manufacturer aspect: it can be the part brand, not its
+      // vehicle application.
+      if (hint.make && (hint.year || hint.model)) {
+        evidence.add(normalizeVehicleMake(hint.make));
+      }
+    }
+    for (const make of extractVehicleMakeEvidence(
+      `${item.title} ${item.brand ?? ''}`,
+    )) {
+      evidence.add(make);
+    }
+
+    // Missing vehicle evidence is inconclusive. Explicitly conflicting
+    // evidence is enough to reject the seller listing as an identity source.
+    return evidence.size === 0 || evidence.has(expectedMake);
+  }
+
   /**
    * Identify a part from live eBay listings carrying the same OEM/MPN via
-   * the Browse API. Deterministic and photo-independent — this is the
-   * primary detection path so part identification never depends on image
-   * quality or coverage. Returns null when eBay has no matching listings
-   * (legitimately rare parts) or the API call fails; callers fall back to
-   * vision / AI text lookup.
+   * the Browse API. Only explicit MPN matches without conflicting vehicle
+   * make evidence may supply the title. Returns null when eBay has no safe
+   * match or the API call fails; callers fall back to vision / AI text lookup.
    */
   private async runBrowseLookup(
     partNumber: string,
     brandHint?: string,
+    vehicleMakeHint?: string,
   ): Promise<{ result: Partial<PartLookupResult> } | null> {
     try {
       let lookup = await this.browseApi.searchByMpn(
@@ -957,7 +1083,7 @@ export class SingleListingFormService {
       if (!lookup.found || lookup.items.length === 0) return null;
 
       const normalize = (v: string | null | undefined) =>
-        (v ?? '').toLowerCase().replace(/[\s\-]/g, '');
+        (v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const target = normalize(partNumber);
 
       const detailed = lookup.items.filter(
@@ -970,12 +1096,19 @@ export class SingleListingFormService {
             vals.some((v) => normalize(v) === target),
           ),
       );
-      const pool =
-        exactMpn.length > 0
-          ? exactMpn
-          : detailed.length > 0
-            ? detailed
-            : lookup.items;
+      // Search text alone is not proof that a seller listing represents this
+      // part number. Never infer the product title from a non-exact result.
+      if (exactMpn.length === 0) return null;
+
+      const pool = exactMpn.filter((item) =>
+        this.browseItemMatchesVehicleMake(item, vehicleMakeHint),
+      );
+      if (pool.length === 0) {
+        this.logger.warn(
+          `Browse part lookup rejected ${partNumber}: eBay results conflict with vehicle make "${vehicleMakeHint}"`,
+        );
+        return null;
+      }
       const best =
         pool.find((i) => i.epid && i.categoryId) ??
         pool.find((i) => i.categoryId) ??
@@ -1068,6 +1201,8 @@ export class SingleListingFormService {
     const contextLines = [`Part number / OEM: ${partNumber}`];
     if (dto.brand?.trim())
       contextLines.push(`Known brand hint: ${dto.brand.trim()}`);
+    if (dto.vehicleMake?.trim())
+      contextLines.push(`Target vehicle make: ${dto.vehicleMake.trim()}`);
     if (dto.vin?.trim())
       contextLines.push(`Donor VIN (if relevant): ${dto.vin.trim()}`);
 
@@ -1141,6 +1276,7 @@ export class SingleListingFormService {
     imageUrls: string[],
     brandHint?: string,
     partType?: string,
+    vehicleMakeHint?: string,
   ): Promise<{
     result: Partial<PartLookupResult>;
     costUsd: number;
@@ -1164,11 +1300,16 @@ export class SingleListingFormService {
       prompt = SINGLE_LISTING_VISION_PROMPT.replace(
         '{partNumberHint}',
         partNumberHint,
-      ).replace('{brandHint}', brandLine);
+      )
+        .replace('{brandHint}', brandLine)
+        .replace(
+          '{vehicleMakeHint}',
+          vehicleMakeHint?.trim() || 'not provided',
+        );
     }
     const visionContext = {
       partNumber: partNumberHint,
-      donorMake: brandHint,
+      donorMake: vehicleMakeHint?.trim() || brandHint,
       partType: useEcuPrompt ? (partType ?? 'ecu') : 'single_listing_form',
     };
     let visionResult: VisionEnrichmentResult;
@@ -1242,11 +1383,8 @@ export class SingleListingFormService {
     const hasOverallShot = coverage?.hasOverallShot === true;
     const coverageIncomplete = !hasLabelShot || !hasOverallShot;
 
-    // Vision runs as a fallback after the eBay Browse lookup, so incomplete
-    // photo coverage is no longer a hard failure: if the model still
-    // produced a usable identification, use it (capped at medium
-    // confidence). Only reject when coverage is incomplete AND the model
-    // couldn't name the part — that combination is genuinely unusable.
+    // Incomplete photo coverage lowers confidence but can still identify the
+    // part when the model produced a usable name.
     if (
       coverageIncomplete &&
       !this.str(parsed.partName) &&

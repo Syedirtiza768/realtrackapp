@@ -1,5 +1,18 @@
 # Current State
 
+**2026-10-08 (catalog photo / part-lookup hotfix brought into git)** — On 2026-10-07
+another session deployed `realtrackapp-backend` and `realtrackapp-frontend`
+`:catalog-photo-part-lookup-20261007` (18:08–18:14 UTC). They were built from
+`/home/ubuntu/realtrackapp-build-catalog-photo-part-fix-20261007` (not a git checkout)
+and three files uploaded to `/tmp/catalog-photo-part-fix-*`, on top of older code. That
+silently removed two releases already in production: the Fashion AI identification
+change (PR #7, live since 09:36 UTC) and the eBay Trading quota guard (PR #9 overlay
+`ebay-quota-880eb325`, 14:28 UTC). A deploy of `main` (`27a67db`) briefly replaced the
+hotfix backend and was rolled back, so production stayed on the hotfix. The hotfix's
+three files are now committed on `fix/catalog-photo-part-lookup`, plus the missing
+`usePartLookup` type. **Deploy only from git commits on `main`**; a build from a copied
+folder can drop releases that are not in that copy.
+
 **2026-10-05 (warehouse stock — not deployed)** — `StockModule` (`/api/stock`) and the Stock workspace were added for all three verticals. They provide warehouses/bins, a SKU master, an append-only ledger, documents, order reservations, procurement of stock that is not on hand (POs with receive-to-order, dropship), and channel quantity sync. Channel sync runs in shadow mode by default. Order import now reserves stock, and shipping and cancelling update it; before this, sales never deducted stock. Migration `1791100000000` is additive. Each workspace must run **Stock → Set up** after deploy. Verified locally: 17 PostgreSQL integration tests; a full 67-migration replay from an empty DB; an end-to-end API run and UI walkthrough against an isolated backend. Not exercised: live eBay/PartsBazar360 pushes (push stays off), production data backfill. See `docs/architecture/WAREHOUSE_INVENTORY.md`.
 
 **2026-09-14 (B&I taxonomy hardening)** — Business & Industrial image intake
