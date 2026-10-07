@@ -27,7 +27,8 @@ Four Docker Compose services (`docker-compose.yml`):
 ## Build
 
 - **Frontend** (`Dockerfile`, root context): multi-stage — `npm run build`
-  (Vite) → static assets served by nginx (`docker/nginx.conf`).
+  (`tsc -b && vite build`) → static assets served by nginx (`docker/nginx.conf`).
+  Until 2026-10-07 the image ran `vite build` alone, which skipped type-checking.
 - **Backend** (`backend/Dockerfile`): multi-stage — install all deps → `nest build`
   → production image with `--omit=dev` deps running `node dist/main.js`.
 
