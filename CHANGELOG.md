@@ -8,6 +8,9 @@
   uses them with the previous text as the fallback (Fashion shows "Add Item").
 - `InventoryManager.tsx` inferred the `missing` URL-filter default as the literal type
   `false`, so toggling "missing images" did not type-check; it is now `boolean`.
+- The frontend `Dockerfile` now runs `npm run build` (`tsc -b && vite build`) instead of
+  `npx vite build`, so an image can no longer be built from code that fails type-checking.
+  That gap is how the two errors above reached production builds unnoticed.
 
 ## 2026-10-07 — Guard eBay publishing against Trading API exhaustion
 
