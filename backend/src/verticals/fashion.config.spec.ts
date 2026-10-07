@@ -5,6 +5,7 @@ import {
   fashionAspectsFromAttributes,
   mergeFashionSuggestions,
   normalizeFashionCategoryFamily,
+  normalizeFashionDepartment,
   validateFashionAttributes,
 } from './fashion.config.js';
 
@@ -116,6 +117,51 @@ describe('Fashion domain configuration', () => {
     expect(aspects.Brand).toEqual(['Acme']);
     expect(aspects._suggestedKeys).toBeUndefined();
     expect(aspects.fitment).toBeUndefined();
+  });
+
+  it('publishes eBay item-specific names only, never raw attribute keys, measurements or defect notes', () => {
+    const aspects = fashionAspectsFromAttributes(
+      {
+        itemType: 'Cardigan',
+        productType: 'Boiled wool cardigan',
+        categoryFamily: 'clothing',
+        department: 'Women',
+        size: 'LG',
+        sizeType: 'Regular',
+        fabricType: 'Boiled wool',
+        countryOfManufacture: 'China',
+        features: 'Pockets, Buttons',
+        vintage: 'No',
+        chestMeasurement: '21',
+        measurementsUnit: 'in',
+        stains: 'faint discoloration visible on the lower front panel near the second button',
+        conditionDetails: 'Light wear',
+        composition: '100% wool',
+        style: 'x'.repeat(90),
+      },
+      'L.L.Bean',
+    );
+    expect(aspects).toMatchObject({
+      Brand: ['L.L.Bean'],
+      Type: ['Cardigan'],
+      Department: ['Women'],
+      Size: ['LG'],
+      'Size Type': ['Regular'],
+      'Fabric Type': ['Boiled wool'],
+      'Country/Region of Manufacture': ['China'],
+      Features: ['Pockets', 'Buttons'],
+      Vintage: ['No'],
+    });
+    expect(Object.keys(aspects).some((name) => /^[a-z]/.test(name))).toBe(false);
+    expect(aspects.Style[0].length).toBeLessThanOrEqual(65);
+  });
+
+  it('maps AI department wording to eBay Department values', () => {
+    expect(normalizeFashionDepartment("men's")).toBe('Men');
+    expect(normalizeFashionDepartment('WOMENS')).toBe('Women');
+    expect(normalizeFashionDepartment('unisex')).toBe('Unisex Adults');
+    expect(normalizeFashionDepartment('Toddler')).toBe('Toddler');
+    expect(normalizeFashionDepartment('  ')).toBeNull();
   });
 
   it('preserves identification metadata keys through Fashion validation', () => {

@@ -185,7 +185,8 @@ bucket had no CORS rules until 2026-09-13.
 | FASHION_SEED_ADMIN_EMAIL | required by seed command | Email for the idempotent Fashion admin seed |
 | FASHION_SEED_ADMIN_PASSWORD | required by seed command | Initial password only; minimum 12 characters; never logged or reset on rerun |
 | FASHION_SEED_ADMIN_NAME | Fashion Admin | Display name for a newly created seed user |
-| FASHION_AI_MODEL | optional | Vision model override for Fashion garment identification; otherwise the shared vision router/default is used |
+| FASHION_AI_MODEL | optional | Vision model for Fashion garment identification. Default `google/gemini-3.1-flash-lite` (Jev-selected, see docs/decisions.md 2026-10-07) |
+| FASHION_AI_FALLBACK_MODEL | optional | Model retried when the primary errors, returns no JSON or is truncated. Default `google/gemma-4-31b-it`; `none` disables |
 
 Run backend npm run seed:fashion-admin only after reviewing the target database and environment. It is not a production migration or deploy approval.
 

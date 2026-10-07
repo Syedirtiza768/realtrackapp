@@ -150,4 +150,75 @@ describe('FashionImageAnalysisService', () => {
     );
     expect(result.attributes.chestMeasurement).toBeUndefined();
   });
+
+  const reply = (content: unknown, extra: Record<string, unknown> = {}) => ({
+    content,
+    model: 'm',
+    finishReason: 'stop',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    estimatedCostUsd: 0,
+    latencyMs: 5,
+    ...extra,
+  });
+  const analyzeOne = () =>
+    service.analyze({ id: 'user-1' } as never, {
+      imageUrls: ['https://cdn.example/a.webp'],
+    });
+
+  it('uses the Jev-selected model first and falls back when the reply has no JSON', async () => {
+    openai.chat
+      .mockResolvedValueOnce(reply('I cannot help with that.'))
+      .mockResolvedValueOnce(
+        reply({ itemType: 'Cardigan', brand: 'L.L.Bean', size: 'LG' }),
+      );
+    const result = await analyzeOne();
+    expect(openai.chat.mock.calls.map(([req]) => req.model)).toEqual([
+      'google/gemini-3.1-flash-lite',
+      'google/gemma-4-31b-it',
+    ]);
+    expect(result.status).toBe('suggested');
+    expect(result.attributes.size).toBe('LG');
+  });
+
+  it('treats a reply cut off at the token limit as a failure, not an empty suggestion', async () => {
+    openai.chat.mockResolvedValue(
+      reply('{"itemType":"Sweater","brand":"Lac', { finishReason: 'length' }),
+    );
+    const result = await analyzeOne();
+    expect(openai.chat).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe('failed');
+  });
+
+  it('reads JSON wrapped in markdown fences', async () => {
+    openai.chat.mockResolvedValue(
+      reply('```json\n{"itemType":"Sweater","brand":"Lacoste","size":"4"}\n```'),
+    );
+    const result = await analyzeOne();
+    expect(openai.chat).toHaveBeenCalledTimes(1);
+    expect(result.brand).toBe('Lacoste');
+    expect(result.attributes.size).toBe('4');
+  });
+
+  it('caps AI titles at 80 characters, normalizes department and does not raise a false multi-item alert', async () => {
+    openai.chat.mockResolvedValue(
+      reply({
+        itemType: 'Cardigan',
+        department: "women's",
+        sizeType: 'Regular',
+        countryOfManufacture: 'China',
+        features: ['Pockets', 'Buttons'],
+        title:
+          "Patagonia Women's Size L 100% Merino Wool Button-Front Funnel Neck Cardigan Sweater Oatmeal Beige",
+        multipleDifferentItems: false,
+        reviewPhotoSet: true,
+      }),
+    );
+    const result = await analyzeOne();
+    expect(result.title.length).toBeLessThanOrEqual(80);
+    expect(result.title).not.toMatch(/\s$/);
+    expect(result.attributes.department).toBe('Women');
+    expect(result.attributes.countryOfManufacture).toBe('China');
+    expect(result.attributes.features).toBe('Pockets, Buttons');
+    expect(result.reviewPhotoSet).toBe(false);
+  });
 });

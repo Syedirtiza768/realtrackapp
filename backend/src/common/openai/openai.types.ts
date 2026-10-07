@@ -135,6 +135,8 @@ export const OPENAI_PRICING: Record<string, { input: number; output: number }> =
     // and may not resolve on OpenRouter yet, hence the 2.5 fallback below.
     'google/gemini-3.1-flash-lite': { input: 0.25, output: 1.5 },
     'google/gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
+    // Fashion vision fallback (Jev-selected 2026-10-07)
+    'google/gemma-4-31b-it': { input: 0.09, output: 0.34 },
     'deepseek/deepseek-chat-v3-0324': { input: 0.27, output: 1.1 },
     'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
     // MiniMax M3 via OpenRouter (legacy default; vision is ~2x)

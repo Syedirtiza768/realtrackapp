@@ -1,5 +1,6 @@
 import type { ProductAttributes } from './vertical.types.js';
 import { validateVerticalAttributes } from './vertical.config.js';
+import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
 
 export const FASHION_VERTICAL = 'fashion' as const;
 
@@ -215,6 +216,59 @@ export const FASHION_FIELD_GROUPS: Array<{
     ],
   },
   {
+    // eBay item specifics that photo identification can fill from labels and the garment itself.
+    id: 'details',
+    label: 'Listing details',
+    fields: [
+      {
+        key: 'countryOfManufacture',
+        label: 'Country of manufacture',
+        input: 'text',
+        families: ['clothing', 'footwear', 'accessories'],
+        help: 'Only from a "Made in" label.',
+      },
+      {
+        key: 'features',
+        label: 'Features',
+        input: 'text',
+        families: ['clothing', 'footwear', 'accessories'],
+        help: 'Visible features such as Pockets, Logo, Hooded.',
+      },
+      {
+        key: 'season',
+        label: 'Season',
+        input: 'text',
+        families: ['clothing', 'footwear', 'accessories'],
+      },
+      {
+        key: 'occasion',
+        label: 'Occasion',
+        input: 'text',
+        families: ['clothing', 'footwear', 'accessories'],
+      },
+      {
+        key: 'theme',
+        label: 'Theme',
+        input: 'text',
+        families: ['clothing', 'footwear', 'accessories'],
+      },
+      {
+        key: 'vintage',
+        label: 'Vintage',
+        input: 'text',
+        families: ['clothing', 'footwear', 'accessories'],
+        help: 'Yes or No.',
+      },
+      {
+        key: 'garmentCare',
+        label: 'Garment care',
+        input: 'text',
+        families: ['clothing'],
+        help: 'Only from a readable care label.',
+      },
+    ],
+  },
+  {
     id: 'measurements',
     label: 'Measurements',
     fields: [
@@ -418,6 +472,31 @@ export function normalizeFashionCategoryFamily(
   return 'clothing';
 }
 
+const FASHION_DEPARTMENTS: Array<[RegExp, string]> = [
+  [/^(men|mens|male|man)$/, 'Men'],
+  [/^(women|womens|female|woman|ladies|lady)$/, 'Women'],
+  [/^unisex( adults?)?$/, 'Unisex Adults'],
+  [/^(boys|boy)$/, 'Boys'],
+  [/^(girls|girl)$/, 'Girls'],
+  [/^unisex (kids|children)$/, 'Unisex Kids'],
+  [/^(baby|babies|infant|infants)$/, 'Baby'],
+];
+
+/**
+ * Map an AI department guess ("men's", "women") to eBay's Department value.
+ * Unrecognised values are returned trimmed so the operator can still review them.
+ */
+export function normalizeFashionDepartment(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const key = value
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/\s+/g, ' ');
+  const match = FASHION_DEPARTMENTS.find(([re]) => re.test(key));
+  return match ? match[1] : value.trim();
+}
+
 export function fashionFieldsForFamily(family: FashionCategoryFamily) {
   return FASHION_ATTRIBUTE_FIELDS.filter((field) =>
     field.families.includes(family),
@@ -551,6 +630,13 @@ export function fashionImportAttributeKeys(): string[] {
     'accessoryType',
     'accessoryDimensions',
     'accessoryMaterial',
+    'countryOfManufacture',
+    'features',
+    'season',
+    'occasion',
+    'theme',
+    'vintage',
+    'garmentCare',
   ];
 }
 
@@ -621,15 +707,17 @@ export function buildFashionListingContent(params: {
   const material = textValue(attrs.material) || textValue(attrs.accessoryMaterial);
   const style = textValue(attrs.style);
 
-  const generatedTitle = joinFacts([
-    brand,
-    department,
-    color,
-    itemType,
-    style,
-    size ? `Size ${size}` : '',
-    material,
-  ]).slice(0, 80);
+  const generatedTitle = truncateEbayTitle(
+    joinFacts([
+      brand,
+      department,
+      color,
+      itemType,
+      style,
+      size ? `Size ${size}` : '',
+      material,
+    ]),
+  );
 
   const facts: string[] = [];
   const pushFact = (label: string, value: string) => {
@@ -653,6 +741,13 @@ export function buildFashionListingContent(params: {
   pushFact('Shoe size', textValue(attrs.shoeSize));
   pushFact('Footwear type', textValue(attrs.footwearType));
   pushFact('Accessory type', textValue(attrs.accessoryType));
+  pushFact('Features', textValue(attrs.features));
+  pushFact('Country of manufacture', textValue(attrs.countryOfManufacture));
+  pushFact('Garment care', textValue(attrs.garmentCare));
+  pushFact('Season', textValue(attrs.season));
+  pushFact('Occasion', textValue(attrs.occasion));
+  pushFact('Theme', textValue(attrs.theme));
+  pushFact('Vintage', textValue(attrs.vintage));
   if (textValue(attrs.measurements))
     pushFact('Measurement notes', textValue(attrs.measurements));
 
@@ -696,36 +791,73 @@ export function suggestFashionSku(itemType?: string | null): string {
   return `FSH-${slug}-${stamp}-${suffix}`.slice(0, 160);
 }
 
+/** eBay caps item-specific values at 65 characters; longer values fail the publish. */
+const EBAY_ASPECT_VALUE_MAX = 65;
+
+/**
+ * Fashion attribute -> eBay item-specific name. Earlier versions also sent every other
+ * attribute under its raw key ("itemType", "chestMeasurement", "stains",
+ * "conditionDetails"), which put duplicates, measurements and free-text defect notes
+ * into item specifics. Defects and measurements belong in the description; keys absent
+ * here are not published as aspects.
+ */
+const FASHION_ASPECT_NAMES: Array<[string, string[]]> = [
+  ['Department', ['department']],
+  ['Type', ['itemType', 'productType', 'footwearType', 'accessoryType']],
+  ['Size', ['size', 'shoeSize']],
+  ['Size Type', ['sizeType']],
+  ['Color', ['color']],
+  ['Style', ['style']],
+  ['Pattern', ['pattern']],
+  ['Material', ['material', 'accessoryMaterial']],
+  ['Fabric Type', ['fabricType']],
+  ['Sleeve Length', ['sleeveLength']],
+  ['Neckline', ['neckline']],
+  ['Closure', ['closure']],
+  ['Fit', ['fit']],
+  ['Shoe Width', ['width']],
+  ['Country/Region of Manufacture', ['countryOfManufacture']],
+  ['Features', ['features']],
+  ['Season', ['season']],
+  ['Occasion', ['occasion']],
+  ['Theme', ['theme']],
+  ['Vintage', ['vintage']],
+  ['Garment Care', ['garmentCare']],
+];
+
+function aspectValues(value: ProductAttributes[string] | undefined): string[] {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/\s*[,|]\s*/)
+      : [textValue(value)];
+  return [
+    ...new Set(
+      items
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => item.slice(0, EBAY_ASPECT_VALUE_MAX).trim()),
+    ),
+  ];
+}
+
 export function fashionAspectsFromAttributes(
   attributes: ProductAttributes,
   brand?: string | null,
 ): Record<string, string[]> {
   const result: Record<string, string[]> = {};
-  const mapped: Array<[string, string]> = [
-    ['Brand', (brand ?? textValue(attributes.brand)).trim()],
-    ['Department', textValue(attributes.department)],
-    ['Type', textValue(attributes.itemType) || textValue(attributes.productType)],
-    ['Size', textValue(attributes.size) || textValue(attributes.shoeSize)],
-    ['Size Type', textValue(attributes.sizeType)],
-    ['Color', textValue(attributes.color)],
-    ['Style', textValue(attributes.style)],
-    ['Pattern', textValue(attributes.pattern)],
-    ['Material', textValue(attributes.material) || textValue(attributes.accessoryMaterial)],
-    ['Sleeve Length', textValue(attributes.sleeveLength)],
-    ['Neckline', textValue(attributes.neckline)],
-    ['Closure', textValue(attributes.closure)],
-  ];
-  for (const [name, value] of mapped) {
-    if (value) result[name] = [value];
-  }
-  for (const [key, value] of Object.entries(attributes)) {
-    if (isFashionMetaKey(key) || AUTOMOTIVE_KEYS.has(key) || INDUSTRIAL_KEYS.has(key))
-      continue;
-    const text = textValue(value);
-    if (!text || result[key]) continue;
-    result[key] = Array.isArray(value)
-      ? value.map((item) => item.trim()).filter(Boolean)
-      : [text];
+  const brandValue = (brand ?? textValue(attributes.brand)).trim();
+  if (brandValue)
+    result.Brand = [brandValue.slice(0, EBAY_ASPECT_VALUE_MAX).trim()];
+  for (const [name, keys] of FASHION_ASPECT_NAMES) {
+    const key = keys.find((candidate) => hasValue(attributes[candidate]));
+    if (!key) continue;
+    // Only Features is multi-valued on eBay; others keep the single value whole.
+    const values =
+      name === 'Features'
+        ? aspectValues(attributes[key])
+        : [textValue(attributes[key]).slice(0, EBAY_ASPECT_VALUE_MAX).trim()];
+    if (values.length && values[0]) result[name] = values;
   }
   return result;
 }
