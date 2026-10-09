@@ -1,5 +1,15 @@
 # Current State
 
+**2026-10-09 (Add Part three-day photo review follow-up; snapshot through 12:21:20 UTC)** — Reviewed the active `/addpart` cohort imported from 2026-10-06 12:21:20 UTC through 2026-10-09 12:21:20 UTC: 136 listings, 88 with at least two photos, and 48 lacking the minimum photo evidence. None were published or had marketplace IDs. The photo gate required high-confidence identity, both label and overall-part coverage, and the supplied MPN in the model's visible-text extraction.
+
+The initial strict pass repaired 60 rows and held 22 for review. A second pass verified all 22: 13 met the strict gate and 9 were moved to `draft` / `needs_review`. Four additional photo-confirmed identity corrections were made across the continuation (`BLAP-19963`, `BLAP-20024`, `BLAP-20025`, and `BLAP-20026`); matching catalog titles, descriptions, and normalized titles were synchronized and listing revisions recorded. Total: 76 photo-verified rows (64 corrected, 12 already accurate), 12 held for manual review, and 48 still needing more photos.
+
+Manual-review rows remain unpublished. The 12 include `BLAP-20001`, whose 20 current photos depict a rear passenger door while its title/MPN identify a Ford fuel injector; `BLAP-20023`, whose brake-caliper photos do not show its supplied MPN; and `BLAP-20027`, where the model's parsed MPN was absent from visible-text OCR. These and the other 9 uncertain rows were moved to `draft` / `needs_review`. No marketplace record was changed.
+
+Within the 48 listings needing another photo, `BLAP-19997` had been marked ready despite having only one saved image. It was also moved to `draft` / `needs_review`; add a label and overall-part photo before retrying.
+
+Production backend health remained up after the data corrections. The code follow-up for private S3 image access, stale `cType` prompt selection, and catalog title normalization is still local and has not been deployed; production currently runs the earlier `217d09e3` Add Part release.
+
 **2026-10-09 (Add Part photo-identity fix deployed to production)** — The
 reported Add Part record had a manually corrected windshield-wiper-linkage
 title while its part-type field still identified a door-control module. Main

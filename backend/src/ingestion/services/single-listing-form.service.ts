@@ -13,6 +13,7 @@ import type { Queue } from 'bullmq';
 import { In, Repository } from 'typeorm';
 import { QueryFailedError } from 'typeorm';
 import * as fs from 'node:fs';
+import sharp from 'sharp';
 import { OpenAiService } from '../../common/openai/openai.service.js';
 import { sanitizeJson } from '../../common/openai/json-sanitizer.js';
 import { VisionEnrichmentPipeline } from '../../common/openai/pipelines/vision-enrichment.pipeline.js';
@@ -734,7 +735,9 @@ export class SingleListingFormService {
       brand: listing.cBrand?.trim() || undefined,
       vehicleMake: listing.extractedMake?.trim() || undefined,
       imageUrls,
-      partType: listing.cType?.trim() || undefined,
+      // cType may be the incorrect identity from an earlier enrichment. Do
+      // not let it select a specialised prompt before the photos identify the
+      // actual part.
     });
 
     if (lookup.partName?.trim()) {
@@ -787,6 +790,7 @@ export class SingleListingFormService {
     }
 
     const saved = await this.listingRepo.save(listing);
+    await this.syncLookupFieldsToCatalogProduct(saved);
 
     // Seed catalog fitment with the Browse-reported year/make/model so the
     // later MVL expansion and deterministic title have a real year to work
@@ -806,6 +810,53 @@ export class SingleListingFormService {
     }
 
     return { listing: saved, lookup };
+  }
+
+  private async syncLookupFieldsToCatalogProduct(
+    listing: ListingRecord,
+  ): Promise<void> {
+    const sku = listing.customLabelSku?.trim();
+    if (!sku) return;
+
+    try {
+      const product = await this.catalogProductRepo.findOne({
+        where: { sku },
+      });
+      if (!product) return;
+
+      if (listing.title?.trim()) {
+        product.title = listing.title.trim();
+        product.titleNormalized = listing.title
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      if (listing.description?.trim())
+        product.description = listing.description.trim();
+      if (listing.cBrand?.trim()) {
+        product.brand = listing.cBrand.trim();
+        product.brandNormalized = listing.cBrand.toLowerCase().trim();
+      }
+      if (listing.categoryName?.trim())
+        product.categoryName = listing.categoryName.trim();
+      if (listing.cManufacturerPartNumber?.trim()) {
+        const partNumber = this.sanitizePartNumber(
+          listing.cManufacturerPartNumber,
+        );
+        product.mpn = partNumber;
+        product.mpnNormalized = partNumber
+          .toLowerCase()
+          .replace(/[\s\-]/g, '');
+        product.oemPartNumber = partNumber;
+      }
+
+      await this.catalogProductRepo.save(product);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to sync photo-identified fields to CatalogProduct SKU ${sku}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   private async seedCatalogFitmentFromBrowse(
@@ -1246,20 +1297,45 @@ export class SingleListingFormService {
    */
   private async resizeImagesForVision(imageUrls: string[]): Promise<string[]> {
     const optimized = await Promise.all(
-      imageUrls.map((url) =>
-        this.imageOptimizer
+      imageUrls.map(async (url) => {
+        if (url.startsWith('data:')) {
+          const match = url.match(/^data:image\/[^;]+;base64,(.+)$/s);
+          if (!match?.[1]) return null;
+          try {
+            const buffer = Buffer.from(match[1], 'base64');
+            const resized = await sharp(buffer)
+              .rotate()
+              .resize({
+                width: 1600,
+                height: 1600,
+                fit: 'inside',
+                withoutEnlargement: true,
+              })
+              .jpeg({ quality: 80, mozjpeg: true })
+              .toBuffer();
+            return `data:image/jpeg;base64,${resized.toString('base64')}`;
+          } catch {
+            return null;
+          }
+        }
+
+        return this.imageOptimizer
           .downloadAndOptimize(url, {
             targetFormat: 'jpg',
             maxWidth: 1600,
             quality: 80,
           })
-          .catch(() => null),
-      ),
+          .catch(() => null);
+      }),
     );
 
     const dataUrls: string[] = [];
     for (const img of optimized) {
       if (!img) continue;
+      if (typeof img === 'string') {
+        dataUrls.push(img);
+        continue;
+      }
       try {
         const buffer = fs.readFileSync(img.localPath);
         const mime = img.format === 'webp' ? 'image/webp' : 'image/jpeg';
@@ -1271,6 +1347,73 @@ export class SingleListingFormService {
       }
     }
     return dataUrls;
+  }
+
+  /**
+   * App-managed S3 objects are private. Read them with the app's S3 identity
+   * and send bounded image data to vision so the provider does not have to
+   * fetch the private bucket URL. External image URLs stay intact.
+   */
+  private async prepareVisionImageInputs(
+    imageUrls: string[],
+  ): Promise<string[]> {
+    return Promise.all(
+      imageUrls.map(async (url) => {
+        const key = this.storageService.keyFromUrl(url);
+        if (!key) return url;
+
+        try {
+          let buffer = await this.storageService.getObjectBuffer(key);
+          let mime = this.visionMimeType(key);
+          const metadata = await sharp(buffer).metadata().catch(() => null);
+          if (
+            buffer.length > 8 * 1024 * 1024 ||
+            (metadata?.width ?? 0) > 2000 ||
+            (metadata?.height ?? 0) > 2000
+          ) {
+            try {
+              const resized = await sharp(buffer)
+                .rotate()
+                .resize({
+                  width: 1600,
+                  height: 1600,
+                  fit: 'inside',
+                  withoutEnlargement: true,
+                })
+                .jpeg({ quality: 82, mozjpeg: true })
+                .toBuffer();
+              if (resized.length < buffer.length) {
+                buffer = resized;
+                mime = 'image/jpeg';
+              }
+            } catch {
+              // Preserve the original bytes if the format cannot be resized.
+            }
+          }
+          return `data:${mime};base64,${buffer.toString('base64')}`;
+        } catch (err) {
+          this.logger.warn(
+            `Could not read an app-managed listing photo for vision: ${err instanceof Error ? err.message : err}`,
+          );
+          throw err;
+        }
+      }),
+    );
+  }
+
+  private visionMimeType(key: string): string {
+    const extension = key.split('.').pop()?.toLowerCase();
+    const mimeByExtension: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      webp: 'image/webp',
+      gif: 'image/gif',
+      heic: 'image/heic',
+      heif: 'image/heif',
+      avif: 'image/avif',
+    };
+    return (extension && mimeByExtension[extension]) || 'image/jpeg';
   }
 
   private async runVisionLookup(
@@ -1314,10 +1457,11 @@ export class SingleListingFormService {
       donorMake: vehicleMakeHint?.trim() || brandHint,
       partType: useEcuPrompt ? (partType ?? 'ecu') : 'single_listing_form',
     };
+    const visionImageUrls = await this.prepareVisionImageInputs(imageUrls);
     let visionResult: VisionEnrichmentResult;
     try {
       visionResult = await this.visionPipeline.analyze(
-        imageUrls,
+        visionImageUrls,
         visionContext,
         prompt,
       );
@@ -1333,7 +1477,7 @@ export class SingleListingFormService {
       this.logger.warn(
         `Vision call failed on oversized image(s), resizing and retrying once: ${message}`,
       );
-      const resizedUrls = await this.resizeImagesForVision(imageUrls);
+      const resizedUrls = await this.resizeImagesForVision(visionImageUrls);
       if (resizedUrls.length === 0) throw err;
 
       visionResult = await this.visionPipeline.analyze(
@@ -1349,6 +1493,11 @@ export class SingleListingFormService {
     if (useEcuPrompt && visionResult.ecuIdentifiers) {
       const ecu = visionResult.ecuIdentifiers;
       const visibleText = ecu.visibleText ?? [];
+      if (!this.visibleTextContainsPartNumber(visibleText, partNumberHint)) {
+        throw new BadRequestException(
+          'Photo label text does not confirm the supplied part number. Check the label and review manually before retrying.',
+        );
+      }
       const bestPartNumber =
         ecu.mpn || ecu.oemNumber || ecu.hardwareNumber || partNumberHint;
       let note = '';
@@ -1405,6 +1554,11 @@ export class SingleListingFormService {
     const visibleText = Array.isArray(parsed.visibleText)
       ? parsed.visibleText.map(String).filter(Boolean)
       : [];
+    if (!this.visibleTextContainsPartNumber(visibleText, partNumberHint)) {
+      throw new BadRequestException(
+        'Photo label text does not confirm the supplied part number. Check the label and review manually before retrying.',
+      );
+    }
     let note = this.str(parsed.note);
     if (visibleText.length > 0) {
       const ocrSnippet = visibleText.slice(0, 8).join('; ');
@@ -1483,6 +1637,29 @@ export class SingleListingFormService {
       confidence: partial.confidence ?? 'medium',
       mvlMatched,
     };
+  }
+
+  private visibleTextContainsPartNumber(
+    visibleText: string[],
+    partNumber: string,
+  ): boolean {
+    const expected = this.sanitizePartNumber(partNumber)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    if (!expected) return false;
+
+    return visibleText.some((text) => {
+      const tokens = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+      for (let start = 0; start < tokens.length; start++) {
+        let joined = '';
+        for (let end = start; end < tokens.length; end++) {
+          joined += tokens[end];
+          if (joined === expected) return true;
+          if (joined.length >= expected.length) break;
+        }
+      }
+      return false;
+    });
   }
 
   async allocateSku(): Promise<string> {

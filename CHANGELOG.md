@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-10-09 — Let Add Part vision read private photos and distrust stale part type
+
+- Photo identification reads app-managed S3 objects with the app's storage
+  identity and sends bounded image data to the vision provider. The provider
+  received 403 responses when it tried to fetch the bucket's private public URL.
+- Add Part no longer uses the existing `cType` to select the ECU-only prompt
+  before photo identification. That stale field had steered a wiper assembly
+  into an ECU prompt and the result had no usable listing title.
+- Photo identity now requires the supplied part number to appear in the
+  model's visible-text extraction, in addition to a usable high-confidence
+  identity and complete label/overall photo coverage. A model echoing the
+  seller hint alone cannot authorize a data change.
+- Successful photo lookups now sync the corrected title, description, brand,
+  MPN, and category to the matching CatalogProduct as well as the listing row;
+  catalog title normalization is refreshed with the title.
+- External image URLs are unchanged, and oversized-image retry now handles
+  inline image data as well.
+
 
 ## 2026-10-09 — Photo-verified Add Part enrichment
 

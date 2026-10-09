@@ -199,7 +199,7 @@ TypeORM CLI configuration for migrations. `autoLoadEntities: true`, `migrations:
 
 ### Inventory (`inventory/`)
 
-`inventory.controller.ts`, `inventory.service.ts`, `processors/inventory-sync.processor.ts`, entities: `inventory-event`, `inventory-ledger`, `store-inventory-allocation`
+`inventory.controller.ts`, `inventory.service.ts`, `inventory-workbench.service.ts`, `processors/inventory-sync.processor.ts`, entities: `inventory-event`, `inventory-ledger`, `store-inventory-allocation`. The Add Part photo lookup reads private S3 images with the app's AWS identity, avoids using a stale part-type field to choose its vision prompt, and syncs successful identity fields plus normalized title to the listing and matching CatalogProduct.
 
 ### Orders (`orders/`)
 
