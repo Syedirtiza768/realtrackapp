@@ -111,3 +111,16 @@ ItemID per account/marketplace group. A full active-list index is loaded only
 when recovering a pending migration whose old offer is no longer available.
 Verification stops after the first eBay usage-limit response, and an
 unresolved rollback or pending listing stops later migration batches.
+
+## Production release checkout safety
+
+The `app.omnicoreholding.com` host has an operator checkout at
+`/home/ubuntu/realtrackapp` with local changes and persistent bind-mounted
+configuration and data. Do not pull, reset, clean, or switch that checkout during
+a routine release. Build from the clean `/home/ubuntu/realtrackapp-release`
+checkout pinned to the pushed `main` commit. Keep the established Compose
+configuration, `.env`, uploads volume, and host data mounts; use a per-commit
+override for the release image tags and build contexts. Recreate only the
+application services unless a reviewed change explicitly requires infrastructure
+changes. The Fashion quick capture release was deployed this way from `b63261e8`
+on 2026-10-09.

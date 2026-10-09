@@ -160,6 +160,7 @@ attempt; successful and draft-created groups are preserved.
 
 ## Fashion Quick Capture, Catalog handoff, and activity report (2026-10-09)
 
-Status: Implemented; release verification and production deployment are tracked in the current handover.
+Status: Implemented and deployed to production on 2026-10-09 from main commit `b63261e8`;
+app health, Fashion SPA routes, and the additive database tables were verified.
 
 The phone-first capture flow stores every accepted source photo as WebP, assigns slot roles and a batch SKU, and queues Fashion identification in the background. Operators can continue capturing while jobs run, review results in Intake, and explicitly add eligible processed items to the shared Catalog. The full activity report includes uploader and Catalog-adder counts, item details, filters, review and publication status, destination stores, policies, and CSV export. Store and per-store shipping/payment/return policy selection happens from Catalog publish.

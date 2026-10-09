@@ -8,6 +8,9 @@
 - Added a filtered activity report with uploader/Catalog-adder attribution, item details, publication targets, per-store policies, and CSV export.
 - Moved Fashion destination store and shipping/payment/return policy selection to the Catalog publish action.
 - Added organization-scoped Fashion warehouse and SKU-counter tables through migration 1791000000000-CreateFashionIntake.
+- Deployed to production from main commit `b63261e8` on 2026-10-09; backend health,
+  Fashion routes, protected intake API behavior, and migration-created tables were
+  verified.
 
 ## 2026-10-08 — Part lookup respects the vehicle make; catalog photo edits stick
 

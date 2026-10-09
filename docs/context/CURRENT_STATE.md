@@ -1,5 +1,18 @@
 # Current State
 
+**2026-10-09 (Fashion quick capture deployed to production)** — Main commit
+`b63261e8` is deployed as `realtrackapp-backend:main-b63261e` and
+`realtrackapp-frontend:main-b63261e`. Deployment used the clean
+`/home/ubuntu/realtrackapp-release` checkout and retained the existing server
+checkout, environment, uploads volume, PostgreSQL, Redis, and PgBouncer. Only
+backend and frontend containers were recreated. Production backend is healthy;
+`/api/health` and the frontend root return HTTP 200. `/fashion/capture`,
+`/fashion/intake`, and `/fashion/reports` return the SPA shell; the unauthenticated
+`/api/fashion/intake` request returns 401 as expected. The additive migration
+created `fashion_warehouses` and `fashion_sku_counters`. Browser-level authenticated
+interaction and a real photo upload were not verified: the desktop browser
+automation harness failed to start with a Windows sandbox ACL error.
+
 **2026-10-08 (catalog photo / part-lookup hotfix brought into git)** — On 2026-10-07
 another session deployed `realtrackapp-backend` and `realtrackapp-frontend`
 `:catalog-photo-part-lookup-20261007` (18:08–18:14 UTC). They were built from
