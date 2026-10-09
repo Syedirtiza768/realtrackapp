@@ -54,6 +54,12 @@ export class FashionListingsService {
     if (!dto.sku.trim() || !dto.title.trim())
       throw new ConflictException('SKU and title cannot be blank');
     const attributes = this.attributes(dto.verticalAttributes);
+    const fromCapture = attributes._intakeSource === 'capture';
+    attributes._createdByUserId = user.id;
+    if (!fromCapture) {
+      attributes._catalogAdded = true;
+      attributes._catalogAddedBy = user.id;
+    }
     try {
       return await this.db.transaction(async (manager) => {
         const repo = manager.getRepository(CatalogProduct);
@@ -82,6 +88,13 @@ export class FashionListingsService {
             fitmentStatus: 'not_applicable',
           }),
         );
+        if (!fromCapture) {
+          saved.verticalAttributes = {
+            ...(saved.verticalAttributes ?? {}),
+            _catalogAddedAt: saved.createdAt.toISOString(),
+          };
+          await repo.save(saved);
+        }
         await this.saveReview(manager, saved, null, {
           status: 'pending',
           authenticityConfirmed: false,

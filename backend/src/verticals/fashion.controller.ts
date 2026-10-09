@@ -210,13 +210,14 @@ export class FashionController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('fashion.access', 'fashion.listings.create')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FilesInterceptor('files', 24))
+  @UseInterceptors(FilesInterceptor('files', 24, { limits: { fileSize: 20 * 1024 * 1024 } }))
   uploadPhotos(
     @CurrentUser() user: User,
     @UploadedFiles() files: Express.Multer.File[],
     @Query('organizationId') organizationId?: string,
+    @Query('sku') sku?: string,
   ) {
-    return this.fashionImages.uploadPhotos(user, files, organizationId);
+    return this.fashionImages.uploadPhotos(user, files, organizationId, sku);
   }
 
   @Post('listings/analyze-images')

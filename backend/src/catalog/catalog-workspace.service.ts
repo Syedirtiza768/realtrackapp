@@ -826,6 +826,13 @@ export class CatalogWorkspaceService {
       })
       .andWhere('p.vertical = :vertical', { vertical })
       .andWhere("p.verticalValidationStatus <> 'deleted'");
+    // Capture rows remain in intake until an operator explicitly adds them to Catalog.
+    // Rows created by earlier versions without this flag stay visible.
+    if (vertical === 'fashion')
+      qb.andWhere(
+        "(COALESCE(p.vertical_attributes->>'_intakeSource', '') <> 'capture' " +
+        "OR COALESCE(p.vertical_attributes->>'_catalogAdded', 'true') = 'true')",
+      );
     if (!scope.manageAllTeams) {
       if (scope.teamIds.length)
         qb.andWhere('(p.teamId IS NULL OR p.teamId IN (:...visibleTeamIds))', {

@@ -210,3 +210,7 @@ Docker services include healthchecks: backend (`wget /api/health`), postgres (`p
 ---
 
 *Consolidated & reorganized: 2026-06-06.*
+
+## Fashion capture operations (2026-10-09)
+
+The Fashion intake worker uses the existing Redis/BullMQ connection and needs no additional service or environment variable. Production backend startup applies migration 1791000000000-CreateFashionIntake through the normal migration runner. Confirm the migration and fashion-intake-analysis worker in backend logs after deployment. Source JPEG, PNG, and WebP photos are normalized and stored as WebP; generated size charts and banner copies are stored the same way.

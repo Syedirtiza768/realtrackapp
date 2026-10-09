@@ -119,3 +119,7 @@ When adding a new entity:
 ---
 
 *Created: 2026-06-06 (satellite).*
+
+## Fashion capture models (2026-10-09)
+
+FashionWarehouse maps to fashion_warehouses and stores organization-owned warehouse code, name, country, and active state. FashionSkuCounter maps to fashion_sku_counters and atomically allocates sequence numbers by organization and batch. Capture items themselves are catalog_products rows with JSONB workflow metadata; queue attempts use the existing BullMQ/Redis infrastructure and completed actions use listing_action_logs.

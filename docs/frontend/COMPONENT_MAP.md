@@ -292,3 +292,14 @@ listing editor. API calls live in
 captures the full validated B&I schema and image URLs, searches seller-specific
 eBay categories, renders required item specifics and supported conditions, and
 tracks publish jobs through a terminal result.
+
+## Fashion capture and reporting (2026-10-09)
+
+| Component | Responsibility |
+|---|---|
+| FashionCapturePage | Phone-first slot capture, batch SKU allocation, measurements, and background identification submission. |
+| FashionPhotoSet / fashionPhotoSlots | Front, back, tag, additional, and size-chart roles, previews, ordering, upload, camera, and banner actions. |
+| FashionIntakePage | Intake history, processing state, filtering, retry, and explicit add-to-Catalog action. |
+| FashionActivityReportPage | Activity summary, actor and item filters, publication destinations, and CSV export. |
+| FashionPublishModal | Per-item-batch destination store selection and per-store eBay policy selection from Catalog. |
+| FashionWarehousesPanel / FashionMeasurementChart | Fashion warehouse settings and reusable measurement templates/chart image creation. |

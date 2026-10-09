@@ -330,3 +330,7 @@ durable eBay multi-store job service.
 | `stock.controller.ts`, `stock-procurement.controller.ts` | `/api/stock/*` |
 
 Design: [../architecture/WAREHOUSE_INVENTORY.md](../architecture/WAREHOUSE_INVENTORY.md).
+
+## Fashion capture services (2026-10-09)
+
+FashionIntakeController exposes protected capture, warehouse, batch/SKU, generated-image, retry, Catalog handoff, and activity-report APIs. FashionIntakeService stores capture state on catalog_products, writes handoff audit rows, and executes filtered report/CSV queries. FashionIntakeProcessor runs the fashion-intake-analysis BullMQ queue. FashionIntakeImagesService renders branded charts/banners and stores them as WebP. FashionWarehouse and FashionSkuCounter are registered in VerticalsModule and created by migration 1791000000000-CreateFashionIntake.

@@ -351,3 +351,7 @@ Migration `1791100000000-CreateWarehouseInventory` (additive). The design is in 
 | `order_items` (+2 cols) | `inventory_item_id`, `stock_status` |
 
 Legacy `inventory_ledger`, `inventory_events`, `inventory_movements` and `store_inventory_allocations` are **superseded (2026-10-05)** but not dropped.
+
+## Fashion capture additions (2026-10-09)
+
+Migration 1791000000000-CreateFashionIntake adds organization-scoped fashion_warehouses and fashion_sku_counters. SKU counter uniqueness is scoped to organization and batch. Captured listing content is saved to the existing catalog_products table; capture source, batch, warehouse, photo-role, identification, uploader, and Catalog handoff metadata live in vertical_attributes JSONB. Explicit Catalog handoffs also append fashion.intake.catalog_added to listing_action_logs. No separate intake product table is used.

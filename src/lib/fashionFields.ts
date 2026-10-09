@@ -81,13 +81,7 @@ export const FASHION_FIELD_GROUPS: Array<{ id: string; label: string; fields: Fa
     id: 'measurements',
     label: 'Measurements',
     fields: [
-      { key: 'chestMeasurement', label: 'Chest / bust', input: 'text', families: ['clothing'] },
-      { key: 'waistMeasurement', label: 'Waist', input: 'text', families: ['clothing'] },
-      { key: 'hipMeasurement', label: 'Hip', input: 'text', families: ['clothing'] },
-      { key: 'lengthMeasurement', label: 'Length measurement', input: 'text', families: ['clothing'] },
-      { key: 'inseamMeasurement', label: 'Inseam', input: 'text', families: ['clothing'] },
-      { key: 'measurementsUnit', label: 'Measurement unit', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Required when a named measurement is set. Do not estimate from photos.' },
-      { key: 'measurements', label: 'Original measurement notes', input: 'textarea', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'measurements', label: 'Original measurement notes', input: 'textarea', families: ['clothing', 'footwear', 'accessories'], help: 'Anything the chart does not cover. Do not estimate from photos.' },
     ],
   },
   {

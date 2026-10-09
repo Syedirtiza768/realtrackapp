@@ -18,6 +18,7 @@ import type { RouteSelection } from '../common/openai/ai-routing-policy.types.js
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
 import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
 import type { ProductAttributes } from './vertical.types.js';
+import { fashionSkuStem } from './fashion-storage-keys.util.js';
 import {
   applyFashionAnalysisMeta,
   buildFashionListingContent,
@@ -102,6 +103,7 @@ export class FashionImageAnalysisService {
     user: User,
     files: Express.Multer.File[] | undefined,
     organizationId?: string,
+    sku?: string,
   ) {
     const org = await this.userOrgs.resolveOrganizationId(
       user.id,
@@ -130,8 +132,13 @@ export class FashionImageAnalysisService {
         const canonical = await this.imageProcessor.convertBufferToWebp(
           file.buffer,
         );
+        const stem = fashionSkuStem(sku);
+        const keyPrefix = 'fashion/intake/' + org.organizationId + '/';
+        const keySuffix = Date.now() + '-' + randomUUID().split('-')[0] + '.webp';
         const s3Key = this.storage.buildDurableKey(
-          `fashion/intake/${org.organizationId}/${randomUUID()}.webp`,
+          stem
+            ? keyPrefix + stem + '-' + keySuffix
+            : keyPrefix + randomUUID() + '.webp',
         );
         await this.storage.putObject(s3Key, canonical.buffer, 'image/webp');
         void this.storage.queueVariantGeneration(s3Key);
@@ -159,6 +166,10 @@ export class FashionImageAnalysisService {
     organizationId?: string,
   ) {
     await this.userOrgs.resolveOrganizationId(user.id, organizationId);
+    return this.analyzeImages(dto);
+  }
+
+  async analyzeImages(dto: AnalyzeFashionImagesDto) {
     const imageUrls = uniqueUrls(dto.imageUrls);
     if (!imageUrls.length)
       throw new BadRequestException(

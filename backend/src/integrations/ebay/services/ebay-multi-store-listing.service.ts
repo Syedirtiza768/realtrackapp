@@ -33,7 +33,7 @@ type PublishTargetInput = {
   requestedReturnPolicyName?: string;
 };
 
-function targetPolicyOverrides(target: PublishTargetInput): Record<string, string> {
+function targetPolicyOverrides(target: Partial<PublishTargetInput>): Record<string, string> {
   const values: Record<string, string | undefined> = {
     fulfillmentPolicyId: target.fulfillmentPolicyId,
     paymentPolicyId: target.paymentPolicyId,
@@ -110,6 +110,8 @@ export class EbayMultiStoreListingService {
     requestedByUserId: string;
     listingIds: string[];
     storeIds: string[];
+    policyOverrides?: Pick<PublishTargetInput, 'requestedFulfillmentPolicyName' | 'requestedPaymentPolicyName' | 'requestedReturnPolicyName'>;
+    policyOverridesByStore?: Record<string, Pick<PublishTargetInput, 'requestedFulfillmentPolicyName' | 'requestedPaymentPolicyName' | 'requestedReturnPolicyName'>>;
     idempotencyKey?: string;
   }): Promise<{
     job: EbayListingJob;
@@ -223,10 +225,12 @@ export class EbayMultiStoreListingService {
         idempotencyKey: input.idempotencyKey ?? null,
       }),
     );
-
     const targets = resolvedProducts.flatMap((product) =>
-      accounts.map((account) =>
-        this.targetRepo.create({
+      accounts.map((account) => {
+        const storePolicyOverrides = targetPolicyOverrides(
+          input.policyOverridesByStore?.[account.primaryStoreId] ?? input.policyOverrides ?? {},
+        );
+        return this.targetRepo.create({
           listingJobId: savedJob.id,
           catalogProductId: product.catalogProductId,
           ebayAccountId: account.id,
@@ -237,9 +241,14 @@ export class EbayMultiStoreListingService {
               ? account.primaryStore.config.marketplace
               : 'EBAY_US'),
           status: 'pending',
-          resultPayload: { sourceListingId: product.sourceListingId },
-        }),
-      ),
+          resultPayload: {
+            sourceListingId: product.sourceListingId,
+            ...(Object.keys(storePolicyOverrides).length
+              ? { policyOverrides: storePolicyOverrides }
+              : {}),
+          },
+        });
+      }),
     );
     const savedTargets = await this.targetRepo.save(targets, { chunk: 500 });
     await this.publishQueue.addBulk(

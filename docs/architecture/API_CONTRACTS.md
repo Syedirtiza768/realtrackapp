@@ -844,3 +844,26 @@ Added 2026-10-05. Design: [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md). Ever
 | `GET channel-sync?storeId&status&driftOnly` · `GET channel-sync/summary` · `POST channel-sync/resync?storeId` | view / channel_sync.manage | Shadow vs pushed quantities |
 
 The Orders API now returns `order_items.inventoryItemId` and `stockStatus`.
+
+## Fashion Quick Capture and activity reporting (2026-10-09)
+
+All routes below use the global /api prefix and Fashion RBAC. Capture drafts remain outside the shared Catalog until an authorized user promotes them.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| POST | /api/fashion/listings/photos?sku=... | fashion.access + fashion.listings.create | Accept JPEG, PNG, or WebP and store normalized WebP images; optional SKU names stored objects. |
+| GET | /api/fashion/measurement-templates | fashion.access | Return the available measurement chart templates. |
+| GET/POST | /api/fashion/warehouses | fashion.listings.view / fashion.settings.manage | List or create organization Fashion warehouses. |
+| PATCH | /api/fashion/warehouses/:warehouseId | fashion.settings.manage | Rename, deactivate, or update a warehouse. |
+| GET | /api/fashion/intake/batches | fashion.listings.create | List batch counters used by the SKU generator. |
+| POST | /api/fashion/intake/sku | fashion.listings.create | Allocate the next SKU for a batch and optional size suffix. |
+| GET | /api/fashion/intake | fashion.listings.view | Paginated intake history with batch, status, text, and source filters. |
+| POST | /api/fashion/intake | fashion.listings.create | Save photo-slot data and enqueue identification in BullMQ. |
+| POST | /api/fashion/listings/:id/identify | fashion.listings.update | Queue or retry identification on an eligible saved draft. |
+| POST | /api/fashion/intake/:id/add-to-catalog | fashion.listings.create | Explicitly promote an eligible processed capture to shared Catalog. |
+| GET | /api/fashion/reports/activity | fashion.listings.view | Paginated activity, item provenance, user counts, and publication target details with filters. |
+| GET | /api/fashion/reports/activity/export | fashion.listings.view | CSV export of the filtered report, capped at 250,000 rows. |
+| POST | /api/fashion/listings/size-chart | fashion.listings.create | Generate a branded size-chart image and store it as WebP. |
+| POST | /api/fashion/listings/photos/banner | fashion.listings.create | Apply a text banner to an organization-owned image copy. |
+
+The Fashion Catalog publisher accepts a storePolicies array alongside listingIds and storeIds. Each selected store must appear exactly once and may supply fulfillment, payment, and return policy names. The existing durable eBay bulk publish job stores the selected overrides on each target.

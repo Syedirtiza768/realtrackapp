@@ -221,3 +221,13 @@ server-side GOOGLE_DRIVE_API_KEY; it never auto-publishes.
 | `/business-industrial/stock` | `stock.view` | `StockWorkspace vertical="business_industrial"` |
 
 The tabs are held in `?tab=`: `overview`, `items` (`&item=<id>` opens the drawer), `orders` (`&view=pick|exceptions`), `procurement` (`&view=requests|pos|suppliers|reorder`, `&po=<id>`), `operations` (`&doc=<id>`), `warehouses`, and `movements`. Nav entries labelled "Stock" were added to the Auto Parts, Fashion and B&I shells. The Orders page shows a per-line stock status. See [../architecture/WAREHOUSE_INVENTORY.md](../architecture/WAREHOUSE_INVENTORY.md#9-ui).
+
+## Fashion capture and activity report (2026-10-09)
+
+| Route | Guard | Screen |
+|---|---|---|
+| /fashion/capture | fashion.listings.create | FashionCapturePage — phone-first photo slots, SKU/batch, measurements, and queued identification. |
+| /fashion/intake | fashion.listings.view | FashionIntakePage — processing history and explicit Catalog handoff. |
+| /fashion/reports | fashion.listings.view | FashionActivityReportPage — full activity report and CSV export. |
+
+Catalog selection opens FashionPublishModal, where active destination stores and per-store shipping, payment, and return policies are selected. Fashion Add Item no longer chooses a store.

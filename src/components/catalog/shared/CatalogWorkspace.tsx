@@ -10,6 +10,7 @@ import CatalogMobileFilterDrawer from './CatalogMobileFilterDrawer';
 import CatalogProductQuickView from './CatalogProductQuickView';
 import CatalogPublishJobPanel, { isTerminalPublishJob, type CatalogPublishJob } from './CatalogPublishJobPanel';
 import BusinessIndustrialPublishModal, { type BusinessIndustrialAccount } from './BusinessIndustrialPublishModal';
+import FashionPublishModal from './FashionPublishModal';
 import CatalogResultsTable from './CatalogResultsTable';
 import { bulkCatalog, downloadCatalogCsv, filtersToParams, getCatalog, getCatalogFacets, getCatalogSuggestions, getCatalogSummary, paramsToFilters } from './catalogApi';
 import type { CatalogConfig } from './catalogTypes';
@@ -92,9 +93,10 @@ export default function CatalogWorkspace({ config }: Props) {
   const canExport = permissions.includes(config.vertical + '.catalog.export');
   const canDelete = permissions.includes(config.vertical + '.catalog.delete');
   const canAssignTeam = permissions.includes(config.vertical + '.catalog.assign_team');
-  const canManagePolicies = permissions.includes(config.vertical + '.catalog.manage_policies');
+  const canManagePolicies = config.vertical !== 'fashion' && permissions.includes(config.vertical + '.catalog.manage_policies');
   const selectedCount = selected.size;
   const isBusinessIndustrial = config.vertical === 'business_industrial';
+  const isFashion = config.vertical === 'fashion';
   const catalogDescription = isBusinessIndustrial
     ? 'Search, review, assign teams, and manage Business & Industrial inventory.'
     : `Search, review, assign teams, and manage ${config.label.toLowerCase()} inventory.`;
@@ -437,6 +439,7 @@ export default function CatalogWorkspace({ config }: Props) {
 
       <CatalogProductQuickView config={config} item={activeItem} organizationId={activeOrganizationId} canPublish={canPublish} onClose={() => setActiveItem(null)} onSaved={saveItem} onPublish={(item) => openPublish([item.id], item)} />
       {isBusinessIndustrial ? <BusinessIndustrialPublishModal open={Boolean(publishSelection)} item={publishSelection?.item} listingIds={publishSelection?.ids || []} accounts={accounts} organizationId={activeOrganizationId} onClose={() => setPublishSelection(null)} onSubmitted={handlePublishSubmitted} /> : null}
+      {isFashion ? <FashionPublishModal open={Boolean(publishSelection)} listingIds={publishSelection?.ids || []} accounts={accounts} organizationId={activeOrganizationId} onClose={() => setPublishSelection(null)} onSubmitted={handlePublishSubmitted} /> : null}
     </div>
   );
 }

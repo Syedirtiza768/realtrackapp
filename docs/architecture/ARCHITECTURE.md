@@ -242,3 +242,7 @@ Full inventory: [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
 ---
 
 *Consolidated & reorganized: 2026-06-06. Updated: 2026-06-11.*
+
+## Fashion capture processing
+
+Fashion photo identification also runs on the BullMQ queue fashion-intake-analysis (worker concurrency 2). Intake records are saved before queueing, so upload and identification are separate operations and failed jobs keep their photos for retry or manual work.

@@ -1,5 +1,14 @@
 # Changelog
 
+
+## 2026-10-09 — Fashion capture, Catalog handoff, and activity report
+
+- Added continuous WebP photo-slot capture with batch SKUs, optional warehouse and measurement chart data, and background Fashion image identification.
+- Added Intake history and an explicit eligibility-checked action to promote processed items to shared Catalog.
+- Added a filtered activity report with uploader/Catalog-adder attribution, item details, publication targets, per-store policies, and CSV export.
+- Moved Fashion destination store and shipping/payment/return policy selection to the Catalog publish action.
+- Added organization-scoped Fashion warehouse and SKU-counter tables through migration 1791000000000-CreateFashionIntake.
+
 ## 2026-10-08 — Part lookup respects the vehicle make; catalog photo edits stick
 
 - Part lookup (`SingleListingFormService.lookupPart`) prefers a usable photo

@@ -1,6 +1,15 @@
 import type { ProductAttributes } from './vertical.types.js';
 import { validateVerticalAttributes } from './vertical.config.js';
 import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
+import {
+  FASHION_MEASUREMENT_TEMPLATES,
+  FASHION_MEASUREMENT_VALUE_KEYS,
+  fashionMeasurementKeyFamilies,
+  fashionMeasurementRows,
+  fashionMeasurementTemplate,
+  normalizeFashionMeasurementUnit,
+  parseFashionMeasurement,
+} from './fashion-measurements.js';
 
 export const FASHION_VERTICAL = 'fashion' as const;
 
@@ -24,6 +33,17 @@ export const FASHION_META_KEYS = [
   '_analysisStatus',
   '_titleConfirmed',
   '_descriptionConfirmed',
+  // Capture and report metadata stays operational and is never sent as an eBay aspect.
+  '_intakeSource',
+  '_intakeBatch',
+  '_warehouseCode',
+  '_warehouseName',
+  '_intakeAccountId',
+  '_intakeMarketplaceId',
+  '_intakeCreatedBy',
+  '_photoRoles',
+  '_sizeChartImageUrl',
+  '_analysisQueuedAt',
 ] as const;
 
 const AUTOMOTIVE_KEYS = new Set([
@@ -63,6 +83,17 @@ export type FashionFieldDef = {
   help?: string;
 };
 
+const MEASUREMENT_VALUE_FIELDS: FashionFieldDef[] = FASHION_MEASUREMENT_VALUE_KEYS.map(
+  (key) => ({
+    key,
+    label:
+      FASHION_MEASUREMENT_TEMPLATES.flatMap((template) => template.points).find(
+        (point) => point.key === key,
+      )?.label ?? key,
+    input: 'text' as const,
+    families: fashionMeasurementKeyFamilies(key),
+  }),
+);
 export const FASHION_FIELD_GROUPS: Array<{
   id: string;
   label: string;
@@ -273,48 +304,25 @@ export const FASHION_FIELD_GROUPS: Array<{
     label: 'Measurements',
     fields: [
       {
-        key: 'chestMeasurement',
-        label: 'Chest / bust',
+        key: 'sizeChartTemplate',
+        label: 'Measurement chart',
         input: 'text',
-        families: ['clothing'],
+        families: ['clothing', 'footwear', 'accessories'],
       },
-      {
-        key: 'waistMeasurement',
-        label: 'Waist',
-        input: 'text',
-        families: ['clothing'],
-      },
-      {
-        key: 'hipMeasurement',
-        label: 'Hip',
-        input: 'text',
-        families: ['clothing'],
-      },
-      {
-        key: 'lengthMeasurement',
-        label: 'Length measurement',
-        input: 'text',
-        families: ['clothing'],
-      },
-      {
-        key: 'inseamMeasurement',
-        label: 'Inseam',
-        input: 'text',
-        families: ['clothing'],
-      },
+      ...MEASUREMENT_VALUE_FIELDS,
       {
         key: 'measurementsUnit',
         label: 'Measurement unit',
         input: 'text',
         families: ['clothing', 'footwear', 'accessories'],
-        help: 'Required when any named measurement is set. Do not infer measurements from ordinary photos.',
+        help: 'Set the unit used by the measurement chart.',
       },
       {
         key: 'measurements',
         label: 'Original measurement notes',
         input: 'textarea',
         families: ['clothing', 'footwear', 'accessories'],
-        help: 'Preserve original label or tape-measure wording.',
+        help: 'Preserve anything the chart does not cover.',
       },
     ],
   },
@@ -438,13 +446,7 @@ export const FASHION_ATTRIBUTE_FIELDS = FASHION_FIELD_GROUPS.flatMap(
   (group) => group.fields,
 );
 
-const MEASUREMENT_VALUE_KEYS = [
-  'chestMeasurement',
-  'waistMeasurement',
-  'hipMeasurement',
-  'lengthMeasurement',
-  'inseamMeasurement',
-] as const;
+const MEASUREMENT_VALUE_KEYS = FASHION_MEASUREMENT_VALUE_KEYS;
 
 const MEASUREMENT_UNITS = new Set(['cm', 'in', 'mm', 'inch', 'inches']);
 
@@ -576,7 +578,27 @@ export function validateFashionAttributes(value: unknown): {
       'Use an explicit measurement unit such as cm or in. The original notes field preserves un-normalized wording.',
     );
   }
-  if (hasValue(cleaned.size) && hasMeasurement) {
+  if (hasMeasurement && unit && normalizeFashionMeasurementUnit(unit))
+    cleaned.measurementsUnit = normalizeFashionMeasurementUnit(unit)!;
+  for (const key of MEASUREMENT_VALUE_KEYS) {
+    if (hasValue(cleaned[key]) && parseFashionMeasurement(cleaned[key]) === null)
+      warnings.push(
+        key + ' should be a positive number measured with a tape or ruler (for example 19 or 19.5).',
+      );
+  }
+  if (hasValue(cleaned.sizeChartTemplate)) {
+    const template = fashionMeasurementTemplate(textValue(cleaned.sizeChartTemplate));
+    if (!template) {
+      warnings.push(
+        'Unknown measurement chart "' + textValue(cleaned.sizeChartTemplate) + '". Choose a chart from the list.',
+      );
+    } else if (template.family !== family) {
+      warnings.push(
+        'The ' + template.label + ' measurement chart belongs to ' + template.family + ', not ' + family + '.',
+      );
+    }
+  }
+  if (hasValue(cleaned.size) && hasMeasurement && !hasValue(cleaned.sizeChartTemplate)) {
     warnings.push(
       'Label size and measured dimensions are stored separately. Do not treat a tape measurement as the size label.',
     );
@@ -764,8 +786,21 @@ export function buildFashionListingContent(params: {
     textValue(attrs.conditionDetails),
   ].filter(Boolean);
 
+  const measurementTemplate = fashionMeasurementTemplate(
+    textValue(attrs.sizeChartTemplate),
+  );
+  const measurementUnit = normalizeFashionMeasurementUnit(
+    textValue(attrs.measurementsUnit),
+  );
+  const measurementLines =
+    measurementTemplate && measurementUnit
+      ? fashionMeasurementRows(measurementTemplate, attrs).map(
+          (row) => row.letter + '. ' + row.label + ': ' + row.value + ' ' + measurementUnit,
+        )
+      : [];
   const descriptionParts = [
     facts.length ? facts.join('\n') : '',
+    measurementLines.length ? 'Measurements (taken flat, ' + (measurementUnit === 'in' ? 'inches' : 'centimetres') + '):\n' + measurementLines.join('\n') : '',
     params.conditionLabel ? `Condition: ${params.conditionLabel}` : '',
     defects.length
       ? `Reported defects and wear:\n${defects.join('\n')}`

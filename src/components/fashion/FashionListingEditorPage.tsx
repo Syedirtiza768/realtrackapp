@@ -11,6 +11,7 @@ import {
   getFashionMetadata,
   isFashionImageUrl,
   listFashionAccounts,
+  requestFashionIdentification,
   saveFashionListing,
   searchFashionCategories,
   type FashionAccount,
@@ -23,8 +24,11 @@ import {
 import { FASHION_FAMILIES, FASHION_FIELD_GROUPS, fashionFieldsForFamily, isFashionMetaKey, normalizeFashionFamily, type FashionFamily } from '../../lib/fashionFields';
 import { sanitizeHtml } from '../../lib/sanitize';
 import { toProxyUrl } from '../../lib/imageUrl';
-import FashionListingPublishPanel from './FashionListingPublishPanel';
 import FashionPhotoSet from './FashionPhotoSet';
+import FashionMeasurementChart, { useFashionMeasurementTemplates, type FashionMeasurementState } from './FashionMeasurementChart';
+import { fashionImagesFromSlots, fashionSlotsFromImages, missingFashionPhotoSlots, type FashionPhotoSlots } from '../../lib/fashionPhotoSlots';
+
+const PENDING_TITLE_PREFIX = 'Pending identification — ';
 
 const input = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800';
 const panel = 'space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900';
@@ -78,7 +82,6 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [accounts, setAccounts] = useState<FashionAccount[]>([]);
-  const [accountKey, setAccountKey] = useState('');
   const [accountError, setAccountError] = useState('');
   const [metadata, setMetadata] = useState<FashionMetadata>();
   const [metadataError, setMetadataError] = useState('');
@@ -98,13 +101,27 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
   const [reviewPhotoSet, setReviewPhotoSet] = useState(false);
   const analyzeLock = useRef(false);
   const categoryRequest = useRef(0);
-  const account = accounts.find((item) => `${item.id}:${item.marketplaceId}` === accountKey);
+  const account = accounts.find((item) => item.status === 'active' && item.marketplaceId) ?? null;
   const canView = !listingId || permissions.includes('fashion.listings.view');
   const locked = listing?.verticalValidationStatus === 'quarantined' || !!listing?.manualReview;
   const canEdit = permissions.includes(listingId ? 'fashion.listings.update' : 'fashion.listings.create') && !locked;
   const dirty = JSON.stringify(form) !== saved;
   const family = normalizeFashionFamily(form.verticalAttributes.categoryFamily);
   const visibleFields = useMemo(() => fashionFieldsForFamily(family), [family]);
+  const { templates: measurementTemplates, error: templatesError } = useFashionMeasurementTemplates(activeOrganizationId);
+  const photoRoles = form.verticalAttributes._photoRoles;
+  const slots = useMemo(() => fashionSlotsFromImages(form.images, photoRoles), [form.images, photoRoles]);
+  const missingSlots = missingFashionPhotoSlots(slots);
+  const measurement: FashionMeasurementState = useMemo(() => {
+    const templateId = fashionAttributeText(form.verticalAttributes.sizeChartTemplate);
+    const unitText = fashionAttributeText(form.verticalAttributes.measurementsUnit).toLowerCase();
+    const values: Record<string, string> = {};
+    for (const template of measurementTemplates)
+      for (const point of template.points) values[point.key] = fashionAttributeText(form.verticalAttributes[point.key]);
+    return { templateId, unit: unitText === 'cm' ? 'cm' : 'in', values };
+  }, [form.verticalAttributes, measurementTemplates]);
+  const analysisStatus = fashionAttributeText(form.verticalAttributes._analysisStatus);
+  const identifying = !!listingId && (analysisStatus === 'queued' || analysisStatus === 'processing');
 
   useEffect(() => {
     if (!listingId || !canView) { setLoading(false); return; }
@@ -137,7 +154,19 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     const timer = window.setTimeout(() => { getFashionMetadata(account.id, account.marketplaceId, form.categoryId.trim(), controller.signal, activeOrganizationId).then(setMetadata).catch((err) => { if (!controller.signal.aborted) setMetadataError(fashionError(err)); }).finally(() => { if (!controller.signal.aborted) setMetadataBusy(false); }); }, 400);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [account, form.categoryId, activeOrganizationId]);
-  useEffect(() => { categoryRequest.current += 1; setCategories([]); setCategoryMessage(''); setCategoryBusy(false); }, [accountKey]);
+  useEffect(() => { categoryRequest.current += 1; setCategories([]); setCategoryMessage(''); setCategoryBusy(false); }, [account?.id]);
+  useEffect(() => {
+    if (!identifying || !listingId) return;
+    const timer = window.setInterval(() => {
+      getFashionListing(listingId, undefined, activeOrganizationId).then((item) => {
+        const status = fashionAttributeText(item.verticalAttributes?._analysisStatus);
+        if (status === 'queued' || status === 'processing') return;
+        if (dirty) { setMessage('Background identification finished. Save or discard your changes, then reload to see the suggestions.'); return; }
+        setReload((value) => value + 1);
+      }).catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [identifying, listingId, dirty, activeOrganizationId]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
@@ -159,8 +188,49 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     confirmKey(key);
     change('verticalAttributes', { ...form.verticalAttributes, [key]: multiple ? value.split('|').map((item) => item.trim()).filter(Boolean) : value });
   }
+  function changeSlots(next: FashionPhotoSlots) {
+    const { images, roles } = fashionImagesFromSlots(next);
+    setForm((previous) => {
+      const verticalAttributes: FashionAttributes = { ...previous.verticalAttributes, _photoRoles: roles };
+      if (next.sizeChart[0]) verticalAttributes._sizeChartImageUrl = next.sizeChart[0];
+      else delete verticalAttributes._sizeChartImageUrl;
+      return { ...previous, images, verticalAttributes };
+    });
+    setMessage('');
+  }
+  function changeMeasurements(next: FashionMeasurementState) {
+    const changed = Object.entries(next.values)
+      .filter(([key, value]) => fashionAttributeText(form.verticalAttributes[key]) !== value.trim())
+      .map(([key]) => key);
+    setForm((previous) => {
+      const attributes: FashionAttributes = { ...previous.verticalAttributes };
+      if (next.templateId) { attributes.sizeChartTemplate = next.templateId; attributes.measurementsUnit = next.unit; }
+      else delete attributes.sizeChartTemplate;
+      for (const [key, value] of Object.entries(next.values)) {
+        if (value.trim()) attributes[key] = value.trim().replace(',', '.');
+        else delete attributes[key];
+      }
+      return { ...previous, verticalAttributes: attributes };
+    });
+    for (const key of [...changed, 'sizeChartTemplate', 'measurementsUnit']) confirmKey(key);
+    setMessage('');
+  }
+  async function identifyInBackground() {
+    if (!listingId || dirty) return;
+    setError(''); setMessage('');
+    try {
+      await requestFashionIdentification(listingId, activeOrganizationId);
+      setMessage('Identification queued. Suggestions appear here when it finishes; confirmed values are kept.');
+      setReload((value) => value + 1);
+    } catch (err) { setError(fashionError(err)); }
+  }
   function changeFamily(next: FashionFamily) {
     const allowed = new Set(fashionFieldsForFamily(next).map((field) => field.key));
+    for (const template of measurementTemplates.filter((item) => item.family === next))
+      for (const point of template.points) allowed.add(point.key);
+    allowed.add('measurementsUnit');
+    const templateFamily = measurementTemplates.find((item) => item.id === fashionAttributeText(form.verticalAttributes.sizeChartTemplate))?.family;
+    if (templateFamily === next) allowed.add('sizeChartTemplate');
     const kept: FashionAttributes = { categoryFamily: next };
     for (const [key, value] of Object.entries(form.verticalAttributes)) {
       if (isFashionMetaKey(key) || allowed.has(key) || key === 'brand') kept[key] = value;
@@ -185,7 +255,7 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     setAnalyzing(true); setError(''); setMessage('');
     try {
       const result = await analyzeFashionImages({
-        imageUrls: form.images,
+        imageUrls: form.images.filter((url) => !slots.sizeChart.includes(url)),
         currentAttributes: form.verticalAttributes,
         confirmedKeys,
         sku: form.sku,
@@ -271,7 +341,7 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
         categoryFamily: family,
         _confirmedKeys: savedConfirmed,
         _suggestedKeys: suggestedKeys.filter((key) => !savedConfirmed.includes(key)),
-        _titleConfirmed: Boolean(form.title.trim()),
+        _titleConfirmed: Boolean(form.title.trim()) && !form.title.startsWith(PENDING_TITLE_PREFIX),
         _descriptionConfirmed: descriptionConfirmed || Boolean(form.description.trim()),
       },
     };
@@ -303,19 +373,24 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     </div>
     {locked && <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">This listing is quarantined or on manual hold. Editing and publishing are unavailable.</p>}
     {!canEdit && !locked && <p className="text-sm text-slate-500">Read-only access. Your role cannot save this item.</p>}
-    <FashionPhotoSet images={form.images} editable={canEdit && !saving} organizationId={activeOrganizationId} onChange={(images) => change('images', images)} />
+    {identifying && <p role="status" className="rounded-lg bg-sky-50 p-4 text-sm text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">Identifying this item from its photos in the background ({analysisStatus}). This page refreshes when suggestions are ready. You can keep editing; confirmed values are never overwritten.</p>}
+    {analysisStatus === 'failed' && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Background identification did not complete. Retry it or continue manually.</p>}
+    <FashionPhotoSet slots={slots} editable={canEdit && !saving} organizationId={activeOrganizationId} sku={form.sku} onChange={changeSlots} />
+    {missingSlots.length > 0 && form.images.length > 0 && <p className="text-sm text-amber-800 dark:text-amber-200">Recommended before publishing: add {missingSlots.join(', ')} photo{missingSlots.length === 1 ? '' : 's'}.</p>}
     {canEdit && <div className="flex flex-wrap gap-3">
       <button type="button" disabled={analyzing || saving || !form.images.length} onClick={() => void analyzePhotos()} className="rounded-lg bg-pink-600 px-5 py-2 font-semibold text-white disabled:opacity-40">{analyzing ? 'Analyzing photos…' : 'Identify from photos'}</button>
+      {listingId && <button type="button" disabled={analyzing || saving || identifying || dirty || !form.images.length} title={dirty ? 'Save changes first' : undefined} onClick={() => void identifyInBackground()} className="rounded-lg border border-pink-300 px-5 py-2 text-sm text-pink-700 disabled:opacity-40 dark:border-pink-800 dark:text-pink-300">{identifying ? 'Identifying in background…' : 'Identify in background'}</button>}
       <button type="button" disabled={analyzing || saving} onClick={() => setMessage('Continue manually. Choose a Fashion category and complete the fields that apply.')} className="rounded-lg border px-5 py-2 text-sm">Continue without identification</button>
     </div>}
     {reviewPhotoSet && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">These photos may show more than one garment. Review the photo set. They will stay on this one item and will not be split automatically.</p>}
     {warnings.map((warning) => <p key={warning} className="text-sm text-amber-800 dark:text-amber-200">{warning}</p>)}
     {conflicts.length > 0 && <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/30"><p className="font-semibold">Review conflicting suggestions</p><ul className="mt-2 list-disc pl-5">{conflicts.map((item) => <li key={item.key}>{item.key}: kept “{item.current}”; analysis suggested “{item.suggested}”.</li>)}</ul></div>}
-    <section className={panel}><h2 className="text-lg font-semibold">Seller and marketplace</h2><label className="block text-sm">Fashion eBay seller<select className={input} value={accountKey} onChange={(e) => setAccountKey(e.target.value)}><option value="">Choose a seller to load category requirements</option>{accounts.map((item) => <option key={`${item.id}:${item.marketplaceId}`} value={`${item.id}:${item.marketplaceId}`}>{item.storeName || item.accountName} · {item.marketplaceId} · {item.status}</option>)}</select></label><p className="text-xs text-slate-500">Seller selection controls Fashion category metadata and publishing. Prices use the selected marketplace currency.</p>{accountError && <p role="alert" className="text-sm text-red-600">{accountError}</p>}{!accountError && !accounts.length && <p className="text-sm text-slate-500">No Fashion seller accounts available. You can still save a draft.</p>}</section>
     <form onSubmit={save} className="space-y-5">
       <fieldset disabled={!canEdit || saving} className="space-y-5">
         <section className={panel}><h2 className="text-lg font-semibold">Item details</h2><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm">SKU *<input className={input} required maxLength={160} readOnly={!!listingId} value={form.sku} onChange={(e) => change('sku', e.target.value)} />{listingId && <span className="text-xs text-slate-500">SKU is immutable after creation.</span>}</label><label className="text-sm">Brand<input className={input} value={form.brand} onChange={(e) => change('brand', e.target.value)} />{suggestedKeys.includes('brand') && <span className="text-xs text-pink-700">Suggested from photos</span>}</label><label className="text-sm sm:col-span-2">Title *<input className={input} required maxLength={200} value={form.title} onChange={(e) => change('title', e.target.value)} /><span className="text-xs text-slate-500">{form.title.length}/200 draft characters. eBay titles allow 80; validation checks publishing readiness.</span></label><label className="text-sm">Price<input className={input} type="number" min="0" step="any" value={form.price} onChange={(e) => change('price', e.target.value)} placeholder="Not set" /></label><label className="text-sm">Quantity *<input className={input} type="number" min="0" step="1" required value={form.quantity} onChange={(e) => change('quantity', e.target.value)} /></label><label className="text-sm sm:col-span-2">Description<textarea className={input} rows={7} value={form.description} onChange={(e) => change('description', e.target.value)} /><span className="text-xs text-slate-500">Use confirmed Fashion details. Reported defects should remain visible. Preview sanitizes HTML.</span></label></div><button type="button" disabled={generating} onClick={() => void generateContent()} className="rounded-lg border px-4 py-2 text-sm">{generating ? 'Generating…' : 'Generate listing text from confirmed details'}</button></section>
         <section className={panel}><h2 className="text-lg font-semibold">Fashion category and condition</h2>
+          <p className="text-xs text-slate-500">Category suggestions use the first active Fashion marketplace available to your account. Choose publishing stores and policies from Catalog.</p>
+          {accountError && <p role="alert" className="text-sm text-red-600">Marketplace category requirements could not be loaded: {accountError}</p>}
           <label className="block text-sm">Fashion category family<select className={input} value={family} onChange={(e) => changeFamily(e.target.value as FashionFamily)}>{FASHION_FAMILIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
           <div className="flex flex-wrap items-end gap-3"><label className="min-w-0 flex-1 text-sm">Find an eBay Fashion category<input className={input} value={categoryQuery} onChange={(e) => setCategoryQuery(e.target.value)} placeholder="For example, women's linen shirt" /></label><button type="button" disabled={!account || !categoryQuery.trim() || categoryBusy} onClick={searchCategories} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40">{categoryBusy ? 'Searching…' : 'Search categories'}</button></div>
           {categoryMessage && <p role="status" className="text-sm">{categoryMessage}</p>}
@@ -329,7 +404,8 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
           {FASHION_FIELD_GROUPS.map((group) => {
             const fields = group.fields.filter((field) => field.families.includes(family));
             if (!fields.length) return null;
-            return <div key={group.id} className="space-y-3"><h3 className="font-semibold">{group.label}</h3><div className="grid gap-4 sm:grid-cols-2">{fields.map((field) => <label className={`text-sm ${field.input === 'textarea' ? 'sm:col-span-2' : ''}`} key={field.key}>{field.label}{suggestedKeys.includes(field.key) ? <span className="ml-2 text-xs font-normal text-pink-700">Suggested</span> : null}{field.input === 'textarea' ? <textarea className={input} rows={3} value={fashionAttributeText(form.verticalAttributes[field.key])} onChange={(e) => setAttribute(field.key, e.target.value)} /> : <input className={input} value={fashionAttributeText(form.verticalAttributes[field.key])} onChange={(e) => setAttribute(field.key, e.target.value)} />}{field.help ? <span className="text-xs text-slate-500">{field.help}</span> : null}</label>)}</div></div>;
+            const chart = group.id === 'measurements' ? <div className="space-y-2">{templatesError && <p role="alert" className="text-sm text-red-600">Measurement charts unavailable: {templatesError}</p>}<FashionMeasurementChart templates={measurementTemplates} family={family} state={measurement} onChange={changeMeasurements} editable={canEdit && !saving} organizationId={activeOrganizationId} brandName={form.brand || undefined} sku={form.sku} hasChartImage={slots.sizeChart.length > 0} onChartImage={(url) => changeSlots({ ...slots, sizeChart: [url] })} /></div> : null;
+            return <div key={group.id} className="space-y-3"><h3 className="font-semibold">{group.label}</h3>{chart}<div className="grid gap-4 sm:grid-cols-2">{fields.map((field) => <label className={`text-sm ${field.input === 'textarea' ? 'sm:col-span-2' : ''}`} key={field.key}>{field.label}{suggestedKeys.includes(field.key) ? <span className="ml-2 text-xs font-normal text-pink-700">Suggested</span> : null}{field.input === 'textarea' ? <textarea className={input} rows={3} value={fashionAttributeText(form.verticalAttributes[field.key])} onChange={(e) => setAttribute(field.key, e.target.value)} /> : <input className={input} value={fashionAttributeText(form.verticalAttributes[field.key])} onChange={(e) => setAttribute(field.key, e.target.value)} />}{field.help ? <span className="text-xs text-slate-500">{field.help}</span> : null}</label>)}</div></div>;
           })}
           {!!metadata?.aspects.length && <div className="space-y-3 border-t pt-4"><h3 className="font-semibold">eBay item specifics</h3><p className="text-xs text-slate-500">Required specifics are marked *. For multiple values, separate entries with |.</p><div className="grid gap-4 sm:grid-cols-2">{metadata.aspects.map((aspect, index) => {
             const normalized = fashionAttributeKey(aspect.localizedAspectName);
@@ -343,7 +419,6 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
       <div className="flex flex-wrap items-center gap-4">{canEdit && <button type="submit" disabled={saving || analyzing || (!!listingId && !dirty)} className="rounded-lg bg-pink-600 px-5 py-2 font-semibold text-white disabled:opacity-40">{saving ? 'Saving…' : listingId ? 'Save changes' : 'Save item'}</button>}<Link to="/fashion/catalog" onClick={leave} className="text-sm">Back to catalog</Link>{permissions.includes('fashion.review') && listing && <Link to="/fashion/review" onClick={leave} className="text-sm text-pink-600">Open authenticity review</Link>}<span className="text-xs text-slate-500">Saving changes resets approval and requires review. Identification is optional.</span></div>
     </form>
-    {preview && <section className={panel} aria-label="Listing preview"><h2 className="text-lg font-semibold">Listing preview</h2><p className="text-xs text-slate-500">Preview of current form values. Actual eBay appearance may vary.</p><div className="grid gap-5 md:grid-cols-2">{form.images[0] && isFashionImageUrl(form.images[0]) && <img src={toProxyUrl(form.images[0])} alt={form.title || 'Fashion listing preview'} className="max-h-96 w-full rounded-lg object-contain" />}<div><h3 className="text-2xl font-semibold">{form.title || 'Untitled Fashion item'}</h3><p className="mt-3 text-xl">{form.price || 'Price not set'} <span className="text-sm text-slate-500">{account?.marketplaceId}</span></p><p className="mt-2 text-sm">{form.brand} · Quantity {form.quantity} · {form.conditionId || 'Condition not set'}</p><p className="mt-2 text-sm text-slate-500">{form.categoryName || form.categoryId || 'Category not set'}</p><dl className="mt-4 grid grid-cols-2 gap-2 text-sm">{Object.entries(form.verticalAttributes).filter(([key, value]) => !isFashionMetaKey(key) && fashionAttributeText(value)).map(([key, value]) => <div key={key}><dt className="text-slate-500">{key}</dt><dd>{fashionAttributeText(value)}</dd></div>)}</dl></div></div><div className="break-words whitespace-pre-wrap text-sm [&_img]:max-w-full" dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.description) }} /></section>}
-    {listing && <FashionListingPublishPanel listings={[listing]} account={account} dirty={dirty || saving} />}
+    {preview && <section className={panel} aria-label="Listing preview"><h2 className="text-lg font-semibold">Listing preview</h2><p className="text-xs text-slate-500">Preview of current form values. Actual marketplace appearance may vary.</p><div className="grid gap-5 md:grid-cols-2">{form.images[0] && isFashionImageUrl(form.images[0]) && <img src={toProxyUrl(form.images[0])} alt={form.title || 'Fashion listing preview'} className="max-h-96 w-full rounded-lg object-contain" />}<div><h3 className="text-2xl font-semibold">{form.title || 'Untitled Fashion item'}</h3><p className="mt-3 text-xl">{form.price || 'Price not set'}</p><p className="mt-2 text-sm">{form.brand} · Quantity {form.quantity} · {form.conditionId || 'Condition not set'}</p><p className="mt-2 text-sm text-slate-500">{form.categoryName || form.categoryId || 'Category not set'}</p><dl className="mt-4 grid grid-cols-2 gap-2 text-sm">{Object.entries(form.verticalAttributes).filter(([key, value]) => !isFashionMetaKey(key) && fashionAttributeText(value)).map(([key, value]) => <div key={key}><dt className="text-slate-500">{key}</dt><dd>{fashionAttributeText(value)}</dd></div>)}</dl></div></div><div className="break-words whitespace-pre-wrap text-sm [&_img]:max-w-full" dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.description) }} /></section>}
   </div>;
 }

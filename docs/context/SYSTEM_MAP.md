@@ -258,3 +258,7 @@ non-automotive workspaces. The React `CatalogWorkspace` presents those APIs
 with Auto Parts-style toolbar density, a mobile filter drawer, and publish-job
 phases; B&I wraps it in `VerticalWorkspaceShell` without changing payload or
 permission contracts.
+
+## Fashion Quick Capture (2026-10-09)
+
+FashionCapturePage uploads fixed photo slots to organization storage as WebP, creates an intake record, and queues fashion-intake-analysis. FashionIntakeProcessor delegates image identification and persists suggested fields without replacing confirmed operator values. FashionIntakePage is the review and Catalog handoff screen; FashionActivityReportPage exposes filtered item provenance and publication outcomes. FashionPublishModal selects active Fashion stores and their policies after Catalog selection. Fashion warehouse/SKU tables are added by migration 1791000000000-CreateFashionIntake.

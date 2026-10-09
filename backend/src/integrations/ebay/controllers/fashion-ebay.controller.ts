@@ -300,11 +300,36 @@ export class FashionEbayController {
         );
     }
 
+    let policyOverridesByStore: Record<string, {
+      requestedFulfillmentPolicyName?: string;
+      requestedPaymentPolicyName?: string;
+      requestedReturnPolicyName?: string;
+    }> | undefined;
+    if (dto.storePolicies) {
+      const policyRows = new Map(dto.storePolicies.map((row) => [row.storeId, row]));
+      if (
+        policyRows.size !== dto.storePolicies.length ||
+        policyRows.size !== storeIds.length ||
+        storeIds.some((storeId) => !policyRows.has(storeId))
+      )
+        throw new BadRequestException(
+          'Choose policy values for each selected Fashion store exactly once.',
+        );
+      policyOverridesByStore = Object.fromEntries(
+        [...policyRows.entries()].map(([storeId, row]) => [storeId, {
+          requestedFulfillmentPolicyName: row.requestedFulfillmentPolicyName,
+          requestedPaymentPolicyName: row.requestedPaymentPolicyName,
+          requestedReturnPolicyName: row.requestedReturnPolicyName,
+        }]),
+      );
+    }
+
     const result = await this.listings.createBulkPublishJob({
       organizationId: org.organizationId,
       requestedByUserId: user.id,
       listingIds,
       storeIds,
+      policyOverridesByStore,
       idempotencyKey: dto.idempotencyKey,
     });
     return {
