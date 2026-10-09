@@ -124,3 +124,19 @@ override for the release image tags and build contexts. Recreate only the
 application services unless a reviewed change explicitly requires infrastructure
 changes. The Fashion quick capture release was deployed this way from `b63261e8`
 on 2026-10-09.
+
+### Add Part photo identity release — 2026-10-09
+
+Main commit `217d09e3568e441310fc2e1c0437c08ef720a1ec` was built from a clean
+archive at `/home/ubuntu/realtrackapp-add-part-photo-identity-217d09e3`. The
+image-only override is
+`/home/ubuntu/realtrackapp-add-part-photo-identity-217d09e3.override.yml` and
+selects `realtrackapp-backend:add-part-photo-identity-217d09e3` and
+`realtrackapp-frontend:add-part-photo-identity-217d09e3`. It was applied with
+the active production Compose files using
+`up -d --no-deps --no-build --pull never backend frontend`. PostgreSQL, Redis,
+and PgBouncer were left running.
+Verification returned backend `/api/health` with database and heap up, HTTP 200
+for the frontend root and `/listings/new`, and healthy/running application
+containers. The prior `main-b63261e` application images remain available for
+rollback by selecting those image tags in a rollback override.
