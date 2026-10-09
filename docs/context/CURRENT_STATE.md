@@ -8,7 +8,7 @@ Manual-review rows remain unpublished. The 12 include `BLAP-20001`, whose 20 cur
 
 Within the 48 listings needing another photo, `BLAP-19997` had been marked ready despite having only one saved image. It was also moved to `draft` / `needs_review`; add a label and overall-part photo before retrying.
 
-Production backend health remained up after the data corrections. The code follow-up for private S3 image access, stale `cType` prompt selection, and catalog title normalization is still local and has not been deployed; production currently runs the earlier `217d09e3` Add Part release.
+Production backend health remained up after the data corrections. The private-S3 image-access, stale-`cType` prompt-selection, visible-label MPN verification, and catalog synchronization follow-up was deployed with main commit `557a9206` as backend image `realtrackapp-backend:add-part-photo-identity-557a9206` on 2026-10-09. Post-deploy `/api/health` returned HTTP 200 with database and heap up; frontend and infrastructure containers stayed on their existing images. No schema change was required.
 
 **2026-10-09 (Add Part photo-identity fix deployed to production)** — The
 reported Add Part record had a manually corrected windshield-wiper-linkage

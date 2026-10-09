@@ -140,3 +140,18 @@ Verification returned backend `/api/health` with database and heap up, HTTP 200
 for the frontend root and `/listings/new`, and healthy/running application
 containers. The prior `main-b63261e` application images remain available for
 rollback by selecting those image tags in a rollback override.
+
+### Add Part photo identity reliability follow-up — 2026-10-09
+
+Main commit `557a9206483830294db211adda24701452096b28` was built from the clean
+`/home/ubuntu/realtrackapp-release` checkout pinned to that pushed `main` commit.
+The per-commit override
+`/home/ubuntu/realtrackapp-add-part-photo-identity-557a9206.override.yml`
+selects `realtrackapp-backend:add-part-photo-identity-557a9206` and builds from
+the release checkout's `backend/` directory. It was applied with the active
+production Compose files using `up -d --no-deps --no-build --pull never backend`.
+The frontend stayed on `realtrackapp-frontend:add-part-photo-identity-217d09e3`;
+PostgreSQL, Redis, and PgBouncer stayed running. No schema change or migration
+was part of this release. Verification showed the new backend image running and
+healthy, with `/api/health` HTTP 200 and database and heap up. The prior backend
+image tag remains available for rollback through an image-only override.
