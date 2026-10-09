@@ -30,7 +30,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 | Route | Component | Permission | Purpose |
 |-------|-----------|------------|---------|
 | `/auto-parts` | `Dashboard` inside `Shell` | `dashboard.view` | Canonical Auto Parts / automotive application landing page |
-| `/listings/new` | `SingleListingPipeline` | `listings.create` | **Add Part** — GridConnect-style intake: part type (OEM/Aftermarket/Salvage), condition (New/Used), brand, part #, price, qty → draft inventory (photos optional; add on Inventory) |
+| `/listings/new` | `SingleListingPipeline` | `listings.create` | **Add Part** — GridConnect-style intake: part type (OEM/Aftermarket/Salvage), condition (New/Used), brand, part #, price, qty → unidentified draft. Add at least two photos in Inventory before automatic identification; photo-less drafts are not assigned a guessed part title. |
 | `/listings/:id/edit` | `ListingEditor` | `listings.update` | Edit listing |
 | `/listings/:id/history` | `RevisionHistory` | `listings.view` | View revisions |
 | `/catalog` | `CatalogManager` | `catalog.view` | Table-first catalog ops: quick filters, team badges, workflow status, bulk publish/policies; row title opens inventory summary modal |
@@ -83,7 +83,7 @@ controls or empty legacy import/location/condition facets.
 
 ### Automotive modal image mutations
 
-The Auto Parts `CatalogInventoryDetailModal` receives a `listing_records` ID. Reorder/remove uses `PATCH /api/inventory/listings/:listingId/images/reorder`, while newly uploaded images use `PATCH /api/inventory/listings/:listingId/images` with uploaded asset IDs.
+The Auto Parts `CatalogInventoryDetailModal` receives a `listing_records` ID. Reorder/remove uses `PATCH /api/inventory/listings/:listingId/images/reorder`, while newly uploaded images use `PATCH /api/inventory/listings/:listingId/images` with uploaded asset IDs. At least two photos are required for part identification. The image-save endpoint queues one photo-first enrichment job; new images can restart a completed job. If photos do not confirm the entered part number, lookup fails closed and surfaces a review-needed error instead of falling back to seller listings. Later enrichment cannot overwrite photo-derived title, type, description, or MPN, and failed validation cannot write generated identity fields.
 
 ### Backend contract
 

@@ -17,7 +17,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and prior audits.
 | White-label / branding | `/auto-parts/settings/client` | `client-settings` | Implemented | Super-admin only; public branding endpoint; default `themeMode` is `light` |
 | Public vertical landing | `/` | — | Implemented | Responsive editorial overview with illustrative product subjects, synthetic workflow walkthrough, FAQ, catalog-status example, branding-aware header/footer, and entry links for Auto Parts, Business & Industrial, and Fashion |
 | Dashboard / KPIs | `/auto-parts` | `dashboard` | Implemented | Auto Parts aggregation via BullMQ; cache table |
-| Listing editor (create/edit) | `/auto-parts/listings/new`, `/auto-parts/listings/:id/edit` | `listings` | Implemented | AI-assisted; split preview |
+| Listing editor (create/edit) | `/auto-parts/listings/new`, `/auto-parts/listings/:id/edit` | `listings` | Implemented | Add Part saves an unidentified draft without an MPN-only lookup. Photo identification starts after at least two saved photos; inconclusive visual evidence fails closed for operator review, and later enrichment preserves photo-derived identity. New images can retry completed enrichment. |
 | Listing revision history | `/auto-parts/listings/:id/history` | `listings` | Implemented | `ListingRevision` |
 | AI listing generation | (in editor) | `listings` (`listing-generation.controller`) | Partial | OpenAI-backed; verify quality/limits |
 | Listings v2 (cached) | — | `listings` (`listings-v2.controller`) | Partial | Redis cache interceptor |

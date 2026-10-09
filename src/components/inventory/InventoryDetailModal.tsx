@@ -35,7 +35,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Badge } from '../ui/badge';
-import { useInventoryDetail, useInlineEnrichListing, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment, useReorderInventoryImages, useUpdateDonorVehicle } from '../../lib/inventoryApi';
+import { useInventoryDetail, useEnrichmentStatus, useUpdateInventoryImages, useRetryInventoryEnrichment, useReorderInventoryImages, useUpdateDonorVehicle } from '../../lib/inventoryApi';
 import { fetchWithAuth } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import ImageUploadZone from '../listings/ImageUploadZone';
@@ -150,7 +150,6 @@ function SortableImage({ id, url, index, isActive, canEdit, onSelect, onRemove }
 
 export default function InventoryDetailModal({ listingId, onClose }: Props) {
   const { data, isLoading, refetch } = useInventoryDetail(listingId);
-  const inlineEnrich = useInlineEnrichListing();
   const retryEnrich = useRetryInventoryEnrichment();
   const updateImages = useUpdateInventoryImages();
   const reorderImages = useReorderInventoryImages();
@@ -300,21 +299,16 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
       setUploadZoneKey((k) => k + 1);
       const refetchResult = await refetch();
 
-      // Only trigger enrichment when 2+ proper photos are attached.
-      // Use the refetched data (not the stale closure) for the actual image count.
+      // Saving images queues enrichment on the backend when there are at least
+      // two photos. Poll that one job instead of submitting a second request.
       const actualImages = refetchResult.data?.imageUrls ?? [];
       if (actualImages.length >= 2) {
         setEnrichingListingId(listingId);
-        try {
-          await inlineEnrich.mutateAsync({ listingId });
-        } catch {
-          // polling will show failed / ready status
-        }
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to save photos');
     }
-  }, [listingId, stagedImages, updateImages, refetch, data?.imageUrls.length, inlineEnrich]);
+  }, [listingId, stagedImages, updateImages, refetch]);
 
   useEffect(() => {
     if (!listingId) return;

@@ -39,7 +39,7 @@ import {
 import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
 import { derivePartNameFromTitle } from '../../listings/utils/derive-part-name-from-title.js';
 
-/** Minimum uploaded images required before vision fallback (label + overall). */
+/** Minimum saved photos required for photo-first part identification. */
 export const PART_LOOKUP_MIN_VISION_IMAGES = 2;
 
 export interface PartLookupResult {
@@ -487,17 +487,13 @@ export class SingleListingFormService {
       }
     }
 
-    // Auto-enrich: run text-only AI enrichment (no photos required)
-    await this.autoEnrichListing(listing, dto);
-
-    // Mandatory listing optimization — same title-guideline SEO title and
-    // MVL-expanded compatibility rows that pipeline-imported listings get.
-    // Best-effort: the part is already usable in draft form without it.
-    if (catalogProduct) {
+    const enqueueOptimization = async (): Promise<void> => {
+      const productId = catalogProduct?.id;
+      if (!productId) return;
       try {
         await this.listingOptimizationQueue.add(
           'optimize-product',
-          { productId: catalogProduct.id, marketplace: 'US' },
+          { productId, marketplace: 'US' },
           {
             jobId: `intake-optimization-${sku}`,
             attempts: 3,
@@ -509,75 +505,57 @@ export class SingleListingFormService {
           `Failed to enqueue listing optimization for SKU ${sku}: ${err}`,
         );
       }
+    };
+
+    // Do not identify a part from its MPN alone during intake. Marketplace
+    // matches can be wrong; wait for saved photos before creating product
+    // identity fields or queuing optimization.
+    const savedImageCount = (listing.itemPhotoUrl ?? '')
+      .split('|')
+      .map((url) => url.trim())
+      .filter(Boolean).length;
+    if (
+      listing.title === placeholderTitle &&
+      savedImageCount >= PART_LOOKUP_MIN_VISION_IMAGES
+    ) {
+      void this.autoEnrichListing(listing, dto).then((identified) =>
+        identified ? enqueueOptimization() : undefined,
+      );
+    } else if (listing.title !== placeholderTitle) {
+      // Preserve explicitly supplied titles; only those may proceed without
+      // photo identification.
+      await enqueueOptimization();
     }
 
     return { listing };
   }
 
   /**
-   * Auto-enrich a newly created intake listing without photos:
-   * make-compatible eBay Browse identification → OpenAI text lookup
-   * (fallback) → MVL canonicalization.
-   * Best-effort: failures are logged but don't prevent part creation.
-   * User-provided fields are never overwritten.
+   * Auto-enrich a newly created intake listing only after at least two photos
+   * are saved. MPN-only seller matches can be incorrect and are not enough
+   * evidence to assign a product title.
    */
   private async autoEnrichListing(
     listing: ListingRecord,
     dto: CreateIntakePartDto,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const partNumber = this.sanitizePartNumber(dto.partNumber);
-      if (!partNumber) return;
+      if (!partNumber) return false;
 
-      let oemResult: Partial<PartLookupResult> | null = null;
+      const imageUrls = (listing.itemPhotoUrl ?? '')
+        .split('|')
+        .map((url) => url.trim())
+        .filter(Boolean);
+      if (imageUrls.length < PART_LOOKUP_MIN_VISION_IMAGES) return false;
 
-      // Step 1: accept only exact MPN candidates that do not contradict the
-      // vehicle make entered by the operator.
-      const browseAttempt = await this.runBrowseLookup(
+      const finalized = await this.lookupPart({
         partNumber,
-        dto.brand,
-        dto.vehicleMake,
-      );
-      if (browseAttempt && this.isOemLookupUsable(browseAttempt.result)) {
-        oemResult = browseAttempt.result;
-      }
-
-      // Step 2 (fallback): AI text enrichment (no photos required)
-      if (!oemResult) {
-        const oemModel =
-          this.config.get<string>('OPENAI_MODEL_TEXT') ||
-          this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4o-mini');
-
-        const lookupDto: PartLookupDto = {
-          partNumber,
-          brand: dto.brand,
-          vehicleMake: dto.vehicleMake,
-          partType: dto.partType,
-        };
-
-        try {
-          const attempt = await this.runOemTextLookup(
-            partNumber,
-            lookupDto,
-            oemModel,
-          );
-          if (!this.isOemLookupUsable(attempt.result)) {
-            this.logger.debug(
-              `Auto-enrich: OEM lookup not usable for ${listing.customLabelSku ?? partNumber}`,
-            );
-            return;
-          }
-          oemResult = attempt.result;
-        } catch {
-          this.logger.debug(
-            `Auto-enrich: OEM lookup failed for ${listing.customLabelSku ?? partNumber}`,
-          );
-          return;
-        }
-      }
-
-      // Step 3: MVL canonicalization
-      const finalized = await this.finalizeLookupFields(oemResult, partNumber);
+        brand: dto.brand,
+        vehicleMake: dto.vehicleMake,
+        partType: dto.partType,
+        imageUrls,
+      });
 
       // Step 4: Apply results, respecting user overrides
       const placeholderTitle = this.stripTitleSpecialChars(
@@ -610,11 +588,8 @@ export class SingleListingFormService {
         listing.categoryName = finalized.category.trim();
       }
 
-      // cType: intake creates this as the part-source dropdown value
-      // (OEM/Aftermarket/Salvage), but publish-time title composition
-      // (listing-builder.service.ts) reads cType as the descriptive part
-      // name. Replace the filler value once we have a real part name —
-      // mirrors the same fillerTypes check in lookupAndApplyToListing.
+      // cType starts as the part-source dropdown value. Visual identification
+      // can replace a stale descriptive type left by an earlier lookup.
       const existingCType = (listing.cType ?? '').trim().toLowerCase();
       const fillerCTypes = new Set([
         'oem',
@@ -628,7 +603,9 @@ export class SingleListingFormService {
       ]);
       if (
         finalized.partName?.trim() &&
-        (!listing.cType?.trim() || fillerCTypes.has(existingCType))
+        (finalized.source === 'vision' ||
+          !listing.cType?.trim() ||
+          fillerCTypes.has(existingCType))
       ) {
         listing.cType = this.stripTitleSpecialChars(finalized.partName).slice(
           0,
@@ -663,6 +640,7 @@ export class SingleListingFormService {
           if (product) {
             if (titleChanged && listing.title) product.title = listing.title;
             if (listing.cBrand) product.brand = listing.cBrand;
+            if (listing.cType) product.partType = listing.cType;
             if (listing.categoryName)
               product.categoryName = listing.categoryName;
             if (listing.description) product.description = listing.description;
@@ -678,10 +656,12 @@ export class SingleListingFormService {
       this.logger.log(
         `Auto-enriched ${listing.customLabelSku}: "${listing.title}" (${finalized.confidence})`,
       );
+      return true;
     } catch (err) {
       this.logger.warn(
         `Auto-enrichment failed for ${listing.customLabelSku ?? dto.partNumber}: ${err}`,
       );
+      return false;
     }
   }
 
@@ -738,6 +718,14 @@ export class SingleListingFormService {
       .split('|')
       .map((u) => u.trim())
       .filter(Boolean);
+    if (
+      listing.origin === ListingOrigin.ADD_PART &&
+      imageUrls.length < PART_LOOKUP_MIN_VISION_IMAGES
+    ) {
+      throw new BadRequestException(
+        'Upload at least two clear part photos before identifying an Add Part listing.',
+      );
+    }
 
     // Keep the operator-entered vehicle make separate from the listing's
     // brand so Browse results can be checked against the intended vehicle.
@@ -764,7 +752,11 @@ export class SingleListingFormService {
         'unknown',
         'other',
       ]);
-      if (!listing.cType?.trim() || fillerTypes.has(existingType)) {
+      if (
+        lookup.source === 'vision' ||
+        !listing.cType?.trim() ||
+        fillerTypes.has(existingType)
+      ) {
         listing.cType = this.stripTitleSpecialChars(lookup.partName).slice(
           0,
           80,
@@ -934,6 +926,14 @@ export class SingleListingFormService {
       };
     }
 
+    // With photos, a conflicting or inconclusive visual result must not
+    // silently fall back to seller listings selected only by the entered MPN.
+    if (imageUrls.length >= PART_LOOKUP_MIN_VISION_IMAGES) {
+      throw new BadRequestException(
+        'The photos did not confirm this part number. Check the label and overall photos, then review the part manually before retrying.',
+      );
+    }
+
     const browseAttempt = await this.runBrowseLookup(
       partNumber,
       dto.brand,
@@ -955,8 +955,8 @@ export class SingleListingFormService {
 
     this.assertAiConfigured();
 
-    // Text fallback for photo-less calls or when the available photo evidence
-    // could not be reconciled with the entered part number.
+    // Text fallback is limited to photo-less calls. With photos, an
+    // inconclusive or conflicting visual result above requires manual review.
     const oemModel =
       this.config.get<string>('OPENAI_MODEL_TEXT') ||
       this.config.get<string>('OPENAI_CHAT_MODEL', 'openai/gpt-4o-mini');
@@ -1016,7 +1016,9 @@ export class SingleListingFormService {
     if (!returnedPartNumber) return true;
 
     const normalizePartNumber = (value: string) =>
-      this.sanitizePartNumber(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+      this.sanitizePartNumber(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
     return (
       normalizePartNumber(returnedPartNumber) ===
       normalizePartNumber(expectedPartNumber)

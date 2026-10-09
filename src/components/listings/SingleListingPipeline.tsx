@@ -15,9 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
   useAddIntakePart,
-  usePartLookup,
   useSingleListingBrands,
-  type PartLookupResult,
 } from '../../lib/pipelineApi';
 import { listTeams } from '../../lib/teamsApi';
 import {
@@ -53,13 +51,11 @@ function partNumberHint(partType: PartType): string {
 
 type PreviewState =
   | { status: 'idle' }
-  | { status: 'ready'; title: string; category?: string; note?: string; confidence?: string }
-  | { status: 'lookup'; partial?: PartLookupResult }
+  | { status: 'saving' }
   | { status: 'saved'; sku: string };
 
 export default function SingleListingPipeline() {
   const addPartMutation = useAddIntakePart();
-  const partLookupMutation = usePartLookup();
   const { data: brandsData } = useSingleListingBrands();
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
     queryKey: ['teams'],
@@ -87,7 +83,6 @@ export default function SingleListingPipeline() {
   const [location, setLocation] = useState('');
   const [weight, setWeight] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [lookupWarning, setLookupWarning] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
 
   const brands = brandsData?.brands ?? [];
@@ -124,7 +119,6 @@ export default function SingleListingPipeline() {
     setPartType(prefs.partType ?? 'OEM');
     setConditionId(prefs.conditionId ?? '3000');
     setError(null);
-    setLookupWarning(null);
     setPreview({ status: 'idle' });
   }, []);
 
@@ -132,7 +126,6 @@ export default function SingleListingPipeline() {
     async (e?: React.FormEvent) => {
       e?.preventDefault();
       setError(null);
-      setLookupWarning(null);
 
       const pn = partNumber.trim();
       const br = brand.trim();
@@ -167,36 +160,9 @@ export default function SingleListingPipeline() {
       // For OEM/Salvage, use vehicleMake as brand when brand is empty
       const effectiveBrand = isAftermarket ? br : (br || vm);
 
-      let lookup: PartLookupResult | undefined;
       try {
-        setPreview({ status: 'lookup' });
-        lookup = await partLookupMutation.mutateAsync({
-          partNumber: pn,
-          brand: effectiveBrand,
-          vehicleMake: vm || undefined,
-          partType,
-        });
-        setPreview({
-          status: 'ready',
-          title: lookup.partName?.trim() || `${br} ${pn}`.slice(0, 80),
-          category: lookup.category,
-          note: lookup.note,
-          confidence: lookup.confidence,
-        });
-      } catch {
-        setLookupWarning(
-          'AI lookup unavailable — part will be saved with a placeholder title. Add photos on Inventory, then Fetch details.',
-        );
-        setPreview({
-          status: 'ready',
-          title: `${effectiveBrand} ${pn}`.slice(0, 80),
-        });
-      }
-
-      try {
+        setPreview({ status: 'saving' });
         const userNotes = notes.trim();
-        const aiNote = lookup?.note?.trim();
-        const combinedDescription = [userNotes, aiNote].filter(Boolean).join('\n\n') || undefined;
 
         const result = await addPartMutation.mutateAsync({
           partNumber: pn,
@@ -206,9 +172,7 @@ export default function SingleListingPipeline() {
           vehicleMake: vm || undefined,
           price: pr,
           quantity: qty,
-          title: lookup?.partName?.trim(),
-          categoryName: lookup?.category?.trim(),
-          description: combinedDescription,
+          description: userNotes || undefined,
           teamId: teamId || undefined,
           location: location.trim() || undefined,
           weight: weight.trim() ? parseFloat(weight) : undefined,
@@ -225,7 +189,6 @@ export default function SingleListingPipeline() {
         const savedPrefs = loadJson<ListingFormPrefs>(STORAGE_KEYS.listingFormPrefs, {});
         setPartType(savedPrefs.partType ?? 'OEM');
         setConditionId(savedPrefs.conditionId ?? '3000');
-        setLookupWarning(null);
         setError(null);
         setPreview({ status: 'saved', sku: savedSku });
       } catch (err) {
@@ -245,7 +208,6 @@ export default function SingleListingPipeline() {
       notes,
       location,
       isAftermarket,
-      partLookupMutation,
       addPartMutation,
     ],
   );
@@ -260,7 +222,7 @@ export default function SingleListingPipeline() {
         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
     }`;
 
-  const isBusy = addPartMutation.isPending || partLookupMutation.isPending;
+  const isBusy = addPartMutation.isPending;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-8">
@@ -274,7 +236,7 @@ export default function SingleListingPipeline() {
           <Link to="/auto-parts/inventory" className="text-blue-400 hover:underline">
             Inventory
           </Link>{' '}
-          before Fetch details
+          to identify the part and create listing details from photo evidence
         </p>
       </div>
 
@@ -539,13 +501,6 @@ export default function SingleListingPipeline() {
               </div>
             </div>
 
-            {lookupWarning && (
-              <div className="flex items-start gap-2 text-amber-300 text-sm bg-amber-900/20 border border-amber-500/30 rounded-lg p-3">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                {lookupWarning}
-              </div>
-            )}
-
             {error && (
               <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg p-3">
                 <AlertCircle className="h-4 w-4 shrink-0" />
@@ -570,7 +525,7 @@ export default function SingleListingPipeline() {
                 {isBusy ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    Processing…
+                    Saving draft…
                   </>
                 ) : (
                   <>
@@ -591,7 +546,7 @@ export default function SingleListingPipeline() {
                 className={`h-1.5 w-1.5 rounded-full ${
                   preview.status === 'saved'
                     ? 'bg-emerald-400'
-                    : preview.status === 'ready' || preview.status === 'lookup'
+                    : preview.status === 'saving'
                       ? 'bg-blue-400 animate-pulse'
                       : mandatoryFilled
                         ? 'bg-amber-400'
@@ -600,10 +555,8 @@ export default function SingleListingPipeline() {
               />
               {preview.status === 'saved'
                 ? 'Saved'
-                : preview.status === 'lookup'
-                  ? 'Looking up…'
-                  : preview.status === 'ready'
-                    ? 'Preview ready'
+                : preview.status === 'saving'
+                  ? 'Saving draft…'
                     : mandatoryFilled
                       ? 'Ready to process'
                       : 'Awaiting input'}
@@ -618,7 +571,8 @@ export default function SingleListingPipeline() {
                   <span className="font-mono font-semibold text-emerald-400">{preview.sku}</span>
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
-                  Add photos on Inventory, then Fetch details and Send to pipeline.
+                  Add at least two photos in Inventory to identify the part and
+                  create listing details from the photo evidence.
                 </p>
                 <Link
                   to="/auto-parts/inventory"
@@ -627,50 +581,10 @@ export default function SingleListingPipeline() {
                   Open Inventory →
                 </Link>
               </div>
-            ) : preview.status === 'ready' || preview.status === 'lookup' ? (
-              <div className="space-y-4 flex-1">
-                {preview.status === 'lookup' && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Identifying part…
-                  </div>
-                )}
-                {preview.status === 'ready' && (
-                  <>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                        Title
-                      </p>
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-snug">
-                        {preview.title}
-                      </p>
-                    </div>
-                    {preview.category && (
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                          Category
-                        </p>
-                        <p className="text-sm text-slate-700 dark:text-slate-300">{preview.category}</p>
-                      </div>
-                    )}
-                    {preview.note && (
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                          Seller notes
-                        </p>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                          {preview.note}
-                        </p>
-                      </div>
-                    )}
-                    {preview.confidence && (
-                      <p className="text-[11px] text-slate-500">
-                        AI confidence:{' '}
-                        <span className="capitalize">{preview.confidence}</span>
-                      </p>
-                    )}
-                  </>
-                )}
+            ) : preview.status === 'saving' ? (
+              <div className="flex flex-1 items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving draft…
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 p-8 text-center">

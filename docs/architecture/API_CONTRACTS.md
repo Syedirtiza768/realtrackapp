@@ -156,11 +156,11 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | POST | `/api/pipeline/run` | Run pipeline job | pipeline.run |
-| POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — part type, condition, brand, part #, price, qty → draft listing (photos optional) | listings.create |
+| POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — part type, condition, brand, part #, price, qty → unidentified draft. No MPN-only guessed title; photo identification and optimization wait for at least two photos. | listings.create |
 | POST | `/api/pipeline/single` | Submit single listing to enrichment pipeline | pipeline.run |
 | GET | `/api/pipeline/single-listing/lookup-pricing` | OpenRouter cost estimates (incl. 15k parts) | listings.create |
 | GET | `/api/pipeline/single-listing/brands` | Brand/make options (catalog + OEM list); `?q=` filter | listings.create |
-| POST | `/api/pipeline/single-listing/part-lookup` | AI lookup: vision when 2+ images; OEM text when no photos | listings.create **or** inventory.enrich |
+| POST | `/api/pipeline/single-listing/part-lookup` | With 2+ photos, use vision first and fail closed if evidence is inconclusive or conflicts with the supplied number. Photo-less calls may use exact MPN Browse results and then AI text fallback. | listings.create **or** inventory.enrich |
 | GET | `/api/pipeline/jobs` | List pipeline jobs | pipeline.view |
 | GET | `/api/pipeline/jobs/:id` | Get job details | pipeline.view |
 
@@ -419,11 +419,11 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 | GET | `/api/inventory/listings/:listingId/enrichment-status` | Poll enrichment progress — returns `{ status, stage }` with stage like `vision_lookup`, `enrichment`, `generating_us`, etc. | inventory.view |
 | DELETE | `/api/inventory/listings/:listingId` | Soft-delete inventory listing | inventory.delete |
 | POST | `/api/inventory/listings/bulk-delete` | Soft-delete multiple inventory listings (`{ ids }`) | inventory.delete |
-| PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing | listings.update |
+| PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing; at least two photos queue enrichment, and new photos can rerun completed enrichment | listings.update |
 | PATCH | `/api/inventory/listings/:listingId/images/reorder` | Reorder or remove the complete image URL array for an automotive listing; the first image is primary | listings.update |
-| POST | `/api/inventory/part-lookup` | Vision-first fetch details for one listing (OEM + brand + 2+ photos → title, category, SEO notes) | inventory.enrich |
+| POST | `/api/inventory/part-lookup` | Fetch details for one listing; Add Part requires 2+ photos and photo lookups fail closed when evidence is inconclusive or conflicts with the supplied number | inventory.enrich |
 | POST | `/api/inventory/part-lookup/bulk` | Vision-first fetch details for multiple listings | inventory.enrich |
-| POST | `/api/inventory/inline-enrich` | **Complete inline enrichment:** vision part lookup + EnrichmentPipeline + AI content generation for US/AU/DE. Creates marketplace listing records directly — no pipeline job. | inventory.enrich |
+| POST | `/api/inventory/inline-enrich` | **Complete inline enrichment:** photo-first identity lookup, validation-gated EnrichmentPipeline, and AI content generation. Photo-derived identity is preserved; failed validation leaves the draft for review. | inventory.enrich |
 | POST | `/api/inventory/send-to-catalog` | **Send to catalog:** Create or update `CatalogProduct` records from enriched listing data (title, brand, price, images, fitments) | inventory.enrich |
 | GET | `/api/inventory/filters/brands` | Distinct brand values (`cBrand`) for filter dropdown | inventory.view |
 | GET | `/api/inventory/filters/makes` | Distinct extracted make values for filter dropdown | inventory.view |

@@ -932,7 +932,8 @@ export class InventoryWorkbenchService {
       title: string;
     }>;
   }> {
-    // Stage 1: Part identification (Browse-first, then vision/text fallback)
+    // Stage 1: photo-first part identification; MPN search is used only when
+    // photos are unavailable on non-Add-Part lookup paths.
     this.logger.log(`Inline enrich [vision_lookup]: listing ${listingId}`);
     await setStage('vision_lookup');
     const { lookup: partLookup } =
@@ -1004,7 +1005,6 @@ export class InventoryWorkbenchService {
       };
       const enrichmentResult =
         await this.enrichmentPipeline.enrich(enrichInput);
-      enrichedPlacement = enrichmentResult.placement;
 
       // AI-driven validity check: EnrichmentPipeline already computes a real
       // score + hard/soft fails via ListingQualityValidator, but nothing
@@ -1012,7 +1012,12 @@ export class InventoryWorkbenchService {
       // Gate on it here instead of trusting the AI's output blindly.
       const autoApproveMinScore =
         this.modelRouter.getThresholds().autoApproveMinScore;
-      const passedGate = enrichmentResult.passedGate ?? true;
+      const passedGate = enrichmentResult.passedGate === true;
+      const preservePhotoIdentity = partLookup.source === 'vision';
+      enrichedPlacement =
+        passedGate && !preservePhotoIdentity
+          ? enrichmentResult.placement
+          : null;
       const score = enrichmentResult.validationScore ?? 100;
       if (!passedGate) {
         // Hard fails (MPN mismatch, cross-make fitment, hallucinated part
@@ -1036,21 +1041,29 @@ export class InventoryWorkbenchService {
         );
       }
 
-      // Apply enrichment results back to the base listing
-      if (enrichmentResult.title)
-        baseListing.title = enrichmentResult.title.slice(0, 80);
-      if (enrichmentResult.brand) baseListing.cBrand = enrichmentResult.brand;
-      if (enrichmentResult.description)
-        baseListing.description = enrichmentResult.description;
-      if (enrichmentResult.partType)
-        baseListing.cType = enrichmentResult.partType;
-      if (enrichmentResult.mpn)
-        baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
-      if (enrichmentResult.oemNumber)
-        baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
-      if (enrichmentResult.features?.length)
+      // The photo lookup owns identity fields. A later free-form model must
+      // not replace that evidence, and failed validation cannot write fields.
+      if (passedGate && !preservePhotoIdentity) {
+        if (enrichmentResult.title)
+          baseListing.title = enrichmentResult.title.slice(0, 80);
+        if (enrichmentResult.brand) baseListing.cBrand = enrichmentResult.brand;
+        if (enrichmentResult.description)
+          baseListing.description = enrichmentResult.description;
+        if (enrichmentResult.partType)
+          baseListing.cType = enrichmentResult.partType;
+        if (enrichmentResult.mpn)
+          baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
+        if (enrichmentResult.oemNumber)
+          baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
+      }
+      if (passedGate && enrichmentResult.features?.length)
         baseListing.cFeatures = enrichmentResult.features.join(' | ');
-      if (browseCorroboration.found && browseCorroboration.categoryId) {
+      if (
+        passedGate &&
+        !preservePhotoIdentity &&
+        browseCorroboration.found &&
+        browseCorroboration.categoryId
+      ) {
         // Real matching listings already told us the category — more
         // authoritative than a Taxonomy suggestion guess, and skips that
         // API call entirely.
@@ -1061,7 +1074,11 @@ export class InventoryWorkbenchService {
           `Category from Browse API corroboration for listing ${listingId}: ` +
             `"${baseListing.categoryName}" (${baseListing.categoryId})`,
         );
-      } else if (enrichmentResult.suggestedCategory) {
+      } else if (
+        passedGate &&
+        !preservePhotoIdentity &&
+        enrichmentResult.suggestedCategory
+      ) {
         baseListing.categoryName = enrichmentResult.suggestedCategory;
         for (const query of this.buildCategoryQueryCandidates(baseListing)) {
           const resolved = await this.resolveCategoryFromQuery(query, 'US');
@@ -1147,6 +1164,7 @@ export class InventoryWorkbenchService {
       listingId: string;
       title: string;
     }> = [];
+    const generatedMarketplaceListingIds: string[] = [];
     const MARKETPLACES: Array<'US' | 'AU' | 'DE'> = ['US'];
     let anyCategoryResolved = Boolean(baseListing.categoryId);
 
@@ -1238,8 +1256,14 @@ export class InventoryWorkbenchService {
           customLabelSku: sku,
           categoryId: mktCategory?.categoryId ?? baseListing.categoryId,
           categoryName: mktCategory?.categoryName ?? baseListing.categoryName,
-          title: aiResult.title.slice(0, 80),
-          description: aiResult.description,
+          title:
+            partLookup.source === 'vision'
+              ? baseListing.title
+              : aiResult.title.slice(0, 80),
+          description:
+            partLookup.source === 'vision'
+              ? baseListing.description
+              : aiResult.description,
           startPrice: baseListing.startPrice,
           startPriceNum: baseListing.startPriceNum,
           quantity: baseListing.quantity,
@@ -1265,10 +1289,14 @@ export class InventoryWorkbenchService {
         });
 
         const saved = await this.listingRepo.save(newListing);
+        generatedMarketplaceListingIds.push(saved.id);
         marketplaceListings.push({
           marketplace: mkt,
           listingId: saved.id,
-          title: aiResult.title,
+          title:
+            partLookup.source === 'vision'
+              ? (baseListing.title ?? '')
+              : aiResult.title,
         });
         this.logger.log(
           `Inline enrich [${stageName}]: created ${mkt} listing for SKU ${sku}`,
@@ -1309,6 +1337,7 @@ export class InventoryWorkbenchService {
           version: 1,
         });
         const saved = await this.listingRepo.save(fallbackListing);
+        generatedMarketplaceListingIds.push(saved.id);
         marketplaceListings.push({
           marketplace: mkt,
           listingId: saved.id,
@@ -1318,7 +1347,7 @@ export class InventoryWorkbenchService {
     }
 
     // Mark base listing as 'ready'
-    if (baseListing.status === 'draft') {
+    if (baseListing.status === 'draft' && !enrichmentGateFailReason) {
       baseListing.status = 'ready';
       await this.listingRepo.save(baseListing);
     }
@@ -1358,6 +1387,23 @@ export class InventoryWorkbenchService {
     if (composedTitle) {
       baseListing.title = composedTitle;
       await this.listingRepo.update(listingId, { title: composedTitle });
+      const generatedListingPatch: Partial<ListingRecord> = {
+        title: composedTitle,
+      };
+      if (partLookup.source === 'vision') {
+        generatedListingPatch.description = baseListing.description;
+      }
+      for (const generatedListingId of generatedMarketplaceListingIds) {
+        await this.listingRepo.update(
+          generatedListingId,
+          generatedListingPatch,
+        );
+        const responseListing = marketplaceListings.find(
+          (item) => item.listingId === generatedListingId,
+        );
+        if (responseListing) responseListing.title = composedTitle;
+      }
+      await this.upsertCatalogProductFromListing(baseListing);
       this.logger.log(
         `Inline enrich: deterministic title for listing ${listingId}: "${composedTitle}"`,
       );
@@ -1856,6 +1902,9 @@ export class InventoryWorkbenchService {
       if (listing.categoryId) patch.categoryId = listing.categoryId;
       if (listing.categoryName) patch.categoryName = listing.categoryName;
       if (listing.cBrand) patch.brand = listing.cBrand;
+      if (listing.cType) patch.partType = listing.cType;
+      if (listing.description) patch.description = listing.description;
+      if (listing.cFeatures) patch.features = listing.cFeatures;
       if (listing.cManufacturerPartNumber)
         patch.mpn = listing.cManufacturerPartNumber;
       if (listing.cOeOemPartNumber)
@@ -1917,6 +1966,8 @@ export class InventoryWorkbenchService {
     );
 
     const existing = parseImageUrls(listing.itemPhotoUrl);
+    const existingImageSet = new Set(existing);
+    const hasNewImages = incoming.some((url) => !existingImageSet.has(url));
     const merged = [...existing];
     for (const url of incoming) {
       if (!merged.includes(url)) merged.push(url);
@@ -1938,6 +1989,7 @@ export class InventoryWorkbenchService {
     if (mergedCount >= 2) {
       const stage = listing.enrichmentStage;
       const mayEnqueue =
+        hasNewImages ||
         !stage ||
         stage === INLINE_ENRICH_STAGES.FAILED ||
         stage === INLINE_ENRICH_STAGES.NEEDS_REVIEW ||
@@ -1949,7 +2001,7 @@ export class InventoryWorkbenchService {
         // actually resumed enrichment; it just sat "failed" forever until
         // someone hit the manual reset-enrichment-retry endpoint.
         await this.autoTrigger.enqueueAutoEnrich(listingId, {
-          force: listing.enrichmentPermanentFail,
+          force: hasNewImages || listing.enrichmentPermanentFail,
         });
       }
     }

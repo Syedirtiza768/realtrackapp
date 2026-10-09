@@ -1,5 +1,13 @@
 # Current State
 
+**2026-10-09 (Add Part photo-identity fix prepared for production)** — The
+reported Add Part record had a manually corrected windshield-wiper-linkage
+title while its part-type field still identified a door-control module. The
+fix saves an unidentified draft, waits for two saved photos, fails closed when
+photo evidence is inconclusive, and prevents later enrichment from overwriting
+photo-derived identity. New images can restart completed enrichment. Production
+deployment and health verification are being recorded below after rollout.
+
 **2026-10-09 (Fashion quick capture deployed to production)** — Main commit
 `b63261e8` is deployed as `realtrackapp-backend:main-b63261e` and
 `realtrackapp-frontend:main-b63261e`. Deployment used the clean

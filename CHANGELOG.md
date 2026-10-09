@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 2026-10-09 — Photo-verified Add Part enrichment
+
+- Add Part now saves an unidentified draft without performing an MPN-only
+  product lookup. Automatic identification starts after at least two saved
+  photos are available.
+- Photo-based identification fails closed when image evidence is inconclusive,
+  rather than substituting a seller listing selected by MPN.
+- Later enrichment preserves photo-derived title, part type, brand, and
+  description; a failed AI validation gate cannot write generated identity
+  fields. New photos can restart a completed enrichment run.
+- The inventory image-save endpoint is the only enrichment trigger for that
+  upload flow, avoiding duplicate jobs.
+
 ## 2026-10-09 — Fashion capture, Catalog handoff, and activity report
 
 - Added continuous WebP photo-slot capture with batch SKUs, optional warehouse and measurement chart data, and background Fashion image identification.
