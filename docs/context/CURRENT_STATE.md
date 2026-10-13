@@ -1,13 +1,16 @@
 # Current State
 
-**2026-10-13 (Fashion responsive capture release candidate)** — Live camera,
+**2026-10-13 (Fashion responsive capture deployed)** — Live camera,
 continuous photo capture with bounded background uploads/retries, automatic AVP
 numbers and size suffixes, opt-in measurements and idempotent create retries are
 implemented. Frontend/backend builds, 26 focused backend tests, synthetic-camera
 browser scenarios and real PostgreSQL concurrent reservations pass. The release
 uses a clean checkout based on main and preserves production's cumulative fixes
-through a targeted image overlay. Deployment results will be recorded in
-`docs/operations/FASHION_CAPTURE_RELEASE_2026-10-13.md` after rollout.
+through a targeted image overlay. Commit `45d396e4` is on main and deployed at
+`https://app.omnicoreholding.com/fashion/capture`. Public health and deployed
+browser scenarios pass; a live photo normalization/S3/proxy check also passed.
+See `docs/operations/FASHION_CAPTURE_RELEASE_2026-10-13.md` for images,
+verification limits and rollback instructions.
 
 **2026-10-09 (Add Part three-day photo review follow-up; snapshot through 12:21:20 UTC)** — Reviewed the active `/addpart` cohort imported from 2026-10-06 12:21:20 UTC through 2026-10-09 12:21:20 UTC: 136 listings, 88 with at least two photos, and 48 lacking the minimum photo evidence. None were published or had marketplace IDs. The photo gate required high-confidence identity, both label and overall-part coverage, and the supplied MPN in the model's visible-text extraction.
 

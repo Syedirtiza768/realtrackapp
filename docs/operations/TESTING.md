@@ -2,6 +2,11 @@
 
 ## Fashion capture reliability (2026-10-13)
 
+Production follow-up: the same browser suite passed against the deployed bundle.
+A separate actual Fashion upload/S3/proxy smoke passed, as did deployed UUID
+validation and a live database allocator check rolled back without retained
+counter changes. See [release evidence](FASHION_CAPTURE_RELEASE_2026-10-13.md).
+
 - Frontend and backend builds pass. The changed frontend files pass ESLint using
   a scoped TypeScript/React-hooks configuration. The root `npm run lint` remains
   blocked by the existing missing ESLint 9 configuration. Backend lint also has

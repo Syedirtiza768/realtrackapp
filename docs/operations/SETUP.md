@@ -1,5 +1,11 @@
 # Setup
 
+**Production Fashion release (2026-10-13):** use the retained release's exact
+Compose argument list and cumulative overrides for recreation/rollback; a bare
+build from the older server checkout can replace deployed hotfixes. See
+[Fashion capture rollout](FASHION_CAPTURE_RELEASE_2026-10-13.md). No application
+environment names, migrations or permissions were added.
+
 > **Source**: Consolidated from `docs/development/setup.md` and `docs/SETUP_AND_DEPLOYMENT.md` — 2026-05-29.
 > For environment variables reference, see [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md).
 > For deployment architecture, see [/docs/architecture/DEPLOYMENT.md](../architecture/DEPLOYMENT.md).
