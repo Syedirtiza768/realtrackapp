@@ -2,6 +2,9 @@
 
 ## Responsive camera and SKU update (2026-10-13)
 
+The **Save & next garment** action panel uses normal document positioning and
+scrolls with the form; it is not sticky or fixed over the photo controls.
+
 `FashionCamera.tsx` opens a live `getUserMedia` preview only on an operator action.
 It prefers the rear camera, supports switching, frame review/retake, and guides
 Front → Back → Tag before optional details. Denied, missing, busy, disconnected,

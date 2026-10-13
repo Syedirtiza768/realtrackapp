@@ -323,7 +323,7 @@ function FashionCapture({ sessionKey }: { sessionKey: string }) {
         </ul>
       </section>}
 
-      <div className="sticky bottom-0 z-10 order-6 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border dark:border-slate-700 dark:bg-slate-900/95">
+      <div className="order-6 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border dark:border-slate-700 dark:bg-slate-900/95">
         {error && <p role="alert" className="mb-2 text-sm text-red-600">{error}</p>}
         <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
           {retryPayload && !saving && <p className="w-full text-sm text-amber-700">Save confirmation was interrupted. Retry the same garment safely, or check <Link to="/fashion/intake" className="underline">Intake history</Link>.</p>}

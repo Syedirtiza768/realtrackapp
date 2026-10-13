@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-13 — Keep Fashion Save & Next in the page flow
+
+- Removed sticky positioning from Quick Capture's Save & next garment action.
+  The action panel scrolls with the form and does not cover the photo controls.
+
 ## 2026-10-13 — Responsive Fashion camera capture and automatic AVP SKUs
 
 - Quick Capture and Add Item now offer a live rear-camera preview, switching,
