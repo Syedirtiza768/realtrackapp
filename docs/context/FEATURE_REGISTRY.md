@@ -2,6 +2,8 @@
 
 **2026-10-13:** Fashion Quick Capture and Add Item now share a live camera with
 guided slots, local previews, bounded background uploads and retry recovery.
+The camera and review fill the app viewport, with compact overlaid controls and
+matching captured-photo framing on portrait, landscape and desktop screens.
 AVP SKUs allocate automatically and append the selected size; corrections keep
 the number and photos. Capture UUIDs make create retries idempotent. Measurement
 charts default off during quick intake. Automated Chromium camera and timeout

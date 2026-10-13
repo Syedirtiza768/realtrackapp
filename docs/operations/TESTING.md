@@ -7,6 +7,12 @@ A separate actual Fashion upload/S3/proxy smoke passed, as did deployed UUID
 validation and a live database allocator check rolled back without retained
 counter changes. See [release evidence](FASHION_CAPTURE_RELEASE_2026-10-13.md).
 
+Full screen camera follow-up: the browser suite also verifies exact viewport
+coverage for the dialog/video and visible controls at 390×844, 844×390 and
+1280×900; full-size review dimensions; captured JPEG aspect ratio matching the
+preview; and stream replacement/release when switching cameras. Main and
+cumulative production frontend builds and scoped camera lint pass.
+
 - Frontend and backend builds pass. The changed frontend files pass ESLint using
   a scoped TypeScript/React-hooks configuration. The root `npm run lint` remains
   blocked by the existing missing ESLint 9 configuration. Backend lint also has

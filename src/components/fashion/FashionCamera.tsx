@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, RefreshCw, SwitchCamera, X } from 'lucide-react';
+import { Camera, Check, Loader2, RefreshCw, SwitchCamera, X } from 'lucide-react';
 import { mediaDeadline } from '../../lib/fashionCaptureMedia';
 import { FASHION_PHOTO_SLOTS, type FashionPhotoRole } from '../../lib/fashionPhotoSlots';
 
@@ -106,11 +106,18 @@ export default function FashionCamera({ initialRole, counts, onCapture, onClose,
     setCapturing(true); setError('');
     const id = generation.current;
     try {
+      // Match the visible object-cover frame instead of saving unseen side areas.
+      const preview = video.getBoundingClientRect();
+      const aspect = preview.width / preview.height;
+      const sourceAspect = video.videoWidth / video.videoHeight;
+      const sourceWidth = sourceAspect > aspect ? video.videoHeight * aspect : video.videoWidth;
+      const sourceHeight = sourceAspect > aspect ? video.videoHeight : video.videoWidth / aspect;
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      canvas.width = Math.max(1, Math.round(sourceWidth));
+      canvas.height = Math.max(1, Math.round(sourceHeight));
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Your browser could not capture this frame. Use the device camera below.');
-      context.drawImage(video, 0, 0);
+      context.drawImage(video, (video.videoWidth - sourceWidth) / 2, (video.videoHeight - sourceHeight) / 2, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
       const blob = await mediaDeadline(new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92)), 8_000, 'Photo capture took too long. Please retry.');
       if (generation.current !== id) return;
       if (!blob) throw new Error('The photo could not be captured. Please retry.');
@@ -128,29 +135,35 @@ export default function FashionCamera({ initialRole, counts, onCapture, onClose,
     if (next) setRole(next.role);
   }
 
-  return createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-2 sm:p-6">
-    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="fashion-camera-title" className="flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-y-auto rounded-2xl bg-slate-950 p-3 text-white sm:p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div><h2 id="fashion-camera-title" className="text-lg font-semibold">Photograph garment</h2><p className="text-sm text-slate-300">{selected.label} · {selected.hint}</p></div>
-        <button ref={closeRef} type="button" onClick={onClose} aria-label="Close camera" className="rounded-full p-3 hover:bg-slate-800"><X size={22} /></button>
+  const totalPhotos = Object.values(counts).reduce((total, count) => total + count, 0);
+  const safeSides = { paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' };
+  return createPortal(<div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="fashion-camera-title" className="fixed inset-0 z-[100] isolate h-[100dvh] w-full overflow-hidden bg-black text-white">
+    <video ref={videoRef} autoPlay playsInline muted aria-label="Live camera preview" className={`absolute inset-0 h-full w-full touch-none object-cover ${shot ? 'invisible' : ''}`} />
+    {shot && <img src={shot.url} alt={`Review ${selected.label.toLowerCase()} photo`} className="absolute inset-0 h-full w-full bg-black object-contain" />}
+    {status === 'starting' && <p role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 p-6 text-center text-sm">Starting camera… Allow camera access when prompted.</p>}
+
+    <header className="absolute inset-x-0 top-0 z-10 grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-3 bg-gradient-to-b from-black/85 to-transparent pb-8" style={{ ...safeSides, paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+      <button ref={closeRef} type="button" onClick={onClose} aria-label="Close camera" className="flex min-h-11 items-center justify-center rounded-full bg-black/40 hover:bg-black/70"><X size={24} /></button>
+      <div className="min-w-0 pt-0.5 text-center"><h2 id="fashion-camera-title" className="text-base font-semibold">Photograph garment</h2><p className="mt-1 truncate text-xs text-white/85" title={selected.hint}>{selected.label} · {selected.hint}</p></div>
+      <button type="button" aria-label="Switch camera" disabled={!!shot || status === 'starting' || capturing} onClick={() => setFacing((value) => value === 'environment' ? 'user' : 'environment')} className="flex min-h-11 items-center justify-center rounded-full bg-black/40 hover:bg-black/70 disabled:opacity-40"><SwitchCamera size={24} /></button>
+    </header>
+
+    <div className="absolute inset-x-0 bottom-0 z-10 space-y-3 bg-gradient-to-t from-black/95 via-black/65 to-transparent pt-8 [@media(max-height:500px)]:space-y-2 [@media(max-height:500px)]:pt-3" style={{ ...safeSides, paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+      {error && <p role="alert" className="mx-auto max-h-[25dvh] max-w-xl overflow-y-auto rounded-lg bg-amber-950/95 p-3 text-sm text-amber-100">{error}</p>}
+      <div className="mx-auto flex max-w-md gap-1.5" aria-label="Photo slot">
+        {cameraSlots.map((slot) => <button key={slot.role} type="button" aria-label={`${slot.label} photo slot, ${counts[slot.role]} of ${slot.max}`} disabled={!!shot || counts[slot.role] >= slot.max} aria-pressed={role === slot.role} onClick={() => setRole(slot.role)} className={`flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-lg border px-1 py-1 text-xs disabled:opacity-50 ${role === slot.role ? 'border-pink-400 bg-pink-600' : 'border-white/30 bg-black/30'}`}>
+          <span className="flex items-center gap-1 font-semibold">{slot.role === 'tag' ? 'Label' : slot.role === 'additional' ? 'Details' : slot.label}{slot.min > 0 && counts[slot.role] >= slot.min && <Check size={12} aria-hidden="true" />}</span>
+          <span className="text-[10px] text-white/75">{counts[slot.role]}/{slot.max}</span>
+        </button>)}
       </div>
-      <div className="relative min-h-40 overflow-hidden rounded-xl bg-black">
-        <video ref={videoRef} autoPlay playsInline muted aria-label="Live camera preview" className={`max-h-[48dvh] w-full object-contain ${shot ? 'invisible' : ''}`} />
-        {shot && <img src={shot.url} alt={`Review ${selected.label.toLowerCase()} photo`} className="absolute inset-0 h-full w-full object-contain" />}
-        {status === 'starting' && <p role="status" className="absolute inset-0 flex items-center justify-center bg-black/70 p-5 text-center">Starting camera… Allow camera access when prompted.</p>}
-      </div>
-      {error && <p role="alert" className="mt-3 rounded-lg bg-amber-950 p-3 text-sm text-amber-100">{error}</p>}
-      <div className="my-3 flex flex-wrap gap-2" aria-label="Photo slot">
-        {cameraSlots.map((slot) => <button key={slot.role} type="button" disabled={!!shot || counts[slot.role] >= slot.max} aria-pressed={role === slot.role} onClick={() => setRole(slot.role)} className={`min-h-11 rounded-lg border px-3 text-sm disabled:opacity-40 ${role === slot.role ? 'border-pink-400 bg-pink-600' : 'border-slate-600'}`}>{slot.label} {counts[slot.role]}/{slot.max}</button>)}
-      </div>
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        {shot ? <><button type="button" className="min-h-12 rounded-xl border border-slate-500 px-6" onClick={clearShot}>Retake</button><button type="button" disabled={full} className="min-h-12 rounded-xl bg-pink-600 px-6 font-semibold disabled:opacity-40" onClick={keepShot}>Use photo & continue</button></>
-          : <><button type="button" aria-label="Switch camera" disabled={status === 'starting' || capturing} onClick={() => setFacing((value) => value === 'environment' ? 'user' : 'environment')} className="min-h-12 rounded-xl border border-slate-500 px-4 disabled:opacity-40"><SwitchCamera size={22} /></button>
-            {status === 'error' ? <button type="button" onClick={() => setAttempt((value) => value + 1)} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-pink-600 px-6 font-semibold"><RefreshCw size={18} /> Retry camera</button>
-              : <button type="button" disabled={status !== 'ready' || capturing || full} onClick={() => void capture()} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-pink-600 px-6 font-semibold disabled:opacity-40"><Camera size={20} /> {capturing ? 'Capturing…' : `Capture ${selected.label.toLowerCase()}`}</button>}</>}
-      </div>
-      <p role="status" className="mt-3 text-center text-xs text-slate-300">{full ? 'This slot is full. Choose another slot or close the camera.' : 'Photos upload in the background. You can keep taking photos.'}</p>
-      <button type="button" onClick={() => { onNativeCapture(role); onClose(); }} className="mt-3 min-h-11 text-sm underline">Use device camera instead</button>
+      {shot ? <div className="mx-auto flex max-w-md items-center justify-center gap-3 py-2"><button type="button" className="min-h-12 flex-1 rounded-xl border border-white/50 bg-black/30 px-4 font-semibold" onClick={clearShot}>Retake</button><button type="button" disabled={full} className="min-h-12 flex-[2] rounded-xl bg-pink-600 px-4 font-semibold disabled:opacity-40" onClick={keepShot}>Use photo & continue</button></div>
+        : <div className="mx-auto grid max-w-md grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <button type="button" aria-label="Use device camera instead" onClick={() => { onNativeCapture(role); onClose(); }} className="min-h-11 justify-self-start rounded-lg px-2 text-left text-xs text-white/85 underline">Device camera</button>
+          {status === 'error' ? <button type="button" onClick={() => setAttempt((value) => value + 1)} className="inline-flex min-h-14 items-center gap-2 rounded-xl bg-pink-600 px-4 font-semibold"><RefreshCw size={18} /> Retry camera</button>
+            : <button type="button" aria-label={capturing ? 'Capturing photo' : `Capture ${selected.label.toLowerCase()}`} disabled={status !== 'ready' || capturing || full} onClick={() => void capture()} className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-white/20 p-1 disabled:opacity-40 [@media(max-height:500px)]:h-14 [@media(max-height:500px)]:w-14"><span className="flex h-full w-full items-center justify-center rounded-full bg-white text-slate-950">{capturing ? <Loader2 className="animate-spin" size={26} /> : <Camera size={26} />}</span></button>}
+          <span className="justify-self-end text-right text-xs text-white/85">{totalPhotos} photo{totalPhotos === 1 ? '' : 's'}</span>
+        </div>}
+      <p role="status" className="text-center text-xs text-white/75">{full ? 'Slot full. Choose another slot or close the camera.' : shot ? 'Check the whole photo, then continue.' : 'Uploads continue while you photograph.'}</p>
     </div>
   </div>, document.body);
 }

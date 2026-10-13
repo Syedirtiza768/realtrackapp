@@ -55,6 +55,19 @@ async function shot(page, label) {
   await page.getByRole('button', { name: `Capture ${label}`, exact: true }).click();
   await page.getByRole('button', { name: 'Use photo & continue' }).click();
 }
+async function assertFullScreenCamera(page) {
+  const layout = await page.getByRole('dialog', { name: 'Photograph garment', exact: true }).evaluate((dialog) => {
+    const bounds = (element) => { const rect = element.getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }; };
+    return { viewport: { x: 0, y: 0, width: innerWidth, height: innerHeight }, dialog: bounds(dialog), video: bounds(dialog.querySelector('video')), scrollHeight: dialog.scrollHeight, height: dialog.clientHeight,
+      controls: [...dialog.querySelectorAll('button')].map((button) => ({ label: button.getAttribute('aria-label') || button.innerText, ...bounds(button) })) };
+  });
+  assert.deepEqual(layout.dialog, layout.viewport, 'Camera dialog must fill the viewport');
+  assert.deepEqual(layout.video, layout.viewport, 'Live preview must fill the viewport');
+  assert.equal(layout.scrollHeight, layout.height, 'Camera controls must fit without scrolling');
+  for (const control of layout.controls) {
+    assert(control.x >= 0 && control.y >= 0 && control.x + control.width <= layout.viewport.width + 1 && control.y + control.height <= layout.viewport.height + 1, `Control outside the camera viewport: ${control.label}`);
+  }
+}
 async function waitUntil(fn, message) {
   for (let attempt = 0; attempt < 100; attempt++) { if (fn()) return; await new Promise((resolve) => setTimeout(resolve, 50)); }
   throw new Error(message);
@@ -69,7 +82,22 @@ try {
   await page.getByRole('button', { name: 'M', exact: true }).click();
   assert.equal(await page.getByLabel('Generated SKU').innerText(), `${baseSku}-M`);
   await page.getByRole('button', { name: 'Open camera', exact: true }).click();
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await assertFullScreenCamera(page);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => document.querySelector('video')?.srcObject?.active, undefined, { polling: 50 });
+  const previousStreamId = await page.evaluate(() => document.querySelector('video').srcObject.id);
+  await page.getByRole('button', { name: 'Switch camera', exact: true }).click();
   await page.getByRole('button', { name: 'Capture front', exact: true }).click();
+  assert.notEqual(await page.evaluate(() => document.querySelector('video').srcObject.id), previousStreamId, 'Switching must replace the stream');
+  assert.equal(await page.evaluate(() => window.__streams.filter((stream) => stream.id !== document.querySelector('video').srcObject.id).every((stream) => stream.getTracks().every((track) => track.readyState === 'ended'))), true, 'Switching must release prior streams');
+  const review = page.getByRole('img', { name: 'Review front photo', exact: true });
+  const reviewSize = await review.evaluate(async (image) => { await image.decode(); return { ratio: image.naturalWidth / image.naturalHeight, expected: innerWidth / innerHeight, width: image.getBoundingClientRect().width, height: image.getBoundingClientRect().height, viewportWidth: innerWidth, viewportHeight: innerHeight }; });
+  assert(Math.abs(reviewSize.ratio - reviewSize.expected) < 0.005, 'Saved frame must match the preview aspect ratio');
+  assert.equal(reviewSize.width, reviewSize.viewportWidth); assert.equal(reviewSize.height, reviewSize.viewportHeight);
+  if (process.env.FASHION_CAMERA_SCREENSHOT) await page.screenshot({ path: process.env.FASHION_CAMERA_SCREENSHOT });
   await page.getByRole('button', { name: 'Retake', exact: true }).click();
   assert.equal(state.uploads.length, 0, 'Retake must not upload discarded frames');
   await shot(page, 'front'); await shot(page, 'back'); await shot(page, 'tag & labels');
@@ -96,6 +124,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Mobile layout must fit');
   await page.screenshot({ path: process.env.FASHION_CAPTURE_SCREENSHOT || 'fashion-capture-mobile.png', fullPage: true });
   console.log('PASS continuous camera, retake, bounded uploads, size correction, photo roles, next garment, mobile layout');
+  console.log('PASS full viewport camera on portrait/landscape/desktop, visible controls, switching and matching review frame');
 
   await page.getByRole('button', { name: 'S', exact: true }).click();
   state.failUpload = true;

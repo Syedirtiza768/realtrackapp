@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-13 — Full screen Fashion camera
+
+- Camera preview now fills the app viewport on phones and desktop, with safe-area
+  padding, compact step controls and a large shutter button over the image.
+- Review and retake use the full viewport. Saved photos match the visible preview
+  framing, while uploads continue in the background.
+- The Save & next garment panel remains in normal form flow after closing the camera.
+
 ## 2026-10-13 — Keep Fashion Save & Next in the page flow
 
 - Removed sticky positioning from Quick Capture's Save & next garment action.

@@ -2,8 +2,9 @@
 
 ## Fashion capture components (2026-10-13)
 
-- `FashionCamera.tsx`: accessible live-camera dialog, rear/front selection,
-  retake/accept flow, photo-slot guidance, permission/deadline recovery and stream cleanup.
+- `FashionCamera.tsx`: accessible full viewport live-camera dialog, rear/front
+  selection, overlaid safe-area controls, preview-matched capture crop, full-size
+  retake/accept review, photo-slot guidance, permission/deadline recovery and stream cleanup.
 - `useFashionPhotoQueue.ts`: immediate local previews, two concurrent uploads,
   per-slot ordering, preserved failed Files and explicit retry/removal.
 - `FashionPhotoSet.tsx`: shared camera/upload slots, pending state and banner work

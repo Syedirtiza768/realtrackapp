@@ -5,6 +5,16 @@
 The **Save & next garment** action panel uses normal document positioning and
 scrolls with the form; it is not sticky or fixed over the photo controls.
 
+The camera is a full viewport (`100dvh`) dialog on mobile and desktop, with an
+edge-to-edge `object-cover` live preview. Close/switch controls overlay the top;
+compact photo steps, a large shutter and device-camera fallback overlay the
+bottom with safe-area padding. Short landscape viewports use compact spacing.
+Canvas capture applies the same centered crop as the live preview, so saved
+photos match what the operator framed. Full viewport review uses `object-contain`
+to preserve the complete captured image if the device rotates before acceptance.
+This fills the app/browser viewport; it does not request browser-native fullscreen
+or hide browser chrome. Camera lifecycle and background upload behavior are unchanged.
+
 `FashionCamera.tsx` opens a live `getUserMedia` preview only on an operator action.
 It prefers the rear camera, supports switching, frame review/retake, and guides
 Front → Back → Tag before optional details. Denied, missing, busy, disconnected,
