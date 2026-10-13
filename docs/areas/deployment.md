@@ -3,8 +3,10 @@
 **Last reviewed:** 2026-10-13
 
 Current Fashion camera/SKU release: the backend runs
-`fashion-camera-sku-20261013-45d396e4`; the frontend runs
-`fashion-save-flow-20261013-611f1018` with a non-sticky Save & Next action panel.
+`add-part-recovery-20261013-r1`; the frontend runs
+`fashion-fullscreen-camera-20261013-a84fa885` with a full viewport camera and
+a non-sticky Save & Next action panel. The frontend-only rollout preserved the
+backend container.
 Both retain the prior cumulative hotfixes.
 The release directory contains the exact Compose argument list and rollback
 images; use those instead of recreating from only the base files. See

@@ -12,6 +12,8 @@ coverage for the dialog/video and visible controls at 390×844, 844×390 and
 1280×900; full-size review dimensions; captured JPEG aspect ratio matching the
 preview; and stream replacement/release when switching cameras. Main and
 cumulative production frontend builds and scoped camera lint pass.
+These scenarios also pass against the deployed full screen camera bundle
+`a84fa885`; the backend container was unchanged and public health remained healthy.
 
 - Frontend and backend builds pass. The changed frontend files pass ESLint using
   a scoped TypeScript/React-hooks configuration. The root `npm run lint` remains

@@ -2,7 +2,22 @@
 
 # Deployment Architecture
 
-## Fashion responsive capture deployment (2026-10-13)
+## Fashion full screen camera deployment (2026-10-13)
+
+The frontend runs `fashion-fullscreen-camera-20261013-a84fa885`. The backend
+observed during this frontend-only rollout was `add-part-recovery-20261013-r1`
+and was not recreated. Health and deployed browser scenarios pass, including
+portrait, landscape and desktop camera/review coverage and non-sticky Save & Next.
+For current recreation/rollback, use the saved Compose arguments under
+`/home/ubuntu/realtrackapp-fashion-fullscreen-camera-20261013-a84fa885/`; they
+preserve both services' current cumulative overrides. See
+[release evidence](../operations/FASHION_CAPTURE_RELEASE_2026-10-13.md).
+
+## Initial Fashion responsive capture rollout (2026-10-13; historical snapshot)
+
+The following original image/override record is superseded by the full screen
+frontend and subsequent backend hotfixes above; use the latest release's saved
+arguments for recreation.
 
 Production backend runs `fashion-camera-sku-20261013-45d396e4`; the frontend now
 runs `fashion-save-flow-20261013-611f1018` after the frontend-only Save & Next

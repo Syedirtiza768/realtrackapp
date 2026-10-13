@@ -11,6 +11,11 @@ through a targeted image overlay. Commit `45d396e4` is on main and deployed at
 browser scenarios pass; a live photo normalization/S3/proxy check also passed.
 Follow-up `611f1018` removes sticky Save & Next positioning; the frontend-only
 deployment passes mobile and desktop scrolling checks, with the backend unchanged.
+Follow-up `a84fa885` deploys the full viewport camera and preview-matched captures.
+Local/deployed synthetic-camera checks pass at mobile portrait/landscape and
+desktop sizes; retake, switching, upload/save recovery and normal-flow Save & Next
+also pass. The rollout preserved the then-current `add-part-recovery-20261013-r1`
+backend container; all production health checks pass.
 See `docs/operations/FASHION_CAPTURE_RELEASE_2026-10-13.md` for images,
 verification limits and rollback instructions.
 

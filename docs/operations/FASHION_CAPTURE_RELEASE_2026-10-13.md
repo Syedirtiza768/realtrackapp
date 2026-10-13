@@ -1,5 +1,43 @@
 # Fashion camera and automatic SKU release — 2026-10-13
 
+## Follow-up: full screen camera (2026-10-13, 11:16 UTC / 16:16 Pakistan time)
+
+Commit `a84fa885` is on main and deployed as
+`realtrackapp-frontend:fashion-fullscreen-camera-20261013-a84fa885`, image
+`sha256:d64a2ab790f17838c5e0e9f70e341cc2e9fe9107f4ed5675776e160cce9a1a8e`.
+The camera uses the full app viewport with overlaid controls and a matching
+centered capture crop. Review/retake also fill the viewport. The browser's own
+chrome is unchanged, and Save & Next remains in normal form flow.
+
+Main and cumulative production frontend builds and scoped camera lint passed.
+The complete synthetic-camera browser suite passed locally and against production,
+including exact camera/video viewport coverage, all controls visible without
+scrolling at 390×844, 844×390 and 1280×900, review dimensions, captured aspect
+ratio, switching/releasing streams, continuous capture, retake, uploads, save
+retry and timeout recovery. Separate deployed mobile/desktop checks confirm the
+Save & Next panel is still static. Physical iOS/Android camera testing remains manual.
+
+Only the frontend container was recreated. The current backend at rollout was
+`realtrackapp-backend:add-part-recovery-20261013-r1`, and its container ID was
+verified unchanged. The saved Compose list merges both currently running
+services' overrides, preserving newer backend hotfixes. Public health returned
+`ok`; backend, PostgreSQL, Redis and PgBouncer are healthy. The new JS
+`/assets/index-BNFV9A6R.js` and CSS `/assets/index-kxJyMCbP.css` return HTTP 200.
+
+The initial immediate HTTP check received a transient 502 while Nginx was starting
+and automatically restored the preceding frontend image. The retry added a
+bounded 20-second readiness check and then completed successfully. Backend
+containers and data were preserved through both attempts.
+
+The current release directory is
+`/home/ubuntu/realtrackapp-fashion-fullscreen-camera-20261013-a84fa885/`, containing
+assets, `frontend-source.tgz`, Dockerfile, saved `compose-args.json`, `rollback.yml`
+and `verification.json`. Use this latest saved argument list to recreate the
+current release. For frontend-only rollback, replace its final override path
+with `rollback.yml` and run `up -d --no-deps frontend`. The retained preceding
+image is `realtrackapp-frontend:rollback-fullscreen-camera-20261013`.
+The older rollout records below are retained as historical context.
+
 ## Follow-up: normal-flow Save & Next (2026-10-13)
 
 Commit `611f1018` removes sticky positioning from the capture action panel.
@@ -19,7 +57,7 @@ Use its saved arguments for current recreation. To roll back just this follow-up
 replace the final override path with its `rollback.yml` and run
 `up -d --no-deps frontend`; the retained image is
 `realtrackapp-frontend:rollback-save-flow-20261013`. The original rollout below is
-preserved as historical context; its backend image remains current.
+preserved as historical context; its backend image remained current at that rollout.
 
 ## Release
 
