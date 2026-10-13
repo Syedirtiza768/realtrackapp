@@ -2,6 +2,19 @@
 
 # Deployment Architecture
 
+## Fashion responsive capture deployment (2026-10-13)
+
+Production frontend and backend run `fashion-camera-sku-20261013-45d396e4` image
+tags. The backend layers four Fashion compiled modules onto the prior production
+image; the frontend rebuild retains cumulative production source fixes. Existing
+environment values and database/cache services are preserved. No migrations ran.
+The release is retained at
+`/home/ubuntu/realtrackapp-fashion-camera-sku-20261013-45d396e4/`; reuse its saved
+Compose arguments and overrides when recreating services. Prior images remain
+under `rollback-fashion-camera-20261013` tags. Health, deployed browser scenarios,
+the live allocator (rolled back) and real S3/photo serving checks passed. See
+[release and rollback details](../operations/FASHION_CAPTURE_RELEASE_2026-10-13.md).
+
 ## Topology
 
 Four Docker Compose services (`docker-compose.yml`):
