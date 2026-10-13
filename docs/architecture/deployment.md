@@ -4,8 +4,11 @@
 
 ## Fashion responsive capture deployment (2026-10-13)
 
-Production frontend and backend run `fashion-camera-sku-20261013-45d396e4` image
-tags. The backend layers four Fashion compiled modules onto the prior production
+Production backend runs `fashion-camera-sku-20261013-45d396e4`; the frontend now
+runs `fashion-save-flow-20261013-611f1018` after the frontend-only Save & Next
+positioning correction. Its retained release directory is
+`/home/ubuntu/realtrackapp-fashion-save-flow-20261013-611f1018/`.
+The backend layers four Fashion compiled modules onto the prior production
 image; the frontend rebuild retains cumulative production source fixes. Existing
 environment values and database/cache services are preserved. No migrations ran.
 The release is retained at

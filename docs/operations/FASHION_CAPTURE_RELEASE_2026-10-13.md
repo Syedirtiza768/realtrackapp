@@ -1,5 +1,26 @@
 # Fashion camera and automatic SKU release — 2026-10-13
 
+## Follow-up: normal-flow Save & Next (2026-10-13)
+
+Commit `611f1018` removes sticky positioning from the capture action panel.
+It was pushed to main and deployed as
+`realtrackapp-frontend:fashion-save-flow-20261013-611f1018` (image
+`sha256:b1969141cd0ba3afb49640b47000e322ff1d398432363702ffa528e838fdea32`).
+The frontend alone was recreated; the backend container ID was verified unchanged.
+Both main and cumulative production frontend builds passed. Browser checks against
+the local build and deployed bundle at 390px and 1280px verify static positioning,
+normal scrolling and no horizontal overflow. Public health is healthy; the new
+asset `/assets/index-A74EIELL.js` returns HTTP 200.
+
+The follow-up directory is
+`/home/ubuntu/realtrackapp-fashion-save-flow-20261013-611f1018/`, including assets,
+`frontend-source.tgz`, Dockerfile, `compose-args.json` and `rollback.yml`.
+Use its saved arguments for current recreation. To roll back just this follow-up,
+replace the final override path with its `rollback.yml` and run
+`up -d --no-deps frontend`; the retained image is
+`realtrackapp-frontend:rollback-save-flow-20261013`. The original rollout below is
+preserved as historical context; its backend image remains current.
+
 ## Release
 
 - Source commit: `45d396e41e97e93ffa9baef563c38c02f0f3f7c0`, pushed normally to `main`.

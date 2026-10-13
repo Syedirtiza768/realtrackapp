@@ -9,6 +9,8 @@ uses a clean checkout based on main and preserves production's cumulative fixes
 through a targeted image overlay. Commit `45d396e4` is on main and deployed at
 `https://app.omnicoreholding.com/fashion/capture`. Public health and deployed
 browser scenarios pass; a live photo normalization/S3/proxy check also passed.
+Follow-up `611f1018` removes sticky Save & Next positioning; the frontend-only
+deployment passes mobile and desktop scrolling checks, with the backend unchanged.
 See `docs/operations/FASHION_CAPTURE_RELEASE_2026-10-13.md` for images,
 verification limits and rollback instructions.
 
