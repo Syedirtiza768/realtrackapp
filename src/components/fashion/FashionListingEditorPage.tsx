@@ -13,6 +13,7 @@ import {
   listFashionAccounts,
   requestFashionIdentification,
   saveFashionListing,
+  nextFashionSku,
   searchFashionCategories,
   type FashionAccount,
   type FashionAttributes,
@@ -25,6 +26,8 @@ import { FASHION_FAMILIES, FASHION_FIELD_GROUPS, fashionFieldsForFamily, isFashi
 import { sanitizeHtml } from '../../lib/sanitize';
 import { toProxyUrl } from '../../lib/imageUrl';
 import FashionPhotoSet from './FashionPhotoSet';
+import type { PhotoUploadState } from './useFashionPhotoQueue';
+import { fashionSkuWithSize } from '../../lib/fashionCaptureMedia';
 import FashionMeasurementChart, { useFashionMeasurementTemplates, type FashionMeasurementState } from './FashionMeasurementChart';
 import { fashionImagesFromSlots, fashionSlotsFromImages, missingFashionPhotoSlots, type FashionPhotoSlots } from '../../lib/fashionPhotoSlots';
 
@@ -65,7 +68,8 @@ function isTrue(value: unknown) {
 
 export default function FashionListingEditorPage() {
   const { id } = useParams<{ id: string }>();
-  return <FashionListingEditor key={id ?? 'new'} listingId={id} />;
+  const { activeOrganizationId, user } = useAuth();
+  return <FashionListingEditor key={`${id ?? 'new'}:${user?.id}:${activeOrganizationId}`} listingId={id} />;
 }
 
 function FashionListingEditor({ listingId }: { listingId?: string }) {
@@ -73,6 +77,15 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
   const { permissions, activeOrganizationId } = useAuth();
   const [listing, setListing] = useState<FashionListing>();
   const [form, setForm] = useState<Form>(empty);
+  const [autoSkuBase, setAutoSkuBase] = useState('');
+  const [skuBusy, setSkuBusy] = useState(false);
+  const [skuError, setSkuError] = useState('');
+  const [skuAttempt, setSkuAttempt] = useState(0);
+  const [uploads, setUploads] = useState<PhotoUploadState>({ pending: 0, failed: 0 });
+  const [chartBusy, setChartBusy] = useState(false);
+  const captureId = useRef(crypto.randomUUID());
+  const saveLock = useRef(false);
+  const [retryDraft, setRetryDraft] = useState<FashionDraft>();
   const [saved, setSaved] = useState(JSON.stringify(empty));
   const [loading, setLoading] = useState(!!listingId);
   const [saving, setSaving] = useState(false);
@@ -112,6 +125,22 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
   const photoRoles = form.verticalAttributes._photoRoles;
   const slots = useMemo(() => fashionSlotsFromImages(form.images, photoRoles), [form.images, photoRoles]);
   const missingSlots = missingFashionPhotoSlots(slots);
+  useEffect(() => {
+    if (listingId || !canEdit) return;
+    const controller = new AbortController();
+    setSkuBusy(true); setSkuError('');
+    nextFashionSku('AVP', undefined, activeOrganizationId, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) { setAutoSkuBase(result.sku); setForm((previous) => ({ ...previous, sku: previous.sku || result.sku })); } })
+      .catch((err) => { if (!controller.signal.aborted) setSkuError(fashionError(err)); })
+      .finally(() => { if (!controller.signal.aborted) setSkuBusy(false); });
+    return () => controller.abort();
+  }, [listingId, canEdit, activeOrganizationId, skuAttempt]);
+  const labelSize = fashionAttributeText(form.verticalAttributes.size);
+  useEffect(() => {
+    if (listingId || !autoSkuBase) return;
+    setForm((previous) => previous.sku === autoSkuBase || previous.sku.startsWith(`${autoSkuBase}-`)
+      ? { ...previous, sku: fashionSkuWithSize(autoSkuBase, labelSize) } : previous);
+  }, [autoSkuBase, labelSize, listingId]);
   const measurement: FashionMeasurementState = useMemo(() => {
     const templateId = fashionAttributeText(form.verticalAttributes.sizeChartTemplate);
     const unitText = fashionAttributeText(form.verticalAttributes.measurementsUnit).toLowerCase();
@@ -312,9 +341,12 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     finally { setGenerating(false); }
   }
   async function save(event: FormEvent) {
-    event.preventDefault(); if (!canEdit || saving) return;
+    event.preventDefault(); if (!canEdit || saveLock.current) return;
     setError(''); setMessage('');
+    if (uploads.pending || uploads.failed) { setError('Wait for photo uploads to finish, and retry or remove failed uploads before saving.'); return; }
+    if (chartBusy) { setError('Wait for the measurement chart to finish before saving.'); return; }
     if (!form.sku.trim() || !form.title.trim()) { setError('SKU and title cannot be blank.'); return; }
+    if (!listingId && autoSkuBase && form.sku.startsWith(autoSkuBase) && !labelSize.trim()) { setError('Choose the label size to complete the automatic SKU. Use OS for one size.'); return; }
     if (form.price !== '' && (!Number.isFinite(Number(form.price)) || Number(form.price) < 0)) { setError('Price must be a non-negative number.'); return; }
     if (!/^\d+$/.test(form.quantity) || !Number.isSafeInteger(Number(form.quantity))) { setError('Quantity must be a non-negative whole number.'); return; }
     if (form.images.some((url) => !isFashionImageUrl(url))) { setError('Every image must use a valid HTTP or HTTPS URL.'); return; }
@@ -325,6 +357,7 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     if (form.brand.trim()) filledKeys.push('brand');
     const savedConfirmed = [...new Set([...confirmedKeys, ...filledKeys])];
     const payload: FashionDraft = {
+      ...(!listingId ? { captureId: captureId.current } : {}),
       sku: form.sku.trim(),
       title: form.title.trim(),
       description: form.description,
@@ -345,9 +378,11 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
         _descriptionConfirmed: descriptionConfirmed || Boolean(form.description.trim()),
       },
     };
-    setSaving(true);
+    saveLock.current = true; setSaving(true);
     try {
-      const result = await saveFashionListing(payload, listingId, activeOrganizationId);
+      if (!listingId) setRetryDraft(retryDraft ?? payload);
+      const result = await saveFashionListing(retryDraft ?? payload, listingId, activeOrganizationId);
+      setRetryDraft(undefined);
       const next = toForm(result);
       setListing(result); setForm(next); setSaved(JSON.stringify(next));
       setMessage('Saved. This Fashion item can be reopened and edited. Authenticity review is required before publishing.');
@@ -355,10 +390,14 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
       setConfirmedKeys(savedConfirmed);
       setSuggestedKeys(suggestedKeys.filter((key) => !savedConfirmed.includes(key)));
       setTitleConfirmed(Boolean(form.title.trim()));
-    } catch (err) { setError(fashionError(err)); }
-    finally { setSaving(false); }
+    } catch (err) {
+      setError(fashionError(err));
+      const status = (err as { status?: number }).status;
+      if (status && status >= 400 && status < 500) setRetryDraft(undefined);
+    }
+    finally { saveLock.current = false; setSaving(false); }
   }
-  function leave(event: React.MouseEvent<HTMLAnchorElement>) { if (dirty && !window.confirm('Discard unsaved Fashion item changes?')) event.preventDefault(); }
+  function leave(event: React.MouseEvent<HTMLAnchorElement>) { if ((dirty || uploads.pending || uploads.failed) && !window.confirm('Discard unsaved Fashion item changes?')) event.preventDefault(); }
   if (!canView || (!listingId && !canEdit)) return <p role="alert">You do not have permission to open this Fashion editor.</p>;
   if (loading) return <p role="status">Loading Fashion item…</p>;
   if (loadError) return <div role="alert" className={panel}><p>{loadError}</p><button type="button" onClick={() => setReload((value) => value + 1)}>Retry loading</button><Link to="/fashion/catalog">Back to catalog</Link></div>;
@@ -375,7 +414,12 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     {!canEdit && !locked && <p className="text-sm text-slate-500">Read-only access. Your role cannot save this item.</p>}
     {identifying && <p role="status" className="rounded-lg bg-sky-50 p-4 text-sm text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">Identifying this item from its photos in the background ({analysisStatus}). This page refreshes when suggestions are ready. You can keep editing; confirmed values are never overwritten.</p>}
     {analysisStatus === 'failed' && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Background identification did not complete. Retry it or continue manually.</p>}
-    <FashionPhotoSet slots={slots} editable={canEdit && !saving} organizationId={activeOrganizationId} sku={form.sku} onChange={changeSlots} />
+    {!listingId && <p className="text-sm text-slate-500">Automatic AVP SKU; selecting the label size updates its suffix. For continuous intake, <Link className="text-pink-700 underline" to="/fashion/capture" onClick={leave}>open Quick capture</Link>.</p>}
+    {!listingId && <section className={panel} aria-label="Automatic SKU size"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">Label size</h2><output className="font-mono text-sm text-pink-700">{form.sku || 'Preparing SKU…'}</output></div><div className="flex gap-2">{['S', 'M', 'L'].map((size) => <button key={size} type="button" disabled={saving || !!retryDraft} aria-pressed={labelSize === size} onClick={() => setAttribute('size', size)} className={`min-h-11 flex-1 rounded-lg border px-4 font-semibold ${labelSize === size ? 'border-pink-600 bg-pink-600 text-white' : 'border-slate-300'}`}>{size}</button>)}</div><label className="block text-sm">Label size for SKU<input className={`${input} max-w-40`} disabled={saving || !!retryDraft} maxLength={8} value={labelSize} onChange={(event) => setAttribute('size', event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())} placeholder="XS, XL, OS, 32…" /></label></section>}
+    {skuBusy && <p role="status" className="text-sm text-slate-500">Preparing automatic SKU… You can start taking photos.</p>}
+    {skuError && <p role="alert" className="text-sm text-red-600">{skuError} <button type="button" onClick={() => setSkuAttempt((value) => value + 1)} className="min-h-11 underline">Retry automatic SKU</button></p>}
+    {retryDraft && !saving && <p role="alert" className="text-sm text-amber-700">Save confirmation was interrupted. Retry saving this item; its photos and details are preserved.</p>}
+    <FashionPhotoSet slots={slots} editable={canEdit && !saving && !retryDraft} organizationId={activeOrganizationId} sku={autoSkuBase || form.sku} onChange={changeSlots} onUploadStateChange={setUploads} />
     {missingSlots.length > 0 && form.images.length > 0 && <p className="text-sm text-amber-800 dark:text-amber-200">Recommended before publishing: add {missingSlots.join(', ')} photo{missingSlots.length === 1 ? '' : 's'}.</p>}
     {canEdit && <div className="flex flex-wrap gap-3">
       <button type="button" disabled={analyzing || saving || !form.images.length} onClick={() => void analyzePhotos()} className="rounded-lg bg-pink-600 px-5 py-2 font-semibold text-white disabled:opacity-40">{analyzing ? 'Analyzing photos…' : 'Identify from photos'}</button>
@@ -386,7 +430,7 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     {warnings.map((warning) => <p key={warning} className="text-sm text-amber-800 dark:text-amber-200">{warning}</p>)}
     {conflicts.length > 0 && <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/30"><p className="font-semibold">Review conflicting suggestions</p><ul className="mt-2 list-disc pl-5">{conflicts.map((item) => <li key={item.key}>{item.key}: kept “{item.current}”; analysis suggested “{item.suggested}”.</li>)}</ul></div>}
     <form onSubmit={save} className="space-y-5">
-      <fieldset disabled={!canEdit || saving} className="space-y-5">
+      <fieldset disabled={!canEdit || saving || !!retryDraft} className="space-y-5">
         <section className={panel}><h2 className="text-lg font-semibold">Item details</h2><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm">SKU *<input className={input} required maxLength={160} readOnly={!!listingId} value={form.sku} onChange={(e) => change('sku', e.target.value)} />{listingId && <span className="text-xs text-slate-500">SKU is immutable after creation.</span>}</label><label className="text-sm">Brand<input className={input} value={form.brand} onChange={(e) => change('brand', e.target.value)} />{suggestedKeys.includes('brand') && <span className="text-xs text-pink-700">Suggested from photos</span>}</label><label className="text-sm sm:col-span-2">Title *<input className={input} required maxLength={200} value={form.title} onChange={(e) => change('title', e.target.value)} /><span className="text-xs text-slate-500">{form.title.length}/200 draft characters. eBay titles allow 80; validation checks publishing readiness.</span></label><label className="text-sm">Price<input className={input} type="number" min="0" step="any" value={form.price} onChange={(e) => change('price', e.target.value)} placeholder="Not set" /></label><label className="text-sm">Quantity *<input className={input} type="number" min="0" step="1" required value={form.quantity} onChange={(e) => change('quantity', e.target.value)} /></label><label className="text-sm sm:col-span-2">Description<textarea className={input} rows={7} value={form.description} onChange={(e) => change('description', e.target.value)} /><span className="text-xs text-slate-500">Use confirmed Fashion details. Reported defects should remain visible. Preview sanitizes HTML.</span></label></div><button type="button" disabled={generating} onClick={() => void generateContent()} className="rounded-lg border px-4 py-2 text-sm">{generating ? 'Generating…' : 'Generate listing text from confirmed details'}</button></section>
         <section className={panel}><h2 className="text-lg font-semibold">Fashion category and condition</h2>
           <p className="text-xs text-slate-500">Category suggestions use the first active Fashion marketplace available to your account. Choose publishing stores and policies from Catalog.</p>
@@ -404,7 +448,7 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
           {FASHION_FIELD_GROUPS.map((group) => {
             const fields = group.fields.filter((field) => field.families.includes(family));
             if (!fields.length) return null;
-            const chart = group.id === 'measurements' ? <div className="space-y-2">{templatesError && <p role="alert" className="text-sm text-red-600">Measurement charts unavailable: {templatesError}</p>}<FashionMeasurementChart templates={measurementTemplates} family={family} state={measurement} onChange={changeMeasurements} editable={canEdit && !saving} organizationId={activeOrganizationId} brandName={form.brand || undefined} sku={form.sku} hasChartImage={slots.sizeChart.length > 0} onChartImage={(url) => changeSlots({ ...slots, sizeChart: [url] })} /></div> : null;
+            const chart = group.id === 'measurements' ? <div className="space-y-2">{templatesError && <p role="alert" className="text-sm text-red-600">Measurement charts unavailable: {templatesError}</p>}<FashionMeasurementChart templates={measurementTemplates} onBusyChange={setChartBusy} family={family} state={measurement} onChange={changeMeasurements} editable={canEdit && !saving} organizationId={activeOrganizationId} brandName={form.brand || undefined} sku={form.sku} hasChartImage={slots.sizeChart.length > 0} onChartImage={(url) => changeSlots({ ...slots, sizeChart: [url] })} /></div> : null;
             return <div key={group.id} className="space-y-3"><h3 className="font-semibold">{group.label}</h3>{chart}<div className="grid gap-4 sm:grid-cols-2">{fields.map((field) => <label className={`text-sm ${field.input === 'textarea' ? 'sm:col-span-2' : ''}`} key={field.key}>{field.label}{suggestedKeys.includes(field.key) ? <span className="ml-2 text-xs font-normal text-pink-700">Suggested</span> : null}{field.input === 'textarea' ? <textarea className={input} rows={3} value={fashionAttributeText(form.verticalAttributes[field.key])} onChange={(e) => setAttribute(field.key, e.target.value)} /> : <input className={input} value={fashionAttributeText(form.verticalAttributes[field.key])} onChange={(e) => setAttribute(field.key, e.target.value)} />}{field.help ? <span className="text-xs text-slate-500">{field.help}</span> : null}</label>)}</div></div>;
           })}
           {!!metadata?.aspects.length && <div className="space-y-3 border-t pt-4"><h3 className="font-semibold">eBay item specifics</h3><p className="text-xs text-slate-500">Required specifics are marked *. For multiple values, separate entries with |.</p><div className="grid gap-4 sm:grid-cols-2">{metadata.aspects.map((aspect, index) => {
@@ -417,7 +461,7 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
         </section>
       </fieldset>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
-      <div className="flex flex-wrap items-center gap-4">{canEdit && <button type="submit" disabled={saving || analyzing || (!!listingId && !dirty)} className="rounded-lg bg-pink-600 px-5 py-2 font-semibold text-white disabled:opacity-40">{saving ? 'Saving…' : listingId ? 'Save changes' : 'Save item'}</button>}<Link to="/fashion/catalog" onClick={leave} className="text-sm">Back to catalog</Link>{permissions.includes('fashion.review') && listing && <Link to="/fashion/review" onClick={leave} className="text-sm text-pink-600">Open authenticity review</Link>}<span className="text-xs text-slate-500">Saving changes resets approval and requires review. Identification is optional.</span></div>
+      <div className="flex flex-wrap items-center gap-4">{canEdit && <button type="submit" disabled={saving || analyzing || chartBusy || uploads.pending > 0 || uploads.failed > 0 || (!!listingId && !dirty)} className="rounded-lg bg-pink-600 px-5 py-2 font-semibold text-white disabled:opacity-40">{saving ? 'Saving…' : retryDraft ? 'Retry save' : listingId ? 'Save changes' : 'Save item'}</button>}<Link to="/fashion/catalog" onClick={leave} className="text-sm">Back to catalog</Link>{permissions.includes('fashion.review') && listing && <Link to="/fashion/review" onClick={leave} className="text-sm text-pink-600">Open authenticity review</Link>}<span className="text-xs text-slate-500">Saving changes resets approval and requires review. Identification is optional.</span></div>
     </form>
     {preview && <section className={panel} aria-label="Listing preview"><h2 className="text-lg font-semibold">Listing preview</h2><p className="text-xs text-slate-500">Preview of current form values. Actual marketplace appearance may vary.</p><div className="grid gap-5 md:grid-cols-2">{form.images[0] && isFashionImageUrl(form.images[0]) && <img src={toProxyUrl(form.images[0])} alt={form.title || 'Fashion listing preview'} className="max-h-96 w-full rounded-lg object-contain" />}<div><h3 className="text-2xl font-semibold">{form.title || 'Untitled Fashion item'}</h3><p className="mt-3 text-xl">{form.price || 'Price not set'}</p><p className="mt-2 text-sm">{form.brand} · Quantity {form.quantity} · {form.conditionId || 'Condition not set'}</p><p className="mt-2 text-sm text-slate-500">{form.categoryName || form.categoryId || 'Category not set'}</p><dl className="mt-4 grid grid-cols-2 gap-2 text-sm">{Object.entries(form.verticalAttributes).filter(([key, value]) => !isFashionMetaKey(key) && fashionAttributeText(value)).map(([key, value]) => <div key={key}><dt className="text-slate-500">{key}</dt><dd>{fashionAttributeText(value)}</dd></div>)}</dl></div></div><div className="break-words whitespace-pre-wrap text-sm [&_img]:max-w-full" dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.description) }} /></section>}
   </div>;

@@ -53,7 +53,19 @@ export class FashionListingsService {
     );
     if (!dto.sku.trim() || !dto.title.trim())
       throw new ConflictException('SKU and title cannot be blank');
+    const replay = async () => {
+      if (!dto.captureId) return null;
+      const product = await this.db.getRepository(CatalogProduct).findOneBy({
+        organizationId: org.organizationId, vertical: 'fashion', sku: dto.sku.trim(),
+      });
+      return product?.verticalAttributes?._captureId === dto.captureId &&
+        product.verticalAttributes._createdByUserId === user.id
+        ? this.publicProduct(product) : null;
+    };
+    const existing = await replay();
+    if (existing) return existing;
     const attributes = this.attributes(dto.verticalAttributes);
+    if (dto.captureId) attributes._captureId = dto.captureId;
     const fromCapture = attributes._intakeSource === 'capture';
     attributes._createdByUserId = user.id;
     if (!fromCapture) {
@@ -109,6 +121,10 @@ export class FashionListingsService {
         return this.publicProduct(saved);
       });
     } catch (error) {
+      if (error instanceof ConflictException || (error as { code?: string }).code === '23505') {
+        const saved = await replay();
+        if (saved) return saved;
+      }
       if ((error as { code?: string }).code === '23505')
         throw new ConflictException('SKU already exists');
       throw error;

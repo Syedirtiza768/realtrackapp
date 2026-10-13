@@ -230,9 +230,9 @@ export class FashionIntakeService {
       const base = `${batch}-${String(number).padStart(4, '0')}`;
       const sku = suffix ? `${base}-${suffix}` : base;
       const products = this.db.getRepository(CatalogProduct);
-      const taken =
-        (await products.existsBy({ sku })) ||
-        (await products.existsBy({ sku: base }));
+      const taken = await products.createQueryBuilder('p')
+        .where('p.sku = :base OR p.sku LIKE :sized', { base, sized: `${base}-%` })
+        .getExists();
       if (!taken) return { batch, number, sku };
     }
     throw new ConflictException(
@@ -244,37 +244,30 @@ export class FashionIntakeService {
     organizationId: string,
     batch: string,
   ): Promise<number> {
-    const updated = await this.db.query<Array<{ last_value: number }>>(
-      `UPDATE fashion_sku_counters
-          SET last_value = last_value + 1, updated_at = now()
-        WHERE organization_id = $1 AND batch = $2
-        RETURNING last_value`,
-      [organizationId, batch],
-    );
-    // TypeORM returns [rows, affected] for UPDATE … RETURNING on postgres.
-    const updatedRows = Array.isArray(updated[0])
-      ? (updated[0] as unknown as Array<{ last_value: number }>)
-      : updated;
-    if (updatedRows[0]?.last_value != null)
-      return Number(updatedRows[0].last_value);
-
-    const escaped = batch.replace(/[^A-Z0-9]/g, '');
-    const seed = await this.db.query<Array<{ max_num: string | null }>>(
-      `SELECT MAX(CAST(SUBSTRING(sku FROM $1) AS INTEGER)) AS max_num
-         FROM catalog_products
-        WHERE sku ~ $2`,
-      [`^${escaped}-([0-9]{1,9})`, `^${escaped}-[0-9]{1,9}(-[A-Z0-9]+)?$`],
-    );
-    const start = Number(seed[0]?.max_num ?? 0) + 1;
-    const inserted = await this.db.query<Array<{ last_value: number }>>(
-      `INSERT INTO fashion_sku_counters (organization_id, batch, last_value)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (organization_id, batch)
-       DO UPDATE SET last_value = fashion_sku_counters.last_value + 1, updated_at = now()
-       RETURNING last_value`,
-      [organizationId, batch, start],
-    );
-    return Number(inserted[0].last_value);
+    // The global SKU namespace requires coordination across organizations too.
+    return this.db.transaction(async (manager) => {
+      await manager.query(`SET LOCAL lock_timeout = '5s'`);
+      await manager.query(`SET LOCAL statement_timeout = '10s'`);
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', ['fashion-sku', batch]);
+      const counters = await manager.query<Array<{ last_value: string | null }>>(
+        'SELECT MAX(last_value) AS last_value FROM fashion_sku_counters WHERE batch = $1', [batch],
+      );
+      let last = Number(counters[0]?.last_value ?? 0);
+      if (counters[0]?.last_value == null) {
+        const seed = await manager.query<Array<{ max_num: string | null }>>(
+          `SELECT MAX(CAST(SUBSTRING(sku FROM $1) AS INTEGER)) AS max_num FROM catalog_products WHERE sku ~ $2`,
+          [`^${batch}-([0-9]{1,9})`, `^${batch}-[0-9]{1,9}(-[A-Z0-9]+)?$`],
+        );
+        last = Number(seed[0]?.max_num ?? 0);
+      }
+      const next = last + 1;
+      await manager.query(
+        `INSERT INTO fashion_sku_counters (organization_id, batch, last_value) VALUES ($1, $2, $3)
+         ON CONFLICT (organization_id, batch) DO UPDATE SET last_value = EXCLUDED.last_value, updated_at = now()`,
+        [organizationId, batch, next],
+      );
+      return next;
+    });
   }
 
   /* ── Quick capture ──────────────────────────────────────────────── */
@@ -289,6 +282,17 @@ export class FashionIntakeService {
       organizationId,
     );
     const sku = dto.sku.trim();
+    const retry = async () => {
+      if (!dto.captureId) return null;
+      const existing = await this.db.getRepository(CatalogProduct).findOneBy({
+        sku, organizationId: org.organizationId, vertical: 'fashion',
+      });
+      return existing?.verticalAttributes?._captureId === dto.captureId &&
+        existing.verticalAttributes._intakeCreatedBy === user.id
+        ? this.listings.publicProduct(existing) : null;
+    };
+    const existing = await retry();
+    if (existing) return existing;
 
     const slots: Record<FashionPhotoRole, string[]> = {
       front: [dto.frontImageUrl],
@@ -332,6 +336,7 @@ export class FashionIntakeService {
       _catalogAdded: false,
       _photoRoles: roles,
       _analysisStatus: dto.identify === false ? 'skipped' : 'queued',
+      ...(dto.captureId ? { _captureId: dto.captureId } : {}),
     };
     const confirmed: string[] = ['categoryFamily'];
     if (dto.department?.trim()) {
@@ -377,6 +382,7 @@ export class FashionIntakeService {
     }
     attributes._confirmedKeys = confirmed;
 
+    let replayed = false;
     const product = await this.listings.create(
       user,
       {
@@ -389,7 +395,17 @@ export class FashionIntakeService {
         verticalAttributes: attributes,
       },
       org.organizationId,
-    );
+    ).catch(async (error: unknown) => {
+      // The unique constraint serializes overlapping saves. Return only the exact
+      // capture owned by this actor; a different garment stays a SKU conflict.
+      if (error instanceof ConflictException) {
+        const saved = await retry();
+        if (saved) { replayed = true; return saved; }
+      }
+      throw error;
+    });
+
+    if (replayed) return product;
 
     // Receive the garment into warehouse stock (ignored until the workspace sets up stock).
     const quantity = dto.quantity ?? 1;
@@ -410,7 +426,9 @@ export class FashionIntakeService {
     });
 
     if (dto.identify !== false)
-      await this.enqueue(product.id, org.organizationId);
+      void this.enqueue(product.id, org.organizationId).catch((error: unknown) => {
+        this.logger.error(`Could not record identification status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      });
     return product;
   }
 
@@ -488,12 +506,17 @@ export class FashionIntakeService {
   }
 
   private async enqueue(productId: string, organizationId: string) {
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
-      await this.queue.add(
+      const enqueue = this.queue.add(
         'identify',
         { productId, organizationId } satisfies FashionIntakeJob,
         { jobId: `fashion-identify-${productId}-${Date.now()}`, attempts: 1 },
       );
+      await Promise.race([enqueue, new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('Identification queue did not respond within 10 seconds.')), 10_000);
+        deadline.unref();
+      })]);
     } catch (error) {
       this.logger.error(
         `Could not queue Fashion identification for ${productId}: ${error instanceof Error ? error.message : error}`,
@@ -501,6 +524,8 @@ export class FashionIntakeService {
       await this.setStatus(productId, organizationId, 'failed', [
         'Background identification could not be queued. Open the item and retry identification.',
       ]);
+    } finally {
+      if (deadline) clearTimeout(deadline);
     }
   }
 

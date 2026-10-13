@@ -41,6 +41,7 @@ export const FASHION_META_KEYS = [
   '_intakeAccountId',
   '_intakeMarketplaceId',
   '_intakeCreatedBy',
+  '_captureId',
   '_photoRoles',
   '_sizeChartImageUrl',
   '_analysisQueuedAt',

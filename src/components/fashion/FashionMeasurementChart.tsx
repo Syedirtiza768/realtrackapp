@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Ruler } from 'lucide-react';
 import {
   createFashionSizeChart,
@@ -56,6 +56,7 @@ type Props = {
   hasChartImage?: boolean;
   /** Mark missing values as required (quick capture). */
   requireAll?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 /**
@@ -63,8 +64,13 @@ type Props = {
  * toggle and an optional branded size-chart image. Values are entered by hand; they are
  * never estimated from photos. Switching units does not convert entered numbers.
  */
-export default function FashionMeasurementChart({ templates, family, state, onChange, editable, organizationId, brandName, sku, onChartImage, hasChartImage, requireAll }: Props) {
+export default function FashionMeasurementChart({ templates, family, state, onChange, editable, organizationId, brandName, sku, onChartImage, hasChartImage, requireAll, onBusyChange }: Props) {
   const [busy, setBusy] = useState(false);
+  const mounted = useRef(true);
+  const signature = JSON.stringify({ state, sku, brandName });
+  const latestSignature = useRef(signature); latestSignature.current = signature;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { onBusyChange?.(busy); return () => { onBusyChange?.(false); }; }, [busy, onBusyChange]);
   const [error, setError] = useState('');
   const available = templates.filter((template) => template.family === family);
   const template = templates.find((item) => item.id === state.templateId);
@@ -80,11 +86,13 @@ export default function FashionMeasurementChart({ templates, family, state, onCh
         if (value) values[point.key] = value.replace(',', '.');
       }
       const result = await createFashionSizeChart({ template: template.id, unit: state.unit, values, brandName: brandName?.trim() || undefined, sku: sku?.trim() || undefined }, organizationId);
+      if (!mounted.current) return;
+      if (latestSignature.current !== signature) { setError('Details changed while the chart was being created. Generate it again with the current details.'); return; }
       onChartImage(result.url);
     } catch (err) {
-      setError(fashionError(err));
+      if (mounted.current) setError(fashionError(err));
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
 

@@ -1,4 +1,56 @@
-# Fashion quick capture — 2026-10-09
+# Fashion quick capture — 2026-10-13
+
+## Responsive camera and SKU update (2026-10-13)
+
+`FashionCamera.tsx` opens a live `getUserMedia` preview only on an operator action.
+It prefers the rear camera, supports switching, frame review/retake, and guides
+Front → Back → Tag before optional details. Denied, missing, busy, disconnected,
+or unanswered cameras have recovery actions and a native file-capture fallback.
+Opening has a 15-second deadline; playback and frame encoding have 8-second
+deadlines. Closing, hiding the document, changing cameras and unmounting stop
+tracks; late permission grants also release their streams. HTTPS is needed for
+the live preview on non-localhost deployments.
+
+`useFashionPhotoQueue.ts` keeps local previews and original Files until upload
+succeeds, with at most two uploads globally and one per slot to preserve capture
+order. Other slots, the camera and form inputs remain usable. Failed files can
+be retried or removed. `prepareFashionPhoto` opportunistically reduces larger
+images to at most 2560 pixels and JPEG quality 0.9; unsupported optimization
+falls back to the original. Uploads remain JPEG/PNG/WebP, at most 20 MB per file.
+`fashionListingsApi.ts` bounds API/body waits to 45 seconds. Banners and chart
+generation count as pending work before save; stale chart results are discarded.
+Local previews are held in memory, not an offline store: closing/reloading the
+page can discard unsaved files; capture registers a browser unload warning.
+
+Quick Capture defaults to AVP and allocates the base SKU on each new garment.
+S/M/L controls append the label size (other sizes, numeric sizes and OS are
+supported). Size corrections do not reserve another number. Uploaded photos use
+the stable base SKU when available; changing size never requires renaming or
+retaking them. Prefix changes explicitly allocate a new base. Existing Add Item
+also gets an automatic AVP base and size controls; existing saved SKUs stay
+immutable. Session settings use `fashion.capture.session.v2:<user>:<organization>`;
+measurement charts default off. Saving still requires front, back and a label
+photo in Quick Capture, and every measurement when the chart is enabled.
+
+`FashionIntakeService.reserveNumber` uses a transaction-scoped PostgreSQL prefix
+advisory lock and the highest counter across organizations, with 5-second lock
+and 10-second statement deadlines. A new prefix seeds from existing catalog
+SKUs. Occupied base numbers are skipped across all size suffixes. Reservations
+can leave gaps after cancellation/timeouts; numbers are not recycled.
+
+`POST /fashion/intake` and `POST /fashion/listings` accept an optional UUID
+`captureId`, stored as operational `_captureId`. A repeat for the same SKU,
+organization and original actor returns the saved item, including overlapping
+writes rejected by the unique SKU constraint. Other captures remain conflicts.
+The client freezes an uncertain create payload and offers **Retry save** with
+that same UUID and payload. Stock intake events use the existing product-based
+idempotency key; replayed capture saves do not emit another event or queue job.
+Capture returns after database persistence and enqueues identification in the
+background. A queue submission that does not respond within 10 seconds records
+`failed` for explicit retry; it never holds up the next garment.
+
+No migrations, routes, permissions, authenticity rules or publishing gates changed.
+Historical implementation and verification notes below are retained.
 
 Closes the gaps found by comparing the Fashion workspace with a competitor
 photos-to-listing flow (SellerPundit "Bulk Upload Images", screen recording of 2026-09-28):
@@ -17,11 +69,11 @@ added each item, and moves store/policy selection to catalog-time publishing.
 | Branded size-chart image | `FashionIntakeImagesService.sizeChart` renders an SVG (brand name, "SIZE GUIDE — <chart>", diagram, value table, SKU) to WebP with sharp and stores it under `fashion/size-charts/<org>/`. Endpoint `POST /api/fashion/listings/size-chart`. |
 | Fixed photo slots | Front (1, required), Back (1, required), Tag & labels (1–2, required), Additional (≤13), Size chart (≤1). `src/lib/fashionPhotoSlots.ts`, `FashionPhotoSet.tsx`. Slot order is the eBay picture order; front is primary. |
 | Batch + SKU generator | `fashion_sku_counters` table; `POST /api/fashion/intake/sku` returns `<BATCH>-<0001>[-<SIZE>]`. The first use of a batch seeds from the highest existing `<BATCH>-<n>` SKU in `catalog_products`; taken SKUs are skipped (SKUs are globally unique). |
-| SKU-named photo files | `POST /api/fashion/listings/photos?sku=…` stores `<SKU>-<timestamp>-<id>.webp`. The capture screen locks the SKU once photos exist. |
+| SKU-named photo files | `POST /api/fashion/listings/photos?sku=…` stores `<SKU>-<timestamp>-<id>.webp`. Since 2026-10-13 capture uses the stable base SKU; size corrections preserve photo URLs. The former photo-based SKU lock is superseded. |
 | Canonical photo format | Every accepted JPEG, PNG, or WebP source photo is normalized by `ImageProcessorService.convertBufferToWebp` and stored with `image/webp` content type and a `.webp` key. |
 | Warehouse at intake | `fashion_warehouses` table, managed in Fashion settings (`fashion.settings.manage`). Stored on the item as `_warehouseCode` / `_warehouseName`. **Does not change the eBay merchant location used at publish.** |
 | Background identification | `POST /api/fashion/intake` saves a staged item and queues BullMQ `fashion-intake-analysis`; `FashionIntakeProcessor` → `FashionIntakeService.processIdentification`. Capture can continue while identification runs. `POST /api/fashion/listings/:id/identify` re-queues. |
-| Phone-first capture screen | `/fashion/capture` (`FashionCapturePage.tsx`). Session settings persist per browser (`localStorage` key `fashion.capture.session`). "Save & next garment" resets the item and generates the next SKU in the batch. |
+| Phone-first capture screen | `/fashion/capture` (`FashionCapturePage.tsx`). Scoped session settings persist under `fashion.capture.session.v2:<user>:<organization>`. "Save & next garment" resets item fields and automatically reserves the next base SKU. Camera capture stays available while SKU generation or uploads are pending. |
 | Image banners | `POST /api/fashion/listings/photos/banner` composites a text strip (top/bottom, dark/pink/light) onto a copy of a photo. Only keys under this organization's `fashion/intake/<org>/` or `fashion/size-charts/<org>/` are accepted — no arbitrary URL fetch. |
 | Intake history and catalog handoff | `/fashion/intake` (`FashionIntakePage.tsx`) over `GET /api/fashion/intake` (batch/status/search/source filters, page/pageSize ≤100). Auto-refreshes while items are queued or processing. Once identification is `suggested` or `skipped`, and the item is neither quarantined nor flagged for manual review, **Add to Catalog** calls `POST /api/fashion/intake/:id/add-to-catalog`; this records `_catalogAdded`, `_catalogAddedBy`, `_catalogAddedAt`, plus a `fashion.intake.catalog_added` action log. Capture items remain hidden from the Fashion Catalog until this action. |
 | Activity report | `/fashion/reports` (`FashionActivityReportPage.tsx`) over `GET /api/fashion/reports/activity` and `/export`. Filters cover activity dates, uploader, catalog adder, catalog/identification/review/publication status, store, batch, free-text search across item fields/photos/specifics, and Fashion attribute key/value. CSV includes all visible product attributes and publication target policy/outcome data. |

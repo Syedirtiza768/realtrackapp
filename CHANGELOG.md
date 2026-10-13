@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-13 — Responsive Fashion camera capture and automatic AVP SKUs
+
+- Quick Capture and Add Item now offer a live rear-camera preview, switching,
+  retake/accept controls, guided photo slots and device-camera fallback.
+- Capture continues during bounded background uploads; local previews and failed
+  files remain available for retry. Camera, request and queue deadlines provide
+  recovery actions, and camera tracks stop when closing or hiding the view.
+- AVP numbers are allocated automatically; label-size changes update the suffix
+  without consuming a number or discarding photos. Prefixes remain configurable.
+- Size buttons and collapsed session settings simplify mobile intake; measurement
+  charts are opt-in. Save retries reuse a capture UUID to prevent duplicate garments.
+- PostgreSQL reservations coordinate across organizations in the global SKU
+  namespace. No schema migration or permission changes are required.
+
 ## 2026-10-09 — Let Add Part vision read private photos and distrust stale part type
 
 - Photo identification reads app-managed S3 objects with the app's storage

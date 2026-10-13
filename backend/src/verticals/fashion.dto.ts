@@ -21,6 +21,11 @@ import {
 } from 'class-validator';
 
 export class CreateFashionDraftDto {
+  @ApiPropertyOptional({ description: 'Stable UUID for safe retries of one new item.' })
+  @IsOptional()
+  @IsUUID()
+  captureId?: string;
+
   @ApiProperty()
   @IsString()
   @MinLength(1)
@@ -369,6 +374,11 @@ export class FashionImageBannerDto {
 }
 
 export class CreateFashionIntakeDto {
+  @ApiPropertyOptional({ description: 'Stable UUID for safe retries of one capture.' })
+  @IsOptional()
+  @IsUUID()
+  captureId?: string;
+
   @ApiProperty({ example: 'AVP-10001-M' })
   @IsString()
   @MinLength(1)

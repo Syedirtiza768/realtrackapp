@@ -1,5 +1,23 @@
 # Component Map
 
+## Fashion capture components (2026-10-13)
+
+- `FashionCamera.tsx`: accessible live-camera dialog, rear/front selection,
+  retake/accept flow, photo-slot guidance, permission/deadline recovery and stream cleanup.
+- `useFashionPhotoQueue.ts`: immediate local previews, two concurrent uploads,
+  per-slot ordering, preserved failed Files and explicit retry/removal.
+- `FashionPhotoSet.tsx`: shared camera/upload slots, pending state and banner work
+  reported to parents so saving cannot omit pending photos.
+- `FashionCapturePage.tsx`: scoped AVP session defaults, automatic SKU/size
+  composition, opt-in measurements, immutable uncertain-save retries and next garment.
+- `FashionListingEditorPage.tsx`: shared camera/queue and automatic AVP/size for
+  new items; saved SKUs remain immutable.
+- `FashionMeasurementChart.tsx`: reports pending work and discards stale/unmounted results.
+- `src/lib/fashionCaptureMedia.ts`: bounded image preparation and media deadlines.
+
+See [Fashion Quick Capture](../architecture/FASHION_QUICK_CAPTURE.md) for limits
+and the distinction between local previews and durably saved photos.
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Source**: Moved from `docs/FRONTEND_MAP.md` (405 lines, 2026-05-29).

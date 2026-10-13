@@ -1,5 +1,23 @@
 # API Contracts
 
+## Fashion create/retry contract (2026-10-13)
+
+- `POST /api/fashion/intake` (`CreateFashionIntakeDto`) and
+  `POST /api/fashion/listings` (`CreateFashionDraftDto`) accept optional
+  `captureId: UUID`. Reuse it with the same SKU and payload when retrying an
+  interrupted create. Only the same organization and original actor receive
+  the existing item; another item using that SKU still returns 409. The UUID is
+  stored in operational `_captureId`, never as an eBay aspect.
+- `POST /api/fashion/intake/sku` retains `{batch, sizeSuffix?}` and its existing
+  response. Prefix reservation now coordinates globally across organizations,
+  skips any occupied size suffix for a base, and uses bounded database lock waits.
+- Intake create returns after durable database persistence. Identification
+  submission continues in the background; submission failure/deadline is
+  recorded as `_analysisStatus=failed` for retry.
+- Existing Fashion access/create permissions and strict DTO validation remain.
+  No new endpoints, permissions or schema changes. See
+  [Fashion Quick Capture](FASHION_QUICK_CAPTURE.md).
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Source**: Consolidated from `docs/API_MAP.md` (557 lines) and `docs/architecture/api-map.md` — 2026-05-29.

@@ -1,5 +1,29 @@
 # Testing
 
+## Fashion capture reliability (2026-10-13)
+
+- Frontend and backend builds pass. The changed frontend files pass ESLint using
+  a scoped TypeScript/React-hooks configuration. The root `npm run lint` remains
+  blocked by the existing missing ESLint 9 configuration. Backend lint also has
+  existing formatting/type-lint findings outside the changed code.
+- `cd backend; npm test -- --runInBand --runTestsByPath src/verticals/fashion-capture-reliability.spec.ts src/verticals/fashion.config.spec.ts src/verticals/fashion-image-analysis.service.spec.ts`
+  passes **26 tests**. Use explicit paths: a worktree name containing "fashion"
+  makes Jest's path-pattern option select unrelated suites.
+- `node scripts/test-fashion-capture-ui.mjs` against `FASHION_UI_URL` (default
+  `http://127.0.0.1:3935`) uses authenticated API fixtures and Chromium's synthetic
+  camera. It covers continuous capture, retake, concurrency, cleanup, photo roles,
+  size correction, next garment, failed upload, interrupted create, camera/SKU/
+  upload deadlines, late camera grants and Add Item. Set `FASHION_PLAYWRIGHT_PATH`
+  and optionally `FASHION_CHROME_PATH` for the local test runtime.
+- `FASHION_TEST_DATABASE_URL=<disposable PostgreSQL URL> node scripts/test-fashion-sku-postgres.cjs`
+  exercises real PostgreSQL locking and 30 simultaneous reservations across three
+  organizations. **Use only a disposable database**; the script creates minimal
+  test tables. It requires a compiled backend.
+- Broader suite run: 86 suites/704 tests passed, 9 suites/47 tests failed and 19
+  tests skipped. Failures are in unchanged B&I, eBay/catalog and ingestion code;
+  no Fashion test failed. Physical iOS/Android camera behavior and actual S3
+  uploads are not proved by the browser fixtures.
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Note**: Lightweight stub. Omni Core has sparse automated test coverage.

@@ -1,5 +1,14 @@
 # Current State
 
+**2026-10-13 (Fashion responsive capture release candidate)** — Live camera,
+continuous photo capture with bounded background uploads/retries, automatic AVP
+numbers and size suffixes, opt-in measurements and idempotent create retries are
+implemented. Frontend/backend builds, 26 focused backend tests, synthetic-camera
+browser scenarios and real PostgreSQL concurrent reservations pass. The release
+uses a clean checkout based on main and preserves production's cumulative fixes
+through a targeted image overlay. Deployment results will be recorded in
+`docs/operations/FASHION_CAPTURE_RELEASE_2026-10-13.md` after rollout.
+
 **2026-10-09 (Add Part three-day photo review follow-up; snapshot through 12:21:20 UTC)** — Reviewed the active `/addpart` cohort imported from 2026-10-06 12:21:20 UTC through 2026-10-09 12:21:20 UTC: 136 listings, 88 with at least two photos, and 48 lacking the minimum photo evidence. None were published or had marketplace IDs. The photo gate required high-confidence identity, both label and overall-part coverage, and the supplied MPN in the model's visible-text extraction.
 
 The initial strict pass repaired 60 rows and held 22 for review. A second pass verified all 22: 13 met the strict gate and 9 were moved to `draft` / `needs_review`. Four additional photo-confirmed identity corrections were made across the continuation (`BLAP-19963`, `BLAP-20024`, `BLAP-20025`, and `BLAP-20026`); matching catalog titles, descriptions, and normalized titles were synchronized and listing revisions recorded. Total: 76 photo-verified rows (64 corrected, 12 already accurate), 12 held for manual review, and 48 still needing more photos.

@@ -1,5 +1,14 @@
 # Feature Registry
 
+**2026-10-13:** Fashion Quick Capture and Add Item now share a live camera with
+guided slots, local previews, bounded background uploads and retry recovery.
+AVP SKUs allocate automatically and append the selected size; corrections keep
+the number and photos. Capture UUIDs make create retries idempotent. Measurement
+charts default off during quick intake. Automated Chromium camera and timeout
+tests, 26 focused backend tests, and 30 concurrent PostgreSQL reservations pass.
+Physical iOS/Android camera testing remains a manual verification item. See
+[Fashion Quick Capture](../architecture/FASHION_QUICK_CAPTURE.md).
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **2026-07-12 publish-readiness update:** A completed enrichment pipeline automatically enqueues its mandatory US/AU/DE listing optimization pass. That pass discovers and validates structured fitment before eBay Motors publishing; the queue handoff is idempotent and retries transient worker failures.

@@ -1,7 +1,27 @@
-import { fetchWithAuth } from './authApi';
+import { fetchWithAuth as authenticatedFetch } from './authApi';
+
+/** Bound interactive waits, including response-body reads. Never retry writes implicitly. */
+async function fetchWithAuth<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort();
+  if (init?.signal?.aborted) controller.abort();
+  init?.signal?.addEventListener('abort', abort, { once: true });
+  const timer = window.setTimeout(() => { timedOut = true; controller.abort(); }, 45_000);
+  try {
+    return await authenticatedFetch<T>(path, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) throw new Error('This request took too long. Your photos and details are still here. Check your connection and retry.');
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    init?.signal?.removeEventListener('abort', abort);
+  }
+}
 
 export type FashionAttributes = Record<string, string | number | boolean | string[]>;
 export interface FashionDraft {
+  captureId?: string;
   sku: string;
   title: string;
   description?: string;
@@ -108,11 +128,11 @@ export interface FashionAnalysisResult {
 }
 
 /** With a SKU, stored files are named `<SKU>-<timestamp>-<id>.webp` for traceability. */
-export async function uploadFashionPhotos(files: File[], organizationId?: string | null, sku?: string) {
+export async function uploadFashionPhotos(files: File[], organizationId?: string | null, sku?: string, signal?: AbortSignal) {
   const body = new FormData();
   for (const file of files) body.append('files', file, file.name);
   const path = sku?.trim() ? `${base}/listings/photos?${new URLSearchParams({ sku: sku.trim() })}` : `${base}/listings/photos`;
-  return fetchWithAuth<{ uploaded: FashionPhotoUpload[]; errors: string[] }>(withOrg(path, organizationId), { method: 'POST', body });
+  return fetchWithAuth<{ uploaded: FashionPhotoUpload[]; errors: string[] }>(withOrg(path, organizationId), { method: 'POST', body, signal });
 }
 
 /* ── Quick capture: measurement charts, warehouses, batches, intake ── */
@@ -143,6 +163,8 @@ export interface FashionBatch {
 }
 export type FashionAnalysisStatus = 'queued' | 'processing' | 'suggested' | 'failed' | 'skipped';
 export interface FashionIntakePayload {
+  /** Reused for an explicit retry of the same garment. */
+  captureId?: string;
   sku: string;
   batch?: string;
   warehouseCode?: string;
@@ -193,7 +215,7 @@ export const listFashionWarehouses = (signal?: AbortSignal, organizationId?: str
 export const createFashionWarehouse = (warehouse: { code: string; name: string; countryCode?: string }, organizationId?: string | null) => post<FashionWarehouse>(withOrg(`${base}/warehouses`, organizationId), warehouse);
 export const updateFashionWarehouse = (id: string, patch: { name?: string; countryCode?: string; active?: boolean }, organizationId?: string | null) => fetchWithAuth<FashionWarehouse>(withOrg(`${base}/warehouses/${encoded(id)}`, organizationId), { method: 'PATCH', body: JSON.stringify(patch) });
 export const listFashionBatches = (signal?: AbortSignal, organizationId?: string | null) => fetchWithAuth<FashionBatch[]>(withOrg(`${base}/intake/batches`, organizationId), { signal });
-export const nextFashionSku = (batch: string, sizeSuffix?: string, organizationId?: string | null) => post<{ batch: string; number: number; sku: string }>(withOrg(`${base}/intake/sku`, organizationId), { batch, ...(sizeSuffix ? { sizeSuffix } : {}) });
+export const nextFashionSku = (batch: string, sizeSuffix?: string, organizationId?: string | null, signal?: AbortSignal) => fetchWithAuth<{ batch: string; number: number; sku: string }>(withOrg(`${base}/intake/sku`, organizationId), { method: 'POST', body: JSON.stringify({ batch, ...(sizeSuffix ? { sizeSuffix } : {}) }), signal });
 export const createFashionIntake = (payload: FashionIntakePayload, organizationId?: string | null) => post<FashionListing>(withOrg(`${base}/intake`, organizationId), payload);
 export const addFashionIntakeToCatalog = (id: string, organizationId?: string | null) => post<{ id: string; addedToCatalog: boolean; alreadyAdded?: boolean; addedAt?: string; addedByUserId?: string }>(withOrg(`${base}/intake/${encoded(id)}/add-to-catalog`, organizationId), {});
 export const listFashionIntake = (params: { batch?: string; status?: string; q?: string; source?: 'capture' | 'all'; page?: number; pageSize?: number }, signal?: AbortSignal, organizationId?: string | null) => {
