@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-15 — Pipeline sample xlsx download fix
+
+- Fixed the "Download Sample Input" link on Pipeline, which downloaded a file Excel could not open. The production frontend image predated `public/pipeline-gridx-sample.xlsx`, so nginx's SPA fallback returned `index.html` under the `.xlsx` name. The repository file is a valid workbook and is unchanged.
+- Deployed frontend image `realtrackapp-frontend:main-ae12191b` (built from `origin/main` at `ae12191b`) by recreating only the `frontend` service. Backend, PostgreSQL, Redis, and PgBouncer were not recreated. The public download on the production host (`ec2-34-196-184-100.compute-1.amazonaws.com`) returned `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` with ZIP signature `50 4b 03 04`, and the app and `/api/health` returned HTTP 200. That image was later replaced by `realtrackapp-frontend:catalog-status-icon-20261015-r2`, which still serves the file.
+- Known drift: the Compose project's config still names `realtrackapp-frontend:rollback-catalog-publish-holds-20261014-r2-attempt3`. A plain `docker compose up` with the existing 35-file set reverts the frontend. Keep the frontend override as an extra `-f` until the base Compose config is updated.
+
 ## 2026-10-13 — Full screen Fashion camera
 
 - Camera preview now fills the app viewport on phones and desktop, with safe-area
