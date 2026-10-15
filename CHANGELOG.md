@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-15 — Pipeline sample xlsx download fix
+
+- Fixed the "Download Sample Input" link on Pipeline, which downloaded a file Excel could not open. The production frontend image predated `public/pipeline-gridx-sample.xlsx`, so nginx's SPA fallback returned `index.html` under the `.xlsx` name. The repository file is a valid workbook and is unchanged.
+- Deployed frontend image `realtrackapp-frontend:main-ae12191b` (built from `origin/main` at `ae12191b`) by recreating only the `frontend` service. Backend, PostgreSQL, Redis, and PgBouncer were not recreated. The public download on the production host (`ec2-34-196-184-100.compute-1.amazonaws.com`) returned `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` with ZIP signature `50 4b 03 04`, and the app and `/api/health` returned HTTP 200. That image was later replaced by `realtrackapp-frontend:catalog-status-icon-20261015-r2`, which still serves the file.
+- Known drift: the Compose project's config still names `realtrackapp-frontend:rollback-catalog-publish-holds-20261014-r2-attempt3`. A plain `docker compose up` with the existing 35-file set reverts the frontend. Keep the frontend override as an extra `-f` until the base Compose config is updated.
+
 ## 2026-10-05 — Warehouse inventory, procurement and channel stock (all verticals)
 
 - New `StockModule` (`/api/stock`) and Stock workspace at `/auto-parts/stock`, `/fashion/stock` and `/business-industrial/stock`. It covers warehouses and bins, a SKU master linked to catalog products, listings and variants, and serial/one-off units. Stock changes are recorded in an append-only movement ledger. It also covers receipts, adjustments with approval, bin moves, damage, transfers with in-transit, blind cycle counts, valuation, aging and a CSV ledger. Design: `docs/architecture/WAREHOUSE_INVENTORY.md`.
