@@ -287,6 +287,10 @@ The additive vertical migration adds explicit vertical and vertical_attributes f
 
 CatalogProduct retains the existing global SKU uniqueness constraint during the pilot. Fashion endpoints reject an existing SKU rather than overwriting another vertical. DB_SYNCHRONIZE remains disabled; neither vertical migration has been run by this implementation.
 
+### Artistic Server Fashion import (2026-10-21)
+
+The importer stores the source format marker, original item specifics, source measurements and unit-review state, source marketplace/channel identifiers, source image URLs, and mirror counts/status in the existing `catalog_products.vertical_attributes` JSONB value. Unknown eBay item specifics are paired in `customAspectNames` / `customAspectValues` so they remain editable and can be included in Fashion publishing. Imported images replace the catalog gallery URLs with application S3 WebP URLs once copied successfully. No table, column, or migration is added.
+
 ## Business & Industrial vertical schema (2026-09-09)
 
 Migration `1790500000000-BusinessIndustrialWorkspaceSecurity` adds three

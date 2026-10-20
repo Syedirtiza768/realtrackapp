@@ -120,6 +120,13 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
   const canEdit = permissions.includes(listingId ? 'fashion.listings.update' : 'fashion.listings.create') && !locked;
   const dirty = JSON.stringify(form) !== saved;
   const family = normalizeFashionFamily(form.verticalAttributes.categoryFamily);
+  const sourceExport = fashionAttributeText(form.verticalAttributes._sourceFormat) === 'artisticserver-fashion-export';
+  const imageMirrorStatus = fashionAttributeText(form.verticalAttributes._imageMirrorStatus);
+  const imageMirrorExpected = fashionAttributeText(form.verticalAttributes._imageMirrorExpected);
+  const imageMirrorStored = fashionAttributeText(form.verticalAttributes._imageMirrorStored);
+  const measurementUnitReviewRequired = isTrue(form.verticalAttributes._measurementUnitReviewRequired);
+  const customAspectNames = stringList(form.verticalAttributes.customAspectNames);
+  const customAspectValues = stringList(form.verticalAttributes.customAspectValues);
   const visibleFields = useMemo(() => fashionFieldsForFamily(family), [family]);
   const { templates: measurementTemplates, error: templatesError } = useFashionMeasurementTemplates(activeOrganizationId);
   const photoRoles = form.verticalAttributes._photoRoles;
@@ -213,6 +220,50 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     setConfirmedKeys((previous) => previous.includes(key) ? previous : [...previous, key]);
     setSuggestedKeys((previous) => previous.filter((item) => item !== key));
   }
+  function confirmImportedMeasurementUnit(unit: 'cm' | 'in') {
+    setForm((previous) => ({
+      ...previous,
+      verticalAttributes: {
+        ...previous.verticalAttributes,
+        measurementsUnit: unit,
+        _measurementUnitReviewRequired: false,
+      },
+    }));
+    confirmKey('measurementsUnit');
+    setMessage(`Source measurements confirmed as ${unit === 'cm' ? 'centimetres' : 'inches'}. Save this draft before publishing.`);
+  }
+  function updateCustomAspect(index: number, field: 'customAspectNames' | 'customAspectValues', value: string) {
+    setForm((previous) => {
+      const names = stringList(previous.verticalAttributes.customAspectNames);
+      const values = stringList(previous.verticalAttributes.customAspectValues);
+      const target = field === 'customAspectNames' ? names : values;
+      while (target.length <= index) target.push('');
+      target[index] = value;
+      return {
+        ...previous,
+        verticalAttributes: {
+          ...previous.verticalAttributes,
+          customAspectNames: names,
+          customAspectValues: values,
+        },
+      };
+    });
+    confirmKey(field);
+    setMessage('');
+  }
+  function removeCustomAspect(index: number) {
+    setForm((previous) => ({
+      ...previous,
+      verticalAttributes: {
+        ...previous.verticalAttributes,
+        customAspectNames: stringList(previous.verticalAttributes.customAspectNames).filter((_, itemIndex) => itemIndex !== index),
+        customAspectValues: stringList(previous.verticalAttributes.customAspectValues).filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+    confirmKey('customAspectNames');
+    confirmKey('customAspectValues');
+    setMessage('');
+  }
   function setAttribute(key: string, value: string, multiple = false) {
     confirmKey(key);
     change('verticalAttributes', { ...form.verticalAttributes, [key]: multiple ? value.split('|').map((item) => item.trim()).filter(Boolean) : value });
@@ -258,6 +309,8 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     for (const template of measurementTemplates.filter((item) => item.family === next))
       for (const point of template.points) allowed.add(point.key);
     allowed.add('measurementsUnit');
+    allowed.add('customAspectNames');
+    allowed.add('customAspectValues');
     const templateFamily = measurementTemplates.find((item) => item.id === fashionAttributeText(form.verticalAttributes.sizeChartTemplate))?.family;
     if (templateFamily === next) allowed.add('sizeChartTemplate');
     const kept: FashionAttributes = { categoryFamily: next };
@@ -430,6 +483,8 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
     {warnings.map((warning) => <p key={warning} className="text-sm text-amber-800 dark:text-amber-200">{warning}</p>)}
     {conflicts.length > 0 && <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/30"><p className="font-semibold">Review conflicting suggestions</p><ul className="mt-2 list-disc pl-5">{conflicts.map((item) => <li key={item.key}>{item.key}: kept “{item.current}”; analysis suggested “{item.suggested}”.</li>)}</ul></div>}
     <form onSubmit={save} className="space-y-5">
+      {sourceExport && imageMirrorStatus !== 'complete' && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Source photos are not all copied into application storage as WebP ({imageMirrorStored || '0'} of {imageMirrorExpected || '0'}). Publishing stays blocked. Enable image mirroring, then re-import the same catalogue to retry failed copies.</p>}
+      {sourceExport && measurementUnitReviewRequired && <div role="status" className="space-y-3 rounded-lg bg-sky-50 p-4 text-sm text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"><p>The source measurements have no unit. They are preserved in the editable notes below. Confirm the source unit before publishing or entering them into a size chart.</p><div className="flex flex-wrap gap-2"><button type="button" disabled={!canEdit || saving} className="rounded-lg border border-sky-300 px-3 py-1.5 disabled:opacity-50" onClick={() => confirmImportedMeasurementUnit('cm')}>Confirm centimetres</button><button type="button" disabled={!canEdit || saving} className="rounded-lg border border-sky-300 px-3 py-1.5 disabled:opacity-50" onClick={() => confirmImportedMeasurementUnit('in')}>Confirm inches</button></div></div>}
       <fieldset disabled={!canEdit || saving || !!retryDraft} className="space-y-5">
         <section className={panel}><h2 className="text-lg font-semibold">Item details</h2><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm">SKU *<input className={input} required maxLength={160} readOnly={!!listingId} value={form.sku} onChange={(e) => change('sku', e.target.value)} />{listingId && <span className="text-xs text-slate-500">SKU is immutable after creation.</span>}</label><label className="text-sm">Brand<input className={input} value={form.brand} onChange={(e) => change('brand', e.target.value)} />{suggestedKeys.includes('brand') && <span className="text-xs text-pink-700">Suggested from photos</span>}</label><label className="text-sm sm:col-span-2">Title *<input className={input} required maxLength={200} value={form.title} onChange={(e) => change('title', e.target.value)} /><span className="text-xs text-slate-500">{form.title.length}/200 draft characters. eBay titles allow 80; validation checks publishing readiness.</span></label><label className="text-sm">Price<input className={input} type="number" min="0" step="any" value={form.price} onChange={(e) => change('price', e.target.value)} placeholder="Not set" /></label><label className="text-sm">Quantity *<input className={input} type="number" min="0" step="1" required value={form.quantity} onChange={(e) => change('quantity', e.target.value)} /></label><label className="text-sm sm:col-span-2">Description<textarea className={input} rows={7} value={form.description} onChange={(e) => change('description', e.target.value)} /><span className="text-xs text-slate-500">Use confirmed Fashion details. Reported defects should remain visible. Preview sanitizes HTML.</span></label></div><button type="button" disabled={generating} onClick={() => void generateContent()} className="rounded-lg border px-4 py-2 text-sm">{generating ? 'Generating…' : 'Generate listing text from confirmed details'}</button></section>
         <section className={panel}><h2 className="text-lg font-semibold">Fashion category and condition</h2>
@@ -458,6 +513,11 @@ function FashionListingEditor({ listingId }: { listingId?: string }) {
             const value = isBrand ? form.brand : fashionAttributeText(form.verticalAttributes[key]);
             return <label className="text-sm" key={aspect.localizedAspectName}>{aspect.localizedAspectName}{aspect.aspectConstraint?.aspectRequired ? ' *' : ''}{suggestedKeys.includes(key) ? <span className="ml-2 text-xs text-pink-700">Suggested</span> : null}<input className={input} list={`fashion-aspect-${index}`} value={value} onChange={(e) => isBrand ? change('brand', e.target.value) : setAttribute(key, e.target.value, aspect.aspectConstraint?.itemToAspectCardinality === 'MULTI')} /><datalist id={`fashion-aspect-${index}`}>{aspect.aspectValues?.map((option) => <option key={option.localizedValue} value={option.localizedValue} />)}</datalist></label>;
           })}</div></div>}
+        </section>
+        <section className="space-y-3 border-t pt-4">
+          <div><h3 className="font-semibold">Additional item specifics</h3><p className="text-xs text-slate-500">Source-specific fields stay editable and are included in the eBay listing unless the same specific is already filled above.</p></div>
+          <div className="space-y-3">{Array.from({ length: Math.max(customAspectNames.length, customAspectValues.length) }, (_, index) => <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]" key={`custom-aspect-${index}`}><label className="text-sm">Specific name<input className={input} value={customAspectNames[index] ?? ''} onChange={(event) => updateCustomAspect(index, 'customAspectNames', event.target.value)} /></label><label className="text-sm">Value<input className={input} value={customAspectValues[index] ?? ''} onChange={(event) => updateCustomAspect(index, 'customAspectValues', event.target.value)} /></label><button type="button" className="self-end rounded-lg border px-3 py-2 text-sm" onClick={() => removeCustomAspect(index)}>Remove</button></div>)}</div>
+          <button type="button" className="rounded-lg border px-4 py-2 text-sm" onClick={() => { const index = Math.max(customAspectNames.length, customAspectValues.length); updateCustomAspect(index, 'customAspectNames', ''); updateCustomAspect(index, 'customAspectValues', ''); }}>Add specific</button>
         </section>
       </fieldset>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}

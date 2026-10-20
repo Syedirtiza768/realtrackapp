@@ -528,7 +528,13 @@ export function compatibleFashionAttributes(
   const allowed = new Set(fashionFieldsForFamily(family).map((field) => field.key));
   const next: ProductAttributes = {};
   for (const [key, value] of Object.entries(attributes)) {
-    if (isFashionMetaKey(key) || allowed.has(key) || key === 'brand') {
+    if (
+      isFashionMetaKey(key) ||
+      allowed.has(key) ||
+      key === 'brand' ||
+      key === 'customAspectNames' ||
+      key === 'customAspectValues'
+    ) {
       next[key] = value;
     }
   }
@@ -861,6 +867,39 @@ const FASHION_ASPECT_NAMES: Array<[string, string[]]> = [
   ['Garment Care', ['garmentCare']],
 ];
 
+/** Resolve source eBay specifics to curated Fashion attribute keys. */
+export function fashionAttributeKeyForAspect(name: string): string | null {
+  const normalized = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const aliases: Record<string, string> = {
+    brand: 'brand',
+    department: 'department',
+    type: 'itemType',
+    size: 'size',
+    sizetype: 'sizeType',
+    color: 'color',
+    colour: 'color',
+    style: 'style',
+    pattern: 'pattern',
+    material: 'material',
+    fabrictype: 'fabricType',
+    sleevelength: 'sleeveLength',
+    neckline: 'neckline',
+    closure: 'closure',
+    fit: 'fit',
+    shoewidth: 'width',
+    countryregionofmanufacture: 'countryOfManufacture',
+    countryofmanufacture: 'countryOfManufacture',
+    countryoforigin: 'countryOfManufacture',
+    features: 'features',
+    season: 'season',
+    occasion: 'occasion',
+    theme: 'theme',
+    vintage: 'vintage',
+    garmentcare: 'garmentCare',
+  };
+  return aliases[normalized] ?? null;
+}
+
 function aspectValues(value: ProductAttributes[string] | undefined): string[] {
   const items = Array.isArray(value)
     ? value
@@ -890,10 +929,27 @@ export function fashionAspectsFromAttributes(
     if (!key) continue;
     // Only Features is multi-valued on eBay; others keep the single value whole.
     const values =
-      name === 'Features'
+      name === 'Features' || name === 'Season'
         ? aspectValues(attributes[key])
         : [textValue(attributes[key]).slice(0, EBAY_ASPECT_VALUE_MAX).trim()];
     if (values.length && values[0]) result[name] = values;
+  }
+
+  const customNames = stringArray(attributes.customAspectNames);
+  const customValues = stringArray(attributes.customAspectValues);
+  const normalizeAspect = (value: string) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const emittedNames = new Set(Object.keys(result).map(normalizeAspect));
+  for (let index = 0; index < customNames.length; index++) {
+    const name = customNames[index]?.trim();
+    const rawValue = customValues[index]?.trim();
+    if (!name || !rawValue || isFashionMetaKey(name)) continue;
+    const normalized = normalizeAspect(name);
+    if (!normalized || emittedNames.has(normalized)) continue;
+    const values = aspectValues(rawValue);
+    if (!values.length) continue;
+    result[name.slice(0, EBAY_ASPECT_VALUE_MAX)] = values;
+    emittedNames.add(normalized);
   }
   return result;
 }

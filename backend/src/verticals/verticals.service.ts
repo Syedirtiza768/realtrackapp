@@ -365,9 +365,24 @@ export class VerticalsService {
       }
     }
     if (params.vertical === 'fashion') {
-      const fashion = validateFashionAttributes(
-        params.product.verticalAttributes ?? {},
-      );
+      const fashionAttributes = params.product.verticalAttributes ?? {};
+      if (
+        fashionAttributes._sourceFormat === 'artisticserver-fashion-export' &&
+        fashionAttributes._imageMirrorStatus !== 'complete'
+      ) {
+        blockingErrors.push(
+          'All source catalogue photos must be copied to application storage as WebP before publishing; re-import the source catalogue to retry failed image copies',
+        );
+      }
+      if (
+        fashionAttributes._sourceFormat === 'artisticserver-fashion-export' &&
+        fashionAttributes._measurementUnitReviewRequired === true
+      ) {
+        blockingErrors.push(
+          'Confirm whether the imported source measurements are in cm or inches before publishing',
+        );
+      }
+      const fashion = validateFashionAttributes(fashionAttributes);
       for (const error of fashion.errors) {
         blockingErrors.push(`Invalid Fashion attributes: ${error}`);
       }

@@ -315,7 +315,7 @@ now publishes to that store rather than the connection's primary store.
 The catalog upload endpoint also accepts multipart field `vertical`; omitted or
 legacy values resolve to `automotive`. Non-automotive publishing is fail-closed
 when `multi_vertical_catalog` is disabled and never receives Motors fitment or
-category fallback behavior.
+category fallback behavior. For `vertical=fashion`, this same upload flow recognizes the Artistic Server catalogue export headers and keeps source image, measurement, and item-specific provenance on editable Fashion drafts.
 
 ## eBay Integrations
 

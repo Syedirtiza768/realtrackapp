@@ -30,6 +30,10 @@ Fashion fields follow `backend/src/verticals/fashion.config.ts`. Clothing is alw
 
 Category metadata adds editable item-specific suggestions and marks required values; multi-valued specifics use `|` separators. Backend validation remains authoritative. New drafts can be saved with incomplete publishing fields. AI success is not required to save.
 
+## Imported source catalogue rows
+
+The shared Catalog Import screen can route a workbook to Fashion. Artistic Server item specifics map to curated Fashion fields where known; other specifics stay editable in the paired **Additional item specifics** controls and flow into eBay aspects. Source measurements remain notes until the operator confirms centimetres or inches. Source-export rows show WebP mirror progress, and the backend blocks publishing until every source photo is stored in the application bucket.
+
 Preview uses current form values, `sanitizeHtml` for description markup and `toProxyUrl` for images. Generate listing text uses confirmed Fashion details and keeps reported defects visible. Unknown details are omitted rather than stated as facts.
 
 Saving an edit resets backend approval to `needs_review`. Quarantined/manualReview listings are read-only.

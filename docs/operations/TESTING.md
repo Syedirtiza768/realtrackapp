@@ -1,5 +1,9 @@
 # Testing
 
+## Fashion source catalogue import
+
+Focused regression coverage includes `backend/src/catalog-import/catalog-import.service.spec.ts`, `backend/src/catalog-import/catalog-product.service.spec.ts`, `backend/src/verticals/fashion-catalog-export.spec.ts`, `backend/src/verticals/fashion.config.spec.ts`, `backend/src/verticals/fashion-image-analysis.service.spec.ts`, and `backend/src/verticals/fashion-capture-reliability.spec.ts`. Run `cd backend; npm test -- --runInBand --runTestsByPath src/catalog-import/catalog-import.service.spec.ts src/catalog-import/catalog-product.service.spec.ts src/verticals/fashion-catalog-export.spec.ts src/verticals/fashion.config.spec.ts src/verticals/fashion-image-analysis.service.spec.ts src/verticals/fashion-capture-reliability.spec.ts` after importer or source-field changes; the current main-based run passes 33 tests. A clean backend/frontend build also checks the import, editor, and publish flow.
+
 ## Fashion capture reliability (2026-10-13)
 
 Production follow-up: the same browser suite passed against the deployed bundle.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-21 — Fashion source catalogue import
+
+- Catalog Import can select Fashion and maps the Artistic Server workbook's category, item specifics, measurements, and provenance into editable drafts. Source photos are copied to application S3 as WebP; incomplete image mirrors and unconfirmed measurement units block publishing.
+- The import reuses existing `vertical_attributes` JSONB and adds no database migration. This records the code change only; it does not claim a production import or deploy.
+
 ## 2026-10-15 — Pipeline sample xlsx download fix
 
 - Fixed the "Download Sample Input" link on Pipeline, which downloaded a file Excel could not open. The production frontend image predated `public/pipeline-gridx-sample.xlsx`, so nginx's SPA fallback returned `index.html` under the `.xlsx` name. The repository file is a valid workbook and is unchanged.

@@ -11,7 +11,7 @@ import { Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
-import { DataSource, Repository, type EntityManager } from 'typeorm';
+import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 import { FashionReview } from '../../verticals/entities/fashion-review.entity.js';
 import { BusinessIndustrialReview } from '../../verticals/entities/business-industrial-review.entity.js';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -25,6 +25,7 @@ import {
 } from '../../listings/listing-record.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { StorageService } from '../../storage/storage.service.js';
+import { ImageProcessorService } from '../../storage/image-processor.service.js';
 import { DuplicateDetectionService } from '../services/duplicate-detection.service.js';
 import { EbayComplianceService } from '../services/ebay-compliance.service.js';
 import { CategoryLookupService } from '../services/category-lookup.service.js';
@@ -33,6 +34,7 @@ import {
   isSingleImageBrand,
   selectPrimaryImageForBrand,
 } from '../../channels/ebay/ebay-listing-images.util.js';
+import { fashionCatalogExportAttributes } from '../../verticals/fashion-catalog-export.js';
 
 export interface CsvImportJobData {
   importId: string;
@@ -47,6 +49,8 @@ const BATCH_SIZE = 250;
 const PROGRESS_UPDATE_INTERVAL = 50;
 /** Parallel remote image fetches per SKU during S3 mirror */
 const IMAGE_MIRROR_CONCURRENCY = 6;
+const FASHION_IMAGE_CONCURRENCY = 2;
+const FASHION_IMAGE_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
  * BullMQ processor for CSV catalog imports.
@@ -79,6 +83,7 @@ export class CsvImportProcessor extends WorkerHost {
     private readonly dataSource: DataSource,
     private readonly eventEmitter: EventEmitter2,
     private readonly storageService: StorageService,
+    private readonly imageProcessor: ImageProcessorService,
     private readonly config: ConfigService,
     @Optional() private readonly browseApi?: EbayBrowseApiService,
     @Optional() private readonly categoryLookup?: CategoryLookupService,
@@ -637,7 +642,54 @@ export class CsvImportProcessor extends WorkerHost {
 
           insertedRows += productsToInsert.length;
 
-          if (
+          if (vertical === 'fashion' && this.shouldMirrorCatalogImages()) {
+            const committedRows = importRowEntries.filter(
+              (entry) => entry.status === 'inserted' || entry.status === 'updated',
+            );
+            const productIds = committedRows
+              .map((entry) => entry.createdProductId ?? entry.matchedProductId)
+              .filter((id): id is string => Boolean(id));
+            if (productIds.length) {
+              const committedProducts = await this.productRepo.findBy({
+                id: In([...new Set(productIds)]),
+              });
+              const sourceRows = new Map<string, number>();
+              for (const entry of committedRows) {
+                const productId = entry.createdProductId ?? entry.matchedProductId;
+                if (productId && typeof entry.rowNumber === 'number')
+                  sourceRows.set(productId, entry.rowNumber);
+              }
+              const exportProducts = committedProducts.filter(
+                (product) =>
+                  product.verticalAttributes?._sourceFormat ===
+                  'artisticserver-fashion-export',
+              );
+              if (exportProducts.length) {
+                await this.mirrorFashionImagesForBatch(
+                  exportProducts,
+                  sourceRows,
+                  importRecord,
+                  listingSheetName,
+                  warnings,
+                );
+              }
+            }
+            const genericInserted = savedBatchProducts
+              .map((product, index) => ({ product, listing: listingsToInsert[index] }))
+              .filter(
+                ({ product }) =>
+                  product.verticalAttributes?._sourceFormat !==
+                  'artisticserver-fashion-export',
+              );
+            if (genericInserted.length) {
+              await this.mirrorImagesForInsertedBatch(
+                genericInserted.map(({ product }) => product),
+                genericInserted.map(({ listing }) => listing),
+                importRecord,
+                listingSheetName,
+              );
+            }
+          } else if (
             savedBatchProducts.length > 0 &&
             this.shouldMirrorCatalogImages()
           ) {
@@ -676,7 +728,8 @@ export class CsvImportProcessor extends WorkerHost {
             flaggedForReview,
             invalidRows,
             phase:
-              productsToInsert.length > 0 && this.shouldMirrorCatalogImages()
+              (productsToInsert.length > 0 || productsToUpdate.length > 0) &&
+              this.shouldMirrorCatalogImages()
                 ? 'mirroring_images'
                 : 'batch',
           });
@@ -687,6 +740,15 @@ export class CsvImportProcessor extends WorkerHost {
         );
       }
 
+      if (
+        vertical === 'fashion' &&
+        !this.shouldMirrorCatalogImages() &&
+        warnings.length < 500
+      ) {
+        warnings.push(
+          'Fashion source images remain pending because CATALOG_MIRROR_IMAGES=false; enable image mirroring and re-import the catalogue.',
+        );
+      }
       if (fitmentMergedLines > 0 && warnings.length < 500) {
         warnings.unshift(
           `eBay File Exchange: merged ${fitmentMergedLines} vehicle compatibility continuation line(s) into parent listing rows.`,
@@ -1116,6 +1178,169 @@ export class CsvImportProcessor extends WorkerHost {
   }
 
   /**
+   * Fashion catalogue exports store source URLs only as temporary import data.
+   * Each photo is converted before it is written to the application's S3 bucket;
+   * failed source URLs are retained in JSONB for audit/re-import and cannot publish.
+   */
+  private async mirrorFashionImagesForBatch(
+    products: CatalogProduct[],
+    sourceRows: Map<string, number>,
+    importRecord: CatalogImport,
+    listingSheetName: string,
+    warnings: string[],
+  ): Promise<void> {
+    const skuConcurrency = Math.max(
+      1,
+      Math.min(
+        2,
+        Number(
+          this.config.get<string>('CATALOG_IMPORT_IMAGE_SKU_CONCURRENCY', '4'),
+        ) || 4,
+      ),
+    );
+
+    const readRemoteBody = async (response: Response): Promise<Buffer> => {
+      const declaredLength = Number(response.headers.get('content-length') ?? 0);
+      if (declaredLength > FASHION_IMAGE_MAX_BYTES)
+        throw new Error('source image exceeds the 25 MB import limit');
+      if (!response.body) {
+        const body = Buffer.from(await response.arrayBuffer());
+        if (body.length > FASHION_IMAGE_MAX_BYTES)
+          throw new Error('source image exceeds the 25 MB import limit');
+        return body;
+      }
+      const reader = response.body.getReader();
+      const chunks: Buffer[] = [];
+      let length = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = Buffer.from(value);
+          length += chunk.length;
+          if (length > FASHION_IMAGE_MAX_BYTES) {
+            await reader.cancel();
+            throw new Error('source image exceeds the 25 MB import limit');
+          }
+          chunks.push(chunk);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      return Buffer.concat(chunks, length);
+    };
+
+    const mirrorOne = async (product: CatalogProduct): Promise<void> => {
+      const urls = [
+        ...new Set(
+          (product.imageUrls ?? [])
+            .map((url) => url.trim())
+            .filter((url) => /^https?:\/\//i.test(url)),
+        ),
+      ];
+      const storedUrls: string[] = [];
+      const namespace = `fashion/catalog/${product.id}`;
+
+      for (let offset = 0; offset < urls.length; offset += FASHION_IMAGE_CONCURRENCY) {
+        const slice = urls.slice(offset, offset + FASHION_IMAGE_CONCURRENCY);
+        const converted = await Promise.all(
+          slice.map(async (url): Promise<string | null> => {
+            const key = this.storageService.mirroredObjectKey(
+              namespace,
+              url,
+              '.webp',
+            );
+            try {
+              if (await this.storageService.objectExists(key))
+                return this.storageService.getCdnUrl(key);
+
+              const sourceKey = this.storageService.keyFromUrl(url);
+              let source: Buffer;
+              if (sourceKey) {
+                source = await this.storageService.getObjectBuffer(sourceKey);
+                if (source.length > FASHION_IMAGE_MAX_BYTES)
+                  throw new Error('source image exceeds the 25 MB import limit');
+              } else {
+                const response = await fetch(url, {
+                  redirect: 'follow',
+                  signal: AbortSignal.timeout(60_000),
+                  headers: {
+                    Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8',
+                    'User-Agent': 'RealTrackApp-Fashion-Import/1.0',
+                  },
+                });
+                if (!response.ok)
+                  throw new Error(`source image returned HTTP ${response.status}`);
+                source = await readRemoteBody(response);
+              }
+              const webp = await this.imageProcessor.convertBufferToWebp(source);
+              await this.storageService.putObject(key, webp.buffer, 'image/webp');
+              return this.storageService.getCdnUrl(key);
+            } catch (error) {
+              this.logger.warn(
+                `Fashion image mirror failed for SKU ${product.sku ?? product.id}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+              return null;
+            }
+          }),
+        );
+        storedUrls.push(...converted.filter((url): url is string => Boolean(url)));
+      }
+
+      const expected = urls.length;
+      const stored = storedUrls.length;
+      const mirrorStatus = expected > 0 && stored === expected
+        ? 'complete'
+        : stored > 0
+          ? 'partial'
+          : 'failed';
+      const mirrorMeta = {
+        _sourceFormat: 'artisticserver-fashion-export',
+        _sourceImageUrls: urls,
+        _imageMirrorExpected: String(expected),
+        _imageMirrorStored: String(stored),
+        _imageMirrorFailed: String(expected - stored),
+        _imageMirrorStatus: mirrorStatus,
+      };
+
+      await this.dataSource.query(
+        `UPDATE "catalog_products"
+         SET "image_urls" = $2, "vertical_attributes" =
+           COALESCE("vertical_attributes", '{}'::jsonb) || $3::jsonb
+         WHERE "id" = $1 AND "vertical" = 'fashion'`,
+        [product.id, storedUrls, JSON.stringify(mirrorMeta)],
+      );
+
+      const rowNumber = sourceRows.get(product.id);
+      if (rowNumber !== undefined) {
+        await this.listingRepo.update(
+          {
+            sourceFileName: importRecord.fileName,
+            sheetName: listingSheetName,
+            sourceRowNumber: rowNumber,
+          },
+          { itemPhotoUrl: storedUrls.join('|') || null },
+        );
+        if (mirrorStatus !== 'complete') {
+          const message = `Fashion image copy is ${mirrorStatus}: ${stored}/${expected} source images converted to WebP in application storage.`;
+          await this.rowRepo.update(
+            { importId: importRecord.id, rowNumber },
+            { message },
+          );
+          if (warnings.length < 500)
+            warnings.push(`Row ${rowNumber}: ${message}`);
+        }
+      }
+    };
+
+    for (let offset = 0; offset < products.length; offset += skuConcurrency) {
+      await Promise.all(
+        products.slice(offset, offset + skuConcurrency).map(mirrorOne),
+      );
+    }
+  }
+
+  /**
    * Copy remote PicURL / imageUrls into S3 (IAM role or env credentials).
    * Updates catalog_products.image_urls and listing_records.itemPhotoUrl for preview/export.
    */
@@ -1289,12 +1514,25 @@ export class CsvImportProcessor extends WorkerHost {
     const brand = data['brand'] || null;
     const mpn = data['mpn'] || null;
     const title = data['title'] || '';
-    const attributeValidation = validateVerticalAttributes(
-      vertical,
+    const importAttributes =
       vertical === 'business_industrial'
         ? businessIndustrialAttributesFromImportRow(data)
-        : attributesFromImportRow(vertical, data),
+        : vertical === 'fashion'
+          ? fashionCatalogExportAttributes(
+              data,
+              attributesFromImportRow('fashion', data),
+            )
+          : attributesFromImportRow(vertical, data);
+    const attributeValidation = validateVerticalAttributes(
+      vertical,
+      importAttributes,
     );
+    const mappedBrand =
+      brand ||
+      (vertical === 'fashion' &&
+        typeof attributeValidation.attributes.brand === 'string'
+        ? attributeValidation.attributes.brand
+        : null);
 
     // Parse image URLs (pipe-delimited in eBay format)
     let imageUrls: string[] = [];
@@ -1368,8 +1606,8 @@ export class CsvImportProcessor extends WorkerHost {
       title: title,
       titleNormalized: title ? this.normalizeTitle(title) : null,
       description: data['description'] || null,
-      brand: brand,
-      brandNormalized: brand ? this.normalizeBrand(brand) : null,
+      brand: mappedBrand,
+      brandNormalized: mappedBrand ? this.normalizeBrand(mappedBrand) : null,
       partType: data['partType'] || null,
       placement: data['placement'] || null,
       material: data['material'] || null,
@@ -1422,14 +1660,25 @@ export class CsvImportProcessor extends WorkerHost {
     const title = data['title'] || null;
     const { make: extractedMake, model: extractedModel } =
       extractMakeModelFromTitle(title);
+    const verticalAttributes =
+      vertical === 'business_industrial'
+        ? businessIndustrialAttributesFromImportRow(data)
+        : vertical === 'fashion'
+          ? fashionCatalogExportAttributes(
+              data,
+              attributesFromImportRow(vertical, data),
+            )
+          : attributesFromImportRow(vertical, data);
+    const importedBrand =
+      data['brand'] ||
+      (typeof verticalAttributes.brand === 'string'
+        ? verticalAttributes.brand
+        : null);
 
     return {
       organizationId,
       vertical,
-      verticalAttributes:
-        vertical === 'business_industrial'
-          ? businessIndustrialAttributesFromImportRow(data)
-          : attributesFromImportRow(vertical, data),
+      verticalAttributes,
       sourceFileName,
       sourceFilePath,
       origin: ListingOrigin.PIPELINE_IMPORT,
@@ -1459,7 +1708,7 @@ export class CsvImportProcessor extends WorkerHost {
       shippingProfileName: data['shippingProfile'] || null,
       returnProfileName: data['returnProfile'] || null,
       paymentProfileName: data['paymentProfile'] || null,
-      cBrand: data['brand'] || null,
+      cBrand: importedBrand,
       cType: data['partType'] || null,
       cFeatures: data['features'] || null,
       cManufacturerPartNumber: data['mpn'] || null,
