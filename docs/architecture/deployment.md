@@ -2,6 +2,33 @@
 
 # Deployment Architecture
 
+## Fashion source catalogue import (2026-10-21)
+
+Commit `b95045cd2ca5731af1db1b40a090625731dac04b` is deployed as
+`realtrackapp-backend:fashion-catalog-import-20261021-b95045cd` and
+`realtrackapp-frontend:fashion-catalog-import-20261021-b95045cd`. The backend
+image layers the Artistic Server import and Fashion export modules over the
+active `primemotive-feedback-20261015-r5` image; the frontend layers the new
+Fashion import/editor bundle over `publish-workspace-20261020-r3`. Deployment
+reused each running service's saved Compose file list and appended the release
+override, retaining production environment values and earlier fixes.
+
+Only backend and frontend containers were recreated. PostgreSQL, Redis and
+PgBouncer container IDs stayed unchanged. The feature uses the existing
+`catalog_products.vertical_attributes` JSONB field, so no database migration
+was added or applied. Public homepage, `/fashion/import`, its JavaScript asset,
+and `/api/health` returned HTTP 200; the backend is healthy and frontend nginx
+configuration is valid. No source workbook was imported during deployment.
+
+Rollback images are
+`realtrackapp-backend:rollback-fashion-catalog-import-20261021-b95045cd` and
+`realtrackapp-frontend:rollback-fashion-catalog-import-20261021-b95045cd`.
+The release directory `/home/ubuntu/realtrackapp-fashion-catalog-import-20261021-b95045cd/`
+retains the image overlay files, rollback Compose override, rollout script and
+exact pre-deploy Compose arguments. Run
+`bash /home/ubuntu/realtrackapp-fashion-catalog-import-20261021-b95045cd/rollout.sh --rollback`
+to restore the two previous application images.
+
 ## Fashion full screen camera deployment (2026-10-13)
 
 The frontend runs `fashion-fullscreen-camera-20261013-a84fa885`. The backend

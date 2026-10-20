@@ -1,5 +1,17 @@
 # Current State
 
+**2026-10-21 (Fashion source catalogue import deployed)** — Commit
+`b95045cd2ca5731af1db1b40a090625731dac04b` is live as
+`realtrackapp-backend:fashion-catalog-import-20261021-b95045cd` and
+`realtrackapp-frontend:fashion-catalog-import-20261021-b95045cd`. Catalog Import
+can target Fashion for Artistic Server spreadsheets and creates editable drafts;
+source images are mirrored to application S3 as WebP, and unresolved image or
+measurement-unit review blocks publishing. The import uses existing JSONB fields
+and required no migration. Public homepage, Fashion import route, frontend asset,
+and API health return HTTP 200. Only backend/frontend were recreated; database,
+Redis and PgBouncer stayed running. No workbook was imported during rollout.
+See `docs/architecture/DEPLOYMENT.md` for rollback images and release details.
+
 **2026-10-13 (Fashion responsive capture deployed)** — Live camera,
 continuous photo capture with bounded background uploads/retries, automatic AVP
 numbers and size suffixes, opt-in measurements and idempotent create retries are

@@ -3,7 +3,8 @@
 ## 2026-10-21 — Fashion source catalogue import
 
 - Catalog Import can select Fashion and maps the Artistic Server workbook's category, item specifics, measurements, and provenance into editable drafts. Source photos are copied to application S3 as WebP; incomplete image mirrors and unconfirmed measurement units block publishing.
-- The import reuses existing `vertical_attributes` JSONB and adds no database migration. This records the code change only; it does not claim a production import or deploy.
+- The import reuses existing `vertical_attributes` JSONB and adds no database migration. Commit `b95045cd` was deployed on 2026-10-21 as backend/frontend images `realtrackapp-backend:fashion-catalog-import-20261021-b95045cd` and `realtrackapp-frontend:fashion-catalog-import-20261021-b95045cd`, layered over the active production images to preserve live fixes. Only backend and frontend containers were recreated; PostgreSQL, Redis, and PgBouncer stayed running.
+- The public homepage, `/fashion/import`, its JavaScript asset, and `/api/health` returned HTTP 200 after deployment. No workbook was imported during rollout. Rollback images and saved Compose arguments are in `/home/ubuntu/realtrackapp-fashion-catalog-import-20261021-b95045cd/`.
 
 ## 2026-10-15 — Pipeline sample xlsx download fix
 
