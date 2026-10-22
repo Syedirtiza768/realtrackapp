@@ -107,6 +107,10 @@ Tracked in: [/docs/context/KNOWN_ISSUES.md](../context/KNOWN_ISSUES.md).
 
 ---
 
+## Image decompression limits
+
+ImageProcessorService.convertBufferToWebp keeps its standard 4096 × 4096 pixel ceiling. The Fashion catalogue import uses an explicit 20,000,000-pixel ceiling with the existing 25 MB source-image byte cap before resizing to at most 2048 pixels and WebP quality 85. This scoped override only accepts the known 4284 × 4284 export photos; all other image workflows retain the default ceiling.
+
 ## Sensitive Environment Variables
 
 | Variable | Security Level | Notes |

@@ -235,7 +235,7 @@ Queue registrations and processors (`@Processor`) discovered in code:
 | `ingestion` | `ingestion/processors/ingestion.processor.ts` | 3 | Image/data ingestion |
 | `pipeline` | `ingestion/processors/pipeline.processor.ts` | 1 | Enrichment pipeline; enqueues `listing-optimization` |
 | `listing-optimization` | `listing-optimization/processors/…` | 1 | Listing optimization |
-| `catalog-import` | `catalog-import/processors/csv-import.processor.ts` | 1 | CSV/catalog import with persisted row checkpoints, idempotent resume, transient retries, and incomplete Fashion image repair (memory-heavy; needs large heap) |
+| `catalog-import` | `catalog-import/processors/csv-import.processor.ts` | 1 | CSV/catalog import with persisted row checkpoints, idempotent resume, transient retries, and incomplete Fashion image repair with a 25 MB/20 MP source cap and 2048-pixel WebP quality-85 output (memory-heavy; needs large heap) |
 | `fitment` | `fitment/processors/fitment-import.processor.ts` | 1 | Fitment import |
 | `inventory` | `inventory/processors/inventory-sync.processor.ts` | 1 | Inventory sync |
 | `orders` | `orders/processors/order-import.processor.ts` | 1 | Order import |

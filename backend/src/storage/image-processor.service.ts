@@ -44,13 +44,19 @@ export class ImageProcessorService {
   constructor(private readonly storage: StorageService) {}
 
   /** Convert and orient an uploaded image before it is persisted to S3. */
-  async convertBufferToWebp(buffer: Buffer): Promise<CanonicalWebpResult> {
+  async convertBufferToWebp(
+    buffer: Buffer,
+    options: { maxPixelCount?: number } = {},
+  ): Promise<CanonicalWebpResult> {
     const validation = this.validateMagicBytes(buffer);
     if (!validation.valid) throw new Error('Invalid image data');
+    const maxPixelCount = options.maxPixelCount ?? MAX_PIXEL_COUNT;
+    if (!Number.isSafeInteger(maxPixelCount) || maxPixelCount <= 0)
+      throw new Error('Invalid maximum image pixel count');
     const metadata = await sharp(buffer).metadata();
     const width = metadata.width ?? 0;
     const height = metadata.height ?? 0;
-    if (width * height > MAX_PIXEL_COUNT)
+    if (width * height > maxPixelCount)
       throw new Error('Image exceeds the maximum pixel count');
     const converted = await sharp(buffer)
       .rotate()

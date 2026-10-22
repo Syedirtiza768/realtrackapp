@@ -54,6 +54,7 @@ const PROGRESS_UPDATE_INTERVAL = 50;
 const IMAGE_MIRROR_CONCURRENCY = 6;
 const FASHION_IMAGE_CONCURRENCY = 2;
 const FASHION_IMAGE_MAX_BYTES = 25 * 1024 * 1024;
+const FASHION_IMAGE_MAX_PIXEL_COUNT = 20_000_000;
 const FASHION_IMAGE_RETRY_ATTEMPTS = 3;
 const FASHION_IMAGE_RETRY_BASE_DELAY_MS = 1_000;
 const FASHION_PENDING_IMAGE_BATCH_SIZE = 25;
@@ -1586,7 +1587,9 @@ export class CsvImportProcessor extends WorkerHost {
                   source = await readRemoteBody(response);
                 }
                 const webp =
-                  await this.imageProcessor.convertBufferToWebp(source);
+                  await this.imageProcessor.convertBufferToWebp(source, {
+                    maxPixelCount: FASHION_IMAGE_MAX_PIXEL_COUNT,
+                  });
                 await this.storageService.putObject(
                   key,
                   webp.buffer,
