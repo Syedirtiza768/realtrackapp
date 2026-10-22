@@ -523,7 +523,8 @@ export class CatalogImportService {
       await this.importRepo.save(importRecord);
     }
 
-    // Fashion retry is explicit: a failed worker must not race an automatic retry.
+    // The processor checkpoints committed rows and resumes incomplete image work,
+    // so bounded automatic retries do not duplicate products or row results.
     try {
       await this.importQueue.add(
         'process-csv',
@@ -534,8 +535,11 @@ export class CatalogImportService {
           resumeFromRow: importRecord.lastProcessedRow,
         },
         {
-          attempts: importRecord.vertical === 'fashion' ? 1 : 3,
-          backoff: { type: 'exponential', delay: 30_000 },
+          attempts: importRecord.vertical === 'fashion' ? 5 : 3,
+          backoff: {
+            type: 'exponential',
+            delay: 30_000,
+          },
           removeOnComplete: 50,
           removeOnFail: 100,
         },

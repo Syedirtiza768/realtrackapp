@@ -17,7 +17,10 @@ import { BusinessIndustrialReview } from '../../verticals/entities/business-indu
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as fs from 'fs';
 import { CatalogImport } from '../entities/catalog-import.entity.js';
-import { CatalogImportRow } from '../entities/catalog-import-row.entity.js';
+import {
+  CatalogImportRow,
+  type ImportRowStatus,
+} from '../entities/catalog-import-row.entity.js';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
 import {
   ListingRecord,
@@ -45,12 +48,146 @@ export interface CsvImportJobData {
 
 /** Target primary listing rows per DB batch */
 const BATCH_SIZE = 250;
-/** Emit DB + SSE progress every N physical CSV lines processed */
+/** Emit UI progress every N physical CSV lines; persist each batch checkpoint. */
 const PROGRESS_UPDATE_INTERVAL = 50;
 /** Parallel remote image fetches per SKU during S3 mirror */
 const IMAGE_MIRROR_CONCURRENCY = 6;
 const FASHION_IMAGE_CONCURRENCY = 2;
 const FASHION_IMAGE_MAX_BYTES = 25 * 1024 * 1024;
+const FASHION_IMAGE_RETRY_ATTEMPTS = 3;
+const FASHION_IMAGE_RETRY_BASE_DELAY_MS = 1_000;
+const FASHION_PENDING_IMAGE_BATCH_SIZE = 25;
+const CATALOG_IMPORT_LOCAL_RETRY_ATTEMPTS = 5;
+const CATALOG_IMPORT_LOCAL_RETRY_BASE_DELAY_MS = 1_000;
+
+export function fashionSourceImageUrls(
+  product: Pick<CatalogProduct, 'imageUrls' | 'verticalAttributes'>,
+): string[] {
+  const persistedSourceUrls = product.verticalAttributes?._sourceImageUrls;
+  const candidates = Array.isArray(persistedSourceUrls)
+    ? persistedSourceUrls
+    : typeof persistedSourceUrls === 'string'
+      ? persistedSourceUrls.split('|')
+      : product.imageUrls;
+  return [
+    ...new Set(
+      (candidates ?? [])
+        .filter((url): url is string => typeof url === 'string')
+        .map((url) => url.trim())
+        .filter((url) => /^https?:\/\//i.test(url)),
+    ),
+  ];
+}
+
+export function isRetryableFashionImageError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    code?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  const status = Number(
+    candidate.status ??
+      candidate.statusCode ??
+      candidate.$metadata?.httpStatusCode,
+  );
+  if (Number.isFinite(status) && status >= 400) {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  const code =
+    typeof candidate.code === 'string' ? candidate.code.toUpperCase() : '';
+  if (
+    [
+      'ECONNRESET',
+      'ECONNREFUSED',
+      'ETIMEDOUT',
+      'EAI_AGAIN',
+      'ENOTFOUND',
+      'ENETUNREACH',
+      'EHOSTUNREACH',
+      'UND_ERR_CONNECT_TIMEOUT',
+      'UND_ERR_HEADERS_TIMEOUT',
+      'UND_ERR_SOCKET',
+    ].includes(code)
+  ) {
+    return true;
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown }).message === 'string'
+        ? (error as { message: string }).message
+        : '';
+  const statusMatch = message.match(/(?:HTTP|status)\s+(\d{3})/i);
+  if (statusMatch) {
+    const responseStatus = Number(statusMatch[1]);
+    return (
+      responseStatus === 408 ||
+      responseStatus === 425 ||
+      responseStatus === 429 ||
+      responseStatus >= 500
+    );
+  }
+  const name =
+    typeof (error as { name?: unknown }).name === 'string'
+      ? (error as { name: string }).name
+      : '';
+  return /timeout|timed out|fetch failed|network|socket hang up|connection reset|connection (?:terminated|closed|timed out)|server closed the connection|could not connect|temporarily unavailable|resource temporarily unavailable|database system is starting up|rate limit|throttl/i.test(
+    `${name} ${message}`,
+  );
+}
+
+export function isRetryableCatalogImportError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    code?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+    driverError?: { code?: unknown };
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  const status = Number(
+    candidate.status ??
+      candidate.statusCode ??
+      candidate.$metadata?.httpStatusCode,
+  );
+  if (Number.isFinite(status) && status >= 400) {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  const rawCode = candidate.code ?? candidate.driverError?.code;
+  const code = typeof rawCode === 'string' ? rawCode.toUpperCase() : '';
+  if (
+    [
+      'ECONNRESET',
+      'ECONNREFUSED',
+      'ETIMEDOUT',
+      'EAI_AGAIN',
+      'ENOTFOUND',
+      'ENETUNREACH',
+      'EHOSTUNREACH',
+      '57P01',
+      '57P02',
+      '57P03',
+      '40001',
+      '40P01',
+      '55P03',
+      '53300',
+    ].includes(code) ||
+    code.startsWith('08')
+  ) {
+    return true;
+  }
+
+  return isRetryableFashionImageError(error);
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 /**
  * BullMQ processor for CSV catalog imports.
@@ -65,7 +202,12 @@ const FASHION_IMAGE_MAX_BYTES = 25 * 1024 * 1024;
  * 7. Generate import report on completion
  */
 /** Single worker: each job holds the full CSV in memory (readFileSync + line array); concurrency 2 doubled peak heap. */
-@Processor('catalog-import', { concurrency: 1 })
+@Processor('catalog-import', {
+  concurrency: 1,
+  lockDuration: 5 * 60 * 1000,
+  stalledInterval: 30_000,
+  maxStalledCount: 5,
+})
 export class CsvImportProcessor extends WorkerHost {
   private readonly logger = new Logger(CsvImportProcessor.name);
 
@@ -92,6 +234,36 @@ export class CsvImportProcessor extends WorkerHost {
   }
 
   async process(job: Job<CsvImportJobData>): Promise<void> {
+    const queueAttempts = Math.max(1, Number(job.opts.attempts ?? 1));
+    const localAttemptLimit =
+      queueAttempts === 1 ? CATALOG_IMPORT_LOCAL_RETRY_ATTEMPTS : 1;
+    for (
+      let localAttempt = 1;
+      localAttempt <= localAttemptLimit;
+      localAttempt++
+    ) {
+      try {
+        await this.processAttempt(job, localAttempt, localAttemptLimit);
+        return;
+      } catch (error) {
+        if (
+          localAttempt >= localAttemptLimit ||
+          !isRetryableCatalogImportError(error)
+        ) {
+          throw error;
+        }
+        await wait(
+          CATALOG_IMPORT_LOCAL_RETRY_BASE_DELAY_MS * 2 ** (localAttempt - 1),
+        );
+      }
+    }
+  }
+
+  private async processAttempt(
+    job: Job<CsvImportJobData>,
+    localAttempt: number,
+    localAttemptLimit: number,
+  ): Promise<void> {
     const { importId, filePath, columnMapping, resumeFromRow } = job.data;
     this.logger.log(
       `Processing CSV import ${importId} from row ${resumeFromRow}`,
@@ -132,11 +304,27 @@ export class CsvImportProcessor extends WorkerHost {
         await this.importRepo.update(importId, { totalRows });
       }
 
-      let insertedRows = importRecord.insertedRows || 0;
-      let updatedRows = importRecord.updatedRows || 0;
-      let skippedDuplicates = importRecord.skippedDuplicates || 0;
-      let flaggedForReview = importRecord.flaggedForReview || 0;
-      let invalidRows = importRecord.invalidRows || 0;
+      const rowStatuses = await this.rowRepo.find({
+        where: { importId },
+        select: ['id', 'rowNumber', 'status', 'createdAt'],
+        order: { createdAt: 'ASC', id: 'ASC' },
+      });
+      const latestStatusByRow = new Map<number, ImportRowStatus>();
+      for (const row of rowStatuses)
+        latestStatusByRow.set(row.rowNumber, row.status);
+
+      let insertedRows = 0;
+      let updatedRows = 0;
+      let skippedDuplicates = 0;
+      let flaggedForReview = 0;
+      let invalidRows = 0;
+      for (const status of latestStatusByRow.values()) {
+        if (status === 'inserted') insertedRows++;
+        else if (status === 'updated') updatedRows++;
+        else if (status === 'duplicate_skipped') skippedDuplicates++;
+        else if (status === 'duplicate_flagged') flaggedForReview++;
+        else if (status === 'invalid') invalidRows++;
+      }
       const warnings: string[] = importRecord.warnings || [];
 
       // Track unique identifiers seen during this import run (across all batches)
@@ -144,7 +332,6 @@ export class CsvImportProcessor extends WorkerHost {
       const seenSku = new Set<string>();
       const seenUpc = new Set<string>();
       const seenEbayItemId = new Set<string>();
-      const seenInsertedRows = new Set<number>();
 
       // Seed with already-inserted rows for resumable imports.
       const alreadyInserted = await this.productRepo.find({
@@ -159,17 +346,23 @@ export class CsvImportProcessor extends WorkerHost {
         }
       }
 
-      const alreadyInsertedRows = await this.rowRepo.find({
-        where: { importId, status: 'inserted' },
-        select: ['rowNumber'],
-      });
-      for (const row of alreadyInsertedRows) {
-        seenInsertedRows.add(row.rowNumber);
-      }
+      const processedRowNumbers = new Set(latestStatusByRow.keys());
 
-      let physicalCursor = resumeFromRow;
+      let physicalCursor = Math.min(
+        totalRows,
+        Math.max(0, resumeFromRow, importRecord.lastProcessedRow || 0),
+      );
       let fitmentMergedLines = 0;
       let orphanFitmentLines = 0;
+
+      if (vertical === 'fashion' && this.shouldMirrorCatalogImages()) {
+        const shouldContinue = await this.retryPendingFashionImages(
+          importRecord,
+          listingSheetName,
+          warnings,
+        );
+        if (!shouldContinue) return;
+      }
 
       // Process primary listing rows (eBay File Exchange: merge vehicle-compatibility continuation lines)
       while (physicalCursor < totalRows) {
@@ -228,7 +421,7 @@ export class CsvImportProcessor extends WorkerHost {
         const importRowEntries: Partial<CatalogImportRow>[] = [];
 
         for (const row of parsedRows) {
-          if (seenInsertedRows.has(row.rowNumber)) {
+          if (processedRowNumbers.has(row.rowNumber)) {
             continue;
           }
 
@@ -472,7 +665,6 @@ export class CsvImportProcessor extends WorkerHost {
               organizationId,
             );
             productsToInsert.push(product);
-            seenInsertedRows.add(row.rowNumber);
             listingsToInsert.push(
               this.mapToListingRecord(
                 row.data,
@@ -640,84 +832,33 @@ export class CsvImportProcessor extends WorkerHost {
             }
           });
 
-          insertedRows += productsToInsert.length;
-
-          if (vertical === 'fashion' && this.shouldMirrorCatalogImages()) {
-            const committedRows = importRowEntries.filter(
-              (entry) => entry.status === 'inserted' || entry.status === 'updated',
-            );
-            const productIds = committedRows
-              .map((entry) => entry.createdProductId ?? entry.matchedProductId)
-              .filter((id): id is string => Boolean(id));
-            if (productIds.length) {
-              const committedProducts = await this.productRepo.findBy({
-                id: In([...new Set(productIds)]),
-              });
-              const sourceRows = new Map<string, number>();
-              for (const entry of committedRows) {
-                const productId = entry.createdProductId ?? entry.matchedProductId;
-                if (productId && typeof entry.rowNumber === 'number')
-                  sourceRows.set(productId, entry.rowNumber);
-              }
-              const exportProducts = committedProducts.filter(
-                (product) =>
-                  product.verticalAttributes?._sourceFormat ===
-                  'artisticserver-fashion-export',
-              );
-              if (exportProducts.length) {
-                await this.mirrorFashionImagesForBatch(
-                  exportProducts,
-                  sourceRows,
-                  importRecord,
-                  listingSheetName,
-                  warnings,
-                );
-              }
-            }
-            const genericInserted = savedBatchProducts
-              .map((product, index) => ({ product, listing: listingsToInsert[index] }))
-              .filter(
-                ({ product }) =>
-                  product.verticalAttributes?._sourceFormat !==
-                  'artisticserver-fashion-export',
-              );
-            if (genericInserted.length) {
-              await this.mirrorImagesForInsertedBatch(
-                genericInserted.map(({ product }) => product),
-                genericInserted.map(({ listing }) => listing),
-                importRecord,
-                listingSheetName,
-              );
-            }
-          } else if (
-            savedBatchProducts.length > 0 &&
-            this.shouldMirrorCatalogImages()
-          ) {
-            await this.mirrorImagesForInsertedBatch(
-              savedBatchProducts,
-              listingsToInsert,
-              importRecord,
-              listingSheetName,
-            );
+          for (const entry of importRowEntries) {
+            if (typeof entry.rowNumber === 'number')
+              processedRowNumbers.add(entry.rowNumber);
           }
+          insertedRows += productsToInsert.length;
         }
 
-        // Update progress (physical CSV lines, includes merged compatibility rows)
-        if (
+        const shouldReportProgress =
           physicalCursor % PROGRESS_UPDATE_INTERVAL === 0 ||
-          physicalCursor >= totalRows
-        ) {
-          await this.importRepo.update(importId, {
-            processedRows: physicalCursor,
-            insertedRows,
-            updatedRows,
-            skippedDuplicates,
-            flaggedForReview,
-            invalidRows,
-            lastProcessedRow: physicalCursor,
-            warnings: warnings.length > 0 ? warnings : null,
-          });
+          physicalCursor >= totalRows;
+        const shouldMirrorImages = this.shouldMirrorCatalogImages();
 
+        // Commit the row checkpoint before the slower image-copy stage. If a
+        // worker stops during S3 work, the next attempt resumes from this
+        // cursor and repairs any incomplete Fashion image sets first.
+        await this.importRepo.update(importId, {
+          processedRows: physicalCursor,
+          insertedRows,
+          updatedRows,
+          skippedDuplicates,
+          flaggedForReview,
+          invalidRows,
+          lastProcessedRow: physicalCursor,
+          warnings: warnings.length > 0 ? warnings : null,
+        });
+
+        if (shouldReportProgress) {
           this.eventEmitter.emit('catalog-import.progress', {
             importId,
             processedRows: physicalCursor,
@@ -729,15 +870,102 @@ export class CsvImportProcessor extends WorkerHost {
             invalidRows,
             phase:
               (productsToInsert.length > 0 || productsToUpdate.length > 0) &&
-              this.shouldMirrorCatalogImages()
+              shouldMirrorImages
                 ? 'mirroring_images'
                 : 'batch',
           });
         }
 
+        if (vertical === 'fashion' && shouldMirrorImages) {
+          const committedRows = importRowEntries.filter(
+            (entry) =>
+              entry.status === 'inserted' || entry.status === 'updated',
+          );
+          const productIds = committedRows
+            .map((entry) => entry.createdProductId ?? entry.matchedProductId)
+            .filter((id): id is string => Boolean(id));
+          if (productIds.length) {
+            const committedProducts = await this.productRepo.findBy({
+              id: In([...new Set(productIds)]),
+            });
+            const sourceRows = new Map<string, number>();
+            for (const entry of committedRows) {
+              const productId =
+                entry.createdProductId ?? entry.matchedProductId;
+              if (productId && typeof entry.rowNumber === 'number')
+                sourceRows.set(productId, entry.rowNumber);
+            }
+            const exportProducts = committedProducts.filter(
+              (product) =>
+                product.verticalAttributes?._sourceFormat ===
+                'artisticserver-fashion-export',
+            );
+            if (exportProducts.length) {
+              await this.mirrorFashionImagesForBatch(
+                exportProducts,
+                sourceRows,
+                importRecord,
+                listingSheetName,
+                warnings,
+              );
+            }
+          }
+          const genericInserted = savedBatchProducts
+            .map((product, index) => ({
+              product,
+              listing: listingsToInsert[index],
+            }))
+            .filter(
+              ({ product }) =>
+                product.verticalAttributes?._sourceFormat !==
+                'artisticserver-fashion-export',
+            );
+          if (genericInserted.length) {
+            await this.mirrorImagesForInsertedBatch(
+              genericInserted.map(({ product }) => product),
+              genericInserted.map(({ listing }) => listing),
+              importRecord,
+              listingSheetName,
+            );
+          }
+        } else if (savedBatchProducts.length > 0 && shouldMirrorImages) {
+          await this.mirrorImagesForInsertedBatch(
+            savedBatchProducts,
+            listingsToInsert,
+            importRecord,
+            listingSheetName,
+          );
+        }
+
+        if (shouldReportProgress) {
+          this.eventEmitter.emit('catalog-import.progress', {
+            importId,
+            processedRows: physicalCursor,
+            totalRows,
+            insertedRows,
+            updatedRows,
+            skippedDuplicates,
+            flaggedForReview,
+            invalidRows,
+            phase: 'batch',
+          });
+        }
+
+        if (warnings.length > 0)
+          await this.importRepo.update(importId, { warnings });
+
         await job.updateProgress(
           totalRows > 0 ? Math.round((physicalCursor / totalRows) * 100) : 100,
         );
+      }
+
+      if (vertical === 'fashion' && this.shouldMirrorCatalogImages()) {
+        const shouldContinue = await this.retryPendingFashionImages(
+          importRecord,
+          listingSheetName,
+          warnings,
+        );
+        if (!shouldContinue) return;
       }
 
       if (
@@ -810,17 +1038,36 @@ export class CsvImportProcessor extends WorkerHost {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Import ${importId} failed: ${message}`);
+      const maxAttempts = Math.max(1, Number(job.opts.attempts ?? 1));
+      const queueRetryScheduled = job.attemptsMade + 1 < maxAttempts;
+      const localRetryScheduled =
+        localAttempt < localAttemptLimit && isRetryableCatalogImportError(err);
+      const retryScheduled = queueRetryScheduled || localRetryScheduled;
+      if (queueRetryScheduled) {
+        this.logger.warn(
+          `Import ${importId} attempt ${job.attemptsMade + 1}/${maxAttempts} failed; BullMQ will retry it: ${message}`,
+        );
+      } else if (localRetryScheduled) {
+        this.logger.warn(
+          `Import ${importId} encountered a transient issue; it will restart from its saved checkpoint (${localAttempt + 1}/${localAttemptLimit}): ${message}`,
+        );
+      } else {
+        this.logger.error(
+          `Import ${importId} failed after ${maxAttempts} attempt(s): ${message}`,
+        );
+      }
 
       await this.importRepo.update(importId, {
-        status: 'failed',
-        errorMessage: message.substring(0, 2000),
+        status: retryScheduled ? 'processing' : 'failed',
+        errorMessage: retryScheduled ? null : message.substring(0, 2000),
       });
 
-      this.eventEmitter.emit('catalog-import.failed', {
-        importId,
-        error: message,
-      });
+      if (!retryScheduled) {
+        this.eventEmitter.emit('catalog-import.failed', {
+          importId,
+          error: message,
+        });
+      }
 
       throw err; // Let BullMQ handle retry
     }
@@ -1177,6 +1424,61 @@ export class CsvImportProcessor extends WorkerHost {
     return this.config.get<string>('CATALOG_MIRROR_IMAGES', 'true') !== 'false';
   }
 
+  private async retryPendingFashionImages(
+    importRecord: CatalogImport,
+    listingSheetName: string,
+    warnings: string[],
+  ): Promise<boolean> {
+    let afterSourceRow = 0;
+    while (true) {
+      const currentStatus = await this.importRepo.findOne({
+        where: { id: importRecord.id },
+        select: ['status'],
+      });
+      if (currentStatus?.status === 'cancelled') return false;
+
+      const products = await this.productRepo
+        .createQueryBuilder('product')
+        .where('"product"."import_id" = :importId', {
+          importId: importRecord.id,
+        })
+        .andWhere('"product"."vertical" = :vertical', {
+          vertical: 'fashion',
+        })
+        .andWhere(
+          '"product"."vertical_attributes" ->> \'_sourceFormat\' = :sourceFormat',
+          { sourceFormat: 'artisticserver-fashion-export' },
+        )
+        .andWhere(
+          "COALESCE(\"product\".\"vertical_attributes\" ->> '_imageMirrorStatus', 'pending') NOT IN ('complete', 'no_images')",
+        )
+        .andWhere('"product"."source_row" > :afterSourceRow', {
+          afterSourceRow,
+        })
+        .orderBy('product.sourceRow', 'ASC')
+        .addOrderBy('product.id', 'ASC')
+        .take(FASHION_PENDING_IMAGE_BATCH_SIZE)
+        .getMany();
+      if (products.length === 0) return true;
+
+      const sourceRows = new Map<string, number>();
+      for (const product of products) {
+        if (product.sourceRow !== null)
+          sourceRows.set(product.id, product.sourceRow);
+      }
+      await this.mirrorFashionImagesForBatch(
+        products,
+        sourceRows,
+        importRecord,
+        listingSheetName,
+        warnings,
+      );
+      afterSourceRow = Math.max(
+        ...products.map((product) => product.sourceRow ?? afterSourceRow),
+      );
+    }
+  }
+
   /**
    * Fashion catalogue exports store source URLs only as temporary import data.
    * Each photo is converted before it is written to the application's S3 bucket;
@@ -1200,7 +1502,9 @@ export class CsvImportProcessor extends WorkerHost {
     );
 
     const readRemoteBody = async (response: Response): Promise<Buffer> => {
-      const declaredLength = Number(response.headers.get('content-length') ?? 0);
+      const declaredLength = Number(
+        response.headers.get('content-length') ?? 0,
+      );
       if (declaredLength > FASHION_IMAGE_MAX_BYTES)
         throw new Error('source image exceeds the 25 MB import limit');
       if (!response.body) {
@@ -1231,17 +1535,15 @@ export class CsvImportProcessor extends WorkerHost {
     };
 
     const mirrorOne = async (product: CatalogProduct): Promise<void> => {
-      const urls = [
-        ...new Set(
-          (product.imageUrls ?? [])
-            .map((url) => url.trim())
-            .filter((url) => /^https?:\/\//i.test(url)),
-        ),
-      ];
+      const urls = fashionSourceImageUrls(product);
       const storedUrls: string[] = [];
       const namespace = `fashion/catalog/${product.id}`;
 
-      for (let offset = 0; offset < urls.length; offset += FASHION_IMAGE_CONCURRENCY) {
+      for (
+        let offset = 0;
+        offset < urls.length;
+        offset += FASHION_IMAGE_CONCURRENCY
+      ) {
         const slice = urls.slice(offset, offset + FASHION_IMAGE_CONCURRENCY);
         const converted = await Promise.all(
           slice.map(async (url): Promise<string | null> => {
@@ -1250,50 +1552,81 @@ export class CsvImportProcessor extends WorkerHost {
               url,
               '.webp',
             );
-            try {
-              if (await this.storageService.objectExists(key))
-                return this.storageService.getCdnUrl(key);
+            for (
+              let attempt = 1;
+              attempt <= FASHION_IMAGE_RETRY_ATTEMPTS;
+              attempt++
+            ) {
+              try {
+                if (await this.storageService.objectExists(key))
+                  return this.storageService.getCdnUrl(key);
 
-              const sourceKey = this.storageService.keyFromUrl(url);
-              let source: Buffer;
-              if (sourceKey) {
-                source = await this.storageService.getObjectBuffer(sourceKey);
-                if (source.length > FASHION_IMAGE_MAX_BYTES)
-                  throw new Error('source image exceeds the 25 MB import limit');
-              } else {
-                const response = await fetch(url, {
-                  redirect: 'follow',
-                  signal: AbortSignal.timeout(60_000),
-                  headers: {
-                    Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8',
-                    'User-Agent': 'RealTrackApp-Fashion-Import/1.0',
-                  },
-                });
-                if (!response.ok)
-                  throw new Error(`source image returned HTTP ${response.status}`);
-                source = await readRemoteBody(response);
+                const sourceKey = this.storageService.keyFromUrl(url);
+                let source: Buffer;
+                if (sourceKey) {
+                  source = await this.storageService.getObjectBuffer(sourceKey);
+                  if (source.length > FASHION_IMAGE_MAX_BYTES)
+                    throw new Error(
+                      'source image exceeds the 25 MB import limit',
+                    );
+                } else {
+                  const response = await fetch(url, {
+                    redirect: 'follow',
+                    signal: AbortSignal.timeout(60_000),
+                    headers: {
+                      Accept:
+                        'image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8',
+                      'User-Agent': 'RealTrackApp-Fashion-Import/1.0',
+                    },
+                  });
+                  if (!response.ok)
+                    throw new Error(
+                      `source image returned HTTP ${response.status}`,
+                    );
+                  source = await readRemoteBody(response);
+                }
+                const webp =
+                  await this.imageProcessor.convertBufferToWebp(source);
+                await this.storageService.putObject(
+                  key,
+                  webp.buffer,
+                  'image/webp',
+                );
+                return this.storageService.getCdnUrl(key);
+              } catch (error) {
+                if (
+                  attempt < FASHION_IMAGE_RETRY_ATTEMPTS &&
+                  isRetryableFashionImageError(error)
+                ) {
+                  await wait(
+                    FASHION_IMAGE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+                  );
+                  continue;
+                }
+                this.logger.warn(
+                  `Fashion image mirror failed for SKU ${product.sku ?? product.id}: ${error instanceof Error ? error.message : String(error)}`,
+                );
+                return null;
               }
-              const webp = await this.imageProcessor.convertBufferToWebp(source);
-              await this.storageService.putObject(key, webp.buffer, 'image/webp');
-              return this.storageService.getCdnUrl(key);
-            } catch (error) {
-              this.logger.warn(
-                `Fashion image mirror failed for SKU ${product.sku ?? product.id}: ${error instanceof Error ? error.message : String(error)}`,
-              );
-              return null;
             }
+            return null;
           }),
         );
-        storedUrls.push(...converted.filter((url): url is string => Boolean(url)));
+        storedUrls.push(
+          ...converted.filter((url): url is string => Boolean(url)),
+        );
       }
 
       const expected = urls.length;
       const stored = storedUrls.length;
-      const mirrorStatus = expected > 0 && stored === expected
-        ? 'complete'
-        : stored > 0
-          ? 'partial'
-          : 'failed';
+      const mirrorStatus =
+        expected === 0
+          ? 'no_images'
+          : stored === expected
+            ? 'complete'
+            : stored > 0
+              ? 'partial'
+              : 'failed';
       const mirrorMeta = {
         _sourceFormat: 'artisticserver-fashion-export',
         _sourceImageUrls: urls,
@@ -1303,32 +1636,62 @@ export class CsvImportProcessor extends WorkerHost {
         _imageMirrorStatus: mirrorStatus,
       };
 
-      await this.dataSource.query(
-        `UPDATE "catalog_products"
-         SET "image_urls" = $2, "vertical_attributes" =
-           COALESCE("vertical_attributes", '{}'::jsonb) || $3::jsonb
-         WHERE "id" = $1 AND "vertical" = 'fashion'`,
-        [product.id, storedUrls, JSON.stringify(mirrorMeta)],
-      );
-
       const rowNumber = sourceRows.get(product.id);
-      if (rowNumber !== undefined) {
-        await this.listingRepo.update(
-          {
-            sourceFileName: importRecord.fileName,
-            sheetName: listingSheetName,
-            sourceRowNumber: rowNumber,
-          },
-          { itemPhotoUrl: storedUrls.join('|') || null },
+      await this.dataSource.transaction(async (manager) => {
+        await manager.query(
+          `UPDATE "catalog_products"
+           SET "image_urls" = $2, "vertical_attributes" =
+             COALESCE("vertical_attributes", '{}'::jsonb) || $3::jsonb
+           WHERE "id" = $1 AND "vertical" = 'fashion'`,
+          [product.id, storedUrls, JSON.stringify(mirrorMeta)],
         );
-        if (mirrorStatus !== 'complete') {
-          const message = `Fashion image copy is ${mirrorStatus}: ${stored}/${expected} source images converted to WebP in application storage.`;
-          await this.rowRepo.update(
-            { importId: importRecord.id, rowNumber },
-            { message },
+
+        if (rowNumber !== undefined) {
+          await manager.getRepository(ListingRecord).update(
+            {
+              sourceFileName: importRecord.fileName,
+              sheetName: listingSheetName,
+              sourceRowNumber: rowNumber,
+            },
+            { itemPhotoUrl: storedUrls.join('|') || null },
           );
-          if (warnings.length < 500)
-            warnings.push(`Row ${rowNumber}: ${message}`);
+        }
+
+        if (
+          rowNumber !== undefined &&
+          mirrorStatus !== 'complete' &&
+          mirrorStatus !== 'no_images'
+        ) {
+          const message = `Fashion image copy is ${mirrorStatus}: ${stored}/${expected} source images converted to WebP in application storage.`;
+          await manager
+            .getRepository(CatalogImportRow)
+            .update({ importId: importRecord.id, rowNumber }, { message });
+        } else if (rowNumber !== undefined) {
+          await manager
+            .getRepository(CatalogImportRow)
+            .createQueryBuilder()
+            .update(CatalogImportRow)
+            .set({ message: null })
+            .where('"import_id" = :importId AND "row_number" = :rowNumber', {
+              importId: importRecord.id,
+              rowNumber,
+            })
+            .andWhere('"message" LIKE :messagePrefix', {
+              messagePrefix: 'Fashion image copy is %',
+            })
+            .execute();
+        }
+      });
+
+      if (rowNumber !== undefined) {
+        const warningPrefix = `Row ${rowNumber}: Fashion image copy is `;
+        for (let index = warnings.length - 1; index >= 0; index--) {
+          if (warnings[index].startsWith(warningPrefix))
+            warnings.splice(index, 1);
+        }
+        if (mirrorStatus !== 'complete' && mirrorStatus !== 'no_images') {
+          const warning = `Row ${rowNumber}: Fashion image copy is ${mirrorStatus}: ${stored}/${expected} source images converted to WebP in application storage.`;
+          if (warnings.length < 500) warnings.push(warning);
         }
       }
     };
@@ -1530,7 +1893,7 @@ export class CsvImportProcessor extends WorkerHost {
     const mappedBrand =
       brand ||
       (vertical === 'fashion' &&
-        typeof attributeValidation.attributes.brand === 'string'
+      typeof attributeValidation.attributes.brand === 'string'
         ? attributeValidation.attributes.brand
         : null);
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-22 — Resumable Fashion catalogue imports
+
+- Fashion imports checkpoint committed row results before the slower WebP/S3 mirror stage. BullMQ stalled-job recovery and bounded retries resume from saved row outcomes, retry transient database/network/image failures, and perform a final pass over incomplete Fashion image mirrors.
+- Rows continue through permanent image-source failures with a clear per-row warning; those drafts remain blocked from publishing until their image requirements are resolved. No schema migration is required.
+
 ## 2026-10-21 — Fashion source catalogue import
 
 - Catalog Import can select Fashion and maps the Artistic Server workbook's category, item specifics, measurements, and provenance into editable drafts. Source photos are copied to application S3 as WebP; incomplete image mirrors and unconfirmed measurement units block publishing.

@@ -54,6 +54,10 @@ These scenarios also pass against the deployed full screen camera bundle
 - **Frontend**: No meaningful tests
 - **Framework**: Jest (backend only)
 
+## Fashion catalogue import recovery (2026-10-22)
+
+The focused worker recovery checks pass with `cd backend; npm run build` and `npm test -- --runInBand --runTestsByPath src/catalog-import/processors/csv-import.processor.spec.ts src/catalog-import/catalog-import.service.spec.ts` (2 suites, 5 tests). They cover retained source image URLs, transient versus permanent image failures, and transient database retry classification. The production import remains an operational follow-up; permanent source URL failures remain row-level warnings.
+
 ## Running Tests
 
 ```bash
