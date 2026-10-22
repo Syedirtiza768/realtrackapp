@@ -2,6 +2,13 @@
 
 # Deployment Architecture
 
+## Fashion catalogue import recovery (2026-10-22)
+
+Main commit 250b94f7 adds persisted row checkpoints, idempotent resume, bounded BullMQ stalled-job recovery and retry handling, plus a final repair pass for incomplete Fashion image mirrors. Production backend image `realtrackapp-backend:fashion-import-recovery-20261022-250b94f7` was built as an overlay on the existing Fashion catalogue import image and deployed by recreating only the backend service.
+
+The backend became healthy and /api/health returned HTTP 200. The active workbook import resumed from 500 to 750 of 13,209 rows after the worker restart. The frontend, PostgreSQL, Redis and PgBouncer stayed running; no schema migration was needed. The saved backend-only rollback override is in `/home/ubuntu/realtrackapp-fashion-import-recovery-20261022-250b94f7/rollback.yml`; rollback image `realtrackapp-backend:rollback-fashion-import-recovery-20261022-250b94f7`.
+
+
 ## Fashion source catalogue import (2026-10-21)
 
 Commit `b95045cd2ca5731af1db1b40a090625731dac04b` is deployed as

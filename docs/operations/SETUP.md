@@ -1,5 +1,8 @@
 # Setup
 
+Fashion catalogue import recovery (2026-10-22): Production uses backend image `realtrackapp-backend:fashion-import-recovery-20261022-250b94f7`. It resumes from committed row checkpoints and retries transient worker/image failures. The 2026-10-22 backend-only rollout preserved the current frontend and infrastructure containers; rollback details are in Deployment Architecture.
+
+
 **Production Fashion release (2026-10-13):** use the retained release's exact
 Compose argument list and cumulative overrides for recreation/rollback; a bare
 build from the older server checkout can replace deployed hotfixes. See
