@@ -38,13 +38,14 @@ describe('ImageProcessorService.convertBufferToWebp', () => {
   });
 
   it('allows the bounded Fashion import cap while keeping WebP output settings', async () => {
+    pipeline.metadata.mockResolvedValue({ width: 5712, height: 4284 });
     const result = await service.convertBufferToWebp(source, {
-      maxPixelCount: 20_000_000,
+      maxPixelCount: 25_000_000,
     });
 
     expect(result).toEqual({
       buffer: Buffer.from('webp'),
-      width: 4284,
+      width: 5712,
       height: 4284,
     });
     expect(pipeline.resize).toHaveBeenCalledWith(2048, 2048, {

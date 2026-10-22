@@ -4,9 +4,10 @@
 
 - Fashion imports checkpoint committed row results before the slower WebP/S3 mirror stage. BullMQ stalled-job recovery and bounded retries resume from saved row outcomes, retry transient database/network/image failures, and perform a final pass over incomplete Fashion image mirrors.
 - Rows continue through permanent image-source failures with a clear per-row warning; those drafts remain blocked from publishing until their image requirements are resolved. No schema migration is required.
-- Fashion import accepts source photos up to 20 MP and 25 MB, then keeps the existing maximum 2048-pixel WebP output at quality 85. The shared image conversion limit remains unchanged for all other workflows.
+- Fashion import accepts source photos up to 25 MP and 25 MB, then keeps the existing maximum 2048-pixel WebP output at quality 85. The shared image conversion limit remains unchanged for all other workflows.
 - Deployed backend-only image realtrackapp-backend:fashion-import-recovery-20261022-250b94f7 on 2026-10-22 from main commit 250b94f7. API health returned HTTP 200, and the active import resumed from 500 to 750 of 13,209 rows; frontend, PostgreSQL, Redis, and PgBouncer were left running. Backend rollback image: realtrackapp-backend:rollback-fashion-import-recovery-20261022-250b94f7.
 - Deployed main commit 3b9247f2 as backend-only image realtrackapp-backend:fashion-import-recovery-20mp-20261022-3b9247f2. Twelve sampled source photos were 4,284 × 4,284 (18.35 MP), above the shared 16.7 MP limit; Fashion imports now accept up to 20 MP while retaining the same 2048-pixel WebP output and quality 85. The backend health endpoint returned HTTP 200, and the active import remained queued as a live worker job; frontend, PostgreSQL, Redis, and PgBouncer stayed running. Rollback image: realtrackapp-backend:rollback-fashion-import-recovery-20mp-20261022-3b9247f2.
+- Follow-up inspection found seven unmirrored photos at 5,712 × 4,284 (24.46 MP) and under the 25 MB byte cap; the Fashion-only pixel ceiling is raised to 25 MP without changing WebP dimensions or quality.
 
 ## 2026-10-21 — Fashion source catalogue import
 

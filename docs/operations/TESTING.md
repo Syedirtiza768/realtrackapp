@@ -56,7 +56,7 @@ These scenarios also pass against the deployed full screen camera bundle
 
 ## Fashion catalogue import recovery (2026-10-22)
 
-The focused worker recovery checks pass with `cd backend; npm run build` and `npm test -- --runInBand --runTestsByPath src/catalog-import/processors/csv-import.processor.spec.ts src/catalog-import/catalog-import.service.spec.ts src/storage/image-processor.service.spec.ts` (3 suites, 7 tests). They cover retained source image URLs, transient versus permanent image failures, and transient database retry classification, the default image pixel ceiling, and the Fashion-only 20 MP override that preserves the 2048-pixel WebP output. The production import remains an operational follow-up; permanent source URL failures remain row-level warnings.
+The focused worker recovery checks pass with `cd backend; npm run build` and `npm test -- --runInBand --runTestsByPath src/catalog-import/processors/csv-import.processor.spec.ts src/catalog-import/catalog-import.service.spec.ts src/storage/image-processor.service.spec.ts` (3 suites, 7 tests). They cover retained source image URLs, transient versus permanent image failures, and transient database retry classification, the default image pixel ceiling, and the Fashion-only 25 MP override that preserves the 2048-pixel WebP output. The production import remains an operational follow-up; permanent source URL failures remain row-level warnings.
 
 ## Running Tests
 

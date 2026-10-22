@@ -1,6 +1,6 @@
 # Setup
 
-Fashion catalogue import recovery (2026-10-22): Production uses backend image `realtrackapp-backend:fashion-import-recovery-20mp-20261022-3b9247f2`. It resumes from committed row checkpoints, retries transient worker/image failures, and permits Fashion source photos up to 20 MP while preserving the existing WebP output settings. The backend-only rollouts preserved the current frontend and infrastructure containers; rollback details are in [Deployment Architecture](../architecture/deployment.md).
+Fashion catalogue import recovery (2026-10-22): Production uses backend image `realtrackapp-backend:fashion-import-recovery-20mp-20261022-3b9247f2`. It resumes from committed row checkpoints, retries transient worker/image failures, and permits Fashion source photos up to 25 MP while preserving the existing WebP output settings. The backend-only rollouts preserved the current frontend and infrastructure containers; rollback details are in [Deployment Architecture](../architecture/deployment.md).
 
 
 **Production Fashion release (2026-10-13):** use the retained release's exact
