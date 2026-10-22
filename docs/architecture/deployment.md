@@ -8,6 +8,8 @@ Main commit 250b94f7 adds persisted row checkpoints, idempotent resume, bounded 
 
 The backend became healthy and /api/health returned HTTP 200. The active workbook import resumed from 500 to 750 of 13,209 rows after the worker restart. The frontend, PostgreSQL, Redis and PgBouncer stayed running; no schema migration was needed. The saved backend-only rollback override is in `/home/ubuntu/realtrackapp-fashion-import-recovery-20261022-250b94f7/rollback.yml`; rollback image `realtrackapp-backend:rollback-fashion-import-recovery-20261022-250b94f7`.
 
+Main commit 3b9247f2 added a 20 MP input-pixel cap scoped to Fashion imports after twelve sampled source photos measured 4,284 × 4,284 pixels (18.35 MP), just above the shared image limit. WebP output remains capped at 2,048 pixels with quality 85. Production backend image `realtrackapp-backend:fashion-import-recovery-20mp-20261022-3b9247f2` passed its compiled-code checks and `/api/health` returned HTTP 200. Only the backend was recreated; the frontend, PostgreSQL, Redis and PgBouncer container IDs were unchanged. The active import's worker job was live after restart; the UI still showed processing at 750 of 13,209 rows at the time of verification. Rollback image `realtrackapp-backend:rollback-fashion-import-recovery-20mp-20261022-3b9247f2` and rollback override are retained under `/home/ubuntu/realtrackapp-fashion-import-recovery-20mp-20261022-3b9247f2/`.
+
 
 ## Fashion source catalogue import (2026-10-21)
 
