@@ -2,6 +2,12 @@
 
 # Deployment Architecture
 
+## Fashion catalogue workbook import completion (2026-10-23)
+
+Production import `a93b9937-2135-4300-b3a2-580ec407f582` for `catalogue-export-2026-10-20 (1).xlsx` completed at `2026-10-23 17:30:44 UTC` with all 13,209 rows processed: 13,162 inserted, 0 updated, 4 duplicates, 43 flagged for review, and 0 invalid. The outcomes reconcile to the workbook total.
+
+The final `catalog_products` aggregate contained 13,135 products with application S3-mirrored image URLs, 27 with no stored image URLs, and 0 with non-empty image URLs outside the mirror. Backend logs contained 218 source-image HTTP 403 mirror-warning entries during the 30-minute completion window; the final aggregate showed no remaining unmirrored URLs. The backend, PostgreSQL, and Redis were healthy, BullMQ active/wait counts were 0, and job progress was 100% at verification.
+
 ## Fashion catalogue import recovery (2026-10-22)
 
 Main commit 250b94f7 adds persisted row checkpoints, idempotent resume, bounded BullMQ stalled-job recovery and retry handling, plus a final repair pass for incomplete Fashion image mirrors. Production backend image `realtrackapp-backend:fashion-import-recovery-20261022-250b94f7` was built as an overlay on the existing Fashion catalogue import image and deployed by recreating only the backend service.
