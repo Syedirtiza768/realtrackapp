@@ -2,6 +2,15 @@
 
 # Deployment Architecture
 
+## Parts Search portal and Needs Review badge (2026-10-27)
+
+Production now runs backend image `realtrackapp-backend:parts-search-20261027-4fc25e79` and frontend image `realtrackapp-frontend:parts-search-20261027-49d1dfe7`. Both are layered on the previously live images (`fashion-import-recovery-25mp-20261022-1c389779`, `catalog-condition-icon-20261021-r1`); rollback tags `rollback-parts-search-20261027-4fc25e79` and `rollback-parts-search-20261027-49d1dfe7` point at them. Release folders: `/home/ubuntu/realtrackapp-parts-search-20261027-4fc25e79/` and `/home/ubuntu/realtrackapp-frontend-parts-search-20261027-49d1dfe7/` (Dockerfile, Compose override, rollback override, rollout script, recorded Compose args).
+
+- **Backend layer:** adds `dist/src/parts-search/` and main's `app.module.js` (identical to the live file apart from the module import). `rbac/permission-registry.js` was deliberately not replaced: the live file has the Primemotive permissions `published_listings.external_feed` / `published_listings.sales.notify`, which main lacks, and lacks main's `stock.*` permissions. Only the `'parts-search': 'dashboard.view'` sidebar key was patched in. Reconcile that file with main before any full backend rebuild.
+- **Frontend:** built from main `49d1dfe7`. Before the switch, the live bundle's user-visible strings were compared with the new build; the only live-only change (the "Needs Review" badge from an uncommitted `dist/`) was committed to main first, so nothing live was dropped.
+- **Checks:** backend healthy; `/api/parts-search/*` routes mapped; container reaches `https://partsbazar360.com/api/v1/search`; `/api/parts-search/status` → 401 unauthenticated; `/`, `/parts-search`, `/parts-search/login`, `/auto-parts` → 200 with bundle `index-D15VAWcc.js`; `nginx -t` passes in the running container. PostgreSQL, Redis and PgBouncer containers unchanged.
+- `PARTSBAZAR360_SEARCH_API_KEY` is not set yet, so the portal serves the PartsBazar360 buyer view. `docker compose` must run with `sudo` on this host (some override files are root-only).
+
 ## Fashion catalogue workbook import completion (2026-10-23)
 
 Production import `a93b9937-2135-4300-b3a2-580ec407f582` for `catalogue-export-2026-10-20 (1).xlsx` completed at `2026-10-23 17:30:44 UTC` with all 13,209 rows processed: 13,162 inserted, 0 updated, 4 duplicates, 43 flagged for review, and 0 invalid. The outcomes reconcile to the workbook total.

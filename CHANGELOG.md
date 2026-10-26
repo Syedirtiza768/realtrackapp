@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27 — Parts Search portal deployed to production
+
+- Backend `realtrackapp-backend:parts-search-20261027-4fc25e79` and frontend `realtrackapp-frontend:parts-search-20261027-49d1dfe7` (main `49d1dfe7`) are live; rollback tags are kept. `/parts-search` is available to Auto Parts users in buyer-view mode until `PARTSBAZAR360_SEARCH_API_KEY` is configured. Details in `docs/architecture/deployment.md`.
+
 ## 2026-10-27 — "Needs Review" listing status badge committed
 
 - The Auto Parts catalog shows a `needs_review` listing status as an amber "Needs Review" badge (`ListingStatusCell`) and status dot (`CatalogInventoryDetailModal`); any status value the frontend does not recognise is shown the same way and never offers a Publish action.

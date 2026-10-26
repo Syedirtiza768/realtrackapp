@@ -1,5 +1,7 @@
 # Setup
 
+Parts Search portal (2026-10-27): Production uses backend image `realtrackapp-backend:parts-search-20261027-4fc25e79` and frontend image `realtrackapp-frontend:parts-search-20261027-49d1dfe7` (main `49d1dfe7`), with rollback tags `rollback-parts-search-20261027-4fc25e79` / `rollback-parts-search-20261027-49d1dfe7`. The portal runs in buyer-view mode until `PARTSBAZAR360_SEARCH_API_KEY` is set. See [../architecture/deployment.md](../architecture/deployment.md#parts-search-portal-and-needs-review-badge-2026-10-27).
+
 Fashion catalogue import recovery (2026-10-22): Production uses backend image `realtrackapp-backend:fashion-import-recovery-25mp-20261022-1c389779`. It resumes from committed row checkpoints, retries transient worker/image failures, and permits Fashion source photos up to 25 MP while preserving the existing WebP output settings. The backend-only rollouts preserved the current frontend and infrastructure containers; rollback details are in [Deployment Architecture](../architecture/deployment.md).
 
 
