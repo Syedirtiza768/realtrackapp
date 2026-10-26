@@ -545,6 +545,21 @@ API clients are organized by domain in `src/lib/`:
 
 ---
 
+## Parts Search portal (2026-10-26)
+
+Read-only proxy over PartsBazar360 universal search; all routes require `dashboard.view`. Full detail in [architecture/api-map.md](architecture/api-map.md#parts-search-portal-2026-10-26).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/parts-search/query` | Search (internal view with every offer when `PARTSBAZAR360_SEARCH_API_KEY` is set, else buyer view) |
+| GET | `/api/parts-search/suggest?q=` | Typeahead (parts, categories, brands, makes) |
+| GET | `/api/parts-search/parts/:id` | Part detail (internal: all offers, stock, source records) |
+| GET | `/api/parts-search/status` | Upstream / internal-key health |
+
+Frontend client: `src/lib/partsSearchApi.ts`.
+
+---
+
 ## Related Documentation
 
 - **Architecture**: `/docs/architecture/overview.md`

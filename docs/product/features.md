@@ -65,6 +65,16 @@ Shared by Auto Parts, Fashion and B&I at `/<workspace>/stock`. Design: [../archi
 - Channel quantity per store = linked warehouse stock − buffer + capped supplier quantity. It runs in shadow mode until push is enabled per store.
 - Weighted-average cost, valuation and aging reports, and a CSV-exportable ledger.
 
+## Parts Search portal (2026-10-26)
+
+`/parts-search` — search the whole PartsBazar360 catalogue from inside Omni Core. Anyone who can open the Auto Parts workspace can use it (same `dashboard.view` permission, same login).
+- One search box understands OEM/part numbers in any separator format (`86401-12020`, `86401 12020`, `A 221 820 02 64`), partial numbers, typos and year/make/model phrases. Typeahead suggests parts, makes, categories and brands.
+- Results show what the engine understood ("Part number: 8640112020"), why each part matched (OEM, interchange, superseded number), and say plainly when only related parts were found.
+- Filters: make, model, year, category, brand, part type, condition, in stock, has photos; plus seller and source in the internal view. Every search is a shareable URL.
+- **Internal view** (when `PARTSBAZAR360_SEARCH_API_KEY` is configured): every offer on a part, including paused/ended ones and offers hidden by the Superior priority rule, with seller, store, source tag and key, seller SKU, seller base price and per-warehouse stock, each labelled Live / Hidden / Outranked. Part pages add the import source records.
+- Without the key, or if PartsBazar360's internal endpoint is unavailable, the portal shows the buyer view and says so.
+- Read-only in this release: no actions write to Omni Core or PartsBazar360.
+
 ## For each major module — quick reference
 
 For purpose, key files, data flow, DB tables, permissions, and extension notes

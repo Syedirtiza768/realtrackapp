@@ -192,6 +192,21 @@ docker compose logs -f postgres redis
 
 ---
 
+### Parts Search portal (optional)
+
+`/parts-search` works with no configuration: it uses PartsBazar360's public search (`PARTSBAZAR360_API_URL`, default `https://partsbazar360.com/api`). For the internal view (every offer, seller, source and stock), set the same random secret on both sides and restart both APIs:
+
+```bash
+# Omni Core backend
+PARTSBAZAR360_SEARCH_API_KEY=<secret>
+# PartsBazar360 API
+REALTRACK_SEARCH_API_KEY=<same secret>
+```
+
+Optional: `PARTS_SEARCH_TIMEOUT_MS` (default 8000), `PARTS_SEARCH_CACHE_TTL_SECONDS` (default 30; 0 disables caching). `GET /api/parts-search/status` reports whether the key works.
+
+---
+
 ## Database Migrations
 
 ### Run Migrations

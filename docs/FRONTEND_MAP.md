@@ -106,6 +106,20 @@ All protected routes are wrapped in `<ProtectedRoute>` and `<Shell>`.
 
 ---
 
+### Parts Search portal (2026-10-26)
+
+A sibling of the Auto Parts, Fashion and B&I workspaces (not under `/auto-parts`), with its own shell (`PartsSearchShell` on `VerticalWorkspaceShell`). Every route except the login requires `dashboard.view`, so exactly the Auto Parts users can open it; the session (JWT in `localStorage`) is shared, so no second sign-in.
+
+| Route | Component | Permission | Notes |
+|-------|-----------|------------|-------|
+| `/parts-search/login` | `LoginPage` (`heading="Sign in to Parts Search"`) | public | Logs in with `vertical: 'automotive'`; returns to the requested URL including its query string |
+| `/parts-search/change-password` | `FashionPasswordPage` | authenticated | Same pattern as other workspaces |
+| `/parts-search` | `PartsSearchHomePage` | `dashboard.view` | Search box, recent searches (per browser), example queries, data-source status |
+| `/parts-search/results` | `PartsSearchResultsPage` | `dashboard.view` | All state in the query string (`q`, repeated list filters, `year`, `inStock`, `hasImage`, `sort`, `page`, `pageSize`) |
+| `/parts-search/parts/:id` | `PartsSearchPartPage` | `dashboard.view` | Part facts, sellers/offers/stock table, source records (internal view), fitment list |
+
+Components live in `src/components/parts-search/` (`SearchBox`, `ResultCard`, `FacetSidebar`, `InternalOffersTable`, `DataSourceNotice`). The Auto Parts sidebar links to the portal ("Parts Search", module key `parts-search`). A 401 on a `/parts-search/*` page sends the user to `/parts-search/login`.
+
 ## Component Organization
 
 ```
@@ -209,6 +223,8 @@ src/components/
 | `rbacApi.ts` | RBAC admin | `/api/rbac` |
 | `clientBrandingApi.ts` | Client branding | `/api/client-settings` |
 | `searchApi.ts` | Search | `/api/listings` |
+| `partsSearchApi.ts` | Parts Search portal (PartsBazar360 universal search) | `/api/parts-search` |
+
 
 ### Core Utilities
 

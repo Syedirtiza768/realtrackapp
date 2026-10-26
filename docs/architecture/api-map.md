@@ -72,6 +72,19 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 | storage | `storage.controller.ts` | `/storage` | `storage.view` |
 | feature-flags | `feature-flag.controller.ts` | `/api/feature-flags` ⚠️ | `feature_flags.view` |
 
+## Parts Search portal (2026-10-26)
+
+`/api/parts-search/*` — read-only proxy over PartsBazar360 universal search for the `/parts-search` portal (`backend/src/parts-search/`). Every route requires `dashboard.view`, the Auto Parts workspace permission.
+
+| Method | Path | Upstream on PartsBazar360 | Notes |
+|---|---|---|---|
+| GET | `/api/parts-search/query` | `/api/integrations/realtrack/search` when `PARTSBAZAR360_SEARCH_API_KEY` is set, otherwise `/api/v1/search` | Params mirror PartsBazar360's `SearchQueryDto` (`q` ≤ 200, `page` ≤ 400, `pageSize` ∈ 24/48/72, list filters ≤ 25 values, sent as repeated params). `seller`/`sourceTag` only reach the internal endpoint. `meta.audience` = `internal` or `public`; `meta.internalUnavailableReason` is set when internal search answered 401/403/404/503 and public search was used instead. 503 `{degraded:true}` on timeout or 5xx. Throttled 5/s, 120/min per user. |
+| GET | `/api/parts-search/suggest?q=` | `/api/search/suggest` | Typeahead. Fewer than 2 chars or any upstream failure returns empty lists, never an error. Throttled 20/s, 400/min. |
+| GET | `/api/parts-search/parts/:id` | `/api/integrations/realtrack/search/parts/:id` (keyed) or `/api/search/parts/:id` | Part detail. Internal view adds `internalOffers` (every offer, any status, with seller, store, source, SKU, base price, per-warehouse stock) and `sourceRecords`. 404 passes PartsBazar360's reason through. |
+| GET | `/api/parts-search/status` | `/api/v1/search` probe + internal `/health` | Upstream reachable, index name, whether the internal key works. |
+
+Responses are cached in Redis for `PARTS_SEARCH_CACHE_TTL_SECONDS` (default 30 s; part detail ≥ 120 s), keyed separately for internal and public. Degraded answers are never cached.
+
 ## Warehouse stock (2026-10-05)
 
 `/api/stock/*` — warehouses, bins, SKU stock, documents, procurement and purchase orders, order stock, and channel quantity sync. The full table is in [API_CONTRACTS.md](API_CONTRACTS.md#warehouse-stock-apistock) and the design is in [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md). This is distinct from `/api/inventory/*` (the Auto Parts enrichment workbench).

@@ -12,6 +12,22 @@
 
 const TOKEN_KEY = 'mk_auth_token';
 
+/** Each workspace has its own login page; send an expired session back to it. */
+const WORKSPACE_LOGIN_PATHS: Array<[prefix: string, loginPath: string]> = [
+  ['/fashion', '/fashion/login'],
+  ['/business-industrial', '/business-industrial/login'],
+  ['/parts-search', '/parts-search/login'],
+];
+
+function redirectToWorkspaceLogin(): void {
+  const { pathname } = window.location;
+  const onLoginPage =
+    pathname.startsWith('/login') || WORKSPACE_LOGIN_PATHS.some(([, loginPath]) => pathname.startsWith(loginPath));
+  if (onLoginPage) return;
+  const match = WORKSPACE_LOGIN_PATHS.find(([prefix]) => pathname.startsWith(prefix));
+  window.location.href = match ? match[1] : '/login';
+}
+
 /**
  * Get auth headers for manual use (e.g. with third-party HTTP clients).
  */
@@ -49,13 +65,7 @@ export async function fetchWithAuth<T = unknown>(
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('mk_auth_user');
     // Redirect to login (unless already on login page)
-    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/fashion/login') && !window.location.pathname.startsWith('/business-industrial/login')) {
-      window.location.href = window.location.pathname.startsWith('/fashion')
-        ? '/fashion/login'
-        : window.location.pathname.startsWith('/business-industrial')
-          ? '/business-industrial/login'
-          : '/login';
-    }
+    redirectToWorkspaceLogin();
     throw new Error('Session expired. Please log in again.');
   }
 
@@ -150,13 +160,7 @@ export async function fetchDownloadResponse(url: string): Promise<Response> {
   if (res.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('mk_auth_user');
-    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/fashion/login') && !window.location.pathname.startsWith('/business-industrial/login')) {
-      window.location.href = window.location.pathname.startsWith('/fashion')
-        ? '/fashion/login'
-        : window.location.pathname.startsWith('/business-industrial')
-          ? '/business-industrial/login'
-          : '/login';
-    }
+    redirectToWorkspaceLogin();
     throw new Error('Session expired. Please log in again.');
   }
 

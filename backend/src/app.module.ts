@@ -44,6 +44,7 @@ import { TeamsModule } from './teams/teams.module.js';
 import { VerticalsModule } from './verticals/verticals.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { StockModule } from './stock/stock.module.js';
+import { PartsSearchModule } from './parts-search/parts-search.module.js';
 
 @Module({
   imports: [
@@ -131,6 +132,7 @@ import { StockModule } from './stock/stock.module.js';
     VerticalsModule,
     CatalogModule,
     StockModule,
+    PartsSearchModule,
   ],
   controllers: [AppController],
   providers: [

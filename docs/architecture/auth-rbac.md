@@ -90,6 +90,16 @@ Order: `ThrottlerGuard` → `JwtAuthGuard` → `PermissionsGuard`.
 - `src/lib/permissions.ts` + `hooks/usePermissions.ts` + a `<Can permission="…">`
   component hide UI elements.
 
+### Parts Search portal gate (2026-10-26)
+
+`/parts-search` (SPA) and `/api/parts-search/*` both require **`dashboard.view`** — the
+same permission as the Auto Parts workspace — rather than a new permission.
+`RbacService.syncFromRegistry` skips roles with `isCustomized = true`, so a newly
+registered permission would never reach edited roles and those users would lose the
+portal while keeping Auto Parts. Reusing the permission keeps "can use Auto Parts ⇔ can
+use Parts Search" true for every role. `/parts-search/login` calls login with
+`vertical: 'automotive'`, so non-Auto-Parts accounts are refused at sign-in too.
+
 ## Protected / admin areas
 
 - `/settings/users`, `/settings/permissions` — RBAC admin (`users.*`, `roles.*`).

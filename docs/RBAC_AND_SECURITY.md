@@ -317,6 +317,13 @@ Applied globally via `ThrottlerGuard`.
 
 ---
 
+### Parts Search portal (2026-10-26)
+
+- Gate: `dashboard.view` on `/parts-search` routes and on `PartsSearchController` (class-level). See [architecture/auth-rbac.md](architecture/auth-rbac.md#parts-search-portal-gate-2026-10-26) for why no new permission was added.
+- `PARTSBAZAR360_SEARCH_API_KEY` is a secret: it unlocks PartsBazar360 data the public search hides (all sellers, offer statuses, source keys, seller base prices, warehouse stock). It never reaches the browser; Omni Core calls PartsBazar360 server-side. It is separate from the publish key (`PARTSBAZAR360_API_KEY`) so either can be rotated alone.
+- Anyone with `dashboard.view` (including `viewer`, `listing_user`, `supervisor`) sees the internal view when the key is configured.
+- Rate limits: query 5/s and 120/min, suggest 20/s and 400/min, part detail 10/s, per user.
+
 ## API / integration users
 
 Custom-role, narrow-permission service accounts (no separate API-key mechanism — same

@@ -446,6 +446,19 @@ TypeORM CLI configuration for migrations:
 
 ---
 
+### Parts Search Module (`parts-search/`)
+
+Read-only proxy over PartsBazar360 universal search for the `/parts-search` portal (2026-10-26).
+
+| File | Purpose |
+|------|---------|
+| `parts-search.controller.ts` | `/api/parts-search/{query,suggest,parts/:id,status}`; class-level `@RequirePermissions('dashboard.view')`; per-route `@Throttle` |
+| `parts-search.service.ts` | Chooses internal vs public upstream, falls back to public on internal 401/403/404/503 (and says why in `meta.internalUnavailableReason`), maps outages to 503, Redis cache via `APP_REDIS`, one structured log line per query |
+| `parts-search.client.ts` | `fetch` client, `PARTSBAZAR360_SEARCH_API_KEY` as bearer for internal calls, timeouts, retry on 502/503/504 |
+| `dto/parts-search-query.dto.ts` | Allow-listed, bounded params mirroring PartsBazar360's `SearchQueryDto`; `toUpstreamParams` sends lists as repeated params |
+
+No entities, migrations or queues.
+
 ### Client Settings Module (`client-settings/`)
 
 **Purpose**: White-label branding (super_admin only)

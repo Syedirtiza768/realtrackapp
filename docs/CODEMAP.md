@@ -98,6 +98,8 @@ src/components/
 | `listingGenerationApi.ts` | AI listing generation API |
 | `rbacApi.ts` | RBAC admin API |
 | `clientBrandingApi.ts` | Client branding API |
+| `partsSearchApi.ts` | Parts Search portal API (`/api/parts-search`) |
+
 | `searchApi.ts` | Search API |
 | `ingestionAdapters.ts` | Ingestion adapters |
 | `ingestionPipeline.ts` | Ingestion pipeline helpers |
@@ -314,6 +316,11 @@ docker/
 - `backend/src/motors-intelligence/entities/product-candidate.entity.ts`
 
 ---
+
+### Parts Search portal (2026-10-26)
+- Backend: `backend/src/parts-search/` (start at `parts-search.service.ts`; HTTP in `parts-search.client.ts`)
+- Frontend: `src/components/parts-search/`, `src/lib/partsSearchApi.ts`; routes in `src/App.tsx` under `/parts-search`
+- Upstream: PartsBazar360 `apps/api/src/modules/search/internal/` (keyed internal search) and `v1/` (public)
 
 ### Warehouse stock (2026-10-05)
 - Backend: `backend/src/stock/` (start at `stock-ledger.service.ts`)

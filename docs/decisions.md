@@ -23,6 +23,29 @@ Format:
 
 ---
 
+## 2026-10-26 — Parts Search portal: own route, Auto Parts permission, server-side proxy, separate read key
+**Decision:** (1) The portal lives inside Omni Core at `/parts-search`, a sibling of the
+workspaces with its own shell, instead of a separate app with SSO — same origin means the
+existing `localStorage` JWT already is the single sign-on. (2) It is gated on
+`dashboard.view`, not a new permission. (3) The browser never calls PartsBazar360; the
+`parts-search` backend module proxies it, validates params against PartsBazar360's bounds,
+caches in Redis and rate-limits per user. (4) Internal data (every offer, seller, source,
+stock) comes from a new key-guarded PartsBazar360 endpoint
+(`/api/integrations/realtrack/search`) with its own secret
+(`PARTSBAZAR360_SEARCH_API_KEY` ↔ `REALTRACK_SEARCH_API_KEY`), not the publish key.
+(5) If the internal endpoint answers 401/403/404/503 the portal falls back to public
+search and says so (`meta.internalUnavailableReason`); timeouts and 5xx are a 503.
+**Why:** (2) `RbacService.syncFromRegistry` never updates roles with `isCustomized = true`,
+so a new permission would silently lock edited roles out while they keep Auto Parts.
+(4) The read key exposes data the public search hides; keeping it separate lets it be
+rotated or revoked without touching publishing. (5) The Omni Core change can ship before
+the PartsBazar360 deploy without a blank portal, while a real outage still reads as one.
+**Revisit when:** the portal needs to differ from Auto Parts access (then add
+`parts_search.access` plus a migration granting it to every role that holds
+`dashboard.view`), supplier identity must be hidden from `viewer`-type roles, or Omni
+Core's own catalogue/stock is merged into the results (org scoping via
+`AutomotiveAccessScopeService` then applies).
+
 ## 2026-10-07 — Fashion vision model chosen by Jev from a labelled benchmark; aspects use eBay names only
 
 **Model.** Fashion identification now defaults to `google/gemini-3.1-flash-lite`, with

@@ -26,6 +26,7 @@ import {
   ListChecks,
   HardDrive,
   Warehouse,
+  SearchCode,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -40,6 +41,8 @@ type NavItem = {
   path: string;
   permission?: string;
   moduleKey?: string;
+  /** Path is outside /auto-parts (another workspace or portal); link to it as-is. */
+  absolute?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -56,6 +59,15 @@ const NAV_ITEMS: NavItem[] = [
     path: "/business-industrial",
     permission: "business_industrial.access",
     moduleKey: "business-industrial",
+    absolute: true,
+  },
+  {
+    icon: SearchCode,
+    label: "Parts Search",
+    path: "/parts-search",
+    permission: "dashboard.view",
+    moduleKey: "parts-search",
+    absolute: true,
   },
 
   {
@@ -317,7 +329,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
         {visibleNav.map((item) => {
-          const targetPath = item.path === "/business-industrial"
+          const targetPath = item.absolute
             ? item.path
             : item.moduleKey === ""
               ? "/auto-parts"

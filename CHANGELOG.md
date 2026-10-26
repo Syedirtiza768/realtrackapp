@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-26 — Parts Search portal (PartsBazar360 universal search)
+
+- New portal at `/parts-search` with its own login (`/parts-search/login`) and shell. Anyone who can open Auto Parts (`dashboard.view`) can use it with the same session.
+- Search box with typeahead understands OEM/part numbers in any separator format, partial numbers, typos and year/make/model phrases; results show the interpretation, match reason and filters (make, model, year, category, brand, part type, condition, stock, photos; seller and source in the internal view). Part pages show facts, offers, stock, source records and fitment.
+- New backend module `parts-search` (`/api/parts-search/{query,suggest,parts/:id,status}`), a cached, rate-limited proxy to PartsBazar360. With `PARTSBAZAR360_SEARCH_API_KEY` it uses PartsBazar360's new internal endpoint (every offer with seller, store, source, SKU, base price and warehouse stock); otherwise the public buyer search. No migration.
+- Auth fixes that benefit every workspace: sign-in now returns to the requested URL including its query string, and a 401 on a workspace page redirects to that workspace's login (logic consolidated in `authApi.ts`).
+- Auto Parts sidebar gains a "Parts Search" link (module key `parts-search`).
+
 ## 2026-10-22 — Resumable Fashion catalogue imports
 
 - Fashion imports checkpoint committed row results before the slower WebP/S3 mirror stage. BullMQ stalled-job recovery and bounded retries resume from saved row outcomes, retry transient database/network/image failures, and perform a final pass over incomplete Fashion image mirrors.

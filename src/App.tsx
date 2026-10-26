@@ -81,6 +81,10 @@ import BusinessIndustrialReviewPage from './components/business-industrial/Busin
 import BusinessIndustrialStoresPage from './components/business-industrial/BusinessIndustrialStoresPage';
 import BusinessIndustrialIncidentsPage from './components/business-industrial/BusinessIndustrialIncidentsPage';
 import BusinessIndustrialUsersPage from './components/business-industrial/BusinessIndustrialUsersPage';
+import PartsSearchShell from './components/parts-search/PartsSearchShell';
+import PartsSearchHomePage from './components/parts-search/PartsSearchHomePage';
+import PartsSearchResultsPage from './components/parts-search/PartsSearchResultsPage';
+import PartsSearchPartPage from './components/parts-search/PartsSearchPartPage';
 import type { ReactNode } from 'react';
 
 function AutoPartsRoutes() {
@@ -165,6 +169,9 @@ function App() {
                 <Route path="/auto-parts/change-password" element={<ProtectedRoute loginPath="/auto-parts/login"><FashionPasswordPage /></ProtectedRoute>} />
                 <Route path="/business-industrial/change-password" element={<ProtectedRoute loginPath="/business-industrial/login"><FashionPasswordPage /></ProtectedRoute>} />
                 <Route path="/business-industrial/login" element={<BusinessIndustrialLoginPage />} />
+                {/* Parts Search signs in with the Auto Parts check (dashboard.view). */}
+                <Route path="/parts-search/login" element={<LoginPage redirectTo="/parts-search" heading="Sign in to Parts Search" />} />
+                <Route path="/parts-search/change-password" element={<ProtectedRoute loginPath="/parts-search/login"><FashionPasswordPage /></ProtectedRoute>} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/channels/ebay/callback" element={<EbayOAuthCallback />} />
@@ -177,6 +184,20 @@ function App() {
                     </ProtectedRoute>
                 } />
 
+
+                {/* Parts Search portal: PartsBazar360 universal search. A sibling of the
+                    workspaces, not part of /auto-parts, but gated on the same permission
+                    (dashboard.view) so exactly the Auto Parts users can open it. */}
+                <Route path="/parts-search" element={
+                    <ProtectedRoute permissions={['dashboard.view']} loginPath="/parts-search/login">
+                        <PartsSearchShell><Outlet /></PartsSearchShell>
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<PartsSearchHomePage />} />
+                    <Route path="results" element={<PartsSearchResultsPage />} />
+                    <Route path="parts/:id" element={<PartsSearchPartPage />} />
+                    <Route path="*" element={<div className="p-10 text-center text-slate-500 dark:text-slate-400"><h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">Parts Search page not found</h1><Link to="/parts-search" className="mt-4 inline-block text-sky-600 dark:text-sky-400">Return to search</Link></div>} />
+                </Route>
 
                 {/* Fashion routes use a separate shell and permission boundary. */}
                 <Route path="/fashion" element={

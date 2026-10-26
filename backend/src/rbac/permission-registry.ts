@@ -802,4 +802,6 @@ export const SIDEBAR_MODULE_PERMISSIONS: Record<string, string> = {
   'settings/integrations/ebay': 'ebay.view',
   'settings/ai-routing': 'ai.routing.view',
   'image-drive': 'image_drive.view',
+  // Parts Search portal (/parts-search) — same gate as the Auto Parts workspace.
+  'parts-search': 'dashboard.view',
 };

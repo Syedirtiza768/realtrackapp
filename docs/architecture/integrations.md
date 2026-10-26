@@ -7,6 +7,8 @@
 | **eBay Developer API** | OAuth, multi-account/multi-store listing publish, inventory & order sync, business-policy sync | `backend/src/integrations/ebay/`, `channels/ebay/` | `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_DEV_ID`, `EBAY_ENVIRONMENT` (SANDBOX/PRODUCTION), `EBAY_REDIRECT_URI` |
 | **OpenAI** | Image classification (vision), listing text generation, embeddings; calls queued | `common/openai/`, `ingestion/ai/`, `motors-intelligence/` | `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` |
 | **AWS S3** | Product image storage + presigned upload/download URLs; Fashion vision uses short-lived signed GET URLs for private images; thumbnails via Sharp | `storage/`, `@aws-sdk/client-s3` | `AWS_S3_BUCKET`, `AWS_S3_PREFIX`, `AWS_S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (legacy `S3_*` aliases) |
+| **PartsBazar360 search** (read) | Parts Search portal (`/parts-search`): proxies PartsBazar360 universal search. With the key, uses the internal endpoint (every offer, seller, source, stock); without it, the public buyer search | `backend/src/parts-search/` | `PARTSBAZAR360_API_URL` (shared with publishing), `PARTSBAZAR360_SEARCH_API_KEY` (must equal `REALTRACK_SEARCH_API_KEY` on PartsBazar360; separate from the publish key), `PARTS_SEARCH_TIMEOUT_MS` (8000), `PARTS_SEARCH_CACHE_TTL_SECONDS` (30) |
+
 | **Shopify** | Admin API scaffolding (`@shopify/shopify-api`) | `channels/` | — (Needs verification: not fully wired) |
 
 > eBay is the primary, most fully implemented integration. Shopify/Amazon/Walmart

@@ -32,7 +32,8 @@ export default function ProtectedRoute({
   }
 
   if (!isAuthenticated) {
-    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
+    // Keep the query string so a shared link (e.g. a Parts Search results URL) survives sign-in.
+    return <Navigate to={loginPath} replace state={{ from: `${location.pathname}${location.search}` }} />;
   }
 
   if (

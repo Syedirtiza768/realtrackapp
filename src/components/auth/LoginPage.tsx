@@ -11,9 +11,13 @@ import { usePublicBranding } from '../../hooks/usePublicBranding';
 import { usePublicAuthConfig } from '../../hooks/usePublicAuthConfig';
 import { toProxyUrl } from '../../lib/imageUrl';
 
-type LoginPageProps = { redirectTo?: string };
+type LoginPageProps = {
+  redirectTo?: string;
+  /** Replaces the "Sign in to <client>" card heading (e.g. on the Parts Search portal). */
+  heading?: string;
+};
 
-export default function LoginPage({ redirectTo = '/auto-parts' }: LoginPageProps) {
+export default function LoginPage({ redirectTo = '/auto-parts', heading }: LoginPageProps) {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,7 +71,7 @@ export default function LoginPage({ redirectTo = '/auto-parts' }: LoginPageProps
 
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
           <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-6">
-            Sign in to {branding.clientName}
+            {heading ?? `Sign in to ${branding.clientName}`}
           </h2>
 
           {error && (
