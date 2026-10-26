@@ -1,4 +1,4 @@
-import { Check, ImageIcon, Upload } from 'lucide-react';
+import { Check, ImageIcon, ShieldAlert, Upload } from 'lucide-react';
 import type { CatalogListingStatus } from '../../types/search';
 
 interface Props {
@@ -28,11 +28,20 @@ const CONFIG: Record<
       'border-amber-200 text-amber-700 bg-amber-50/50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950/30',
     icon: ImageIcon,
   },
+  needs_review: {
+    label: 'Needs Review',
+    className:
+      'border-amber-200 text-amber-800 bg-amber-50/70 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-950/40',
+    icon: ShieldAlert,
+  },
 };
 
 export default function ListingStatusCell({ status, onPublish }: Props) {
   const key = status ?? 'ready_to_publish';
-  const cfg = CONFIG[key];
+  // API status values can reach the frontend before its type/config is updated.
+  // Treat unknown values as review holds so the catalog stays usable and cannot
+  // accidentally offer a publish action for a status it does not understand.
+  const cfg = CONFIG[key] ?? CONFIG.needs_review;
   const Icon = cfg.icon;
   const clickable = key === 'ready_to_publish' && onPublish;
 

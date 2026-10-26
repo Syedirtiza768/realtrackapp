@@ -21,7 +21,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and the prior
 | AI listing generation | (in editor) | `listings` (`listing-generation.controller`) | Partial | OpenAI-backed; verify quality/limits |
 | Listings v2 (cached) | — | `listings` (`listings-v2.controller`) | Partial | Redis cache interceptor |
 | Export rules | — | `listings` (`export-rule.controller`) | Partial | Route on `/api/api/export-rules` ⚠️ |
-| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted automotive search |
+| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted automotive search. Listing status badges: Published, Ready to Publish, Need Images, Needs Review (any unknown status also shows as Needs Review and never offers Publish) |
 | Catalog CSV/bulk import | `/catalog/import` | `catalog-import` | Implemented | BullMQ; memory-heavy |
 | Motors filters view | `/catalog/motors-filters` | `catalog-import` | Implemented | Motors-specific facets |
 | Compliance audits | (catalog) | `catalog-import` (`compliance.controller`) | Partial | `catalog.compliance` |

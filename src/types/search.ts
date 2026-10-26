@@ -40,7 +40,11 @@ export interface SearchQuery {
   sort?: SortMode;
 }
 
-export type CatalogListingStatus = 'published' | 'ready_to_publish' | 'need_images';
+export type CatalogListingStatus =
+  | 'published'
+  | 'ready_to_publish'
+  | 'need_images'
+  | 'needs_review';
 
 export type StockLevelFilter = 'in_stock' | 'out_of_stock' | 'low_stock';
 

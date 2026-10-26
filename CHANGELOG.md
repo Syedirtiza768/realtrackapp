@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — "Needs Review" listing status badge committed
+
+- The Auto Parts catalog shows a `needs_review` listing status as an amber "Needs Review" badge (`ListingStatusCell`) and status dot (`CatalogInventoryDetailModal`); any status value the frontend does not recognise is shown the same way and never offers a Publish action.
+- This was already live in production (frontend image `catalog-condition-icon-20261021-r1`, built from an uncommitted `dist/`). It is now in git so deploying `main` no longer removes it.
+
 ## 2026-10-26 — Parts Search portal (PartsBazar360 universal search)
 
 - New portal at `/parts-search` with its own login (`/parts-search/login`) and shell. Anyone who can open Auto Parts (`dashboard.view`) can use it with the same session.

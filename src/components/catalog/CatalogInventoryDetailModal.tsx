@@ -127,6 +127,7 @@ const EBAY_STATUS: Record<CatalogListingStatus, { label: string; dotClass: strin
   published: { label: 'Published', dotClass: 'bg-emerald-500' },
   ready_to_publish: { label: 'Ready to Publish', dotClass: 'bg-emerald-500' },
   need_images: { label: 'Need Images', dotClass: 'bg-amber-500' },
+  needs_review: { label: 'Needs Review', dotClass: 'bg-amber-500' },
 };
 
 function formatCategoryBreadcrumb(name: string | null | undefined): string[] {
