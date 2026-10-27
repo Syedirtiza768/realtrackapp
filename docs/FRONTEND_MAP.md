@@ -131,6 +131,7 @@ A sibling of the Auto Parts, Fashion and B&I workspaces (not under `/auto-parts`
   - **`PartDetailView`** (shared with the part page): images and downloads, facts, **cross-references by role** (part numbers, supersedes, interchange, OEM cross-references, OE; each number searchable), sellers and stock, a **structured fitment table** with evidence level and a filter, the listing's compatibility list, item specifics, description and source records.
   - **Omni Core warehouse rows** open a summary from Omni Core data (no PartsBazar360 record).
   - Match and verdict labels live in `options/labels.ts`.
+  - **Description** (`ListingDescription`): seller descriptions are usually full eBay listing HTML with their own `<style>` (incl. `body`/`html`/`:root` rules). They are sanitized (`sanitizeListingDocument`, DOMPurify, keeps `<style>`) and shown in a sandboxed `srcdoc` iframe (no `allow-scripts`), sized to its content and capped at 480 px with **Show full description**. Plain-text descriptions render as text.
 - **Images (2026-10-27):** clicking a result thumbnail opens `ImageGalleryDialog`: every image of the part in high quality, arrows/thumbnails, **Download full size** and **All N (.zip)**. Rows also have an **Image** quick download, and the part page has both buttons, using the server image list so indexes match. Downloads go through `fetchDownloadResponse` (JWT) and save with the server's `Content-Disposition` name (`lib/partsSearchOptionsApi.ts`: `listPartImages`, `downloadPartImage`, `downloadPartImagesZip`, `downloadOmniImage`).
 
 

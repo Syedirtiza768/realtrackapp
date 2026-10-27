@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27 — Parts Search: listing descriptions render as formatted HTML
+
+- Part descriptions (mostly eBay listing HTML) showed as raw markup. They now render sanitized in a sandboxed frame with the listing's own styling, capped with **Show full description**; plain-text descriptions are unchanged.
+
 ## 2026-10-27 — Parts Search list-first + modal deployed
 
 - Production frontend: `parts-search-modal-20261027-3f6e9f4c` (main `3f6e9f4c`), rollback tag kept; PartsBazar360 API with the cross-reference pass is live. See `docs/architecture/deployment.md`.

@@ -22,6 +22,7 @@ import {
 import { downloadPartImage, downloadPartImagesZip, listPartImages } from '../../lib/partsSearchOptionsApi';
 import DataSourceNotice from './DataSourceNotice';
 import InternalOffersTable from './InternalOffersTable';
+import ListingDescription from './ListingDescription';
 
 type Vehicle = { year?: number | string; make?: string; model?: string; trim?: string; engine?: string };
 
@@ -449,7 +450,7 @@ export default function PartDetailView({ id, onSearchNumber, context, headingId,
 
         {part.description && (
           <Section title="Description">
-            <p className="whitespace-pre-line text-sm text-slate-700 dark:text-slate-300">{part.description.slice(0, 4000)}</p>
+            <ListingDescription description={part.description} title={part.title} />
           </Section>
         )}
 

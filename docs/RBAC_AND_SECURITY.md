@@ -330,6 +330,7 @@ Applied globally via `ThrottlerGuard`.
   - **Other hosts are fetched server-side** under these controls (`parts-search-images.service.ts`), which prevent requests to internal or cloud-metadata addresses: http(s) only, ports 80/443, DNS resolved and private/loopback/link-local/metadata addresses rejected at every redirect hop, `image/*` only, ≤ 25 MB, 15 s timeout.
   - **Rate limits:** download 5/s and 120/min, zip 1/s and 20/min.
   - **Responses** are `private, no-store` with `nosniff`.
+- (2026-10-27) Parts Search part descriptions are third-party seller HTML. They are never injected into the app DOM: `ListingDescription` sanitizes them with DOMPurify (scripts, frames, forms, inputs, `base`/`meta`/`link` and event handlers removed; `<style>` kept) and renders them in an iframe with `sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"`. Without `allow-scripts` nothing in it can run; `allow-same-origin` only lets the app measure its height. Links open in a new tab, and the listing CSS cannot restyle the app.
 
 ## API / integration users
 

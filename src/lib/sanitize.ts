@@ -28,6 +28,26 @@ export function sanitizeHtml(dirty: string | null | undefined): string {
 }
 
 /**
+ * Sanitize a marketplace listing description (eBay-style HTML with its own
+ * <style> blocks) for display in a sandboxed iframe. Keeps <style> so the
+ * listing looks as the seller built it; the iframe keeps that CSS away from
+ * the app. Scripts, frames, forms and event handlers are removed.
+ */
+export function sanitizeListingDocument(dirty: string | null | undefined): string {
+  if (!dirty) return '';
+  return DOMPurify.sanitize(dirty, {
+    FORCE_BODY: true,
+    ADD_TAGS: ['style'],
+    FORBID_TAGS: ['script', 'iframe', 'frame', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'base', 'meta', 'link'],
+  });
+}
+
+/** Does a stored description contain HTML markup (vs plain text)? */
+export function looksLikeHtml(value: string | null | undefined): boolean {
+  return Boolean(value && /<([a-z][a-z0-9]*)\b[^>]*>/i.test(value));
+}
+
+/**
  * Sanitize search highlight HTML — only allows <mark> tags.
  */
 export function sanitizeHighlight(dirty: string | null | undefined): string {
