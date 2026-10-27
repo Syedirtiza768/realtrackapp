@@ -20,7 +20,7 @@ import {
 const DEBOUNCE_MS = 200;
 
 type Option =
-  | { kind: 'part'; key: string; label: string; detail: string; image: string | null; to: string }
+  | { kind: 'part'; key: string; label: string; detail: string; image: string | null; to: string; search: string }
   | { kind: 'filter'; key: string; label: string; detail: string; to: string };
 
 function useSuggestions(query: string) {
@@ -97,16 +97,24 @@ export default function SearchBox({ initialQuery = '', keepParams, buildPath, si
   const options = useMemo<Option[]>(() => {
     if (!data) return [];
     const q = query.trim();
-    const out: Option[] = data.parts.map((part) => ({
-      kind: 'part',
-      key: `part:${part.id}`,
-      label: part.title,
-      detail: [part.brand, part.manufacturerPartNumber, formatMoney(part.minPrice, part.currency)]
-        .filter((value) => value && value !== '—')
-        .join(' · '),
-      image: partImageUrl(part.imageUrl),
-      to: `/parts-search/parts/${encodeURIComponent(part.id)}`,
-    }));
+    // A picked part opens the list of every option for its number (exact,
+    // superseded, equivalents, our stock) with that part highlighted — not a
+    // single part page. Without a number, its title is the search.
+    const out: Option[] = data.parts.map((part) => {
+      const partQuery = part.manufacturerPartNumber?.trim() || part.title;
+      const base = buildPath ? buildPath(partQuery) : resultsPath({ q: partQuery });
+      return {
+        kind: 'part',
+        key: `part:${part.id}`,
+        label: part.title,
+        detail: [part.brand, part.manufacturerPartNumber, formatMoney(part.minPrice, part.currency)]
+          .filter((value) => value && value !== '—')
+          .join(' · '),
+        image: partImageUrl(part.imageUrl),
+        to: `${base}${base.includes('?') ? '&' : '?'}focus=${encodeURIComponent(part.id)}`,
+        search: partQuery,
+      };
+    });
     for (const make of data.makes.slice(0, 3)) {
       out.push({ kind: 'filter', key: `make:${make}`, label: make, detail: 'Vehicle make', to: buildPath ? buildPath(`${make} ${q}`.trim()) : resultsPath({ q, make: [make] }) });
     }
@@ -124,7 +132,7 @@ export default function SearchBox({ initialQuery = '', keepParams, buildPath, si
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     if (active >= 0 && options[active]) {
-      go(options[active].to);
+      pick(options[active]);
       return;
     }
     const q = query.trim();
@@ -138,6 +146,14 @@ export default function SearchBox({ initialQuery = '', keepParams, buildPath, si
     setActive(-1);
     inputRef.current?.blur();
     navigate(to);
+  };
+
+  const pick = (option: Option) => {
+    if (option.kind === 'part') {
+      rememberSearch(option.search);
+      setQuery(option.search);
+    }
+    go(option.to);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -235,7 +251,7 @@ export default function SearchBox({ initialQuery = '', keepParams, buildPath, si
               aria-selected={index === active}
               onMouseDown={(event) => {
                 event.preventDefault();
-                go(option.to);
+                pick(option);
               }}
               onMouseEnter={() => setActive(index)}
               className={`flex cursor-pointer items-center gap-3 px-4 py-2 text-sm ${

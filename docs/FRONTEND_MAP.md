@@ -116,7 +116,7 @@ A sibling of the Auto Parts, Fashion and B&I workspaces (not under `/auto-parts`
 | `/parts-search/change-password` | `FashionPasswordPage` | authenticated | Same pattern as other workspaces |
 | `/parts-search` | `PartsSearchHomePage` | `dashboard.view` | Search box, recent searches (per browser), example queries, data-source status |
 | `/parts-search/results` | `PartsSearchResultsPage` | `dashboard.view` | All state in the query string (`q`, repeated list filters, `year`, `inStock`, `hasImage`, `sort`, `page`, `pageSize`) |
-| `/parts-search/parts/:id` | `PartsSearchPartPage` | `dashboard.view` | Part facts, sellers/offers/stock table, source records (internal view), fitment list |
+| `/parts-search/parts/:id` | `PartsSearchPartPage` | `dashboard.view` | Deep link / new tab: the same `PartDetailView` the result list opens in a modal |
 | `/parts-search/demand` | `PartsSearchDemandPage` | `dashboard.view` | Searched-but-unsellable numbers/queries/vehicles and sourcing requests (status editable) |
 
 **Since 2026-10-27** `/parts-search/results` is the "every sellable option" view (`PartsSearchResultsPage`, `components/parts-search/options/*`, `lib/partsSearchOptionsApi.ts`):
@@ -125,6 +125,12 @@ A sibling of the Auto Parts, Fashion and B&I workspaces (not under `/auto-parts`
 - **Nothing to sell:** a sourcing-request card when nothing is sellable.
 - **URL state:** `q`, vehicle params (`vehicleConfigId`, `makeId`, `modelId`, `make`, `model`, `year`, `engineLitres`, `vlabel`, `vin`), `drop`, `all=1`, `page`.
 - **Fallback:** without the internal key the page falls back to the buyer view (`PartsSearchClassicResults`, the 2026-10-26 results page).
+- **List first, details in a modal (2026-10-27):**
+  - **Typeahead part:** picking one no longer opens a single part page. It runs the options search for that part's number (`…/results?q=<MPN>&focus=<id>`), so every exact, superseded and equivalent option shows; the picked part is highlighted ("Picked") and scrolled into view. If it is hidden as not available, a banner offers "Open its details" / "Show not available".
+  - **Row click:** clicking an option title opens `options/PartDetailDialog` over the list (scroll and expanded groups kept). The dialog shows why the part is in the list (match, trail, verdict, stock), then `PartDetailView`. ← / → step through the list, Esc closes, and ctrl/cmd-click still opens the full page in a new tab.
+  - **`PartDetailView`** (shared with the part page): images and downloads, facts, **cross-references by role** (part numbers, supersedes, interchange, OEM cross-references, OE; each number searchable), sellers and stock, a **structured fitment table** with evidence level and a filter, the listing's compatibility list, item specifics, description and source records.
+  - **Omni Core warehouse rows** open a summary from Omni Core data (no PartsBazar360 record).
+  - Match and verdict labels live in `options/labels.ts`.
 - **Images (2026-10-27):** clicking a result thumbnail opens `ImageGalleryDialog`: every image of the part in high quality, arrows/thumbnails, **Download full size** and **All N (.zip)**. Rows also have an **Image** quick download, and the part page has both buttons, using the server image list so indexes match. Downloads go through `fetchDownloadResponse` (JWT) and save with the server's `Content-Disposition` name (`lib/partsSearchOptionsApi.ts`: `listPartImages`, `downloadPartImage`, `downloadPartImagesZip`, `downloadOmniImage`).
 
 

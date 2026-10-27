@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
-import type { OptionGroup } from '../../../lib/partsSearchOptionsApi';
+import type { OptionGroup, OptionItem } from '../../../lib/partsSearchOptionsApi';
 import type { GalleryTarget } from './ImageGalleryDialog';
 import OptionRow from './OptionRow';
 
@@ -30,12 +30,16 @@ type Props = {
   showingUnavailable: boolean;
   onShowUnavailable: () => void;
   onImage: (target: GalleryTarget) => void;
+  onOpen: (item: OptionItem) => void;
+  /** Part picked from the typeahead: its group opens and pages far enough to show it. */
+  focusId?: string | null;
 };
 
 /** One equivalence / verdict group: always complete, paged client-side. */
-export default function OptionGroupSection({ group, query, requestRef, hasVehicle, showingUnavailable, onShowUnavailable, onImage }: Props) {
-  const [open, setOpen] = useState(!group.collapsedByDefault);
-  const [shown, setShown] = useState(PAGE);
+export default function OptionGroupSection({ group, query, requestRef, hasVehicle, showingUnavailable, onShowUnavailable, onImage, onOpen, focusId }: Props) {
+  const focusIndex = focusId ? group.items.findIndex((item) => item.partId === focusId) : -1;
+  const [open, setOpen] = useState(!group.collapsedByDefault || focusIndex >= 0);
+  const [shown, setShown] = useState(Math.max(PAGE, focusIndex + 1));
   const inStock = group.items.filter((i) => i.availability.status === 'in_stock' || (i.omniStock?.available ?? 0) > 0).length;
 
   return (
@@ -61,7 +65,16 @@ export default function OptionGroupSection({ group, query, requestRef, hasVehicl
           {group.items.length > 0 ? (
             <ul className="border-t border-slate-100 dark:border-slate-800">
               {group.items.slice(0, shown).map((item) => (
-                <OptionRow key={item.partId} item={item} query={query} requestRef={requestRef} hasVehicle={hasVehicle} onImage={onImage} />
+                <OptionRow
+                  key={item.partId}
+                  item={item}
+                  query={query}
+                  requestRef={requestRef}
+                  hasVehicle={hasVehicle}
+                  onImage={onImage}
+                  onOpen={onOpen}
+                  focused={item.partId === focusId}
+                />
               ))}
             </ul>
           ) : (

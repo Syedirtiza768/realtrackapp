@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-27 — Parts Search: list first, part details in a modal, full cross-references
+
+- Picking a part in the typeahead opens the list of every option for its number with that part highlighted, instead of a single part page.
+- Clicking an option opens its description in a modal over the list (`PartDetailDialog`). The modal shows why the part is an option, cross-references by role (each searchable), a structured fitment table with evidence, item specifics, stock and images. ← / → step through options; the part page (`/parts-search/parts/:id`) stays for links and new tabs.
+- Requires PartsBazar360 with the cross-reference pass:
+  - item-specific interchange, superseded and OE numbers, read by role;
+  - an indexed `pb_part_numbers()` lookup;
+  - `Fitment` rows as compatibility data;
+  - `crossReferences` / `fitments` on the internal part detail.
+
+  Older PartsBazar360 still works; the new sections are then just absent.
+
 ## 2026-10-27 — Parts Search image downloads deployed
 
 - Production backend and frontend: `parts-search-images-20261027-2f2d4755` (main `2f2d4755`); rollback tags kept. See `docs/architecture/deployment.md`.

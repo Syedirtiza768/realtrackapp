@@ -3,8 +3,11 @@
  *  fitment verdicts for text queries), live stock from
  *  PartsBazar360 and Omni Core warehouses, fitment against
  *  the selected vehicle, and a sourcing request when nothing
- *  can be sold. Falls back to the buyer-view results when the
- *  internal search is not configured on the server.
+ *  can be sold. Clicking an option opens its description in a
+ *  modal over the list (PartDetailDialog); a part picked from
+ *  the typeahead arrives as ?focus=<id> and is highlighted.
+ *  Falls back to the buyer-view results when the internal
+ *  search is not configured on the server.
  * ────────────────────────────────────────────────────────── */
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -20,12 +23,14 @@ import {
   rememberVehicle,
   searchOptions,
   type OptionDroppable,
+  type OptionItem,
   type OptionsParams,
   type OptionsResponse,
   type VehicleSelection,
 } from '../../lib/partsSearchOptionsApi';
 import ImageGalleryDialog, { type GalleryTarget } from './options/ImageGalleryDialog';
 import OptionGroupSection from './options/OptionGroupSection';
+import PartDetailDialog, { type PartDetailTarget } from './options/PartDetailDialog';
 import VehicleBar from './options/VehicleBar';
 import PartsSearchClassicResults from './PartsSearchClassicResults';
 import SearchBox from './SearchBox';
@@ -99,14 +104,17 @@ export default function PartsSearchResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const params = useMemo(() => optionsParamsFromUrl(searchParams), [searchParams]);
+  // Part picked from the typeahead (?focus=<id>): highlighted in the list.
+  const focusId = searchParams.get('focus');
   const [gallery, setGallery] = useState<GalleryTarget | null>(null);
+  const [detail, setDetail] = useState<PartDetailTarget | null>(null);
 
   useEffect(() => {
     if (params.q) rememberSearch(params.q);
   }, [params.q]);
 
   const search = useQuery({
-    queryKey: ['parts-search', 'options', searchParams.toString()],
+    queryKey: ['parts-search', 'options', optionsPath(params)],
     queryFn: ({ signal }) => searchOptions(params, signal),
     placeholderData: keepPreviousData,
     // Stock must be current: always refetch on focus/remount, never serve old data as fresh.
@@ -116,7 +124,14 @@ export default function PartsSearchResultsPage() {
   const data = search.data;
   const checkedAgo = useSecondsSince(data?.meta.checkedAt);
 
-  const update = (next: OptionsParams) => navigate(optionsPath(next));
+  const update = (next: OptionsParams) => {
+    setDetail(null);
+    navigate(optionsPath(next));
+  };
+  // Every visible option in list order: previous / next in the modal.
+  const sequence = useMemo<OptionItem[]>(() => data?.groups.flatMap((group) => group.items) ?? [], [data]);
+  const focusHidden = Boolean(focusId && data && !sequence.some((item) => item.partId === focusId));
+  const searchNumber = (number: string) => update({ q: number, vehicle: params.vehicle, includeUnavailable: params.includeUnavailable });
   const setVehicle = (vehicle: VehicleSelection | undefined) => {
     if (vehicle) rememberVehicle(vehicle);
     update({ ...params, vehicle, page: undefined });
@@ -222,6 +237,20 @@ export default function PartsSearchResultsPage() {
 
       {data && data.mode !== 'empty' && sellableNow === 0 && <SourcingRequestCard key={data.requestId} data={data} />}
 
+      {focusHidden && (
+        <p className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+          The part you picked is not in the sellable options for this number.
+          <button type="button" onClick={() => setDetail({ partId: focusId!, title: '' })} className="font-medium underline">
+            Open its details
+          </button>
+          {!params.includeUnavailable && (
+            <button type="button" onClick={() => navigate(`${optionsPath({ ...params, includeUnavailable: true })}&focus=${encodeURIComponent(focusId!)}`)} className="font-medium underline">
+              Show not available
+            </button>
+          )}
+        </p>
+      )}
+
       {data?.groups.map((group) => (
         <OptionGroupSection
           key={`${data.requestId}-${group.key}`}
@@ -232,6 +261,8 @@ export default function PartsSearchResultsPage() {
           showingUnavailable={Boolean(params.includeUnavailable)}
           onShowUnavailable={() => update({ ...params, includeUnavailable: true })}
           onImage={setGallery}
+          onOpen={(item) => setDetail({ partId: item.partId, title: item.title, item })}
+          focusId={focusId}
         />
       ))}
 
@@ -256,6 +287,14 @@ export default function PartsSearchResultsPage() {
       )}
 
       <ImageGalleryDialog target={gallery} onClose={() => setGallery(null)} />
+      <PartDetailDialog
+        target={detail}
+        sequence={sequence}
+        hasVehicle={hasVehicle}
+        onNavigate={setDetail}
+        onClose={() => setDetail(null)}
+        onSearchNumber={searchNumber}
+      />
     </div>
   );
 }

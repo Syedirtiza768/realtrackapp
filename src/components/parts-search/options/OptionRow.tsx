@@ -5,38 +5,12 @@
  * ────────────────────────────────────────────────────────── */
 
 import { Check, ChevronDown, Copy, Download, ExternalLink, ImageOff, Loader2, Warehouse } from 'lucide-react';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 import { formatMoney, partImageUrl } from '../../../lib/partsSearchApi';
-import { downloadOmniImage, downloadPartImage, logSelection, type OptionItem, type OptionVerdict } from '../../../lib/partsSearchOptionsApi';
+import { downloadOmniImage, downloadPartImage, logSelection, type OptionItem } from '../../../lib/partsSearchOptionsApi';
 import type { GalleryTarget } from './ImageGalleryDialog';
 import InternalOffersTable from '../InternalOffersTable';
-
-const MATCH_STYLE: Record<string, string> = {
-  exact: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
-  superseded: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300',
-  oem_equivalent: 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300',
-  aftermarket_equivalent: 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300',
-  possible: 'border border-dashed border-amber-400 text-amber-800 dark:border-amber-600 dark:text-amber-300',
-  omni_core: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-};
-
-const MATCH_LABEL: Record<string, string> = {
-  exact: 'Exact number',
-  superseded: 'Superseded',
-  oem_equivalent: 'OEM equivalent',
-  aftermarket_equivalent: 'Aftermarket equivalent',
-  possible: 'Unverified equivalent',
-  omni_core: 'Omni Core stock',
-};
-
-const VERDICT: Record<OptionVerdict, { label: string; className: string }> = {
-  fits: { label: 'Fits', className: 'bg-emerald-600 text-white' },
-  likely: { label: 'Likely fits', className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' },
-  universal: { label: 'Universal', className: 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300' },
-  unverified: { label: 'Not confirmed', className: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200' },
-  does_not_fit: { label: 'Does not fit', className: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' },
-};
+import { MATCH_LABEL, MATCH_STYLE, VERDICT } from './labels';
 
 type Props = {
   item: OptionItem;
@@ -44,9 +18,17 @@ type Props = {
   requestRef: string;
   hasVehicle: boolean;
   onImage: (target: GalleryTarget) => void;
+  /** Open the part description in a modal over the list. */
+  onOpen: (item: OptionItem) => void;
+  /** The part picked from the typeahead: highlighted and scrolled into view. */
+  focused?: boolean;
 };
 
-export default function OptionRow({ item, query, requestRef, hasVehicle, onImage }: Props) {
+export default function OptionRow({ item, query, requestRef, hasVehicle, onImage, onOpen, focused }: Props) {
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focused]);
   const [details, setDetails] = useState<null | 'why' | 'stock'>(null);
   const [copied, setCopied] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -88,7 +70,10 @@ export default function OptionRow({ item, query, requestRef, hasVehicle, onImage
   };
 
   return (
-    <li className={`border-b border-slate-100 px-3 py-2.5 last:border-0 dark:border-slate-800 ${a.status === 'not_available' && !(omni?.available ?? 0) ? 'opacity-70' : ''}`}>
+    <li
+      ref={rowRef}
+      className={`border-b border-slate-100 px-3 py-2.5 last:border-0 dark:border-slate-800 ${a.status === 'not_available' && !(omni?.available ?? 0) ? 'opacity-70' : ''} ${focused ? 'bg-amber-50 ring-2 ring-inset ring-amber-300 dark:bg-amber-950/30 dark:ring-amber-700' : ''}`}
+    >
       <div className="grid grid-cols-[56px_minmax(0,1fr)] gap-x-3 gap-y-1 md:grid-cols-[56px_minmax(0,1fr)_150px_190px]">
         {/* image */}
         <button
@@ -108,17 +93,29 @@ export default function OptionRow({ item, query, requestRef, hasVehicle, onImage
 
         {/* what + why */}
         <div className="min-w-0">
-          {isOmni ? (
-            <span className="font-medium text-slate-900 dark:text-slate-100">{item.title}</span>
-          ) : (
-            <Link
-              to={`/parts-search/parts/${encodeURIComponent(item.partId)}`}
-              onClick={() => select('open')}
-              className="font-medium text-slate-900 hover:underline dark:text-slate-100"
-            >
-              {item.title}
-            </Link>
-          )}
+          <a
+            href={isOmni ? undefined : `/parts-search/parts/${encodeURIComponent(item.partId)}`}
+            role={isOmni ? 'button' : undefined}
+            tabIndex={0}
+            onClick={(event) => {
+              // Plain click opens the modal; ctrl/cmd/middle-click keeps "open in new tab".
+              if (!isOmni && (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)) return;
+              event.preventDefault();
+              select('open');
+              onOpen(item);
+            }}
+            onKeyDown={(event) => {
+              if (isOmni && (event.key === 'Enter' || event.key === ' ')) {
+                event.preventDefault();
+                onOpen(item);
+              }
+            }}
+            aria-haspopup="dialog"
+            className="cursor-pointer font-medium text-slate-900 hover:underline dark:text-slate-100"
+          >
+            {item.title}
+          </a>
+          {focused && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-800 dark:text-amber-100">Picked</span>}
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
             {item.brand && <span className="font-medium">{item.brand}</span>}
             {partNumber && (

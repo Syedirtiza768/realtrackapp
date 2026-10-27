@@ -79,6 +79,15 @@ Shared by Auto Parts, Fashion and B&I at `/<workspace>/stock`. Design: [../archi
   - **Fitment:** pick make/model/year/engine or decode a VIN (or type it: "left headlight 2018 Audi Q5"). Each part gets *Fits / Likely fits / Not confirmed / Does not fit*. "Fits" needs catalogue or compatibility-table evidence for the right engine; title-derived data is at most "likely"; the wrong side is "does not fit".
   - **Never lose a sale:** searches with no results or no stock are logged as demand, staff can add a sourcing request, and `/parts-search/demand` lists top unsellable numbers, queries and vehicles plus open requests.
 - Writes only to Omni Core's own `parts_search_events` (audit + demand). Nothing is written to PartsBazar360 or to fitment data. "Reserve / quote" is a placeholder.
+- **List, then details (2026-10-27):** searching — including picking a part in the typeahead — always shows the list of every option for that number; the picked part is highlighted. Clicking an option opens its full description in a modal without leaving the list:
+  - why it is an option;
+  - every cross-reference number by role (each one click to search);
+  - every vehicle it is documented for, with how strong the evidence is;
+  - stock and sellers;
+  - item specifics.
+
+  Arrow keys move to the next or previous option.
+- **Cross-compatibility used in full (2026-10-27):** number search now also reads the listing's item specifics. That covers interchange numbers, superseded numbers, and OE numbers in five languages. It also finds numbers inside comma-separated OE lists, and uses structured fitment rows alongside each part's compatibility list. Superseded numbers now show as "Replaces / replaced by" instead of a plain OE match.
 - **Image downloads (2026-10-27):** from any result (gallery or the row's **Image** button) or the part page, download the full-size image or all images of a part as a zip. "Full size" means:
   - the original file for photos in Omni Core's storage, not a resized web copy;
   - eBay's largest rendition (1600 px) for eBay photos, or the stored size when eBay has nothing larger.

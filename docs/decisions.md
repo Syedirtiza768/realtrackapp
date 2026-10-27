@@ -23,6 +23,11 @@ Format:
 
 ---
 
+## 2026-10-27 — Parts Search: a picked part opens its option list; details are a modal, not a route
+**Decision:** Choosing a part in the typeahead runs the options search for that part's number (`?q=<MPN>&focus=<id>`) and highlights the part, rather than navigating to `/parts-search/parts/:id`. Clicking an option opens `PartDetailDialog` (component state, not a URL) over the list; the part page remains for deep links and ctrl/cmd-click.
+**Why:** Staff sell whatever is available, not one listing. A single part page hid the exact duplicates, superseded and equivalent parts, and the stock of each. Keeping the modal out of the URL means opening and closing it never refetches the options (the query key is built from the search params without `focus`), so the list, its scroll position and expanded groups survive.
+**Revisit when:** staff need to share a link to "this list with this part open"; then add a `part` param that is excluded from the query key.
+
 ## 2026-10-27 — Part image downloads go through the API, addressed by part + index
 **Decision:** Portal image downloads are served by Omni Core (`/api/parts-search/parts/:id/images/:index/download`, `…/images/zip`) rather than by linking the browser to image URLs. The request names only a part and an index; the server takes the URL from part data and picks the best copy:
 - **Our S3 bucket:** the original object, read with `StorageService`.

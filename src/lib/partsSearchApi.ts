@@ -175,6 +175,35 @@ export interface PartsSearchStatus {
   internal: { ok: boolean; message?: string } | null;
 }
 
+export type PartNumberRole = 'MPN' | 'BRAND_MPN' | 'OEM' | 'SUPERSEDED' | 'INTERCHANGE' | 'OEM_CROSS_REFERENCE' | 'OE';
+
+export interface PartCrossReference {
+  number: string;
+  normalized: string;
+  role: PartNumberRole;
+  source: string;
+  verified: boolean;
+}
+
+export interface PartFitment {
+  make: string;
+  model: string;
+  generation: string | null;
+  startYear: number | null;
+  endYear: number | null;
+  trim: string | null;
+  engine: string | null;
+  transmission: string | null;
+  drivetrain: string | null;
+  market: string | null;
+  /** A (catalogue/VIN) … F (title parse). */
+  evidenceLevel: string;
+  confidence: number;
+  verificationStatus: string;
+  source: string | null;
+  notes: string | null;
+}
+
 /** Part detail: internal view (internalOffers + sourceRecords) or the public PDP payload. */
 export interface PartDetail {
   id: string;
@@ -205,6 +234,14 @@ export interface PartDetail {
   internalUnavailableReason?: string;
   internalOffers?: InternalOffer[];
   internalOfferCount?: number;
+  /** Internal: every number on the part with its role (MPN, superseded, interchange, OE…). */
+  crossReferences?: PartCrossReference[];
+  /** Internal: structured fitment rows, strongest evidence first (≤ 1000). */
+  fitments?: PartFitment[];
+  fitmentCount?: number;
+  /** Internal: listing aspects as stored (eBay item specifics etc.). */
+  itemSpecifics?: Record<string, unknown> | null;
+  genuineOem?: boolean;
   sourceRecords?: Array<{
     id: string;
     sellerOfferId: string | null;
