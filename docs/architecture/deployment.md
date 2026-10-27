@@ -2,6 +2,18 @@
 
 # Deployment Architecture
 
+## Parts Search list-first + part detail modal (2026-10-27, main 3f6e9f4c)
+
+Frontend only: production frontend is `realtrackapp-frontend:parts-search-modal-20261027-3f6e9f4c` (bundle `index-Cs3kmmgc.js`), layered on `parts-search-images-20261027-2f2d4755` (replaces `dist/` only). The backend is unchanged (`parts-search-images-20261027-2f2d4755`): the new part-detail fields come from PartsBazar360 and are passed through.
+
+- **Rollback:** `realtrackapp-frontend:rollback-parts-search-modal-20261027-3f6e9f4c`. Release folder: `/home/ubuntu/realtrackapp-parts-search-modal-20261027-3f6e9f4c/`.
+- **Depends on PartsBazar360** `main` 894393a + 0aaaa5b, which is live as `partsbazar360-api:latest` `728b5f918f12` (see PartsBazar360 `docs/apps/api.md`).
+- **Checks:**
+  - From the backend container with its key, options for `5N1419502B` show it superseded by `5N1419502M`, and the part detail carries `crossReferences` (MPN + 5 superseded) and 7 fitment rows.
+  - `/parts-search` and `/parts-search/results` return 200; the options API returns 401 without auth.
+  - Backend, PostgreSQL, Redis and PgBouncer containers are unchanged.
+  - A signed-in staff session on production was not exercised; the flow was verified locally against production-captured data.
+
 ## Parts Search image downloads (2026-10-27, main 2f2d4755)
 
 Production runs backend and frontend `parts-search-images-20261027-2f2d4755` (frontend bundle `index-v28gJd7N.js`). They are layered on `parts-search-options-20261027-22dc97da`, replacing only `dist/src/parts-search/**` and the frontend `dist/`; there is no migration and no environment change.

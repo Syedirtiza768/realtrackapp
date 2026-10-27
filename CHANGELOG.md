@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27 — Parts Search list-first + modal deployed
+
+- Production frontend: `parts-search-modal-20261027-3f6e9f4c` (main `3f6e9f4c`), rollback tag kept; PartsBazar360 API with the cross-reference pass is live. See `docs/architecture/deployment.md`.
+
 ## 2026-10-27 — Parts Search: list first, part details in a modal, full cross-references
 
 - Picking a part in the typeahead opens the list of every option for its number with that part highlighted, instead of a single part page.

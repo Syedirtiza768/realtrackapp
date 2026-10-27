@@ -1,5 +1,7 @@
 # Setup
 
+Parts Search list-first + part detail modal (2026-10-27, main 3f6e9f4c): production frontend is `parts-search-modal-20261027-3f6e9f4c` (rollback tag `rollback-parts-search-modal-20261027-3f6e9f4c`); backend unchanged.
+
 Parts Search image downloads (2026-10-27, main 2f2d4755): production backend and frontend are `parts-search-images-20261027-2f2d4755` (rollback tags `rollback-parts-search-images-20261027-2f2d4755`).
 
 Parts Search options (2026-10-27, main 22dc97da): production now uses backend `realtrackapp-backend:parts-search-options-20261027-22dc97da` and frontend `realtrackapp-frontend:parts-search-options-20261027-22dc97da` (rollback tags `rollback-parts-search-options-20261027-22dc97da`), with `PARTSBAZAR360_SEARCH_API_KEY` set. Details: [../architecture/deployment.md](../architecture/deployment.md#parts-search-every-sellable-option-2026-10-27-main-22dc97da).
