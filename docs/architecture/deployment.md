@@ -2,6 +2,25 @@
 
 # Deployment Architecture
 
+## Parts Search "every sellable option" (2026-10-27, main 22dc97da)
+
+**Production images:**
+- Backend `realtrackapp-backend:parts-search-options-20261027-22dc97da`, layered on `parts-search-20261027-4fc25e79`. It adds `dist/src/parts-search/**` and migration `1791600000000-CreatePartsSearchEvents`, which ran at the entrypoint; it was the only pending migration of 71.
+- Frontend `realtrackapp-frontend:parts-search-options-20261027-22dc97da` (bundle `index-U27TdzyR.js`), layered on `parts-search-20261027-49d1dfe7`.
+
+**Rollback:** tags `rollback-parts-search-options-20261027-22dc97da` (backend and frontend). Release folder: `/home/ubuntu/realtrackapp-parts-search-options-20261027-22dc97da/` (backend files at the top level, `frontend/` for the frontend).
+
+**Key and configuration:**
+- `PARTSBAZAR360_SEARCH_API_KEY` was added to `/home/ubuntu/realtrackapp/.env`, copied server-to-server from PartsBazar360's `REALTRACK_SEARCH_API_KEY`, never printed. Backup: `/home/ubuntu/realtrackapp.env.pre-parts-search-options-20261027`.
+- The backend's `compose-override.yml` passes the key through, so later rollouts that reuse the container's Compose file list keep it.
+
+**Checks:**
+- Backend healthy; `parts_search_events` exists.
+- `/api/parts-search/options` returns 401 unauthenticated; with the key, the container reaches PartsBazar360 internal search `/health` (200).
+- The frontend serves the new bundle on `/parts-search`. PostgreSQL, Redis and PgBouncer are unchanged.
+
+**Staff check still needed:** a signed-in end-to-end check by a staff user (sign in at `/parts-search/login`).
+
 ## Parts Search portal and Needs Review badge (2026-10-27)
 
 Production now runs backend image `realtrackapp-backend:parts-search-20261027-4fc25e79` and frontend image `realtrackapp-frontend:parts-search-20261027-49d1dfe7`. Both are layered on the previously live images (`fashion-import-recovery-25mp-20261022-1c389779`, `catalog-condition-icon-20261021-r1`); rollback tags `rollback-parts-search-20261027-4fc25e79` and `rollback-parts-search-20261027-49d1dfe7` point at them. Release folders: `/home/ubuntu/realtrackapp-parts-search-20261027-4fc25e79/` and `/home/ubuntu/realtrackapp-frontend-parts-search-20261027-49d1dfe7/` (Dockerfile, Compose override, rollback override, rollout script, recorded Compose args).

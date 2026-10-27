@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27 — Parts Search options deployed
+
+- Production: backend and frontend `parts-search-options-20261027-22dc97da`, migration `CreatePartsSearchEvents1791600000000` applied, internal PartsBazar360 key configured. PartsBazar360 API deployed with the options endpoint (`cea9dbc`). See `docs/architecture/deployment.md`.
+
 ## 2026-10-27 — Parts Search: every sellable option, precisely
 
 - `/parts-search/results` lists every option we can sell for a query, grouped:
