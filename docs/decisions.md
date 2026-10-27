@@ -23,6 +23,20 @@ Format:
 
 ---
 
+## 2026-10-27 — "Every sellable option": our stock is its own entry; demand = nothing sellable
+**Decision:**
+1. **Omni Core stock** (automotive `inventory_items` with a catalogue product) is matched to results by normalized MPN/OEM number. It is shown as its own "In our warehouse" group, plus a badge on PartsBazar360 rows with the same number. It never changes a PartsBazar360 row's availability or visibility.
+2. **Visibility:** Omni Core always asks PartsBazar360 for unavailable parts and hides them itself after the merge.
+3. **Demand:** a search is logged as demand when it has no results, or no in-stock option from either source.
+4. **Fallback:** without the internal key, `/parts-search/results` falls back to the buyer view rather than failing.
+
+**Why:**
+- *Separate entry:* a first version attached our single GM hinge to all 20 exact listings, making 16 ended listings from other sellers look sellable.
+- *Demand definition:* "no stock" (not just "no results") is what loses a sale.
+- *Fallback:* the Omni Core release can precede key setup.
+
+**Revisit when:** Omni Core stock gains part-number links to PartsBazar360 parts (then attach precisely instead of by number), or procurement needs notifications instead of the demand page.
+
 ## 2026-10-26 — Parts Search portal: own route, Auto Parts permission, server-side proxy, separate read key
 **Decision:** (1) The portal lives inside Omni Core at `/parts-search`, a sibling of the
 workspaces with its own shell, instead of a separate app with SSO — same origin means the

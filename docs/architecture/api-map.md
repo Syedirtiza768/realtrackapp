@@ -82,6 +82,14 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 | GET | `/api/parts-search/suggest?q=` | `/api/search/suggest` | Typeahead. Fewer than 2 chars or any upstream failure returns empty lists, never an error. Throttled 20/s, 400/min. |
 | GET | `/api/parts-search/parts/:id` | `/api/integrations/realtrack/search/parts/:id` (keyed) or `/api/search/parts/:id` | Part detail. Internal view adds `internalOffers` (every offer, any status, with seller, store, source, SKU, base price, per-warehouse stock) and `sourceRecords`. 404 passes PartsBazar360's reason through. |
 | GET | `/api/parts-search/status` | `/api/v1/search` probe + internal `/health` | Upstream reachable, index name, whether the internal key works. |
+| GET | `/api/parts-search/options` | `/api/integrations/realtrack/search/options` (key required) | "Every sellable option" (2026-10-27). Params: `q`, vehicle (`vehicleConfigId` / `makeId`+`modelId`+`year` / `make`+`model`+`year`, `engineLitres`), `drop`, `includeUnavailable`, `page`, `pageSize`. Groups by relation (number queries) or fitment verdict (text), with live availability. Omni Core automotive warehouse stock is merged by normalized MPN/OEM number (scoped to the user's organizations) as an "In our warehouse" group plus badges. Not-available parts are hidden after the merge unless `includeUnavailable`. Every call is logged to `parts_search_events`. 503 `INTERNAL_SEARCH_UNAVAILABLE` without the key (the SPA then shows the buyer view). |
+| POST | `/api/parts-search/events/select` | — | `{query, partId, requestRef?, action}`: audit of what staff opened, copied or followed. |
+| POST | `/api/parts-search/requests` | — | Sourcing request `{query, numbers?, vehicle?, partId?, note?}` → `parts_search_events` (type `request`, status `open`). |
+| PATCH | `/api/parts-search/requests/:id` | — | `{status: open / done / dismissed}`. |
+| GET | `/api/parts-search/demand?days=7` | — | Searched-but-unsellable report: totals, top numbers, top queries, top vehicles, requests. |
+| GET | `/api/parts-search/vehicles/{makes, makes/:id/models, models/:id/generations, generations/:id/configurations}` | `/api/vehicles/...` (public) | Vehicle picker; cached 1 h in Redis. |
+| GET | `/api/parts-search/vin/:vin` | NHTSA vPIC `DecodeVinValues` | `{year, make, model, trim, engineLitres}`; cached 30 days; 17-char VIN check. |
+
 
 Responses are cached in Redis for `PARTS_SEARCH_CACHE_TTL_SECONDS` (default 30 s; part detail ≥ 120 s), keyed separately for internal and public. Degraded answers are never cached.
 

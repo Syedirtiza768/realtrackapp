@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Search } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 import VerticalWorkspaceShell, { type VerticalNavItem } from '../layout/VerticalWorkspaceShell';
 
@@ -14,6 +14,7 @@ const NAV: VerticalNavItem[] = [
     path: '/parts-search',
     isActive: (pathname) => pathname === '/parts-search' || pathname.startsWith('/parts-search/results') || pathname.startsWith('/parts-search/parts/'),
   },
+  { icon: ClipboardList, label: 'Demand', path: '/parts-search/demand' },
   { icon: ArrowLeftRight, label: 'Auto Parts workspace', path: '/auto-parts', end: true },
 ];
 

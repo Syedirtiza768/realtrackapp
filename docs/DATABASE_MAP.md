@@ -358,6 +358,20 @@
 
 ---
 
+### Parts Search Module (2026-10-27)
+
+`parts_search_events` (migration `1791600000000-CreatePartsSearchEvents`). It is the audit + demand log for the Parts Search portal.
+
+- **Type:** `type` (`query` | `select` | `request`).
+- **Who:** `user_id`, `user_email`.
+- **What was asked:** `query`, `numbers text[]` (normalized, GIN-indexed), `vehicle jsonb`.
+- **Outcome:** `result_count`, `in_stock_count`, `fits_count`.
+- **Demand:** `demand` is true when nothing was found or nothing was in stock.
+- **Selection:** `part_id`, `request_ref` (ties a selection to its search).
+- **Requests:** `note`, `status` (open/done/dismissed), `updated_by`, `updated_at`.
+- **Indexes:** `(type, created_at)`, `(demand, created_at)`, `numbers` GIN.
+- **Retention:** none; the table is append-only apart from request status.
+
 ### Inventory Module
 
 #### `inventory_ledger` (InventoryLedger)

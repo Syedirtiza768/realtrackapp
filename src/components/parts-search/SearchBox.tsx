@@ -61,11 +61,16 @@ type Props = {
   initialQuery?: string;
   /** Filters to keep when a plain query is submitted from the results page. */
   keepParams?: Omit<PartsSearchParams, 'q' | 'page'>;
+  /**
+   * Options results: build the target URL for a query (keeps the selected
+   * vehicle). Facet suggestions then refine the query text instead.
+   */
+  buildPath?: (q: string) => string;
   size?: 'lg' | 'md';
   autoFocus?: boolean;
 };
 
-export default function SearchBox({ initialQuery = '', keepParams, size = 'md', autoFocus }: Props) {
+export default function SearchBox({ initialQuery = '', keepParams, buildPath, size = 'md', autoFocus }: Props) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
@@ -103,16 +108,16 @@ export default function SearchBox({ initialQuery = '', keepParams, size = 'md', 
       to: `/parts-search/parts/${encodeURIComponent(part.id)}`,
     }));
     for (const make of data.makes.slice(0, 3)) {
-      out.push({ kind: 'filter', key: `make:${make}`, label: make, detail: 'Vehicle make', to: resultsPath({ q, make: [make] }) });
+      out.push({ kind: 'filter', key: `make:${make}`, label: make, detail: 'Vehicle make', to: buildPath ? buildPath(`${make} ${q}`.trim()) : resultsPath({ q, make: [make] }) });
     }
     for (const category of data.categories.slice(0, 3)) {
-      out.push({ kind: 'filter', key: `category:${category}`, label: category, detail: 'Category', to: resultsPath({ q, category: [category] }) });
+      out.push({ kind: 'filter', key: `category:${category}`, label: category, detail: 'Category', to: buildPath ? buildPath(`${q} ${category}`.trim()) : resultsPath({ q, category: [category] }) });
     }
     for (const brand of data.brands.slice(0, 3)) {
-      out.push({ kind: 'filter', key: `brand:${brand}`, label: brand, detail: 'Brand', to: resultsPath({ q, brand: [brand] }) });
+      out.push({ kind: 'filter', key: `brand:${brand}`, label: brand, detail: 'Brand', to: buildPath ? buildPath(`${brand} ${q}`.trim()) : resultsPath({ q, brand: [brand] }) });
     }
     return out;
-  }, [data, query]);
+  }, [data, query, buildPath]);
 
   const showList = open && query.trim().length >= 2 && (options.length > 0 || loading);
 
@@ -123,9 +128,9 @@ export default function SearchBox({ initialQuery = '', keepParams, size = 'md', 
       return;
     }
     const q = query.trim();
-    if (!q && !keepParams) return;
+    if (!q && !keepParams && !buildPath) return;
     rememberSearch(q);
-    go(resultsPath({ ...keepParams, q: q || undefined }));
+    go(buildPath ? buildPath(q) : resultsPath({ ...keepParams, q: q || undefined }));
   };
 
   const go = (to: string) => {

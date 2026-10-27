@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-27 — Parts Search: every sellable option, precisely
+
+- `/parts-search/results` lists every option we can sell for a query, grouped:
+  - **Number queries:** exact, superseded, OEM equivalent, aftermarket equivalent, and unverified cross-references (collapsed, with a "why this part?" trail).
+  - **Text queries:** by fitment verdict, plus "other matches".
+- **Availability** comes from PartsBazar360's database at query time, and ended listings are hidden but counted. Omni Core automotive warehouse stock is merged in by part number.
+- **Vehicle:** picker (make/model/year/engine) or VIN decode (NHTSA), or parsed from the query. Verdicts are *Fits / Likely fits / Not confirmed / Does not fit*, based on the kind of evidence.
+- **Demand:** searches with nothing sellable are logged to `parts_search_events`; sourcing requests and the `/parts-search/demand` report are new. Migration `1791600000000-CreatePartsSearchEvents`.
+- **Requirements:** needs `PARTSBAZAR360_SEARCH_API_KEY` (and PartsBazar360 `cea9dbc` or later); without it the page shows the buyer view as before.
+
 ## 2026-10-27 — Parts Search portal deployed to production
 
 - Backend `realtrackapp-backend:parts-search-20261027-4fc25e79` and frontend `realtrackapp-frontend:parts-search-20261027-49d1dfe7` (main `49d1dfe7`) are live; rollback tags are kept. `/parts-search` is available to Auto Parts users in buyer-view mode until `PARTSBAZAR360_SEARCH_API_KEY` is configured. Details in `docs/architecture/deployment.md`.

@@ -555,6 +555,14 @@ Read-only proxy over PartsBazar360 universal search; all routes require `dashboa
 | GET | `/api/parts-search/suggest?q=` | Typeahead (parts, categories, brands, makes) |
 | GET | `/api/parts-search/parts/:id` | Part detail (internal: all offers, stock, source records) |
 | GET | `/api/parts-search/status` | Upstream / internal-key health |
+| GET | `/api/parts-search/options` | Every sellable option: grouped, live stock (PartsBazar360 + Omni Core warehouses), fitment verdicts; logged |
+| POST | `/api/parts-search/events/select` | Log which result staff picked |
+| POST | `/api/parts-search/requests` | Create a sourcing request (demand log) |
+| PATCH | `/api/parts-search/requests/:id` | Set request status |
+| GET | `/api/parts-search/demand` | Demand report |
+| GET | `/api/parts-search/vehicles/...` | Vehicle picker (PartsBazar360 hierarchy) |
+| GET | `/api/parts-search/vin/:vin` | VIN decode (NHTSA) |
+
 
 Frontend client: `src/lib/partsSearchApi.ts`.
 

@@ -85,6 +85,7 @@ import PartsSearchShell from './components/parts-search/PartsSearchShell';
 import PartsSearchHomePage from './components/parts-search/PartsSearchHomePage';
 import PartsSearchResultsPage from './components/parts-search/PartsSearchResultsPage';
 import PartsSearchPartPage from './components/parts-search/PartsSearchPartPage';
+import PartsSearchDemandPage from './components/parts-search/PartsSearchDemandPage';
 import type { ReactNode } from 'react';
 
 function AutoPartsRoutes() {
@@ -196,6 +197,7 @@ function App() {
                     <Route index element={<PartsSearchHomePage />} />
                     <Route path="results" element={<PartsSearchResultsPage />} />
                     <Route path="parts/:id" element={<PartsSearchPartPage />} />
+                    <Route path="demand" element={<PartsSearchDemandPage />} />
                     <Route path="*" element={<div className="p-10 text-center text-slate-500 dark:text-slate-400"><h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">Parts Search page not found</h1><Link to="/parts-search" className="mt-4 inline-block text-sky-600 dark:text-sky-400">Return to search</Link></div>} />
                 </Route>
 

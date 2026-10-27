@@ -117,6 +117,15 @@ A sibling of the Auto Parts, Fashion and B&I workspaces (not under `/auto-parts`
 | `/parts-search` | `PartsSearchHomePage` | `dashboard.view` | Search box, recent searches (per browser), example queries, data-source status |
 | `/parts-search/results` | `PartsSearchResultsPage` | `dashboard.view` | All state in the query string (`q`, repeated list filters, `year`, `inStock`, `hasImage`, `sort`, `page`, `pageSize`) |
 | `/parts-search/parts/:id` | `PartsSearchPartPage` | `dashboard.view` | Part facts, sellers/offers/stock table, source records (internal view), fitment list |
+| `/parts-search/demand` | `PartsSearchDemandPage` | `dashboard.view` | Searched-but-unsellable numbers/queries/vehicles and sourcing requests (status editable) |
+
+**Since 2026-10-27** `/parts-search/results` is the "every sellable option" view (`PartsSearchResultsPage`, `components/parts-search/options/*`, `lib/partsSearchOptionsApi.ts`):
+- **Header:** vehicle bar (`VehicleBar`: make → model → year → engine picker, or VIN decode; last vehicle remembered per browser), summary sentence with stock age, removable interpretation chips (`drop=`), did-you-mean.
+- **Groups and rows:** one `OptionGroupSection` per group, with `possible`, `related` and `does_not_fit` collapsed. Dense `OptionRow`s show image (click to enlarge), match badge and "why this part?" trail, verdict and evidence, price, stock and location, Omni Core stock, sellers table and actions.
+- **Nothing to sell:** a sourcing-request card when nothing is sellable.
+- **URL state:** `q`, vehicle params (`vehicleConfigId`, `makeId`, `modelId`, `make`, `model`, `year`, `engineLitres`, `vlabel`, `vin`), `drop`, `all=1`, `page`.
+- **Fallback:** without the internal key the page falls back to the buyer view (`PartsSearchClassicResults`, the 2026-10-26 results page).
+
 
 Components live in `src/components/parts-search/` (`SearchBox`, `ResultCard`, `FacetSidebar`, `InternalOffersTable`, `DataSourceNotice`). The Auto Parts sidebar links to the portal ("Parts Search", module key `parts-search`). A 401 on a `/parts-search/*` page sends the user to `/parts-search/login`.
 

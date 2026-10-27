@@ -457,7 +457,15 @@ Read-only proxy over PartsBazar360 universal search for the `/parts-search` port
 | `parts-search.client.ts` | `fetch` client, `PARTSBAZAR360_SEARCH_API_KEY` as bearer for internal calls, timeouts, retry on 502/503/504 |
 | `dto/parts-search-query.dto.ts` | Allow-listed, bounded params mirroring PartsBazar360's `SearchQueryDto`; `toUpstreamParams` sends lists as repeated params |
 
-No entities, migrations or queues.
+Since 2026-10-27 also:
+
+| File | Purpose |
+|------|---------|
+| `parts-search-options.service.ts` | `/options` proxy to PartsBazar360 internal options search; Omni Core automotive stock merge (`inventory_items` ⋈ `catalog_products` ⋈ `stock_levels`/`warehouses`, matched by normalized MPN/OEM, user's organizations only); visibility after merge; `parts_search_events` logging; demand report; vehicle proxy (Redis 1 h); NHTSA VIN decode (Redis 30 d) |
+| `dto/parts-search-options.dto.ts` | Options/select/request/status/demand DTOs; `toOptionsParams` (always fetches unavailable parts so the merge can decide) |
+| `entities/parts-search-event.entity.ts` | `parts_search_events` (query / select / request) |
+
+Migration `1791600000000-CreatePartsSearchEvents`. Module imports `TypeOrmModule.forFeature([PartsSearchEvent])` and `AuthModule` (for `UserOrganizationService`).
 
 ### Client Settings Module (`client-settings/`)
 

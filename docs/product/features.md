@@ -73,7 +73,12 @@ Shared by Auto Parts, Fashion and B&I at `/<workspace>/stock`. Design: [../archi
 - Filters: make, model, year, category, brand, part type, condition, in stock, has photos; plus seller and source in the internal view. Every search is a shareable URL.
 - **Internal view** (when `PARTSBAZAR360_SEARCH_API_KEY` is configured): every offer on a part, including paused/ended ones and offers hidden by the Superior priority rule, with seller, store, source tag and key, seller SKU, seller base price and per-warehouse stock, each labelled Live / Hidden / Outranked. Part pages add the import source records.
 - Without the key, or if PartsBazar360's internal endpoint is unavailable, the portal shows the buyer view and says so.
-- Read-only in this release: no actions write to Omni Core or PartsBazar360.
+- **Every sellable option (2026-10-27):**
+  - **Number expansion:** a part number returns the exact part, superseded numbers, OEM and aftermarket equivalents (with a "why this part?" trail), and unverified cross-references in a collapsed group. Other-make parts that merely share digits are left out, compared by manufacturer family.
+  - **Availability now:** checked against PartsBazar360's database at query time, not the search index; ended listings are hidden but counted. Omni Core's own automotive warehouse stock is listed first as "In our warehouse".
+  - **Fitment:** pick make/model/year/engine or decode a VIN (or type it: "left headlight 2018 Audi Q5"). Each part gets *Fits / Likely fits / Not confirmed / Does not fit*. "Fits" needs catalogue or compatibility-table evidence for the right engine; title-derived data is at most "likely"; the wrong side is "does not fit".
+  - **Never lose a sale:** searches with no results or no stock are logged as demand, staff can add a sourcing request, and `/parts-search/demand` lists top unsellable numbers, queries and vehicles plus open requests.
+- Writes only to Omni Core's own `parts_search_events` (audit + demand). Nothing is written to PartsBazar360 or to fitment data. "Reserve / quote" is a placeholder.
 
 ## For each major module — quick reference
 

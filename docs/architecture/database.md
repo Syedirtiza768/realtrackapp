@@ -89,6 +89,10 @@ npm run migration:show       # status
 
 A PowerShell helper exists: `scripts/run-migrations.ps1`.
 
+### Parts Search events (2026-10-27)
+
+`1791600000000-CreatePartsSearchEvents` creates `parts_search_events` (see DATABASE_MAP). Its timestamp is above every migration recorded in production; production also has `1791200000000`–`1791400000000` Primemotive migrations that are not in `main`.
+
 ## Seed data
 
 - `listingpro.dump` (repo root) is restored into a fresh Postgres volume by
