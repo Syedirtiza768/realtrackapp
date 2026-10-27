@@ -1,5 +1,7 @@
 # Setup
 
+Parts Search listing descriptions (2026-10-27, main 2bfc2a5d): production frontend is `parts-search-desc-20261027-2bfc2a5d` (rollback tag `rollback-parts-search-desc-20261027-2bfc2a5d`); backend unchanged.
+
 Parts Search list-first + part detail modal (2026-10-27, main 3f6e9f4c): production frontend is `parts-search-modal-20261027-3f6e9f4c` (rollback tag `rollback-parts-search-modal-20261027-3f6e9f4c`); backend unchanged.
 
 Parts Search image downloads (2026-10-27, main 2f2d4755): production backend and frontend are `parts-search-images-20261027-2f2d4755` (rollback tags `rollback-parts-search-images-20261027-2f2d4755`).

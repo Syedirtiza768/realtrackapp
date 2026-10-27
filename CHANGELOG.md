@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27 — Listing description fix deployed
+
+- Production frontend: `parts-search-desc-20261027-2bfc2a5d` (main `2bfc2a5d`); rollback tag kept. See `docs/architecture/deployment.md`.
+
 ## 2026-10-27 — Parts Search: listing descriptions render as formatted HTML
 
 - Part descriptions (mostly eBay listing HTML) showed as raw markup. They now render sanitized in a sandboxed frame with the listing's own styling, capped with **Show full description**; plain-text descriptions are unchanged.

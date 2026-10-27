@@ -2,6 +2,10 @@
 
 # Deployment Architecture
 
+## Parts Search listing descriptions as sanitized HTML (2026-10-27, main 2bfc2a5d)
+
+Frontend only: production frontend is `realtrackapp-frontend:parts-search-desc-20261027-2bfc2a5d` (bundle `index-Bj8-ZK2t.js`), layered on `parts-search-modal-20261027-3f6e9f4c` (replaces `dist/` only). Rollback: `realtrackapp-frontend:rollback-parts-search-desc-20261027-2bfc2a5d`. Release folder: `/home/ubuntu/realtrackapp-parts-search-desc-20261027-2bfc2a5d/`. Checks: the bundle carries the sandboxed description frame, `/parts-search` and `/parts-search/results` return 200, and the backend and data containers are unchanged.
+
 ## Parts Search list-first + part detail modal (2026-10-27, main 3f6e9f4c)
 
 Frontend only: production frontend is `realtrackapp-frontend:parts-search-modal-20261027-3f6e9f4c` (bundle `index-Cs3kmmgc.js`), layered on `parts-search-images-20261027-2f2d4755` (replaces `dist/` only). The backend is unchanged (`parts-search-images-20261027-2f2d4755`): the new part-detail fields come from PartsBazar360 and are passed through.
