@@ -562,6 +562,10 @@ Read-only proxy over PartsBazar360 universal search; all routes require `dashboa
 | GET | `/api/parts-search/demand` | Demand report |
 | GET | `/api/parts-search/vehicles/...` | Vehicle picker (PartsBazar360 hierarchy) |
 | GET | `/api/parts-search/vin/:vin` | VIN decode (NHTSA) |
+| GET | `/api/parts-search/parts/:id/images` | High-quality image previews for a part |
+| GET | `/api/parts-search/parts/:id/images/:index/download` | Download one image, full size |
+| GET | `/api/parts-search/parts/:id/images/zip` | Download all images as a zip |
+| GET | `/api/parts-search/omni/:itemId/image/download` | Download an Omni Core warehouse item image |
 
 
 Frontend client: `src/lib/partsSearchApi.ts`.

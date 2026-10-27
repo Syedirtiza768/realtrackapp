@@ -125,6 +125,7 @@ A sibling of the Auto Parts, Fashion and B&I workspaces (not under `/auto-parts`
 - **Nothing to sell:** a sourcing-request card when nothing is sellable.
 - **URL state:** `q`, vehicle params (`vehicleConfigId`, `makeId`, `modelId`, `make`, `model`, `year`, `engineLitres`, `vlabel`, `vin`), `drop`, `all=1`, `page`.
 - **Fallback:** without the internal key the page falls back to the buyer view (`PartsSearchClassicResults`, the 2026-10-26 results page).
+- **Images (2026-10-27):** clicking a result thumbnail opens `ImageGalleryDialog`: every image of the part in high quality, arrows/thumbnails, **Download full size** and **All N (.zip)**. Rows also have an **Image** quick download, and the part page has both buttons, using the server image list so indexes match. Downloads go through `fetchDownloadResponse` (JWT) and save with the server's `Content-Disposition` name (`lib/partsSearchOptionsApi.ts`: `listPartImages`, `downloadPartImage`, `downloadPartImagesZip`, `downloadOmniImage`).
 
 
 Components live in `src/components/parts-search/` (`SearchBox`, `ResultCard`, `FacetSidebar`, `InternalOffersTable`, `DataSourceNotice`). The Auto Parts sidebar links to the portal ("Parts Search", module key `parts-search`). A 401 on a `/parts-search/*` page sends the user to `/parts-search/login`.

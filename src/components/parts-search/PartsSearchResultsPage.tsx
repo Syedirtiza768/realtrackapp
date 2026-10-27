@@ -24,6 +24,7 @@ import {
   type OptionsResponse,
   type VehicleSelection,
 } from '../../lib/partsSearchOptionsApi';
+import ImageGalleryDialog, { type GalleryTarget } from './options/ImageGalleryDialog';
 import OptionGroupSection from './options/OptionGroupSection';
 import VehicleBar from './options/VehicleBar';
 import PartsSearchClassicResults from './PartsSearchClassicResults';
@@ -94,29 +95,11 @@ function SourcingRequestCard({ data }: { data: OptionsResponse }) {
   );
 }
 
-function Lightbox({ image, onClose }: { image: { url: string; alt: string } | null; onClose: () => void }) {
-  useEffect(() => {
-    if (!image) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [image, onClose]);
-  if (!image) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4" role="dialog" aria-modal="true" aria-label={image.alt} onClick={onClose}>
-      <img src={image.url} alt={image.alt} referrerPolicy="no-referrer" className="max-h-[85vh] max-w-[90vw] rounded-lg bg-white object-contain" onClick={(e) => e.stopPropagation()} />
-      <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-slate-800" aria-label="Close image">
-        <X size={18} />
-      </button>
-    </div>
-  );
-}
-
 export default function PartsSearchResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const params = useMemo(() => optionsParamsFromUrl(searchParams), [searchParams]);
-  const [image, setImage] = useState<{ url: string; alt: string } | null>(null);
+  const [gallery, setGallery] = useState<GalleryTarget | null>(null);
 
   useEffect(() => {
     if (params.q) rememberSearch(params.q);
@@ -248,7 +231,7 @@ export default function PartsSearchResultsPage() {
           hasVehicle={hasVehicle}
           showingUnavailable={Boolean(params.includeUnavailable)}
           onShowUnavailable={() => update({ ...params, includeUnavailable: true })}
-          onImage={(url, alt) => setImage({ url, alt })}
+          onImage={setGallery}
         />
       ))}
 
@@ -272,7 +255,7 @@ export default function PartsSearchResultsPage() {
         </nav>
       )}
 
-      <Lightbox image={image} onClose={() => setImage(null)} />
+      <ImageGalleryDialog target={gallery} onClose={() => setGallery(null)} />
     </div>
   );
 }

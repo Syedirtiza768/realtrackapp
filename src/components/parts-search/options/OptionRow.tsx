@@ -4,11 +4,12 @@
  *  (stock, where, price, sellers) · actions.
  * ────────────────────────────────────────────────────────── */
 
-import { Check, ChevronDown, Copy, ExternalLink, ImageOff, Warehouse } from 'lucide-react';
+import { Check, ChevronDown, Copy, Download, ExternalLink, ImageOff, Loader2, Warehouse } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatMoney, partImageUrl } from '../../../lib/partsSearchApi';
-import { logSelection, type OptionItem, type OptionVerdict } from '../../../lib/partsSearchOptionsApi';
+import { downloadOmniImage, downloadPartImage, logSelection, type OptionItem, type OptionVerdict } from '../../../lib/partsSearchOptionsApi';
+import type { GalleryTarget } from './ImageGalleryDialog';
 import InternalOffersTable from '../InternalOffersTable';
 
 const MATCH_STYLE: Record<string, string> = {
@@ -42,13 +43,15 @@ type Props = {
   query: string;
   requestRef: string;
   hasVehicle: boolean;
-  onImage: (url: string, alt: string) => void;
+  onImage: (target: GalleryTarget) => void;
 };
 
 export default function OptionRow({ item, query, requestRef, hasVehicle, onImage }: Props) {
   const [details, setDetails] = useState<null | 'why' | 'stock'>(null);
   const [copied, setCopied] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const image = imageFailed ? null : partImageUrl(item.image);
   const a = item.availability;
   const partNumber = item.manufacturerPartNumber || item.match.matchedNumber;
@@ -61,6 +64,19 @@ export default function OptionRow({ item, query, requestRef, hasVehicle, onImage
   const trail = item.match.trail.length > 1 || (item.match.relation !== 'exact' && item.match.trail.length) ? item.match.trail : [];
   const verdict = item.fitment.verdict ? VERDICT[item.fitment.verdict] : null;
   const select = (action: 'open' | 'copy' | 'external' | 'quote') => logSelection({ query, partId: item.partId, requestRef, action });
+
+  const downloadImage = async () => {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      if (isOmni) await downloadOmniImage(item.partId);
+      else await downloadPartImage(item.partId, 0);
+    } catch (e) {
+      setDownloadError((e as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const copy = () => {
     if (!partNumber) return;
@@ -77,10 +93,11 @@ export default function OptionRow({ item, query, requestRef, hasVehicle, onImage
         {/* image */}
         <button
           type="button"
-          onClick={() => image && onImage(image, item.title)}
+          onClick={() => (image || item.imageCount > 0) && onImage({ partId: item.partId, title: item.title, fallbackUrl: image })}
           className="row-span-2 h-14 w-14 overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
-          aria-label={image ? 'Enlarge image' : 'No image'}
-          disabled={!image}
+          aria-label={image || item.imageCount ? `View ${item.imageCount > 1 ? `${item.imageCount} images` : 'image'}` : 'No image'}
+          title={item.imageCount > 1 ? `${item.imageCount} images` : undefined}
+          disabled={!image && !item.imageCount}
         >
           {image ? (
             <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} className="h-full w-full object-contain" />
@@ -187,6 +204,19 @@ export default function OptionRow({ item, query, requestRef, hasVehicle, onImage
               Evidence: {item.fitment.evidence.map((e) => e.source).slice(0, 2).join('; ')}
             </span>
           )}
+          {(item.imageCount > 0 || (isOmni && item.image)) && (
+            <button
+              type="button"
+              onClick={() => void downloadImage()}
+              disabled={downloading}
+              className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50 dark:text-slate-300 dark:hover:text-slate-100"
+              title="Download the main image in full size"
+            >
+              {downloading ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}
+              Image
+            </button>
+          )}
+          {downloadError && <span className="text-red-600 dark:text-red-400">{downloadError}</span>}
           <span className="ml-auto flex items-center gap-3">
             {item.publicUrl && (
               <a href={item.publicUrl} target="_blank" rel="noreferrer" onClick={() => select('external')} className="inline-flex items-center gap-0.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100">

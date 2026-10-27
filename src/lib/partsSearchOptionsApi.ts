@@ -5,10 +5,53 @@
  * server; without it `/options` answers 503 INTERNAL_SEARCH_UNAVAILABLE and the
  * portal falls back to the buyer-view results.
  */
-import { fetchWithAuth } from './authApi';
+import { fetchDownloadResponse, fetchWithAuth } from './authApi';
 import type { InternalOffer } from './partsSearchApi';
 
 const base = '/api/parts-search';
+
+/* ── High-quality image downloads ─────────────────────────────────── */
+
+export interface PartImage {
+  index: number;
+  /** Highest-quality browser preview (original / eBay 1600 px). */
+  previewUrl: string;
+  filename: string;
+  origin: 'omni-core-storage' | 'ebay' | 'partsbazar360' | 'web';
+}
+
+export function listPartImages(partId: string, signal?: AbortSignal) {
+  return fetchWithAuth<{ partId: string; label: string; images: PartImage[] }>(`${base}/parts/${encodeURIComponent(partId)}/images`, { signal });
+}
+
+/** Save an authenticated download using the server's Content-Disposition name. */
+async function saveDownload(url: string, fallbackName: string): Promise<void> {
+  const res = await fetchDownloadResponse(url);
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const name = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? fallbackName;
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(href), 30_000);
+}
+
+export function downloadPartImage(partId: string, index: number) {
+  return saveDownload(`${base}/parts/${encodeURIComponent(partId)}/images/${index}/download`, `part-image-${index + 1}`);
+}
+
+export function downloadPartImagesZip(partId: string) {
+  return saveDownload(`${base}/parts/${encodeURIComponent(partId)}/images/zip`, 'part-images.zip');
+}
+
+/** "In our warehouse" rows carry ids like `omni:<inventoryItemId>`. */
+export function downloadOmniImage(partId: string) {
+  return saveDownload(`${base}/omni/${encodeURIComponent(partId.replace(/^omni:/, ''))}/image/download`, 'omni-core-part');
+}
 
 export type OptionRelation =
   | 'exact'

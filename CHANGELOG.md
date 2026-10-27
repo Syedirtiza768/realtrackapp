@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-27 — Parts Search: download high-quality images
+
+- Results open a gallery of every image of a part in high quality, with **Download full size** and **All N (.zip)**; rows get an **Image** quick download and the part page gets both buttons.
+- Downloads come from new `/api/parts-search/parts/:id/images…` endpoints:
+  - originals from Omni Core's private S3 (never the resized web variants);
+  - eBay's 1600 px rendition, falling back to the stored size;
+  - other hosts fetched server-side with remote-fetch controls.
+
 ## 2026-10-27 — Parts Search options deployed
 
 - Production: backend and frontend `parts-search-options-20261027-22dc97da`, migration `CreatePartsSearchEvents1791600000000` applied, internal PartsBazar360 key configured. PartsBazar360 API deployed with the options endpoint (`cea9dbc`). See `docs/architecture/deployment.md`.

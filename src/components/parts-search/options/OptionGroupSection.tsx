@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import type { OptionGroup } from '../../../lib/partsSearchOptionsApi';
+import type { GalleryTarget } from './ImageGalleryDialog';
 import OptionRow from './OptionRow';
 
 const PAGE = 25;
@@ -28,7 +29,7 @@ type Props = {
   hasVehicle: boolean;
   showingUnavailable: boolean;
   onShowUnavailable: () => void;
-  onImage: (url: string, alt: string) => void;
+  onImage: (target: GalleryTarget) => void;
 };
 
 /** One equivalence / verdict group: always complete, paged client-side. */

@@ -23,6 +23,16 @@ Format:
 
 ---
 
+## 2026-10-27 — Part image downloads go through the API, addressed by part + index
+**Decision:** Portal image downloads are served by Omni Core (`/api/parts-search/parts/:id/images/:index/download`, `…/images/zip`) rather than by linking the browser to image URLs. The request names only a part and an index; the server takes the URL from part data and picks the best copy:
+- **Our S3 bucket:** the original object, read with `StorageService`.
+- **eBay:** the 1600 px rendition, or the stored size on 404.
+- **Other hosts:** the stored URL, with the remote-fetch controls described in RBAC_AND_SECURITY.
+
+**Why:** Our bucket is private, browsers ignore `download` on cross-origin links, and accepting arbitrary URLs would turn the endpoint into an open proxy into the server's network. `StorageService` was not modified because production's compiled copy may differ from `main` (layered images).
+
+**Revisit when:** images move to a public CDN, or bulk exports beyond 30 images per part are needed.
+
 ## 2026-10-27 — "Every sellable option": our stock is its own entry; demand = nothing sellable
 **Decision:**
 1. **Omni Core stock** (automotive `inventory_items` with a catalogue product) is matched to results by normalized MPN/OEM number. It is shown as its own "In our warehouse" group, plus a badge on PartsBazar360 rows with the same number. It never changes a PartsBazar360 row's availability or visibility.

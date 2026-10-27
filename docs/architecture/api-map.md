@@ -89,6 +89,10 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 | GET | `/api/parts-search/demand?days=7` | — | Searched-but-unsellable report: totals, top numbers, top queries, top vehicles, requests. |
 | GET | `/api/parts-search/vehicles/{makes, makes/:id/models, models/:id/generations, generations/:id/configurations}` | `/api/vehicles/...` (public) | Vehicle picker; cached 1 h in Redis. |
 | GET | `/api/parts-search/vin/:vin` | NHTSA vPIC `DecodeVinValues` | `{year, make, model, trim, engineLitres}`; cached 30 days; 17-char VIN check. |
+| GET | `/api/parts-search/parts/:id/images` | `…/search/parts/:id` (internal or public) | High-quality previews `[{index, previewUrl, filename, origin}]`: our S3 originals via `/api/storage/serve/<original key>` (never responsive variants), eBay upgraded to the 1600 px rendition, others as stored. |
+| GET | `/api/parts-search/parts/:id/images/:index/download` | image host | One image as an attachment (`<brand>-<mpn>-<n>.<ext>`), best quality: our private bucket read through `StorageService`, eBay `s-l1600`/`$_57` (falls back to the stored size on 404), other hosts fetched server-side. |
+| GET | `/api/parts-search/parts/:id/images/zip` | image hosts | All images (≤ 30) as a zip; failures listed in `MISSING.txt`. |
+| GET | `/api/parts-search/omni/:itemId/image/download` | our bucket / image host | Image of an Omni Core warehouse item ("In our warehouse"), scoped to the caller's organizations. |
 
 
 Responses are cached in Redis for `PARTS_SEARCH_CACHE_TTL_SECONDS` (default 30 s; part detail ≥ 120 s), keyed separately for internal and public. Degraded answers are never cached.

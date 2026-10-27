@@ -464,6 +464,7 @@ Since 2026-10-27 also:
 | `parts-search-options.service.ts` | `/options` proxy to PartsBazar360 internal options search; Omni Core automotive stock merge (`inventory_items` ⋈ `catalog_products` ⋈ `stock_levels`/`warehouses`, matched by normalized MPN/OEM, user's organizations only); visibility after merge; `parts_search_events` logging; demand report; vehicle proxy (Redis 1 h); NHTSA VIN decode (Redis 30 d) |
 | `dto/parts-search-options.dto.ts` | Options/select/request/status/demand DTOs; `toOptionsParams` (always fetches unavailable parts so the merge can decide) |
 | `entities/parts-search-event.entity.ts` | `parts_search_events` (query / select / request) |
+| `parts-search-images.service.ts` | High-quality image list/download/zip. `resolve()` classifies stored URLs (our bucket → `StorageService.getObjectStream`, original before variants; eBay → 1600 px with fallback; other http(s) hosts). Remote fetches: public addresses only (DNS checked, every redirect re-checked, ports 80/443), `image/*` only, ≤ 25 MB, 15 s timeout. Zip via `archiver` (store, ≤ 30 images). Module now imports `StorageModule`. |
 
 Migration `1791600000000-CreatePartsSearchEvents`. Module imports `TypeOrmModule.forFeature([PartsSearchEvent])` and `AuthModule` (for `UserOrganizationService`).
 

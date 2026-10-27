@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, ExternalLink, ImageOff } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Download, ExternalLink, FolderDown, ImageOff, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -9,6 +9,7 @@ import {
   partPublicUrl,
   type PartDetail,
 } from '../../lib/partsSearchApi';
+import { downloadPartImage, downloadPartImagesZip, listPartImages } from '../../lib/partsSearchOptionsApi';
 import DataSourceNotice from './DataSourceNotice';
 import InternalOffersTable from './InternalOffersTable';
 
@@ -42,6 +43,15 @@ export default function PartsSearchPartPage() {
   const navigate = useNavigate();
   const [imageIndex, setImageIndex] = useState(0);
   const [showAllVehicles, setShowAllVehicles] = useState(false);
+  const [downloading, setDownloading] = useState<'one' | 'all' | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  // Server-side list: high-quality previews whose indexes match the download endpoint.
+  const imageList = useQuery({
+    queryKey: ['parts-search', 'part-images', id],
+    queryFn: ({ signal }) => listPartImages(id, signal),
+    staleTime: 60_000,
+    retry: false,
+  });
 
   const query = useQuery({
     queryKey: ['parts-search', 'part', id],
@@ -82,8 +92,23 @@ export default function PartsSearchPartPage() {
     );
   }
 
-  const images = (part.imageUrls ?? []).map(partImageUrl).filter((url): url is string => Boolean(url));
+  const served = imageList.data?.images ?? null;
+  const images = served
+    ? served.map((img) => img.previewUrl)
+    : (part.imageUrls ?? []).map(partImageUrl).filter((url): url is string => Boolean(url));
   const mainImage = images[Math.min(imageIndex, images.length - 1)];
+  const download = async (kind: 'one' | 'all') => {
+    setDownloading(kind);
+    setDownloadError(null);
+    try {
+      if (kind === 'all') await downloadPartImagesZip(part.id);
+      else await downloadPartImage(part.id, served?.[Math.min(imageIndex, served.length - 1)]?.index ?? 0);
+    } catch (e) {
+      setDownloadError((e as Error).message);
+    } finally {
+      setDownloading(null);
+    }
+  };
   const vehicles = vehiclesOf(part);
   const visibleVehicles = showAllVehicles ? vehicles : vehicles.slice(0, 12);
   const publicOffers = part.offers ?? [];
@@ -114,6 +139,31 @@ export default function PartsSearchPartPage() {
                   <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full bg-white object-contain dark:bg-slate-900" />
                 </button>
               ))}
+            </div>
+          )}
+          {served && served.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => void download('one')}
+                disabled={downloading !== null}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {downloading === 'one' ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Download size={13} aria-hidden="true" />}
+                Download full size
+              </button>
+              {served.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => void download('all')}
+                  disabled={downloading !== null}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  {downloading === 'all' ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <FolderDown size={13} aria-hidden="true" />}
+                  All {served.length} images (.zip)
+                </button>
+              )}
+              {downloadError && <span className="text-red-600 dark:text-red-400">{downloadError}</span>}
             </div>
           )}
         </div>

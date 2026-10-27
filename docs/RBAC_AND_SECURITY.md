@@ -324,6 +324,12 @@ Applied globally via `ThrottlerGuard`.
 - Anyone with `dashboard.view` (including `viewer`, `listing_user`, `supervisor`) sees the internal view when the key is configured.
 - Rate limits: query 5/s and 120/min, suggest 20/s and 400/min, part detail 10/s, per user. Options 5/s and 120/min, VIN 2/s and 30/min, requests 3/s.
 - (2026-10-27) Options, sourcing requests, request status changes and the demand report are all gated on `dashboard.view`. Omni Core warehouse stock in options results is limited to the caller's organizations (`UserOrganizationService.listForUser`). `parts_search_events` stores user id/email per search for the audit trail.
+- (2026-10-27) Image downloads (`/api/parts-search/parts/:id/images*`, `/omni/:itemId/image/download`) are gated on `dashboard.view`.
+  - **Callers can only name a part id and an image index;** the image URL always comes from PartsBazar360 / Omni Core data.
+  - **Our private bucket** is read with the server's S3 credentials, so no public bucket URL is exposed.
+  - **Other hosts are fetched server-side** under these controls (`parts-search-images.service.ts`), which prevent requests to internal or cloud-metadata addresses: http(s) only, ports 80/443, DNS resolved and private/loopback/link-local/metadata addresses rejected at every redirect hop, `image/*` only, ≤ 25 MB, 15 s timeout.
+  - **Rate limits:** download 5/s and 120/min, zip 1/s and 20/min.
+  - **Responses** are `private, no-store` with `nosniff`.
 
 ## API / integration users
 
