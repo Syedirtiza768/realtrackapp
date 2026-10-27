@@ -2,6 +2,17 @@
 
 # Deployment Architecture
 
+## Parts Search image downloads (2026-10-27, main 2f2d4755)
+
+Production runs backend and frontend `parts-search-images-20261027-2f2d4755` (frontend bundle `index-v28gJd7N.js`). They are layered on `parts-search-options-20261027-22dc97da`, replacing only `dist/src/parts-search/**` and the frontend `dist/`; there is no migration and no environment change.
+
+- **Rollback:** tags `rollback-parts-search-images-20261027-2f2d4755`. Release folder: `/home/ubuntu/realtrackapp-parts-search-images-20261027-2f2d4755/`.
+- **Checks:**
+  - The image routes are mapped and return 401 without auth.
+  - A catalogue original reads from the private bucket as a 2448×2448 JPEG (1.6 MB) through the same S3 client.
+  - The backend container fetches eBay 1600 px renditions.
+  - PostgreSQL, Redis and PgBouncer are unchanged.
+
 ## Parts Search "every sellable option" (2026-10-27, main 22dc97da)
 
 **Production images:**

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27 — Parts Search image downloads deployed
+
+- Production backend and frontend: `parts-search-images-20261027-2f2d4755` (main `2f2d4755`); rollback tags kept. See `docs/architecture/deployment.md`.
+
 ## 2026-10-27 — Parts Search: download high-quality images
 
 - Results open a gallery of every image of a part in high quality, with **Download full size** and **All N (.zip)**; rows get an **Image** quick download and the part page gets both buttons.

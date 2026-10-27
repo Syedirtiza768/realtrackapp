@@ -1,5 +1,7 @@
 # Setup
 
+Parts Search image downloads (2026-10-27, main 2f2d4755): production backend and frontend are `parts-search-images-20261027-2f2d4755` (rollback tags `rollback-parts-search-images-20261027-2f2d4755`).
+
 Parts Search options (2026-10-27, main 22dc97da): production now uses backend `realtrackapp-backend:parts-search-options-20261027-22dc97da` and frontend `realtrackapp-frontend:parts-search-options-20261027-22dc97da` (rollback tags `rollback-parts-search-options-20261027-22dc97da`), with `PARTSBAZAR360_SEARCH_API_KEY` set. Details: [../architecture/deployment.md](../architecture/deployment.md#parts-search-every-sellable-option-2026-10-27-main-22dc97da).
 
 Parts Search portal (2026-10-27): Production uses backend image `realtrackapp-backend:parts-search-20261027-4fc25e79` and frontend image `realtrackapp-frontend:parts-search-20261027-49d1dfe7` (main `49d1dfe7`), with rollback tags `rollback-parts-search-20261027-4fc25e79` / `rollback-parts-search-20261027-49d1dfe7`. The portal runs in buyer-view mode until `PARTSBAZAR360_SEARCH_API_KEY` is set. See [../architecture/deployment.md](../architecture/deployment.md#parts-search-portal-and-needs-review-badge-2026-10-27).
