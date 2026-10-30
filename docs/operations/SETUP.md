@@ -1,5 +1,10 @@
 # Setup
 
+eBay Trading API revision fix (2026-10-30, main `00aad7cd`): production backend
+image is `realtrackapp-backend:ebay-revise-00aad7cd`. It avoids false publish
+failures caused by immediate stale `GetItem` readbacks after accepted revisions.
+Health and rollback details: [deployment record](../architecture/deployment.md#ebay-revision-stale-readback-fix-2026-10-30-main-00aad7cd).
+
 Parts Search listing descriptions (2026-10-27, main 2bfc2a5d): production frontend is `parts-search-desc-20261027-2bfc2a5d` (rollback tag `rollback-parts-search-desc-20261027-2bfc2a5d`); backend unchanged.
 
 Parts Search list-first + part detail modal (2026-10-27, main 3f6e9f4c): production frontend is `parts-search-modal-20261027-3f6e9f4c` (rollback tag `rollback-parts-search-modal-20261027-3f6e9f4c`); backend unchanged.

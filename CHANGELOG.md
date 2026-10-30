@@ -4,6 +4,8 @@
 
 - An accepted Trading API `ReviseFixedPriceItem` response is treated as success without an immediate `GetItem` equality check. This avoids marking accepted listing changes as failed when eBay's read endpoint briefly returns stale data.
 - Added a focused regression test for the existing-listing revision path.
+- Deployed backend image `realtrackapp-backend:ebay-revise-00aad7cd` from main commit `00aad7cd`. Only the backend was recreated; PostgreSQL, Redis, PgBouncer, and the frontend remained running. `/api/health` returned HTTP 200 with database and heap up, and the backend healthcheck is healthy. No migration or listing retry was run.
+- Rollback image: `realtrackapp-backend:parts-search-images-20261027-2f2d4755`. The clean source and Compose/rollback overrides are retained in `/home/ubuntu/realtrackapp-release-ebay-revise-00aad7cd/`.
 
 ## 2026-10-27 — Listing description fix deployed
 

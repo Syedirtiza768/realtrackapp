@@ -2,6 +2,25 @@
 
 # Deployment Architecture
 
+## eBay revision stale-readback fix (2026-10-30, main 00aad7cd)
+
+Production backend image `realtrackapp-backend:ebay-revise-00aad7cd` was built
+from the clean main release source at `/home/ubuntu/realtrackapp-release-ebay-revise-00aad7cd/`
+and deployed by recreating only the backend with the active production Compose
+file list. PostgreSQL, Redis, PgBouncer, and the frontend stayed running. No
+database migration or listing retry was needed.
+
+- Existing Trading API listing revisions now treat a successful
+  `ReviseFixedPriceItem` response as confirmation; an immediate `GetItem`
+  readback can lag and must not turn an accepted revision into a failed target.
+- **Verification:** the backend container is healthy; `/api/health` returned
+  HTTP 200 with database and heap up; the compiled stale-readback helper is
+  absent. The eBay publish queue had no active, waiting, or delayed jobs at
+  cutover.
+- **Rollback:** image `realtrackapp-backend:parts-search-images-20261027-2f2d4755`
+  with `/home/ubuntu/realtrackapp-release-ebay-revise-00aad7cd/rollback.yml`.
+  The release folder also retains the clean backend source and Compose override.
+
 ## Parts Search listing descriptions as sanitized HTML (2026-10-27, main 2bfc2a5d)
 
 Frontend only: production frontend is `realtrackapp-frontend:parts-search-desc-20261027-2bfc2a5d` (bundle `index-Bj8-ZK2t.js`), layered on `parts-search-modal-20261027-3f6e9f4c` (replaces `dist/` only). Rollback: `realtrackapp-frontend:rollback-parts-search-desc-20261027-2bfc2a5d`. Release folder: `/home/ubuntu/realtrackapp-parts-search-desc-20261027-2bfc2a5d/`. Checks: the bundle carries the sandboxed description frame, `/parts-search` and `/parts-search/results` return 200, and the backend and data containers are unchanged.
