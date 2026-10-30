@@ -238,6 +238,7 @@ describe('EbayPublishService', () => {
     svc = new EbayPublishService(
       mockConfig(),
       inventoryApi as any,
+      { reviseFixedPriceItem: jest.fn().mockResolvedValue(undefined) } as any, // tradingApi
       taxonomyApi as any,
       {} as any, // taxonomyCache
       auth as any,
@@ -278,6 +279,44 @@ describe('EbayPublishService', () => {
   });
 
   describe('publish', () => {
+    it('treats an accepted Trading API revise response as success without a GetItem readback', async () => {
+      const reviseFixedPriceItem = jest.fn().mockResolvedValue(undefined);
+      (svc as any).tradingApi = { reviseFixedPriceItem };
+      const channel = {
+        listingId: '1234567890',
+        internalSku: 'SKU-001',
+      };
+
+      const result = await (svc as any).reviseExistingTradingListing(
+        { id: 'store-1', storeName: 'My Store' },
+        'store-1',
+        validRequest(),
+        null,
+        'EBAY_US',
+        channel,
+      );
+
+      expect(result).toMatchObject({
+        storeId: 'store-1',
+        storeName: 'My Store',
+        success: true,
+        listingId: '1234567890',
+      });
+      expect(reviseFixedPriceItem).toHaveBeenCalledWith(
+        'store-1',
+        '1234567890',
+        expect.any(Object),
+        'EBAY_US',
+      );
+      expect(channelRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channelPrice: '49.99',
+          channelQuantity: 5,
+          listingStatus: 'published',
+        }),
+      );
+    });
+
     it('throws BadRequestException when storeIds is empty', async () => {
       await expect(svc.publish(validRequest({ storeIds: [] }))).rejects.toThrow(
         BadRequestException,

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-30 — Prevent false eBay revision failures from stale readback
+
+- An accepted Trading API `ReviseFixedPriceItem` response is treated as success without an immediate `GetItem` equality check. This avoids marking accepted listing changes as failed when eBay's read endpoint briefly returns stale data.
+- Added a focused regression test for the existing-listing revision path.
+
 ## 2026-10-27 — Listing description fix deployed
 
 - Production frontend: `parts-search-desc-20261027-2bfc2a5d` (main `2bfc2a5d`); rollback tag kept. See `docs/architecture/deployment.md`.

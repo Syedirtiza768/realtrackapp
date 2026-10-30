@@ -1,6 +1,6 @@
 # eBay integration & the PartsBazar360 relationship
 
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-30
 
 ## eBay
 RealTrackApp's core purpose is eBay automotive-parts listing management: multi-store
@@ -13,6 +13,10 @@ Confirmed non-obvious behaviors (see [[../decisions|decisions.md]] for the full
 entries):
 - `EbayMvlService` is injected optionally into `EbayPublishService` to break a
   circular dependency between the `channels` and `fitment` modules.
+- Existing Trading API listing revisions are successful when `ReviseFixedPriceItem`
+  returns successfully. Do not require an immediate exact `GetItem` readback:
+  eBay can return a stale snapshot shortly after accepting the change, which
+  would incorrectly mark a durable publish target as failed.
 - Publish failures with eBay errorId `25005` (invalid category) trigger a
   purge-and-recreate-offer retry, not just a plain retry.
 - Item-specific values are sanitized to eBay's 65-character aspect limit before

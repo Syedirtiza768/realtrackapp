@@ -2004,6 +2004,9 @@ export class EbayPublishService {
           force: true,
         });
       }
+      // A successful Trading API revise response confirms the update. An
+      // immediate GetItem readback may be stale and must not mark the publish
+      // target as failed after eBay accepted the revision.
       await this.tradingApi.reviseFixedPriceItem(
         storeId,
         channel.listingId,
