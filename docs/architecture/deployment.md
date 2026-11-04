@@ -2,6 +2,15 @@
 
 # Deployment Architecture
 
+## Fashion catalog filter dropdowns (2026-11-04, main 057cfb0f)
+
+Production frontend runs `realtrackapp-frontend:fashion-catalog-filters-20261104-057cfb0f`, built from main commit `057cfb0f` on the live `7fb85299` source lineage. The Fashion catalog presents brand, category, condition, status, stock, and Fashion-specific facets as horizontal dropdowns above results; remaining criteria stay in Advanced Filters. Business & Industrial keeps its desktop filter column.
+
+- **Base and rollback:** the release layers the existing `realtrackapp-frontend:publish-workspace-20261104-7fb85299` image. Rollback image: `realtrackapp-frontend:rollback-fashion-catalog-filters-20261104-r1`.
+- **Release folder:** `/home/ubuntu/fashion-catalog-filters-20261104/`.
+- **Verification:** public homepage and `/api/health` returned HTTP 200; the public JavaScript bundle `index-DBsuBUAI.js` contains the Fashion filter and workspace-scoped publishing code. Only the frontend was recreated; backend, PostgreSQL, Redis, and PgBouncer container IDs were unchanged. No schema or catalog data changed.
+- **Browser check:** an authenticated visual walkthrough was not completed because Windows browser state capture timed out.
+
 ## eBay catalog bulk publish workspace scope (2026-11-04, main 7fb85299)
 
 Production frontend only: `realtrackapp-frontend:publish-workspace-20261104-7fb85299` (bundle `index-DqQ7q5aK.js`) layers the main commit `7fb85299` frontend build over the previously live `parts-search-desc-20261027-2bfc2a5d` image. The publish dialog scopes active eBay stores to the selected workspace and passes its `organizationId` through durable bulk-job creation and target polling.

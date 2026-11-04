@@ -3,7 +3,7 @@
 ## 2026-11-04 — Fashion catalog filter dropdowns
 
 - Replaced Fashion's left filter column with a horizontal dropdown row for brand, category, condition, catalog status, stock, Fashion category, department, item type, size, color, and material. Large facets remain searchable, and less-used filters open in an Advanced Filters drawer.
-- Existing server-side filtering, facet counts, URL/session state, and active filter chips are preserved. This is a frontend-only release candidate; production has not yet been updated.
+- Existing server-side filtering, facet counts, URL/session state, and active filter chips are preserved. Deployed from main commit `057cfb0f` as `realtrackapp-frontend:fashion-catalog-filters-20261104-057cfb0f`, based on the live `publish-workspace-20261104-7fb85299` image. Rollback image: `realtrackapp-frontend:rollback-fashion-catalog-filters-20261104-r1`. The public homepage, API health, and filter bundle checks passed; only the frontend was recreated, with backend and data containers unchanged.
 
 ## 2026-11-04 — Scope catalog eBay publishing to the active workspace
 
