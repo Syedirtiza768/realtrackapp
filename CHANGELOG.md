@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-04 — Fashion catalog filter dropdowns
+
+- Replaced Fashion's left filter column with a horizontal dropdown row for brand, category, condition, catalog status, stock, Fashion category, department, item type, size, color, and material. Large facets remain searchable, and less-used filters open in an Advanced Filters drawer.
+- Existing server-side filtering, facet counts, URL/session state, and active filter chips are preserved. This is a frontend-only release candidate; production has not yet been updated.
+
 ## 2026-11-04 — Scope catalog eBay publishing to the active workspace
 
 - The Auto Parts publish dialog now lists only active eBay stores in the selected workspace. Durable bulk-job creation and target polling both carry that workspace ID, preventing the API from checking a valid store against the user's default workspace.

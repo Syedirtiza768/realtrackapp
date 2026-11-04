@@ -72,7 +72,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 
 ## Vertical catalog routes (2026-09-12)
 
-The canonical parity surfaces are `/auto-parts/catalog`, `/business-industrial/catalog`, and `/fashion/catalog`. The B&I and Fashion `/listings` collection routes remain aliases to the shared workspace; their `/listings/editor` and `/fashion/listings/:id[/edit]` routes remain full vertical editors. Both shared surfaces use `CatalogWorkspace` with loading-safe checkbox facets, searchable/collapsible filters, a mobile filter drawer, empty-catalog versus no-match states, server-side pagination, URL/session persistence, quick view, drag-reorder image management, bulk actions with pending and record-level failure feedback, export, and publish-job progress that distinguishes submitted, processing, published, partially failed, and failed without treating panel close as cancellation. Category selections use the facet's stable category ID and imported-to dates are inclusive.
+The canonical parity surfaces are `/auto-parts/catalog`, `/business-industrial/catalog`, and `/fashion/catalog`. The B&I and Fashion `/listings` collection routes remain aliases to the shared workspace; their `/listings/editor` and `/fashion/listings/:id[/edit]` routes remain full vertical editors. Both shared surfaces use `CatalogWorkspace` with loading-safe checkbox facets, searchable/collapsible filters, empty-catalog versus no-match states, server-side pagination, URL/session persistence, quick view, drag-reorder image management, bulk actions with pending and record-level failure feedback, export, and publish-job progress that distinguishes submitted, processing, published, partially failed, and failed without treating panel close as cancellation. B&I keeps its desktop filter column and mobile filter drawer. Fashion uses horizontal dropdowns above results for brand, category, condition, status, stock, Fashion category, department, item type, size, color, and material; less-used filters open in an accessible Advanced Filters drawer on desktop and mobile. Category selections use the facet's stable category ID and imported-to dates are inclusive.
 
 The B&I catalog reuses the Auto Parts catalog's table-first header and action
 hierarchy (summary, refresh, export, policy edit, add item, selection bar,
@@ -142,7 +142,7 @@ Fashion has a separate shell and login boundary rather than reusing the automoti
 |-------|-----------|------------|---------|
 | /fashion/login | FashionLoginPage | public | Fashion-specific login on the shared light canvas |
 | /fashion | FashionDashboardPage | fashion.dashboard.view | Fashion metrics, stores, and Add Item |
-| /fashion/catalog | FashionCatalogPage | fashion.listings.view | Shared catalog workspace; Add Item opens the photos-first editor |
+| /fashion/catalog | FashionCatalogPage | fashion.listings.view | Shared catalog workspace with Fashion-specific horizontal filter dropdowns above results; Add Item opens the photos-first editor |
 | /fashion/listings | FashionCatalogPage | fashion.listings.view | Alias of `/fashion/catalog` |
 | /fashion/listings/new | FashionListingEditorPage | fashion.listings.create | Photos-first Add Item: collect photos, optional identification, category-aware Fashion fields, save |
 | /fashion/listings/:id | FashionListingEditorPage | fashion.listings.view | Reopen a saved Fashion item |

@@ -5,10 +5,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   filterCount: number;
+  showOnDesktop?: boolean;
   children: ReactNode;
 };
 
-export default function CatalogMobileFilterDrawer({ open, onClose, filterCount, children }: Props) {
+export default function CatalogMobileFilterDrawer({ open, onClose, filterCount, showOnDesktop = false, children }: Props) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
@@ -51,7 +52,7 @@ export default function CatalogMobileFilterDrawer({ open, onClose, filterCount, 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div className={`fixed inset-0 z-50 ${showOnDesktop ? '' : 'lg:hidden'}`}>
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div
         ref={panelRef}

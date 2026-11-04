@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { fetchWithAuth } from '../../../lib/authApi';
 import FeedbackPanel from '../../ui/FeedbackPanel';
 import CatalogActiveFilterTags from './CatalogActiveFilterTags';
+import CatalogQuickFilterBar from './CatalogQuickFilterBar';
 import CatalogFilterControls, { activeFilterCount } from './CatalogFilterControls';
 import CatalogMobileFilterDrawer from './CatalogMobileFilterDrawer';
 import CatalogProductQuickView from './CatalogProductQuickView';
@@ -283,9 +284,11 @@ export default function CatalogWorkspace({ config }: Props) {
           {summary ? <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{summary.total.toLocaleString()} products · {summary.withImages.toLocaleString()} with images · {summary.published.toLocaleString()} published</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setShowFilters(true)} className={toolbarButton + ' lg:hidden'} aria-expanded={showFilters} aria-controls="catalog-mobile-filters">
-            <SlidersHorizontal size={14} aria-hidden="true" /> Filters{filterCount ? ` (${filterCount})` : ''}
-          </button>
+          {!isFashion ? (
+            <button type="button" onClick={() => setShowFilters(true)} className={toolbarButton + ' lg:hidden'} aria-expanded={showFilters} aria-controls="catalog-mobile-filters">
+              <SlidersHorizontal size={14} aria-hidden="true" /> Filters{filterCount ? ` (${filterCount})` : ''}
+            </button>
+          ) : null}
           <button type="button" onClick={refresh} disabled={loading} className={toolbarButton}>
             <RefreshCw size={14} className={loading ? 'animate-spin motion-reduce:animate-none' : ''} aria-hidden="true" /> Refresh
           </button>
@@ -322,6 +325,17 @@ export default function CatalogWorkspace({ config }: Props) {
         <button type="submit" className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium text-white sm:shrink-0 ${primaryButtonClass(isBusinessIndustrial)}`}>Search</button>
       </form>
 
+      {isFashion ? (
+        <CatalogQuickFilterBar
+          config={config}
+          facets={facets}
+          filters={state.filters}
+          onChange={setFilters}
+          onAdvancedClick={() => setShowFilters(true)}
+          loading={facets === null && !facetsError}
+        />
+      ) : null}
+
       {recentSearches.length && !state.q ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <span>Recent:</span>
@@ -356,9 +370,9 @@ export default function CatalogWorkspace({ config }: Props) {
       ) : null}
       {job ? <CatalogPublishJobPanel job={job} onClose={() => setJob(null)} /> : null}
 
-      <div className="flex items-start gap-4">
-        <CatalogFilterControls config={config} filters={state.filters} facets={facets} facetsError={facetsError} onChange={setFilters} onReset={resetFilters} />
-        <div className="min-w-0 flex-1 space-y-3">
+      <div className={isFashion ? 'min-w-0' : 'flex items-start gap-4'}>
+        {!isFashion ? <CatalogFilterControls config={config} filters={state.filters} facets={facets} facetsError={facetsError} onChange={setFilters} onReset={resetFilters} /> : null}
+        <div className={`min-w-0 space-y-3 ${isFashion ? 'w-full' : 'flex-1'}`}>
           {selectedCount ? (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/20">
               <span className="mr-2 text-sm font-medium text-blue-900 dark:text-blue-100">{selectedCount} selected on this page</span>
@@ -431,7 +445,7 @@ export default function CatalogWorkspace({ config }: Props) {
         </div>
       </div>
 
-      <CatalogMobileFilterDrawer open={showFilters} onClose={() => setShowFilters(false)} filterCount={filterCount}>
+      <CatalogMobileFilterDrawer open={showFilters} onClose={() => setShowFilters(false)} filterCount={filterCount} showOnDesktop={isFashion}>
         <div id="catalog-mobile-filters">
           <CatalogFilterControls compact config={config} filters={state.filters} facets={facets} facetsError={facetsError} onChange={setFilters} onReset={resetFilters} />
         </div>

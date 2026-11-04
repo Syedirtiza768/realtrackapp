@@ -262,9 +262,11 @@ logging, and authorization scope; `FashionListingsService` and
 quarantine, and single-record edit rules. Existing automotive CatalogManager
 and APIs remain intact, so legacy automotive data is not widened into the
 non-automotive workspaces. The React `CatalogWorkspace` presents those APIs
-with Auto Parts-style toolbar density, a mobile filter drawer, and publish-job
-phases; B&I wraps it in `VerticalWorkspaceShell` without changing payload or
-permission contracts.
+with Auto Parts-style toolbar density and publish-job phases. B&I keeps its
+desktop filter column and mobile filter drawer; Fashion places its primary and
+garment-attribute dropdowns above results and opens the Advanced Filters drawer
+at any viewport. B&I wraps the workspace in `VerticalWorkspaceShell` without
+changing payload or permission contracts.
 
 ## Fashion Quick Capture (2026-10-09)
 
