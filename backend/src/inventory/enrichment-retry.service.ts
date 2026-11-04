@@ -90,7 +90,7 @@ const PERMANENT_MARKERS = [
 ];
 
 /** UI-facing bucket for a failed listing's `enrichmentLastFailureReason`. */
-export type FailureUiClass = 'code_bug' | 'needs_data' | 'system';
+export type FailureUiClass = 'code_bug' | 'needs_data' | 'needs_review' | 'system';
 
 /**
  * Markers within a `permanent_*`/`client_error_*` reason string that mean
@@ -109,6 +109,11 @@ const DATA_GAP_REASON_MARKERS = [
   'cannot_exceed',
 ];
 
+const PHOTO_IDENTITY_REVIEW_MARKERS = [
+  'photos did not confirm this part number',
+  'part number could not be verified from photos',
+];
+
 /**
  * Classify a stored `enrichmentLastFailureReason` for display: a code bug
  * (TypeError/ReferenceError — see `cannot read propert`/`is not a
@@ -119,16 +124,29 @@ const DATA_GAP_REASON_MARKERS = [
  */
 export function classifyFailureForUi(
   reason: string | null | undefined,
+  imageCount?: number,
 ): FailureUiClass | null {
   if (!reason) return null;
+  const normalizedReason = reason.toLowerCase();
   if (
-    reason.startsWith('permanent_cannot_read_propert') ||
-    reason.startsWith('permanent_is_not_a_function') ||
-    reason.startsWith('permanent_is_not_defined')
+    normalizedReason.startsWith('permanent_cannot_read_propert') ||
+    normalizedReason.startsWith('permanent_is_not_a_function') ||
+    normalizedReason.startsWith('permanent_is_not_defined')
   ) {
     return 'code_bug';
   }
-  if (DATA_GAP_REASON_MARKERS.some((marker) => reason.includes(marker))) {
+  if (
+    PHOTO_IDENTITY_REVIEW_MARKERS.some((marker) =>
+      normalizedReason.includes(marker),
+    )
+  ) {
+    return imageCount !== undefined && imageCount < 2
+      ? 'needs_data'
+      : 'needs_review';
+  }
+  if (
+    DATA_GAP_REASON_MARKERS.some((marker) => normalizedReason.includes(marker))
+  ) {
     return 'needs_data';
   }
   return 'system';
@@ -144,6 +162,13 @@ export class EnrichmentRetryService {
     @InjectQueue('inventory')
     private readonly inventoryQueue: Queue,
   ) {}
+
+  getFailureUiClass(
+    reason: string | null | undefined,
+    imageCount?: number,
+  ): FailureUiClass | null {
+    return classifyFailureForUi(reason, imageCount);
+  }
 
   /**
    * Classify an enrichment error as transient (retriable) or permanent.

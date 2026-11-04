@@ -609,11 +609,11 @@ export class InventoryWorkbenchService {
         pipelineJobStatus: primaryJob?.status,
         hasCompletedPipelineJob,
         enrichmentStatus,
-        ...(enrichmentStatus === 'failed'
+        ...(enrichmentStatus === 'failed' || enrichmentStatus === 'needs_review'
           ? {
               failureReason: listing.enrichmentLastFailureReason ?? undefined,
               failureClass:
-                classifyFailureForUi(listing.enrichmentLastFailureReason) ??
+                classifyFailureForUi(listing.enrichmentLastFailureReason, imageUrls.length) ??
                 undefined,
             }
           : {}),
@@ -875,7 +875,7 @@ export class InventoryWorkbenchService {
       enrichmentPermanentFail: listing.enrichmentPermanentFail,
       failureReason: listing.enrichmentLastFailureReason ?? undefined,
       failureClass:
-        classifyFailureForUi(listing.enrichmentLastFailureReason) ?? undefined,
+        classifyFailureForUi(listing.enrichmentLastFailureReason, parseImageUrls(listing.itemPhotoUrl).length) ?? undefined,
       importedAt: listing.importedAt,
       updatedAt: listing.updatedAt,
       publishedAt: listing.publishedAt,

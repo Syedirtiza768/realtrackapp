@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-04 — Distinguish photo review from missing photos
+
+- Enrichment failures that say photos could not confirm the part number now show `Needs review` when the listing has at least two saved photos. Listings below the two-photo requirement remain `Needs photo`.
+- Deployed backend image `realtrackapp-backend:inventory-photo-review-20261104`, layered with the existing Motoark production features. Rollback image: `realtrackapp-backend:motoark-lifecycle-20261102-candidate`.
+- This backend-only status correction changes no listing records, images, or marketplace records and requires no schema migration.
+
 ## 2026-10-30 — Prevent false eBay revision failures from stale readback
 
 - An accepted Trading API `ReviseFixedPriceItem` response is treated as success without an immediate `GetItem` equality check. This avoids marking accepted listing changes as failed when eBay's read endpoint briefly returns stale data.

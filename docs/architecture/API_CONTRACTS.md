@@ -432,9 +432,9 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
-| GET | `/api/inventory/listings` | List workbench parts — one row per SKU (`page`, `limit`, `status`, `search`, `missingImages`, `dateAddedFrom`, `dateAddedTo`, `brand`, `make`, `model`, `category`) | inventory.view |
-| GET | `/api/inventory/listings/:listingId/detail` | Full part detail for modal (fitments, US/AU/DE variants, pipeline job, enrichmentStage) | inventory.view |
-| GET | `/api/inventory/listings/:listingId/enrichment-status` | Poll enrichment progress — returns `{ status, stage }` with stage like `vision_lookup`, `enrichment`, `generating_us`, etc. | inventory.view |
+| GET | `/api/inventory/listings` | List workbench parts — one row per SKU (`page`, `limit`, `status`, `search`, `missingImages`, `dateAddedFrom`, `dateAddedTo`, `brand`, `make`, `model`, `category`). Photo identity failures with 2+ attached images report `needs_review`; missing-photo failures remain `failed` with `failureClass: needs_data`. | inventory.view |
+| GET | `/api/inventory/listings/:listingId/detail` | Full part detail for modal (fitments, US/AU/DE variants, pipeline job, enrichmentStage, failureReason, failureClass) | inventory.view |
+| GET | `/api/inventory/listings/:listingId/enrichment-status` | Poll enrichment progress — returns `{ status, stage }`; a photo identity mismatch with 2+ saved images reports `needs_review`. | inventory.view |
 | DELETE | `/api/inventory/listings/:listingId` | Soft-delete inventory listing | inventory.delete |
 | POST | `/api/inventory/listings/bulk-delete` | Soft-delete multiple inventory listings (`{ ids }`) | inventory.delete |
 | PATCH | `/api/inventory/listings/:listingId/images` | Attach uploaded photo URLs to a draft listing; at least two photos queue enrichment, and new photos can rerun completed enrichment | listings.update |

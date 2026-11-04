@@ -1,5 +1,7 @@
 # Current State
 
+**2026-11-04 (Inventory photo review status)** — Inventory listings with at least two saved images whose photos did not verify the part number surface as `needs_review` instead of the misleading missing-photo state. Listings with fewer than two images remain `failed`/`needs_data` and the UI continues to show “Needs photo”. No record mutation or marketplace call is part of the fix. Deployed backend image and verification details are in `docs/architecture/deployment.md`.
+
 **2026-10-21 (Fashion source catalogue import deployed)** — Commit
 `b95045cd2ca5731af1db1b40a090625731dac04b` is live as
 `realtrackapp-backend:fashion-catalog-import-20261021-b95045cd` and

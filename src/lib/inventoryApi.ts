@@ -30,7 +30,7 @@ export type EnrichmentStatus =
  * fix, `needs_data` (e.g. a missing required photo) can be self-served by
  * ops by correcting the listing, `system` is an API/auth/rate-limit issue.
  */
-export type FailureUiClass = 'code_bug' | 'needs_data' | 'system';
+export type FailureUiClass = 'code_bug' | 'needs_data' | 'needs_review' | 'system';
 
 export interface InventoryMarketplaceVariant {
   listingId: string;
@@ -75,7 +75,7 @@ export interface InventoryListingItem {
   hasCompletedPipelineJob: boolean;
   enrichmentStatus: EnrichmentStatus;
   enrichmentStage?: string | null;
-  /** Only present when enrichmentStatus === 'failed'. */
+  /** Present when enrichmentStatus is failed or needs_review. */
   failureReason?: string;
   failureClass?: FailureUiClass;
   intakeSource?: boolean;

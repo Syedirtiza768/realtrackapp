@@ -89,6 +89,7 @@ export class InventoryAutoTriggerService {
       | 'cManufacturerPartNumber'
       | 'cBrand'
       | 'pipelineJobId'
+      | 'enrichmentLastFailureReason'
     > & { enrichmentStage?: string | null },
     pipelineJob?: PipelineJob | null,
   ): EnrichmentStatus {
@@ -98,7 +99,14 @@ export class InventoryAutoTriggerService {
       if (INLINE_RUNNING_STAGES.has(stage)) return 'enriching';
       if (stage === INLINE_ENRICH_STAGES.COMPLETED) return 'completed';
       if (stage === INLINE_ENRICH_STAGES.NEEDS_REVIEW) return 'needs_review';
-      if (stage === INLINE_ENRICH_STAGES.FAILED) return 'failed';
+      if (stage === INLINE_ENRICH_STAGES.FAILED) {
+        return this.retryService.getFailureUiClass(
+          listing.enrichmentLastFailureReason,
+          this.parseImageUrls(listing.itemPhotoUrl).length,
+        ) === 'needs_review'
+          ? 'needs_review'
+          : 'failed';
+      }
     }
 
     if (pipelineJob) {

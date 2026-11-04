@@ -2,6 +2,22 @@
 
 # Deployment Architecture
 
+## Inventory photo-review status (2026-11-04, main)
+
+Production backend image `realtrackapp-backend:inventory-photo-review-20261104`
+contains the main-branch status fix and layers the existing Motoark/Primemotive
+production overlay over it. Only the backend was recreated; the frontend,
+PostgreSQL, Redis, and PgBouncer stayed running. No schema migration or listing
+data update was needed.
+
+- Photo identity failures with at least two saved images report `needs_review`;
+  fewer than two images remain a missing-data failure.
+- **Verification:** backend health and `/api/health` return HTTP 200. The
+  inventory frontend already supports the `Needs review` badge.
+- **Rollback:** restore
+  `realtrackapp-backend:motoark-lifecycle-20261102-candidate` using the active
+  production Compose file list.
+
 ## eBay revision stale-readback fix (2026-10-30, main 00aad7cd)
 
 Production backend image `realtrackapp-backend:ebay-revise-00aad7cd` was built
