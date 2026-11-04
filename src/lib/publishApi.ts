@@ -113,18 +113,24 @@ export function createDurableBulkPublishJob(
   listingIds: string[],
   storeIds: string[],
   idempotencyKey: string,
+  organizationId: string,
 ): Promise<DurableBulkPublishJob> {
   return authPost('/api/ebay/listings/publish-bulk', {
     listingIds,
     storeIds,
     idempotencyKey,
+    organizationId,
   });
 }
 
 export function fetchDurableBulkPublishTargets(
   jobId: string,
+  organizationId: string,
 ): Promise<DurableBulkPublishTarget[]> {
-  return fetchWithAuth(`/api/ebay/listing-jobs/${encodeURIComponent(jobId)}/targets`);
+  const query = `?organizationId=${encodeURIComponent(organizationId)}`;
+  return fetchWithAuth(
+    `/api/ebay/listing-jobs/${encodeURIComponent(jobId)}/targets${query}`,
+  );
 }
 
 /**

@@ -15,6 +15,7 @@
 | 401 loops in UI | Expired/invalid JWT | Re-login; check `JWT_SECRET` unchanged across restarts |
 | CORS errors | Origin not allow-listed | Add to `CORS_ORIGIN` |
 | Migration fails midway | Non-reversible/partial | `migrationsTransactionMode: 'each'` isolates each; fix + re-run |
+| eBay bulk publish says a selected store is not active in this organization | Publish request used a different workspace from the selected store | Switch to the workspace that owns the store and refresh the dialog; the current catalog dialog scopes stores and sends the active workspace ID with job creation and polling |
 | eBay publish reports EPS 400 “No valid image can be downloaded” | First-party S3 image is private, while the running backend still uses URL upload | Deploy the EPS file-upload fix; check the backend image contains `create_image_from_file`, then use the scoped retry below |
 
 ---

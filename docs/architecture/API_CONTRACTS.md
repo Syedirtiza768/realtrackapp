@@ -548,13 +548,15 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 
 | Method | Path | Purpose | Permission |
 |--------|------|---------|------------|
-| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; enforces the 5,000 target/day organization quota and checks the shared eBay Trading API allowance before creating the job | `ebay.publish` |
+| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; clients send the active `organizationId` so stores are checked in the selected workspace; enforces the 5,000 target/day organization quota and checks the shared eBay Trading API allowance before creating the job | `ebay.publish` |
 | GET | `/api/ebay/listing-jobs/:id` | Read durable publish-job status | `ebay.view` |
 | GET | `/api/ebay/listing-jobs/:id/targets` | Read per-listing/per-store progress and results | `ebay.view` |
 
 Bulk jobs persist in `ebay_listing_jobs` / `ebay_listing_job_targets` and run
 through the `ebay-listing-publish` BullMQ queue at bounded concurrency. The
 submission request is idempotent when `idempotencyKey` is supplied.
+The catalog client carries the same `organizationId` on the target-poll request
+so progress is resolved in the workspace where the job was created.
 For native OAuth stores, single and bulk submission reserve the requested targets, already
 pending/processing targets, and 100 calls for other Trading operations against
 eBay Developer Analytics' `AddFixedPriceItem` remaining allowance. Low capacity

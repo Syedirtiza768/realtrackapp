@@ -57,6 +57,18 @@
 
 ## High Priority Issues
 
+### R19: Catalog Bulk Publish Used the User's Default Workspace
+
+**Type**: Reliability bug
+**Severity**: High
+**Status**: Resolved (2026-11-04)
+
+**Description**: The Auto Parts catalog publish dialog could show an eBay store from the currently selected workspace, but the durable bulk-publish request omitted `organizationId`. For a user in multiple workspaces, the API then resolved the user's oldest workspace and rejected the valid store with `selected store(s) are not active eBay stores in this organization` before creating a job.
+
+**Resolution**: Scope the publish dialog's store list to active eBay accounts in the selected workspace, pass its `organizationId` to durable job creation, and include the same ID when polling job targets. No backend or schema change is required.
+
+**Files**: `src/components/catalog/CatalogManager.tsx`, `src/components/channels/PublishModal.tsx`, `src/components/catalog/PublishProgressPanel.tsx`, `src/lib/publishApi.ts`
+
 ### R18: eBay Publish Changed Reviewed Titles and Business Policies
 
 **Type**: Data-integrity bug

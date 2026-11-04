@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-04 — Scope catalog eBay publishing to the active workspace
+
+- The Auto Parts publish dialog now lists only active eBay stores in the selected workspace. Durable bulk-job creation and target polling both carry that workspace ID, preventing the API from checking a valid store against the user's default workspace.
+- This is a frontend-only correction; no database migration or listing update is required.
+
 ## 2026-11-04 — Distinguish photo review from missing photos
 
 - Enrichment failures that say photos could not confirm the part number now show `Needs review` when the listing has at least two saved photos. Listings below the two-photo requirement remain `Needs photo`.

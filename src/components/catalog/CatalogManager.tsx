@@ -32,6 +32,7 @@ import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
 import type { SearchItem } from '../../types/search';
 import { authHeaders } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '../auth/AuthContext';
 import type { SearchQuery, SortMode, ActiveFilters, DateAddedPreset } from '../../types/search';
 import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
 import { useUrlFilters } from '../../hooks/useUrlFilters';
@@ -74,6 +75,7 @@ function saveRecent(terms: string[]) {
 
 export default function CatalogManager() {
   const navigate = useNavigate();
+  const { activeOrganizationId } = useAuth();
   const { has } = usePermissions();
   const canDeleteListings = has('listings.delete');
   /* ── State (synced to URL) ─────────────────────────────── */
@@ -415,6 +417,7 @@ export default function CatalogManager() {
     setPublishJob({
       id: `pub-${Date.now()}`,
       mode: params.mode,
+      organizationId: params.organizationId,
       listing: params.listing,
       listingIds: params.listingIds,
       listingNames,
@@ -734,6 +737,7 @@ export default function CatalogManager() {
       {publishTargetId && publishModalOpen && (publishListing || publishListingLoading) && (
         <PublishModal
           mode="single"
+          organizationId={activeOrganizationId}
           listing={
             publishListing ??
             ({ id: publishTargetId, title: null, customLabelSku: null } as SearchItem)
@@ -747,6 +751,7 @@ export default function CatalogManager() {
       {/* Bulk publish modal */}
       <PublishModal
         mode="bulk"
+        organizationId={activeOrganizationId}
         listingIds={Array.from(selectedIds)}
         open={bulkPublishOpen}
         onClose={() => setBulkPublishOpen(false)}
