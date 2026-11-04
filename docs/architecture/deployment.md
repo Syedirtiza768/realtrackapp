@@ -2,6 +2,14 @@
 
 # Deployment Architecture
 
+## eBay catalog bulk publish workspace scope (2026-11-04, main 7fb85299)
+
+Production frontend only: `realtrackapp-frontend:publish-workspace-20261104-7fb85299` (bundle `index-DqQ7q5aK.js`) layers the main commit `7fb85299` frontend build over the previously live `parts-search-desc-20261027-2bfc2a5d` image. The publish dialog scopes active eBay stores to the selected workspace and passes its `organizationId` through durable bulk-job creation and target polling.
+
+- **Rollback:** `realtrackapp-frontend:rollback-publish-workspace-20261104-7fb85299`, preserving the prior live frontend image. Release folder: `/home/ubuntu/realtrackapp-publish-workspace-20261104-7fb85299/`.
+- **Verification:** frontend root and the new bundle returned successfully over HTTP; `/api/health` returned successfully; backend, PostgreSQL, Redis, and PgBouncer container IDs were unchanged. No schema or listing data changes were made.
+- **Verification limit:** authenticated browser interaction was not confirmed because Windows computer-use state capture timed out twice. The screenshot's 53-listing batch was already complete at 53/53 on 2026-11-03 and was not submitted again.
+
 ## Inventory photo-review status (2026-11-04, main)
 
 Production backend image `realtrackapp-backend:inventory-photo-review-20261104`

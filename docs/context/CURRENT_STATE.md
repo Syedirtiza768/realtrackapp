@@ -1,5 +1,7 @@
 # Current State
 
+**2026-11-04 (Catalog eBay publish workspace fix deployed)** — Main commit `7fb85299` is live as frontend image `realtrackapp-frontend:publish-workspace-20261104-7fb85299` (bundle `index-DqQ7q5aK.js`), layered on the previously live `parts-search-desc-20261027-2bfc2a5d` image. Catalog store choices are scoped to the active workspace, and durable bulk creation and target polling carry that workspace ID. The frontend root and new asset were served over HTTP, `/api/health` returned successfully, and backend, PostgreSQL, Redis, and PgBouncer container IDs stayed unchanged. Rollback image `realtrackapp-frontend:rollback-publish-workspace-20261104-7fb85299` and release folder `/home/ubuntu/realtrackapp-publish-workspace-20261104-7fb85299/` are retained. No listings were submitted during rollout; the screenshot's 53-item batch had already completed 53/53 on 2026-11-03 and was not retried. Authenticated browser interaction was not verified because the Windows computer-use state capture timed out twice.
+
 **2026-11-04 (Inventory photo review status)** — Inventory listings with at least two saved images whose photos did not verify the part number surface as `needs_review` instead of the misleading missing-photo state. Listings with fewer than two images remain `failed`/`needs_data` and the UI continues to show “Needs photo”. No record mutation or marketplace call is part of the fix. Deployed backend image and verification details are in `docs/architecture/deployment.md`.
 
 **2026-10-21 (Fashion source catalogue import deployed)** — Commit

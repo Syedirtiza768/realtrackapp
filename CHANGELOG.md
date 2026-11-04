@@ -4,6 +4,7 @@
 
 - The Auto Parts publish dialog now lists only active eBay stores in the selected workspace. Durable bulk-job creation and target polling both carry that workspace ID, preventing the API from checking a valid store against the user's default workspace.
 - This is a frontend-only correction; no database migration or listing update is required.
+- Deployed from main commit `7fb85299` as `realtrackapp-frontend:publish-workspace-20261104-7fb85299`; rollback image: `realtrackapp-frontend:rollback-publish-workspace-20261104-7fb85299`. HTTP bundle/root and API health checks passed; backend and data containers were unchanged.
 
 ## 2026-11-04 — Distinguish photo review from missing photos
 
