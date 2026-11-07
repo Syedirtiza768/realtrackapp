@@ -3,6 +3,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CatalogProduct } from '../entities/catalog-product.entity.js';
+import { normalizeCatalogUpc } from '../utils/catalog-identifiers.js';
+
+/**
+ * matchStrategy used when a UPC is already stored on a product outside the
+ * importing organization/vertical. The UPC unique index is global, so such a
+ * row can be neither inserted nor used to update a product in this scope.
+ */
+export const UPC_OUTSIDE_SCOPE_STRATEGY = 'upc_outside_scope';
 
 export interface DuplicateCheckResult {
   isDuplicate: boolean;
@@ -97,9 +105,10 @@ export class DuplicateDetectionService {
     }
 
     // Layer 4: UPC (exact match)
-    if (product.upc) {
+    const upc = normalizeCatalogUpc(product.upc);
+    if (upc) {
       const match = await this.productRepo.findOne({
-        where: { upc: product.upc },
+        where: { upc },
         select: ['id'],
       });
       if (match) {
@@ -177,8 +186,48 @@ export class DuplicateDetectionService {
   ): Promise<Map<number, DuplicateCheckResult>> {
     const results = new Map<number, DuplicateCheckResult>();
 
+    // UPC first. idx_catalog_upc is a GLOBAL unique index, not scoped by
+    // organization/vertical, so a UPC held anywhere must be matched here.
+    // Otherwise the insert (or an update that sets upc) fails the whole batch
+    // transaction with a unique-key violation.
+    const upcEntries = products.filter((p) => normalizeCatalogUpc(p.upc));
+    if (upcEntries.length > 0) {
+      const upcs = [
+        ...new Set(upcEntries.map((p) => normalizeCatalogUpc(p.upc)!)),
+      ];
+      const existingByUpc = await this.productRepo
+        .createQueryBuilder('p')
+        .select(['p.id', 'p.upc', 'p.organizationId', 'p.vertical'])
+        .where('p.upc IN (:...upcs)', { upcs })
+        .getMany();
+      const upcMap = new Map(existingByUpc.map((p) => [p.upc, p]));
+
+      for (const entry of upcEntries) {
+        const match = upcMap.get(normalizeCatalogUpc(entry.upc)!);
+        if (!match) continue;
+        results.set(
+          entry.index,
+          this.isInScope(match, scope)
+            ? {
+                isDuplicate: true,
+                isPartialMatch: false,
+                matchStrategy: 'upc',
+                matchedProductId: match.id,
+                confidence: 1.0,
+              }
+            : {
+                isDuplicate: false,
+                isPartialMatch: false,
+                matchStrategy: UPC_OUTSIDE_SCOPE_STRATEGY,
+                matchedProductId: match.id,
+                confidence: 1.0,
+              },
+        );
+      }
+    }
+
     // Collect all SKUs for a batch lookup
-    const skuEntries = products.filter((p) => p.sku);
+    const skuEntries = products.filter((p) => p.sku && !results.has(p.index));
     if (skuEntries.length > 0) {
       const skus = skuEntries.map((p) => p.sku!);
       const existingBySkuQuery = this.productRepo
@@ -298,6 +347,24 @@ export class DuplicateDetectionService {
   }
 
   /* ── Normalization helpers ─────────────────────────────── */
+
+  /** Same scope rules as the SKU/MPN/title batch queries above. */
+  private isInScope(
+    product: {
+      organizationId: string | null;
+      vertical: ProductVertical | null;
+    },
+    scope?: { organizationId?: string | null; vertical?: ProductVertical },
+  ): boolean {
+    if (scope?.organizationId && product.organizationId !== scope.organizationId)
+      return false;
+    if (scope?.vertical) {
+      if (scope.vertical === 'automotive')
+        return product.vertical === 'automotive' || product.vertical == null;
+      return product.vertical === scope.vertical;
+    }
+    return true;
+  }
 
   normalizeMpn(mpn: string): string {
     return mpn

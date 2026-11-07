@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-07 — Catalog import UPC unique-key failures
+
+- Fixed catalog imports failing with `duplicate key value violates unique constraint "idx_catalog_upc"`. The batch duplicate check had no UPC layer, while `idx_catalog_upc` is a global unique index, so a UPC already stored on any product reached the insert and failed the whole batch. UPC is now matched first; an in-scope match updates that product, and a UPC owned outside the importing organization/vertical is skipped as `duplicate_skipped` (`upc_outside_scope`) instead of failing.
+- Placeholder UPCs such as `Does not apply` are no longer stored as catalog identifiers or used as duplicate keys. Previously, one such row could block the import, and a legacy catalog row holding that placeholder made every later placeholder row fail. Listing-level `pUpc` still carries the raw eBay value. An update with a blank UPC no longer clears the UPC already on the product.
+- Workspace change pending deployment. Covered by `catalog-identifiers.spec.ts` and `duplicate-detection.service.spec.ts`.
 ## 2026-11-04 — Fashion catalog filter dropdowns
 
 - Replaced Fashion's left filter column with a horizontal dropdown row for brand, category, condition, catalog status, stock, Fashion category, department, item type, size, color, and material. Large facets remain searchable, and less-used filters open in an Advanced Filters drawer.

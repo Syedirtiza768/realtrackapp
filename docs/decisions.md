@@ -23,6 +23,12 @@ Format:
 
 ---
 
+## 2026-11-07 — Placeholder UPCs are not identifiers; UPC matching is global
+
+- **Why:** Fashion import `8ea9d3f4` (eBay active-listings export, 5,465 rows) failed on its first batch with `idx_catalog_upc`. The export puts `Does not apply` in `P:UPC`, and production `catalog_products` already held a legacy row with `upc = 'Does not apply'` (no org or vertical). The unique index is global, not scoped by organization/vertical, but the batch duplicate check only scoped SKU/MPN/title and had no UPC layer.
+- **Decision:** `normalizeCatalogUpc()` (`backend/src/catalog-import/utils/catalog-identifiers.ts`) maps blank and placeholder values (`does not apply`, `n/a`, `na`, `none`, `null`, `-`) to null. Duplicate keys and `catalog_products.upc` use the normalized value. `ListingRecord.pUpc` keeps the raw value because eBay expects `Does not apply` there.
+- **Decision:** UPC is checked first in `checkDuplicateBatch`, without org/vertical scope. An in-scope match updates the owning product. An out-of-scope match is skipped as `duplicate_skipped` (`upc_outside_scope`), because neither insert nor update can write a UPC the index already holds.
+- **Not done:** The legacy production row `catalog_products` with `upc = 'Does not apply'` (sku `BLA-00021`) was left unchanged. Nulling it is a data change and needs approval.
 ## 2026-10-27 — Parts Search: a picked part opens its option list; details are a modal, not a route
 **Decision:** Choosing a part in the typeahead runs the options search for that part's number (`?q=<MPN>&focus=<id>`) and highlights the part, rather than navigating to `/parts-search/parts/:id`. Clicking an option opens `PartDetailDialog` (component state, not a URL) over the list; the part page remains for deep links and ctrl/cmd-click.
 **Why:** Staff sell whatever is available, not one listing. A single part page hid the exact duplicates, superseded and equivalent parts, and the stock of each. Keeping the modal out of the URL means opening and closing it never refetches the options (the query key is built from the search params without `focus`), so the list, its scroll position and expanded groups survive.
