@@ -25,7 +25,11 @@ import {
 } from '../../listings/listing-record.entity.js';
 import { extractMakeModelFromTitle } from '../../listings/utils/extract-make-model-from-title.js';
 import { StorageService } from '../../storage/storage.service.js';
-import { DuplicateDetectionService } from '../services/duplicate-detection.service.js';
+import {
+  DuplicateDetectionService,
+  UPC_OUTSIDE_SCOPE_STRATEGY,
+} from '../services/duplicate-detection.service.js';
+import { normalizeCatalogUpc } from '../utils/catalog-identifiers.js';
 import { EbayComplianceService } from '../services/ebay-compliance.service.js';
 import { CategoryLookupService } from '../services/category-lookup.service.js';
 import { EbayBrowseApiService } from '../../channels/ebay/ebay-browse-api.service.js';
@@ -148,7 +152,8 @@ export class CsvImportProcessor extends WorkerHost {
       });
       for (const p of alreadyInserted) {
         if (p.sku) seenSku.add(this.normalizeIdentifier(p.sku));
-        if (p.upc) seenUpc.add(this.normalizeIdentifier(p.upc));
+        const seededUpc = normalizeCatalogUpc(p.upc);
+        if (seededUpc) seenUpc.add(seededUpc);
         if (p.ebayItemId) {
           seenEbayItemId.add(this.normalizeIdentifier(p.ebayItemId));
         }
@@ -317,9 +322,9 @@ export class CsvImportProcessor extends WorkerHost {
           const skuKey = row.data['sku']
             ? this.normalizeIdentifier(row.data['sku'])
             : null;
-          const upcKey = row.data['upc']
-            ? this.normalizeIdentifier(row.data['upc'])
-            : null;
+          // Placeholders such as "Does not apply" are not identifiers; they
+          // must not dedupe unrelated rows against each other.
+          const upcKey = normalizeCatalogUpc(row.data['upc']);
           const ebayItemIdKey = row.data['ebayItemId']
             ? this.normalizeIdentifier(row.data['ebayItemId'])
             : null;
@@ -375,7 +380,7 @@ export class CsvImportProcessor extends WorkerHost {
           index: idx,
           sku: row.data['sku'] || null,
           mpn: row.data['mpn'] || null,
-          upc: row.data['upc'] || null,
+          upc: normalizeCatalogUpc(row.data['upc']),
           title: row.data['title'] || null,
           brand: row.data['brand'] || null,
         }));
@@ -443,6 +448,20 @@ export class CsvImportProcessor extends WorkerHost {
               matchStrategy: dupResult.matchStrategy,
               matchedProductId: dupResult.matchedProductId,
               message: `Duplicate detected via ${dupResult.matchStrategy} — updating existing product`,
+              rawData: row.data,
+            });
+          } else if (dupResult?.matchStrategy === UPC_OUTSIDE_SCOPE_STRATEGY) {
+            // The UPC unique index is global: this UPC already belongs to a
+            // product in another organization/vertical, so it cannot be inserted.
+            skippedDuplicates++;
+            importRowEntries.push({
+              importId,
+              rowNumber: row.rowNumber,
+              status: 'duplicate_skipped',
+              matchStrategy: UPC_OUTSIDE_SCOPE_STRATEGY,
+              matchedProductId: dupResult.matchedProductId,
+              message:
+                'UPC already exists on a catalog product outside this organization/vertical; row not imported',
               rawData: row.data,
             });
           } else if (dupResult?.isPartialMatch) {
@@ -610,6 +629,8 @@ export class CsvImportProcessor extends WorkerHost {
                   }
                   await this.resetBusinessIndustrialReview(manager, existing);
                 }
+                // A blank/placeholder UPC must not wipe a real UPC already on the product.
+                if (!product.upc) delete product.upc;
                 await manager
                   .getRepository(CatalogProduct)
                   .update(productId, product as any);
@@ -1361,7 +1382,7 @@ export class CsvImportProcessor extends WorkerHost {
       sku: data['sku'] || null,
       mpn: mpn,
       mpnNormalized: mpn ? this.normalizeMpn(mpn) : null,
-      upc: data['upc'] || null,
+      upc: normalizeCatalogUpc(data['upc']),
       ean: data['ean'] || null,
       ebayItemId: data['ebayItemId'] || null,
       epid: data['epid'] || null,

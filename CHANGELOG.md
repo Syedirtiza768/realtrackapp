@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-07 — Catalog import UPC unique-key failures
+
+- Fixed catalog imports failing with `duplicate key value violates unique constraint "idx_catalog_upc"`. The batch duplicate check had no UPC layer, while `idx_catalog_upc` is a global unique index, so a UPC already stored on any product reached the insert and failed the whole batch. UPC is now matched first; an in-scope match updates that product, and a UPC owned outside the importing organization/vertical is skipped as `duplicate_skipped` (`upc_outside_scope`) instead of failing.
+- Placeholder UPCs such as `Does not apply` are no longer stored as catalog identifiers or used as duplicate keys. Previously, one such row could block the import, and a legacy catalog row holding that placeholder made every later placeholder row fail. Listing-level `pUpc` still carries the raw eBay value. An update with a blank UPC no longer clears the UPC already on the product.
+- Workspace change pending deployment. Covered by `catalog-identifiers.spec.ts` and `duplicate-detection.service.spec.ts`.
+
 ## 2026-10-05 — Warehouse inventory, procurement and channel stock (all verticals)
 
 - New `StockModule` (`/api/stock`) and Stock workspace at `/auto-parts/stock`, `/fashion/stock` and `/business-industrial/stock`. It covers warehouses and bins, a SKU master linked to catalog products, listings and variants, and serial/one-off units. Stock changes are recorded in an append-only movement ledger. It also covers receipts, adjustments with approval, bin moves, damage, transfers with in-transit, blind cycle counts, valuation, aging and a CSV ledger. Design: `docs/architecture/WAREHOUSE_INVENTORY.md`.

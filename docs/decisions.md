@@ -23,6 +23,13 @@ Format:
 
 ---
 
+## 2026-11-07 — Placeholder UPCs are not identifiers; UPC matching is global
+
+- **Why:** Fashion import `8ea9d3f4` (eBay active-listings export, 5,465 rows) failed on its first batch with `idx_catalog_upc`. The export puts `Does not apply` in `P:UPC`, and production `catalog_products` already held a legacy row with `upc = 'Does not apply'` (no org or vertical). The unique index is global, not scoped by organization/vertical, but the batch duplicate check only scoped SKU/MPN/title and had no UPC layer.
+- **Decision:** `normalizeCatalogUpc()` (`backend/src/catalog-import/utils/catalog-identifiers.ts`) maps blank and placeholder values (`does not apply`, `n/a`, `na`, `none`, `null`, `-`) to null. Duplicate keys and `catalog_products.upc` use the normalized value. `ListingRecord.pUpc` keeps the raw value because eBay expects `Does not apply` there.
+- **Decision:** UPC is checked first in `checkDuplicateBatch`, without org/vertical scope. An in-scope match updates the owning product. An out-of-scope match is skipped as `duplicate_skipped` (`upc_outside_scope`), because neither insert nor update can write a UPC the index already holds.
+- **Not done:** The legacy production row `catalog_products` with `upc = 'Does not apply'` (sku `BLA-00021`) was left unchanged. Nulling it is a data change and needs approval.
+
 ## 2026-10-05 — Warehouse stock: one ledger, absolute channel pushes, shadow mode, sell-before-you-own
 **Decision:**
 1. A new `stock` module and `/api/stock` prefix were added, rather than extending `inventory/`.
