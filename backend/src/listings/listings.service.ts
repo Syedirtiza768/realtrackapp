@@ -29,6 +29,7 @@ import { RbacService } from '../rbac/rbac.service.js';
 import { StoreAccessService } from '../channels/store-access.service.js';
 import { User } from '../auth/entities/user.entity.js';
 import { TeamsService } from '../teams/teams.service.js';
+import { listingVerticalFilter } from './utils/listing-vertical-filter.js';
 
 /**
  * Maps each Excel header text (normalized to lowercase) to the
@@ -882,8 +883,9 @@ export class ListingsService {
     return { total, revisions };
   }
 
-  async getSummary(user?: User) {
+  async getSummary(user?: User, vertical?: string) {
     const storeFilter = await this.buildStoreFilter(user);
+    const verticalFilter = listingVerticalFilter(vertical);
 
     if (storeFilter && storeFilter.sql === '1=0') {
       return { totalRecords: 0, uniqueSkus: 0, files: 0 };
@@ -892,6 +894,7 @@ export class ListingsService {
     // totalRecords
     const qb = this.listingRepo.createQueryBuilder('r');
     if (storeFilter) qb.andWhere(storeFilter.sql, storeFilter.params);
+    if (verticalFilter) qb.andWhere(verticalFilter.sql, verticalFilter.params);
     const totalRecords = await qb.getCount();
 
     // uniqueSkus
@@ -899,6 +902,8 @@ export class ListingsService {
       .createQueryBuilder('r')
       .select('COUNT(DISTINCT r.customLabelSku)', 'uniqueSkus');
     if (storeFilter) skuQb.where(storeFilter.sql, storeFilter.params);
+    if (verticalFilter)
+      skuQb.andWhere(verticalFilter.sql, verticalFilter.params);
     const uniqueRow = await skuQb.getRawOne<{ uniqueSkus: string }>();
 
     // files
@@ -906,6 +911,8 @@ export class ListingsService {
       .createQueryBuilder('r')
       .select('COUNT(DISTINCT r.sourceFileName)', 'files');
     if (storeFilter) fileQb.where(storeFilter.sql, storeFilter.params);
+    if (verticalFilter)
+      fileQb.andWhere(verticalFilter.sql, verticalFilter.params);
     const fileRow = await fileQb.getRawOne<{ files: string }>();
 
     return {

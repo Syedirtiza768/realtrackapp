@@ -40,6 +40,8 @@ import { useSessionState } from '../../hooks/useSessionState';
 
 const DEFAULT_PAGE_SIZE = 25;
 const RECENT_KEY = 'lp_recent_searches';
+/** This page is the Auto Parts catalog; other verticals have their own catalogs. */
+const AUTO_PARTS_VERTICAL = 'automotive';
 
 function countAdvancedFilters(f: ActiveFilters): number {
   let count = 0;
@@ -223,6 +225,8 @@ export default function CatalogManager() {
       // Collapse marketplace/SKU siblings server-side so total + pagination
       // reflect unique SKUs (backend aggregates sibling marketplaces).
       groupBySku: '1',
+      // Auto Parts catalog: only automotive listings (legacy NULL vertical counts as automotive).
+      vertical: AUTO_PARTS_VERTICAL,
       ...filtersToQuery(filters),
     }),
     [searchQuery, page, pageSize, sortMode, filters],
@@ -230,7 +234,7 @@ export default function CatalogManager() {
 
   const { data, loading, error, refetch } = useSearch(apiQuery);
   const { data: facets, loading: facetsLoading } = useDynamicFacets(apiQuery);
-  const summary = useSummary();
+  const summary = useSummary(AUTO_PARTS_VERTICAL);
 
   const displayItems = data?.items ?? [];
 

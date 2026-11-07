@@ -180,14 +180,15 @@ export function useListingDetail(id: string | null) {
 
 /* ── useSummary ───────────────────────────────────────────── */
 
-export function useSummary() {
+export function useSummary(vertical?: string) {
   const [data, setData] = useState<{ totalRecords: number; uniqueSkus: number; files: number } | null>(null);
 
   useEffect(() => {
-    fetchJson<{ totalRecords: number; uniqueSkus: number; files: number }>('/listings/summary')
+    const q = vertical ? `?vertical=${encodeURIComponent(vertical)}` : '';
+    fetchJson<{ totalRecords: number; uniqueSkus: number; files: number }>(`/listings/summary${q}`)
       .then(setData)
       .catch(() => {});
-  }, []);
+  }, [vertical]);
 
   return data;
 }

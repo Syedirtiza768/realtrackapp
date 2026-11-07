@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-07 — Auto Parts catalog shows only automotive listings
+
+- Listing search (`GET /listings/search`, `/listings/search/facets`) and `GET /listings/summary` accept an optional `vertical` parameter. `automotive` matches `vertical = 'automotive'` and legacy NULL-vertical rows, the same rule the automotive scope uses. Other verticals and callers that omit the parameter are unchanged.
+- The Auto Parts catalog page (`CatalogManager`) sends `vertical=automotive`. Before this, Fashion and Business & Industrial listing records appeared in the Auto Parts catalog and in its totals.
+- Covered by `listing-vertical-filter.spec.ts`. Deploy as a layered backend image plus the frontend build; see the deployment record.
+
 ## 2026-11-07 — Catalog import UPC unique-key failures
 
 - Fixed catalog imports failing with `duplicate key value violates unique constraint "idx_catalog_upc"`. The batch duplicate check had no UPC layer, while `idx_catalog_upc` is a global unique index, so a UPC already stored on any product reached the insert and failed the whole batch. UPC is now matched first; an in-scope match updates that product, and a UPC owned outside the importing organization/vertical is skipped as `duplicate_skipped` (`upc_outside_scope`) instead of failing.

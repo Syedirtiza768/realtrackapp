@@ -9,6 +9,7 @@ export interface SearchQuery {
   limit?: number;
   offset?: number;
   cursor?: string;
+  vertical?: string;      // 'automotive' | 'fashion' | 'business_industrial'; omit for all
   q?: string;
   exactSku?: string;
   brands?: string;        // comma-separated

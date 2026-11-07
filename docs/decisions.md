@@ -23,6 +23,12 @@ Format:
 
 ---
 
+## 2026-11-07 — Auto Parts catalog filters by vertical on the server, not in the page
+
+- **Why:** The Auto Parts catalog reads `/listings/search` and `/listings/summary`, which were not filtered by vertical. Fashion and Business & Industrial listing records appeared under Auto Parts, and in its totals. The earlier vertical scope existed only in uncommitted work.
+- **Decision:** Listing search, facets and summary take an optional `vertical`, applied through `listingVerticalFilter()`. `automotive` also matches NULL-vertical legacy rows, the same rule as the automotive scope. Only the Auto Parts catalog sends it. Pages that omit it see unchanged results, so Business & Industrial, pipeline and stock keep working.
+- **Revisit when:** Each vertical gets its own listing endpoint. Then the parameter can be removed.
+
 ## 2026-11-07 — Placeholder UPCs are not identifiers; UPC matching is global
 
 - **Why:** Fashion import `8ea9d3f4` (eBay active-listings export, 5,465 rows) failed on its first batch with `idx_catalog_upc`. The export puts `Does not apply` in `P:UPC`, and production `catalog_products` already held a legacy row with `upc = 'Does not apply'` (no org or vertical). The unique index is global, not scoped by organization/vertical, but the batch duplicate check only scoped SKU/MPN/title and had no UPC layer.

@@ -153,8 +153,11 @@ export class ListingsController {
 
   @Get('summary')
   @RequirePermissions('listings.view')
-  getSummary(@CurrentUser() user: User) {
-    return this.listingsService.getSummary(user);
+  getSummary(
+    @CurrentUser() user: User,
+    @Query('vertical') vertical?: string,
+  ) {
+    return this.listingsService.getSummary(user, vertical);
   }
 
   @Get('facets')

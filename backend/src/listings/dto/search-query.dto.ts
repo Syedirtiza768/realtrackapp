@@ -153,6 +153,11 @@ export class SearchQueryDto {
   @IsString()
   groupBySku?: string;
 
+  /* -- Vertical scope ------------------------------------- */
+  @IsOptional()
+  @IsString()
+  vertical?: string; // "automotive" (Auto Parts catalog) | "fashion" | "business_industrial"
+
   /* -- Sorting -------------------------------------------- */
   @IsOptional()
   @IsIn([

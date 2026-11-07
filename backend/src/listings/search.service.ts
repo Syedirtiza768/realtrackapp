@@ -7,6 +7,7 @@ import { StoreAccessService } from '../channels/store-access.service.js';
 import { User } from '../auth/entities/user.entity.js';
 import { TeamsService } from '../teams/teams.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { listingVerticalFilter } from './utils/listing-vertical-filter.js';
 
 /* ── Simple in-memory cache ───────────────────────────────── */
 interface CacheEntry<T> {
@@ -419,6 +420,10 @@ export class SearchService {
       }
     }
 
+    /* -- Vertical filter (Auto Parts catalog sends vertical=automotive) -- */
+    const verticalFilter = listingVerticalFilter(dto.vertical);
+    if (verticalFilter) qb.andWhere(verticalFilter.sql, verticalFilter.params);
+
     /* -- Team scope (membership + optional filter) ---------------- */
     await this.applyTeamScope(qb, dto, user);
 
@@ -758,6 +763,7 @@ export class SearchService {
 
     // Pre-compute store filter for dynamic facets
     const storeFilter = await this.buildStoreFilterSql(user);
+    const verticalFilter = listingVerticalFilter(dto.vertical);
     const teamScopeIds = await this.resolveTeamScopeIds(dto, user);
 
     // Build base WHERE — same text-match rules as SearchService.search (FTS + SKU + ILIKE when vector null)
@@ -812,6 +818,7 @@ export class SearchService {
         base.andWhere(`${SAFE_PRICE} <= :maxPrice`, { maxPrice: dto.maxPrice });
       }
       if (storeFilter) base.andWhere(storeFilter.sql, storeFilter.params);
+      if (verticalFilter) base.andWhere(verticalFilter.sql, verticalFilter.params);
       if (teamScopeIds !== null) {
         if (teamScopeIds.length === 0) {
           base.andWhere('1 = 0');
