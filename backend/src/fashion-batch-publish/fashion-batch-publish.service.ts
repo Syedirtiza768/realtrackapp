@@ -45,7 +45,7 @@ import {
 import {
   ebayMasterAttributes,
 } from './fashion-ebay-images.util.js';
-import { buildIssueFromError } from './fashion-build-preflight.util.js';
+import { preflightIssuesFromErrors } from './fashion-build-preflight.util.js';
 import {
   ebayMasterUrls,
   FashionImagePipelineService,
@@ -660,7 +660,7 @@ export class FashionBatchPublishService {
         vertical: 'fashion',
         readOnly: true,
       });
-      return built.blockingErrors.map((message) => buildIssueFromError(message));
+      return preflightIssuesFromErrors(built.blockingErrors);
     } catch (error) {
       return [{
         code: 'BUILD_CHECK_FAILED',

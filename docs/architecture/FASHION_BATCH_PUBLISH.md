@@ -146,7 +146,9 @@ READY:
 
 Every batch needs an eBay store, because the check runs against that store's policies. Read-only mode
 never creates a merchant location on eBay; it reports the blocker instead (`readOnly` in
-`listing-builder.service.ts`). Live batches approve a listing only after this check passes.
+`listing-builder.service.ts`). Live batches approve a listing only after this check passes. The
+builder's own approval check ("authenticity/compliance review must be approved") is left out of this
+check, because the live batch records the reviewer's approval itself just before it publishes.
 
 ## Authenticity approval (decided 2026-11-09)
 

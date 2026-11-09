@@ -14,7 +14,19 @@ const BUILD_CODES: Array<[RegExp, string]> = [
   [/image URL/i, 'IMAGE_REQUIRED'],
 ];
 
+/**
+ * The builder also refuses listings that have no recorded Fashion approval. The
+ * live batch records the reviewer's approval itself, immediately before it
+ * publishes, so that check is not a readiness blocker and is left out here.
+ */
+const APPROVAL_GATE = /authenticity\/compliance review must be approved/i;
+
 export function buildIssueFromError(message: string): ComplianceIssue {
   const code = BUILD_CODES.find(([pattern]) => pattern.test(message))?.[1] ?? 'LISTING_BUILD';
   return { code, severity: 'review', message };
+}
+
+/** Review issues for the builder's blocking errors, minus the approval gate. */
+export function preflightIssuesFromErrors(messages: string[]): ComplianceIssue[] {
+  return messages.filter((message) => !APPROVAL_GATE.test(message)).map(buildIssueFromError);
 }

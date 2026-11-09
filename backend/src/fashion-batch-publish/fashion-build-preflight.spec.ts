@@ -1,4 +1,22 @@
-import { buildIssueFromError } from './fashion-build-preflight.util.js';
+import { buildIssueFromError, preflightIssuesFromErrors } from './fashion-build-preflight.util.js';
+
+describe('preflightIssuesFromErrors', () => {
+  it('drops the approval gate and keeps every other blocker', () => {
+    const issues = preflightIssuesFromErrors([
+      'Fashion authenticity/compliance review must be approved before publishing',
+      'A category-supported eBay condition is required; no condition was inferred',
+    ]);
+    expect(issues.map((i) => i.code)).toEqual(['CONDITION_MISSING']);
+  });
+
+  it('returns nothing when the only blocker is the approval gate', () => {
+    expect(
+      preflightIssuesFromErrors([
+        'Fashion authenticity/compliance review must be approved before publishing',
+      ]),
+    ).toEqual([]);
+  });
+});
 
 describe('buildIssueFromError', () => {
   it.each([
