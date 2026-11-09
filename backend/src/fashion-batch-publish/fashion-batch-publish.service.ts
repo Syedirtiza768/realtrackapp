@@ -19,6 +19,7 @@ import { EbayListingJobTarget } from '../integrations/ebay/entities/ebay-listing
 import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
 import { EbayMultiStoreListingService } from '../integrations/ebay/services/ebay-multi-store-listing.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { ListingBuilderService } from '../integrations/ebay/services/listing-builder.service.js';
 import { FashionListingsService } from '../verticals/fashion-listings.service.js';
 import { VerticalsService } from '../verticals/verticals.service.js';
 import {
@@ -42,9 +43,9 @@ import {
   type FashionComplianceConfig,
 } from './fashion-compliance.rules.js';
 import {
-  EBAY_MASTER_IMAGE_SET_KEY,
-  type EbayMasterImageSet,
+  ebayMasterAttributes,
 } from './fashion-ebay-images.util.js';
+import { buildIssueFromError } from './fashion-build-preflight.util.js';
 import {
   ebayMasterUrls,
   FashionImagePipelineService,
@@ -140,6 +141,7 @@ export class FashionBatchPublishService {
     private readonly verticals: VerticalsService,
     private readonly fashion: FashionListingsService,
     private readonly listings: EbayMultiStoreListingService,
+    private readonly builder: ListingBuilderService,
     private readonly imagePipeline: FashionImagePipelineService,
     private readonly vision: FashionVisionCheckService,
   ) {}
@@ -186,9 +188,11 @@ export class FashionBatchPublishService {
         );
       ebayAccountId = account.id;
     }
+    if (!ebayAccountId)
+      throw new BadRequestException(
+        'Choose the eBay store for every batch: publish readiness is checked against its policies and condition rules',
+      );
     if (!dto.dryRun) {
-      if (!ebayAccountId)
-        throw new BadRequestException('Choose the eBay store to publish to');
       if (dto.confirmAuthenticity !== true)
         throw new BadRequestException(
           'A live batch needs a reviewer to confirm authenticity for listings that pass the compliance check',
@@ -340,6 +344,19 @@ export class FashionBatchPublishService {
         // Dry runs report fixes without touching the catalog.
         if (!batch.dryRun && evaluation.decision !== 'BLOCKED')
           await this.applyFixesToProduct(product, evaluation, batch.id, null);
+
+        // Publish-readiness: the same listing-builder checks the live publish
+        // runs (condition, measurement units, store policies). Without them READY
+        // only meant "photos and text passed" and overstated what could publish.
+        if (evaluation.decision === 'PASS' || evaluation.decision === 'AUTO_FIXED') {
+          const buildIssues = await this.buildPreflight(product, batch);
+          if (buildIssues.length) {
+            evaluation.issues = [...evaluation.issues, ...buildIssues];
+            evaluation.decision = decide(evaluation.issues);
+            evaluation.risk = riskScore(evaluation.issues);
+            this.storeEvaluation(pipeline, evaluation);
+          }
+        }
         await this.audit(product, null, 'fashion.batch.compliance', evaluation.decision.toLowerCase(), undefined, {
           batchId: batch.id,
           dryRun: batch.dryRun,
@@ -624,6 +641,35 @@ export class FashionBatchPublishService {
     pipeline.checkedAt = new Date();
   }
 
+  /**
+   * Run the listing builder read-only for one listing and return its blocking
+   * errors as review issues. Never writes to eBay (readOnly skips merchant
+   * location creation).
+   */
+  private async buildPreflight(product: CatalogProduct, batch: FashionPublishBatch): Promise<ComplianceIssue[]> {
+    if (!batch.ebayAccountId || !batch.marketplaceId)
+      return [{ code: 'BUILD_NOT_CHECKED', severity: 'review', message: 'No eBay store selected, so publish readiness was not checked' }];
+    try {
+      const account = await this.fashion.account(batch.ebayAccountId, batch.organizationId);
+      const built = await this.builder.build({
+        catalogProductId: product.id,
+        ebayAccountId: batch.ebayAccountId,
+        marketplaceId: batch.marketplaceId,
+        listingRecordId: product.id,
+        storeId: account.primaryStoreId,
+        vertical: 'fashion',
+        readOnly: true,
+      });
+      return built.blockingErrors.map((message) => buildIssueFromError(message));
+    } catch (error) {
+      return [{
+        code: 'BUILD_CHECK_FAILED',
+        severity: 'review',
+        message: `Publish readiness could not be checked: ${error instanceof Error ? error.message : String(error)}`,
+      }];
+    }
+  }
+
   /** Persist safe auto-fixes + the eBay master set onto the catalog product. */
   private async applyFixesToProduct(
     product: CatalogProduct,
@@ -643,14 +689,8 @@ export class FashionBatchPublishService {
       if (!product.brand) product.brand = e.fixed.brandSpecific;
       changed = true;
     }
-    const set: EbayMasterImageSet = {
-      sourceUrls: (product.imageUrls ?? []).map((u) => u.trim()),
-      masterUrls: e.masterUrls,
-      batchId,
-      createdAt: new Date().toISOString(),
-    };
-    attrs[EBAY_MASTER_IMAGE_SET_KEY] = set;
-    // jsonb column; the declared attribute type does not model nested objects.
+    // Flat string arrays only: the Fashion attribute validator rejects object-typed values.
+    Object.assign(attrs, ebayMasterAttributes(e.masterUrls, product.imageUrls ?? []));
     product.verticalAttributes = attrs as CatalogProduct['verticalAttributes'];
     await this.productRepo.save(product);
     if (changed)

@@ -144,6 +144,7 @@ import { StorageModule } from '../../storage/storage.module.js';
     ListingActionLogWriterService,
     EbayIntegrationPermissionsService,
     EbayPolicySyncService,
+    ListingBuilderService,
   ],
 })
 export class EbayIntegrationsModule {}

@@ -101,6 +101,8 @@ export class ListingBuilderService {
     vertical?: ProductVertical;
     /** Connected-store policy/profile values selected at publish time. */
     policyOverrides?: Record<string, unknown>;
+    /** Preflight only: report a missing merchant location instead of creating one on eBay. */
+    readOnly?: boolean;
   }): Promise<ListingBuilderResult> {
     const warnings: string[] = [];
 
@@ -558,11 +560,14 @@ export class ListingBuilderService {
     }
 
     if (!merchantLocationKey) {
-      const ensured = await this.inventoryApi.ensureMerchantLocation(
-        params.storeId,
+      // readOnly never creates a merchant location on eBay; it reports the blocker below.
+      const ensured = params.readOnly
+        ? null
+        : await this.inventoryApi.ensureMerchantLocation(
+            params.storeId,
 
-        merchantLocationKey,
-      );
+            merchantLocationKey,
+          );
 
       if (ensured) {
         merchantLocationKey = ensured;

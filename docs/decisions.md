@@ -23,6 +23,12 @@ Format:
 
 ---
 
+## 2026-11-09 — READY means publish-ready: the listing builder's checks run in dry runs too
+
+- **Decision:** a listing reaches READY only when it passes the photo and text checks and the listing builder's publish checks (condition, measurement units, store policies). The builder runs read-only, so dry runs never write to eBay.
+- **Why:** the first 200-listing dry run reported 153 READY. A live attempt on 8 of them failed in the builder. All 153 lacked a condition and 152 needed a measurement-unit check. The dry run never ran those checks, so READY overstated what could publish.
+- **Rejected:** treating the builder's errors as a live-only problem. Dry runs then keep reporting listings that can't publish.
+
 ## 2026-11-09 — Batch publish keeps the human authenticity gate; a reviewer confirms once per batch
 
 - **Decision (user, 2026-11-09):** a live "Publish next N" batch must be started by a user with `fashion.review` + `fashion.authenticity.review` who ticks one confirmation. Listings in that batch that pass compliance (PASS/AUTO_FIXED) are approved in `fashion_reviews` under that reviewer's ID. NEEDS_REVIEW items need individual approval; BLOCKED items cannot be approved.

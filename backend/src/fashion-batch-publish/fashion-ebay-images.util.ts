@@ -1,33 +1,23 @@
 /**
- * The Fashion publish pipeline writes the eBay JPEG masters it produced to
- * `verticalAttributes._ebayMasterImageSet`, together with the catalog image
- * list they were made from. Publishing uses the masters only while that list
- * is unchanged, so editing a listing's photos falls back to the normal path
+ * The Fashion publish pipeline records the eBay JPEG masters it produced as
+ * two string-array attributes on the listing:
+ *   _ebayMasterUrls        S3 URLs of the masters, in photo order
+ *   _ebayMasterSourceUrls  the catalog image URLs those masters were made from
+ *
+ * Publishing uses the masters only while the catalog photos still equal the
+ * source list, so editing a listing's photos falls back to the normal path
  * until the pipeline runs again.
+ *
+ * Only strings, numbers, booleans and string arrays pass the Fashion attribute
+ * validator. An object-typed attribute (the first version wrote one) makes every
+ * save of the listing fail with "Invalid Fashion attributes", so keep these flat.
  */
-export const EBAY_MASTER_IMAGE_SET_KEY = '_ebayMasterImageSet';
+export const EBAY_MASTER_URLS_KEY = '_ebayMasterUrls';
+export const EBAY_MASTER_SOURCE_URLS_KEY = '_ebayMasterSourceUrls';
 
-export interface EbayMasterImageSet {
-  sourceUrls: string[];
-  masterUrls: string[];
-  batchId: string | null;
-  createdAt: string;
-}
-
-export function readEbayMasterImageSet(
-  attributes: Record<string, unknown> | null | undefined,
-): EbayMasterImageSet | null {
-  const raw = attributes?.[EBAY_MASTER_IMAGE_SET_KEY];
-  if (!raw || typeof raw !== 'object') return null;
-  const set = raw as Partial<EbayMasterImageSet>;
-  if (!Array.isArray(set.sourceUrls) || !Array.isArray(set.masterUrls))
-    return null;
-  return {
-    sourceUrls: set.sourceUrls.filter((u): u is string => typeof u === 'string'),
-    masterUrls: set.masterUrls.filter((u): u is string => typeof u === 'string'),
-    batchId: typeof set.batchId === 'string' ? set.batchId : null,
-    createdAt: typeof set.createdAt === 'string' ? set.createdAt : '',
-  };
+function stringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.every((item) => typeof item === 'string') ? (value as string[]) : null;
 }
 
 export function fashionEbayMasterImages(
@@ -38,13 +28,23 @@ export function fashionEbayMasterImages(
   } | null,
 ): string[] | null {
   if (!product || product.vertical !== 'fashion') return null;
-  const set = readEbayMasterImageSet(product.verticalAttributes);
-  if (!set?.masterUrls.length) return null;
+  const attrs = product.verticalAttributes ?? {};
+  const masters = stringArray(attrs[EBAY_MASTER_URLS_KEY]);
+  const sources = stringArray(attrs[EBAY_MASTER_SOURCE_URLS_KEY]);
+  if (!masters?.length || !sources) return null;
   const current = (product.imageUrls ?? []).map((u) => u.trim());
-  if (
-    current.length !== set.sourceUrls.length ||
-    current.some((u, i) => u !== set.sourceUrls[i])
-  )
+  if (current.length !== sources.length || current.some((u, i) => u !== sources[i]))
     return null;
-  return set.masterUrls;
+  return masters;
+}
+
+/** Attribute values to store for a set of masters and the photos they came from. */
+export function ebayMasterAttributes(
+  masterUrls: string[],
+  sourceUrls: string[],
+): Record<string, string[]> {
+  return {
+    [EBAY_MASTER_URLS_KEY]: [...masterUrls],
+    [EBAY_MASTER_SOURCE_URLS_KEY]: sourceUrls.map((u) => u.trim()),
+  };
 }

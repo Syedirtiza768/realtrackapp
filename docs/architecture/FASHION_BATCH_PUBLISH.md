@@ -74,10 +74,14 @@ eBay accepts JPG, GIF, PNG, BMP, TIFF, AVIF, HEIC and WEBP (eBay "Managing image
 
 ### How the masters reach eBay
 
-The pipeline writes `verticalAttributes._ebayMasterImageSet = { sourceUrls, masterUrls, batchId }`
-on the product (live runs and re-checks only, never dry runs). `CatalogPublishResolverService`
-uses `masterUrls` for Fashion when `sourceUrls` still equals the product's `imageUrls`
-(`fashion-ebay-images.util.ts`); otherwise it falls back to the normal image path. The existing
+The pipeline writes two flat string-array attributes on the product: `_ebayMasterUrls` (the masters,
+in photo order) and `_ebayMasterSourceUrls` (the catalog photos they were made from). It does this on
+live runs and re-checks only, never dry runs. `CatalogPublishResolverService` uses `_ebayMasterUrls`
+for Fashion when `_ebayMasterSourceUrls` still equals the product's `imageUrls`
+(`fashion-ebay-images.util.ts`); otherwise it falls back to the normal image path. Object-typed
+attributes are not allowed: the Fashion validator rejects them and every save of the listing fails.
+The first version wrote an object (`_ebayMasterImageSet`); the 8 listings it touched were cleaned up on
+2026-11-09 (audit action `fashion.batch.repair`). The existing
 `EbayMediaApiService` then uploads each master's bytes from S3 with `create_image_from_file` (the
 bucket stays private) close to publish time and caches the EPS URL in `ebay_hosted_images`; the
 pipeline copies those URLs into `fashion_listing_pipeline.ebay_image_urls`.
@@ -123,6 +127,26 @@ returns a suggested title/brand/description when there are review-level text iss
 
 Fixes are applied to the catalog only on live runs and re-checks, and the check is re-run after
 any reviewer fix.
+
+## Publish readiness (added 2026-11-09)
+
+READY means ready to publish, not just "photos and text passed". After the compliance check, every
+listing that would pass runs through `ListingBuilderService.build` in read-only mode. That is the same
+code the live publish uses. Its blocking errors become review issues, so the listing does not reach
+READY:
+
+| Issue code | Meaning | Who fixes it |
+|---|---|---|
+| `MEASUREMENT_UNITS` | Imported measurements need a cm/inches confirmation | Reviewer, per listing |
+| `CONDITION_MISSING` | No eBay condition; the builder does not infer one | Reviewer, per listing |
+| `POLICY_MISSING` | Store policies not synced or mapped | Store settings |
+| `RETURN_POLICY` | New-condition listings need a 30-day return policy with seller-paid returns | eBay Seller Hub, then re-sync policies |
+| `MERCHANT_LOCATION`, `IMAGE_REQUIRED`, `LISTING_BUILD` | Other builder blockers | Depends on the message |
+| `BUILD_CHECK_FAILED` | The check itself errored | Retry the item |
+
+Every batch needs an eBay store, because the check runs against that store's policies. Read-only mode
+never creates a merchant location on eBay; it reports the blocker instead (`readOnly` in
+`listing-builder.service.ts`). Live batches approve a listing only after this check passes.
 
 ## Authenticity approval (decided 2026-11-09)
 

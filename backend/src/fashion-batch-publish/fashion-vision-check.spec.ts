@@ -1,6 +1,7 @@
 import type { PipelineImage } from './entities/fashion-publish.entities.js';
 import { decide } from './fashion-compliance.rules.js';
-import { fashionEbayMasterImages } from './fashion-ebay-images.util.js';
+import { ebayMasterAttributes, fashionEbayMasterImages } from './fashion-ebay-images.util.js';
+import { validateFashionAttributes } from '../verticals/fashion.config.js';
 import {
   parseVisionVerdict,
   visionIssues,
@@ -110,12 +111,23 @@ describe('fashionEbayMasterImages', () => {
     vertical: 'fashion',
     imageUrls: ['a', 'b'],
     verticalAttributes: {
-      _ebayMasterImageSet: { sourceUrls: ['a', 'b'], masterUrls: ['m1'], batchId: null, createdAt: '' },
+      _ebayMasterUrls: ['m1'],
+      _ebayMasterSourceUrls: ['a', 'b'],
     },
   };
   it('uses masters while the catalog photos are unchanged', () => {
     expect(fashionEbayMasterImages(product)).toEqual(['m1']);
   });
+  it('stores masters as flat string arrays the Fashion validator accepts', () => {
+    const result = validateFashionAttributes({
+      brand: 'Lacoste',
+      ...ebayMasterAttributes(['m1', 'm2'], ['a', 'b']),
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.attributes._ebayMasterUrls).toEqual(['m1', 'm2']);
+    expect(result.attributes._ebayMasterSourceUrls).toEqual(['a', 'b']);
+  });
+
   it('falls back when photos changed or for other verticals', () => {
     expect(fashionEbayMasterImages({ ...product, imageUrls: ['a', 'c'] })).toBeNull();
     expect(fashionEbayMasterImages({ ...product, vertical: 'automotive' })).toBeNull();

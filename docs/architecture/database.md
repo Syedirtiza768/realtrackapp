@@ -99,7 +99,7 @@ Migration `1791700000000-CreateFashionBatchPublish` adds `fashion_listing_pipeli
 `catalog_product_id`, per-listing pipeline state, issues, images, eBay IDs),
 `fashion_publish_batches`, `fashion_publish_batch_items` (unique `batch_id, catalog_product_id`) and
 `fashion_compliance_configs` (PK `organization_id`). Additive only. The pipeline also writes
-`catalog_products.vertical_attributes._ebayMasterImageSet`. See
+`catalog_products.vertical_attributes._ebayMasterUrls` and `_ebayMasterSourceUrls` (flat string arrays; see the 2026-11-09 correction in [FASHION_BATCH_PUBLISH.md](FASHION_BATCH_PUBLISH.md)). See
 [FASHION_BATCH_PUBLISH.md](FASHION_BATCH_PUBLISH.md).
 
 ## Seed data

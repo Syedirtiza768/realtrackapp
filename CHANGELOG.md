@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-09 — Batch publish: flat master attributes and publish-readiness checks
+
+- Fixed: the first live batch wrote `_ebayMasterImageSet` as an object onto each listing. The Fashion attribute validator rejects objects, so every save of those listings failed, and the builder failed the listings. The masters are now the `_ebayMasterUrls` and `_ebayMasterSourceUrls` string arrays. The 8 listings from that attempt were cleaned up: the old attribute was removed, with audit action `fashion.batch.repair`.
+- Changed: READY now means the listing builder's publish checks pass as well as the photo and text checks. Dry runs and live batches run the builder read-only, so they never write to eBay. Blockers appear as review issues (`MEASUREMENT_UNITS`, `CONDITION_MISSING`, `POLICY_MISSING`, `RETURN_POLICY`, and others). Every batch now needs an eBay store.
+- Added a `readOnly` option to `ListingBuilderService.build` (skips merchant-location creation) and exported the service from `EbayIntegrationsModule`.
+- Tests: `fashion-build-preflight.spec.ts`, plus a regression test that the stored masters pass `validateFashionAttributes`.
+- Spec: `docs/architecture/FASHION_BATCH_PUBLISH.md`, section "Publish readiness".
+
 ## 2026-11-09 — Fashion "Publish next N" batch pipeline
 
 - New Fashion Catalog action **Publish next...** runs the oldest N unpublished Fashion listings through photo processing, a counterfeit/VeRO compliance check and eBay publishing, with a dry-run mode. New pages: `/fashion/batches` (progress, CSV report, retry, audit log) and `/fashion/compliance-review` (issues, photo previews, AI fix diff, approve/reject).
