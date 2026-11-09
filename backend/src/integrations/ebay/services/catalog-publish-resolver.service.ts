@@ -6,6 +6,7 @@ import { CatalogProduct } from '../../../catalog-import/entities/catalog-product
 import { ListingRecord } from '../../../listings/listing-record.entity.js';
 import { ImageAsset } from '../../../storage/entities/image-asset.entity.js';
 import { StorageService } from '../../../storage/storage.service.js';
+import { fashionEbayMasterImages } from '../../../fashion-batch-publish/fashion-ebay-images.util.js';
 import {
   flattenImageUrlInputs,
   isSingleImageBrand,
@@ -197,6 +198,14 @@ export class CatalogPublishResolverService {
     preferListingRecord = false,
     brandOrTitle?: string | null,
   ): Promise<string[]> {
+    const masters = fashionEbayMasterImages(catalogProduct);
+    if (masters) {
+      warnings.push(
+        `Using ${masters.length} eBay master image(s) from the Fashion publish pipeline`,
+      );
+      return masters;
+    }
+
     const candidates: string[] = [];
 
     const addListingImages = () => {

@@ -101,6 +101,13 @@ Responses are cached in Redis for `PARTS_SEARCH_CACHE_TTL_SECONDS` (default 30 s
 
 `/api/stock/*` — warehouses, bins, SKU stock, documents, procurement and purchase orders, order stock, and channel quantity sync. The full table is in [API_CONTRACTS.md](API_CONTRACTS.md#warehouse-stock-apistock) and the design is in [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md). This is distinct from `/api/inventory/*` (the Auto Parts enrichment workbench).
 
+## Fashion batch publish (2026-11-09)
+
+`/api/fashion/batch-publish/*`: "Publish next N". `POST batches`, `GET batches[/:id[/report.csv]]`,
+`POST items/:itemId/retry`, `GET review-queue`, `GET listings/:id[/audit]`,
+`POST listings/:id/{apply-suggestion,reject-suggestion,recheck,approve,reject}`,
+`GET|PUT compliance-config`. Full table with permissions: [FASHION_BATCH_PUBLISH.md](FASHION_BATCH_PUBLISH.md).
+
 ## Auth endpoints (detail)
 
 | Method | Path | Handler | Auth | Purpose |

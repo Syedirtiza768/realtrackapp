@@ -1,4 +1,4 @@
-import { Download, Loader2, PlusCircle, RefreshCw, Search, Send, Shield, SlidersHorizontal, Users, X } from 'lucide-react';
+import { Download, Loader2, PlusCircle, RefreshCw, Rocket, Search, Send, Shield, SlidersHorizontal, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
@@ -12,6 +12,7 @@ import CatalogProductQuickView from './CatalogProductQuickView';
 import CatalogPublishJobPanel, { isTerminalPublishJob, type CatalogPublishJob } from './CatalogPublishJobPanel';
 import BusinessIndustrialPublishModal, { type BusinessIndustrialAccount } from './BusinessIndustrialPublishModal';
 import FashionPublishModal from './FashionPublishModal';
+import FashionBatchPublishModal from '../../fashion/batch/FashionBatchPublishModal';
 import CatalogResultsTable from './CatalogResultsTable';
 import { bulkCatalog, downloadCatalogCsv, filtersToParams, getCatalog, getCatalogFacets, getCatalogSuggestions, getCatalogSummary, paramsToFilters } from './catalogApi';
 import type { CatalogConfig } from './catalogTypes';
@@ -81,6 +82,7 @@ export default function CatalogWorkspace({ config }: Props) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [job, setJob] = useState<CatalogPublishJob | null>(null);
   const [publishSelection, setPublishSelection] = useState<{ ids: string[]; item?: CatalogItem } | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [teamTarget, setTeamTarget] = useState('');
   const [shippingProfile, setShippingProfile] = useState('');
   const [paymentProfile, setPaymentProfile] = useState('');
@@ -303,6 +305,11 @@ export default function CatalogWorkspace({ config }: Props) {
               <Shield size={14} aria-hidden="true" /> {pendingAction === 'policies' ? 'Updating…' : 'Edit Policies'}
             </button>
           ) : null}
+          {isFashion && canPublish ? (
+            <button type="button" onClick={() => setBatchOpen(true)} className={toolbarButton} title="Process photos, run the counterfeit/VeRO check and publish the next unpublished listings">
+              <Rocket size={14} aria-hidden="true" /> Publish next…
+            </button>
+          ) : null}
           <button type="button" onClick={() => navigate(config.editorUrl())} className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium text-white ${primaryButtonClass(isBusinessIndustrial)}`}>
             <PlusCircle size={14} aria-hidden="true" /> {addLabel}
           </button>
@@ -453,6 +460,7 @@ export default function CatalogWorkspace({ config }: Props) {
 
       <CatalogProductQuickView config={config} item={activeItem} organizationId={activeOrganizationId} canPublish={canPublish} onClose={() => setActiveItem(null)} onSaved={saveItem} onPublish={(item) => openPublish([item.id], item)} />
       {isBusinessIndustrial ? <BusinessIndustrialPublishModal open={Boolean(publishSelection)} item={publishSelection?.item} listingIds={publishSelection?.ids || []} accounts={accounts} organizationId={activeOrganizationId} onClose={() => setPublishSelection(null)} onSubmitted={handlePublishSubmitted} /> : null}
+      {isFashion ? <FashionBatchPublishModal open={batchOpen} accounts={accounts} organizationId={activeOrganizationId} onClose={() => setBatchOpen(false)} /> : null}
       {isFashion ? <FashionPublishModal open={Boolean(publishSelection)} listingIds={publishSelection?.ids || []} accounts={accounts} organizationId={activeOrganizationId} onClose={() => setPublishSelection(null)} onSubmitted={handlePublishSubmitted} /> : null}
     </div>
   );

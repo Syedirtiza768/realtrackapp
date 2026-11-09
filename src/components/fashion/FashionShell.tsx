@@ -13,6 +13,8 @@ import {
   Users,
   Warehouse,
   Boxes,
+  Rocket,
+  ShieldCheck,
 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
@@ -34,6 +36,8 @@ const NAV: Array<VerticalNavItem & { permission: string }> = [
   { icon: Boxes, label: 'Stock', path: '/fashion/stock', permission: 'stock.view' },
   { icon: Upload, label: 'Bulk import', path: '/fashion/import', permission: 'fashion.import' },
   { icon: ClipboardCheck, label: 'Authenticity review', path: '/fashion/review', permission: 'fashion.review' },
+  { icon: Rocket, label: 'Publish batches', path: '/fashion/batches', permission: 'fashion.listings.view' },
+  { icon: ShieldCheck, label: 'Compliance review', path: '/fashion/compliance-review', permission: 'fashion.authenticity.review' },
   { icon: Store, label: 'Stores', path: '/fashion/stores', permission: 'fashion.stores.view' },
   { icon: ShieldAlert, label: 'Incidents', path: '/fashion/incidents', permission: 'fashion.incidents.manage' },
   { icon: Users, label: 'Users', path: '/fashion/users', permission: 'fashion.users.manage' },

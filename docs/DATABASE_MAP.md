@@ -522,6 +522,17 @@ const all = await listingRepo.find({ withDeleted: true });
 
 Sixteen new tables plus two `order_items` columns. They are listed in [architecture/DATABASE_SCHEMA.md](architecture/DATABASE_SCHEMA.md#warehouse-inventory-schema-2026-10-05) and designed in [architecture/WAREHOUSE_INVENTORY.md](architecture/WAREHOUSE_INVENTORY.md). `stock_movements` is the source of truth for stock. Product `quantity` columns are a projection for `stocked` items. *Outdated as of 2026-10-05:* `inventory_ledger` / `inventory_events` / `inventory_movements` / `store_inventory_allocations` are legacy and no longer written by new code.
 
+## Fashion batch publish tables (2026-11-09)
+
+| Table | Key | Notes |
+|---|---|---|
+| `fashion_listing_pipeline` | `catalog_product_id` (FK catalog_products, cascade) | State machine UNPUBLISHED to PUBLISHED/FAILED; `active_batch_id` locks a listing to one batch; issues/fixes/images/vision jsonb; `ebay_master_urls`, `ebay_image_urls` text[] |
+| `fashion_publish_batches` | `id` | `dry_run`, `ebay_account_id`, `marketplace_id`, `confirmed_by_user_id`, `status` |
+| `fashion_publish_batch_items` | `id`; unique (`batch_id`,`catalog_product_id`) | per-batch outcome for progress view and CSV |
+| `fashion_compliance_configs` | `organization_id` | rule-list overrides (jsonb) |
+
+Details: [FASHION_BATCH_PUBLISH.md](architecture/FASHION_BATCH_PUBLISH.md).
+
 ## Related Documentation
 
 - **Architecture**: `/docs/architecture/overview.md`

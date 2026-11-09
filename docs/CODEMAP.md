@@ -327,6 +327,13 @@ docker/
 - Frontend: `src/components/stock/StockWorkspace.tsx`, `src/lib/stockApi.ts`
 - Design: `docs/architecture/WAREHOUSE_INVENTORY.md`
 
+### Fashion batch publish (2026-11-09)
+
+- `backend/src/fashion-batch-publish/`: Publish-next-N pipeline (module, service, processor, image pipeline, vision check, rules, entities)
+- `backend/src/migrations/1791700000000-CreateFashionBatchPublish.ts`
+- `src/components/fashion/batch/`: batch modal, batches page, compliance review page, audit drawer
+- Spec: `docs/architecture/FASHION_BATCH_PUBLISH.md`
+
 ## Navigation Tips
 
 1. **Finding a feature**: Check `src/App.tsx` (frontend routes) or `backend/src/app.module.ts` (backend modules)

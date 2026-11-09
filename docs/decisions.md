@@ -23,6 +23,14 @@ Format:
 
 ---
 
+## 2026-11-09 — Batch publish keeps the human authenticity gate; a reviewer confirms once per batch
+
+- **Decision (user, 2026-11-09):** a live "Publish next N" batch must be started by a user with `fashion.review` + `fashion.authenticity.review` who ticks one confirmation. Listings in that batch that pass compliance (PASS/AUTO_FIXED) are approved in `fashion_reviews` under that reviewer's ID. NEEDS_REVIEW items need individual approval; BLOCKED items cannot be approved.
+- **Rejected:** treating a compliance PASS as approval with no human (removes the documented gate in `SECURITY.md`); per-listing approval for every item (defeats the single-click batch).
+- **Fix policy:** auto-fixes only make a listing more accurate: removing filler words, removing extra brand names when the real brand is in the title, filling an obvious Brand specific, and dropping watermarked or off-product photos. Phrases like "inspired by" or "dupe" are never auto-removed, because removing them would disguise a possible dupe; they go to review. Replica wording, a logo mismatch and below-floor prices on protected brands block publishing.
+- **Images:** the eBay master is a JPEG for the widest compatibility; eBay also accepts WEBP, PNG and others. Masters are uploaded to EPS from S3 bytes, so the bucket stays private. Production has no CloudFront.
+- **Vision model:** reuses the Jev-chosen Fashion models (2026-10-07) as defaults; `FASHION_COMPLIANCE_MODEL` overrides. Not yet benchmarked for counterfeit signals.
+
 ## 2026-11-07 — Auto Parts catalog filters by vertical on the server, not in the page
 
 - **Why:** The Auto Parts catalog reads `/listings/search` and `/listings/summary`, which were not filtered by vertical. Fashion and Business & Industrial listing records appeared under Auto Parts, and in its totals. The earlier vertical scope existed only in uncommitted work.

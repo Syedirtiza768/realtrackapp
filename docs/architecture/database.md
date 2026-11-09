@@ -93,6 +93,15 @@ A PowerShell helper exists: `scripts/run-migrations.ps1`.
 
 `1791600000000-CreatePartsSearchEvents` creates `parts_search_events` (see DATABASE_MAP). Its timestamp is above every migration recorded in production; production also has `1791200000000`–`1791400000000` Primemotive migrations that are not in `main`.
 
+### Fashion batch publish (2026-11-09)
+
+Migration `1791700000000-CreateFashionBatchPublish` adds `fashion_listing_pipeline` (PK
+`catalog_product_id`, per-listing pipeline state, issues, images, eBay IDs),
+`fashion_publish_batches`, `fashion_publish_batch_items` (unique `batch_id, catalog_product_id`) and
+`fashion_compliance_configs` (PK `organization_id`). Additive only. The pipeline also writes
+`catalog_products.vertical_attributes._ebayMasterImageSet`. See
+[FASHION_BATCH_PUBLISH.md](FASHION_BATCH_PUBLISH.md).
+
 ## Seed data
 
 - `listingpro.dump` (repo root) is restored into a fresh Postgres volume by

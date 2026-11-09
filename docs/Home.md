@@ -47,6 +47,8 @@ this.
   — ledger, warehouses/bins, orders, procurement (stock not on hand), channel quantity sync; plan and history in
   [[planning/INVENTORY_AND_WAREHOUSE_PLAN|planning/INVENTORY_AND_WAREHOUSE_PLAN.md]]
 
+- [Fashion batch publish](architecture/FASHION_BATCH_PUBLISH.md): "Publish next N" with S3 image variants, counterfeit/VeRO check, review queue and batch publishing (2026-11-09)
+
 ## Pre-existing deep-dive docs (not rewritten here — dates matter)
 The `docs/` tree has multiple generations of architecture documentation. When two
 files cover the same topic, prefer whichever has the newer modification date and

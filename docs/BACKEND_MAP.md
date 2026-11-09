@@ -538,6 +538,16 @@ Migration `1791600000000-CreatePartsSearchEvents`. Module imports `TypeOrmModule
 
 `backend/src/stock/` provides warehouse inventory, procurement and channel quantity sync. See [backend/MODULE_MAP.md](backend/MODULE_MAP.md#stock-module-2026-10-05) and [architecture/WAREHOUSE_INVENTORY.md](architecture/WAREHOUSE_INVENTORY.md). The `inventory/` module is still the Auto Parts enrichment workbench. Its ledger endpoints (`/api/inventory/:id/adjust|reserve|release|allocations`) are legacy as of 2026-10-05.
 
+## Fashion batch publish module (2026-11-09)
+
+`backend/src/fashion-batch-publish/`: `FashionBatchPublishModule` (registered in `app.module.ts`).
+Controller `/fashion/batch-publish`; `FashionBatchPublishService` (picking, state machine, review
+actions, CSV); BullMQ processor on queue `fashion-batch-publish`; `FashionImagePipelineService`
+(sharp variants to S3); `FashionVisionCheckService` (OpenRouter vision); pure rules in
+`fashion-compliance.rules.ts`. Reuses `EbayMultiStoreListingService.createPublishJob`,
+`FashionListingsService.review`, and `EbayMediaApiService` (via the resolver hook in
+`catalog-publish-resolver.service.ts`). See [FASHION_BATCH_PUBLISH.md](architecture/FASHION_BATCH_PUBLISH.md).
+
 ## Global Guards
 
 Applied in order in `app.module.ts`:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-09 — Fashion "Publish next N" batch pipeline
+
+- New Fashion Catalog action **Publish next...** runs the oldest N unpublished Fashion listings through photo processing, a counterfeit/VeRO compliance check and eBay publishing, with a dry-run mode. New pages: `/fashion/batches` (progress, CSV report, retry, audit log) and `/fashion/compliance-review` (issues, photo previews, AI fix diff, approve/reject).
+- Photos are stored in S3 as `catalog/{listingId}/{sha256}/` original + thumb/small/large WebP + a JPEG eBay master of at most 2000px (sRGB, EXIF stripped, never upscaled). Fashion publishes use the masters via `verticalAttributes._ebayMasterImageSet`; other verticals are unchanged.
+- Publishing still requires an approved authenticity review. A live batch is started by a Fashion reviewer who confirms authenticity once for listings that pass; each approval is recorded under that reviewer.
+- Migration `1791700000000-CreateFashionBatchPublish` (additive: 4 new tables). No new permissions. Spec: `docs/architecture/FASHION_BATCH_PUBLISH.md`. Not yet deployed.
+
 ## 2026-11-07 — Auto Parts catalog shows only automotive listings
 
 - Listing search (`GET /listings/search`, `/listings/search/facets`) and `GET /listings/summary` accept an optional `vertical` parameter. `automotive` matches `vertical = 'automotive'` and legacy NULL-vertical rows, the same rule the automotive scope uses. Other verticals and callers that omit the parameter are unchanged.

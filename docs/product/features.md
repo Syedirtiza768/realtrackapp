@@ -94,6 +94,19 @@ Shared by Auto Parts, Fashion and B&I at `/<workspace>/stock`. Design: [../archi
 
   Files are named after the part (`Toyota-86401-12020-1.jpg`).
 
+## Fashion batch publish: "Publish next N" (2026-11-09)
+
+From the Fashion Catalog, **Publish next...** takes the oldest N unpublished listings, stores each
+photo in S3 (original + thumb/small/large WebP + eBay JPEG master), runs a counterfeit/VeRO check on
+text, price and photos, applies safe fixes, and publishes listings that pass using the S3 masters.
+A dry run shows what would publish without touching eBay or the catalog. A live batch needs a
+reviewer to confirm authenticity once for passing listings; anything risky goes to
+`/fashion/compliance-review`, where a reviewer sees the issues, photo previews and an AI fix diff.
+Batch progress, per-listing audit log, retries and the CSV report are at `/fashion/batches`. Business
+rule: fixes make a listing accurate and never hide a possible counterfeit. Replica wording, a logo
+mismatch, or a below-floor price on a protected brand blocks publishing. Spec:
+[FASHION_BATCH_PUBLISH.md](../architecture/FASHION_BATCH_PUBLISH.md).
+
 ## For each major module — quick reference
 
 For purpose, key files, data flow, DB tables, permissions, and extension notes

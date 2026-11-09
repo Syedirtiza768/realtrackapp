@@ -42,6 +42,7 @@ import { ClientSettingsModule } from './client-settings/client-settings.module.j
 import { PublishedListingsModule } from './published-listings/published-listings.module.js';
 import { TeamsModule } from './teams/teams.module.js';
 import { VerticalsModule } from './verticals/verticals.module.js';
+import { FashionBatchPublishModule } from './fashion-batch-publish/fashion-batch-publish.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { StockModule } from './stock/stock.module.js';
 import { PartsSearchModule } from './parts-search/parts-search.module.js';
@@ -130,6 +131,7 @@ import { PartsSearchModule } from './parts-search/parts-search.module.js';
     PublishedListingsModule,
     TeamsModule,
     VerticalsModule,
+    FashionBatchPublishModule,
     CatalogModule,
     StockModule,
     PartsSearchModule,

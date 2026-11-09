@@ -433,6 +433,14 @@ export default defineConfig({
 
 `src/components/stock/` contains `StockWorkspace` and one file per tab: Overview, Items (+ `StockItemDrawer`), Orders, Procurement, Documents, Warehouses, Movements and SetupPanel. It also contains `stockUi.tsx`, which holds the shared primitives and the `useLoad`/`useAction` hooks. The API client is `src/lib/stockApi.ts`. Routes are listed in [frontend/ROUTES_AND_SCREENS.md](frontend/ROUTES_AND_SCREENS.md#warehouse-stock-routes-2026-10-05).
 
+## Fashion batch publish UI (2026-11-09)
+
+`src/components/fashion/batch/`: `FashionBatchPublishModal` (opened by the Fashion-only
+"Publish next..." button in `CatalogWorkspace`), `FashionBatchesPage` (`/fashion/batches`,
+`/fashion/batches/:id`), `FashionComplianceReviewPage` (`/fashion/compliance-review`),
+`ListingAuditLog` drawer, `batchApi.ts`. Nav entries "Publish batches" and "Compliance review" in
+`FashionShell`. See [FASHION_BATCH_PUBLISH.md](architecture/FASHION_BATCH_PUBLISH.md).
+
 ## Related Documentation
 
 - **API Map**: `/docs/API_MAP.md`

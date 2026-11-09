@@ -70,6 +70,9 @@ import FashionPasswordPage from './components/fashion/FashionPasswordPage';
 import FashionCapturePage from './components/fashion/FashionCapturePage';
 import FashionIntakePage from './components/fashion/FashionIntakePage';
 import FashionActivityReportPage from './components/fashion/FashionActivityReportPage';
+// Fashion "Publish next N" pipeline: batch progress + compliance review queue.
+import FashionBatchesPage from './components/fashion/batch/FashionBatchesPage';
+import FashionComplianceReviewPage from './components/fashion/batch/FashionComplianceReviewPage';
 import BusinessIndustrialLoginPage from './components/business-industrial/BusinessIndustrialLoginPage';
 import BusinessIndustrialShell from './components/business-industrial/BusinessIndustrialShell';
 import BusinessIndustrialDashboardPage from './components/business-industrial/BusinessIndustrialDashboardPage';
@@ -219,6 +222,9 @@ function App() {
                     <Route path="listings/:id/edit" element={<ProtectedRoute permissions={['fashion.listings.update']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
                     <Route path="import" element={<ProtectedRoute permissions={['fashion.import']} loginPath="/fashion/login"><FashionImportPage /></ProtectedRoute>} />
                     <Route path="review" element={<ProtectedRoute permissions={['fashion.review']} loginPath="/fashion/login"><FashionReviewPage /></ProtectedRoute>} />
+                    <Route path="batches" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionBatchesPage /></ProtectedRoute>} />
+                    <Route path="batches/:id" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionBatchesPage /></ProtectedRoute>} />
+                    <Route path="compliance-review" element={<ProtectedRoute permissions={['fashion.authenticity.review']} loginPath="/fashion/login"><FashionComplianceReviewPage /></ProtectedRoute>} />
                     <Route path="stores" element={<ProtectedRoute permissions={['fashion.stores.view']} loginPath="/fashion/login"><FashionStoresPage /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute permissions={['fashion.users.manage']} loginPath="/fashion/login"><FashionUsersPage /></ProtectedRoute>} />
                     <Route path="incidents" element={<ProtectedRoute permissions={['fashion.incidents.manage']} loginPath="/fashion/login"><FashionIncidentsPage /></ProtectedRoute>} />
