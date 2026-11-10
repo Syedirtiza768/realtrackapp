@@ -19,6 +19,12 @@
 - Fashion import updates now skip empty values and merge `vertical_attributes` over the existing ones (`importUpdateWithoutBlankOverwrites`); clearing a value is an editor action. Other verticals are unchanged.
 - Workspace change pending deployment. Covered by `csv-import.processor.spec.ts` and `catalog-import.service.spec.ts`. The production data repair is recorded in [the operations record](docs/operations/FASHIONSTORY_WINTER_REIMPORT_2026-11-11.md).
 
+## 2026-11-10 — Batch compliance: "Off White" colour no longer treated as the Off-White brand
+
+- Fixed: the batch compliance rules matched "Off White" and "Off-White" as the protected brand Off-White. Titles describing a colour (for example a Columbia jacket "Off-White Grey") had that wording stripped as "other brand names", and the brand check then flagged them. Both spellings are now ambiguous aliases in `DEFAULT_FASHION_COMPLIANCE_CONFIG.ambiguousBrands`, so they count as the brand only when the listing's brand field says Off-White. A real Off-White listing still gets the protected-brand price-floor check.
+- Tests: two cases in `fashion-compliance.rules.spec.ts`.
+- Merged into main on 2026-11-11 during the workspace reconciliation. Not yet deployed to production.
+
 ## 2026-11-09 — Batch publish: flat master attributes and publish-readiness checks
 
 - Fixed: the first live batch wrote `_ebayMasterImageSet` as an object onto each listing. The Fashion attribute validator rejects objects, so every save of those listings failed, and the builder failed the listings. The masters are now the `_ebayMasterUrls` and `_ebayMasterSourceUrls` string arrays. The 8 listings from that attempt were cleaned up: the old attribute was removed, with audit action `fashion.batch.repair`.

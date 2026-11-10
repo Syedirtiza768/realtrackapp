@@ -111,6 +111,28 @@ describe('fashion compliance text rules', () => {
     expect(decide(r.issues)).toBe('BLOCKED');
   });
 
+  it('keeps an "Off White" colour in the title instead of treating it as a brand', () => {
+    const r = run({
+      title: 'Columbia Men\'s Small Hooded Winter Jacket Off-White Grey Outdoor Coat',
+      brand: 'Columbia',
+      brandSpecific: 'Columbia',
+      price: 60,
+    });
+    expect(r.fixed.title).toContain('Off-White');
+    expect(r.issues.map((i) => i.code)).not.toContain('BRAND_TITLE_MISMATCH');
+    expect(r.issues.map((i) => i.code)).not.toContain('PROTECTED_BRAND');
+  });
+
+  it('still detects Off-White when the brand field says Off-White', () => {
+    const r = run({
+      title: 'Off-White Hooded Sweatshirt Black Size M',
+      brand: 'Off-White',
+      brandSpecific: 'Off-White',
+      price: 10,
+    });
+    expect(r.issues.map((i) => i.code)).toContain('PRICE_BELOW_BRAND_FLOOR');
+  });
+
   it('does not apply a price floor to a brand that is only mentioned', () => {
     const r = run({ title: 'Lacoste Coach Jacket Navy', price: 20 });
     expect(r.issues.map((i) => i.code)).not.toContain('PRICE_BELOW_BRAND_FLOOR');

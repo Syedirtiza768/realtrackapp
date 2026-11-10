@@ -249,6 +249,9 @@ export const DEFAULT_FASHION_COMPLIANCE_CONFIG: FashionComplianceConfig = {
     'boss',
     'mk',
     'lv',
+    // A colour word in most titles ("Off White" sweater), not the brand.
+    'Off-White',
+    'Off White',
   ],
   authenticityGuarantee: [
     {

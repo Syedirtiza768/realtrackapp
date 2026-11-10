@@ -116,7 +116,9 @@ Risk score 0–100 (any open block ≥ 90). Result: `PASS`, `AUTO_FIXED`, `NEEDS
 | No usable photo left | review |
 
 Ambiguous brand words (Coach, Gap, Guess, Vans, Boss, …) are only matched when they are the
-listing's own brand, so "coach jacket" does not trigger brand rules.
+listing's own brand, so "coach jacket" does not trigger brand rules. "Off White" / "Off-White" are
+ambiguous too (added 2026-11-10): a colour in most titles. A listing that says Off-White in its brand
+field is still checked as the protected brand; a title alone does not make the listing Off-White.
 
 Vision model: `FASHION_COMPLIANCE_MODEL` → `FASHION_AI_MODEL` → `google/gemini-3.1-flash-lite`,
 fallback `FASHION_AI_FALLBACK_MODEL` (default `google/gemma-4-31b-it`) — the Jev-chosen Fashion
