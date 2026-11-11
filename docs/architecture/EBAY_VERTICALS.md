@@ -95,6 +95,10 @@ by this implementation.
 
 Fashion is available at /fashion/login and uses Fashion-only permissions and roles. Fashion draft listing endpoints are organization scoped; private authenticity evidence is stored in fashion_reviews and omitted from public listing payloads. Photos-first Add Item uploads garment images through existing storage and optionally identifies category and attributes with the shared vision provider; Fashion item specifics are projected from confirmed attributes (not automotive MPN/fitment). A Fashion product must be explicitly approved with authenticity confirmation before the publish projection can proceed. Quarantine blocks publishing locally and reports remote takedown as unavailable unless a supported integration is added.
 
+Fashion Catalog bulk publish lets operators choose a marketplace enabled for each destination account. Policy options come from that marketplace's cached eBay policies, and the selected marketplace is persisted on the publish target for worker validation and publishing.
+
+Fashion validation and publishing use the selected marketplace's inventory location key or an explicit location override. The Inventory API must confirm that exact key is enabled. The Fashion publish path blocks an unavailable key to prevent an incorrect ship-from location from appearing on eBay. Trading API publishing uses the verified warehouse's city, region, country and postal code for the item location.
+
 The Fashion eBay OAuth start route writes vertical context into the Redis OAuth state, creates a Fashion-enabled store, and rejects an eBay seller account already connected in the workspace. The same seller cannot be reused for an automotive or Fashion store. The dedicated seed command provisions the initial Fashion admin without resetting an existing password.
 
 ## Fashion item specifics (2026-10-07)
@@ -107,3 +111,6 @@ Occasion, Theme, Vintage, Garment Care. Unmapped keys such as `itemType`, `compo
 measurement values, `categoryFamily` and the defect fields are not sent; defects and
 measurements belong in the description. Values are capped at eBay's 65 characters. See
 docs/decisions.md (2026-10-07).
+## Fashion measurements are not item specifics (2026-09-28)
+`fashionAspectsFromAttributes` no longer emits measurement values, `sizeChartTemplate`, `measurementsUnit`, `measurements` or `categoryFamily` as custom item specifics. Before this change every non-`_` Fashion attribute became a specific (for example `chestMeasurement: 38`, `categoryFamily: clothing`). Measurements are published in the description table and the generated size-chart image. See docs/architecture/FASHION_QUICK_CAPTURE.md.
+**Updated 2026-10-07:** Fashion aspects now come only from an explicit attribute to eBay name map (`FASHION_ASPECT_NAMES`: Brand, Department, Type, Size, Size Type, Color, Style, Pattern, Material, Fabric Type, Sleeve Length, Neckline, Closure, Fit, Shoe Width, Country/Region of Manufacture, Features, Season, Occasion, Theme, Vintage, Garment Care). Unmapped keys such as `itemType`, `composition` and the defect fields are no longer sent, and values are capped at 65 characters.

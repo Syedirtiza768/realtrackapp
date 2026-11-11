@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios, { type AxiosResponse } from 'axios';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import FormData from 'form-data';
 import { Repository } from 'typeorm';
 import { EbayHostedImage } from '../../integrations/ebay/entities/ebay-hosted-image.entity.js';
@@ -24,6 +27,8 @@ const IMAGE_CACHE_EXPIRY_BUFFER_MS = 60 * 60 * 1000;
 const IMAGE_UPLOAD_CONCURRENCY = 3;
 const IMAGE_UPLOAD_MAX_ATTEMPTS = 3;
 const IMAGE_UPLOAD_RETRY_DELAYS_MS = [500, 1_500];
+const NEW_CONDITION_IMAGE_FILES = ['F1.webp', 'F2.webp', 'F3.webp'] as const;
+const NEW_CONDITION_IMAGE_DIRECTORY = 'new-condition-listing-images';
 
 /**
  * Uploads listing images to eBay Picture Services (EPS).
@@ -35,6 +40,7 @@ const IMAGE_UPLOAD_RETRY_DELAYS_MS = [500, 1_500];
 @Injectable()
 export class EbayMediaApiService {
   private readonly logger = new Logger(EbayMediaApiService.name);
+  private newConditionImageUrlsPromise: Promise<string[]> | null = null;
 
   constructor(
     private readonly auth: EbayAuthService,
@@ -111,6 +117,82 @@ export class EbayMediaApiService {
       `Resolved ${hosted.length} listing image(s) to eBay Picture Services for store ${storeId}`,
     );
     return hosted;
+  }
+
+  /**
+   * Ensure the shared New-condition WebP assets exist in S3 and return their
+   * stable source URLs in the required F1, F2, F3 order. Content-addressed keys
+   * make uploads idempotent across backend restarts and asset updates.
+   */
+  async getNewConditionImageUrls(options?: {
+    uploadIfMissing?: boolean;
+  }): Promise<string[]> {
+    if (options?.uploadIfMissing === false) {
+      return this.buildNewConditionImageUrls(false);
+    }
+    if (!this.newConditionImageUrlsPromise) {
+      this.newConditionImageUrlsPromise = this.ensureNewConditionImageUrls().catch(
+        (error: unknown) => {
+          this.newConditionImageUrlsPromise = null;
+          throw error;
+        },
+      );
+    }
+    return [...(await this.newConditionImageUrlsPromise)];
+  }
+
+  private async ensureNewConditionImageUrls(): Promise<string[]> {
+    return this.buildNewConditionImageUrls(true);
+  }
+
+  private async buildNewConditionImageUrls(
+    uploadIfMissing: boolean,
+  ): Promise<string[]> {
+    const urls: string[] = [];
+    for (const fileName of NEW_CONDITION_IMAGE_FILES) {
+      const buffer = await this.readBundledNewConditionImage(fileName);
+      if (
+        buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+        buffer.toString('ascii', 8, 12) !== 'WEBP'
+      ) {
+        throw new Error(`${fileName} is not a valid WebP image`);
+      }
+
+      const digest = createHash('sha256').update(buffer).digest('hex');
+      const key = this.storage.buildDurableKey(
+        `shared/${NEW_CONDITION_IMAGE_DIRECTORY}/${digest}-${fileName}`,
+      );
+      if (
+        uploadIfMissing &&
+        !(await this.storage.objectExists(key))
+      ) {
+        await this.storage.putObject(key, buffer, 'image/webp');
+        this.logger.log(`Uploaded shared New-condition image ${fileName}`);
+      }
+      urls.push(this.storage.getCdnUrl(key));
+    }
+    return urls;
+  }
+
+  private async readBundledNewConditionImage(fileName: string): Promise<Buffer> {
+    const candidates = [
+      join(process.cwd(), 'assets', NEW_CONDITION_IMAGE_DIRECTORY, fileName),
+      join(
+        process.cwd(),
+        'backend',
+        'assets',
+        NEW_CONDITION_IMAGE_DIRECTORY,
+        fileName,
+      ),
+    ];
+    for (const path of candidates) {
+      try {
+        return await readFile(path);
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    throw new Error(`Bundled New-condition image ${fileName} was not found`);
   }
 
   private async hostImage(storeId: string, sourceUrl: string): Promise<string> {

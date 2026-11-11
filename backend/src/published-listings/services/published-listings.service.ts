@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -7,12 +8,17 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets, In } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
+import { ChannelWebhookLog } from '../../channels/entities/channel-webhook-log.entity.js';
 import { Store } from '../../channels/entities/store.entity.js';
 import { StoreAccessService } from '../../channels/store-access.service.js';
+import { CatalogProduct } from '../../catalog-import/entities/catalog-product.entity.js';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
 import { EbayPublishedListingSyncLog } from '../entities/ebay-published-listing-sync-log.entity.js';
-import type { PublishedListingsQueryDto } from '../dto/published-listings.dto.js';
+import type {
+  PrimemotiveSaleWebhookDto,
+  PublishedListingsQueryDto,
+} from '../dto/published-listings.dto.js';
 import {
   EBAY_STORE_SLUG_ALIASES,
   isAllStoresSlugQuery,
@@ -21,17 +27,26 @@ import {
 } from '../store-slug.util.js';
 import {
   toPublishedListingApiResponse,
+  toPublishedListingCatalogData,
   type PublishedListingApiResponse,
 } from '../published-listings-response.util.js';
 import { PublishedListingsEnrichmentService } from './published-listings-enrichment.service.js';
 import { PublishedListingsHealthService } from './published-listings-health.service.js';
 import { preferRicherImageUrls } from '../../channels/ebay/ebay-listing-images.util.js';
+import { payloadHash, verifyWebhook } from '../../integrations/motoark/webhook-signature.js';
 
 /** Listings older than this relative to the account's last successful sync are not "live". */
 export const LIVE_SYNC_SKEW_MS = 6 * 60 * 60 * 1000;
 
-/** Store-level sync considered failed when last error is newer than last success, or never succeeded. */
-const STORE_SYNC_STALE_MS = 24 * 60 * 60 * 1000;
+/**
+ * Default sync freshness window. Production may lengthen this to match its
+ * scheduled full-refresh cadence (for example, weekly plus a one-day grace).
+ */
+const STORE_SYNC_STALE_AFTER_HOURS = Math.max(
+  1,
+  Number(process.env.PUBLISHED_LISTINGS_SYNC_STALE_AFTER_HOURS ?? 24) || 24,
+);
+const STORE_SYNC_STALE_MS = STORE_SYNC_STALE_AFTER_HOURS * 60 * 60 * 1000;
 
 export interface PublishedListingStoreSummary {
   storeId: string;
@@ -68,6 +83,10 @@ export class PublishedListingsService {
   constructor(
     @InjectRepository(EbayPublishedListing)
     private readonly listingRepo: Repository<EbayPublishedListing>,
+    @InjectRepository(CatalogProduct)
+    private readonly catalogProductRepo: Repository<CatalogProduct>,
+    @InjectRepository(ChannelWebhookLog)
+    private readonly webhookLogRepo: Repository<ChannelWebhookLog>,
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
     @InjectRepository(ConnectedEbayAccount)
@@ -79,23 +98,232 @@ export class PublishedListingsService {
     private readonly health: PublishedListingsHealthService,
   ) {}
 
-  async list(
+  async resolvePrimemotiveStoreId(organizationId: string): Promise<string> {
+    const [organizationStores, accounts, listingStoreRows] = await Promise.all([
+      this.storeRepo.find({ where: { organizationId, channel: 'ebay' } }),
+      this.accountRepo.find({
+        where: { organizationId },
+        relations: ['primaryStore'],
+      }),
+      this.listingRepo
+        .createQueryBuilder('listing')
+        .innerJoin(Store, 'store', 'store.id = listing.storeId')
+        .select('DISTINCT store.id', 'storeId')
+        .where('listing.organizationId = :organizationId', {
+          organizationId,
+        })
+        .andWhere('store.channel = :channel', { channel: 'ebay' })
+        .andWhere('LOWER(BTRIM(store.store_name)) = :storeName', {
+          storeName: 'primemotive',
+        })
+        .getRawMany<{ storeId: string }>(),
+    ]);
+
+    const matchesPrimemotive = (store: Store | null | undefined) =>
+      store?.channel === 'ebay' &&
+      store.storeName.trim().toLowerCase() === 'primemotive';
+    const storeIds = new Set<string>([
+      ...organizationStores.filter(matchesPrimemotive).map((store) => store.id),
+      ...accounts
+        .map((account) => account.primaryStore)
+        .filter(matchesPrimemotive)
+        .map((store) => store.id),
+      ...listingStoreRows.map((row) => row.storeId),
+    ]);
+
+    if (storeIds.size === 0) {
+      throw new NotFoundException(
+        'Primemotive eBay store was not found for this organization',
+      );
+    }
+    if (storeIds.size > 1) {
+      throw new ConflictException(
+        'Multiple Primemotive eBay stores were found for this organization',
+      );
+    }
+    return [...storeIds][0];
+  }
+
+  async listPrimemotive(
     organizationId: string,
     user: User,
     query: PublishedListingsQueryDto,
   ): Promise<{
-    items: EbayPublishedListing[];
+    items: Array<EbayPublishedListing | PublishedListingApiResponse>;
     total: number;
     page: number;
     limit: number;
+    nextId?: string;
+    hasMore?: boolean;
+  }> {
+    const storeId = await this.resolvePrimemotiveStoreId(organizationId);
+
+    // The dedicated feed is always scoped to the database store association.
+    // Ignore caller-provided store filters so they cannot broaden or redirect it.
+    return this.list(
+      organizationId,
+      user,
+      {
+        ...query,
+        storeId,
+        storeSlug: undefined,
+        // This integration is a database snapshot of listings that are marked
+        // active in RealTrackApp; caller filters must not broaden the scope.
+        status: 'all',
+      },
+      { requirePublishedActiveRecord: true },
+    );
+  }
+
+  async list(
+    organizationId: string,
+    user: User,
+    query: PublishedListingsQueryDto,
+    constraints: {
+      requirePublishedActiveRecord?: boolean;
+    } = {},
+  ): Promise<{
+    items: Array<EbayPublishedListing | PublishedListingApiResponse>;
+    total: number;
+    page: number;
+    limit: number;
+    nextId?: string;
+    hasMore?: boolean;
   }> {
     const accessibleStores = await this.storeAccess.getAccessibleStoreIds(user);
     const page = query.page ?? 1;
     const limit = Math.min(query.limit ?? 50, 200);
     const offset = (page - 1) * limit;
 
-    const qb = await this.buildListQuery(organizationId, user, query, accessibleStores);
-    const [items, total] = await qb.skip(offset).take(limit).getManyAndCount();
+    const qb = await this.buildListQuery(
+      organizationId,
+      user,
+      query,
+      accessibleStores,
+      constraints.requirePublishedActiveRecord,
+    );
+    if (query.afterId) {
+      if (!constraints.requirePublishedActiveRecord || page !== 1 || query.sortBy || query.sortDir) throw new BadRequestException('afterId requires the dedicated Primemotive feed without page/sort overrides');
+      qb.andWhere('l.id > :afterId', { afterId: query.afterId }).orderBy('l.id', 'ASC');
+    }
+    const [items, total] = await qb.skip(query.afterId ? 0 : offset).take(limit).getManyAndCount();
+    const cursor = query.afterId ? { nextId: items.at(-1)?.id ?? query.afterId, hasMore: total > items.length } : {};
+    if (query.includeCatalogData !== 'true') {
+      return { items, total, page, limit, ...cursor };
+    }
+
+    const catalogProducts = await this.loadCatalogProducts(
+      items
+        .map((listing) => listing.catalogProductId)
+        .filter((id): id is string => Boolean(id)),
+      organizationId,
+    );
+    const catalogById = new Map(catalogProducts.map((product) => [product.id, product]));
+    return {
+      items: items.map((listing) =>
+        toPublishedListingApiResponse(listing, {
+          includeCatalogData: true,
+          catalogData: listing.catalogProductId
+            ? catalogById.has(listing.catalogProductId)
+              ? toPublishedListingCatalogData(
+                  catalogById.get(listing.catalogProductId)!,
+                )
+              : null
+            : null,
+        }),
+      ),
+      total,
+      page,
+      limit,
+      ...cursor,
+    };
+  }
+
+  async recordPrimemotiveSaleEvent(
+    organizationId: string,
+    user: User,
+    dto: PrimemotiveSaleWebhookDto,
+    rawBody: Buffer,
+    timestampHeader?: string,
+    signatureHeader?: string,
+  ) {
+    verifyWebhook(process.env.PRIMEMOTIVE_SALES_WEBHOOK_SECRET, rawBody, timestampHeader, signatureHeader);
+
+    const listing = await this.listingRepo.findOne({
+      where: { id: dto.listingId, organizationId },
+      relations: ['store'],
+    });
+    if (
+      !listing?.store ||
+      listing.store.channel !== 'ebay' ||
+      listing.store.storeName.trim().toLowerCase() !== 'primemotive'
+    ) {
+      throw new NotFoundException('Primemotive published listing not found');
+    }
+    await this.assertListingAccess(user, listing.storeId);
+
+    const externalId = `${organizationId}:${dto.eventId}`;
+    const payload = {
+      organizationId,
+      storeId: listing.storeId,
+      listingId: listing.id,
+      eventId: dto.eventId,
+      eventType: dto.eventType,
+      soldAt: dto.soldAt,
+      quantity: dto.quantity,
+      externalOrderId: dto.externalOrderId,
+      unitPrice: dto.unitPrice,
+      currency: dto.currency,
+    };
+    const hash = payloadHash(payload);
+    return this.webhookLogRepo.manager.transaction(async em => {
+      await em.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`primemotive-sale:${externalId}`]);
+      const [receipt] = await em.query('SELECT * FROM primemotive_sale_receipts WHERE organization_id=$1 AND event_id=$2', [organizationId, dto.eventId]);
+      if (receipt) {
+        if (receipt.payload_hash !== hash) throw new ConflictException('Event ID was already used with a different payload');
+        return { status: 'duplicate', eventId: dto.eventId, listingId: receipt.listing_id, receivedAt: new Date(receipt.received_at).toISOString() };
+      }
+      const logs = em.getRepository(ChannelWebhookLog);
+      const existing = await logs.findOne({ where: { channel: 'primemotive', eventType: 'listing.sold', externalId } });
+      if (existing && payloadHash(existing.payload) !== hash) throw new ConflictException('Event ID was already used with a different payload');
+      const receivedAt = existing?.createdAt ?? new Date();
+      await em.query('INSERT INTO primemotive_sale_receipts(organization_id,event_id,listing_id,payload_hash,received_at) VALUES($1,$2,$3,$4,$5)', [organizationId, dto.eventId, listing.id, hash, receivedAt]);
+      if (!existing) await logs.save(logs.create({ channel: 'primemotive', eventType: dto.eventType, externalId, payload, processingStatus: 'processed', processedAt: receivedAt }));
+      return { status: existing ? 'duplicate' : 'accepted', eventId: dto.eventId, listingId: listing.id, receivedAt: receivedAt.toISOString() };
+    });
+  }
+
+  async listPrimemotiveSalesEvents(
+    organizationId: string,
+    user: User,
+    query: PublishedListingsQueryDto,
+  ) {
+    const page = query.page ?? 1;
+    const limit = Math.min(query.limit ?? 50, 200);
+    const qb = this.webhookLogRepo
+      .createQueryBuilder('event')
+      .where('event.channel = :channel', { channel: 'primemotive' })
+      .andWhere('event.eventType = :eventType', { eventType: 'listing.sold' })
+      .andWhere("event.payload ->> 'organizationId' = :organizationId", {
+        organizationId,
+      });
+
+    if (!user.storeAccessAll) {
+      const accessibleStores = await this.storeAccess.getAccessibleStoreIds(user);
+      if (accessibleStores.size === 0) {
+        qb.andWhere('1 = 0');
+      } else {
+        qb.andWhere("event.payload ->> 'storeId' IN (:...storeIds)", {
+          storeIds: [...accessibleStores],
+        });
+      }
+    }
+
+    const [items, total] = await qb
+      .orderBy('event.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
     return { items, total, page, limit };
   }
 
@@ -106,8 +334,15 @@ export class PublishedListingsService {
   ): Promise<string> {
     const accessibleStores = await this.storeAccess.getAccessibleStoreIds(user);
     const exportQuery = { ...query, status: query.status ?? 'all' };
-    const qb = await this.buildListQuery(organizationId, user, exportQuery, accessibleStores);
-    qb.limit(10000);
+    const qb = await this.buildListQuery(
+      organizationId,
+      user,
+      exportQuery,
+      accessibleStores,
+    );
+    const exportPage = query.page ?? 1;
+    const exportPageSize = 10000;
+    qb.skip((exportPage - 1) * exportPageSize).take(exportPageSize);
 
     const items = await qb.getMany();
 
@@ -144,8 +379,12 @@ export class PublishedListingsService {
     };
 
     const rows = items.map((r) => {
-      const specifics = (r.itemSpecifics ?? {}) as Record<string, string[]>;
-      const brand = this.firstSpecificFromItem(specifics, ['brand', 'manufacturer', 'marque']);
+      const specifics = r.itemSpecifics ?? {};
+      const brand = this.firstSpecificFromItem(specifics, [
+        'brand',
+        'manufacturer',
+        'marque',
+      ]);
       const mpn = this.firstSpecificFromItem(specifics, [
         'manufacturer part number',
         'mpn',
@@ -235,6 +474,7 @@ export class PublishedListingsService {
     user: User,
     query: PublishedListingsQueryDto,
     accessibleStores: Set<string>,
+    requirePublishedActiveRecord = false,
   ) {
     const qb = this.listingRepo
       .createQueryBuilder('l')
@@ -259,7 +499,11 @@ export class PublishedListingsService {
     if (query.storeId) {
       qb.andWhere('l.storeId = :storeId', { storeId: query.storeId });
     }
-
+    if (requirePublishedActiveRecord) {
+      qb.andWhere("l.listingStatus = 'active'")
+        .andWhere('l.ebayItemId IS NOT NULL')
+        .andWhere("BTRIM(l.ebayItemId) <> ''");
+    }
     // Default scope: Blackline + Salvage only (unless storeId / storeSlug=all / explicit slug).
     const slugStoreIds = await this.resolveStoreSlugIds(
       organizationId,
@@ -344,6 +588,12 @@ export class PublishedListingsService {
     }
     if (query.listedTo) {
       qb.andWhere('l.ebayStartTime <= :listedTo', { listedTo: query.listedTo });
+    }
+    const updatedAfter = query.updatedAfter ?? query.updateAfter;
+    if (updatedAfter) {
+      qb.andWhere('l.updatedAt >= :updatedAfter', {
+        updatedAfter,
+      });
     }
     if (query.lowStock === 'true') {
       qb.andWhere('l.quantityAvailable > 0 AND l.quantityAvailable <= 3');
@@ -458,6 +708,7 @@ export class PublishedListingsService {
     id: string,
     organizationId: string,
     user: User,
+    includeCatalogData = false,
   ): Promise<PublishedListingApiResponse> {
     let listing = await this.listingRepo.findOne({
       where: { id, organizationId },
@@ -468,7 +719,25 @@ export class PublishedListingsService {
     listing = await this.maybeEnrichDetailOnDemand(listing);
 
     const storeSlug = await this.resolveStoreSlugForId(listing.storeId);
-    return toPublishedListingApiResponse(listing, { storeSlug });
+    if (!includeCatalogData) {
+      return toPublishedListingApiResponse(listing, { storeSlug });
+    }
+
+    const catalogProduct = listing.catalogProductId
+      ? (
+          await this.loadCatalogProducts(
+            [listing.catalogProductId],
+            organizationId,
+          )
+        )[0] ?? null
+      : null;
+    return toPublishedListingApiResponse(listing, {
+      storeSlug,
+      includeCatalogData: true,
+      catalogData: catalogProduct
+        ? toPublishedListingCatalogData(catalogProduct)
+        : null,
+    });
   }
 
   /**
@@ -739,6 +1008,31 @@ export class PublishedListingsService {
     const accountByStore = new Map(
       accounts.map((a) => [a.primaryStoreId, a] as const),
     );
+    const accountIds = accounts.map((account) => account.id);
+    const latestSuccessfulSyncByAccount = new Map<string, Date>();
+    if (accountIds.length > 0) {
+      const successfulSyncRows = await this.syncLogRepo
+        .createQueryBuilder('log')
+        .select('log.ebayAccountId', 'ebayAccountId')
+        .addSelect(
+          'MAX(COALESCE(log.completedAt, log.startedAt))',
+          'lastSuccessAt',
+        )
+        .where('log.organizationId = :organizationId', { organizationId })
+        .andWhere('log.ebayAccountId IN (:...accountIds)', { accountIds })
+        .andWhere("log.status = 'completed'")
+        .andWhere("log.trigger <> 'single'")
+        .groupBy('log.ebayAccountId')
+        .getRawMany<{ ebayAccountId: string; lastSuccessAt: Date | null }>();
+      for (const row of successfulSyncRows) {
+        if (row.lastSuccessAt) {
+          latestSuccessfulSyncByAccount.set(
+            row.ebayAccountId,
+            new Date(row.lastSuccessAt),
+          );
+        }
+      }
+    }
 
     const countRows = await this.listingRepo
       .createQueryBuilder('l')
@@ -788,17 +1082,24 @@ export class PublishedListingsService {
         lastSyncedAt: null,
       };
       const liveActive = liveActiveByStore.get(storeId) ?? 0;
-      const syncStatus = this.resolveStoreSyncStatus(account, liveActive);
+      const successfulSyncAt = [
+        account?.lastSuccessfulSyncAt ?? null,
+        account ? latestSuccessfulSyncByAccount.get(account.id) ?? null : null,
+      ]
+        .filter((value): value is Date => Boolean(value))
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+      const syncStatus = this.resolveStoreSyncStatus(
+        account,
+        liveActive,
+        successfulSyncAt,
+      );
       items.push({
         storeId,
         storeSlug: this.extractStoreSlug(store),
         name: store.storeName,
         activeListingCount: liveActive,
         endedListingCount: counts.ended,
-        lastSyncedAt:
-          account?.lastSuccessfulSyncAt?.toISOString() ??
-          counts.lastSyncedAt?.toISOString() ??
-          null,
+        lastSyncedAt: (successfulSyncAt ?? counts.lastSyncedAt)?.toISOString() ?? null,
         syncStatus,
         ebayAccountId: account?.id ?? null,
         connectionStatus: account?.connectionStatus ?? null,
@@ -915,11 +1216,12 @@ export class PublishedListingsService {
   private resolveStoreSyncStatus(
     account: ConnectedEbayAccount | undefined,
     liveActive: number,
+    successfulSyncAt: Date | null | undefined = account?.lastSuccessfulSyncAt,
   ): PublishedListingStoreSummary['syncStatus'] {
     if (!account) return 'never_synced';
     if (account.connectionStatus !== 'active') return 'inactive';
-    if (!account.lastSuccessfulSyncAt) return 'never_synced';
-    const age = Date.now() - account.lastSuccessfulSyncAt.getTime();
+    if (!successfulSyncAt) return 'never_synced';
+    const age = Date.now() - successfulSyncAt.getTime();
     if (age > STORE_SYNC_STALE_MS) return 'stale';
     // Active connection with a recent watermark but zero live rows is still
     // "ok" at the sync layer — empty inventory is surfaced via activeListingCount.
@@ -966,5 +1268,45 @@ export class PublishedListingsService {
     if (!stores.has(storeId)) {
       throw new ForbiddenException('No access to this store listing');
     }
+  }
+
+  private async loadCatalogProducts(
+    ids: string[],
+    organizationId: string,
+  ): Promise<CatalogProduct[]> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return [];
+    return this.catalogProductRepo
+      .createQueryBuilder('product')
+      .select([
+        'product.id',
+        'product.organizationId',
+        'product.sku',
+        'product.mpn',
+        'product.mpnNormalized',
+        'product.upc',
+        'product.ean',
+        'product.epid',
+        'product.title',
+        'product.brand',
+        'product.partType',
+        'product.placement',
+        'product.material',
+        'product.features',
+        'product.countryOfOrigin',
+        'product.oemPartNumber',
+        'product.weight',
+        'product.categoryId',
+        'product.categoryName',
+        'product.verticalAttributes',
+        'product.fitmentData',
+        'product.fitmentRows',
+      ])
+      .where('product.id IN (:...ids)', { ids: uniqueIds })
+      .andWhere(
+        '(product.organizationId = :organizationId OR product.organizationId IS NULL)',
+        { organizationId },
+      )
+      .getMany();
   }
 }

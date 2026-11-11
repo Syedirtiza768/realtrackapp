@@ -16,6 +16,28 @@ import { Type } from 'class-transformer';
 
 export const STOCK_LEVELS = ['in_stock', 'low_stock', 'out_of_stock'] as const;
 
+/** Sortable inventory table columns; each has an `_asc` / `_desc` pair. */
+export const INVENTORY_SORT_COLUMNS = [
+  'image',
+  'sku',
+  'brand',
+  'location',
+  'team',
+  'fitments',
+  'validation',
+  'price',
+  'status',
+  'enrichment',
+  'catalog',
+] as const;
+
+export const INVENTORY_SORT_MODES = INVENTORY_SORT_COLUMNS.flatMap((c) => [
+  `${c}_asc` as const,
+  `${c}_desc` as const,
+]);
+
+export type InventorySortMode = (typeof INVENTORY_SORT_MODES)[number];
+
 export class InventoryListingsQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -120,6 +142,16 @@ export class InventoryListingsQueryDto {
   @IsNumber()
   @Min(0)
   maxWeight?: number;
+
+  /** '1' = only parts that have a price (mirrors the catalog `hasPrice` filter). */
+  @IsOptional()
+  @IsIn(['1'])
+  hasPrice?: string;
+
+  /** `<column>_<asc|desc>`; unset = newest first. Ignored by the facets endpoint. */
+  @IsOptional()
+  @IsIn(INVENTORY_SORT_MODES)
+  sort?: InventorySortMode;
 }
 
 export class InventoryPartLookupDto {

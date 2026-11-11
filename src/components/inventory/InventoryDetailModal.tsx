@@ -1044,7 +1044,7 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                       <span className="capitalize">{data.pipelineJob.status.replace(/_/g, ' ')}</span>
                     </p>
                     <Link
-                      to={`/pipeline?job=${data.pipelineJob.id}`}
+                      to={`/auto-parts/pipeline?job=${data.pipelineJob.id}`}
                       className="text-xs text-blue-400 hover:underline mt-1 inline-block"
                     >
                       View in Pipeline
@@ -1087,14 +1087,14 @@ export default function InventoryDetailModal({ listingId, onClose }: Props) {
                 )}
 
                 <Link
-                  to={`/inventory/${listingId}/edit`}
+                  to={`/auto-parts/inventory/${listingId}/edit`}
                   className="text-xs font-medium text-purple-400 hover:underline"
                 >
                   Open full editor →
                 </Link>
 
                 <Link
-                  to="/catalog"
+                  to="/auto-parts/catalog"
                   className="text-xs font-medium text-blue-400 hover:underline"
                 >
                   Browse enriched parts in Catalog

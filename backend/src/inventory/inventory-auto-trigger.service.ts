@@ -193,6 +193,7 @@ export class InventoryAutoTriggerService {
       return { queued: false, reason: 'listing_not_found' };
     }
 
+    // Part identity must be checked against a label and overall photo.
     const imageCount = this.parseImageUrls(listing.itemPhotoUrl).length;
     if (imageCount < 2) {
       this.logger.debug(

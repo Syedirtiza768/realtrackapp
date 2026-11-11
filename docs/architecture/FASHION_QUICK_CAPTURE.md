@@ -187,3 +187,6 @@ before slots existed load with the first photo as Front and the rest as Addition
 - Warehouse → eBay merchant location mapping at publish time.
 - Converting existing values when switching cm/in.
 - Batch-level bulk actions from intake history (publish, reassign warehouse).
+# Fashion quick capture — 2026-09-28
+| SKU-named photo files | `POST /api/fashion/listings/photos?sku=…` stores `<SKU>-<timestamp>-<id>.webp`. The capture screen locks the SKU once photos exist. |
+| Phone-first capture screen | `/fashion/capture` (`FashionCapturePage.tsx`). Session settings persist per browser (`localStorage` key `fashion.capture.session`). "Save & next garment" resets the item and generates the next SKU in the batch. Camera and upload buttons stay visible on mobile; they enable after a SKU is entered or generated. When a batch is selected, the photo panel also offers one-tap SKU generation. |

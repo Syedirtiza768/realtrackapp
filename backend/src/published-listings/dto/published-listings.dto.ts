@@ -1,19 +1,30 @@
 import {
   IsArray,
+  IsDateString,
   IsEnum,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   Max,
+  MaxLength,
   Min,
+  MinLength,
+  Matches,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { BulkJobAction } from '../entities/ebay-published-listing-bulk-job.entity.js';
 
 export class PublishedListingsQueryDto {
+  /** Stable UUID keyset for dedicated Primemotive snapshot imports. Start at the nil UUID. */
+  @IsOptional() @IsUUID() afterId?: string;
+  /** Commit-ordered keyset cursor. Mutually exclusive with timestamp pagination. */
+  @IsOptional() @Matches(/^(0|[1-9]\d{0,18})$/) afterSequence?: string;
+  @IsOptional() @Matches(/^(0|[1-9]\d{0,18})$/) throughSequence?: string;
   @IsOptional()
   @IsUUID()
   organizationId?: string;
@@ -28,7 +39,7 @@ export class PublishedListingsQueryDto {
 
   /**
    * Comma-separated eBay storefront slugs, e.g. `salvagea,blackline`
-   * or `salvagea,blacklineusedautoparts`. Resolves to RealTrack store IDs.
+   * or `salvagea,blacklineusedautoparts`. Resolves to Omni Core store IDs.
    * Omit to default to Blackline + Salvage; use `all` for every connected store.
    */
   @IsOptional()
@@ -101,6 +112,16 @@ export class PublishedListingsQueryDto {
   @IsString()
   listedTo?: string;
 
+  /** Only return mirror rows updated at or after this ISO timestamp. */
+  @IsOptional()
+  @IsDateString()
+  updatedAfter?: string;
+
+  /** Compatibility spelling supported by external API clients. */
+  @IsOptional()
+  @IsDateString()
+  updateAfter?: string;
+
   @IsOptional()
   @IsString()
   lowStock?: string;
@@ -108,6 +129,11 @@ export class PublishedListingsQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  /** Include the linked RealTrackApp catalog product source projection. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  includeCatalogData?: 'true' | 'false';
 
   @IsOptional()
   @IsString()
@@ -129,6 +155,44 @@ export class PublishedListingsQueryDto {
   @Min(1)
   @Max(200)
   limit?: number = 50;
+}
+
+export class PrimemotiveSaleWebhookDto {
+  @IsIn(['listing.sold'])
+  eventType!: 'listing.sold';
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(160)
+  eventId!: string;
+
+  /** UUID returned as `id` by the Primemotive listing feed. */
+  @IsUUID()
+  listingId!: string;
+
+  @IsDateString()
+  soldAt!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  externalOrderId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  unitPrice?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  currency?: string;
 }
 
 export class SyncPublishedListingsDto {

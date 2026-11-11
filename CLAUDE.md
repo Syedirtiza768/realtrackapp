@@ -1,4 +1,4 @@
-# RealTrackApp — Claude Code Guide
+# Omni Core — Claude Code Guide
 
 > **Tool-agnostic rules live in [AGENTS.md](AGENTS.md)** — read that first; it applies to any
 > AI agent, not just Claude Code. **The docs map-of-content is [docs/Home.md](docs/Home.md)**
@@ -8,7 +8,7 @@
 
 ## Project overview
 
-RealTrackApp is a full-stack eBay listing management and inventory pipeline tool.
+Omni Core is a full-stack eBay listing management and inventory pipeline tool.
 
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS (port 8050)
 - **Backend**: NestJS + TypeORM + PostgreSQL + Redis (port 4191)

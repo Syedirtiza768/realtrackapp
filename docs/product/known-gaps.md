@@ -9,7 +9,7 @@ some items may be resolved since the audits.
 
 ## Product / UX
 
-- **Branding inconsistency**: "RealTrackApp" (shell) vs "ListingPro" (login, DB).
+- **Branding**: User-facing surfaces use "Omni Core"; legacy package/database identifiers remain for compatibility.
 - **Forgot-password**: `/forgot-password` page exists; no confirmed reset endpoint
   → **Needs verification**.
 - **Multi-marketplace breadth**: Shopify/Amazon/Walmart are scaffolding;

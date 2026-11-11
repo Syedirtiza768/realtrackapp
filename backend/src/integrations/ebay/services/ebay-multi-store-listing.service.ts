@@ -112,6 +112,7 @@ export class EbayMultiStoreListingService {
     storeIds: string[];
     policyOverrides?: Pick<PublishTargetInput, 'requestedFulfillmentPolicyName' | 'requestedPaymentPolicyName' | 'requestedReturnPolicyName'>;
     policyOverridesByStore?: Record<string, Pick<PublishTargetInput, 'requestedFulfillmentPolicyName' | 'requestedPaymentPolicyName' | 'requestedReturnPolicyName'>>;
+    marketplaceByStore?: Record<string, string>;
     idempotencyKey?: string;
   }): Promise<{
     job: EbayListingJob;
@@ -161,7 +162,7 @@ export class EbayMultiStoreListingService {
         primaryStoreId: In(storeIds),
         connectionStatus: 'active',
       },
-      relations: ['primaryStore'],
+      relations: ['primaryStore', 'marketplaces'],
     });
     const accountByStore = new Map(
       accounts.map((account) => [account.primaryStoreId, account]),
@@ -171,6 +172,21 @@ export class EbayMultiStoreListingService {
       throw new BadRequestException(
         `${missingStores.length} selected store(s) are not active eBay stores in this organization`,
       );
+    }
+    for (const [storeId, marketplaceId] of Object.entries(
+      input.marketplaceByStore ?? {},
+    )) {
+      const account = accountByStore.get(storeId);
+      if (
+        !account?.marketplaces?.some(
+          (marketplace) =>
+            marketplace.enabled && marketplace.marketplaceId === marketplaceId,
+        )
+      ) {
+        throw new BadRequestException(
+          'The requested marketplace is not enabled for the selected eBay store',
+        );
+      }
     }
 
     const resolvedProducts: Array<{
@@ -236,6 +252,7 @@ export class EbayMultiStoreListingService {
           ebayAccountId: account.id,
           vertical: product.vertical,
           marketplaceId:
+            input.marketplaceByStore?.[account.primaryStoreId] ??
             account.primaryStore?.ebayMarketplaceId ??
             (typeof account.primaryStore?.config?.marketplace === 'string'
               ? account.primaryStore.config.marketplace

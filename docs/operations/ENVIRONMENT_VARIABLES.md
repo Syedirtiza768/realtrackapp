@@ -78,6 +78,19 @@ authentication. This is not a secret or an environment override.
 
 ## eBay Developer API
 
+## Published listing mirror
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `PUBLISHED_LISTINGS_SYNC_STALE_AFTER_HOURS` | `24` | Hours before a connected store is reported stale in listing sync status. Set to `192` when production's full mirror sync runs weekly (seven days plus one day of grace). This controls status reporting only; it does not schedule or trigger eBay calls. |
+| `PRIMEMOTIVE_SALES_WEBHOOK_SECRET` | _(unset)_ | **Secret.** Inbound sale-receipt key. The 2026-11-02 candidate adds missing standard Compose forwarding. Runtime inspection confirmed a value already exists through the deployed configuration; no value was displayed or rotated. |
+| `MOTOARK_ORDER_WEBHOOK_SECRET` | _(unset)_ | **Secret.** Separate HMAC key for `/api/integrations/motoark/order-events`; configure for rollout; missing value returns 503 |
+| `PRIMEMOTIVE_LISTING_WEBHOOK_ORGANIZATION_ID` | _(unset)_ | Required organization scope for the candidate's outbound listing sender; resolves its Primemotive store and prevents cross-organization delivery |
+| `PRIMEMOTIVE_LISTING_WEBHOOK_URL` | _(unset)_ | HTTPS destination for outbound Primemotive listing change events; unset pauses push delivery while the pull change feed remains available |
+| `PRIMEMOTIVE_LISTING_WEBHOOK_SECRET` | _(unset)_ | **Secret.** HMAC-SHA256 signing key for outbound listing change webhook requests |
+| `PRIMEMOTIVE_SIMULATION_ENABLED` | `false` | When enabled, updates one seeded synthetic Primemotive listing per minute; this path writes only to the local mirror and does not call eBay |
+| `PRIMEMOTIVE_SIMULATION_ORGANIZATION_ID` | _(empty)_ | Organization UUID used to scope synthetic Primemotive listing updates |
+
 ## B&I image intake pilot
 
 | Var | Default | Purpose |
@@ -136,7 +149,12 @@ bucket had no CORS rules until 2026-09-13.
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `NODE_ENV` | `production` (Docker) | Env mode; gates Swagger |
-| `NODE_OPTIONS` | `--max-old-space-size=1536` (t3.medium) | V8 heap; raise on larger instances |
+| `NODE_OPTIONS` | `--max-old-space-size=1280` (t3.medium) | V8 heap; raise on larger instances. Must fit under `BACKEND_MEM_LIMIT` with sharp/native buffers. A host `.env` value overrides the compose default |
+| `BACKEND_MEM_LIMIT` | `1800m` | Compose `mem_limit` for the backend container (contains OOMs to the backend instead of the host) |
+| `STORAGE_THUMBNAIL_CONCURRENCY` | `3` | BullMQ `storage-thumbnails` worker concurrency (image variant generation) |
+| `SHARP_CONCURRENCY` | `1` | libvips threads per sharp operation (process-wide) |
+| `SHARP_CACHE_MB` | `32` | sharp operation-cache memory cap in MB (min 8) |
+| `IMAGE_UPLOAD_MAX_FILE_MB` | `20` | Per-file limit on in-memory image upload endpoints (HTTP 413 above it) |
 | `IGNORE_ENV_FILE` | `true` (Docker) | Ignore host `.env` in container |
 | `PIPELINE_PROJECT_ROOT` | `/app` | Root for pipeline scripts/output |
 | `PIPELINE_CATEGORY_GUARD_CONCURRENCY` | `8` | Bounded concurrency for the post-enrichment, pre-persistence Motors leaf-category guard |

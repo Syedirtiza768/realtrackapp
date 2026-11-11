@@ -95,7 +95,7 @@ export default function SkuDetailPage() {
       <div className="p-8 text-center">
         <AlertCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
         <p className="text-red-600">{error ?? 'Listing not found'}</p>
-        <button onClick={() => navigate('/catalog')} className="mt-4 text-blue-600 hover:underline">
+        <button onClick={() => navigate('/auto-parts/catalog')} className="mt-4 text-blue-600 hover:underline">
           Back to Catalog
         </button>
       </div>
@@ -110,7 +110,7 @@ export default function SkuDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button
-          onClick={() => navigate('/catalog')}
+          onClick={() => navigate('/auto-parts/catalog')}
           className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-slate-500 dark:text-slate-600" />
@@ -127,7 +127,7 @@ export default function SkuDetailPage() {
           </h1>
         </div>
         <Link
-          to={`/catalog/products/${listing.id}/publish/ebay`}
+          to={`/auto-parts/catalog/products/${listing.id}/publish/ebay`}
           className="px-3 py-1.5 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
         >
           Publish to eBay

@@ -201,7 +201,7 @@ export default function ImportReport({ importRecord }: ImportReportProps) {
                 )}
 
                 <a
-                  href="/catalog"
+                  href="/auto-parts/catalog"
                   className="inline-flex items-center text-blue-400 hover:text-blue-300"
                 >
                   Open catalog

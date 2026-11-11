@@ -80,6 +80,8 @@ export const FASHION_FIELD_GROUPS: Array<{ id: string; label: string; fields: Fa
   {
     id: 'measurements',
     label: 'Measurements',
+    // Measured values, the chart choice and the unit are edited by FashionMeasurementChart
+    // (templates served by GET /api/fashion/measurement-templates).
     fields: [
       { key: 'measurements', label: 'Original measurement notes', input: 'textarea', families: ['clothing', 'footwear', 'accessories'], help: 'Anything the chart does not cover. Do not estimate from photos.' },
     ],

@@ -10,6 +10,7 @@ import { FitmentDiscoveryService } from './fitment-discovery.service.js';
 import type { FitmentDiscoveryResult } from './fitment-discovery.service.js';
 import type { EnterpriseListingResult } from '../ingestion/enterprise-listing-intelligence.service.js';
 import { computeSourceDataHash } from './source-data-hash.util.js';
+import { resolvePlatformModelFromTitle } from '../fitment/platform-generation.util.js';
 import type {
   JobOptimizationStatus,
   OptimizationIssue,
@@ -17,7 +18,7 @@ import type {
   ProductOptimizationSummary,
 } from './listing-optimization.types.js';
 
-const OPTIMIZATION_VERSION = 1;
+const OPTIMIZATION_VERSION = 28;
 
 type PreparedOptimization =
   | { skip: true; product: CatalogProduct }
@@ -31,6 +32,10 @@ type PreparedOptimization =
 @Injectable()
 export class ListingOptimizationService {
   private readonly logger = new Logger(ListingOptimizationService.name);
+  private readonly pipelineDonorModelCache = new Map<
+    string,
+    Promise<string | null>
+  >();
 
   constructor(
     @InjectRepository(CatalogProduct)
@@ -47,6 +52,7 @@ export class ListingOptimizationService {
     jobId: string,
     marketplace: 'US' | 'DE' | 'AU' = 'US',
     bullJob?: Job,
+    options?: { force?: boolean },
   ): Promise<void> {
     const pipelineJob = await this.jobRepo.findOneBy({ id: jobId });
     const byMkt = (pipelineJob?.optimizationByMarketplace ?? {}) as Record<
@@ -55,7 +61,11 @@ export class ListingOptimizationService {
     >;
     const existingStatus = byMkt[marketplace]?.status;
 
-    if (existingStatus === 'completed' || existingStatus === 'needs_review') {
+    const force = options?.force ?? false;
+    if (
+      !force &&
+      (existingStatus === 'completed' || existingStatus === 'needs_review')
+    ) {
       this.logger.log(
         `Optimization for job ${jobId} [${marketplace}] already completed, skipping`,
       );
@@ -187,7 +197,10 @@ export class ListingOptimizationService {
             this.optimizeProductsBatch(
               chunk.map((p) => p.id),
               marketplace,
-              { force: false },
+              {
+                force: force && !isRetry,
+                sourceFilename: pipelineJob?.originalFilename ?? undefined,
+              },
             ),
             new Promise<never>((_, reject) =>
               setTimeout(
@@ -288,15 +301,14 @@ export class ListingOptimizationService {
    * Batch variant of optimizeProduct — prepares each product's fitment
    * individually (that part is DB/local-lookup driven, not the bottleneck),
    * then makes ONE call to enterprise.generateForProductsBatch covering all
-   * of them instead of one OpenAI call per product. A failure for one
-   * product (prepare, AI, or finalize) is caught and marks just that
-   * product failed, matching the per-product isolation optimizeProduct's
-   * caller previously got from running items one at a time.
+   * of them instead of one OpenAI call per product. If the AI batch fails,
+   * enterprise generation falls back to deterministic fitment-based titles;
+   * prepare/finalize failures remain isolated to the affected product.
    */
   async optimizeProductsBatch(
     productIds: string[],
     marketplace: 'US' | 'DE' | 'AU' = 'US',
-    options?: { force?: boolean },
+    options?: { force?: boolean; sourceFilename?: string },
   ): Promise<void> {
     if (productIds.length === 0) return;
 
@@ -388,15 +400,43 @@ export class ListingOptimizationService {
   private async prepareProductForOptimization(
     productId: string,
     marketplace: 'US' | 'DE' | 'AU',
-    options?: { force?: boolean },
+    options?: { force?: boolean; sourceFilename?: string },
   ): Promise<PreparedOptimization> {
     const product = await this.productRepo.findOneBy({ id: productId });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
+
+    const sourceFilename =
+      options?.sourceFilename ??
+      (product.pipelineJobId
+        ? (
+            await this.jobRepo.findOneBy({ id: product.pipelineJobId })
+          )?.originalFilename
+        : undefined);
+    const sourceDonor = this.enterprise.parseDonorVehicleFromFilename(
+      sourceFilename,
+      product.brand,
+    );
+    if (sourceDonor) {
+      if (!product.donorYear?.trim()) product.donorYear = sourceDonor.year;
+      if (!product.donorMake?.trim()) product.donorMake = sourceDonor.make;
+      if (!product.donorModel?.trim()) {
+        product.donorModel =
+          sourceDonor.model ||
+          resolvePlatformModelFromTitle(sourceDonor.make, product.title) ||
+          (product.pipelineJobId
+            ? (await this.resolvePipelineDonorModel(
+                product.pipelineJobId,
+                sourceDonor.make,
+              )) ?? ''
+            : '');
+      }
+    }
 
     const hash = computeSourceDataHash(product);
     if (
       !options?.force &&
       product.optimizationStatus === 'completed' &&
+      product.optimizationVersion === OPTIMIZATION_VERSION &&
       product.sourceDataHash === hash
     ) {
       return { skip: true, product };
@@ -459,9 +499,62 @@ export class ListingOptimizationService {
       fitmentConfidence: fitment.confidence,
       donorVin: fitment.donorVin,
       donorVinDecoded: fitment.donorVinDecoded,
+      ...(product.donorYear?.trim()
+        ? { donorYear: product.donorYear.trim() }
+        : {}),
+      ...(product.donorMake?.trim()
+        ? { donorMake: product.donorMake.trim() }
+        : {}),
+      ...(product.donorModel?.trim()
+        ? { donorModel: product.donorModel.trim() }
+        : {}),
     } as any);
 
     return { skip: false, product, fitment, hash };
+  }
+
+  /**
+   * A pipeline job is one donor vehicle. If its filename omits the model,
+   * reuse a single unambiguous model already present in that job's donor
+   * fields or vehicle-prefixed source titles.
+   */
+  private resolvePipelineDonorModel(
+    pipelineJobId: string,
+    make: string,
+  ): Promise<string | null> {
+    const cached = this.pipelineDonorModelCache.get(pipelineJobId);
+    if (cached) return cached;
+
+    const pending = this.productRepo
+      .find({
+        where: { pipelineJobId },
+        select: ['donorModel', 'title'],
+        order: { id: 'ASC' },
+        take: 2000,
+      })
+      .then((products) => {
+        const models = new Map<string, string>();
+        for (const product of products) {
+          const model =
+            product.donorModel?.trim() ||
+            resolvePlatformModelFromTitle(make, product.title);
+          if (model) models.set(model.toLowerCase(), model);
+        }
+        return models.size === 1 ? [...models.values()][0] : null;
+      })
+      .catch((error) => {
+        this.logger.warn(
+          `Unable to infer donor model for pipeline job ${pipelineJobId}: ${String(error)}`,
+        );
+        return null;
+      });
+
+    this.pipelineDonorModelCache.set(pipelineJobId, pending);
+    if (this.pipelineDonorModelCache.size > 200) {
+      const oldestKey = this.pipelineDonorModelCache.keys().next().value;
+      if (oldestKey) this.pipelineDonorModelCache.delete(oldestKey);
+    }
+    return pending;
   }
 
   /** Post-AI-call status/score computation + persistence for one product. */

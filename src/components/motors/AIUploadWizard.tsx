@@ -250,7 +250,7 @@ export default function AIUploadWizard() {
       <div className="bg-white border-b px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center gap-4">
           <button
-            onClick={() => navigate('/motors')}
+            onClick={() => navigate('/auto-parts/motors')}
             className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -325,7 +325,7 @@ export default function AIUploadWizard() {
           <ResultsStep
             product={product ?? null}
             progress={pipelineProgress}
-            onViewProduct={() => motorsProductId && navigate(`/motors/${motorsProductId}`)}
+            onViewProduct={() => motorsProductId && navigate(`/auto-parts/motors/${motorsProductId}`)}
             onStartOver={() => {
               setStep('upload');
               setFiles([]);

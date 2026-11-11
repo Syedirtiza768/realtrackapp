@@ -9,7 +9,7 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { QueryFailedError } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { BulkUpdateDto } from './dto/bulk-update.dto';
@@ -30,6 +30,7 @@ import { StoreAccessService } from '../channels/store-access.service.js';
 import { User } from '../auth/entities/user.entity.js';
 import { TeamsService } from '../teams/teams.service.js';
 import { listingVerticalFilter } from './utils/listing-vertical-filter.js';
+import { AutomotiveAccessScopeService } from '../auth/automotive-access-scope.service.js';
 
 /**
  * Maps each Excel header text (normalized to lowercase) to the
@@ -223,6 +224,7 @@ export class ListingsService {
     private readonly rbac: RbacService,
     private readonly storeAccess: StoreAccessService,
     private readonly teamsService: TeamsService,
+    private readonly automotiveScope: AutomotiveAccessScopeService,
   ) {}
 
   /* ── Query methods ──────────────────────────────────────── */
@@ -320,44 +322,54 @@ export class ListingsService {
   }
 
   async findOne(id: string, user?: User) {
-    const record = await this.listingRepo.findOne({ where: { id } });
+    const record = await this.findAccessibleListing(id, user);
     if (!record) {
-      throw new NotFoundException(`Listing ${id} not found`);
-    }
-
-    // ── Store access check ──
-    const storeFilter = await this.buildStoreFilter(user);
-    if (storeFilter && storeFilter.sql !== '1=0') {
-      const hasAccess = await this.listingRepo
-        .createQueryBuilder('r')
-        .select('r.id')
-        .where('r.id = :id', { id })
-        .andWhere(storeFilter.sql, storeFilter.params)
-        .getExists();
-      if (!hasAccess) {
-        throw new NotFoundException(`Listing ${id} not found`);
-      }
-    } else if (storeFilter && storeFilter.sql === '1=0') {
       throw new NotFoundException(`Listing ${id} not found`);
     }
 
     let catalogProduct: CatalogProduct | null = null;
     if (record.customLabelSku) {
-      catalogProduct = await this.catalogProductRepo.findOneBy({
-        sku: record.customLabelSku,
-      });
+      const productQb = this.catalogProductRepo
+        .createQueryBuilder('p')
+        .where('p.sku = :sku', { sku: record.customLabelSku });
+      const productScope = await this.automotiveScope.buildFilter(user, 'p');
+      if (productScope)
+        productQb.andWhere(productScope.sql, productScope.params);
+      catalogProduct = await productQb.getOne();
     }
     return { listing: record, catalogProduct };
   }
 
   /* ── CRUD operations (Module 1) ─────────────────────────── */
 
-  async create(dto: CreateListingDto) {
+  async create(dto: CreateListingDto, user: User) {
+    const organizationId =
+      await this.automotiveScope.resolveWriteOrganizationId(user);
+    return this.createScoped(dto, organizationId, user.id);
+  }
+
+  async createForOrganization(
+    dto: CreateListingDto,
+    organizationId?: string | null,
+    changedBy?: string | null,
+  ) {
+    return this.createScoped(
+      dto,
+      this.automotiveScope.resolveSystemWriteOrganizationId(organizationId),
+      changedBy ?? null,
+    );
+  }
+
+  private async createScoped(
+    dto: CreateListingDto,
+    organizationId: string,
+    changedBy: string | null,
+  ) {
     try {
-      return await this.createInTransaction(dto);
+      return await this.createInTransaction(dto, organizationId, changedBy);
     } catch (err) {
       if (this.isSkuUniqueViolation(err) && dto.customLabelSku?.trim()) {
-        return this.createInTransaction(dto);
+        return this.createInTransaction(dto, organizationId, changedBy);
       }
       throw err;
     }
@@ -371,7 +383,11 @@ export class ListingsService {
     );
   }
 
-  private async createInTransaction(dto: CreateListingDto) {
+  private async createInTransaction(
+    dto: CreateListingDto,
+    organizationId: string,
+    changedBy: string | null,
+  ) {
     return this.dataSource.transaction(async (em) => {
       const listing = em.create(ListingRecord, {
         ...dto,
@@ -381,6 +397,9 @@ export class ListingsService {
         origin: ListingOrigin.ADD_PART,
         sheetName: 'manual',
         sourceRowNumber: 0,
+        organizationId,
+        vertical: 'automotive',
+        updatedBy: changedBy,
       } as Partial<ListingRecord>);
 
       const sku = dto.customLabelSku?.trim();
@@ -391,6 +410,8 @@ export class ListingsService {
           .createQueryBuilder(ListingRecord, 'l')
           .setLock('pessimistic_write')
           .where('l.customLabelSku = :sku', { sku })
+          .andWhere('l.organizationId = :organizationId', { organizationId })
+          .andWhere('l.vertical = :vertical', { vertical: 'automotive' })
           .andWhere('l.deletedAt IS NULL')
           .getOne();
       }
@@ -413,7 +434,7 @@ export class ListingsService {
           statusAfter: savedExisting.status ?? oldStatus ?? 'draft',
           snapshot: { ...savedExisting } as unknown as Record<string, unknown>,
           changeReason: 'update_via_create',
-          changedBy: null,
+          changedBy,
         });
         await em.save(ListingRevision, revision);
 
@@ -424,6 +445,8 @@ export class ListingsService {
         .createQueryBuilder(ListingRecord, 'r')
         .select('MAX(r.sourceRowNumber)', 'max')
         .where('r.sourceFileName = :src', { src: 'manual' })
+        .andWhere('r.organizationId = :organizationId', { organizationId })
+        .andWhere('r.vertical = :vertical', { vertical: 'automotive' })
         .withDeleted()
         .getRawOne<{ max: string | null }>();
       const nextRow = (Number(maxRow?.max) || 0) + 1;
@@ -438,7 +461,7 @@ export class ListingsService {
         statusAfter: saved.status ?? 'draft',
         snapshot: { ...saved } as unknown as Record<string, unknown>,
         changeReason: 'create',
-        changedBy: null,
+        changedBy,
       });
       await em.save(ListingRevision, revision);
 
@@ -448,7 +471,7 @@ export class ListingsService {
 
   async update(id: string, dto: UpdateListingDto, user?: User) {
     return this.dataSource.transaction(async (em) => {
-      const listing = await em.findOne(ListingRecord, { where: { id } });
+      const listing = await this.findAccessibleListing(id, user, em);
       if (!listing) throw new NotFoundException(`Listing ${id} not found`);
 
       if (listing.version !== dto.version) {
@@ -510,7 +533,7 @@ export class ListingsService {
         changes.customLabelSku = trimmed.length > 0 ? trimmed : null;
       }
 
-      await this.assertSkuRenameAllowed(em, listing.id, oldSku, changes);
+      await this.assertSkuRenameAllowed(em, listing, oldSku, changes);
 
       Object.assign(listing, changes);
       // Keep numeric mirrors in lockstep in-memory (DB trigger also syncs on
@@ -572,7 +595,7 @@ export class ListingsService {
 
   async patchStatus(id: string, dto: PatchStatusDto, user?: User) {
     return this.dataSource.transaction(async (em) => {
-      const listing = await em.findOne(ListingRecord, { where: { id } });
+      const listing = await this.findAccessibleListing(id, user, em);
       if (!listing) throw new NotFoundException(`Listing ${id} not found`);
 
       if (listing.version !== dto.version) {
@@ -640,33 +663,35 @@ export class ListingsService {
     });
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user: User) {
     // Soft-delete hides this listing instance. Same-SKU donor re-import may
     // create a NEW active row; this row stays deleted unless restore() is used.
-    const listing = await this.listingRepo.findOne({ where: { id } });
+    const listing = await this.findAccessibleListing(id, user);
     if (!listing) throw new NotFoundException(`Listing ${id} not found`);
     await this.listingRepo.softRemove(listing);
     return { success: true };
   }
 
-  async restore(id: string) {
-    const listing = await this.listingRepo.findOne({
-      where: { id },
-      withDeleted: true,
-    });
+  async restore(id: string, user: User) {
+    const listing = await this.findAccessibleListing(
+      id,
+      user,
+      this.dataSource.manager,
+      true,
+    );
     if (!listing) throw new NotFoundException(`Listing ${id} not found`);
     await this.listingRepo.recover(listing);
     return { listing };
   }
 
-  async bulkUpdate(dto: BulkUpdateDto) {
+  async bulkUpdate(dto: BulkUpdateDto, user: User) {
     const updated: string[] = [];
     const failed: { id: string; error: string; conflict?: boolean }[] = [];
 
     for (const id of dto.ids) {
       try {
         await this.dataSource.transaction(async (em) => {
-          const listing = await em.findOne(ListingRecord, { where: { id } });
+          const listing = await this.findAccessibleListing(id, user, em);
           if (!listing) {
             throw new NotFoundException(`Listing ${id} not found`);
           }
@@ -685,6 +710,7 @@ export class ListingsService {
           }
 
           Object.assign(listing, dto.changes);
+          listing.updatedBy = user.id;
           await em.save(ListingRecord, listing);
         });
         updated.push(id);
@@ -710,7 +736,7 @@ export class ListingsService {
       throw new BadRequestException('At least one profile must be provided');
     }
 
-    const listings = await this.listingRepo.findBy({ id: In(dto.ids) });
+    const listings = await this.findAccessibleListings(dto.ids, user);
     if (!listings.length) {
       throw new NotFoundException('No listings found for given IDs');
     }
@@ -741,7 +767,13 @@ export class ListingsService {
       ),
     ];
     if (skus.length) {
-      const products = await this.catalogProductRepo.findBy({ sku: In(skus) });
+      const productQb = this.catalogProductRepo
+        .createQueryBuilder('p')
+        .where('p.sku IN (:...skus)', { skus });
+      const productScope = await this.automotiveScope.buildFilter(user, 'p');
+      if (productScope)
+        productQb.andWhere(productScope.sql, productScope.params);
+      const products = await productQb.getMany();
       for (const product of products) {
         if (shippingProfile) product.shippingProfile = shippingProfile;
         if (returnProfile) product.returnProfile = returnProfile;
@@ -755,8 +787,8 @@ export class ListingsService {
     return { updated: listings.length };
   }
 
-  async bulkSoftDelete(ids: string[]) {
-    const listings = await this.listingRepo.findBy({ id: In(ids) });
+  async bulkSoftDelete(ids: string[], user: User) {
+    const listings = await this.findAccessibleListings(ids, user);
     if (!listings.length)
       throw new NotFoundException('No listings found for given IDs');
     await this.listingRepo.softRemove(listings);
@@ -873,7 +905,13 @@ export class ListingsService {
     return [headers.join(','), ...rows].join('\n');
   }
 
-  async getRevisions(listingId: string, limit: number, offset: number) {
+  async getRevisions(
+    listingId: string,
+    limit: number,
+    offset: number,
+    user?: User,
+  ) {
+    await this.findAccessibleListing(listingId, user);
     const [revisions, total] = await this.revisionRepo.findAndCount({
       where: { listingId },
       order: { version: 'DESC' },
@@ -1128,19 +1166,59 @@ export class ListingsService {
 
   /* ── Private helpers ────────────────────────────────────── */
 
-  /** Store filter: returns { sql, params } or null if no filtering needed */
+  /** Organization, vertical, and store filter for automotive records. */
   private async buildStoreFilter(
     user?: User,
-  ): Promise<{ sql: string; params: Record<string, string[]> } | null> {
+    alias = 'r',
+  ): Promise<{
+    sql: string;
+    params: Record<string, string | string[]>;
+  } | null> {
+    const accessFilter = await this.automotiveScope.buildFilter(user, alias);
     const storeIds = await this.storeAccess.resolveStoreFilter(user);
-    if (storeIds === undefined) return null; // accessAll or no user
+    if (storeIds === undefined) return accessFilter;
     if (storeIds.length === 0) {
-      return { sql: StoreAccessService.UNSCOPED_LISTINGS_SQL, params: {} };
+      return {
+        sql: accessFilter
+          ? `(${accessFilter.sql}) AND (${StoreAccessService.UNSCOPED_LISTINGS_SQL})`
+          : StoreAccessService.UNSCOPED_LISTINGS_SQL,
+        params: accessFilter?.params ?? {},
+      };
     }
     return {
-      sql: StoreAccessService.SCOPED_LISTINGS_SQL,
-      params: { storeIds },
+      sql: accessFilter
+        ? `(${accessFilter.sql}) AND (${StoreAccessService.SCOPED_LISTINGS_SQL})`
+        : StoreAccessService.SCOPED_LISTINGS_SQL,
+      params: { ...(accessFilter?.params ?? {}), storeIds },
     };
+  }
+
+  private async findAccessibleListing(
+    id: string,
+    user?: User,
+    manager: DataSource['manager'] = this.dataSource.manager,
+    withDeleted = false,
+  ): Promise<ListingRecord | null> {
+    const qb = manager
+      .createQueryBuilder(ListingRecord, 'r')
+      .where('r.id = :id', { id });
+    if (withDeleted) qb.withDeleted();
+    const accessFilter = await this.buildStoreFilter(user, 'r');
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
+    return qb.getOne();
+  }
+
+  private async findAccessibleListings(
+    ids: string[],
+    user: User,
+  ): Promise<ListingRecord[]> {
+    if (!ids.length) return [];
+    const qb = this.listingRepo
+      .createQueryBuilder('r')
+      .where('r.id IN (:...ids)', { ids });
+    const accessFilter = await this.buildStoreFilter(user, 'r');
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
+    return qb.getMany();
   }
 
   /** Upsert a batch of partial records using ON CONFLICT */
@@ -1282,7 +1360,7 @@ export class ListingsService {
    */
   private async assertSkuRenameAllowed(
     em: DataSource['manager'],
-    listingId: string,
+    listing: ListingRecord,
     oldSku: string | null,
     changes: Record<string, unknown>,
   ): Promise<void> {
@@ -1293,9 +1371,24 @@ export class ListingsService {
         : (changes.customLabelSku as string | null);
     if (!newSku || newSku === oldSku) return;
 
-    const conflictingProduct = await em.findOne(CatalogProduct, {
-      where: { sku: newSku },
-    });
+    const productQb = em
+      .createQueryBuilder(CatalogProduct, 'p')
+      .where('p.sku = :sku', { sku: newSku });
+    if (listing.organizationId) {
+      productQb.andWhere('p.organizationId = :organizationId', {
+        organizationId: listing.organizationId,
+      });
+    } else {
+      productQb.andWhere('p.organizationId IS NULL');
+    }
+    if (listing.vertical) {
+      productQb.andWhere('p.vertical = :vertical', {
+        vertical: listing.vertical,
+      });
+    } else {
+      productQb.andWhere('p.vertical IS NULL');
+    }
+    const conflictingProduct = await productQb.getOne();
     if (conflictingProduct) {
       throw new ConflictException(
         `SKU "${newSku}" is already used by another catalog product.`,
@@ -1306,7 +1399,19 @@ export class ListingsService {
       .createQueryBuilder(ListingRecord, 'l')
       .where('l.customLabelSku = :sku', { sku: newSku })
       .andWhere('l.deletedAt IS NULL')
-      .andWhere('l.id != :id', { id: listingId })
+      .andWhere('l.id != :id', { id: listing.id })
+      .andWhere(
+        listing.organizationId
+          ? 'l.organizationId = :organizationId'
+          : 'l.organizationId IS NULL',
+        listing.organizationId
+          ? { organizationId: listing.organizationId }
+          : {},
+      )
+      .andWhere(
+        listing.vertical ? 'l.vertical = :vertical' : 'l.vertical IS NULL',
+        listing.vertical ? { vertical: listing.vertical } : {},
+      )
       .getOne();
     if (conflictingListing) {
       throw new ConflictException(
@@ -1337,13 +1442,22 @@ export class ListingsService {
     const newSku = saved.customLabelSku?.trim() || null;
     if (!oldSku || oldSku === newSku) return;
 
+    const scope = {
+      organizationId: saved.organizationId ?? IsNull(),
+      vertical: saved.vertical ?? IsNull(),
+    };
+
     if (newSku) {
-      await em.update(CatalogProduct, { sku: oldSku }, { sku: newSku });
+      await em.update(
+        CatalogProduct,
+        { sku: oldSku, ...scope },
+        { sku: newSku },
+      );
     }
     // Current row already has newSku; siblings still on oldSku.
     await em.update(
       ListingRecord,
-      { customLabelSku: oldSku },
+      { customLabelSku: oldSku, ...scope },
       { customLabelSku: newSku },
     );
   }
@@ -1371,11 +1485,20 @@ export class ListingsService {
     const qtyChanged = changes.quantity !== undefined;
     if (!priceChanged && !qtyChanged) return;
 
+    const scope = {
+      organizationId: saved.organizationId ?? IsNull(),
+      vertical: saved.vertical ?? IsNull(),
+    };
+
     if (priceChanged) {
-      await em.update(CatalogProduct, { sku }, { price: saved.startPriceNum });
+      await em.update(
+        CatalogProduct,
+        { sku, ...scope },
+        { price: saved.startPriceNum },
+      );
       await em.update(
         ListingRecord,
-        { customLabelSku: sku },
+        { customLabelSku: sku, ...scope },
         {
           startPrice: saved.startPrice,
           startPriceNum: saved.startPriceNum,
@@ -1384,10 +1507,14 @@ export class ListingsService {
     }
 
     if (qtyChanged) {
-      await em.update(CatalogProduct, { sku }, { quantity: saved.quantityNum });
+      await em.update(
+        CatalogProduct,
+        { sku, ...scope },
+        { quantity: saved.quantityNum },
+      );
       await em.update(
         ListingRecord,
-        { customLabelSku: sku },
+        { customLabelSku: sku, ...scope },
         {
           quantity: saved.quantity,
           quantityNum: saved.quantityNum,

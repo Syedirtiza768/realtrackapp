@@ -14,6 +14,43 @@ describe('isTransientPublishFailure', () => {
 
   it('does not retry deterministic validation failures', () => {
     expect(isTransientPublishFailure('Invalid category ID')).toBe(false);
+    expect(
+      isTransientPublishFailure(
+        'ReviseItem failed (21919474): Inventory-based listing management is not currently supported by this tool.',
+      ),
+    ).toBe(false);
+    expect(
+      isTransientPublishFailure(
+        'Only approved sellers may list this airbag item; do not relist it.',
+      ),
+    ).toBe(false);
+    expect(
+      isTransientPublishFailure(
+        'The item is mis-categorized. Select a different category.',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not automatically retry an uncertain ended-listing relist', () => {
+    expect(
+      isTransientPublishFailure(
+        'RelistFixedPriceItem outcome is uncertain; verify eBay before retrying.',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not retry the overseas warehouse location policy block', () => {
+    expect(
+      isTransientPublishFailure(
+        'Cannot revise listing. Forward-deployed item country differs from registered address. SRM_HIS_WH_Location_Mismatch_Inventory_Block 1276646',
+      ),
+    ).toBe(false);
+  });
+  it('retries network and eBay service failures', () => {
+    expect(
+      isTransientPublishFailure('status code 503: service unavailable'),
+    ).toBe(true);
+    expect(isTransientPublishFailure('upstream connect error')).toBe(true);
   });
 });
 

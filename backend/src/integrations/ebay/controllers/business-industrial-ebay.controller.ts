@@ -307,12 +307,13 @@ export class BusinessIndustrialEbayController {
       select: ['id', 'verticalValidationStatus', 'manualReview'],
     });
     if (
-      products.length !== dto.listingIds.length ||
-      products.some(
-        (product) =>
-          product.verticalValidationStatus !== 'approved' ||
-          product.manualReview,
-      )
+      !this.allowUnapprovedPublish() &&
+      (products.length !== dto.listingIds.length ||
+        products.some(
+          (product) =>
+            product.verticalValidationStatus !== 'approved' ||
+            product.manualReview,
+        ))
     ) {
       throw new BadRequestException(
         'Every Business & Industrial listing must be approved and not quarantined before publishing',
@@ -331,6 +332,11 @@ export class BusinessIndustrialEbayController {
       requestedByUserId: user.id,
       listingIds: dto.listingIds,
       storeIds: dto.storeIds,
+      policyOverrides: {
+        requestedFulfillmentPolicyName: dto.requestedFulfillmentPolicyName,
+        requestedPaymentPolicyName: dto.requestedPaymentPolicyName,
+        requestedReturnPolicyName: dto.requestedReturnPolicyName,
+      },
       idempotencyKey: dto.idempotencyKey,
     });
     return {
@@ -467,7 +473,10 @@ export class BusinessIndustrialEbayController {
       throw new BadRequestException(
         'Business & Industrial listing not found in this workspace',
       );
-    if (product.verticalValidationStatus !== 'approved' || product.manualReview)
+    if (
+      !this.allowUnapprovedPublish() &&
+      (product.verticalValidationStatus !== 'approved' || product.manualReview)
+    )
       throw new BadRequestException(
         'Business & Industrial review must be approved and the listing must not be quarantined before publishing',
       );
@@ -493,6 +502,14 @@ export class BusinessIndustrialEbayController {
       this.marketplace(account, target.marketplaceId);
     }
     return org.organizationId;
+  }
+
+  /**
+   * Temporary operator-controlled bypass for B&I publishing. Review records
+   * remain intact; this only changes the publish gate when explicitly enabled.
+   */
+  private allowUnapprovedPublish() {
+    return process.env.BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH === 'true';
   }
 
   private async authorizedAccount(

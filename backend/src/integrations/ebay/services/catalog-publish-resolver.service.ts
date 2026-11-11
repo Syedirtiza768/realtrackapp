@@ -142,13 +142,34 @@ export class CatalogPublishResolverService {
       resolvedFromListingId
         ? (listingValue ?? catalogValue ?? null)
         : (catalogValue ?? listingValue ?? null);
+    const preferListingText = (
+      listingValue: string | null | undefined,
+      catalogValue: string | null | undefined,
+    ): string | null => {
+      const listingText = listingValue?.trim();
+      const catalogText = catalogValue?.trim();
+      return resolvedFromListingId
+        ? listingText || catalogText || null
+        : catalogText || listingText || null;
+    };
+    const listingSku = listingRecord?.customLabelSku?.trim();
+    const catalogSku = catalogProduct?.sku?.trim();
+    if (listingSku && catalogSku && listingSku !== catalogSku) {
+      warnings.push(
+        resolvedFromListingId
+          ? 'Catalog SKU differs from the reviewed listing custom label SKU; using the listing value for publish'
+          : 'Listing custom label SKU differs from the catalog SKU; using the catalog value for publish',
+      );
+    }
+    const publishSku = resolvedFromListingId
+      ? listingSku || catalogSku
+      : catalogSku || listingSku;
 
     const snapshot: CatalogPublishSnapshot = {
       catalogProductId: catalogProduct!.id,
       listingRecordId: listingRecord?.id ?? null,
       sku:
-        catalogProduct?.sku?.trim() ||
-        listingRecord?.customLabelSku?.trim() ||
+        publishSku ||
         catalogProduct?.id ||
         listingRecord!.id,
       title:
@@ -158,15 +179,18 @@ export class CatalogPublishResolverService {
         listingRecord?.description,
         catalogProduct?.description,
       ),
-      brand: preferListing(
+      brand: preferListingText(
         listingRecord?.cBrand ?? listingRecord?.manufacturerName,
         catalogProduct?.brand,
       ),
-      mpn: preferListing(
+      mpn: preferListingText(
         listingRecord?.cManufacturerPartNumber,
         catalogProduct?.mpn,
       ),
-      partType: preferListing(listingRecord?.cType, catalogProduct?.partType),
+      partType: preferListingText(
+        listingRecord?.cType,
+        catalogProduct?.partType,
+      ),
       price: preferListing(
         listingRecord?.startPriceNum,
         catalogProduct?.price != null ? Number(catalogProduct.price) : null,

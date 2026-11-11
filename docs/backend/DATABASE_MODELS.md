@@ -1,5 +1,17 @@
 # Database Models
 
+**2026-11-02 local candidate:** MotoArk lifecycle tables use explicit
+`EntityManager` SQL for atomic inbox/order/stock transactions:
+`primemotive_sale_receipts`, `motoark_order_events`, `motoark_orders`,
+`motoark_order_lines`, `motoark_returns`, and `motoark_refunds`.
+`EbayPublishedListing.revision` and `EbayPublishedListingChange.sequence`
+are decimal-string bigint entity fields. See the
+[schema reference](../architecture/DATABASE_SCHEMA.md) and
+[lifecycle contract](../architecture/MOTOARK_ORDER_LIFECYCLE.md). Neither
+migration is deployed yet.
+
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Note**: Lightweight satellite to [/docs/architecture/DATABASE_SCHEMA.md](../architecture/DATABASE_SCHEMA.md).
 > Extracted from entity details in `docs/architecture/database.md` (2026-05-29).
 > For the complete schema with columns and indexes, see DATABASE_SCHEMA.
@@ -32,6 +44,7 @@
 | templates | 1 | ListingTemplate |
 | notifications | 1 | Notification |
 | feature-flags | 1 | FeatureFlag |
+| verticals | 3 | BusinessIndustrialReview, BusinessIndustrialUnit, BusinessIndustrialIncident |
 
 ---
 
@@ -123,3 +136,13 @@ When adding a new entity:
 ## Fashion capture models (2026-10-09)
 
 FashionWarehouse maps to fashion_warehouses and stores organization-owned warehouse code, name, country, and active state. FashionSkuCounter maps to fashion_sku_counters and atomically allocates sequence numbers by organization and batch. Capture items themselves are catalog_products rows with JSONB workflow metadata; queue attempts use the existing BullMQ/Redis infrastructure and completed actions use listing_action_logs.
+## B&I image intake entities (2026-09-10)
+`BusinessIndustrialImageIntakeJob`, `BusinessIndustrialImageIntakeGroup`, and
+`BusinessIndustrialImageIntakeAsset` represent organization-scoped folder
+uploads, grouped dot-suffix instances, AI/category evidence, and B&I-owned S3
+assets. They are persisted by the `1790800000000-CreateBusinessIndustrialImageIntake`
+migration and are processed by the dedicated BullMQ worker.
+## Fashion quick capture entities (2026-09-28)
+- `FashionWarehouse` (`backend/src/verticals/entities/fashion-warehouse.entity.ts`, table `fashion_warehouses`) — organization stock locations offered at quick capture. Not linked to eBay merchant locations.
+- `FashionSkuCounter` (`backend/src/verticals/entities/fashion-sku-counter.entity.ts`, table `fashion_sku_counters`) — per-organization, per-batch last issued SKU number.
+See docs/architecture/FASHION_QUICK_CAPTURE.md.

@@ -5,6 +5,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import type { ProductVertical } from '../../verticals/vertical.types.js';
+import { isDedicatedFashionStore } from '../../verticals/vertical.config.js';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
@@ -19,6 +20,7 @@ import { EbayTaxonomyApiService } from './ebay-taxonomy-api.service.js';
 import { EbayTaxonomyCacheService } from './ebay-taxonomy-cache.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
 import { EbayTradingApiService } from './ebay-trading-api.service.js';
+import { capEbayPublishQuantity } from './ebay-publish-quantity.util.js';
 import { EbaySellAccountApiService } from '../../integrations/ebay/services/ebay-sell-account-api.service.js';
 import { EbayPaReturnPolicyService } from '../../integrations/ebay/services/ebay-pa-return-policy.service.js';
 import {
@@ -48,7 +50,10 @@ import {
   buildEbayListingDescription,
   sanitizePublishListingText,
 } from './ebay-listing-text.util.js';
-import { sanitizeEbayImageUrls } from './ebay-listing-images.util.js';
+import {
+  EBAY_MAX_LISTING_IMAGES,
+  sanitizeEbayImageUrls,
+} from './ebay-listing-images.util.js';
 import { mapToEbayConditionEnum } from './ebay-listing-condition.util.js';
 import {
   extractEbayErrorParameter,
@@ -110,6 +115,41 @@ function normalizePublishedDescription(value: unknown): string {
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+function isEndedTradingRevisionFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ReviseFixedPriceItem failed \(291\)/i.test(message);
+}
+
+function appendImageUrlsAtEnd(
+  imageUrls: string[],
+  trailingImageUrls: string[],
+  maxImages = EBAY_MAX_LISTING_IMAGES,
+): string[] {
+  const trailing: string[] = [];
+  const trailingKeys = new Set<string>();
+  for (const raw of trailingImageUrls) {
+    const url = raw.trim();
+    const key = url.toLowerCase();
+    if (!url || trailingKeys.has(key)) continue;
+    trailingKeys.add(key);
+    trailing.push(url);
+  }
+
+  const required = trailing.slice(-maxImages);
+  const seen = new Set(required.map((url) => url.toLowerCase()));
+  const retained: string[] = [];
+  const retainedLimit = Math.max(0, maxImages - required.length);
+  for (const raw of imageUrls) {
+    const url = raw.trim();
+    const key = url.toLowerCase();
+    if (!url || seen.has(key)) continue;
+    seen.add(key);
+    if (retained.length >= retainedLimit) continue;
+    retained.push(url);
+  }
+  return [...retained, ...required];
 }
 
 /**
@@ -831,6 +871,7 @@ export class EbayPublishService {
         sku,
         condition: mappedCondition,
         description: desc.description,
+        quantity: capEbayPublishQuantity(req.quantity),
       };
     }
 
@@ -929,6 +970,15 @@ export class EbayPublishService {
       }
     }
 
+    const resolvedQuantity =
+      !looksStub && Number.isFinite(req.quantity) && req.quantity >= 0
+        ? req.quantity
+        : Number.isFinite(parsedQty) && parsedQty >= 0
+          ? parsedQty
+          : Number.isFinite(req.quantity) && req.quantity >= 0
+            ? req.quantity
+            : 1;
+
     return {
       ...req,
       sku,
@@ -946,14 +996,7 @@ export class EbayPublishService {
           : Number.isFinite(parsedPrice)
             ? parsedPrice
             : req.price,
-      quantity:
-        !looksStub && Number.isFinite(req.quantity) && req.quantity >= 0
-          ? req.quantity
-          : Number.isFinite(parsedQty) && parsedQty >= 0
-            ? parsedQty
-            : Number.isFinite(req.quantity) && req.quantity >= 0
-              ? req.quantity
-              : 1,
+      quantity: capEbayPublishQuantity(resolvedQuantity),
       requestedFulfillmentPolicyName:
         req.requestedFulfillmentPolicyName?.trim() ||
         listing.shippingProfileName?.trim() ||
@@ -1434,7 +1477,44 @@ export class EbayPublishService {
 
     let hostedImageUrls: string[];
     try {
-      hostedImageUrls = await this.ebayMedia.hostImages(storeId, req.imageUrls);
+      const hostedListingImages = await this.ebayMedia.hostImages(
+        storeId,
+        req.imageUrls,
+      );
+      const appendNewConditionImages = req.condition === 'NEW';
+      if (appendNewConditionImages) {
+        const requiredSourceImages =
+          await this.ebayMedia.getNewConditionImageUrls();
+        const hostedRequiredImages = await this.ebayMedia.hostImages(
+          storeId,
+          requiredSourceImages,
+        );
+        if (hostedRequiredImages.length !== requiredSourceImages.length) {
+          throw new Error(
+            `Could not host all ${requiredSourceImages.length} required New-condition images; listing was not published`,
+          );
+        }
+        const distinctBaseImages = hostedListingImages.filter(
+          (url) =>
+            !hostedRequiredImages.some(
+              (requiredUrl) => requiredUrl.toLowerCase() === url.toLowerCase(),
+            ),
+        );
+        if (
+          distinctBaseImages.length >
+          EBAY_MAX_LISTING_IMAGES - hostedRequiredImages.length
+        ) {
+          this.logger.warn(
+            `New-condition listing ${req.sku} exceeds eBay's ${EBAY_MAX_LISTING_IMAGES}-image limit; trimming earlier gallery images to append F1, F2, and F3`,
+          );
+        }
+        hostedImageUrls = appendImageUrlsAtEnd(
+          hostedListingImages,
+          hostedRequiredImages,
+        );
+      } else {
+        hostedImageUrls = hostedListingImages;
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-11 — Workspace reconciled into main
+
+- Two months of uncommitted work from the development checkout was merged into main: 165 tracked and 82 untracked files taken as-is, 99 files merged three ways, and 109 conflicting hunks reviewed. Where both sides rewrote the same code, main's production version was kept; docs were combined. 410 one-off scripts (many holding live credentials) and generated output were left out. Backend and frontend build cleanly; no test fails that does not already fail on main, and 10 previously failing tests now pass. Details and the list of local variants preserved on `archive/workspace-snapshot-20261111`: [the reconciliation record](docs/operations/WORKSPACE_RECONCILIATION_2026-11-11.md).
+
 ## 2026-11-11 — Parts & Accessories return rule no longer applies to Fashion
 
 - `marketplaceRequiresPartsAccessoriesReturnPolicy` classifies every EBAY_US category ID ≥ 33000 as Parts & Accessories, which includes apparel. New / New-with-tags Fashion listings were blocked at build ("require a return policy with at least 30 days and seller-paid return shipping"), and the publish service could have switched the seller to a free-returns policy. The builder and both publish-service checks now skip the rule for `vertical === 'fashion'`. Deployed to production on 2026-11-11 as overlay `realtrackapp-backend:fashion-pa-return-20261111` (healthy); 78 New-with-tags Fashion items then published to Primewardrobeusa with the store's existing return policy unchanged.
@@ -37,6 +41,10 @@
 - The Auto Parts catalog page (`CatalogManager`) sends `vertical=automotive`. Before this, Fashion and Business & Industrial listing records appeared in the Auto Parts catalog and in its totals.
 - Covered by `listing-vertical-filter.spec.ts`. Deploy as a layered backend image plus the frontend build; see the deployment record.
 
+## 2026-11-08 — Re-list ended legacy eBay listings on publish
+- Production logs for pipeline `946db3ea-4df2-4033-a99b-2c498ac2ccef` showed 99 legacy Trading API listings failing with eBay error 291 because their saved item IDs had ended. A publish retry now calls `RelistFixedPriceItem` only after that exact revise error, then saves the new eBay ItemID and URL in the channel mapping.
+- A failed or uncertain relist result is not automatically retried, avoiding duplicate eBay listings when the request may have succeeded but the response or local mapping write was lost. The failed listing jobs have not been retried, and this fix has not been deployed.
+- Added focused coverage for the relist request, item-ID replacement, and no automatic retry after an uncertain response.
 ## 2026-11-07 — Catalog import UPC unique-key failures
 
 - Fixed catalog imports failing with `duplicate key value violates unique constraint "idx_catalog_upc"`. The batch duplicate check had no UPC layer, while `idx_catalog_upc` is a global unique index, so a UPC already stored on any product reached the insert and failed the whole batch. UPC is now matched first; an in-scope match updates that product, and a UPC owned outside the importing organization/vertical is skipped as `duplicate_skipped` (`upc_outside_scope`) instead of failing.
@@ -309,15 +317,726 @@
 
 - Restored the Fashion vision flow's existing signed-download URL call by adding short-lived S3 GET URL generation to StorageService. This uses the configured bucket, key, and signed URL expiry.
 
+## 2026-11-07 — Fashion bulk publish marketplace selection
+
+- The Fashion Catalog publish dialog now lets operators choose an enabled marketplace for each selected eBay store and loads that marketplace's shipping, payment, and return policies. The worker receives the selected marketplace, and the API rejects unavailable marketplace selections before queueing. Workspace change pending deployment.
+- Fashion eBay publishing now verifies the exact configured merchant location on eBay. Validation blocks missing or disabled locations instead of letting the publisher substitute a warehouse from another country. Workspace change pending deployment.
+
+## 2026-11-05 — PrimeMotive US production reconciliation
+
+- Reconciled all 90,535 US listings from the supplied PrimeMotive Seller Hub export against a newly completed eBay inventory report. Committed 71,911 mirror updates, 18,624 missing mirror inserts, and 5,222 existing US inventory publication-link updates. Rollback trials and independent post-commit verification passed with zero mismatches.
+- The reconciled source population contains 50,935 active listings, 37,940 out-of-stock listings, and 1,660 ended listings; advertised available quantity totals 62,221. Physical warehouse stock and marketplace push policies were not changed. Unknown mirror-only IDs were retained for review.
+- Saved a verified before-image backup and production results. With explicit user approval, reset the API reader password using a server-generated credential, protected environment/rollback files, and a transactional audit event. Authenticated active/out-of-stock/ended listing checks and the dedicated PrimeMotive feed passed with HTTP 200; roles and permissions were preserved. Recurring sync completeness, physical-stock mapping/counts, and consumer credential provisioning/ingestion remain follow-ups; see the [production record](docs/operations/PRIMEMOTIVE_US_RECONCILIATION_2026-11-05.md).
+
+## 2026-11-04 — Business & Industrial eBay OAuth return route
+
+- Successful shared eBay OAuth callbacks now honor the vertical-specific destination saved by the connection flow. B&I-only admins return to `/business-industrial/stores` instead of general eBay settings, which requires `ebay.view`. Deployed backend overlay `realtrackapp-backend:ebay-oauth-return-20261104-r1`; see the [release record](docs/operations/EBAY_OAUTH_RETURN_2026-11-04.md).
+
+## 2026-11-04 — Fashion catalog filter dropdowns
+
+- Moved Fashion's primary catalog facets into horizontal dropdowns above the results: brand, category, condition, catalog status, stock, department, item type, size, color, and material. Dropdowns retain option counts and searchable lists for large facets; less-used criteria remain in Advanced Filters.
+- The shared Fashion catalog route uses the same server-side filters and URL/session state. No backend or schema changes were required; this update is local and not deployed.
+
+## 2026-11-03 — MotoArk lifecycle production rollout
+
+- Added signed, organization/store-scoped order-events, processing-status, and quantity APIs. Durable event keys/payload hashes, order versions, and atomic warehouse transactions cover purchases, partial shipments/cancellations, returns with quarantine/inspection/disposal, and independent capped financial refund records.
+- Hardened legacy sale receipts against concurrent duplicates and changed-payload event-ID reuse (409). Added standard Compose forwarding for the existing sales key and separate lifecycle key. Internal generic order/stock mutations cannot bypass MotoArk balances.
+- Added stable UUID snapshot imports, commit-safe promoted sequence cursors, per-listing revisions, scoped ordered callbacks, and mirror status reconciliation after acknowledged channel quantity pushes.
+- Added two additive migrations and API/schema/RBAC/operations documentation. Focused suites passed 42 tests before final cursor checks; new code/migration lint and backend build pass. See `docs/operations/TESTING.md` for local evidence.
+- Deployed the reviewed overlay as `realtrackapp-backend:motoark-lifecycle-20261102-candidate`, restoring missing Primemotive routes while preserving production PartsSearch. Both migrations applied after a full pre-migration archive passed `pg_restore` validation. The existing sales signing key was preserved and a separate lifecycle key configured. Local/public health returned 200; protected routes returned 401 without credentials; signed synthetic lifecycle, duplicate/conflict, quantity, snapshot/change-feed, and legacy-receipt checks passed. No order or stock movement was created by the lifecycle check.
+- Marketplace stock pushing remains off. The 200-row active Primemotive sample has 0 mapped inventory items, so verified warehouse counts and mappings are still required; unmapped sales stay pending and no opening balances were written. See `docs/operations/MOTOARK_RELEASE_2026-11-02.md` for the backup checksum, image IDs, rollout evidence, and rollback procedure.
+
+## 2026-11-02 — MotoArk lifecycle integration assessment
+
+- Documented the existing sale webhook's receipt-only behavior, unsupported cancellations/returns/refunds, missing inbound-secret Compose forwarding, concurrent duplicate risk, and the missing purchase-to-stock path.
+- Added an evidence-backed implementation plan reusing warehouse stock services, with scoped durable order events, return inspection, independent refund handling, quantity ordering, consumer isolation, and acceptance checks. Corrected the API/feature guides' concurrency and initial-load guarantees; proposed routes remain unimplemented.
+- Documentation only; no application code, secrets, stock, migration, or deployment changed. Focused existing tests: 21 passed and 1 failed because the published-listing offer-resolution test's Trading API mock lacks `reviseFixedPriceItem`.
+
+## 2026-10-30 — eBay Trading API revisions no longer fail on stale readback
+
+- Legacy listing revisions now trust a successful `ReviseFixedPriceItem` response instead of requiring an exact `GetItem` match within two seconds. This prevents eBay read-after-write lag from marking accepted changes as failed bulk targets; a focused regression test covers the path.
+- Local change only; production still runs the 2026-10-27 backend image and requires an approved deployment to receive this behavior.
+
+## 2026-10-22 — Resumable catalog import worker
+
+- Fashion import batches now checkpoint committed rows before the slower image-copy stage. Worker retries resume from the durable row cursor, skip rows with saved outcomes, and repair incomplete Fashion image sets from their preserved source URLs.
+- Fashion imports receive bounded BullMQ retries with exponential backoff; legacy single-attempt jobs also retry transient worker/database failures locally. The worker renews long-running locks and recovers stalled jobs. Transient image fetch/storage failures get bounded retries while existing WebP quality, pixel, and byte limits stay unchanged.
+- Permanently unavailable or invalid source images remain visible as per-row warnings and continue to block publishing; the catalog import can still finish its row work. No database migration was needed.
+- Local change only; the updated worker has not been deployed to production.
+
+## 2026-10-21 — Auto Parts condition-filter crash fixed and deployed
+
+- Added the `needs_review` status icon and a fail-closed fallback for unknown listing statuses, and labeled review-held rows **Needs Review** in the inventory detail modal. This prevents the catalog from crashing when condition **New** returns a review-held row.
+- Deployed frontend image `realtrackapp-frontend:catalog-condition-icon-20261021-r1` as an overlay on the active production frontend. The public homepage, `/auto-parts/catalog`, JavaScript, CSS, and `/api/health` returned HTTP 200; the served bundle contains `needs_review`. Only the frontend container was recreated; backend, PostgreSQL, Redis, and PgBouncer container IDs stayed unchanged. No listing data changed. Rollback image: `realtrackapp-frontend:rollback-catalog-condition-icon-20261021-r1`.
+
+## 2026-10-20 — Fashion catalogue export import support
+
+- Added a Fashion export adapter for item specifics, measurements, marketplace provenance, and source image URLs. Recognized values map to the Fashion editor; remaining specifics stay editable and can be included in eBay aspects.
+- Source export photos are converted to WebP and copied into the application S3 bucket. Rows with incomplete mirrors are blocked from publishing, and re-imports reuse successful objects and retry failures.
+- Source measurements keep their original notes and require an explicit cm/in confirmation before publishing; confirmed units are included in generated listing text.
+- The existing JSONB Fashion schema is reused; no SQL migration was needed. The import implementation was later deployed as backend commit `b95045cd2ca5731af1db1b40a090625731dac04b`. A production import began on 2026-10-22; the latest app check showed 250/13,209 rows processed and image-copy warnings. No listings were published. The resumability improvement is still local pending deployment.
+
+## 2026-10-20 — Catalog bulk publish workspace scoping
+
+- The Auto Parts publish dialog now lists only active eBay primary stores in the selected workspace, and durable bulk-publish requests include that workspace ID. This prevents a store from one workspace being rejected against the user's default workspace.
+- Follow-up fix deployed as frontend image `realtrackapp-frontend:publish-workspace-20261020-r3`: target polling now includes the same `organizationId` as job creation. Without it, the API looked up the job in the user's default workspace and returned `Job not found`. The homepage and `/api/health` returned HTTP 200; only the frontend was recreated, and no listings were retried or published. Rollback image: `realtrackapp-frontend:rollback-publish-workspace-20261020-r2`.
+- Deployed frontend image `realtrackapp-frontend:publish-workspace-20261020-r2`, including the existing `Needs Review` shield icon and fail-closed status fallback. Only the frontend container was recreated; backend, PostgreSQL, and Redis container IDs stayed unchanged. The homepage and `/api/health` returned HTTP 200. Rollback image: `realtrackapp-frontend:rollback-publish-workspace-20261020-r1`. No listings were retried or published during verification.
+
+## 2026-10-15 — Catalog status icon runtime fix
+
+- Added the `needs_review` status to the Auto Parts catalog's icon map and a fail-closed fallback for unrecognized API statuses. Unknown or review-held rows remain non-publishable and no longer crash the catalog while reading `icon`.
+- The production frontend had been rebuilt from `ae12191b`, which predated the `needs_review` UI added for the catalog review-hold backend behavior. The first overlay copied asset directories without read/execute permissions, so nginx returned 403 for JavaScript and CSS. Rebuilt and deployed `realtrackapp-frontend:catalog-status-icon-20261015-r2` with readable static assets; only the frontend container was recreated, preserving existing Compose overrides.
+- The homepage, catalog route, JavaScript, CSS, and `/api/health` returned HTTP 200. Chrome rendered the homepage and the frontend logs had no new asset permission errors. Backend, PostgreSQL, Redis, and PgBouncer container IDs were unchanged; no listing data changed. The base frontend image `realtrackapp-frontend:main-ae12191b` remains available for rollback.
+
+## 2026-10-15 — Infiniti EX35 listing review data repair
+
+- Corrected vehicle context and synchronized titles on all 65 visible listings from pipeline `1d2f793b-6dea-4117-8f5c-9e9cc7e7c9c1`; saved exact-MPN application evidence for 55 rows as 223 MVL-checked exact-part candidates, ten of which now support the two ready fenders, and removed the stale missing-price error from the visible tailgate.
+- After the owner confirmed separate dismantled parts and shared donor-assembly galleries as the standard photo workflow, marked 51 records Ready to Publish. Only the two fender panels needed nine side-matched photos; each has five verified model years. Removed generic shared-gallery holds, clarified that only the named dismantled part is included, and retained 14 holds for specific MPN/side/condition conflicts or unverified exact applications. Nothing was published; the deleted zero-price seat-frame row was untouched. See [repair and validation record](docs/operations/INFINITI_EX35_REVIEW_2026-10-15.md).
+## 2026-10-14 — Primemotive integration feedback
+
+- Removed the item-specific Mercedes-only filter from the Primemotive feed; it now returns every active published listing from the authenticated organization's Primemotive store with a non-empty eBay item ID.
+- Added a durable, transactional change feed for added, edited, ended, and deleted listings plus retrying HMAC-signed outbound webhook delivery when a callback URL and secret are configured.
+- Added 10 synthetic Primemotive test listings via an idempotent seed command and an opt-in minute simulator that changes one synthetic row at a time without calling eBay.
+- CSV exports now return 10,000 rows per requested `page`, so later pages can be exported independently.
+- Deployed backend image `realtrackapp-backend:primemotive-feedback-20261015-r5` with migration `1791400000000-PrimemotiveListingChangeFeed`, after verifying a pre-migration database backup. Local and public health, overlay checksums, migration state, and protected-route checks passed; rollback image: `realtrackapp-backend:rollback-primemotive-feedback-20261015-r5`.
+- Seeded 10 marked synthetic Primemotive listings and enabled the minute simulator for the Primemotive organization. The simulator changes one synthetic row's price or quantity and does not call eBay. Outbound listing webhooks remain idle until the callback URL and secret are configured.
+
+## 2026-10-14 — Catalog review holds and eBay publish diagnostics
+
+- Catalog rows with a manual-review flag or a `needs_review`/protected lifecycle status now display as **Needs Review**, are excluded from **Ready to Publish**, and are blocked by both single and bulk catalog publishing. The durable eBay publish validator rechecks the catalog product and organization before creating a listing, so stale UI state cannot bypass the hold.
+- Trading API error 240 handling surfaces eBay's `ErrorParameters.Value` policy reason when present. The production failures inspected for this incident contain only eBay's generic rejection, which requires seller/account or listing-policy resolution before those items can be retried.
+- Deployed backend image `realtrackapp-backend:catalog-publish-holds-20261014-r2` and frontend image `realtrackapp-frontend:catalog-publish-holds-20261014-r1`, preserving Compose overrides and runtime environment. Backend/frontend builds, local and public health checks, deployed module checksums, public frontend checksum, and protected-route checks passed. Rollback image: `realtrackapp-backend:rollback-catalog-publish-holds-20261014-r2-attempt3`. No marketplace listing retry was run.
+
+## 2026-10-13 — Add Part failure recovery
+
+- Photo lookup retains the entered part number when complete OCR tokens confirm it, even if the model selects another identifier printed on the same assembly. Conflicting selected identifiers are removed from the generated primary name; unmatched photo evidence still requires review. ECU identification now recognizes the explicitly supplied ECU prompt and requests high image detail.
+- AI requests without an explicit output limit now request at most 4,096 completion tokens instead of reserving a provider default of 65,536. Actual billing failures retain their original error and stop automatic retries with a system failure classification.
+- Deployed the scoped backend image `realtrackapp-backend:add-part-recovery-20261013-r1`, preserving active Compose overrides and runtime environment. Backend build, six focused regression tests, isolated runtime checks, and local/public health checks passed. See `docs/operations/ADD_PART_RECOVERY_2026-10-13.md` for the production audit and recovery results.
+- Audited 25 failed records from the previous seven days: final state is 13 completed, 12 requiring identity/fitment review, zero failed and zero pending recovery jobs. Restored the photo-verified leading zero in `BU1-16326`; withdrew unsupported imported vehicle claims for three affected pipeline records with complete before-images. Three records still need original number evidence; no eBay publication was performed.
+
+## 2026-10-13 — Inventory photo verification status
+
+- Inventory no longer reports “Needs photo” for a completed photo check that could not verify the entered part number. These listings now show “Needs review”; “Needs photo” is reserved for explicit missing-photo or photo-coverage failures. The photo identity gate remains fail-closed.
+
+## 2026-10-13 — Primemotive feed scope and production runtime repair
+
+- Added opt-in `includeCatalogData=true` to published-listing feeds and listing detail. It exposes the linked RealTrackApp catalog record's stored identifiers, descriptive fields, attributes, source category, and only explicitly MVL-validated fitment rows while preserving source provenance; it excludes linked catalog rows owned by another organization and does not fabricate canonical Partslink24 keys or relations. Deployed as `realtrackapp-backend:primemotive-catalog-data-r3-20261013`; backend build passed, health returned HTTP 200, protected feed returned HTTP 401 without a token, and the container is healthy.
+- The `/api/published-listings/primemotive` feed now reads RealTrackApp's database mirror only and always limits rows to the authenticated organization's Primemotive store, explicit Mercedes-Benz item specifics, a non-empty eBay item ID, and database `listingStatus=active`. Caller status/store filters cannot broaden it. `updatedAfter` and the `updateAfter` compatibility alias both filter the database `updatedAt` watermark.
+- Fixed production Compose configuration so the Primemotive image and API prefix are actually used. Granted `published_listings.export` to the existing API reader role with additive migration `1791300000000-PrimemotiveExportPermissionGrant`.
+- Sync health now uses the latest completed scheduled/full sync log instead of an old account watermark alone; `PUBLISHED_LISTINGS_SYNC_STALE_AFTER_HOURS` supports weekly database refresh cadence. Production Primemotive connection is active and its latest completed scheduled refresh was 2026-10-11 with 25,000 processed and 0 failed.
+- Compared the 2026-10-07 Seller Hub report by eBay item ID: 64,257 of 87,955 US-site IDs have an active RealTrackApp database row; 238 also match the active Primemotive/Mercedes feed scope.
+
+## 2026-10-12 — Fashion mobile photo capture controls
+
+- Kept the camera and upload choices visible in quick capture when the SKU is blank, explained why a SKU is required, and added one-tap SKU generation from the photo panel when a batch is selected.
+
+## 2026-10-12 — Primemotive external listing integration
+
+- Added a paginated Primemotive-only JSON feed with incremental `updatedAfter` polling. The dedicated feed now requires an explicit Mercedes-Benz Make/Brand item-specific value and ignores caller store filters; it does not infer make from listing titles.
+- Added a timestamped HMAC- and permission-protected sale-event receiver plus a paginated sale-event log. Events are idempotent and do not mutate listing or inventory quantities. The RBAC migration grants the two integration permissions to the existing published-listings reader role when present.
+
+## 2026-10-11 — Health probe throttling and DynaTrade CSV batch 37
+
+- Fixed the catalog listing editor's Type item-specific field mapping. It now persists edits to `CatalogProduct.partType` instead of silently dropping them under the preview-only `type` key.
+
+- Follow-up health fix: heap reached 657.85 MB, exceeding the deployed 512 MB threshold while the backend remained responsive and below its 1.8 GB container limit. The backend-only derived image `realtrackapp-backend:health-heap-1024-20261011` raises the health threshold to 1 GB. Node syntax validation passed; direct/public health, runtime, and frontend checks returned HTTP 200 after rollout, and all five containers were healthy.
+- Prepared a 209-SKU new-record import CSV with 42,717 validated fitment rows. The file excludes 37 existing catalog matches and passed importer-header, count, pricing, quantity, image, description, condition, shipping-profile, and MVL-tag checks. Production import remains pending a signed-in account with `catalog.import`; no eBay publish occurred.
+- Exempted the public `/api/health` liveness/readiness probe from the global rate limiter. Docker's 10-second probes no longer compete with client traffic for the shared rate limit; auth and permission checks for other routes are unchanged.
+- Raised the backend heap readiness threshold from 300 MB to 512 MB after production's 335 MB heap caused false unhealthy/503 responses while the container used only about 462 MB RSS of its 1.8 GB limit. Deployed `realtrackapp-backend:health-heap-512-20261011`; direct and frontend-proxied health checks and the frontend root return 200. All five production containers are running; backend, PostgreSQL, Redis, and PgBouncer report healthy.
+- Staged FEBI-26383 as CSV batch 37 with its verified official image, product description, 46 U.S. fitments, source quantity, New condition, agreed $38 pricing, and Superior $38.99 shipping. The v104 master and separate fitment CSV passed the independent audit; no production listing write or eBay publish occurred.
+- Added the 600-row v7 live reconciliation manifest with current 471/129 statuses, explicit New condition, verified pricing/quantity/image/description/policy fields, and fitment audit notes. It marks existing records to prevent duplicate imports and does not request eBay publication.
+- Production DNS audit found `mhn.realtrackapp.com` and `enxi.realtrackapp.com` resolve to `208.91.197.132` instead of the EC2 host. The app remains reachable at `app.omnicoreholding.com`; no DNS records were changed.
+- Rechecked the live frontend bundle at `app.omnicoreholding.com`: it serves the draft-first Add Part UI and does not include the screenshot's stuck `Identifying part…` state. Authenticated save behavior remains unverified without a signed-in session.
+- Created the source-preserving v105 DynaTrade master after auditing HENGST-E5KFR2D12. The four Aston Martin fitments are unsupported, and the saved Mercedes candidates lack exact part-to-vehicle evidence, so the row now accepts zero fitments and stays held. All 6,046 source rows and 6,032 distinct SKUs remain in the master; every other field matches v104. The next Bosch evidence slice also found 0 of 15 fully ready. No production records were changed.
+
+## 2026-10-11 — DynaTrade CSV batch 36 audited
+
+- Staged FEBI-34608 from source row 620 with stock 1,224, New condition, $38.00 sale price, and Superior $38.99 shipping. The official 1 L ATF listing and matching BMW OE reference were checked, and its current official 1500-by-1500 bottle image passed live-byte/hash validation. Retained 822 of 1,186 saved ePID/MVL fitments for officially supported makes and excluded 364 Kia rows; the raw API response was not retained, so endpoint completeness is not claimed. The independent audit passed; no production write or eBay publish occurred.
+
+# Changelog
+
+## 2026-10-10 — DynaTrade CSV batch 35 audited
+
+- Staged HENGST-E1722L from source row 4381 with workbook stock 10, New condition, $49.99 sale price, and Superior $38.99 shipping. Hengst's official catalog confirms the air-filter insert and Porsche OE reference; the actual-product 1200-by-1200 eBay image passed visual review and live hash checks. The 94 saved eBay ePID compatibility rows matched active `US_MVL_2026_05` and passed the independent audit. Seller page totals differ, so only the 94 saved API/MVL rows are included. No production write or eBay publish occurred.
+
+## 2026-10-10 — DynaTrade CSV batch 34 audited
+
+- Staged HENGST-H14W30 from source row 5471 with stock 61, New condition, $38.00 sale price, and Superior $38.99 shipping. Its actual-product photo was visually reviewed, the exact official Hengst OE reference was confirmed, and all 760 eBay fitment rows matched active `US_MVL_2026_05`. The 6,046-row v101 master and separate fitment CSV passed the independent workbook, image, identity, pricing, and policy audit. No production write or eBay publish occurred.
+
+## 2026-10-10 — Catalog publication destinations
+
+- Catalog results now identify the eBay marketplace and store for each publication on desktop and mobile, with a direct listing link. Published rows without destination data are labeled clearly.
+
+## 2026-10-10 — Duplicate inventory photo strip removed
+
+- Removed the redundant “Part pictures” strip from Inventory Details while retaining the larger primary photo and the existing Product Images gallery/editor. Deployed frontend-only as `realtrackapp-frontend:inventory-photo-dedupe-20261010`; root and `/api/health` returned HTTP 200, and the served bundle no longer contains the duplicate strip. No listing or database data changed.
+
+## 2026-10-10 — DynaTrade production quantity and condition reconciliation
+
+- Reconciled 921 existing RealTrack listings against exact workbook brand/MPN matches: every match now shows New and all 919 unambiguous quantities match the source. Updated 925 catalog products, changed 829 listing records and 223 catalog products, and recorded listing revisions. The two existing FEBI 101942 quantities remain unchanged because two source rows have conflicting quantities without a row-to-listing mapping. No eBay offer updates were sent; 29 records with internal `published` status had internal quantity changes.
+
+## 2026-10-10 — DynaTrade batch 33 applied to RealTrack
+
+- Created FEBI-33602 as a ready listing and updated existing FEBI-43556 in place. Both use workbook quantities, New condition, agreed USD pricing and Superior shipping, official FEBI photos, and fitments validated against the active U.S. MVL. Production health checks passed; neither listing was published to eBay. The applied CSV and manifest are recorded in `docs/operations/DYNATRADE_CSV_ENRICHMENT.md`.
+
+## 2026-10-10 — eBay publish quantity capped
+
+- eBay publish requests now cap each listing's available quantity at 10 across the standard, queued, legacy adapter, and variation-family publish paths. The saved channel quantity reflects the capped amount.
+
+## 2026-10-10 — Inventory part photos visible in details (initial release)
+
+- The inventory details modal now shows a larger, full-fit primary photo and a thumbnail strip for additional part pictures near the title. Image frames now size their contained image correctly so `cover` and `contain` layouts work as intended. Deployed frontend-only as `realtrackapp-frontend:inventory-photo-fix-20261010`; the frontend and `/api/health` returned HTTP 200, and backend health remained healthy.
+
+## 2026-10-10 — DynaTrade CSV batch 33 staged (pre-application checkpoint)
+
+- Batch 33 staged FEBI-33602 and FEBI-43556 with 35 detailed eBay/MVL compatibility rows, visually reviewed live official product images, descriptions, source quantities, AED-to-USD prices, `Condition=New`, and the requested Superior $38.99 shipping policy. The independent workbook and image/pricing/policy audit passed before application. The staged master was v99 with 244 verified products and 49,919 fitment rows. This staging checkpoint made no production write; the later application is recorded in the separate entry above, and the current master is v100.
+- The reviewed-batch preparer and audit require MPN token boundaries in eBay titles and allow a selected replacement image to reference the prior source gallery. This prevents a longer number such as `ADU172211` from being accepted as MPN `172211`; that FEBI row remains held for identity review.
+
+## 2026-10-10 — Shared New-condition listing images
+
+- New-condition listing galleries use the shared WebP images in F1, F2, F3 order. The source images are converted once, uploaded to content-addressed shared S3 keys, and reused. The `ebay:backfill-new-condition-images` script updates application catalog, listing, and published-listing image fields with a dry-run-first workflow and a JSON backup; it does not revise live eBay listings.
+
+## 2026-10-10 — Add Part draft-first fix deployed
+
+- Production now runs `realtrackapp-backend:add-part-save-timeout-20261010` and `realtrackapp-frontend:add-part-save-timeout-20261010`. Add Part saves and returns its draft before optional Image Drive lookup; background photo attachment re-reads the listing so a later operator photo is preserved, and automatic identification starts only after enough photos are saved.
+- The Add Part request now has a 45-second client timeout with a warning to check Inventory before retrying. The homepage and `/api/health` returned HTTP 200 after deployment, database and memory checks were up, and all five containers were running. The production browser reached the login screen, so a signed-in save was not exercised. No catalog/listing rows were imported or changed.
+
+## 2026-10-10 — DynaTrade CSV preparation and review
+
+- Batch 28 adds BOSCH-3397005046 with a visually reviewed 900-by-900 actual-product photo and 12 exact active `US_MVL_2026_05` configurations for 1998–1999 Mercedes-Benz S320, S420, S500, and S600 applications listed by Bosch's U.S. catalog. Year-2000 applications remain excluded pending build-date validation. The v94 master has 237 verified CSV products, 196 held rows, two research holds, 4,874 pending rows, and 49,637 detailed fitments. The independent audit passed source preservation, image hash, exact fitments, AED/USD price rules, and Superior policies; no production write occurred.
+- The reviewed-batch CSV preparer now accepts explicit per-product catalog-check wording, recognizes only numeric-leading Mercedes `A` and Chrysler `K` OE prefixes, and allows an image replacement to cite any URL in the source row's prior gallery. This records the evidence and replacement history without overstating Bosch's OE cross-reference.
+- Batch 28 prices the AED 136.425 cost at $37.15 converted cost and $74.30 sale price under the >$25 rule, with the $38.99 Superior shipping policy. Bosch's catalog does not publish a direct OE cross-reference to the supplier's 2208201845 value; the row records that limitation.
+- Batch 25 adds FEBI 181242 and HENGST E1776L with 56 detailed fitments. Official FEBI and Hengst sources confirm product identity, references, and technical data; both visually reviewed actual-product photos passed fresh live hash checks. Fitments match the active production MVL; 20 of 38 raw FEBI eBay compatibility records are excluded because they do not reconcile to complete active U.S. vehicle rows. The independent audit passed all 6,046 source rows, fitments, AED/USD pricing, and Superior policies. The v91 master has 234 verified products, 196 held rows, and 4,879 pending rows; no production write occurred.
+- Batch 24 adds FEBI 172879 and 179289 valve-cover gaskets plus FEBI 178884 additional water pump, with 3,677 exact fitments. Fresh official PartsFinder pages confirm article types and OE references; all three visually reviewed 1500-by-1500 product photos passed fresh live hash checks. The independent audit passed all 6,046 source rows, fitments, pricing, and Superior policies. The v90 master has 232 verified products, 196 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 23 adds FEBI 104873, 174408, 16343, 173581, and 46653 with 918 exact fitments across Jaguar, Land Rover, BMW, Audi, and Peugeot. Fresh official PartsFinder pages verify each article and OE reference; all five visually reviewed 1500-by-1500 product photos passed current live hash checks. The independent audit passed all 6,046 source rows, exact fitments, pricing, and Superior policies. The v89 master has 229 verified products, 199 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 22 adds FEBI 174477, 34854, 172394, 192796, and 108638 with 252 exact Porsche, Land Rover, and Jaguar fitments. Live official PartsFinder pages confirm exact article types and OE references; the five visually reviewed 1500-by-1500 product photos passed fresh image-hash checks. The independent audit passed all 6,046 source rows, fitments, pricing, and Superior policies. The v88 master has 224 verified products, 204 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 21 adds FEBI 34293, 177109, 47368, 108577, and 107274 with 185 exact fitments across Land Rover, Volvo, Porsche, and Jaguar. Live PartsFinder pages confirm exact articles and OE references; the five visually reviewed 1500-by-1500 official photos passed fresh image-hash checks after correcting their links to the full-size gallery. The independent audit passed all 6,046 source rows, fitments, prices, and Superior policies. The v87 master has 219 verified products, 209 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 20 adds five FEBI parts (34384, 39737, 24493, 31822, 185706) with 123 exact Land Rover, Dodge, and Mercedes-Benz fitments. Live PartsFinder pages confirm the exact FEBI articles and OE references; all five refreshed 1500-by-1500 official photos show the actual parts and passed visual/hash review. The independent audit passed the 6,046-row source, fitments, pricing, and Superior policies. The v86 master has 214 verified products, 214 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 19 adds five FEBI products (108213, 108214, 170680, 24771, 29800) with 117 Porsche, Mercedes-Benz, and Kia fitments. Official PartsFinder pages confirmed exact article identities and OE references. All five current 1500-by-1500 official images show the actual parts and passed visual review plus a fresh live hash audit. The independent audit passed the 6,046-row source, detailed fitments, AED/USD pricing, and Superior policies. The v85 master has 209 verified products, 219 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 18 adds FEBI 10266 with 21 Mercedes-Benz fitments matched to active `US_MVL_2026_05`. The official PartsFinder article confirms thermostat-with-sealing-ring identity and OE 616 200 04 15. The current 1500-by-1500 gallery photo was re-fetched and visually reviewed after its bytes changed; the independent live hash audit passed. Exact AED cost converts to $6.47, pricing at $38.00 with the agreed Superior policies. The v84 master has 204 verified CSV products, 224 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 17 adds BOSCH 0280218002 with 70 detailed fitments: 60 saved eBay/MVL Volkswagen rows and ten Seat Toledo rows supported by Bosch's official U.S. applications and exact active-MVL records. Its official 1400-by-1400 product gallery image was visually reviewed and re-fetched with an unchanged JPEG signature/hash. The independent audit passed workbook preservation, exact identity, fitments, AED/USD price rules, and Superior policies. The v83 master has 203 verified products, 225 held rows, and 4,881 pending rows; no production write occurred.
+- The reviewed-batch preparer and audit now support separately sourced official-application/MVL fitment rows with a hashed MVL snapshot, and require both image dimensions to meet the 500-pixel minimum. The image audit validates generic MIME responses against actual JPEG bytes.
+- Batch 16 adds BOSCH 0280218175 with a visually verified live 1500-by-1500 photo showing the MPN on the sensor and 90 detailed Audi and Volkswagen fitments. Bosch's U.S. product page confirms OE 03H906461 and its official application lookup agrees with every included make/model/year row. The independent audit passed all 6,046 source rows, pricing/policies, ePID identity, active-MVL details, and current image hash. The v82 master has 202 newly verified CSV products, 226 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 15 adds BOSCH 0281002956 with a visually checked live 1000-by-946 product photo and 69 detailed Audi and Volkswagen fitments. Bosch's official U.S. application lookup agrees with every included make/model/year row; the independent audit passed all 6,046 source rows, pricing/policies, ePID identity, active-MVL details, and current image hash. The v81 master has 201 newly verified CSV products, 227 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 14 adds BOSCH 0392020073 with a visually checked live 1500-by-1500 product photo and 341 detailed Audi, Porsche, and Volkswagen fitments. Bosch's official application lookup agrees with every included make/model/year row; the independent audit passed all 6,046 source rows, pricing/policies, ePID identity, active-MVL details, and current image hash. The v80 master has 200 newly verified CSV products, 228 held rows, and 4,881 pending rows; no production write occurred.
+- Batch 13 adds HENGST E1000L with 156 exact Volvo fitments. The 1500-by-1500 exact-MPN retailer image was visually reviewed and re-fetched with an unchanged hash; official HENGST catalog evidence confirms article type, EAN, dimensions and OE references. The independent audit passed all 6,046 source rows, pricing/policies, ePID identity and active-MVL details. The v79 master has 199 newly verified CSV products, 229 held rows and 4,881 pending rows; no production write occurred. E1722L remains held for insufficient verified photo resolution.
+- Batch 13's photo replacement is evidence-bound to the previously selected URL, and its fitment provenance records the exact Sell Metadata API detail source. The Browse API call returned HTTP 429; cached detailed fitments were reused.
+- Batch 12 adds 37 FEBI products and 6,807 detailed compatibility rows. All 37 live official 1500-by-1500 product photos were visually reviewed and re-fetched with unchanged SHA-256 hashes. The independent audit passed workbook preservation, official identity/OE checks, saved eBay identity, exact MVL fitments, Superior pricing/policies, and prior-batch exclusion. The v78 master retains all 6,046 rows with 198 new verified CSV products, 230 held rows, and 4,881 pending rows; no production writes occurred.
+- Fixed the incremental CSV preparer to rebuild make/model/year compatibility summaries from selected detailed fitments, preserving year gaps instead of merging ranges across missing years. The batch 12 audit caught and confirmed the fix.
+- The eBay Browse request returned HTTP 429, so batch 12 reused saved Sell Metadata API compatibility evidence without repeating the rate-limited call. Production import remains on demand; email was canceled.
+- Batch 12 image checks now compare the live official-image hash with the saved visual approval; changed images stay held until they are downloaded and reviewed again. A read-only audit of production batch-one records identified two selected-source fitment mismatches, documented in the current-state and enrichment strategy files.
+- Added a local, repeatable CSV preparation/export workflow with reviewed image evidence, official OE reference checks, MVL fitment reconciliation, Superior pricing and policies, and explicit hold reasons.
+- Prepared 138 new verified CSV products: 105 FEBI and 33 Hengst, with 30,542 detailed compatibility rows. The full 6,046-row v72 master retains pending and held records and preserves the original supplier columns.
+- Added bounded parallel official FEBI/Hengst research, persistent checkpoints, photo approvals tied to content hashes, and independent source/price/image/fitment audits. FEBI 27086 now uses its visually reviewed official full-size photo, exact BMW OE reference, and 90 preserved U.S. MVL compatibility rows. Restored one original supplier description changed by the older master and retained the previous wording separately; AED input precision is preserved.
+- Production import remains on demand. This workflow performs no production writes, publishing or email notifications. See `docs/operations/DYNATRADE_CSV_ENRICHMENT.md`.
+- Recorded the end-to-end evidence, CSV, on-demand import, and production verification plan in `docs/operations/DYNATRADE_COMPLETION_STRATEGY.md`.
+- Batch 6 adds ten FEBI products and 7,750 exact fitment rows after live official-image fetch and visual review. Fixed `Volkswagen (VW)` make normalization and made new descriptions product-specific from the official catalog; unverified technical attributes remain blank.
+- Added an incremental next-batch preparer and extended CSV export/audit coverage through batch 6.
+- Added reviewed cross-brand CSV preparation and auditing. Batch 7 adds BOSCH 0261210364 with 71 Porsche fitment rows; batch 8 adds two BOSCH sensors with 545 fitment rows. The 66 unconfirmed Audi rows for 0261210147 stay excluded while the 148 supported Volkswagen rows remain active.
+- The v74 master retains 6,046 source rows and records 141 newly verified CSV products, 287 held rows, and 4,881 pending rows. Batches 7 and 8 passed current image URL/content-hash, official reference, pricing/policy, and exact fitment audits; no production writes occurred.
+- Extended the reviewed-batch pipeline to validate brand-specific official source hosts, re-reviewed image-source evidence, punctuation-normalized OE references, and explicitly reconciled excluded makes. Batch 9 adds FEBI 47894 with 154 BMW fitment rows; four unsupported Lexus rows remain excluded.
+- The v75 master retains all 6,046 source rows and records 142 newly verified CSV products, 286 held rows, and 4,881 pending rows. Batch 9 passed its live image, source workbook, price/policy, official reference, and detailed fitment audit; no production writes occurred.
+- Batch 10 adds FEBI 11816 and FEBI 22251 with live-checked, visually reviewed official images, exact manufacturer reference checks, factual descriptions, Superior pricing/policies, and 1,010 detailed fitment rows. The 53 Lincoln and Mercury eBay fitments for FEBI 22251 remain excluded because official evidence did not support them.
+- The v76 master retains all 6,046 source rows and records 144 newly verified CSV products (108 FEBI, 33 Hengst, 3 Bosch), 284 held rows, and 4,881 pending rows. Batch 10 passed the independent source, image, pricing/policy, identity, and fitment audit. Production remains unchanged; no listing import or email was made.
+- Batch 11 adds 17 HENGST products and 4,210 detailed compatibility rows. Exact MPN/OE identity, eBay catalog identity, visually reviewed current product image hashes, pricing/policies, source workbook preservation, and MVL fitments passed the independent audit. Three H326WK Volkswagen rows remain excluded pending official application support; production was not written.
+- The v77 source-preserving master retains all 6,046 rows, with 161 new verified CSV products, 267 held rows, and 4,881 pending rows. Fixed the reviewed-batch audit's vehicle-summary reconstruction to preserve year gaps and compact only consecutive fitment years. No production import occurred.
+
+## 2026-10-10 — Accurate catalog publish-readiness checks
+
+- Catalog fitment review now distinguishes year/make/model rows with different trims, engines, or platforms. Case/spacing-only copies of the same MVL record do not block readiness; conflicting records for one vehicle configuration still require review.
+- U.S. marketplace readiness accepts one verified item image, matching eBay's documented minimum picture requirement for item listings.
+
+## 2026-10-09 — Fashion intake handoff and activity reporting
+
+- Fashion photo intake normalizes all uploaded JPEG, PNG, and WebP photos to WebP and queues garment identification in the background so capture can continue while items are processed.
+- Processed, non-quarantined intake items now wait for an explicit **Add to Catalog** action. Catalog records who added each item and when; pending captures stay out of the Catalog list.
+- Store and shipping/payment/return policy selection now happens when catalog items are selected for publishing. Each selected store can use its own policies or store defaults.
+- Added a filterable Fashion activity report and CSV export with item details, uploader/catalog-adder, processing and review status, and per-store publication outcomes/policies.
+
+## 2026-10-09 — Photo-verified Add Part enrichment
+
+### Fixed
+- **Wrong Add Part identity:** `/listings/new` saves an unidentified draft instead of assigning a title from an MPN-only seller match. Identification now requires at least two saved photos; inconclusive photo evidence fails closed and requires manual review rather than falling back to a potentially unrelated seller listing.
+- **Photo identity overwritten during enrichment:** a failed validation gate cannot write generated listing fields, and a successful visual lookup keeps its title, part type, brand, and description through later enrichment. Newly added photos can restart a completed enrichment run.
+- **Duplicate image enrichment requests:** the inventory image-save endpoint is the single trigger, avoiding duplicate jobs when photos are uploaded from the detail modal.
+- A photo-less Add Part draft no longer waits for optional Image Drive search. Drive photos attach in the background after re-reading the saved listing so a later user upload is not overwritten; photo-based identification starts only when enough saved images are present. The draft-save request now aborts after 45 seconds and advises checking Inventory before retrying to avoid a duplicate.
+
+## 2026-10-08 — Keep Add Part responsive during eBay rate limits
+
+- Interactive part lookups now fail fast on eBay Browse 429 responses rather
+  than waiting through long retry delays before falling back to AI lookup.
+- The browser aborts an interactive part lookup after 45 seconds, shows a
+  retry notice, and continues saving the draft with a fallback title.
+- Add Part saves no longer wait for duplicate Browse/AI/MVL auto-enrichment;
+  placeholder drafts continued that best-effort enrichment in the background.
+  A successful pre-save lookup was not repeated during draft creation.
+- Superseded 2026-10-09: Add Part no longer identifies photo-less placeholder
+  drafts from MPN alone; see **Photo-verified Add Part enrichment** above.
+
+## 2026-10-08 — Search every applicable Prowler catalog year (optimization v28)
+
+- Prowler searches now explicitly target the year-specific Mopar factory
+  catalog PDFs for 1997, 1999, 2000, and 2001, plus an exact fitment source for
+  the 2002 endpoint. A later-model product page alone cannot truncate earlier
+  exact-part catalog evidence.
+- If the first two searches omit years, the one alternate search targets the
+  factory catalog archive and exact component row instead of repeating a broad
+  vehicle-generation lookup.
+
+## 2026-10-08 — Combine exact-MPN year-specific OEM catalogs (optimization v27)
+
+- A source-verified interval can now be assembled from exact-MPN year-specific
+  factory catalog pages when each cited page places the MPN beside the listed
+  component. Every actual model year between the title endpoints still needs
+  exact-part evidence; unsupported years are not filled in.
+- The Prowler lookup recognizes Mopar's legacy omitted leading zero only for
+  `0LP...` Prowler identifiers and its actual 1997, 1999–2002 model-year set.
+  It can combine Plymouth-era factory diagrams with Chrysler-era exact-part
+  ranges without inventing a 1998 Prowler.
+- Only cited source years are retained as review-only rows. They remain outside
+  `fitment_data`, publish compatibility, and automatic publishing.
+
+## 2026-10-08 — Require part-specific ranges in cited catalog text (optimization v26)
+
+- The model's JSON claim and quoted evidence are no longer accepted as source
+  text. A year interval must be extracted from the actual cited catalog page.
+- Range context must identify the exact MPN or requested part name, preventing a
+  generic vehicle-generation heading from widening a part-specific interval.
+- Prowler lookups now target year-specific Mopar diagrams and exact-MPN listings;
+  all catalog fitment stays review-only and publishing remains disabled.
+
+## 2026-10-08 — Use diversified exact-MPN searches for missed fitment (optimization v25)
+
+- Each first-pass lookup now uses two distinct exact-part searches: the quoted
+  MPN alone, then the same MPN with the requested vehicle, part name, and
+  fitment terms. Only unresolved items get one different alternate query.
+- This improves catalog coverage without repeating successful lookups or
+  reprocessing products that already have a year prefix. Exact identifier,
+  same-page vehicle/range, replacement-break, and review-only safeguards remain.
+
+## 2026-10-08 — Improve exact-MPN catalog lookup for VW Golf GTI titles (optimization v24)
+
+- The OEM lookup now searches the quoted complete part number first, with a
+  separate vehicle-and-part query only when the exact-number search fails.
+  Search excerpts include more of the catalog application table while keeping
+  each attempt to one Exa query.
+- The validator recognizes Volkswagen's US catalog label `GTI` as the
+  `Golf GTI` listing variant only when the cited exact-MPN page explicitly
+  shows that GTI application. It does not accept generic Golf fitment rows.
+- Cited ranges remain title-only review evidence; marketplace compatibility
+  and publishing are unchanged.
+
+## 2026-10-08 — Reject supersession-only MPN matches (optimization v23)
+
+- Exact-MPN matching now checks complete identifiers with punctuation-aware
+  boundaries, so a base MPN is not mistaken for a suffixed replacement.
+- A citation that mentions the requested number only as a replaced,
+  superseded, or interchangeable number cannot establish fitment. The same
+  cited catalog page must still show the requested vehicle and explicit year
+  interval. This remains title-only review evidence.
+
+## 2026-10-08 — Accept exact MPNs in catalog page identity (optimization v22)
+
+- Exact OEM product pages can place the full part number in the URL or page
+  title while the cited excerpt contains only the vehicle application table.
+  The lookup now accepts an exact MPN token in either part of that same cited
+  page.
+- The page must still be a catalog/OEM source and explicitly support the
+  requested vehicle and complete year endpoints. This remains title-only
+  evidence; no compatibility is approved and no listing is published.
+
+## 2026-10-08 — Add one alternate search for rejected MPN lookups (optimization v21)
+
+- If the first exact-MPN response is truncated or fails the source validator,
+  the lookup makes one alternate exact-MPN catalog search with a larger output
+  cap. Successful first attempts do not incur another search.
+- The retry still requires an exact MPN, cited OEM/catalog page, requested
+  vehicle application, and explicit complete endpoints. It never falls back to
+  donor-year or model-generation inference.
+- Optimization version 21 makes only missing-range or stale products eligible
+  for this targeted retry.
+
+## 2026-10-08 — Read exact MPNs from catalog diagram bodies (optimization v20)
+
+- A cited catalog page no longer needs the exact MPN in its title or URL when
+  the same page body explicitly contains the exact part-number row and the
+  requested model's complete year interval. This supports manufacturer diagrams
+  whose URL names the parent assembly.
+- The parser still requires the exact MPN in page content, an OEM/catalog source,
+  the requested make/model/trim, and explicit contiguous year endpoints from
+  that cited page. Intervals remain title-only review evidence.
+- Optimization version 20 enables targeted retries for products blocked by
+  this citation-title restriction.
+
+## 2026-10-08 — Retry truncated exact-MPN year searches (optimization v19)
+
+- The exact-MPN lookup now makes one capped Exa search with a compact prompt
+  and enough output budget for GPT-6 Luna to return the cited year interval.
+- If that structured answer is still cut off, it retries once with a larger
+  output cap and a shorter recovery instruction. It does not repeat a full
+  pipeline pass.
+- Optimization version 19 makes only previously blocked or stale products
+  eligible for this targeted title-range retry. Citation, exact MPN, vehicle,
+  endpoint, and review-only compatibility checks remain in force.
+
+## 2026-10-08 — Extract complete ranges from exact-MPN catalog citations (optimization v18)
+
+- GPT-6 Luna searches with capped Exa result volume and minimal reasoning. The
+  optimizer now reads cited page excerpts directly when the model uses its
+  response budget on search and returns no JSON, instead of treating that
+  citation-backed lookup as a miss.
+- A title range requires an exact-MPN catalog product page and the requested
+  model/trim application. Production-date caps apply only when the catalog shows
+  a replacement suffix for the same option-code row; unrelated date breaks do
+  not truncate the range.
+- Exact OEM intervals can guide draft titles even when the target marketplace
+  has no matching MVL model. Those rows stay review-only/rejected and never
+  enter publish compatibility. Combined `Plymouth Prowler` brand values now
+  resolve to make/model for exact-MPN research.
+- Optimization version 18 retries only listings missing a complete title range.
+
+## 2026-10-08 — Validate citation evidence independently of the model flag (optimization v17)
+
+- The OEM lookup no longer discards a response solely because Luna sets
+  `verified=false`; the server checks the cited URL, exact MPN, requested
+  make/model/trim, and both explicit year endpoints before accepting a range.
+- Candidate excerpts remain title-only review evidence. A missing citation,
+  excerpt, exact identifier, or matching vehicle/range still blocks the title.
+- Bumped optimization to v17 for targeted retries of previously blocked rows.
+
+## 2026-10-08 — Validate URL-only OEM citations with exact excerpts (optimization v16)
+
+- GPT-6 Luna now returns a short exact excerpt from the cited OEM page when
+  Exa supplies only a URL/title citation. The server still requires the exact
+  MPN, vehicle variant, source citation, and both range endpoints to match.
+- Scoped the Plymouth/Chrysler make transition to Prowler fitment only; other
+  makes cannot cross-match. Evidence remains review-only and titles remain
+  unpublished until separately approved.
+- Bumped optimization to v16 to retry only targeted products with this lookup
+  behavior.
+
+## 2026-10-08 — Accept exact OEM diagram evidence from cited page content (optimization v15)
+
+- OEM lookup source classification now checks cited page content as well as the
+  page title and URL. Parts diagrams often show the exact part-number row and
+  model-year application in the body while using a generic title that does not
+  say `catalog` or `OEM`.
+- Exact MPN, make/model/trim, and both year-endpoint checks remain mandatory;
+  cited year ranges remain title-only review evidence and do not authorize
+  compatibility publishing.
+- Bumped listing optimization to v15 so products rejected by the old source
+  label check are eligible for a fresh, targeted OEM lookup.
+
+## 2026-10-08 — Reuse exact-MPN OEM year citations during enrichment (optimization v14)
+
+- Fitment discovery now recognizes a saved, MVL-validated exact-MPN OEM citation
+  with one unique matching year interval, even when MVL rows omit years inside it.
+  It reuses that evidence instead of repeating eBay and GPT-6 Luna catalog searches.
+- When research is needed, the OEM lookup searches manufacturer diagram synonyms
+  for the part type and briefly caches exact-query hits and misses. OEM citation
+  rows are accepted only when the cited exact MPN matches the product identifier.
+- Title generation and lookup avoidance share the same citation, make, model/trim,
+  MPN, and year-span checks. The interval remains review-only and title-only; it
+  never fills publish compatibility or approves a listing.
+
+## 2026-10-08 — Preserve cited OEM year intervals in draft titles (optimization v13)
+
+- When MVL row validation omits an individual year, the title builder can now
+  use an explicit inclusive year interval from cited, exact-MPN OEM catalog
+  evidence that matches the requested model/trim. The citation must contain
+  the product MPN, make, and target application.
+- The interval remains title-only review evidence; it does not fill approved
+  compatibility or enable publishing. Conflicting, overlong, or unmatched
+  intervals remain blocked for review.
+- Bumped listing optimization to version 13 so the improved title evidence
+  rule is applied to previously processed products.
+
+## 2026-10-08 — Group complete title ranges across equivalent trim labels (optimization v12)
+
+- Title-range selection now groups target-MVL rows by canonical make/model and
+  the requested variant tokens, so catalog descriptions such as `GTI` and
+  `GTI Autobahn Hatchback` can contribute to the same complete contiguous span.
+- Generic model titles continue to require the same trim label; unrelated
+  variants are not merged. Review-only exact-MPN evidence remains excluded from
+  publishable compatibility.
+- Preserved meaningful single-letter vehicle tokens such as `R` during title
+  range matching and bumped the optimizer version to 12.
+
+## 2026-10-08 — Complete OEM year-range search and MVL model normalization (optimization v11)
+
+- Extended GPT-6 Luna catalog research to compare multiple exact-MPN catalog
+  queries and seek the complete contiguous application range; a single
+  donor-year example no longer substitutes for full fitment.
+- Kept lookup search pinned to Exa and corrected AI usage reporting to the
+  current $0.007 per search query, alongside GPT-6 Luna token usage.
+- Mapped combined catalog model values to a canonical eBay MVL base model and
+  preserved the target variant and catalog trim as separate fields. A result
+  that cannot be represented without losing the requested model/trim remains
+  blocked for review.
+- Kept exact-source, make, model/trim, year-endpoint, and MVL checks. Catalog
+  rows remain review-only and do not become publishable compatibility.
+- Bumped optimizer version to 11 so products processed under the incomplete
+  v10 behavior are eligible for a fresh pass.
+
+## 2026-10-08 — Exact OEM catalog title enrichment (optimization v10)
+
+- Added an automatic OpenRouter GPT-6 Luna web-search fallback for products
+  missing a complete, exact-part year range. A cited OEM catalog page must
+  support the exact MPN, requested make/model/trim variant, and year span;
+  citations that do not carry that evidence are rejected.
+- Kept base model and trim separate for target-market MVL checks and title
+  range grouping, preventing ranges from crossing vehicle trims (such as Golf
+  and Golf GTI). Seller hints remain review-only and cannot suppress OEM
+  lookup when they lack a target-MVL-checked range.
+- Accepted model and trim when a cited exact-part catalog lists them in
+  separate fields or entries, while still requiring every target variant token
+  to appear in the cited application evidence.
+- Accepted catalog evidence is review-only and excluded from approved
+  compatibility. Donor year, platform spans, and noncontiguous fitments cannot
+  fill a missing title range. Products without supported evidence remain
+  blocked for review.
+- Bounded concurrent searches to four per backend process and made the lookup
+  cache in-flight-only. OpenRouter web-search usage is included at its current
+  per-request cost.
+- Bumped optimizer version to 10. Build and deployment/job results are
+  recorded in `docs/operations/CATALOG_PIPELINE.md` after the production pass.
+
+## 2026-10-08 — Re-run stale optimizations with exact-part title evidence
+
+- Fixed: title generation no longer falls back to the donor year or a whole
+  platform-generation span when no part-number-matched fitment years exist.
+  A single exact-MPN/OEM-catalog year may be shown; multiple years must form a
+  contiguous range and pass the target marketplace MVL. Platform-generation,
+  donor, sibling-part, and unvalidated review rows cannot supply title years.
+  Missing evidence keeps the item blocked for review.
+- Bumped listing optimization to version 8 so completed products are
+  reconsidered with the corrected evidence rule.
+- Fixed: the explicit **Optimize All** action now forces a fresh pass even when
+  the job-level marketplace state is already `needs_review` or `completed`;
+  background retries retain their resume and skip behavior.
+- This supersedes the 2026-10-05 donor-generation title fallback below; a
+  donor vehicle or platform span is not evidence that a specific part fits.
+- Deployed backend image `realtrackapp-backend:title-fitment-20261008-v3`,
+  layered over active image `realtrackapp-backend:title-fitment-20261008-v2`. Backend
+  health is `ok`; frontend and data services were not recreated. The prior
+  image remains the rollback target.
+- Pipeline `7239edb3-770b-4b18-a60f-288b5bdeba8c` was re-optimized over SSH
+  through the application's listing optimization service. Results are reported
+  after the run completes; no eBay listing was published and no compatibility
+  was approved.
+
+## 2026-10-07 — Catalog photo replacement and part identity safeguards
+
+- Fixed: uploading replacement photos in the Auto Parts catalog now saves any
+  pending image removals/reordering before appending the new uploads. The modal
+  treats the automotive `listing_records` image list as authoritative so stale
+  catalog-product image copies cannot resurrect deleted photos.
+- Fixed: Add Part now supplies the selected vehicle make to part lookup. eBay
+  results must contain an exact MPN and cannot be used when their make evidence
+  conflicts with the selected vehicle. Fetch Details prioritizes usable photos
+  and rejects a visual result that identifies a different part number.
+
+## 2026-10-07 — eBay publish and policy-sync test suites green again
+
+- Fixed: `ebay-publish.service.spec.ts` (20 failures) and
+  `ebay-policy-sync.service.spec.ts` (2 failures) were asserting superseded
+  behaviour. No publish-service logic changed. The specs now pin
+  `EBAY_LISTING_API_MODE=inventory` for Inventory API tests, because new listings
+  default to Trading API. They also cover the bounded hash-suffixed conflict-SKU
+  namespace, the 2026-09-30 rule that a fresh publish failing with 25713 fails
+  closed without deleting the Inventory item, the marketplace-default fallback for
+  missing named policy profiles (and the block when no default exists),
+  description-only fitment for Motors categories without structured rows, and
+  compatibility readback failures raised by `EbayCompatibilityReconciliationService`.
+  Added reconciler coverage for a readback missing expected rows.
+- Fixed: eBay policy sync left a 30-second inventory-location timeout timer
+  pending after every marketplace fetch; it is now cleared once the fetch settles.
+  The spec mocks the atomic `manager.transaction` replace and asserts that a failed
+  policy fetch leaves stored policies untouched.
+- Fixed: `backend/src/scripts/backfill-brand-images.ts` had a missing closing
+  parenthesis (`TS1005` at line 434) that blocked `tsconfig.build.json` builds.
+
+## 2026-10-07 — Fashion identification: Jev-selected model, fallback, fuller autofill
+
+- Fashion photo identification now uses `google/gemini-3.1-flash-lite` with an automatic
+  fallback to `google/gemma-4-31b-it`, chosen by Jev (OpenRouter `/alpha/decisions`) from
+  a 20-model benchmark on 5 labelled garments. Override with `FASHION_AI_MODEL` /
+  `FASHION_AI_FALLBACK_MODEL` (now passed through `docker-compose.yml`).
+- Fixed: a non-JSON or truncated model reply was shown as a successful analysis with
+  empty fields. It now retries on the fallback model, then reports a failure.
+- Fixed: single-garment photo sets could show the "more than one garment" alert.
+- Fixed: AI titles longer than eBay's 80 characters are trimmed on a word boundary
+  before review instead of being cut at publish.
+- Fixed: Fashion item specifics no longer include raw attribute keys and free-text
+  defect notes; only eBay aspect names are sent, values capped at 65 characters.
+- Added Fashion "Listing details" fields (country of manufacture, features, season,
+  occasion, theme, vintage, garment care), filled by identification, plus department
+  normalization (`Men`/`Women`/...) and `Size Type` / condition autofill. Prompt
+  `fashion-image-identification-v2`.
+- Added `google/gemma-4-31b-it` to the AI cost table (it was logged at gpt-4.1-mini rates).
+
+## 2026-10-06 — Fix production Auto Parts catalog navigation
+
+- The production Auto Parts sidebar had a fully prefixed Catalog path that the
+  shell prefixed a second time, sending clicks to `/auto-parts/auto-parts/catalog`
+  and the route fallback. The corrected release uses the relative `/catalog`
+  path; the shell resolves it to `/auto-parts/catalog`.
+- Deployed frontend image `realtrackapp-frontend:catalog-route-fix-20261006`
+  from `/home/ubuntu/realtrackapp-main-release-20261005`. The previous image
+  `realtrackapp-frontend:stock-20261005` and Compose override backup were kept
+  for rollback. The backend and database services were not restarted.
+- The frontend build succeeded, and the public canonical catalog route returned
+  HTTP 200 after deployment; backend, Postgres, Redis, and PgBouncer remained
+  healthy.
+
+## 2026-10-06 — Apply exact OEM applications to UPL-235 draft titles
+
+- Researched the screenshot's nine UPL-235 MPNs. Five had exact OEM catalog
+  applications that also passed the active US MVL (`US_MVL_2026_05`):
+  `BU1-15777` → `2011 Infiniti FX35`, `BU1-15789` → `2014-2016 Toyota Corolla`,
+  `BU1-15794` → `2010-2015 Audi A4`, `BU1-15765` → `2007-2009 Audi Q7`, and
+  `BU1-15746` → `2015 Audi A8 Quattro`. Four unsupported MPNs remain blocked.
+- Three initial optimizer outputs widened the title years beyond the
+  exact-part applications. Those titles were corrected to the catalog ranges;
+  generated platform/sibling rows were removed. The five titles now match in
+  `catalog_products` and draft `listing_records`.
+- Each OEM row remains `needs_review` with `mvlStatus=valid`; `fitment_data` is
+  empty, `manual_review=true`, and the listings remain drafts. No eBay listing
+  or compatibility publishing occurred. The remaining 48 UPL-235 records and
+  72 UPL-234 records remain blocked; the earlier BMW row remains in review.
+- Sources: [INFINITI 2011 FX35 catalog](https://parts.infinitiusa.com/v-2011-infiniti-fx35--base--3-5l-v6-gas/electrical--parking-aid),
+  [Toyota 82662-02660 catalog](https://parts.longotoyota.com/oem-parts/toyota-fuse-and-relay-center-cover-8266202660),
+  [VAG 8K0839016D catalog](https://oemwolf.com/oem-parts/8k0839016d.html),
+  [VAG 4L0910441A catalog](https://oemwolf.com/oem-parts/4l0910441a.html),
+  [VAG 4H0959107AC catalog](https://oemwolf.com/oem-parts/4h0959107ac.html).
+
+## 2026-10-06 — Canonicalize Bentley donor spelling and repair pipeline titles
+
+- The known source spelling `Bently` now resolves to `Bentley` during make
+  normalization and donor filename parsing, allowing the existing model-
+  generation title fallback to work for future uploads with that typo.
+- Deployed backend image `realtrackapp-backend:main-20261006-bently-alias-00206b9a`.
+- Repaired production job `b69699a1-445a-41da-9e58-02a9b9e8becd`: 162 catalog
+  and listing titles and 170 export title cells now use the `2005-2013 Bentley
+  Flying Spur` generation range. Titles remain at or below 80 characters; all
+  listings remain drafts in review, and no eBay listings or compatibility
+  approvals were changed. The original CSV is backed up as
+  `/app/output/pipeline-b69699a1/US-Motors-Listings-2026-10-05.csv.pre-year-range-20261006`.
+
+## 2026-10-06 — Use exact-part seller hints for reviewed title ranges
+
+- Deployed the isolated backend release `realtrackapp-backend:title-range-20261006`;
+  the prior image remains tagged `realtrackapp-backend:pre-title-range-20261006`.
+- Re-ran optimization for uploads UPL-2026-000235 and UPL-2026-000234. One
+  exact Brand+MPN eBay seller hint for BMW MPN `613507199885` passed US MVL and
+  added the `2011 BMW 328I` draft title prefix. The hint remains review-only in
+  `fitment_rows`; it did not become published compatibility.
+- At the initial retry baseline, 125 products lacked usable exact-part year
+  evidence and were blocked with `TITLE_YEAR_RANGE_MISSING` (53 in UPL-235 and
+  72 in UPL-234). The later same-day OEM catalog follow-up corrected five
+  UPL-235 titles; see the entry above. One other UPL-234 record (`BU1-15375`,
+  existing eBay item `307197235705`) remains unchanged with no year range in
+  its local title. The retries did not invoke listing or compatibility
+  publishing; production health was `ok`.
+
+## 2026-10-05 — Use known model-generation spans in pipeline titles
+
+- Pipeline titles continue to prefer a contiguous fitment span. If one is not
+  available, a donor year/make/model that resolves to a known platform
+  generation supplies that generation's full year span to the title. This
+  fallback affects titles only and never widens or approves compatibility.
+- Donor filenames can contain year, make, and VIN without a model. When the
+  job has one unambiguous known model in a vehicle-prefixed source title, the
+  optimizer reuses it for that single-donor job. Optimization version 4
+  invalidates older completed results for a later optimization pass.
+- Production drafts were corrected: all 103 Audi A6 titles in pipeline
+  `7edda15f-804f-4dbd-ba44-98d901b16a3c` now begin `2011-2018 Audi A6`, and
+  all 73 Jaguar XF titles in pipeline
+  `f2696bdc-cbe9-4189-ad42-6029fd3fef86` now begin `2008-2015 Jaguar XF`.
+  Catalog/listing titles and the two pipeline CSV exports are synchronized;
+  the exports have pre-change backups. All listings remain drafts, with no
+  eBay item IDs or fitment approvals changed. The production backend was
+  deployed as `realtrackapp-backend:main-20261005-year-range-00206b9a` and its
+  health endpoint returned `status: ok` after restart.
+
+## 2026-10-05 — Default new eBay listings to Trading API
+
+- Standard new single-item listings default to Trading API `AddFixedPriceItem`
+  so their Custom Label remains editable in Seller Hub. Inventory API remains
+  an explicit mode for this path. Variation-family item groups and existing
+  Inventory API offer-backed listings keep their existing flows.
+
+## 2026-10-05 — Target a single eBay listing for Seller Hub migration
+
+- The Inventory API → Trading API migration command accepts `--item-id` to
+  preflight one exact listing across stores, and stops if the ID maps to more
+  than one local record. Live migration still requires `--apply --confirm`;
+  it ends the old listing and creates a new Trading API listing with a new eBay
+  Item ID.
+
 ## 2026-10-05 — Warehouse inventory, procurement and channel stock (all verticals)
 
 - New `StockModule` (`/api/stock`) and Stock workspace at `/auto-parts/stock`, `/fashion/stock` and `/business-industrial/stock`. It covers warehouses and bins, a SKU master linked to catalog products, listings and variants, and serial/one-off units. Stock changes are recorded in an append-only movement ledger. It also covers receipts, adjustments with approval, bin moves, damage, transfers with in-transit, blind cycle counts, valuation, aging and a CSV ledger. Design: `docs/architecture/WAREHOUSE_INVENTORY.md`.
 - **Fix:** imported orders now reserve stock, shipping deducts it, and cancelling releases it. Previously the `order.new` handler reconciled an empty list, so sales never reduced stock. `order.new` is now emitted by `OrdersService.importOrder` for every new order, and `order.cancelled` is new.
 - **Stock that is not on hand:** each SKU is stocked, stock + source, or on demand, and supplier offers can be recorded. A shortfall raises a procurement request. Requests are grouped into purchase orders, and goods received against a PO are reserved for the waiting orders. Suppliers can dropship directly to the buyer. Reorder-point suggestions are included.
 - Channel quantity is computed per store as linked-warehouse availability − buffer + capped supplier quantity. It is pushed to eBay (Inventory API offers / Trading listings) and PartsBazar360 only when the new `stock_channel_push` flag **and** the store's push switch are on. Otherwise it runs in shadow mode with drift reporting.
-- Vertical hooks: Auto Parts warehouse intake and B&I serialized units receive stock automatically once a workspace has run stock setup. The Fashion quick-capture hook ships with the Fashion quick-capture feature.
+- Vertical hooks: Auto Parts warehouse intake and B&I serialized units receive stock automatically once a workspace has run stock setup. The Fashion quick-capture hook and warehouse mirroring ship with the Fashion quick-capture feature.
 - Migration `1791100000000-CreateWarehouseInventory` (additive) and 12 `stock.*` permissions. The legacy `inventory_ledger` / `inventory_events` / `inventory_movements` / `store_inventory_allocations` tables are superseded.
 - Verified with PostgreSQL integration tests (17 passing) and a full migration-chain replay from an empty database. An end-to-end API run and a UI walkthrough were done on an isolated local backend. Not deployed.
+
+## 2026-10-04 — Omni Core infographic video advertisement
+
+- Added an original 30-second automotive-parts campaign in landscape and vertical formats, with local motion graphics, an original instrumental track, posters, and editable rendering source under `assets/marketing/omni-core-ad/`. Creative scope and feature grounding are documented in `docs/product/OMNI_CORE_VIDEO_AD.md`.
+
+## 2026-10-04 — Repair duplicated Auto Parts catalog links
+
+- Auto Parts deep links with a repeated `/auto-parts` prefix now redirect to the canonical route, preserving query parameters and hashes. For example, `/auto-parts/auto-parts/catalog` redirects to `/auto-parts/catalog`.
+
+## 2026-10-04 — Add compatible year ranges to Infiniti Q50 pipeline titles
+
+- Revised the 61 published eBay listings in pipeline `35833336-07b2-42b3-8661-083390b55e12` with part-number-based Q50 year ranges, verified each live Inventory item title, and synchronized the 62 catalog/listing rows and pipeline CSV Title cells. The one soft-deleted draft received a database/export title update only and remains deleted.
+- Compatibility rows remain `needs_review` with manual review enabled; this title repair did not approve or publish eBay fitment. See `docs/operations/OEM_FITMENT_LOOKUP_2026-10-04.md` for the applied ranges, references, and caveats.
+
+## 2026-10-03 — Require evidence-backed year ranges in pipeline titles
+
+- The donor filename parser now canonicalizes the source spelling Infinity to Infiniti, so a matching year/make/model/VIN upload can supply its donor vehicle context.
+- Donor year supplies vehicle context only. Title ranges must come from contiguous, part-number-matched fitment years that pass MVL checks; missing or mismatched ranges block optimization. Exact-MPN lookup uses the canonical donor make when the catalog brand also contains a model.
+- Bumped optimization version to 3 so previously completed products are reconsidered on their next optimization pass.
+
+## 2026-10-02 — Preserve fitment year ranges when AI generation fails
+
+- **Permanent exact-MPN enrichment fallback:** when existing product/title evidence does not provide a bounded year range, fitment discovery now queries eBay Browse by brand + MPN. Only exact normalized Brand+MPN matches can contribute Year/Make/Model hints; every year is checked against the target marketplace MVL. These seller-reported hints stay `needs_review` and may guide a contiguous title range only. They are excluded from `fitment_data`, descriptions, AI fitment input, and publish compatibility until separately approved. No range is invented when exact hints or MVL validation are unavailable. Optimization version 2 invalidates stale completed optimization results the next time those products enter optimization again.
+- Pipeline optimization now supplies a matching upload filename's donor year/make/model before fitment discovery and persists the parsed donor fields. Validated fitment years remain the title's year-range source; available ranges are enforced even when a generated German title omits them, and deterministic title generation still runs if the AI batch is unavailable.
+- Corrected all 41 draft titles for pipeline job `cde847fd-f3e1-46fc-8052-cf0386a5ea58` using exact OEM part-number lookup ranges, and updated the CSV export to match the database. Added 191 source-noted year-level fitment rows as `needs_review` with manual review enabled; none are publishable until VIN/configuration and eBay Motors Vehicle Lookup validation. No eBay listings were published or changed. Source/range record: `docs/operations/OEM_FITMENT_LOOKUP_2026-10-02.md`.
+
+## 2026-10-01 — Keep new Trading API custom labels editable
+
+- New fixed-price listings published through Trading API continue to send the seller SKU as eBay's Custom Label, while using ItemID inventory tracking. eBay can revise the label on these listings after publication. Existing listings already managed by SKU cannot switch tracking modes in place and must be relisted before their labels can be changed.
+
+## 2026-09-30 — Revise existing eBay offers through their owning API
+
+- Publish now checks the existing channel mapping before honoring Trading mode. Inventory-managed listings keep their offer identity: active offers are revised in place through Inventory API `updateOffer`; offers eBay reports as `UNPUBLISHED` are updated and then republished through that same offer. Unknown eBay offer states fail closed before a write. Legacy Trading-only listings are revised by their existing listing ID, avoiding duplicate adds.
+- Trading API publish failures now include eBay's `Message` and `ShortMessage` alongside `LongMessage` when returned, so policy rejections such as restricted vehicle-part listings show their actual reason. eBay policy blocks still need seller/account resolution.
+- The exact-job requeue utility now includes ended-listing error 291 and stored effective-SKU mismatches only for targets with a verified Inventory API offer/SKU mapping.
+- Error 25713 during Inventory offer lookup now checks the mapped Trading listing and only rebuilds after eBay confirms that listing is completed/ended. Recovery deletes only the stale offer, keeps the Inventory SKU/item, and reuses a verified existing offer when createOffer reports error 25002. Published offer listing IDs are read from eBay's nested `listing.listingId` response field.
+- Added publisher regression coverage for Inventory API routing in Trading mode, active offer revision, ended offer republish, stale offer lookup, duplicate-offer reuse, nested listing IDs, and detailed Trading API errors.
+
+## 2026-09-30 — Show every NAPA listing image
+
+- Catalog listing details now combine the image URLs stored on the listing and its catalog product, preserving their existing order while removing duplicates. This exposes images present on only one side of the linked records.
+- NAPA Canada and NAPA Online image URLs now use a fixed-host, same-origin image endpoint. Nginx caches successful image responses for 30 days so catalog thumbnails and detail galleries do not depend on browser-side CDN access.
+
+## 2026-09-29 — Prevent blank eBay primary categories from reaching publish
+
+- eBay Motors publishing now resolves a missing or malformed category to the existing fallback leaf (`9886`) and persists that category on the catalog/listing rows. The Trading API request builder rejects missing or malformed category IDs before sending a request, avoiding eBay error 37 for an empty `PrimaryCategory.CategoryID`.
+- Added regression coverage for the missing-category Trading API publish path and the request-level guard.
+
+## 2026-09-29 — Auto Parts catalog & inventory: Has Price filter and sortable columns
+
+- **Has Price** toggle on the filter bar of Auto Parts → Catalog (`hasPrice=1`, existing backend filter, previously buried in Advanced Filters) and Auto Parts → Inventory (new `hasPrice=1` on `GET /inventory/listings` and `/inventory/listings/facets`; same rule as the "Price" validation flag: non-blank `startPrice` or a numeric `startPriceNum`).
+- Catalog table: every data column (SKU, Image, Title, Team, Condition, Stock, Price, Date Added, Status, eBay) is a click-to-sort header. `sort` now accepts `<col>_asc|desc` plus `oldest` (see `SEARCH_SORT_MODES` in `backend/src/listings/dto/search-query.dto.ts`); the new team/condition/stock/status/ebay/image sorts are implemented in the SKU-grouped path the catalog grid uses (`buildDedupOrderSql`) — ungrouped callers fall back to newest-first.
+- Inventory table: every column is sortable via new `sort=<col>_<asc|desc>` (`INVENTORY_SORT_COLUMNS` in `dto/inventory-workbench.dto.ts`), sorted server-side across all pages. Derived columns mirror their JS counterparts in SQL (Validation = missing-field count, Enrichment ≈ `deriveStatus()`, Catalog = enrichment completed, Fitments = max(part_fitments, catalog fitment_data)) — see `inventorySortKeySql()` in `inventory-workbench.service.ts`; keep them in sync if those rules change.
+- Inventory table gained a **Price** column (the item already carried `price`).
 
 ## 2026-09-29 — Publish listings directly to partsbazar360.com
 
@@ -330,6 +1049,333 @@
 - Photos are verified in S3 and sent as public `/api/storage/serve/...` URLs (the bucket is private and originals are often converted to `.webp`); missing or `temp/` photos are dropped and a listing with none left is refused.
 - All photos sent to PartsBazar360 are now WebP in S3: external photos (NAPA, eBay) are downloaded, converted (≤1600 px) and stored; JPG/PNG-only originals get a WebP copy; NAPA Canada photos are read from NAPA Online (same ids, no server-side block). A listing with no obtainable photo is refused and, if live, taken off PartsBazar360.
 - Deployed to production and verified with one live listing (BLA-18425 → Blackline on partsbazar360.com); see `docs/integrations/partsbazar360-publish.md`.
+
+## 2026-09-29 — NAPA exact-part pricing and indexed result recovery
+
+- Accepted the owner's rule that an exact NAPA part number can supply a price even when the official product page says remanufactured and the inventory listing says new. Product-type and position mismatches remain held. Five backed-up, readback-verified batches updated 124 previously held NAPA catalog products and draft listings.
+- Recorded user-provided Google result screenshots for SFI 26917 ($14.49/Each) and ADC 2072XB ($108.99/Each) as indexed official price evidence, distinct from fresh page prices; the conflicting $111.99 Shopping display for 2072XB was excluded.
+- An alternate exact-part NAPA Canada page supplied C$163.29 for 2775XA, plus an official image and fitment. The guarded writer converted it to US$115.25 at the recorded CAD/USD rate and verified the live catalog and draft records.
+- Live NAPA totals after the update: 445/737 with any catalog price, 393 with accepted official price evidence, 292 with no catalog price, and 386 with both official price and official primary image.
+
+## 2026-09-29 — NAPA draft listing gallery images
+
+- Appended the same lossless 1254×1254 WebP F1, F2, and F3 images, in order, to all 737 unpublished NAPA listings in both catalog and listing records. Existing images and their order were preserved; the 173 listings without prior images now contain the three supplied images.
+- Where the catalog and listing records already had different image sequences, the images were appended to each sequence independently so neither side lost existing images. No published NAPA listings were changed.
+
+## 2026-09-29 — FEBEST ready-to-publish gallery images
+
+- Updated all 1,806 unpublished, ready-to-publish FEBEST drafts in both catalog and listing records. Replaced the final three image slots with lossless 1254×1254 WebP versions of F1, F2, and F3, in that order; all published FEBEST listings were left untouched.
+- Two drafts had only two existing images, so their part photo and diagram were preserved and F1–F3 appended. The final gallery counts are 1,805 listings with five images and one listing with four.
+
+## 2026-09-28 — Fashion quick capture
+
+- Added `/fashion/capture` (phone-first garment intake) and `/fashion/intake` (paginated history with identification status and retry).
+- Photo slots: Front, Back and Tag & labels are required; Additional (≤13) and Size chart. Slot order sets the eBay picture order. Photos uploaded with a SKU are stored as `<SKU>-<timestamp>-<id>.webp`.
+- Measurement charts for 10 garment types (A–E points, cm/in) in the editor and capture screen, plus a server-rendered branded size-chart image.
+- Batch SKU generator (`<BATCH>-<0001>[-<SIZE>]`) with an atomic per-batch counter seeded from existing SKUs; organization warehouses managed in Fashion settings.
+- Background identification queue (`fashion-intake-analysis`) and **Identify in background** in the editor; confirmed values and titles are never overwritten.
+- Per-photo text banners.
+- Changed: Fashion measurements, `categoryFamily`, `sizeChartTemplate`, `measurementsUnit` and measurement notes are no longer sent as eBay item specifics; measurements now appear as a table in generated descriptions.
+- Migration `1791000000000-CreateFashionIntake`; backend Docker image installs `fonts-dejavu-core`.
+- Fashion identification no longer warns that size/brand were not confirmed when the operator already entered them, and no longer warns about label size vs measurements when a measurement chart is used.
+- Details: `docs/architecture/FASHION_QUICK_CAPTURE.md`.
+
+## 2026-09-26 — FEBEST low-resolution source images
+
+- Trusted FEBEST imports now validate the official 1600-pixel photo/diagram path before mirroring a 200-pixel source URL. When a full-size variant is unavailable, the importer keeps the supplied image URL rather than storing a broken replacement.
+- Production catalog and listing records for the 3,701-SKU content-ready batch now use verified 1600-pixel official part photos; 3,691 rows also use a verified full-size diagram. The other 10 keep their existing diagram because FEBEST has no 1600-pixel version for those SKUs.
+- Existing eBay galleries were not revised: the current connected seller account is not the owner of sampled active listings, and eBay rejected the photo-only revision. The owning seller account must be connected before that separate update can run.
+
+## 2026-09-26 — Fixed: pipeline exports omitted catalog and Image Drive photos
+
+- Pipeline image mirroring now processes generated CSV files as well as XLSX files.
+- After catalog and Image Drive resolution, finalized product images are merged into the downloadable output by SKU. Image Drive lookup includes SKU alongside manufacturer and OE part numbers.
+- Pipeline jobs record resolved/missing image coverage and the pipeline page reports the missing SKU/part-number pairs instead of searching with generated placeholder identifiers.
+## 2026-09-26 — Fixed: pipeline titles omitted donor year
+
+- Pipeline job optimization now uses stored donor year/make/model fields and fills missing donor context from a source filename formatted as YYYY MAKE MODEL plus a 17-character VIN when MAKE matches the product brand. Validated fitment years remain the title source when available.
+- Corrected 93 draft listing and catalog titles for pipeline job c35a49cb-742d-4dc1-9ba5-f955bdd301b7 to match its US export. All titles include the source-labeled 2015 Audi A8L vehicle and remain within 80 characters; this resolved 23 listing/export title mismatches. No published eBay listings were changed.
+
+
+## 2026-09-23/24 — Fixed: enriched catalog data (fitment, images, price) was never reaching the database
+
+- **Root cause of "changes not visible on the live site":** this pipeline has two layers — CSV/JSON
+  staging files, and the Postgres tables (`catalog_products`, `listing_records`) the live app
+  actually reads. Moving data from the first to the second requires a separate, deliberate
+  "persist" step. Pricing in particular had **never** been persisted by any script in this
+  pipeline's history — `catalog_products.price` and `listing_records.startPrice`/`startPriceNum`
+  were unset for every row, regardless of source (eBay comparables or NAPA's site).
+- Added `scripts/persist-napa-official-sql.mjs` (+ tests): persists NAPA-site-sourced fitment,
+  title/description and images — `persist-fitment-sql.mjs` only accepts eBay-compatibility-sourced
+  fitment, so it silently excluded these rows. Same safe pattern as `persist-fitment-sql.mjs`
+  (SQL generated locally, executed via `ssh`+`psql`, never Node in the memory-constrained
+  production container — KNOWN_ISSUES R27); dry-run by default, backup + all-or-nothing
+  transaction + `--restore`.
+- Added `scripts/persist-napa-pricing-sql.mjs` (+ tests): the first script to ever write price
+  into the database, for every row with a publishable `Pricing Status`, not only NAPA-sourced ones.
+- Applied 2026-09-23: **186 rows** got fitment/title/description, **4** got an image, **152**
+  got a price — all for the first time. 3 fitment rows and 2 pricing rows were skipped
+  (`not_in_database`: CSV SKUs with no matching `catalog_products` row under this import — minor
+  data drift, not investigated further).
+- See [docs/operations/CATALOG_PIPELINE.md](docs/operations/CATALOG_PIPELINE.md) for the full
+  writeup and [docs/decisions.md](docs/decisions.md) for why pricing was never wired up before.
+
+## 2026-09-23 — Napa images, fitment and pricing sourced directly from napacanada.com
+
+- Added `scripts/napa-official-apply.mjs` (+ tests): applies NAPA-own-site images and manufacturer
+  vehicle fitment to Napa rows research showed a match for (190 of 375 previously-image-missing
+  rows), additive-only, with a non-blocking `CONDITION CONFLICT` flag for the 14 rows where NAPA's
+  page lists Remanufactured against a catalog New.
+- Added `scripts/napa-price-apply.mjs` (+ tests): applies a NAPA-site retail price to Napa Caliper
+  rows found priced (7 of 11 found, CAD converted to USD with a cited live FX rate; see
+  [docs/decisions.md](docs/decisions.md)). Established that napacanada.com shows consumer pricing
+  for the Caliper category only — pads, rotors, chassis, electrical and hose lines consistently do
+  not, across 9+ sampled prefixes.
+- Added `scripts/image-source-ebay.mjs` / `image-source-apply.mjs` (+ tests): eBay-Browse-based
+  image sourcing, kept as reusable infrastructure though it found 0 Napa matches in its pilot.
+- Full methodology, access constraints and the NAPA SKU-prefix map in
+  [docs/operations/CATALOG_PIPELINE.md](docs/operations/CATALOG_PIPELINE.md).
+- PartsBazar360 exports regenerated: 152 content-ready, 110 postable (up from 109).
+
+## 2026-09-21 — Ops: removed the renovessa stack from the production host
+
+- Stopped and removed `renovessa-app-1` / `renovessa-db-1`, the `renovessa-app` image and the nginx site link to
+  free RAM on the shared 4 GB host (KNOWN_ISSUES R27). Data volumes, `/opt/renovessa` and an archive
+  (`~/renovessa-archive-20260921/`) were kept on the server; see R27 for the restore steps.
+- Pruned the Docker build cache (~43 GB; disk 81% -> 37%).
+- Stopped the ERP (`compose-*`, `/opt/traders/compose`) stack the same day (`docker compose stop`; nothing removed).
+  The host now runs only realtrack. Restart steps are in KNOWN_ISSUES R27.
+
+## 2026-09-21 — FIX: cap image-processing memory (502s from backend OOM restarts) — deployed 16:17 UTC
+
+- **Cause:** the backend container was repeatedly OOM-killed on the 4 GB production host; nginx returned 502
+  while Docker restarted it (KNOWN_ISSUES R27, update 2026-09-21 ~16:00 UTC).
+- `storage/processors/thumbnail.processor.ts`: worker concurrency 15 -> 3, configurable via
+  `STORAGE_THUMBNAIL_CONCURRENCY`.
+- `storage/image-processor.service.ts`: process-wide `sharp.concurrency(1)` and `sharp.cache({memory: 32})`
+  (`SHARP_CONCURRENCY`, `SHARP_CACHE_MB`).
+- New `storage/upload-limits.ts`: 20 MB per-file multer limit (`IMAGE_UPLOAD_MAX_FILE_MB`) on the in-memory image
+  upload endpoints (Image Drive x3, Fashion, Business & Industrial intake). Larger files now get HTTP 413.
+- `docker-compose.yml`: backend `mem_limit: ${BACKEND_MEM_LIMIT:-1800m}`; default heap 1536 -> 1280 MB. Note that a
+  host `.env` `NODE_OPTIONS` overrides the compose default.
+
+## 2026-09-21 — Fitment from eBay's compatibility check; second pricing correction (brand must be named)
+
+- Added the eBay-compatibility fitment finder (`fitment-compat.mjs`, `fitment-from-ebay-compat.mjs`,
+  `fitment-compat-apply.mjs`, `fitment-compat-eval.mjs`, `persist-fitment-sql.mjs`, `mvl-pull.sh`,
+  `csv-safe.mjs`). It uses only the application token (`check_compatibility`), samples years through long
+  ranges, requires two sellers to agree, and uses a listing only if its own item specifics name our Brand
+  and Manufacturer Part Number. 3 rows applied (Ford Taurus, Ford Escape, Nissan Armada/Titan/QX56).
+  Accuracy against already-validated fitment: 88.6% with the guard (67% without).
+- **Second pricing correction:** comparables must name the brand (part type alone no longer qualifies for
+  part-number searches). 85 of 132 priced Napa rows had no NAPA-named comparable. Verified prices
+  232 -> 147; postable 118 -> 106, then 109 with the three new fitment rows. No reman-prone row is postable.
+- The local runner gained `PUSH_SOURCE=1` (source CSV push, md5-guarded) and pushes the fitment state.
+- Found: some already-validated fitment appears wrong (KNOWN_ISSUES R29) and the host still restarts the
+  backend on its own (R27 update).
+- Ops: activated 4 GB swap on the production host (swappiness 10, persisted in fstab) against the OOM kills (R27).
+
+## 2026-09-21 — FIX: pricing comparables must be the right kind of product
+
+- **Bug:** Browse comparables were accepted on a part-number substring match alone, so numeric part
+  numbers priced parts from unrelated products (an air filter from LEGO tiles, a muffler from
+  torque rods and diecast cars). Those rows were marked verified and could reach the postable export.
+- **Effect on earlier figures:** of the original 44 postable rows, 8 had a wrong price and 3 no
+  defensible price; the "223 verified" figure was inflated.
+- **Fix:** comparables must name the brand or enough of the part type (OE-number matches must name
+  the part type); new offline `--refilter` re-derives stored results. Corrected server figures: 232
+  verified, 118 postable (previously reported: 223 and 44). See CATALOG_PIPELINE, "Correction:
+  comparable relevance".
+- The local runner gained `MODE=push`, `REFILTER=1`, `ALLOW_SHRINK=1` and a pre-push server backup.
+
+## 2026-09-21 — SEO content persisted to the catalog DB; heavy pipeline work moved off the production host
+
+- Added `scripts/persist-seo-content.mjs`: a narrow, transactional write of the new SEO
+  title/description into `catalog_products` and draft `listing_records` (147 rows applied, backup
+  written, `--restore` available). Dry-run by default.
+- The production host (3.8 GB, no swap) OOM-killed the backend twice while pipeline jobs ran inside
+  its container (KNOWN_ISSUES R27). The server-side retry watcher was stopped and deprecated;
+  `scripts/pricing-retry-local.sh` replaces it and does the heavy work on another machine.
+  `create-partsbazar360-csv.mjs` now honors `PIPELINE_BASE`.
+
+## 2026-09-21 — Vehicle-aware SEO titles and descriptions for validated-fitment rows
+
+- Added `scripts/seo-content.mjs` / `seo-content-apply.mjs`: titles in the store house style
+  (`Febest 1924-E70FUPL Control Arm Front Upper Left for BMW X5 X6 E70 E71`, <= 80 chars, make
+  once with its models, real chassis codes only) and structured HTML descriptions built only
+  from data already held. Applied to the 147 rows with validated fitment; exports regenerated.
+- Fixes a mis-title in the previous builder: a part that is Rear on some vehicles and Front on
+  others was titled by its first record ("Rear"). Position now appears only when consistent.
+- Reman-prone part types (calipers, starters, alternators, axles...) are described without
+  "New" (KNOWN_ISSUES R24).
+- `price-enrich-catalog.mjs`: the web-result overlay no longer overwrites Browse evidence
+  (it had erased the "not evaluated" flag, which would have made `--retry-failed` skip rows).
+  `price-web-research.mjs` gained `--reserve` / `--only-searched` and a live credit check.
+
+## 2026-09-21 — Web-search pricing (GPT-5.6 Luna) for rows eBay Browse could not price
+
+- Added `scripts/price-web-research.mjs`: GPT-5.6 Luna (OpenRouter, web search on) finds
+  priced pages for the exact brand + MPN. Every cited page is re-fetched and only counted
+  when it shows the brand + MPN (or UPC) and the price; a wrong quoted price is replaced by
+  the price the page's JSON-LD declares. All statistics and statuses are computed in code;
+  confidence is capped at `medium`. Unverifiable sources (bot-protected retailers) go to
+  manual review and are never postable.
+- Rows whose only exact page is remanufactured/used are flagged as condition conflicts
+  instead of being priced as New (see KNOWN_ISSUES R24).
+- `price-enrich-catalog.mjs` overlays web results only onto rows Browse could not price
+  (a Browse price always wins), reports condition conflicts, counts web methods as
+  exact-MPN/MSRP, and writes `partsbazar360-pricing-review-queue.csv`.
+
+## 2026-09-20 — Pricing enrichment stage for the eBay/PartsBazar360 pipeline
+
+- Added `scripts/price-enrich-catalog.mjs`: every catalog row now gets an
+  evidence-backed price from eBay Browse comparables (exact UPC/EAN, then
+  brand+MPN, then MPN, then OE/interchange), falling back to catalog MSRP.
+  Comparables are filtered to new fixed-price listings from reputable sellers,
+  compared shipping-inclusive, and trimmed of outliers; the recommended price is
+  the median less 3%, rounded to a buyer-friendly amount.
+- Comparables are ACTIVE listings only. The account grant is `buy.browse`, so the
+  Marketplace Insights (sold listings) API is unavailable and
+  `pricing_verified_exact_match` is never emitted. Rows with no defensible price
+  are preserved as `pricing_pending`; thin, wildly dispersed, or
+  identifier-conflicted rows become `manual_pricing_review`.
+- The audit and postable PartsBazar360 exports carry 13 new pricing columns, and
+  the File Exchange export is patched with `*StartPrice`. A listing is postable
+  only with a numeric price, a currency, a pricing source or method, a confidence
+  value, and no unresolved identifier conflict; content-ready rows that fail the
+  gate are kept in the audit export as `content_ready_pricing_pending`. With no
+  pricing evidence present the export fails closed.
+- Each run writes `partsbazar360-pricing-validation-report.md`/`.json` with the
+  verified / exact-MPN / comparable-part / MSRP / missing / manual-review
+  breakdowns and min/median/max recommended price by brand and category.
+- An eBay HTTP 429 is never recorded as "no comparables found". Rows whose
+  lookups were all rate-limited are marked `lookup_rate_limited` / not evaluated
+  and re-priced by `--retry-failed`; the report splits rows genuinely searched
+  from rows never evaluated.
+
+## 2026-09-19 — Clarify eBay Inventory API listing editing
+
+- Published listing details now explain that eBay Inventory API listings cannot
+  be edited in Seller Hub and direct operators to the system's Quick revise form,
+  which uses the supported Inventory API revision path.
+
+## 2026-09-19 — FEBEST Trading API compatibility fallback
+
+- FEBEST publishes now route through the Seller Hub-editable Trading API path
+  even when the global listing mode remains inventory.
+- Trading AddFixedPriceItem serializes only unique Year/Make/Model compatibility
+  rows first. If eBay still returns 21917122 (“All compatibilities are
+  invalid”), it retries the atomic add without the compatibility block so the
+  listing is published instead of being dropped; the fitment remains in the
+  buyer-facing description.
+
+## 2026-09-16 — B&I intake recovery and duplicate-folder protection
+
+- B&I intake now resets only genuinely stale groups left in `processing` after
+  a worker interruption, allowing the last folders to be retried and finalized
+  instead of leaving the parent job partial forever.
+- Drive-source provenance is stored on intake-created products. Repeated folder
+  names from different Drive roots receive deterministic `BNI-` collision
+  suffixes, so separate folders no longer overwrite or share one catalog row.
+- Added the scoped `bi:repair` recovery command for the three authorized Drive
+  jobs, including current duplicate-folder separation and category corrections;
+  it never publishes to eBay.
+- The repair is now idempotent for the listing-record source-row uniqueness
+  constraint, materializes missing projections, and backfills evidence-based
+  required `Model`/`Type` values. The scoped eBay readiness audit now
+  accepts intake job IDs and exits after reporting; the three repaired jobs
+  validated at 377/377 ready, 0 blocked, published=false.
+
+## 2026-09-16 — Business & Industrial intake throughput
+
+- The production B&I Drive intake worker now permits two concurrent root jobs. Image identity remains idempotent by intake job and source path, so retries do not duplicate already-ingested assets.
+
+- **Faster visible drafts and catalog header controls (2026-09-16):** Public
+  Drive intake now processes two folders concurrently, downloads four images
+  per folder concurrently with bounded retries, and creates each folder's draft
+  as soon as its complete image set is retained. Incomplete folders remain
+  retryable instead of producing partial drafts. The shared catalog table now
+  exposes direct column sorting and filters for MPN, category, condition,
+  price/stock, images, import date, and publication status. Production also
+  moved the three current Drive jobs and their 22 existing drafts from the
+  Super Admin organization into the dedicated B&I workspace; no marketplace
+  publication was performed.
+
+- **B&I catalog isolation and tenant repair (2026-09-16):** Business &
+  Industrial catalog publication joins now require an exact B&I vertical and
+  organization match; legacy null-vertical/null-organization compatibility is
+  retained only for Automotive. Image intake inventory mirrors now inherit the
+  authoritative catalog product organization and match existing rows by
+  organization + vertical + SKU. Production repaired 77 unambiguous historical
+  B&I mirrors to their matching catalog-product organization; no marketplace
+  publication was performed.
+
+- **B&I publish-readiness repair (2026-09-16):** New image-intake drafts now
+  persist dispatch location, shipping coverage, parcel dimensions/weight and
+  units, enriched item specifics, a separate MPN (model fallback, then
+  `Does Not Apply`), Type, and a normalized condition. Blank linked inventory
+  values no longer mask populated catalog Brand/MPN/Type values. Added an
+  idempotent backfill for all existing B&I catalog rows and their inventory
+  projections; it performs no marketplace publication.
+
+- **B&I exact-folder Drive intake and MPN/SKU preservation (2026-09-16):** Drive intake now processes every direct source folder with supported images, preserves decimal folder suffixes as part of the independent listing identity, generates `BNI-<exact-folder-name>` SKUs, keeps MPN in its dedicated field, retains all available folder images, and overwrites same-SKU enrichment in place without publishing. Automatic draft enrichment also runs for confidence-gated detections so the catalog receives the full source set for operator publishing readiness.
+
+
+- **B&I catalog published status + backfill (2026-09-15):** `/business-industrial/catalog` was forcing Unpublished for operators with an empty store-access list (`AND 1 = 0`), even when live `ebay_listing_channels` and `listing_records."ebayListingId"` rows existed. Catalog search now keeps Published from live channels (including null vertical), `catalog_products.ebay_item_id`, and matching listing records. Successful eBay publishes stamp `ebay_item_id`. Historical live rows are repaired by `scripts/backfill-catalog-publication-status.sql`.
+
+- **eBay 25002 core-fitment retry actually strips optional fields (2026-09-15):** Production FEBEST publishes (SKUs such as `1921-G01LH`) failed with Inventory error 25002 after the compatibility PUT and readback succeeded. European catalog trims/engines (`sDrive 18 d`, `BMW B47 D20 A`) and a `Submodel` property are not valid US Motors compatibility fields, and the documented retry was rewriting the same payload. Publish now retries once with unique Make/Model/Year only, omits `Submodel` from the Inventory API payload, and uses that reduced projection for offer refresh.
+
+- **B&I catalog filter placement parity (2026-09-14):** The Business & Industrial catalog now follows Auto Parts placement with a horizontal quick-filter bar below search and a left-side advanced-filter drawer at desktop and mobile widths. Existing filter state, URL/session persistence, bulk actions, and catalog data are unchanged; no listings were published.
+
+- **B&I intake identifiers and catalog navigation (2026-09-14):** Image-intake
+  drafts now persist MPN separately and generate deterministic `BNI-` SKUs from
+  the normalized base folder name; final numeric dot suffixes remain grouped as
+  physical instances. Removed operator-facing model/token/cost details from
+  intake responses and screens, made intake run/group lists independently
+  scrollable, and added a desktop filter toggle plus contained sticky-header
+  scrolling to the shared catalog workspace. No listings were published.
+
+- **B&I bulk publish profile selection (2026-09-14):** The selected-listings
+  publish dialog now loads the complete connected-store profile/policy options,
+  lets the operator choose shared shipping, payment, and return profiles before
+  a future publish click, and carries the selected names into each durable target
+  for store-specific policy-ID resolution. This change does not submit or
+  publish any listing by itself.
+
+- **B&I eBay condition normalization (2026-09-14):** Preserved imported eBay
+  condition ID 3000 as USED_EXCELLENT instead of collapsing it to ID 5000,
+  which eBay rejects for categories such as Switching Mode Power Supplies.
+  Publish projection validation now infers missing generic-used IDs and selects
+  a supported condition from the live category policy within the same used,
+  new, refurbished, or parts family.
+
+- **B&I catalog publication state and policy selectors (2026-09-14):** Catalog
+  rows now reconcile current and legacy live eBay records, expose Published,
+  Unpublished, and Blocked filters, and provide a usable published-item URL.
+  Bulk policy editing now uses complete connected-store shipping, payment, and
+  return profile dropdowns instead of free-text inputs.
+
+- **Temporary B&I publish bypass (2026-09-14):** Added the reversible
+  `BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH` switch for operator-led
+  publishing. When enabled, the B&I UI and eBay publish endpoints do not
+  require compliance approval, and multi-selected B&I records can receive bulk
+  policy/profile edits; review records and other publishing safeguards remain
+  unchanged.
+
+- **Private S3 eBay image publishing fix (2026-09-14):** eBay Picture Services
+  now receives private first-party S3 image bytes through the multipart
+  `create_image_from_file` endpoint, while the durable source URL remains the
+  cache key. This avoids eBay's failed anonymous fetch of private presigned
+  URLs without making the image bucket public or persisting signed URLs.
+
+- **B&I taxonomy hardening (2026-09-14):** Business & Industrial image intake
+  now tries the AI category query first and then deterministic family/type
+  query variants when eBay suggestions are too narrow. Every result is still
+  verified as an eBay leaf and receives live item-aspect metadata; the fallback
+  broadens search vocabulary but never invents a category ID. No marketplace
+  publishing is performed by intake.
+
+- **FEBEST pre-enriched import and source audit (2026-09-14):** Added the explicit `pre_enriched_febest_v1` pipeline mode, exact three-sheet server validator plus dry-run endpoint, draft-only collision-checked worker path, and upload UI selector. The deterministic FEBEST audit ingests 4,599 unique source rows, enumerates 20,102 official catalog items, captures official evidence for 4,591 products, applies the approved 30% AED markup with recorded Google Finance FX, and produces 533,612 accepted US-MVL fitment rows plus a separate 1,102,126-row review audit. The run remains DRAFT/BLOCKED for 886 products without accepted US-MVL mappings and 8 unresolved evidence/image rows; no production writes or eBay publishing were performed.
 
 - **Fashion photos-first item workflow (2026-09-14):** Fashion Add Item now
   collects a complete garment photo set (camera, upload, or both) before
@@ -425,7 +1471,20 @@ for every meaningful change (Continuous Documentation Protocol).
 
 ## [Unreleased]
 
+- Catalog photo zoom now routes first-party S3 and supported NAPA images through
+  the same-origin image proxy. Direct browser requests to the private S3 bucket
+  returned 403, while the application image proxy serves the same asset.
+
+- Fixed eBay publish SKU resolution so reviewed listing `customLabelSku` values
+  take precedence over stale catalog SKUs, and catalog-only requests recover
+  the persisted SKU instead of publishing with the internal product ID.
+
+- **Jeep teardown image host repoint (2026-09-13):** Pipeline job `UPL-2026-000146` (`JEEP-2218-WHITE-*`, including `JEEP-2218-WHITE-RD13`) stored image URLs on the retired `solarrisebackupbucket.s3.amazonaws.com` host. Rows were repointed onto `solarrisebackupbucket-<account>.s3.amazonaws.com` with the same object keys. The objects already existed; Auto Parts serving failed because the live bucket policy only granted the app account `mhn/business-industrial/*`. That policy now also allows `mhn/catalog-images/*`, `mhn/temp/*`, `mhn/originals/*`, and `mhn/image-drive/*`. The live bucket had no CORS configuration, so Inventory Details browser `PUT`s failed as `S3 upload network error` on every SKU; CORS now allows the production frontend origins (`app.omnicoreholding.com`, `mhn.realtrackapp.com`, and related hosts) with `PUT`/`Content-Type`. Image mirroring treats the legacy hostname as an alias of the configured bucket. Maintenance: `scripts/repoint-s3-bucket-alias-urls.mjs`.
+
+
 - **Publish build dependencies:** Added the safe eBay category util, `PublishRequest.vertical`, and validated fitment-source option required by the B&I listing builder.
+
+
 
 - **B&I catalog condition and brand filters:** Business & Industrial facets now
   aggregate condition from `condition_label` when `condition_id` is null (the
@@ -526,8 +1585,7 @@ for every meaningful change (Continuous Documentation Protocol).
 
 - **B&I public Drive pilot and Luna enrichment:** Added a protected
   POST /api/business-industrial/image-intake/jobs/from-drive endpoint and
-  frontend controls for a server-side 20-item pilot. The worker prefers
-  BNI-* folders, caps images per item, converts images to WebP before S3,
+  frontend controls for a server-side full-root import. The worker processes every direct folder, retains all supported images, and converts images to WebP before S3,
   uses openai/gpt-5.6-luna-20260709 for vision plus listing copy, aggregates
   token/cost totals from ai_run_logs, and projects reviewable drafts into both
   B&I Catalog and shared Inventory. The pilot requires GOOGLE_DRIVE_API_KEY
@@ -571,10 +1629,9 @@ for every meaningful change (Continuous Documentation Protocol).
 - **eBay inventory-location country guard:** Publish location resolution now treats `default`, `USA`, and other legacy US placeholders as invalid for this UAE account, accepts only an enabled UAE merchant location, and provisions/uses the required Dubai location `AE_Dubai` when needed. If eBay cannot verify or provision a UAE location, the publish fails closed instead of submitting a US location.
 - **eBay collision and warehouse-policy failure handling:** Account-level SKU collisions now use a deterministic bounded alternate for every valid imported SKU family (including FORD-*), while existing channel mappings reuse the assigned alternate on later publishes. eBay overseas-warehouse location blocks (reference 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block) are classified as permanent and bulk revise actions now preserve the detailed eBay reason with actionable location/authorization guidance.
 
-- **eBay stale-offer recovery:** Superior and other Inventory API publishes now
-  recover once from eBay error 25713 (This Offer is not available) by purging
-  the stale offer/item, restoring compatibility, and creating a fresh offer.
-  Targeted durable-job recovery recognizes the same failure class.
+- **eBay stale-offer recovery (superseded 2026-09-30):** The earlier retry purged
+  the stale offer and item. Current code preserves the Inventory item and follows
+  the confirmed-ended, exact-offer recovery described in the 2026-09-30 entry.
 
 - **Pipeline Image Drive auto-attachment:** Bulk pipeline finalization now resolves manufacturer/OEM part numbers against Image Drive folders, replaces warehouse/bin placeholders, prepends matched CDN image URLs, preserves valid source URLs, updates listing and catalog image fields, and records match/link counts.
 - **Image Drive thumbnail visibility:** Folder APIs now return CDN URLs for generated thumbnail keys, and raw Image Drive thumbnails are routed through the backend image proxy.

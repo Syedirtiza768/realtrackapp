@@ -71,6 +71,7 @@ const BRAND_ALIASES: Record<string, string> = {
   mercedes: 'Mercedes-Benz',
   'mercedes-benz': 'Mercedes-Benz',
   mb: 'Mercedes-Benz',
+  bently: 'Bentley',
   vw: 'Volkswagen',
   chevy: 'Chevrolet',
   landrover: 'Land Rover',
@@ -143,6 +144,64 @@ export function buildPlatformKey(
   const mk = normalizePlatformMake(make);
   const md = normalizePlatformModel(mk, model);
   return mk && md ? `${mk}|${md}` : '';
+}
+
+/**
+ * Resolve a known model when a source listing title starts with its vehicle
+ * identity, optionally after a year or year range (for example,
+ * "2012 Jaguar XF ..."). This is intentionally prefix-only so a part name
+ * that happens to contain a model token cannot supply donor context.
+ */
+export function resolvePlatformModelFromTitle(
+  make: string | null | undefined,
+  title: string | null | undefined,
+  ranges: PlatformRangesMap = PLATFORM_RANGES,
+): string | null {
+  const normalizedMake = normalizePlatformMake(make);
+  let remainder = String(title ?? '').trim().replace(
+    /^(?:19|20)\d{2}(?:\s*[-–]\s*(?:19|20)\d{2})?\s+/,
+    '',
+  );
+  if (!normalizedMake || !remainder) return null;
+
+  const canonicalMakeVariants =
+    normalizedMake.toLowerCase() === 'infiniti'
+      ? [normalizedMake, 'Infinity']
+      : [normalizedMake];
+  const makeVariants = [
+    ...new Set([String(make ?? '').trim(), ...canonicalMakeVariants]),
+  ]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  const titleMake = makeVariants.find((candidate) => {
+    const prefix = candidate.toLowerCase();
+    const text = remainder.toLowerCase();
+    return (
+      text.startsWith(prefix) &&
+      (text.length === prefix.length || /\s/.test(text[prefix.length]))
+    );
+  });
+  if (!titleMake) return null;
+  remainder = remainder.slice(titleMake.length).trimStart();
+
+  const makeKey = normalizePlatformMake(make).toLowerCase();
+  const prefix = `${makeKey}|`;
+  const models = Object.keys(ranges)
+    .filter((key) => key.toLowerCase().startsWith(prefix))
+    .map((key) => key.slice(key.indexOf('|') + 1))
+    .sort((a, b) => b.length - a.length);
+  const text = remainder.toLowerCase();
+
+  return (
+    models.find((model) => {
+      const candidate = model.toLowerCase();
+      return (
+        text.startsWith(candidate) &&
+        (text.length === candidate.length ||
+          /[\s\-/,]/.test(text[candidate.length]))
+      );
+    }) ?? null
+  );
 }
 
 /** Resolve chassis generation from donor/model year. */

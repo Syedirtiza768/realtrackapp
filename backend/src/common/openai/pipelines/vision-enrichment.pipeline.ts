@@ -111,7 +111,9 @@ export class VisionEnrichmentPipeline {
   ): Promise<VisionEnrichmentResult> {
     // Auto-detect ECU / electronic modules and use the specialised prompt
     // unless the caller explicitly supplied a custom prompt.
-    const useEcuPrompt = !prompt && isEcuPartType(partContext.partType);
+    const useEcuPrompt =
+      (!prompt || prompt === ECU_IDENTIFICATION_PROMPT) &&
+      isEcuPartType(partContext.partType);
     const effectivePrompt =
       prompt ?? (useEcuPrompt ? ECU_IDENTIFICATION_PROMPT : MOTOR_PARTS_PROMPT);
     const systemPrompt = useEcuPrompt
@@ -123,6 +125,10 @@ export class VisionEnrichmentPipeline {
       userPrompt: effectivePrompt,
       systemPrompt,
       imageUrls,
+      imageDetail:
+        partContext.partType === 'single_listing_form' || useEcuPrompt
+          ? 'high'
+          : undefined,
       model: route.model,
       costLane: route.lane,
       jsonMode: true,

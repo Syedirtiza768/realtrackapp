@@ -53,12 +53,26 @@ export type DateAddedPreset = 'all' | 'today' | 'yesterday' | 'last_7' | 'last_3
 
 export type SortMode =
   | 'relevance'
+  | 'newest'
+  | 'oldest'
   | 'price_asc'
   | 'price_desc'
-  | 'newest'
   | 'title_asc'
   | 'title_desc'
-  | 'sku_asc';
+  | 'sku_asc'
+  | 'sku_desc'
+  | 'team_asc'
+  | 'team_desc'
+  | 'condition_asc'
+  | 'condition_desc'
+  | 'stock_asc'
+  | 'stock_desc'
+  | 'status_asc'
+  | 'status_desc'
+  | 'ebay_asc'
+  | 'ebay_desc'
+  | 'image_asc'
+  | 'image_desc';
 
 /* -- Search Response ------------------------------------------------- */
 
@@ -105,6 +119,8 @@ export interface SearchItem {
   teamName?: string | null;
   teamColor?: string | null;
   catalogStatus?: CatalogListingStatus;
+  /** Linked catalog product is on manual review or a protected lifecycle hold. */
+  publishBlocked?: boolean;
   shippingProfileName?: string | null;
   /** eBay item ID (set when listing is published to eBay) */
   ebayListingId?: string | null;

@@ -52,7 +52,7 @@ export class IntegrationsEbayController {
   @Get('workspace')
   @ApiOperation({
     summary:
-      'Resolve RealTrack workspace for the signed-in user (not an eBay seller ID)',
+      'Resolve Omni Core workspace for the signed-in user (not an eBay seller ID)',
   })
   async workspace(@CurrentUser() user: User) {
     return this.userOrgs.getWorkspaceContext(user.id);
@@ -83,10 +83,13 @@ export class IntegrationsEbayController {
     @Query('state') state: string,
     @Res() res: Response,
   ) {
-    const base = this.config.get<string>(
-      'FRONTEND_BASE_URL',
-      'http://localhost:3911',
-    );
+    const configuredBase = this.config.get<string>('FRONTEND_BASE_URL');
+    const base = (
+      configuredBase?.trim() ||
+      (process.env.NODE_ENV === 'production'
+        ? 'https://app.omnicoreholding.com'
+        : 'http://localhost:3911')
+    ).replace(/\/+$/, '');
     try {
       if (!code || !state) {
         res.redirect(
@@ -95,8 +98,12 @@ export class IntegrationsEbayController {
         return;
       }
       const result = await this.oauth.handleCallback({ code, state });
+      const destination = result.redirectUrl ?? '/settings/integrations/ebay';
       res.redirect(
-        `${base}/settings/integrations/ebay?success=1&accountId=${result.connectedEbayAccountId}`,
+        base +
+          destination +
+          '?success=1&accountId=' +
+          result.connectedEbayAccountId,
       );
     } catch (err) {
       this.logger.error(

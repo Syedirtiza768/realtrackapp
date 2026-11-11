@@ -1,4 +1,4 @@
-const BASE = 'https://mhn.realtrackapp.com/api';
+const BASE = 'https://app.omnicoreholding.com/api';
 const JOB_ID = '1c3a0f2a-064c-4d86-8c37-c31f60ffd272';
 const DELAY = 1200; // ms between requests (well under 100/min medium limit)
 

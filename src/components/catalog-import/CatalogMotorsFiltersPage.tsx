@@ -252,7 +252,7 @@ export default function CatalogMotorsFiltersPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-1">
-              <Link to="/catalog/import" className="hover:text-blue-400">
+              <Link to="/auto-parts/catalog/import" className="hover:text-blue-400">
                 CSV Import
               </Link>
               <span>/</span>

@@ -31,9 +31,10 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 |-------|-----------|------------|---------|
 | `/auto-parts` | `Dashboard` inside `Shell` | `dashboard.view` | Canonical Auto Parts / automotive application landing page |
 | `/listings/new` | `SingleListingPipeline` | `listings.create` | **Add Part** — GridConnect-style intake: part type (OEM/Aftermarket/Salvage), condition (New/Used), brand, part #, price, qty → unidentified draft. Add at least two photos in Inventory before automatic identification; photo-less drafts are not assigned a guessed part title. |
+| `/listings/new` | `SingleListingPipeline` | `listings.create` | **Add Part** — GridConnect-style intake: part type (OEM/Aftermarket/Salvage), condition (New/Used), brand, vehicle make, part #, price, qty → unidentified draft. The draft save does not wait on optional Image Drive lookup; fetched images attach in the background only if the listing is still photo-less. Add at least two photos in Inventory before automatic identification; photo-less drafts are not assigned a guessed part title. A 45-second client timeout tells operators to check Inventory before retrying. |
 | `/listings/:id/edit` | `ListingEditor` | `listings.update` | Edit listing |
 | `/listings/:id/history` | `RevisionHistory` | `listings.view` | View revisions |
-| `/catalog` | `CatalogManager` | `catalog.view` | Table-first catalog ops: quick filters, team badges, workflow status, bulk publish/policies; row title opens inventory summary modal |
+| `/catalog` | `CatalogManager` | `catalog.view` | Table-first catalog ops: quick filters, team badges, workflow status including manual-review holds, bulk publish/policies; held rows are excluded from Ready to Publish and rejected by single/bulk publish; row title opens inventory summary modal |
 | `/catalog/products/:id` | `CatalogProductDetail` | `catalog.view` | Full product editor: WYSIWYG preview, images, multi-marketplace, publish |
 | `/catalog/import` | `CatalogImportDashboard` | `catalog.import` | CSV import with an explicit Automotive, Business & Industrial, or Fashion vertical selector; vertical is sent with the upload |
 | `/catalog/motors-filters` | `CatalogMotorsFiltersPage` | `catalog.view` | Motors filters |
@@ -73,6 +74,7 @@ All protected routes wrapped in `<ProtectedRoute>` and `<Shell>`. Public routes 
 ## Vertical catalog routes (2026-09-12)
 
 The canonical parity surfaces are `/auto-parts/catalog`, `/business-industrial/catalog`, and `/fashion/catalog`. The B&I and Fashion `/listings` collection routes remain aliases to the shared workspace; their `/listings/editor` and `/fashion/listings/:id[/edit]` routes remain full vertical editors. Both shared surfaces use `CatalogWorkspace` with loading-safe checkbox facets, searchable/collapsible filters, empty-catalog versus no-match states, server-side pagination, URL/session persistence, quick view, drag-reorder image management, bulk actions with pending and record-level failure feedback, export, and publish-job progress that distinguishes submitted, processing, published, partially failed, and failed without treating panel close as cancellation. B&I keeps its desktop filter column and mobile filter drawer. Fashion uses horizontal dropdowns above results for brand, category, condition, status, stock, Fashion category, department, item type, size, color, and material; less-used filters open in an accessible Advanced Filters drawer on desktop and mobile. Category selections use the facet's stable category ID and imported-to dates are inclusive.
+The canonical parity surfaces are `/auto-parts/catalog`, `/business-industrial/catalog`, and `/fashion/catalog`. The B&I and Fashion `/listings` collection routes remain aliases to the shared workspace; their `/listings/editor` and `/fashion/listings/:id[/edit]` routes remain full vertical editors. Both shared surfaces use `CatalogWorkspace` with loading-safe checkbox facets, searchable/collapsible filters, horizontal dropdown filters above results, and an Advanced Filters drawer for less-used criteria. Fashion's dropdown row includes brand, category, condition, catalog status, stock, department, item type, size, color, and material. The workspaces also provide empty-catalog versus no-match states, server-side pagination, URL/session persistence, quick view, drag-reorder image management, bulk actions with pending and record-level failure feedback, export, and publish-job progress that distinguishes submitted, processing, published, partially failed, and failed without treating panel close as cancellation. Category selections use the facet's stable category ID and imported-to dates are inclusive.
 
 The B&I catalog reuses the Auto Parts catalog's table-first header and action
 hierarchy (summary, refresh, export, policy edit, add item, selection bar,
@@ -84,12 +86,13 @@ controls or empty legacy import/location/condition facets.
 ### Automotive modal image mutations
 
 The Auto Parts `CatalogInventoryDetailModal` receives a `listing_records` ID. Reorder/remove uses `PATCH /api/inventory/listings/:listingId/images/reorder`, while newly uploaded images use `PATCH /api/inventory/listings/:listingId/images` with uploaded asset IDs. At least two photos are required for part identification. The image-save endpoint queues one photo-first enrichment job; new images can restart a completed job. If photos do not confirm the entered part number, lookup fails closed and surfaces a review-needed error instead of falling back to seller listings. Later enrichment cannot overwrite photo-derived title, type, description, or MPN, and failed validation cannot write generated identity fields.
+The Auto Parts `CatalogInventoryDetailModal` receives a `listing_records` ID, which is the source of truth for its image list. The primary part photo is shown in a contain-fit frame; saved photos appear in the existing Product Images gallery lower in the modal, where authorized users can reorder, remove, upload, and copy URLs. Selecting a gallery thumbnail opens the full image viewer. There is no second thumbnail strip near the title, so the same saved photos are not repeated in two galleries. The shared `OptimizedImage` component sizes its image to the frame so `objectFit` is honored. Before appending uploaded assets with `PATCH /api/inventory/listings/:listingId/images`, the modal persists pending removals/reordering through `PATCH /api/inventory/listings/:listingId/images/reorder`; this prevents previously removed images from returning after refresh. Add Part saves the selected vehicle make but leaves product identity unassigned until at least two photos are available. Optional Image Drive lookup runs after the draft response and re-reads the listing before attaching photos, so it cannot replace a user upload made after save. The backend queues one photo-first enrichment job; new photos can restart a completed run. If photos do not confirm the part number, lookup fails closed and surfaces a review-needed error instead of falling back to seller listings. Inventory labels that case `Needs review`; `Needs photo` is limited to explicit missing-photo or photo-coverage errors. A failed AI quality gate cannot overwrite the photo-derived title, type, description, or MPN. The client stops waiting for a draft-save response after 45 seconds and prompts the operator to check Inventory before retrying to avoid duplicates.
 
 ### Backend contract
 
 - Fashion: `/api/fashion/catalog/search`, `/search/suggest`, `/search/facets`, `/products/:id`, `/bulk/*`, and `/export`.
 - Business & Industrial: `/api/business-industrial/catalog/search`, `/search/suggest`, `/search/facets`, `/summary`, `/products/:id`, `/bulk/*`, `/categories`, and `/export`.
-- Both verticals’ catalog responses include only organization/vertical/team-authorized records and publication summaries from accessible stores.
+- Both verticals’ catalog responses include only organization/vertical/team-authorized records and publication summaries from accessible stores. B&I requires exact organization and `business_industrial` tags for catalog products, inventory mirrors, and channel joins; Automotive alone retains compatibility with historical null-tagged rows.
 
 ### Login
 ```
@@ -160,10 +163,10 @@ A 401 from a Fashion page preserves the Fashion login route. A Fashion-authentic
 |-------|-----------|------------|---------|
 | /business-industrial/login | BusinessIndustrialLoginPage | public | Dedicated B&I login surface |
 | /business-industrial | BusinessIndustrialDashboardPage | business_industrial.dashboard.view | Metrics and dedicated stores |
-| /business-industrial/catalog | BusinessIndustrialCatalogWorkspacePage | business_industrial.listings.view | Shared Auto Parts-style catalog workspace with brand/category/condition/review/stock and populated B&I facets, mobile filter drawer, compact mobile product cards, mixed selection checkboxes, canonical detail hydration, complete image viewer/lightbox, drag-reorder images, multi-store single validation/publish that loads shipping/return/payment profiles via `/stores/:id/profiles` (Auto Parts path) with B&I account-policy fallback plus connected-store defaults/location, select all/deselect all, bulk store publishing, export, and publish progress phases |
+| /business-industrial/catalog | BusinessIndustrialCatalogWorkspacePage | business_industrial.listings.view | Shared Auto Parts-style catalog workspace with direct Product/SKU/Price/Date column sorting; header filters for MPN, category, condition, price/stock, images, date, and publication status; brand/category/condition/review/stock and populated B&I facets; horizontal quick-filter bar and advanced-filter drawer; compact mobile product cards; mixed selection checkboxes; canonical detail hydration; complete image viewer/lightbox; drag-reorder images; live Published status from channels/`ebay_item_id`/listing records; multi-store validation/publish and bulk shared profile/policy dropdowns; export; and publish progress phases |
 | /business-industrial/listings | BusinessIndustrialCatalogWorkspacePage | business_industrial.listings.view | Legacy alias to the shared B&I catalog workspace |
 | /business-industrial/listings/editor | BusinessIndustrialListingsPage | business_industrial.listings.view | Sectioned technical editor (identity, category/marketplace, evidence, specifications, inventory, shipping) with supported unit controls, validation jump, unsaved-change warning, direct `?edit=` loading via catalog product, seller selection, live eBay leaf-category search, required item specifics, per-target validation, publish-job tracking, and publication end. Saving returns the draft to compliance review; visible completeness does not authorize publication. |
-| /business-industrial/image-intake | BusinessIndustrialImageIntakeWorkspacePage | business_industrial.import | Production image intake workspace for public Google Drive or local folders, organization-scoped background processing, WebP storage, progress/cost visibility, group evidence review, retry, Excel export, and catalog draft creation |
+| /business-industrial/image-intake | BusinessIndustrialImageIntakeWorkspacePage | business_industrial.import | Production image intake workspace for public Google Drive or local folders, organization-scoped background processing, WebP storage, exact-folder grouping, full image retention, group evidence review, retry, Excel export, and catalog draft creation |
 | /business-industrial/import | BusinessIndustrialImportPage | business_industrial.import | B&I CSV/XLSX upload, progress, preview, retry, cancel, and client error report |
 | /business-industrial/review | BusinessIndustrialReviewPage | business_industrial.review | Provenance/specification/testing/restricted-category approval and private unit actions |
 | /business-industrial/stores | BusinessIndustrialStoresPage | business_industrial.stores.view | Dedicated eBay seller connections, policies, and marketplace configuration |
@@ -184,16 +187,22 @@ drawer, 44px controls, and stacked actions; catalog results use cards below
 
 Business Industrial image intake accepts a public Google Drive folder or a local
 directory/drop, previews source images, uploads in API-sized batches, queues
-server-side processing, polls AI progress, displays image evidence and warnings
-per grouped part, creates a B&I catalog draft, and downloads the Excel export.
-The screen clearly labels AI output as reviewable suggestions and
-hands drafts into the existing listing/compliance/eBay publish flow.
+server-side processing, polls enrichment progress, displays image evidence and
+warnings per exact source folder, creates each Drive-folder catalog draft as
+soon as all of that folder's images are retained, and downloads the Excel
+export. Folder/image work uses bounded concurrency and download retries;
+incomplete folders stay retryable and are not exposed as partial drafts.
+The screen clearly labels AI output as reviewable suggestions and hands drafts
+into the existing listing/compliance/eBay publish flow.
 
-The screen also accepts a public Google Drive folder URL for the bounded pilot.
-It queues the server-side worker, polls the job, shows Luna model/tokens/cost,
-and exposes the resulting drafts in B&I Catalog and the shared Inventory
-workbench. The Drive importer is capped at 20 item folders and requires the
-server-side GOOGLE_DRIVE_API_KEY; it never auto-publishes.
+The screen also accepts a public Google Drive folder URL for production intake.
+It queues the server-side worker, polls processing progress, and exposes the
+resulting drafts in B&I Catalog and the shared Inventory workbench. Every direct
+folder with supported images is independent, decimal suffixes remain in the
+`BNI-<exact-folder-name>` SKU, all available images are retained, MPN is stored
+separately, and same-SKU re-intake overwrites enrichment in place. Each Drive
+job processes every direct folder (unless explicitly skipped) and requires the server-side
+`GOOGLE_DRIVE_API_KEY`; it never auto-publishes.
 
 ## Unified vertical routing and account switching (2026-09-11)
 
@@ -201,6 +210,11 @@ server-side GOOGLE_DRIVE_API_KEY; it never auto-publishes.
 - Every Auto Parts screen is canonical under `/auto-parts/*`. Historical global
   paths such as `/catalog`, `/inventory`, and `/settings/*` redirect to the
   equivalent prefixed route so saved links remain usable.
+- Auto Parts sidebar paths are relative to the vertical prefix: the Catalog
+  item is `/catalog`, and `Shell.tsx` adds `/auto-parts` once. Storing
+  `/auto-parts/catalog` in that item would produce the duplicated path below.
+- A duplicated Auto Parts prefix (`/auto-parts/auto-parts/*`) redirects to the
+  canonical `/auto-parts/*` route while preserving query parameters and hashes.
 - Fashion and B&I remain under `/fashion/*` and `/business-industrial/*`.
 - All three authenticated shells expose the same workspace switcher. A user
   with multiple vertical permissions switches without signing in again; every
@@ -211,6 +225,16 @@ server-side GOOGLE_DRIVE_API_KEY; it never auto-publishes.
 - Auto Parts settings child routes use the permission keys from
   `SIDEBAR_PERMISSION_MAP`; inventory edit requires both `inventory.view` and
   `listings.update`.
+
+## Fashion quick capture and activity routes (2026-10-09)
+
+| Route | Component | Permission | Purpose |
+|---|---|---|---|
+| `/fashion/capture` | `FashionCapturePage` | `fashion.listings.create` | Phone-first capture: session settings, batch SKU, photo slots, measurement chart, Save & next garment |
+| `/fashion/intake` | `FashionIntakePage` | `fashion.listings.view` | Paginated intake history with background identification status, retry, and Add to Catalog for processed items |
+| `/fashion/reports` | `FashionActivityReportPage` | `fashion.listings.view` | Filtered user/item activity report with per-store publication details and CSV export |
+
+Fashion navigation adds **Quick capture**, **Intake history**, and **Activity report**. Processed intake items enter the Fashion Catalog only after an explicit handoff. Store and policy choices are made when selected catalog items are published. Fashion settings gains a Warehouses panel. The item editor (`/fashion/listings/:id`) uses photo slots, the measurement chart and an **Identify in background** action. See docs/architecture/FASHION_QUICK_CAPTURE.md.
 
 ## Warehouse stock routes (2026-10-05)
 

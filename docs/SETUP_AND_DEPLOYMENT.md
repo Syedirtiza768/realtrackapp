@@ -2,7 +2,7 @@
 
 # Setup and Deployment
 
-> Complete guide for setting up and deploying RealTrackApp.
+> Complete guide for setting up and deploying Omni Core.
 > For environment variables, see `/docs/development/environment-variables.md`.
 
 ---

@@ -60,6 +60,6 @@ import { StockProcurementController } from './stock-procurement.controller.js';
     StockReportsService,
     StockIntakeListener,
   ],
-  exports: [StockLedgerService, InventoryItemsService, OrderStockService],
+  exports: [StockLedgerService, InventoryItemsService, OrderStockService, ReservationsService, ChannelStockSyncService],
 })
 export class StockModule {}

@@ -11,7 +11,12 @@ import type {
   StoreContext,
 } from '../../channel-adapter.interface.js';
 import { mapToEbayConditionEnum } from '../../ebay/ebay-listing-condition.util.js';
+import { capEbayPublishQuantity } from '../../ebay/ebay-publish-quantity.util.js';
 import { toEbayInventoryApiMarketplaceId } from '../../ebay/ebay-marketplace-headers.util.js';
+import {
+  DEFAULT_MERCHANT_LOCATION_KEY,
+  isLegacyDefaultMerchantLocationKey,
+} from '../../ebay/ebay-inventory-location.util.js';
 import {
   extractEbayErrorParameter,
   isEbayOfferAlreadyExistsError,
@@ -159,17 +164,30 @@ export class EbayAdapter implements ChannelAdapter {
         listingData['condition'] as string | undefined,
         'USED_EXCELLENT',
       );
+      const requestedQuantity = Number(listingData['quantity'] ?? 1);
+      const quantity = Number.isFinite(requestedQuantity)
+        ? capEbayPublishQuantity(requestedQuantity)
+        : 1;
       const marketplaceRaw =
         (listingData['marketplaceId'] as string) || 'EBAY_MOTORS_US';
       const marketplaceId = toEbayInventoryApiMarketplaceId(marketplaceRaw);
       const authHeaders = { Authorization: `Bearer ${tokens.accessToken}` };
+      const requestedLocationKey =
+        typeof listingData['locationKey'] === 'string'
+          ? listingData['locationKey'].trim()
+          : '';
+      const merchantLocationKey =
+        requestedLocationKey &&
+        !isLegacyDefaultMerchantLocationKey(requestedLocationKey)
+          ? requestedLocationKey
+          : DEFAULT_MERCHANT_LOCATION_KEY;
 
       await this.http.put(
         `/sell/inventory/v1/inventory_item/${sku}`,
         {
           availability: {
             shipToLocationAvailability: {
-              quantity: listingData['quantity'] ?? 1,
+              quantity,
             },
           },
           condition,
@@ -195,7 +213,7 @@ export class EbayAdapter implements ChannelAdapter {
           },
         },
         categoryId: listingData['categoryId'],
-        merchantLocationKey: listingData['locationKey'] ?? 'default',
+        merchantLocationKey,
         listingDuration: 'GTC',
       };
       if (listingData['fulfillmentPolicyId']) {

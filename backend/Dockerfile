@@ -45,6 +45,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/scripts/migrate-recent-ebay-inventory-listings.mjs ./tools/
 COPY --from=builder /app/scripts/requeue-ebay-518-failures.mjs ./tools/
+COPY --from=builder /app/assets ./assets
 
 # Create uploads directory
 RUN mkdir -p uploads/catalog

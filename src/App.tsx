@@ -92,6 +92,13 @@ import PartsSearchDemandPage from './components/parts-search/PartsSearchDemandPa
 import type { ReactNode } from 'react';
 
 function AutoPartsRoutes() {
+    const { pathname, search, hash } = useLocation();
+    const duplicatedPrefix = '/auto-parts/auto-parts';
+    if (pathname === duplicatedPrefix || pathname.startsWith(`${duplicatedPrefix}/`)) {
+        const canonicalPath = pathname.replace(/^\/auto-parts\/auto-parts(?=\/|$)/, '/auto-parts');
+        return <Navigate to={`${canonicalPath}${search}${hash}`} replace />;
+    }
+
     const protect = (permission: string, element: ReactNode, mode: 'any' | 'all' = 'any') => (
         <ProtectedRoute permissions={[permission]} mode={mode} loginPath="/auto-parts/login">
             {element}
@@ -181,7 +188,8 @@ function App() {
                 <Route path="/channels/ebay/callback" element={<EbayOAuthCallback />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
 
-                {/* Auto Parts owns its complete route tree under one vertical prefix. */}
+                {/* Auto Parts owns its complete route tree under one vertical prefix;
+                    AutoPartsRoutes also repairs links with a duplicated prefix. */}
                 <Route path="/auto-parts/*" element={
                     <ProtectedRoute permissions={['dashboard.view']} loginPath="/auto-parts/login">
                         <Shell><AutoPartsRoutes /></Shell>
@@ -212,8 +220,11 @@ function App() {
                 }>
                    <Route index element={<ProtectedRoute permissions={['fashion.dashboard.view']} loginPath="/fashion/login"><FashionDashboardPage /></ProtectedRoute>} />
                    <Route path="listings/new" element={<ProtectedRoute permissions={['fashion.listings.create']} loginPath="/fashion/login"><FashionListingEditorPage /></ProtectedRoute>} />
+                    {/* Quick capture: phone-first photo slots, batch SKU, measurement chart, background identification */}
                     <Route path="capture" element={<ProtectedRoute permissions={['fashion.listings.create']} loginPath="/fashion/login"><FashionCapturePage /></ProtectedRoute>} />
+                    {/* Intake history: paginated capture log with batch/status filters */}
                     <Route path="intake" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionIntakePage /></ProtectedRoute>} />
+                    {/* Activity report: item provenance, processing/review filters, and publication targets */}
                     <Route path="reports" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionActivityReportPage /></ProtectedRoute>} />
                     <Route path="stock" element={<ProtectedRoute permissions={['stock.view']} loginPath="/fashion/login"><StockWorkspace vertical="fashion" /></ProtectedRoute>} />
                     <Route path="catalog" element={<ProtectedRoute permissions={['fashion.listings.view']} loginPath="/fashion/login"><FashionCatalogPage /></ProtectedRoute>} />

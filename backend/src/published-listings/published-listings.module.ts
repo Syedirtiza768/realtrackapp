@@ -3,11 +3,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { ChannelsModule } from '../channels/channels.module.js';
 import { Store } from '../channels/entities/store.entity.js';
+import { ChannelWebhookLog } from '../channels/entities/channel-webhook-log.entity.js';
 import { EbayIntegrationsModule } from '../integrations/ebay/ebay-integrations.module.js';
 import { User } from '../auth/entities/user.entity.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { EbayPublishedListing } from './entities/ebay-published-listing.entity.js';
+import { EbayPublishedListingChange } from './entities/ebay-published-listing-change.entity.js';
 import { EbayPublishedListingSyncLog } from './entities/ebay-published-listing-sync-log.entity.js';
 import { EbayPublishedListingBulkJob } from './entities/ebay-published-listing-bulk-job.entity.js';
 import { EbayPublishedListingBulkJobItem } from './entities/ebay-published-listing-bulk-job-item.entity.js';
@@ -26,6 +29,8 @@ import { PublishedListingsPricingService } from './services/published-listings-p
 import { PublishedListingsSchedulerService } from './services/published-listings-scheduler.service.js';
 import { PublishedListingsEnrichmentService } from './services/published-listings-enrichment.service.js';
 import { PublishedListingsTradingEnrichmentService } from './services/published-listings-trading-enrichment.service.js';
+import { PrimemotiveListingChangesService } from './services/primemotive-listing-changes.service.js';
+import { PrimemotiveListingSimulatorService } from './services/primemotive-listing-simulator.service.js';
 import { EbayListingPageScrapeService } from '../channels/ebay/ebay-listing-page-scrape.service.js';
 import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
 
@@ -33,6 +38,9 @@ import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
   imports: [
     TypeOrmModule.forFeature([
       EbayPublishedListing,
+      EbayPublishedListingChange,
+      CatalogProduct,
+      ChannelWebhookLog,
       EbayPublishedListingSyncLog,
       EbayPublishedListingBulkJob,
       EbayPublishedListingBulkJobItem,
@@ -65,6 +73,8 @@ import { SchedulerModule } from '../common/scheduler/scheduler.module.js';
     PublishedListingsSyncProcessor,
     PublishedListingsBulkProcessor,
     PublishedListingsSchedulerService,
+    PrimemotiveListingChangesService,
+    PrimemotiveListingSimulatorService,
   ],
   exports: [PublishedListingsSyncService, PublishedListingsService],
 })

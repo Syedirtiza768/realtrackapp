@@ -330,6 +330,11 @@ export class FashionEbayController {
       listingIds,
       storeIds,
       policyOverridesByStore,
+      marketplaceByStore: Object.fromEntries(
+        (dto.storePolicies ?? []).flatMap(({ storeId, marketplaceId }) =>
+          marketplaceId ? [[storeId, marketplaceId]] : [],
+        ),
+      ),
       idempotencyKey: dto.idempotencyKey,
     });
     return {

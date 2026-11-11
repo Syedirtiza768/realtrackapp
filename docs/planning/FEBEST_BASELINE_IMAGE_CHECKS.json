@@ -1,0 +1,38 @@
+[
+  {
+    "id": "13f9a8a7-2847-4e5a-a5be-9ac90bbf3723",
+    "sku": "3226-ESC",
+    "url": "https://i.ebayimg.com/00/s/NDAwWDQwOQ==/z/KfIAAeSwuMVqAZBq/$_1.JPG?set_id=8800005007",
+    "http_status": 200,
+    "mime": "image/jpeg",
+    "dimensions": [
+      400,
+      391
+    ],
+    "bytes": 40844
+  },
+  {
+    "id": "b7f8a406-5e27-478b-8abd-f1cd649029cb",
+    "sku": "3220-001",
+    "url": "https://i.ebayimg.com/00/s/NDAwWDUzOA==/z/6XMAAeSwYIpqHIfx/$_1.JPG?set_id=8800005007",
+    "http_status": 200,
+    "mime": "image/jpeg",
+    "dimensions": [
+      400,
+      298
+    ],
+    "bytes": 10794
+  },
+  {
+    "id": "be28b391-2d39-434d-885f-e88f8a03cd23",
+    "sku": "88430-182422X",
+    "url": "https://i.ebayimg.com/00/s/MTYwMFgxNjAw/z/cMUAAeSw9yVp4K~n/$_1.JPG?set_id=8800005007",
+    "http_status": 200,
+    "mime": "image/jpeg",
+    "dimensions": [
+      400,
+      400
+    ],
+    "bytes": 25674
+  }
+]

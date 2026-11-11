@@ -87,7 +87,9 @@ export class ListingOptimizationProcessor extends WorkerHost {
       `Starting mandatory listing optimization for pipeline job ${jobId} [${marketplace}]`,
     );
     try {
-      await this.optimization.enqueueJobOptimization(jobId, marketplace, job);
+      await this.optimization.enqueueJobOptimization(jobId, marketplace, job, {
+        force,
+      });
       this.logger.log(
         `Completed listing optimization for pipeline job ${jobId} [${marketplace}]`,
       );

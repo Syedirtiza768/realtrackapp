@@ -1,4 +1,4 @@
-# RealTrackApp Backend (NestJS + PostgreSQL)
+# Omni Core Backend (NestJS + PostgreSQL)
 
 This backend ingests eBay `Listings` rows (including `Custom Label (SKU)`) from the workbook set in:
 

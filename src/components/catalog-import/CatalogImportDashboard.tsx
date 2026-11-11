@@ -238,7 +238,7 @@ export default function CatalogImportDashboard() {
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Import CSV, .xlsx, or .xls catalog files into the master product database.{' '}
-            <Link to="/catalog/motors-filters" className="text-blue-400 hover:underline">
+            <Link to="/auto-parts/catalog/motors-filters" className="text-blue-400 hover:underline">
               Browse with Motors ops filters
             </Link>
           </p>

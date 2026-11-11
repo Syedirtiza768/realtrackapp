@@ -18,6 +18,22 @@
   No new endpoints, permissions or schema changes. See
   [Fashion Quick Capture](FASHION_QUICK_CAPTURE.md).
 
+## MotoArk lifecycle (deployed 2026-11-03)
+`POST /api/integrations/motoark/order-events` (`motoark.orders.notify`) durably
+accepts signed purchase, shipment, cancellation, return, and refund facts with
+atomic event deduplication and stock processing. `GET /order-events/:eventId`
+and `GET /quantities/:listingId` beneath the same prefix require
+`motoark.orders.view`. Physical receipt/restocking additionally require the
+corresponding `motoark.returns.receive` / `motoark.returns.restock` permission.
+Use the separate `MOTOARK_ORDER_WEBHOOK_SECRET`; HTTP 202 confirms receipt,
+while `status` reports applied/pending/rejected. See the
+[complete contract, examples, and rollout gate](MOTOARK_ORDER_LIFECYCLE.md).
+The deployed release adds stable snapshot `afterId` and committed change
+`afterSequence`/`throughSequence` cursors, decimal-string listing revisions,
+organization-scoped ordered callbacks, and atomic conflict-aware legacy sale
+receipt keys. The older production route descriptions below describe the
+runtime before this release; see the
+[production record](../operations/MOTOARK_RELEASE_2026-11-02.md).
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Source**: Consolidated from `docs/API_MAP.md` (557 lines) and `docs/architecture/api-map.md` — 2026-05-29.
@@ -46,6 +62,14 @@ The protected pipeline upload accepts `importMode=pre_enriched_febest_v1` in add
 | POST | `/api/pipeline/upload` | `pipeline.run` | Accepts `importMode=pre_enriched_febest_v1`; invalid or non-ready workbooks are rejected before enqueue |
 
 Trusted-mode worker behavior: approved HTML, official image URLs, item specifics, and accepted fitments are persisted as draft catalog/listing rows only after collision preflight. It bypasses legacy generation and the mandatory optimization queue; publication is never performed by this mode.
+
+## Pipeline listing optimization
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| POST | `/api/pipeline/jobs/:id/optimize-all` | `pipeline.run` | Re-runs listing optimization for all products in the selected marketplace. An explicit Optimize All request forces stale or previously reviewed results through current fitment/title rules; it updates draft catalog/listing data only and does not publish listings or approve compatibility. |
+
+The endpoint accepts optional `marketplace` (`US`, `DE`, or `AU`), `limit`, `aiBudgetListings`, and `listingQualityProfile` values. Background retries remain resumable and do not force already-completed products.
 
 ## Authentication
 
@@ -99,6 +123,16 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 | DELETE | `/api/listings/:id` | Delete listing | listings.delete |
 | GET | `/api/listings/:id/history` | Get revision history | listings.view |
 | POST | `/api/listings/:id/generate` | AI-generate listing | listings.generate |
+
+### Catalog search status
+
+`GET /api/listings/search` accepts comma-separated `catalogStatus` values:
+`published`, `ready_to_publish`, `needs_review`, and `need_images`. Search rows
+include `catalogStatus` and `publishBlocked`; manual-review and protected
+catalog lifecycle holds are reported as `needs_review` and excluded from the
+other publish-readiness states. The catalog UI uses this flag to prevent single
+and bulk publish attempts, while the durable eBay publish validator rechecks
+the hold before sending a marketplace request.
 
 ### Listings V2 (Cached)
 
@@ -175,10 +209,12 @@ All endpoints require authentication unless marked with `@Public()` decorator.
 |--------|------|-------------|------------|
 | POST | `/api/pipeline/run` | Run pipeline job | pipeline.run |
 | POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — part type, condition, brand, part #, price, qty → unidentified draft. No MPN-only guessed title; photo identification and optimization wait for at least two photos. | listings.create |
+| POST | `/api/pipeline/single-listing/add-part` | Warehouse intake — part type, condition, brand, part #, price, qty → draft listing. Add Part does not assign an MPN-only guessed title; photo identification and optimization wait for at least two photos. Optional Image Drive lookup runs after the draft response and cannot replace photos saved in the meantime. The browser aborts a stalled draft request after 45 seconds and asks the user to check Inventory before retrying. | listings.create |
 | POST | `/api/pipeline/single` | Submit single listing to enrichment pipeline | pipeline.run |
 | GET | `/api/pipeline/single-listing/lookup-pricing` | OpenRouter cost estimates (incl. 15k parts) | listings.create |
 | GET | `/api/pipeline/single-listing/brands` | Brand/make options (catalog + OEM list); `?q=` filter | listings.create |
 | POST | `/api/pipeline/single-listing/part-lookup` | With 2+ photos, use vision first and fail closed if evidence is inconclusive or conflicts with the supplied number. Photo-less calls may use exact MPN Browse results and then AI text fallback. | listings.create **or** inventory.enrich |
+| POST | `/api/pipeline/single-listing/part-lookup` | Accepts part number, brand, vehicle make, and optional images. With 2+ photos, uses authenticated managed-image input and requires a complete OCR token match for the entered number; another printed identifier selected by the model does not override that verified number. Inconclusive evidence fails closed. Provider/storage errors retain their actual error. Photo-less calls may use exact MPN Browse results and then AI text fallback. | listings.create **or** inventory.enrich |
 | GET | `/api/pipeline/jobs` | List pipeline jobs | pipeline.view |
 | GET | `/api/pipeline/jobs/:id` | Get job details | pipeline.view |
 
@@ -343,7 +379,11 @@ category fallback behavior. For `vertical=fashion`, this same upload flow recogn
 | Method | Path | Description | Permission |
 |--------|------|-------------|------------|
 | GET | `/api/published-listings` | List/filter published listings | published_listings.view |
-| GET | `/api/published-listings/export` | Export published listings as CSV (query params match list endpoint) | published_listings.export |
+| GET | `/api/published-listings/primemotive` | Paginated JSON feed from the RealTrackApp database, restricted server-side to the authenticated organization's Primemotive store, rows with an eBay item ID and database `listingStatus=active`; no item-specific make filter is applied. `includeCatalogData=true` optionally adds linked RealTrackApp catalog source fields; it does not synthesize canonical Partslink24 values. | published_listings.external_feed |
+| GET | `/api/published-listings/primemotive/changes` | Paginated, durable listing change events since required `updatedAfter` (`updateAfter` alias accepted), including added, updated, and removed rows | published_listings.external_feed |
+| GET | `/api/published-listings/primemotive/sales-events` | Paginated inbound sale-event log for the authenticated organization | published_listings.view |
+| POST | `/api/published-listings/primemotive/webhooks/sales` | Record only `listing.sold` for a Primemotive listing; sequential event-ID duplicate lookup, no atomic concurrent deduplication; does not change listing/inventory quantities | published_listings.sales.notify |
+| GET | `/api/published-listings/export` | Export a 10,000-row CSV page; use `page=1`, `page=2`, etc. with the same filters | published_listings.export |
 | GET | `/api/published-listings/summary` | Dashboard counts | published_listings.view |
 | GET | `/api/published-listings/sync-logs` | Sync job history | published_listings.view |
 | GET | `/api/published-listings/stores` | Connected stores with listing counts | published_listings.view |
@@ -351,7 +391,7 @@ category fallback behavior. For `vertical=fashion`, this same upload flow recogn
 | POST | `/api/published-listings/sync` | Enqueue store sync from eBay | published_listings.sync |
 | GET | `/api/published-listings/trading-enrichment/budget` | Trading API rate-limit budget status | published_listings.view |
 | POST | `/api/published-listings/trading-enrichment/batch` | Pre-enrich listings via Trading API (warm cache) | published_listings.sync |
-| GET | `/api/published-listings/:id` | Listing detail (+ raw eBay payload) | published_listings.view |
+| GET | `/api/published-listings/:id` | Listing detail (+ raw eBay payload); `includeCatalogData=true` optionally adds linked RealTrackApp catalog source fields | published_listings.view |
 | GET | `/api/published-listings/:id/trading-enrichment` | Trading API enrichment (images, compatibility, description, item specifics). Returns cached data (<7 days) or fetches from eBay. ~1.7s on cache miss, <10ms on hit. | published_listings.view |
 | GET | `/api/published-listings/:id/revisions` | Audit/revision history | published_listings.view |
 | PATCH | `/api/published-listings/:id` | Revise title/price/qty/images | published_listings.manage |
@@ -361,6 +401,72 @@ category fallback behavior. For `vertical=fashion`, this same upload flow recogn
 | POST | `/api/published-listings/:id/competitor-pricing` | Refresh competitor pricing for one listing | published_listings.sync |
 | POST | `/api/published-listings/bulk` | Bulk price/qty/end/sync | published_listings.bulk |
 | GET | `/api/published-listings/bulk/:jobId` | Bulk job status | published_listings.view |
+
+The Primemotive JSON feed reads the RealTrackApp database mirror; it does not
+query eBay per request. It requires the authenticated organization's exact
+Primemotive store, a non-empty `ebayItemId`, and database `listingStatus=active`.
+It does not require or infer a Mercedes-Benz make value; consumers apply their
+own product targeting. These store and active/published constraints cannot be
+overridden by caller filters. `page` defaults to 1; `limit` defaults to 50 and
+is capped at 200. The response includes `items`, `total`, `page`, and `limit`.
+It supports `updatedAfter=<ISO-8601 timestamp>`
+and the compatibility alias `updateAfter` for incremental polling, returning
+matching listing objects updated at or after the database timestamp. External
+consumers should upsert by listing `id`; `status=all` cannot broaden this feed
+to include inactive rows.
+
+`GET /api/published-listings/primemotive/changes` is the durable incremental
+change feed. It requires `updatedAfter` (or `updateAfter`), uses an inclusive
+timestamp, and returns `listing.added`, `listing.updated`, and `listing.removed`
+events in ascending order. A removal event contains the last listing snapshot,
+including `listingStatus: "removed"` for a physical row deletion. Page through
+the complete `total` before advancing the timestamp watermark; event IDs are
+stable for deduplication. A database trigger writes these events in the same
+transaction as the listing change, including full-sync rows marked ended.
+
+When `PRIMEMOTIVE_LISTING_WEBHOOK_URL` and
+`PRIMEMOTIVE_LISTING_WEBHOOK_SECRET` are configured, the backend also pushes
+the same events to the receiver. Delivery is signed over the exact
+`<timestamp>.<raw JSON body>` bytes with HMAC-SHA256 in `X-Primemotive-Timestamp` and
+`X-Primemotive-Signature: sha256=<hex>`. Failed deliveries retry with backoff;
+the receiver should deduplicate by `eventId`.
+
+The list endpoints and `GET /api/published-listings/:id` accept
+`includeCatalogData=true` to add a `catalogData` object from the linked
+`catalog_products` record. It includes stored identifiers, descriptive fields,
+attributes, source category, and explicitly MVL-validated fitment rows when
+available. Review-only, rejected, and untagged fitment rows are excluded. Only
+records owned by the listing's organization or legacy records with no
+organization ID are included; other-organization links return
+`catalogData: null`. These are RealTrackApp source values, not certified
+Partslink24 keys or a normalized Partslink24 catalog export.
+
+`GET /api/published-listings/sync-status` reports the latest completed
+non-single sync record per store together with the connection state. A completed
+sync newer than an older failed attempt clears the failed health flag. The
+staleness window is controlled by `PUBLISHED_LISTINGS_SYNC_STALE_AFTER_HOURS`;
+production uses 192 hours for its weekly scheduled full mirror refresh.
+
+The sale webhook body requires `eventType: "listing.sold"`, an external `eventId`,
+the feed's `listingId`, `soldAt`, and positive `quantity`. `externalOrderId`, `unitPrice`,
+and `currency` are optional. The sender authenticates with a bearer JWT and the
+`published_listings.sales.notify` permission, and signs the raw request body with
+`PRIMEMOTIVE_SALES_WEBHOOK_SECRET` using the timestamped HMAC scheme in the integration
+guide. The server verifies the listing belongs to the authenticated organization and
+Primemotive store, records the event, and returns `accepted` or `duplicate`. It does not
+change listing quantity or inventory.
+
+**2026-11-02 source assessment:** Cancellation, return, and refund event types
+are rejected by the sale DTO. Duplicate detection is a lookup followed by an
+insert, without a database-enforced logical event key or payload comparison.
+The standard Compose backend omits `PRIMEMOTIVE_SALES_WEBHOOK_SECRET`
+forwarding. See the [MotoArk gap analysis](../integrations/motoark-order-lifecycle-gap-analysis.md)
+for the proposed dedicated lifecycle contract and stock/channel integration;
+those proposed endpoints are not implemented.
+
+CSV export uses the same filters as the list endpoint and returns up to 10,000
+rows per file. `page` defaults to `1`; `page=2` returns rows 10,001–20,000 of
+the same ordered query. The response filename includes the requested page.
 
 ### Trading API Enrichment (PartsBazar360 integration)
 
@@ -442,6 +548,11 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 | POST | `/api/inventory/part-lookup` | Fetch details for one listing; Add Part requires 2+ photos, reads private S3 images into bounded vision inputs, ignores stale `cType` prompt hints, requires the supplied MPN in visible label text plus complete label/overall coverage, fails closed when evidence is inconclusive, and syncs successful photo identity fields and normalized title to its CatalogProduct | inventory.enrich |
 | POST | `/api/inventory/part-lookup/bulk` | Vision-first fetch details for multiple listings | inventory.enrich |
 | POST | `/api/inventory/inline-enrich` | **Complete inline enrichment:** photo-first identity lookup, validation-gated EnrichmentPipeline, and AI content generation. Photo-derived identity is preserved; failed validation leaves the draft for review. | inventory.enrich |
+| PATCH | `/api/inventory/listings/:listingId/images` | Append uploaded photo URLs; at least two photos queue enrichment, and newly added photos can rerun a previously completed enrichment | listings.update |
+| PATCH | `/api/inventory/listings/:listingId/images/reorder` | Replace the complete image URL array for an automotive listing; the first image is primary | listings.update |
+| POST | `/api/inventory/part-lookup` | Fetch details for one listing: Add Part records require 2+ photos; photo-based lookups fail closed when visual evidence is inconclusive or conflicts with the supplied number | inventory.enrich |
+| POST | `/api/inventory/part-lookup/bulk` | Fetch details for multiple listings using photo-first lookup and exact-MPN/vehicle-make checks | inventory.enrich |
+| POST | `/api/inventory/inline-enrich` | Enqueue photo-first inline enrichment when at least two photos are present. New image evidence can rerun a completed job. Failed validation preserves photo-derived identity and leaves the draft for review. | inventory.enrich |
 | POST | `/api/inventory/send-to-catalog` | **Send to catalog:** Create or update `CatalogProduct` records from enriched listing data (title, brand, price, images, fitments) | inventory.enrich |
 | GET | `/api/inventory/filters/brands` | Distinct brand values (`cBrand`) for filter dropdown | inventory.view |
 | GET | `/api/inventory/filters/makes` | Distinct extracted make values for filter dropdown | inventory.view |
@@ -551,6 +662,9 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 | POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; clients send the active `organizationId` so stores are checked in the selected workspace; enforces the 5,000 target/day organization quota and checks the shared eBay Trading API allowance before creating the job | `ebay.publish` |
 | GET | `/api/ebay/listing-jobs/:id` | Read durable publish-job status | `ebay.view` |
 | GET | `/api/ebay/listing-jobs/:id/targets` | Read per-listing/per-store progress and results | `ebay.view` |
+| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; accepts an optional `organizationId` validated against the caller's workspace membership, and enforces the 5,000 target/day organization quota. Optional `requestedFulfillmentPolicyName`, `requestedPaymentPolicyName`, and `requestedReturnPolicyName` apply shared profile names to every target and are resolved against each store's own synced policy IDs. | `ebay.publish` |
+| GET | `/api/ebay/listing-jobs/:id` | Read durable publish-job status; accepts optional `organizationId` to scope lookup to a workspace | `ebay.view` |
+| GET | `/api/ebay/listing-jobs/:id/targets` | Read per-listing/per-store progress and results; clients must pass the same `organizationId` used when creating the job if the active workspace differs from the user's default | `ebay.view` |
 
 Bulk jobs persist in `ebay_listing_jobs` / `ebay_listing_job_targets` and run
 through the `ebay-listing-publish` BullMQ queue at bounded concurrency. The
@@ -591,6 +705,11 @@ The public `GET /api/storage/serve/{s3Key}` image proxy prefers a sibling
 a temporary redirect to the original key when the WebP object is absent.
 Responsive `_thumb.webp`, `_sm.webp`, `_medium.webp`, and `_lg.webp`
 requests retain their existing on-demand self-healing behavior.
+The public `GET /api/storage/napa-image/{imageId}?preset={preset}` proxy serves
+NAPA Genuine Parts images from the fixed `media.napaonline.com` host. `imageId`
+must be numeric; `preset` is limited to `webproof`, `webprooflarge`, or
+`webproofxlarge` (default `webprooflarge`). Nginx caches successful responses
+for 30 days.
 
 | Method | Path | Description | Access |
 |--------|------|-------------|--------|
@@ -683,7 +802,7 @@ All Fashion routes remain under the normal /api prefix and require JWT plus the 
 | GET | /api/fashion/workspace | fashion.dashboard.view | Fashion metrics and enabled stores |
 | GET | /api/fashion/listings | fashion.listings.view | Organization-scoped Fashion catalog |
 | POST/PATCH | /api/fashion/listings and /api/fashion/listings/:id | fashion.listings.create/update | Create or edit a Fashion draft |
-| POST | /api/fashion/listings/photos | fashion.listings.create | Multipart Fashion garment photo upload via existing storage; returns CDN URLs |
+| POST | /api/fashion/listings/photos | fashion.listings.create | Multipart Fashion garment photo upload; every accepted JPEG/PNG/WebP source is normalized and stored as WebP, then returns CDN URLs |
 | POST | /api/fashion/listings/analyze-images | fashion.listings.create | Analyze a complete photo set; `confirmedKeys` and saved `_confirmedKeys` are not overwritten; photos are kept if analysis fails |
 | POST | /api/fashion/listings/generate-content | fashion.listings.create | Build Fashion title/description from confirmed attributes and reported defects |
 | POST | /api/fashion/listings/:id/review | fashion.review | Approve or reject authenticity review |
@@ -691,11 +810,29 @@ All Fashion routes remain under the normal /api prefix and require JWT plus the 
 | POST | /api/fashion/listings/:id/quarantine | fashion.incidents.manage | Local quarantine; remote takedown is reported unavailable unless an integration supports it |
 | GET/PATCH | /api/fashion/stores and /api/fashion/stores/:storeId/config | fashion.stores.view/settings.manage | View and configure Fashion store enablement |
 | POST | /api/fashion/ebay/oauth/start | fashion.stores.manage | Start a vertical-tagged eBay OAuth flow |
-| POST | /api/fashion/ebay/listings/validate or /publish | fashion.publish | Validate or enqueue an approved Fashion listing against Fashion-enabled seller targets |
+| POST | /api/fashion/ebay/listings/validate or /publish | fashion.publish | Validate or enqueue an approved Fashion listing against Fashion-enabled seller targets. Validation verifies the exact enabled merchant location for each target marketplace. |
+| POST | /api/fashion/ebay/listings/publish-bulk | fashion.access + fashion.publish | From Catalog, publish selected approved items to chosen Fashion stores. Optional `storePolicies` supplies each store's enabled `marketplaceId` and shipping, payment and return policy names. Omitting `marketplaceId` uses the store default. |
 | GET | /api/fashion/users | fashion.users.manage | List Fashion workspace members |
 | PATCH | /api/fashion/users/:userId/role | fashion.roles.manage | Assign a Fashion role |
+| GET | /api/fashion/measurement-templates | fashion.access | Measurement chart templates (points A–E, attribute keys, schematic `diagramSvg`) |
+| GET | /api/fashion/warehouses?includeInactive= | fashion.listings.view | Organization warehouses for quick capture |
+| POST / PATCH | /api/fashion/warehouses, /api/fashion/warehouses/:warehouseId | fashion.settings.manage | Create (code upper-cased, unique per org) or rename/activate/deactivate a warehouse |
+| GET | /api/fashion/intake/batches | fashion.listings.create | Batches with last SKU number and item count |
+| POST | /api/fashion/intake/sku | fashion.listings.create | `{ batch, sizeSuffix? }` → next free `<BATCH>-<0001>[-<SIZE>]`; atomic per-org counter seeded from existing SKUs |
+| POST | /api/fashion/intake | fashion.listings.create | Quick capture: front/back/tag (required) + additional/size-chart photo URLs, batch, warehouse, condition, department, measurement chart; stages an item titled `Pending identification — <SKU>` and queues identification unless `identify:false`; it does not choose a store or expose the item in Catalog |
+| GET | /api/fashion/intake?batch=&status=&q=&source=capture\|all&page=&pageSize= | fashion.listings.view | Paginated intake history (images, warehouse, `_analysisStatus`, review status, catalog handoff status) |
+| POST | /api/fashion/intake/:id/add-to-catalog | fashion.listings.create | Add a processed capture item that is not quarantined or flagged for manual review to Catalog and record the acting user/time |
+| GET | /api/fashion/reports/activity | fashion.listings.view | Filtered Fashion activity report with counts, uploaded/added actors, item attributes, review status and per-store publication targets |
+| GET | /api/fashion/reports/activity/export | fashion.listings.view | CSV export for the activity report using the same filters (up to 250,000 rows per export) |
+| POST | /api/fashion/listings/:id/identify | fashion.listings.update | 202; re-queue background identification (draft/needs_review/rejected only) |
+| POST | /api/fashion/listings/size-chart | fashion.listings.create | `{ template, unit, values, brandName?, sku? }` → stored branded size-chart WebP URL; 400 on unknown keys or non-numeric values |
+| POST | /api/fashion/listings/photos/banner | fashion.listings.create | `{ imageUrl, text, position, theme }` → new WebP copy with a text banner; only this org's Fashion storage keys (403 otherwise) |
+
+`POST /api/fashion/listings/photos` also accepts `?sku=` to name stored files `<SKU>-<timestamp>-<id>.webp`. See docs/architecture/FASHION_QUICK_CAPTURE.md.
 
 Catalog import upload/start accepts Fashion only when the caller has fashion.import; non-Fashion imports still require catalog.import. Vertical is selected server-side from the request and persisted on the import.
+
+Fashion imports of the Artistic Server catalogue export map `Item Specifics` and JSON `Measurements` into the existing Fashion attributes. Unrecognized item specifics remain editable name/value pairs and are included in Fashion publish aspects. Source export measurements remain notes until an operator confirms their unit; unresolved unit confirmation and incomplete image mirroring are both rejected by Fashion publish validation. Source export image URLs are converted to WebP in application S3. No new endpoint or request permission is introduced.
 
 ## Business & Industrial workspace API (2026-09-09)
 
@@ -716,10 +853,11 @@ vertical during OAuth.
 | GET/POST/POST | `/api/business-industrial/incidents`, `/incidents/:id/takedown`, `/incidents/:id/release` | business_industrial.incidents.view/manage/release | Verified incident intake, retryable takedown, release, and audit state |
 | GET | `/api/business-industrial/stores` | business_industrial.stores.view | List dedicated B&I seller stores |
 | POST | `/api/business-industrial/ebay/oauth/start` | business_industrial.stores.manage | Start vertical-tagged eBay OAuth |
+| GET | `/api/integrations/ebay/oauth/callback` | Public; uses vertical saved in OAuth state | Complete eBay OAuth and return B&I connections to `/business-industrial/stores` |
 | GET | `/api/business-industrial/ebay/accounts` and `/accounts/:id/policies` | business_industrial.stores.view | List dedicated seller accounts and read stored marketplace policies |
 | POST | `/api/business-industrial/ebay/accounts/:id/policies/sync` | business_industrial.stores.manage | Synchronize payment, return, and fulfillment policies |
 | GET | `/api/business-industrial/ebay/accounts/:id/categories` and `/categories/:categoryId/metadata` | business_industrial.listings.view | Search category leaves and retrieve required aspects/policies |
-| POST | `/api/business-industrial/ebay/listings/validate`, `/publish`, `/publish-bulk` | business_industrial.publish | Validate or enqueue approved listings against B&I stores |
+| POST | `/api/business-industrial/ebay/listings/validate`, `/publish`, `/publish-bulk` | business_industrial.publish | Validate or enqueue approved listings against B&I stores; bulk publish accepts optional shared fulfillment/payment/return profile names and retains them per target for worker-time store-specific resolution |
 | GET | `/api/business-industrial/ebay/listing-jobs/:id` and `/listings` | business_industrial.listings.view | Inspect publish jobs and organization-scoped publication channels |
 | POST | `/api/business-industrial/ebay/listings/:id/end` | business_industrial.publish | End a B&I publication and verify the remote offer is unpublished |
 | GET/POST/PATCH | `/api/business-industrial/users`, `/users/:userId/role`, `/users/:userId/deactivate`, `/users/:userId/stores` | business_industrial.users.manage | Create temporary-password accounts, role-manage, assign dedicated stores, or deactivate B&I members |
@@ -793,8 +931,9 @@ POST /api/business-industrial/image-intake/jobs/from-drive requires
 business_industrial.import and accepts folderUrl, optional maxItems from 1 to
 200, optional skipFolderNames, and autoCreateDrafts. It queues the server-side worker, which prefers
 BNI-1…BNI-N direct child folders, caps images at 12 per item, converts sources
-to WebP before S3, and runs the same vision/enrichment flow. Job polling
-returns aiInputTokens, aiOutputTokens, aiCostUsd, aiRuns, aiModel, and webpStorage.
+to WebP before S3, and runs the same vision/enrichment flow. Job polling returns
+processing counts, status, timestamps, and webpStorage; internal run accounting
+is not exposed in the operator-facing intake response.
 Drafts are projected into shared listing_records and never
 published automatically.
 The create, list, polling, group review, apply, upload, start, and export

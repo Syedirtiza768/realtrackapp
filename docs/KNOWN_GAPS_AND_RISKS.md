@@ -316,12 +316,12 @@ const listings = await this.listingRepo.find({
 **Likelihood**: High  
 **Impact**: Low
 
-**Issue**: App shows "RealTrackApp" but login screen and DB name use "ListingPro".
+**Issue**: The application previously showed inconsistent legacy names across the shell, login, and client settings.
 
 **Impact**: Minor user confusion.
 
 **Fix**:
-- Standardize on "RealTrackApp"
+- Resolved by standardizing user-facing branding on "Omni Core"; `listingpro` remains an internal identifier.
 - Update login screen
 - Consider DB rename (careful!)
 

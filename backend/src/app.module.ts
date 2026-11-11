@@ -46,9 +46,11 @@ import { FashionBatchPublishModule } from './fashion-batch-publish/fashion-batch
 import { CatalogModule } from './catalog/catalog.module.js';
 import { StockModule } from './stock/stock.module.js';
 import { PartsSearchModule } from './parts-search/parts-search.module.js';
+import { MotoarkModule } from './integrations/motoark/motoark.module.js';
 
 @Module({
   imports: [
+    MotoarkModule,
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: process.env.IGNORE_ENV_FILE === 'true',

@@ -59,6 +59,7 @@ describe('CatalogPublishResolverService', () => {
       catalogRepo as never,
       listingRepo as never,
       assetRepo as never,
+      { getPreferredImageUrl: async (url: string) => url } as never,
     );
     return { service, catalogRepo, listingRepo };
   }
@@ -92,7 +93,7 @@ describe('CatalogPublishResolverService', () => {
   it('keeps exact listing-record values when the catalog row differs', async () => {
     const staleCatalog = {
       id: catalogId,
-      sku: 'BLA-17856',
+      sku: 'STALE-CATALOG-SKU',
       title: 'Different catalog title',
       description: 'Different catalog description',
       price: 55,
@@ -105,9 +106,13 @@ describe('CatalogPublishResolverService', () => {
 
     expect(result!.snapshot.title).toBe('Test Part');
     expect(result!.snapshot.description).toBe('desc');
+    expect(result!.snapshot.sku).toBe('BLA-17856');
     expect(result!.snapshot.price).toBe(99.99);
     expect(result!.snapshot.quantity).toBe(1);
     expect(result!.snapshot.imageUrls[0]).toBe('https://cdn.example.com/a.jpg');
+    expect(result!.warnings).toContain(
+      'Catalog SKU differs from the reviewed listing custom label SKU; using the listing value for publish',
+    );
   });
 
   it('selects one highest-resolution image for a FEBI publish snapshot', async () => {

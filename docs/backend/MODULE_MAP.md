@@ -1,5 +1,13 @@
 # Module Map
 
+**2026-11-02 local candidate:** `MotoarkModule`
+(`backend/src/integrations/motoark/motoark.module.ts`) imports scoped listing,
+eBay authorization, RBAC, channel access, and warehouse services. It owns the
+signed order-events API, durable retry processor, quantity projection, and
+physical-return adapter. Existing `StockModule` exports reservation and
+channel-sync services for this integration. See the
+[complete lifecycle design](../architecture/MOTOARK_ORDER_LIFECYCLE.md).
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Source**: Moved from `docs/BACKEND_MAP.md` (552 lines, 2026-05-29).
@@ -197,6 +205,20 @@ TypeORM CLI configuration for migrations. `autoLoadEntities: true`, `migrations:
 
 `controllers/integrations-ebay.controller.ts`, `controllers/ebay-multi-store.controller.ts`, services: `ebay-integrations-oauth`, `ebay-sync`, `ebay-policy-sync`, `ebay-listing`, `ebay-inventory`, `ebay-order`, processors: `ebay-listing-publish`, `ebay-inventory-sync`, `ebay-order-sync`, ~15 entities
 
+### Published Listings (`published-listings/`)
+
+`published-listings.controller.ts` exposes the organization-scoped listing mirror and detail APIs; `services/published-listings.service.ts` filters the database mirror, while the sync service refreshes it from eBay. The Primemotive JSON feed resolves the exact store associated with the authenticated organization and returns active published listings without a make-specific filter. Snapshot imports use a stable UUID cursor and listing revision; incremental changes use a committed sequence cursor. `includeCatalogData=true` optionally batch-loads linked `catalog_products` source fields for the page, restricted to same-organization or legacy null-organization rows; fitment projection includes only explicitly MVL-validated rows. These values are not canonical Partslink24 values. The migration-backed `/primemotive/changes` feed records added, edited, ended, and deleted listings; its optional HMAC-signed outbound callbacks require a configured URL, secret, and organization scope. Synthetic rows are marked `is_test_listing`; the opt-in simulator changes only those database rows and makes no eBay calls. The legacy sale-event receiver requires `published_listings.sales.notify` plus timestamped HMAC verification and records deduplicated receipts without changing inventory quantities.
+
+### MotoArk (`integrations/motoark/`)
+
+Deployed 2026-11-03. `motoark.controller.ts` exposes signed order events,
+processing status, and warehouse-derived quantity lookup. `motoark.service.ts`
+provides the organization-scoped durable inbox and ordered lifecycle processing;
+`motoark-stock.service.ts` uses `stock` reservations/ledger for shipment,
+cancellation, and physically inspected return flows. The separate lifecycle key
+is required. Synthetic listings are safely rejected; unmapped or unavailable
+stock remains pending. Marketplace stock push remains disabled.
+
 ### Inventory (`inventory/`)
 
 `inventory.controller.ts`, `inventory.service.ts`, `inventory-workbench.service.ts`, `processors/inventory-sync.processor.ts`, entities: `inventory-event`, `inventory-ledger`, `store-inventory-allocation`. The Add Part photo lookup reads private S3 images with the app's AWS identity, avoids using a stale part-type field to choose its vision prompt, and syncs successful identity fields plus normalized title to the listing and matching CatalogProduct.
@@ -267,6 +289,8 @@ Applied in order in `app.module.ts`:
 ## Fashion vertical module (2026-09-09)
 
 backend/src/verticals contains VerticalsModule, FashionController, FashionListingsService, FashionImageAnalysisService, VerticalsService, FashionReview, and the vertical configuration/DTOs. FashionController owns organization-scoped drafts, photo upload, multi-image identification, listing-text generation, review decisions, private evidence metadata, quarantine, store configuration, and Fashion role administration. Photo storage reuses StorageService and ImageProcessorService; Fashion vision uses short-lived signed GET URLs for private S3 image keys; identification reuses OpenAiService vision and EbayTaxonomyApiService. The eBay integration module exposes the vertical-tagged Fashion OAuth start route while the shared callback preserves the destination.
+backend/src/verticals contains VerticalsModule, FashionController, FashionListingsService, FashionImageAnalysisService, VerticalsService, FashionReview, and the vertical configuration/DTOs. FashionController owns organization-scoped drafts, photo upload, multi-image identification, listing-text generation, review decisions, private evidence metadata, quarantine, store configuration, and Fashion role administration. Photo storage reuses StorageService and ImageProcessorService; identification reuses OpenAiService vision and EbayTaxonomyApiService. The eBay integration module exposes vertical-tagged Fashion and B&I OAuth start routes; the shared callback returns successful connections to the store page for the vertical saved in OAuth state.
+**Quick capture (2026-09-28):** `FashionIntakeController` (`/api/fashion/measurement-templates`, `warehouses`, `intake`, `intake/sku`, `intake/batches`, `listings/:id/identify`, `listings/size-chart`, `listings/photos/banner`), `FashionIntakeService` (warehouses, atomic batch SKUs, capture → `FashionListingsService.create`, background merge), `FashionIntakeProcessor` (BullMQ `fashion-intake-analysis`, concurrency 2), `FashionIntakeImagesService` (sharp-rendered size chart and banners), `fashion-measurements.ts` (templates/diagrams), `fashion-storage-keys.util.ts`, entities `FashionWarehouse` and `FashionSkuCounter`. `FashionImageAnalysisService.analyzeImages` is the user-independent core used by the job. See docs/architecture/FASHION_QUICK_CAPTURE.md.
 
 ## Business & Industrial vertical module (2026-09-09)
 
@@ -292,15 +316,13 @@ Taxonomy leaf/aspect resolution, AI audit logging, draft creation, and export.
 `business-industrial-image-intake` BullMQ queue sequentially to control model
 and taxonomy rate limits.
 
-The same service exposes a bounded public-Drive pilot route. It enumerates
-server-side Drive children using GOOGLE_DRIVE_API_KEY, downloads up to 200 item
-folders and every supported image up to the 5,000-image job cap, canonicalizes
+The same service exposes a full-root public-Drive route. It enumerates
+server-side Drive children using GOOGLE_DRIVE_API_KEY, downloads every item
+folder and every supported image; local uploads keep the separate 5,000-image safety limit, canonicalizes
 images to WebP before S3, invokes openai/gpt-5.6-luna-20260709 for vision,
 evidence-bound listing copy, and the shared Browse-backed price suggestion, and
-aggregates spend from ai_run_logs. Decimal dot-suffix folders are grouped as
-instances of the normalized base SKU. Successful draft application writes both
-the B&I CatalogProduct and a shared ListingRecord inventory projection; reruns
-merge new assets into the existing normalized catalog SKU.
+aggregates spend from ai_run_logs. Decimal dot-suffix folders remain independent exact-folder SKUs. Successful draft application writes both
+the B&I CatalogProduct and a shared ListingRecord inventory projection; reruns overwrite the existing exact-folder catalog SKU in place.
 
 ## Shared catalog module (2026-09-12)
 

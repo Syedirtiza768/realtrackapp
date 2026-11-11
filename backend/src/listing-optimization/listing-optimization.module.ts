@@ -14,6 +14,7 @@ import { ListingOptimizationService } from './listing-optimization.service.js';
 import { ListingOptimizationProcessor } from './processors/listing-optimization.processor.js';
 import { TitleVerificationService } from './title-verification/title-verification.service.js';
 import { EbayFitmentPublishService } from './ebay-fitment-publish.service.js';
+import { OemFitmentLookupService } from './oem-fitment-lookup.service.js';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { EbayFitmentPublishService } from './ebay-fitment-publish.service.js';
   ],
   providers: [
     FitmentDiscoveryService,
+    OemFitmentLookupService,
     ListingOptimizationService,
     ListingOptimizationProcessor,
     EnterpriseListingIntelligenceService,

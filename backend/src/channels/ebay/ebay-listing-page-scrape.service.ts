@@ -77,7 +77,7 @@ export class EbayListingPageScrapeService {
         headers: {
           'User-Agent':
             process.env.PUBLISHED_LISTINGS_SCRAPE_UA ??
-            'Mozilla/5.0 (compatible; RealTrackPublishedListingsBot/1.0; +https://mhn.realtrackapp.com)',
+            'Mozilla/5.0 (compatible; OmniCorePublishedListingsBot/1.0; +https://app.omnicoreholding.com)',
           Accept:
             'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',

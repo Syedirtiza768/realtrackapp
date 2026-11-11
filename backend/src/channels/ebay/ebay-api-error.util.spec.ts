@@ -1,7 +1,10 @@
 import {
   formatEbayApiError,
+  formatEbayOverseasWarehouseBlockError,
   isEbayAvailabilityMissingTransientError,
+  isEbayOverseasWarehouseBlockError,
   isEbayInvalidAccessTokenError,
+  isEbayOfferUnavailableError,
   isEbayPartsAccessoriesReturnPolicyError,
   isEbayRecoverableBusinessPolicyError,
 } from './ebay-api-error.util.js';
@@ -66,5 +69,39 @@ describe('formatEbayApiError', () => {
       },
     };
     expect(isEbayAvailabilityMissingTransientError(err)).toBe(true);
+  });
+
+  it('detects an eBay offer that no longer exists', () => {
+    const err = {
+      response: {
+        data: {
+          errors: [{ errorId: 25713, message: 'This Offer is not available.' }],
+        },
+      },
+    };
+    expect(isEbayOfferUnavailableError(err)).toBe(true);
+  });
+
+  it('detects the overseas warehouse block as a permanent policy error', () => {
+    const err = {
+      response: {
+        data: {
+          errors: [
+            {
+              errorId: 1276646,
+              longMessage:
+                'It appears you are listing a forward-deployed item in a country different from your registered address.',
+            },
+          ],
+        },
+      },
+    };
+    expect(isEbayOverseasWarehouseBlockError(err)).toBe(true);
+    expect(
+      formatEbayOverseasWarehouseBlockError(err, {
+        storeName: 'Primemotive',
+        merchantLocationKey: 'AE_Dubai',
+      }),
+    ).toContain('Overseas Warehouse Block Policy');
   });
 });

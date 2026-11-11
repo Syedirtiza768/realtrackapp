@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator.js';
 import {
@@ -21,12 +22,13 @@ export class HealthController {
   ) {}
 
   @Public()
+  @SkipThrottle({ short: true, medium: true, long: true })
   @Get()
   @HealthCheck()
   check() {
     return this.health.check([
       () => this.db.pingCheck('database'),
-      () => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024), // 300 MB
+      () => this.memory.checkHeap('memory_heap', 1024 * 1024 * 1024), // 1 GB within the 1.8 GB backend container limit
     ]);
   }
 

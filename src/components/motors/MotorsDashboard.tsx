@@ -132,7 +132,7 @@ function ProductRow({ product }: { product: MotorsProduct }) {
   return (
     <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
       <td className="px-4 py-3">
-        <Link to={`/motors/${product.id}`} className="flex items-center gap-3 group">
+        <Link to={`/auto-parts/motors/${product.id}`} className="flex items-center gap-3 group">
           {product.imageUrls?.[0] ? (
             <OptimizedImage
               src={product.imageUrls[0]}
@@ -182,7 +182,7 @@ function ProductRow({ product }: { product: MotorsProduct }) {
             </button>
           )}
           <Link
-            to={`/motors/${product.id}`}
+            to={`/auto-parts/motors/${product.id}`}
             className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-blue-600 transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
@@ -357,7 +357,7 @@ export default function MotorsDashboard() {
             <RefreshCw className="w-4 h-4" />
           </button>
           <Link
-            to="/motors/upload"
+            to="/auto-parts/motors/upload"
             className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 flex items-center gap-2 shadow-sm"
           >
             <Camera className="w-4 h-4" />

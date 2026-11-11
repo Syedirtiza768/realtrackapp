@@ -14,7 +14,7 @@ They connect each seller account only through **“Connect with eBay”** (OAuth
 
 ## How to connect an eBay account
 
-1. Sign in to RealTrackApp.  
+1. Sign in to Omni Core.  
 2. Open **eBay stores** (`/settings/integrations/ebay`).  
 3. Enter your **organization UUID** (from your workspace admin).  
 4. Choose **display name**, **marketplace** (e.g. eBay Motors US), and **sandbox vs production**.  
@@ -28,7 +28,7 @@ If the connection shows **reconnect required**, run connect again; refresh token
 
 Scopes are configured via `EBAY_SCOPES` (environment). Typical Inventory / sell flows require account and inventory-related scopes; exact strings must match your eBay developer app configuration.
 
-## Catalog is maintained inside RealTrackApp
+## Catalog is maintained inside Omni Core
 
 - SKU, title, brand, MPN, condition, quantity, price, images, fitment, and descriptions live in the **internal catalog**.  
 - eBay receives **channel copies** as inventory items + offers + published listings.  

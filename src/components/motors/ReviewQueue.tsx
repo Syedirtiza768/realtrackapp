@@ -165,7 +165,7 @@ function TaskRow({ task }: { task: ReviewTask }) {
             </>
           ) : null}
           <Link
-            to={`/motors/${task.motorsProductId}`}
+            to={`/auto-parts/motors/${task.motorsProductId}`}
             className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-blue-600 transition-colors"
             title="View product"
           >

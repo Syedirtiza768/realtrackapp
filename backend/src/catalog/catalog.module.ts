@@ -6,8 +6,10 @@ import { RbacModule } from '../rbac/rbac.module.js';
 import { TeamsModule } from '../teams/teams.module.js';
 import { VerticalsModule } from '../verticals/verticals.module.js';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
+import { EbayPublishedListing } from '../published-listings/entities/ebay-published-listing.entity.js';
 import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
 import { BusinessIndustrialReview } from '../verticals/entities/business-industrial-review.entity.js';
 import { FashionReview } from '../verticals/entities/fashion-review.entity.js';
@@ -27,8 +29,10 @@ import {
     VerticalsModule,
     TypeOrmModule.forFeature([
       CatalogProduct,
+      ListingRecord,
       ConnectedEbayAccount,
       EbayListingChannel,
+      EbayPublishedListing,
       ListingActionLog,
       BusinessIndustrialReview,
       FashionReview,

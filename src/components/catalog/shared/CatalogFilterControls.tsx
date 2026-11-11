@@ -48,6 +48,7 @@ export default function CatalogFilterControls({ config, filters, facets, facetsE
     { key: 'categories', label: 'eBay category', buckets: facets?.categories || [], expanded: true },
     { key: 'conditions', label: 'Condition', buckets: facets?.conditions || [], expanded: true },
     { key: 'validationStatuses', label: 'Review status', buckets: facets?.validationStatuses || [], expanded: true },
+    { key: 'catalogStatuses', label: 'Publication status', buckets: facets?.catalogStatuses || [], expanded: true },
     { key: 'stockLevels', label: 'Stock', buckets: facets?.stockLevels || [] },
   ] : [
     { key: 'brands', label: 'Brand', buckets: facets?.brands || [], expanded: true }, { key: 'categories', label: 'Category', buckets: facets?.categories || [], expanded: true }, { key: 'conditions', label: 'Condition', buckets: facets?.conditions || [] }, { key: 'catalogStatuses', label: 'Catalog status', buckets: facets?.catalogStatuses || [] }, { key: 'stockLevels', label: 'Stock', buckets: facets?.stockLevels || [] },

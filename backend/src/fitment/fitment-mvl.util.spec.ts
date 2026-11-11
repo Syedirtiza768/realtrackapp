@@ -1,9 +1,11 @@
 import {
+  compatibilityHasOptionalFields,
   fitmentDataToCompatibilityPayload,
   isSameMakeVariant,
   parseFitmentEntry,
   pickCanonicalPropertyValue,
   selectPublishFitmentSource,
+  toCoreCompatibilityPayload,
 } from './fitment-mvl.util.js';
 
 describe('isSameMakeVariant', () => {
@@ -225,5 +227,79 @@ describe('fitment-mvl.util', () => {
     ]);
 
     expect(payload).toBeUndefined();
+  });
+
+  it('omits Submodel because US Motors Inventory API does not accept that property', () => {
+    const payload = fitmentDataToCompatibilityPayload([
+      {
+        Make: 'BMW',
+        Model: 'X3',
+        Year: '2017',
+        Trim: 'sDrive 18 d',
+        Engine: 'BMW B47 D20 A',
+        Submodel: 'xDrive35i',
+      },
+    ]);
+
+    expect(payload?.compatibleProducts[0].compatibilityProperties).toEqual([
+      { name: 'Make', value: 'BMW' },
+      { name: 'Model', value: 'X3' },
+      { name: 'Year', value: '2017' },
+      { name: 'Trim', value: 'sDrive 18 d' },
+      { name: 'Engine', value: 'BMW B47 D20 A' },
+    ]);
+  });
+
+  it('toCoreCompatibilityPayload keeps unique Make/Model/Year and drops optional fields', () => {
+    const core = toCoreCompatibilityPayload({
+      compatibleProducts: [
+        {
+          compatibilityProperties: [
+            { name: 'Make', value: 'BMW' },
+            { name: 'Model', value: 'X3' },
+            { name: 'Year', value: '2017' },
+            { name: 'Trim', value: 'sDrive 18 d' },
+            { name: 'Engine', value: 'BMW B47 D20 A' },
+            { name: 'Submodel', value: 'xDrive35i' },
+          ],
+          notes: 'Official FEBEST application; MVL match score 0.58',
+        },
+        {
+          compatibilityProperties: [
+            { name: 'Make', value: 'BMW' },
+            { name: 'Model', value: 'X3' },
+            { name: 'Year', value: '2017' },
+            { name: 'Trim', value: 'xDrive35i' },
+          ],
+        },
+      ],
+    });
+
+    expect(core).toEqual({
+      compatibleProducts: [
+        {
+          compatibilityProperties: [
+            { name: 'Make', value: 'BMW' },
+            { name: 'Model', value: 'X3' },
+            { name: 'Year', value: '2017' },
+          ],
+        },
+      ],
+    });
+    expect(
+      compatibilityHasOptionalFields({
+        compatibleProducts: [
+          {
+            compatibilityProperties: [
+              { name: 'Make', value: 'BMW' },
+              { name: 'Model', value: 'X3' },
+              { name: 'Year', value: '2017' },
+              { name: 'Trim', value: 'sDrive 18 d' },
+            ],
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(compatibilityHasOptionalFields(core)).toBe(false);
   });
 });

@@ -16,7 +16,7 @@ PostgreSQL via TypeORM, Redis-backed BullMQ for background work. Both live insid
   migration (per [[../context/CURRENT_STATE|CURRENT_STATE.md]] "What Is Broken") —
   not independently re-verified here
 - The database name is `listingpro` (`.env.example` `DB_NAME`) even though the app
-  is branded RealTrackApp — see the branding-inconsistency note in
+  is branded Omni Core — see the branding note in
   [[../context/CURRENT_STATE|CURRENT_STATE.md]]
 
 ## Background jobs

@@ -50,7 +50,7 @@ export default function RegisterPage() {
 
     try {
       await register(email, password, name || undefined);
-      navigate('/');
+      navigate('/auto-parts', { replace: true });
     } catch (err: any) {
       setError(err.message);
     }

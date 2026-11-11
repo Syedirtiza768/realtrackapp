@@ -203,6 +203,7 @@ export class EbayPolicySyncService {
       });
 
       let locations: { merchantLocationKey: string; name: string }[] = [];
+      let locationsTimeout: ReturnType<typeof setTimeout> | undefined;
       try {
         locations = await Promise.race([
           this.sellAccount.listInventoryLocations(
@@ -210,19 +211,22 @@ export class EbayPolicySyncService {
             baseUrl,
             mp.marketplaceId,
           ),
-          new Promise<never>((_, reject) =>
-            setTimeout(
+          new Promise<never>((_, reject) => {
+            locationsTimeout = setTimeout(
               () =>
                 reject(new Error('Inventory locations fetch timed out (30s)')),
               30_000,
-            ),
-          ),
+            );
+          }),
         ]);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.warn(
           `Inventory locations fetch failed account=${ebayAccountId} mp=${mp.marketplaceId}: ${msg}`,
         );
+      } finally {
+        // Do not leave a pending 30s timer behind once the fetch settles.
+        clearTimeout(locationsTimeout);
       }
 
       const pick = (items: EbayPolicyListItem[]) =>

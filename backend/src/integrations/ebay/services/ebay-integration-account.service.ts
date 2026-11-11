@@ -5,6 +5,10 @@ import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.
 import { EbayBusinessPolicy } from '../entities/ebay-business-policy.entity.js';
 import { EbayAccountMarketplace } from '../entities/ebay-account-marketplace.entity.js';
 import { ListingActionLogWriterService } from './listing-action-log-writer.service.js';
+import {
+  DEFAULT_MERCHANT_LOCATION_KEY,
+  isLegacyDefaultMerchantLocationKey,
+} from '../../../channels/ebay/ebay-inventory-location.util.js';
 
 @Injectable()
 export class EbayIntegrationAccountService {
@@ -160,8 +164,13 @@ export class EbayIntegrationAccountService {
         body.defaultFulfillmentPolicyId?.trim() || null;
     }
     if (body.defaultInventoryLocationKey !== undefined) {
-      mp.defaultInventoryLocationKey =
+      const requestedLocationKey =
         body.defaultInventoryLocationKey?.trim() || null;
+      mp.defaultInventoryLocationKey = isLegacyDefaultMerchantLocationKey(
+        requestedLocationKey,
+      )
+        ? DEFAULT_MERCHANT_LOCATION_KEY
+        : requestedLocationKey;
     }
     await this.mpRepo.save(mp);
     await this.logWriter.write({

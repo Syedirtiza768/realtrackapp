@@ -146,6 +146,7 @@ export class OrderStockService {
         [orderId],
       )) as OrderRow[];
       if (!order) throw new NotFoundException('Order not found');
+      if (order.channel === 'motoark') throw new BadRequestException('Use the MotoArk order-events contract to allocate external order stock');
       if (CLOSED_ORDER_STATUSES.has(order.status)) return;
       const lines = (await em.query(
         `SELECT id, listing_id, sku, quantity, inventory_item_id, stock_status
@@ -323,10 +324,11 @@ export class OrderStockService {
     const itemIds: string[] = [];
     await this.db.transaction('READ COMMITTED', async (em) => {
       const [order] = (await em.query(
-        `SELECT o.id, s.organization_id FROM orders o LEFT JOIN stores s ON s.id = o.store_id WHERE o.id = $1 FOR UPDATE OF o`,
+        `SELECT o.id, o.channel, s.organization_id FROM orders o LEFT JOIN stores s ON s.id = o.store_id WHERE o.id = $1 FOR UPDATE OF o`,
         [orderId],
-      )) as Array<{ id: string; organization_id: string | null }>;
+      )) as Array<{ id: string; channel: string; organization_id: string | null }>;
       if (!order?.organization_id) return;
+      if (order.channel === 'motoark') throw new BadRequestException('Use the MotoArk order-events contract to release external order stock');
       org = order.organization_id;
       const reservations = await em.getRepository(StockReservation).find({
         where: { orderId, status: In(['active', 'picked']) },
@@ -391,10 +393,11 @@ export class OrderStockService {
     const warnings: string[] = [];
     await this.db.transaction('READ COMMITTED', async (em) => {
       const [order] = (await em.query(
-        `SELECT o.id, o.external_order_id, s.organization_id FROM orders o LEFT JOIN stores s ON s.id = o.store_id WHERE o.id = $1 FOR UPDATE OF o`,
+        `SELECT o.id, o.channel, o.external_order_id, s.organization_id FROM orders o LEFT JOIN stores s ON s.id = o.store_id WHERE o.id = $1 FOR UPDATE OF o`,
         [orderId],
-      )) as Array<{ id: string; external_order_id: string | null; organization_id: string | null }>;
+      )) as Array<{ id: string; channel: string; external_order_id: string | null; organization_id: string | null }>;
       if (!order?.organization_id) return;
+      if (order.channel === 'motoark') throw new BadRequestException('Use the MotoArk order-events contract to ship external order stock');
       org = order.organization_id;
       const reservations = await em.getRepository(StockReservation).find({
         where: { orderId, status: In(['active', 'picked']) },

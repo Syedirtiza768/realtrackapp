@@ -5,7 +5,7 @@
 
 ## What This Project Is
 
-RealTrackApp (internal name: `listingpro`) is a **multi-channel automotive parts listing & operations platform**. It ingests product data and images, enriches with AI (OpenAI), manages vehicle fitment (YMMT — Year/Make/Model/Trim), and publishes/syncs listings to marketplaces (primarily **eBay**), with orders, inventory, pricing, dashboards, automation, RBAC, and audit.
+Omni Core (internal name: `listingpro`) is a **multi-channel automotive parts listing & operations platform**. It ingests product data and images, enriches with AI (OpenAI), manages vehicle fitment (YMMT — Year/Make/Model/Trim), and publishes/syncs listings to marketplaces (primarily **eBay**), with orders, inventory, pricing, dashboards, automation, RBAC, and audit.
 
 ## Project Type
 
@@ -94,7 +94,7 @@ See [ROADMAP.md](ROADMAP.md) and [NEXT_STEPS.md](NEXT_STEPS.md).
 - No JWT revocation (client-side logout only)
 - Weak tenant/org row-level isolation
 - eBay OAuth token refresh fragility
-- Branding inconsistency (RealTrackApp vs ListingPro)
+- Legacy internal identifiers remain in package, database, and storage names for compatibility
 
 Full risk inventory: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 

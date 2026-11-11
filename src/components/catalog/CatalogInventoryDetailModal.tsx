@@ -798,7 +798,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
             <div className="flex-1 overflow-y-auto px-5 py-5">
               {/* Hero */}
               <div className="flex gap-4 border-b border-slate-100 pb-5 dark:border-slate-800">
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
                 {localImages[0] ? (
                   <button
                     type="button"
@@ -806,7 +806,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
                     className="block h-full w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
                     aria-label="Zoom image"
                   >
-                    <OptimizedImage src={localImages[0]} alt="" variant="medium" aspectRatio="1/1" className="h-full w-full" />
+                    <OptimizedImage src={localImages[0]} alt="Primary part photo" variant="medium" aspectRatio="1/1" objectFit="contain" className="h-full w-full" />
                   </button>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-slate-400">

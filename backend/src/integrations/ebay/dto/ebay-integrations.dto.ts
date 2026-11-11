@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   ValidateNested,
 } from 'class-validator';
 
@@ -138,6 +139,11 @@ export class EbayBulkPublishJobDto {
 export class EbayBulkPublishStorePolicyDto {
   @IsUUID()
   storeId!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^EBAY_[A-Z]+(?:_[A-Z]+)*$/)
+  marketplaceId?: string;
 
   @IsOptional()
   @IsString()

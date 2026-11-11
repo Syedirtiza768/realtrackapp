@@ -37,6 +37,10 @@ describe('EbayMultiStoreListingService bulk publish', () => {
           connectionSource: 'native_oauth',
           primaryStoreId: 'store-1',
           primaryStore: { ebayMarketplaceId: 'EBAY_US', config: {} },
+          marketplaces: [
+            { marketplaceId: 'EBAY_DE', enabled: true },
+            { marketplaceId: 'EBAY_GB', enabled: false },
+          ],
         },
         {
           id: 'account-2',
@@ -131,6 +135,44 @@ describe('EbayMultiStoreListingService bulk publish', () => {
     );
   });
 
+  it('uses the explicitly selected marketplace for that store only', async () => {
+    const { service, targetRepo } = setup();
+    await service.createBulkPublishJob({
+      organizationId: 'org-1',
+      requestedByUserId: 'user-1',
+      listingIds: ['listing-1'],
+      storeIds: ['store-1', 'store-2'],
+      marketplaceByStore: { 'store-1': 'EBAY_DE' },
+    });
+    expect(targetRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ebayAccountId: 'account-1',
+        marketplaceId: 'EBAY_DE',
+      }),
+    );
+    expect(targetRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ebayAccountId: 'account-2',
+        marketplaceId: 'EBAY_US',
+      }),
+    );
+  });
+
+  it('rejects a disabled marketplace before creating or queuing a target', async () => {
+    const { service, targetRepo, publishQueue } = setup();
+    await expect(
+      service.createBulkPublishJob({
+        organizationId: 'org-1',
+        requestedByUserId: 'user-1',
+        listingIds: ['listing-1'],
+        storeIds: ['store-1'],
+        marketplaceByStore: { 'store-1': 'EBAY_GB' },
+      }),
+    ).rejects.toThrow('The requested marketplace is not enabled');
+    expect(targetRepo.create).not.toHaveBeenCalled();
+    expect(publishQueue.addBulk).not.toHaveBeenCalled();
+  });
+
   it('throws when none of the listings can be resolved', async () => {
     const { service } = setup();
     (service as any).publishResolver.resolve = jest
@@ -197,6 +239,33 @@ describe('EbayMultiStoreListingService bulk publish', () => {
       }),
     ).rejects.toThrow(/eBay Trading API allowance is low/);
     expect(jobRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('persists shared bulk profile names for every listing/store target', async () => {
+    const { service, targetRepo } = setup();
+
+    await service.createBulkPublishJob({
+      organizationId: 'org-1',
+      requestedByUserId: 'user-1',
+      listingIds: ['listing-1'],
+      storeIds: ['store-1', 'store-2'],
+      policyOverrides: {
+        requestedFulfillmentPolicyName: 'B&I Shipping',
+        requestedPaymentPolicyName: 'Immediate Payment',
+        requestedReturnPolicyName: '30 Day Returns',
+      },
+    });
+
+    expect(targetRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+      resultPayload: {
+        sourceListingId: 'listing-1',
+        policyOverrides: {
+          requestedFulfillmentPolicyName: 'B&I Shipping',
+          requestedPaymentPolicyName: 'Immediate Payment',
+          requestedReturnPolicyName: '30 Day Returns',
+        },
+      },
+    }));
   });
 
   it('normalizes target error payloads for shared catalog progress', async () => {

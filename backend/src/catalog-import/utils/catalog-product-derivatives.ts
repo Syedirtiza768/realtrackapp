@@ -46,21 +46,27 @@ function fitmentRows(product: CatalogProduct): Record<string, unknown>[] {
   return f;
 }
 
+function fitmentText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+}
+
 function yearFromEntry(e: Record<string, unknown>): number | null {
   const y = e['Year'] ?? e['year'];
   if (y == null) return null;
-  const n = parseInt(String(y), 10);
+  const n = parseInt(fitmentText(y), 10);
   return Number.isFinite(n) ? n : null;
 }
 
 function makeFromEntry(e: Record<string, unknown>): string {
   const m = e['Make'] ?? e['make'];
-  return m != null ? String(m).trim().toLowerCase() : '';
+  return fitmentText(m).toLowerCase();
 }
 
 function modelFromEntry(e: Record<string, unknown>): string {
   const m = e['Model'] ?? e['model'];
-  return m != null ? String(m).trim().toLowerCase() : '';
+  return fitmentText(m).toLowerCase();
 }
 
 /** Heuristic: placement is important for body / lighting / large exterior parts. */
@@ -89,19 +95,71 @@ export function priceBandFromPrice(price: number | null | undefined): string {
 }
 
 function duplicateFitmentCount(rows: Record<string, unknown>[]): number {
-  const sigs = new Map<string, number>();
+  const sigs = new Map<string, { count: number; rowVariants: Set<string> }>();
   for (const e of rows) {
+    // Distinct trims, engines, and platforms can share the same Y/M/M. Treat
+    // only repeated vehicle configurations as duplicates, and normalize case
+    // and whitespace so cosmetic source differences do not trigger review.
+    const value = (...keys: string[]): string => {
+      const raw = keys
+        .map((key) => e[key])
+        .find((candidate) => candidate != null);
+      return fitmentText(raw).replace(/\s+/g, ' ').toLowerCase();
+    };
     const y = yearFromEntry(e) ?? '';
-    const mk = makeFromEntry(e);
-    const md = modelFromEntry(e);
-    const key = `${y}|${mk}|${md}`;
-    sigs.set(key, (sigs.get(key) ?? 0) + 1);
+    const mk = makeFromEntry(e).replace(/\s+/g, ' ');
+    const md = modelFromEntry(e).replace(/\s+/g, ' ');
+    const trim = value('Trim', 'trim', 'Submodel', 'submodel');
+    const engine = value('Engine', 'engine');
+    const platform = value('Platform', 'platform');
+    const bodyStyle = value(
+      'BodyStyle',
+      'bodyStyle',
+      'Body Style',
+      'body_style',
+    );
+    const driveType = value(
+      'DriveType',
+      'driveType',
+      'Drive Type',
+      'drive_type',
+    );
+    const key = [y, mk, md, trim, engine, platform, bodyStyle, driveType].join(
+      '|',
+    );
+    const existing = sigs.get(key) ?? {
+      count: 0,
+      rowVariants: new Set<string>(),
+    };
+    existing.count += 1;
+    existing.rowVariants.add(normalizedFitmentRow(e));
+    sigs.set(key, existing);
   }
   let dups = 0;
-  for (const c of sigs.values()) {
-    if (c > 1) dups += c - 1;
+  for (const { count, rowVariants } of sigs.values()) {
+    // Repeated copies of the same normalized MVL record do not change the
+    // supported vehicle set; only conflicting records need manual review.
+    if (count > 1 && rowVariants.size > 1) dups += count - 1;
   }
   return dups;
+}
+
+function normalizedFitmentRow(row: Record<string, unknown>): string {
+  const normalize = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      return value.trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+    if (Array.isArray(value)) return value.map(normalize);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, entry]) => [key, normalize(entry)]),
+      );
+    }
+    return value;
+  };
+  return JSON.stringify(normalize(row));
 }
 
 function categoryBucketsForProduct(
@@ -272,11 +330,7 @@ export function computeCatalogProductDerived(
   );
 
   const marketplace_us_ready =
-    readiness_status === 'ready' &&
-    has_oem_number &&
-    has_images &&
-    image_count >= 2 &&
-    has_fitment;
+    readiness_status === 'ready' && has_oem_number && has_images && has_fitment;
 
   const marketplace_multi_candidate =
     data_completeness_score >= 80 &&

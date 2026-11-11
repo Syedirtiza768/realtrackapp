@@ -1,6 +1,24 @@
 # Warehouse inventory (StockModule)
 
-**Status:** Implemented 2026-10-05; not deployed. **Code:** `backend/src/stock/`, `src/components/stock/`, `src/lib/stockApi.ts`.
+**2026-11-05 listing reconciliation:** The supplied PrimeMotive US population
+was reconciled on production in `ebay_published_listings` and existing matching
+`ebay_listing_channels` publication links. The 62,221 advertised available
+units are channel evidence only. No physical opening balances, stock movements,
+or stock push policy changes were made. Verified warehouse counts and mappings
+are still required. See the [production record](../operations/PRIMEMOTIVE_US_RECONCILIATION_2026-11-05.md).
+
+**MotoArk lifecycle (deployed 2026-11-03):** The external lifecycle
+adapter uses the same reservation/ledger transaction path for paid, shipped,
+cancelled, returned, inspected, and disposed quantities. Generic order/stock
+mutations reject MotoArk orders to preserve their external version and line
+balances. Channel acknowledgement reconciles both mirror quantity and
+active/out-of-stock status. Production stock pushing remains disabled; no
+opening balances were created because a bounded Primemotive sample had no
+inventory mappings. Verified warehouse counts are required before pending
+events can apply.
+See [the contract and current stock prerequisites](MOTOARK_ORDER_LIFECYCLE.md).
+
+**Status:** Deployed to production 2026-10-05 (images `realtrackapp-*:stock-20261005`); stock setup run for all 12 workspaces; channel push off (shadow mode). **Code:** `backend/src/stock/`, `src/components/stock/`, `src/lib/stockApi.ts`.
 **Migration:** `backend/src/migrations/1791100000000-CreateWarehouseInventory.ts` (additive only).
 **Plan and history:** [../planning/INVENTORY_AND_WAREHOUSE_PLAN.md](../planning/INVENTORY_AND_WAREHOUSE_PLAN.md).
 

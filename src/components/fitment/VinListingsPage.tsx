@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Barcode, AlertCircle, Loader2, Search, Download } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/card';
 import { getListingsByVin, exportDbListingsByVin, type VinListingsResponse } from '../../lib/fitmentVinListingsApi';
+import { toProxyUrl } from '../../lib/imageUrl';
 
 function parseImageUrls(raw: string | null | undefined): string[] {
   if (!raw?.trim()) return [];
@@ -338,7 +339,7 @@ export default function VinListingsPage() {
                               {row.parsedImages && row.parsedImages.length > 0 ? (
                                 <div className="relative shrink-0">
                                   <img
-                                    src={row.parsedImages[0]}
+                                    src={toProxyUrl(row.parsedImages[0])}
                                     alt={row.title ?? ''}
                                     className="w-12 h-12 rounded-md object-cover bg-slate-800"
                                   />
@@ -350,7 +351,7 @@ export default function VinListingsPage() {
                                 </div>
                               ) : row.itemPhotoUrl ? (
                                 <img
-                                  src={row.itemPhotoUrl}
+                                  src={toProxyUrl(row.itemPhotoUrl)}
                                   alt={row.title ?? ''}
                                   className="w-12 h-12 rounded-md object-cover bg-slate-800 shrink-0"
                                 />
@@ -374,7 +375,7 @@ export default function VinListingsPage() {
                                     {row.parsedImages.slice(1, 5).map((img, i) => (
                                       <img
                                         key={i}
-                                        src={img}
+                                        src={toProxyUrl(img)}
                                         alt=""
                                         className="w-6 h-6 rounded object-cover bg-slate-800 shrink-0"
                                       />

@@ -91,13 +91,100 @@ function tagValue(block: string, tag: string): string | null {
   return raw.replace(/^<!\[CDATA\[|\]\]>$/g, '');
 }
 
+/**
+ * eBay reports policy blocks (e.g. "Overseas Warehouse Block", "account is
+ * limited") as a generic error 240 and puts the real reason in the first
+ * ErrorParameters value, as HTML. Surface it so operators don't see only
+ * "title and/or description may contain improper words".
+ */
+function tradingPolicyReason(xml: string): string | null {
+  const parameters = xml.match(
+    /<ErrorParameters\b[^>]*>([\s\S]*?)<\/ErrorParameters>/i,
+  )?.[1];
+  const raw = parameters ? tagValue(parameters, 'Value') : null;
+  if (!raw) return null;
+  const text = raw
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&apos;/g, "'")
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\{e\d+-\d+x\}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text || null;
+}
+
 function tradingFailureMessage(xml: string, fallback: string): string {
   const details = [
     tagValue(xml, 'LongMessage'),
     tagValue(xml, 'Message'),
     tagValue(xml, 'ShortMessage'),
   ].filter((value): value is string => Boolean(value));
+  if (tagValue(xml, 'ErrorCode') === '240') {
+    const reason = tradingPolicyReason(xml);
+    if (reason) details.unshift(`eBay policy block: ${reason}`);
+  }
   return [...new Set(details)].join(' — ') || fallback;
+}
+
+function fixedPriceRevisionFields(
+  input: TradingFixedPriceRevisionInput,
+): string[] {
+  const fields: string[] = [];
+  if (input.title != null) {
+    fields.push(`    <Title>${xmlText(input.title)}</Title>`);
+  }
+  if (input.description != null) {
+    fields.push(`    <Description>${xmlText(input.description)}</Description>`);
+  }
+  if (input.categoryId != null) {
+    fields.push(
+      `    <PrimaryCategory><CategoryID>${xmlText(input.categoryId)}</CategoryID></PrimaryCategory>`,
+    );
+  }
+  if (input.quantity != null) {
+    fields.push(
+      `    <Quantity>${Math.max(0, Math.trunc(input.quantity))}</Quantity>`,
+    );
+  }
+  if (input.price != null) {
+    fields.push(
+      `    <StartPrice currencyID="${xmlText(input.currency ?? 'USD')}">${input.price.toFixed(2)}</StartPrice>`,
+    );
+  }
+  if (input.imageUrls != null) {
+    const pictures = input.imageUrls
+      .map((url) => `      <PictureURL>${xmlText(url)}</PictureURL>`)
+      .join('\n');
+    fields.push(`    <PictureDetails>\n${pictures}\n    </PictureDetails>`);
+  }
+  if (input.itemSpecifics != null) {
+    const specifics = itemSpecificsXml(input.itemSpecifics).replace(
+      /^ {2}/gm,
+      '    ',
+    );
+    fields.push(specifics);
+  }
+  return fields;
+}
+
+function buildFixedPriceListingRequest(
+  callName: 'ReviseFixedPriceItem' | 'RelistFixedPriceItem',
+  itemId: string,
+  input: TradingFixedPriceRevisionInput,
+): string {
+  const fields = fixedPriceRevisionFields(input);
+  return `<?xml version="1.0" encoding="utf-8"?>
+<${callName}Request xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <ItemID>${xmlText(itemId)}</ItemID>
+${fields.join('\n')}
+  </Item>
+</${callName}Request>`;
 }
 
 function escapeXml(value: string): string {

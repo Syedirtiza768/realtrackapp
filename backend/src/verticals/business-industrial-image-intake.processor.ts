@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
 import { BusinessIndustrialImageIntakeService } from './business-industrial-image-intake.service.js';
 
-@Processor('business-industrial-image-intake', { concurrency: 1 })
+@Processor('business-industrial-image-intake', { concurrency: 2 })
 export class BusinessIndustrialImageIntakeProcessor extends WorkerHost {
   constructor(private readonly intake: BusinessIndustrialImageIntakeService) {
     super();
@@ -18,7 +18,7 @@ export class BusinessIndustrialImageIntakeProcessor extends WorkerHost {
     if (job.name === 'import-drive')
       await this.intake.processDriveJob(
         job.data.jobId,
-        job.data.maxItems ?? 20,
+        job.data.maxItems,
         job.data.autoCreateDrafts ?? true,
         job.data.skipFolderNames ?? [],
       );

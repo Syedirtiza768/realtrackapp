@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { FeatureFlagService } from '../common/feature-flags/feature-flag.service.js';
 import { EbayInventoryApiService } from '../channels/ebay/ebay-inventory-api.service.js';
+import { capEbayPublishQuantity } from '../channels/ebay/ebay-publish-quantity.util.js';
 import type {
   EbayConditionEnum,
   EbayInventoryItem,
@@ -168,6 +169,7 @@ export class EbayVariantPublishingService {
         ]),
       ) as Record<string, string[]>;
       const condition = this.mapCondition(variant.conditionId);
+      const quantity = capEbayPublishQuantity(variant.quantity ?? 0);
       const item: EbayInventoryItem = {
         sku: variant.sku,
         product: {
@@ -182,7 +184,7 @@ export class EbayVariantPublishingService {
         },
         condition,
         availability: {
-          shipToLocationAvailability: { quantity: variant.quantity ?? 0 },
+          shipToLocationAvailability: { quantity },
         },
       };
       await this.inventoryApi.createOrReplaceItem(
@@ -196,7 +198,7 @@ export class EbayVariantPublishingService {
         marketplaceId: input.marketplaceId,
         format: 'FIXED_PRICE',
         listingDescription: product?.description ?? family.name,
-        availableQuantity: variant.quantity ?? 0,
+        availableQuantity: quantity,
         categoryId,
         merchantLocationKey: input.merchantLocationKey,
         pricingSummary: {

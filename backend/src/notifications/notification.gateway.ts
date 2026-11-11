@@ -21,7 +21,7 @@ interface WsJwtPayload {
     origin: [
       'http://localhost:3191',
       'http://localhost:5173',
-      'https://mhn.realtrackapp.com',
+      'https://app.omnicoreholding.com',
     ],
   },
   namespace: '/notifications',

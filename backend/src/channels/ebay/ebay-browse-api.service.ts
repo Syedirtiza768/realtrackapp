@@ -151,6 +151,8 @@ export class EbayBrowseApiService {
     aspectFilter?: string;
     seller?: string;
     marketplaceId?: string | null;
+    /** Interactive lookups may fail fast on 429 instead of sleeping through retries. */
+    retryOnRateLimit?: boolean;
   }): Promise<EbaySearchResult> {
     const cfg = await this.appHeaders(options.marketplaceId);
     const params: Record<string, string | number> = {};
@@ -173,6 +175,7 @@ export class EbayBrowseApiService {
           params,
         });
       },
+      options.retryOnRateLimit === false ? 1 : undefined,
     );
     return data;
   }
@@ -180,14 +183,19 @@ export class EbayBrowseApiService {
   /**
    * Get a single item by its eBay item ID (v1|itemId|0 format).
    */
-  async getItem(itemId: string): Promise<EbayItem> {
-    const cfg = await this.appHeaders();
+  async getItem(
+    itemId: string,
+    marketplaceId?: string | null,
+    retryOnRateLimit = true,
+  ): Promise<EbayItem> {
+    const cfg = await this.appHeaders(marketplaceId);
     const { data } = await this.withRateLimitRetry(
       `getItem(${itemId})`,
       async () => {
         await this.rateLimiter.acquire();
         return this.http.get<EbayItem>(`/item/${itemId}`, cfg);
       },
+      retryOnRateLimit ? undefined : 1,
     );
     return data;
   }
@@ -311,7 +319,12 @@ export class EbayBrowseApiService {
   async searchByMpn(
     brand: string,
     mpn: string,
-    options?: { categoryIds?: string; limit?: number },
+    options?: {
+      categoryIds?: string;
+      limit?: number;
+      marketplaceId?: string | null;
+      retryOnRateLimit?: boolean;
+    },
   ): Promise<EbayCatalogLookupResult> {
     if (!mpn?.trim()) {
       return { found: false, items: [] };
@@ -321,43 +334,46 @@ export class EbayBrowseApiService {
     const limit = options?.limit ?? 10;
 
     try {
-      const cfg = await this.appHeaders();
-      const params: Record<string, string | number> = {
+      const result = await this.search({
         q: query,
         limit,
-      };
-      if (options?.categoryIds) {
-        params.category_ids = options.categoryIds;
-      }
+        categoryIds: options?.categoryIds,
+        marketplaceId: options?.marketplaceId,
+        ...(options?.retryOnRateLimit === undefined
+          ? {}
+          : { retryOnRateLimit: options.retryOnRateLimit }),
+      });
 
-      const { data } = await this.http.get<EbaySearchResult>(
-        '/item_summary/search',
-        { ...cfg, params },
-      );
-
-      const summaries = data.itemSummaries ?? [];
+      const summaries = result.itemSummaries ?? [];
       if (summaries.length === 0) {
         this.logger.debug(`eBay catalog lookup: no results for "${query}"`);
         return { found: false, items: [] };
       }
 
       // Fetch full item details for the top results to get EPID + aspects
+      const detailSummaries = summaries.slice(0, Math.min(3, summaries.length));
       const detailResults = await Promise.allSettled(
-        summaries
-          .slice(0, Math.min(3, summaries.length))
-          .map((s) => this.getItem(s.itemId).catch(() => null)),
+        detailSummaries.map((s) =>
+          (options?.retryOnRateLimit === false
+            ? this.getItem(s.itemId, options.marketplaceId, false)
+            : this.getItem(s.itemId, options?.marketplaceId)
+          ).catch(() => null),
+        ),
       );
 
       const items: EbayCatalogLookupResult['items'] = [];
 
-      for (const settled of detailResults) {
+      for (let index = 0; index < detailResults.length; index++) {
+        const settled = detailResults[index];
         const item = settled.status === 'fulfilled' ? settled.value : null;
         if (!item) continue;
 
         const aspects: Record<string, string[]> = {};
         if (Array.isArray(item.localizedAspects)) {
           for (const a of item.localizedAspects) {
-            aspects[a.name] = [a.value];
+            const values = aspects[a.name] ?? [];
+            if (!values.includes(a.value)) values.push(a.value);
+            aspects[a.name] = values;
           }
         }
 
@@ -367,8 +383,20 @@ export class EbayBrowseApiService {
         items.push({
           itemId: item.itemId,
           title: item.title,
-          brand: item.brand ?? null,
-          mpn: item.mpn ?? null,
+          itemWebUrl: item.itemWebUrl ?? null,
+          brand:
+            item.brand ??
+            this.firstAspectValue(aspects, ['Brand', 'Manufacturer']) ??
+            null,
+          mpn:
+            item.mpn ??
+            this.firstAspectValue(aspects, [
+              'Manufacturer Part Number',
+              'MPN',
+              'Part Number',
+              'OE/OEM Part Number',
+            ]) ??
+            null,
           epid: item.epid ?? null,
           categoryId: item.categories?.[0]?.categoryId ?? null,
           categoryName: item.categories?.[0]?.categoryName ?? null,
@@ -378,10 +406,11 @@ export class EbayBrowseApiService {
       }
 
       // Also extract from summaries that didn't get full detail
-      for (const s of summaries.slice(items.length)) {
+      for (const s of summaries.slice(detailSummaries.length)) {
         items.push({
           itemId: s.itemId,
           title: s.title,
+          itemWebUrl: s.itemWebUrl ?? null,
           brand: null,
           mpn: null,
           epid: null,
@@ -421,10 +450,23 @@ export class EbayBrowseApiService {
   ): Array<{ year?: string; make?: string; model?: string }> {
     const hints: Array<{ year?: string; make?: string; model?: string }> = [];
 
-    // Direct aspect keys that eBay sellers use
-    const yearValues = aspects['Year'] ?? aspects['Model Year'] ?? [];
-    const makeValues = aspects['Make'] ?? aspects['Manufacturer'] ?? [];
-    const modelValues = aspects['Model'] ?? aspects['Vehicle Model'] ?? [];
+    const yearValues = this.aspectValues(aspects, [
+      'Year',
+      'Model Year',
+      'Vehicle Year',
+      'Compatible Year',
+    ]);
+    const makeValues = this.aspectValues(aspects, [
+      'Compatible Make',
+      'Vehicle Make',
+      'Make',
+      'Manufacturer',
+    ]);
+    const modelValues = this.aspectValues(aspects, [
+      'Compatible Model',
+      'Vehicle Model',
+      'Model',
+    ]);
 
     if (
       yearValues.length > 0 ||
@@ -437,18 +479,25 @@ export class EbayBrowseApiService {
         makeValues.length,
         modelValues.length,
       );
+      const valueAt = (values: string[], index: number) =>
+        values.length === 1 ? values[0] : values[index];
       for (let i = 0; i < maxLen; i++) {
         const hint: { year?: string; make?: string; model?: string } = {};
-        if (yearValues[i]) hint.year = yearValues[i];
-        if (makeValues[i]) hint.make = makeValues[i];
-        if (modelValues[i]) hint.model = modelValues[i];
+        const year = valueAt(yearValues, i);
+        const make = valueAt(makeValues, i);
+        const model = valueAt(modelValues, i);
+        if (year) hint.year = year;
+        if (make) hint.make = make;
+        if (model) hint.model = model;
         if (hint.year || hint.make || hint.model) hints.push(hint);
       }
     }
 
     // Also check "Compatible Vehicles" or "Vehicle Type" aspects
-    const compatVehicles =
-      aspects['Compatible Vehicles'] ?? aspects['Vehicle Type'] ?? [];
+    const compatVehicles = this.aspectValues(aspects, [
+      'Compatible Vehicles',
+      'Vehicle Type',
+    ]);
     for (const cv of compatVehicles) {
       // Try to parse "2018 Toyota Camry" or "Toyota Camry 2018" format
       const parsed = this.parseVehicleString(cv);
@@ -458,15 +507,45 @@ export class EbayBrowseApiService {
     return hints;
   }
 
+  private aspectValues(
+    aspects: Record<string, string[]>,
+    names: string[],
+  ): string[] {
+    const wanted = new Set(names.map((name) => this.normalizeAspectName(name)));
+    const values: string[] = [];
+    for (const [name, candidates] of Object.entries(aspects)) {
+      if (!wanted.has(this.normalizeAspectName(name))) continue;
+      for (const candidate of candidates) {
+        const value = candidate.trim();
+        if (value && !values.includes(value)) values.push(value);
+      }
+    }
+    return values;
+  }
+
+  private firstAspectValue(
+    aspects: Record<string, string[]>,
+    names: string[],
+  ): string | null {
+    return this.aspectValues(aspects, names)[0] ?? null;
+  }
+
+  private normalizeAspectName(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
   /** Parse a vehicle string like "2018 Toyota Camry" into year/make/model */
   private parseVehicleString(
     text: string,
   ): { year?: string; make?: string; model?: string } | null {
     if (!text?.trim()) return null;
     const trimmed = text.trim();
+    const yearPattern = '(?:19|20)\\d{2}(?:\\s*[-–—]\\s*(?:19|20)\\d{2})?';
 
-    // Try "YEAR MAKE MODEL" format
-    const yearFirst = trimmed.match(/^(\d{4})\s+([A-Za-z-]+)\s+(.+)$/);
+    // Try "YEAR[-YEAR] MAKE MODEL" format
+    const yearFirst = trimmed.match(
+      new RegExp(`^(${yearPattern})\\s+([A-Za-z-]+)\\s+(.+)$`),
+    );
     if (yearFirst) {
       return {
         year: yearFirst[1],
@@ -475,8 +554,10 @@ export class EbayBrowseApiService {
       };
     }
 
-    // Try "MAKE MODEL YEAR" format
-    const yearLast = trimmed.match(/^([A-Za-z-]+)\s+(.+)\s+(\d{4})$/);
+    // Try "MAKE MODEL YEAR[-YEAR]" format
+    const yearLast = trimmed.match(
+      new RegExp(`^([A-Za-z-]+)\\s+(.+)\\s+(${yearPattern})$`),
+    );
     if (yearLast) {
       return {
         year: yearLast[3],

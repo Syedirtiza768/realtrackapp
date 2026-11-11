@@ -337,6 +337,7 @@ export class PublishedListingsSyncService {
               ebayAccountId: account.id,
               marketplaceId: accountMarketplaceId,
               listingStatus: 'active',
+              isTestListing: false,
             },
           });
           if (remainingActive > liveCount) {
@@ -496,6 +497,10 @@ export class PublishedListingsSyncService {
       throw new BadRequestException('Listing has no SKU');
     }
 
+    if (!local.offerId && local.ebayItemId) {
+      return this.syncLegacyTradingListing(account, local, channelByListing);
+    }
+
     const item = await this.inventoryApi.getItem(storeId, local.sku);
     let offer: EbayOffer | null = null;
 
@@ -527,6 +532,66 @@ export class PublishedListingsSyncService {
       channelByListing,
       local,
     );
+  }
+
+  private async syncLegacyTradingListing(
+    account: ConnectedEbayAccount,
+    local: EbayPublishedListing,
+    channelByListing: Map<string, EbayListingChannel>,
+  ): Promise<{ created: boolean }> {
+    const itemId = local.ebayItemId!;
+    const details = await this.tradingApi.getItemDetails(
+      account.primaryStoreId,
+      itemId,
+      local.marketplaceId,
+    );
+    const quantity =
+      details.quantity == null
+        ? local.quantityAvailable
+        : Math.max(0, details.quantity - (details.quantitySold ?? 0));
+    const status =
+      details.listingStatus && details.listingStatus.toLowerCase() !== 'active'
+        ? 'ended'
+        : quantity <= 0
+          ? 'out_of_stock'
+          : 'active';
+    const channel = channelByListing.get(itemId);
+    local.title = details.title?.trim() || local.title;
+    local.description = details.description ?? local.description;
+    local.categoryId = details.categoryId ?? local.categoryId;
+    local.price = details.price != null ? String(details.price) : local.price;
+    local.currency = details.currency ?? local.currency;
+    local.quantityAvailable = quantity;
+    local.quantitySold = details.quantitySold ?? local.quantitySold;
+    local.listingStatus = status;
+    local.listingUrl =
+      details.listingUrl ??
+      this.health.buildListingUrl(itemId, local.marketplaceId, account.environment);
+    if (details.imageUrls.length) local.imageUrls = details.imageUrls;
+    if (Object.keys(details.itemSpecifics).length) {
+      local.itemSpecifics = details.itemSpecifics;
+    }
+    if (details.compatibility) {
+      local.compatibility = details.compatibility as unknown as Record<string, unknown>;
+    }
+    local.offerId = null;
+    local.ebayListingChannelId = channel?.id ?? local.ebayListingChannelId;
+    local.rawEbayResponse = {
+      syncSource: 'trading_api_get_item',
+      item: details,
+    };
+    local.lastSyncedAt = new Date();
+    await this.listingRepo.save(local);
+    if (channel) {
+      channel.offerId = null;
+      channel.listingId = itemId;
+      channel.listingUrl = local.listingUrl;
+      channel.channelPrice = local.price;
+      channel.channelQuantity = quantity;
+      channel.listingStatus = status === 'ended' ? 'ended' : 'published';
+      await this.channelRepo.save(channel);
+    }
+    return { created: false };
   }
 
   private async upsertFromOffer(
@@ -1452,10 +1517,24 @@ export class PublishedListingsSyncService {
            AND "listing_status" = 'active' AND "ebay_item_id" IS NOT NULL`,
         [ebayAccountId, marketplaceId],
       )) as { ebay_item_id: string }[];
+      const syntheticRows = (await queryRunner.query(
+        `SELECT "ebay_item_id" FROM "ebay_published_listings"
+         WHERE "ebay_account_id" = $1 AND "marketplace_id" = $2
+           AND "listing_status" = 'active' AND "is_test_listing" = true
+           AND "ebay_item_id" IS NOT NULL`,
+        [ebayAccountId, marketplaceId],
+      )) as { ebay_item_id: string }[];
+      const syntheticItemIds = new Set(
+        syntheticRows.map((row) => row.ebay_item_id),
+      );
 
       const toEnd: string[] = [];
       for (const row of activeRows) {
-        if (row.ebay_item_id && !seenKeys.has(prefix + row.ebay_item_id)) {
+        if (
+          row.ebay_item_id &&
+          !syntheticItemIds.has(row.ebay_item_id) &&
+          !seenKeys.has(prefix + row.ebay_item_id)
+        ) {
           toEnd.push(row.ebay_item_id);
         }
       }
@@ -1473,9 +1552,10 @@ export class PublishedListingsSyncService {
         const batch = toEnd.slice(i, i + BATCH_SIZE);
         await queryRunner.query(
           `UPDATE "ebay_published_listings"
-             SET "listing_status" = 'ended', "last_synced_at" = $3
+             SET "listing_status" = 'ended', "last_synced_at" = $3, "updated_at" = $3
            WHERE "ebay_account_id" = $1 AND "marketplace_id" = $2
-             AND "ebay_item_id" = ANY($4::text[])`,
+             AND "ebay_item_id" = ANY($4::text[])
+             AND "is_test_listing" = false`,
           [ebayAccountId, marketplaceId, endedAt, batch],
         );
       }

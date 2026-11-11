@@ -2,7 +2,7 @@
 
 # Codebase Map
 
-> File and module reference for navigating the RealTrackApp codebase.
+> File and module reference for navigating the Omni Core codebase.
 > For architecture overview, see `/docs/architecture/overview.md`.
 > For API details, see `/docs/architecture/api-map.md`.
 
@@ -261,6 +261,26 @@ docker/
 |--------|---------|
 | `import-ebay-inventory.mjs` | eBay inventory import utility |
 | `run-migrations.ps1` | PowerShell migration helper |
+| `price-enrich-catalog.mjs` | Pricing stage: eBay Browse comparables → the 13 pricing columns + validation report; `--refilter` re-derives stored results under the comparable-relevance rules offline ([methodology](operations/CATALOG_PIPELINE.md#pricing-enrichment)) |
+| `price-enrich-catalog.test.mjs` | `node --test` coverage for the pricing helpers |
+| `price-web-research.mjs` | Web-search pricing (GPT-5.6 Luna via OpenRouter) for rows Browse could not price; re-verifies every cited page ([method](operations/CATALOG_PIPELINE.md#web-search-pricing-gpt-56-luna)) |
+| `price-web-research.test.mjs` | `node --test` coverage for URL safety, page verification, structured-price correction, and the decision matrix |
+| `seo-content.mjs` | Deterministic vehicle-aware SEO title (house style, <= 80 chars) + structured HTML description composer ([rules](operations/CATALOG_PIPELINE.md#vehicle-aware-seo-titles-and-descriptions)) |
+| `seo-content-apply.mjs` | Dry-run-by-default CLI that writes the composer output into the pipeline CSVs (backup first, no DB writes) |
+| `seo-content.test.mjs` | `node --test` coverage for the composer, incl. the Febest/BMW example |
+| `fitment-compat.mjs` | Fitment from eBay `check_compatibility`: candidates from listing text, year sampling, verification, same-product (brand + MPN) guard |
+| `fitment-from-ebay-compat.mjs` | eBay client + per-row orchestration for the above (capped, resumable, stops on 429); run off-host |
+| `fitment-compat-apply.mjs` | Writes confirmed fitment into the source CSV (dry-run default, backup, round-trip guard) |
+| `fitment-compat-eval.mjs` | Scores the finder against already-validated fitment |
+| `persist-fitment-sql.mjs` | DB write of fitment + title/description via `psql` over ssh (no Node on the host); dry-run default, backup, `--restore` |
+| `mvl-pull.sh`, `sql/mvl-us-variants.sql` | Read-only export of the eBay US vehicle list through `psql` in the Postgres container |
+| `csv-safe.mjs` | Shared byte-exact CSV read/write guard used by the appliers |
+| `persist-seo-content.mjs` | Narrow, transactional DB write of SEO title/description for validated-fitment SKUs (dry-run default, backup, `--restore`) |
+| `persist-seo-content.test.mjs` | `node --test` coverage for its validation logic |
+| `pricing-retry-local.sh` | Finishes the eBay pricing retry from another machine and only copies results to the host (replaces the deprecated server watcher) |
+| `ebay-quota-probe.mjs` | Exit 0/1/2 probe: is the eBay Browse quota answering for this app token |
+| `pricing-retry-watcher.sh` | Host-side watcher: polls the Browse quota, then runs `--retry-failed` + regenerates the exports |
+| `create-partsbazar360-csv.mjs` | Builds the PartsBazar360 audit + postable exports; enforces the pricing publish gate |
 | (other utility scripts) |
 
 ---

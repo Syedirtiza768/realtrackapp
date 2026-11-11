@@ -105,7 +105,7 @@ src/components/
 │   └── RevisionHistory.tsx
 ├── catalog/            # Catalog
 │   ├── CatalogManager.tsx      # Table-first search + bulk ops
-│   ├── CatalogInventoryDetailModal.tsx  # Row quick-view summary; links to product editor
+│   ├── CatalogInventoryDetailModal.tsx  # Row quick-view; photo zoom uses image proxy; links to product editor
 │   ├── CatalogTable.tsx
 │   ├── CatalogFilterBar.tsx
 │   ├── CatalogBulkBar.tsx
@@ -286,6 +286,8 @@ export default defineConfig({
 ## Fashion workspace components (2026-09-09)
 
 src/components/fashion contains FashionLoginPage, FashionShell (VerticalWorkspaceShell with Add Item), FashionDashboardPage, FashionCatalogPage, FashionListingEditorPage, FashionPhotoSet, FashionListingPublishPanel, FashionImportPage, FashionReviewPage, FashionStoresPage, FashionUsersPage, FashionIncidentsPage, and FashionSettingsPage. These components use the existing authenticated fetch wrapper but never render inside the automotive Shell.
+
+**Quick capture and catalog handoff (2026-10-09):** `FashionCapturePage` (phone-first WebP intake), `FashionIntakePage` (processing history and Add to Catalog), `FashionActivityReportPage` (filters and CSV), and `FashionPublishModal` (catalog-time store and per-store policy selection) extend the existing flow. `FashionMeasurementChart` (+ `useFashionMeasurementTemplates`, `isFashionMeasurementValue`), `FashionWarehousesPanel` (settings), and `FashionPhotoSet` (Front/Back/Tag/Additional/Size chart, camera + upload, reorder, per-photo banner) remain the capture primitives driven by `src/lib/fashionPhotoSlots.ts`; the previous list uploader remains `FashionPhotoAppend`, used by the shared `CatalogProductQuickView`. See docs/architecture/FASHION_QUICK_CAPTURE.md.
 
 ## Business & Industrial workspace components (2026-09-09)
 

@@ -168,9 +168,11 @@ export default function CatalogProductDetail() {
 
   /* ── Image management state ─────────────────────────────── */
   const catalogImages = useMemo(() => {
-    if (catalogProduct?.imageUrls?.length) return catalogProduct.imageUrls as string[];
-    if (listing?.itemPhotoUrl) return getAllImageUrls(listing.itemPhotoUrl);
-    return [];
+    const productImages = (catalogProduct?.imageUrls ?? []) as string[];
+    const listingImages = listing?.itemPhotoUrl
+      ? getAllImageUrls(listing.itemPhotoUrl)
+      : [];
+    return [...new Set([...productImages, ...listingImages].filter(Boolean))];
   }, [catalogProduct?.imageUrls, listing?.itemPhotoUrl]);
 
   const [localImages, setLocalImages] = useState<string[]>([]);
@@ -476,7 +478,7 @@ export default function CatalogProductDetail() {
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-4">
       <button
-        onClick={() => navigate('/catalog')}
+        onClick={() => navigate('/auto-parts/catalog')}
         className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
       >
         <ArrowLeft size={16} />

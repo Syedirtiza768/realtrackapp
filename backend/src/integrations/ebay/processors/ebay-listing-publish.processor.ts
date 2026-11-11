@@ -4,6 +4,7 @@ import { FashionListingsService } from '../../../verticals/fashion-listings.serv
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CatalogProduct } from '../../../catalog-import/entities/catalog-product.entity.js';
 import { EbayListingJobTarget } from '../entities/ebay-listing-job-target.entity.js';
 import { EbayListingJob } from '../entities/ebay-listing-job.entity.js';
 import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
@@ -12,6 +13,7 @@ import { EbayListingValidationService } from '../services/ebay-listing-validatio
 import { ListingBuilderService } from '../services/listing-builder.service.js';
 import { CatalogPublishResolverService } from '../services/catalog-publish-resolver.service.js';
 import { EbayPublishService } from '../../../channels/ebay/ebay-publish.service.js';
+import { capEbayPublishQuantity } from '../../../channels/ebay/ebay-publish-quantity.util.js';
 import { Store } from '../../../channels/entities/store.entity.js';
 import type { PublishErrorPayload } from '../../sellerpundit/sellerpundit.types.js';
 
@@ -46,6 +48,7 @@ export function isTransientPublishFailure(message: string): boolean {
     'different from your registered address',
     'shipping from overseas warehouses',
     'ship from overseas warehouses',
+    'verify ebay before retrying',
   ];
   if (permanentMarkers.some((marker) => normalized.includes(marker))) {
     return false;
@@ -100,6 +103,8 @@ export class EbayListingPublishProcessor extends WorkerHost {
     private readonly channelRepo: Repository<EbayListingChannel>,
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
+    @InjectRepository(CatalogProduct)
+    private readonly productRepo: Repository<CatalogProduct>,
     private readonly validation: EbayListingValidationService,
     private readonly builder: ListingBuilderService,
     private readonly publishResolver: CatalogPublishResolverService,
@@ -274,7 +279,12 @@ export class EbayListingPublishProcessor extends WorkerHost {
         }
         ch.vertical = built.publishRequest.vertical ?? target.vertical ?? null;
         ch.internalSku = built.publishRequest.sku;
-        ch.ebayInventorySku = r.effectiveSku ?? built.publishRequest.sku;
+        // Trading API listings are intentionally not represented as Inventory
+        // API SKUs. Keeping this null is how sync/revise paths distinguish the
+        // Seller Hub-editable legacy listing model from Inventory listings.
+        ch.ebayInventorySku = r.offerId
+          ? r.effectiveSku ?? built.publishRequest.sku
+          : null;
         ch.offerId = r.offerId ?? null;
         ch.listingId = r.listingId ?? null;
         ch.listingUrl =
@@ -282,12 +292,19 @@ export class EbayListingPublishProcessor extends WorkerHost {
             ? `https://www.ebay.com/itm/${r.listingId}`
             : null;
         ch.channelPrice = String(built.publishRequest.price);
-        ch.channelQuantity = built.publishRequest.quantity;
+        ch.channelQuantity = capEbayPublishQuantity(
+          built.publishRequest.quantity,
+        );
         ch.listingStatus = 'published';
         ch.publishedAt = new Date();
         ch.lastErrorCode = null;
         ch.lastErrorMessage = null;
         await this.channelRepo.save(ch);
+        if (r.listingId) {
+          await this.productRepo.update(catalogProductId, {
+            ebayItemId: r.listingId,
+          });
+        }
         // A quarantine/edit may commit while the remote publish request is in flight.
         if (isFashion) {
           const containment = await this.fashion!.containIfBlocked(
@@ -337,6 +354,11 @@ export class EbayListingPublishProcessor extends WorkerHost {
               },
               errorPayload: null,
             });
+            if (existingListingId) {
+              await this.productRepo.update(catalogProductId, {
+                ebayItemId: existingListingId,
+              });
+            }
             this.logger.warn(
               `Skipped duplicate publish target ${target.id}: eBay listing ${existingListingId} is already published in channel ${existingChannel.id}`,
             );

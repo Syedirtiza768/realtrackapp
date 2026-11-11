@@ -1,14 +1,20 @@
 import {
   Body,
   Controller,
+  Headers,
   Get,
+  HttpCode,
   Param,
+  ParseBoolPipe,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -17,6 +23,7 @@ import { User } from '../auth/entities/user.entity.js';
 import { EbayIntegrationPermissionsService } from '../integrations/ebay/services/ebay-integration-permissions.service.js';
 import {
   BulkPublishedListingsDto,
+  PrimemotiveSaleWebhookDto,
   PublishedListingsQueryDto,
   RevisePublishedListingDto,
   SyncPublishedListingsDto,
@@ -29,6 +36,7 @@ import { PublishedListingsBulkService } from './services/published-listings-bulk
 import { PublishedListingsAuditService } from './services/published-listings-audit.service.js';
 import { PublishedListingsPricingService } from './services/published-listings-pricing.service.js';
 import { PublishedListingsTradingEnrichmentService } from './services/published-listings-trading-enrichment.service.js';
+import { PrimemotiveListingChangesService } from './services/primemotive-listing-changes.service.js';
 
 @ApiTags('published-listings')
 @ApiBearerAuth()
@@ -44,6 +52,7 @@ export class PublishedListingsController {
     private readonly pricing: PublishedListingsPricingService,
     private readonly permissions: EbayIntegrationPermissionsService,
     private readonly tradingEnrichment: PublishedListingsTradingEnrichmentService,
+    private readonly primemotiveChanges: PrimemotiveListingChangesService,
   ) {}
 
   @Get()
@@ -61,6 +70,85 @@ export class PublishedListingsController {
     return this.listings.list(organizationId, user, query);
   }
 
+  @Get('primemotive')
+  @RequirePermissions('published_listings.external_feed')
+  @ApiOperation({
+    summary: 'List active published eBay listings from the Primemotive store',
+  })
+  async listPrimemotive(
+    @Query() query: PublishedListingsQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId } = await this.permissions.resolveOrganization(
+      user.id,
+      query.organizationId,
+    );
+    return this.listings.listPrimemotive(organizationId, user, query);
+  }
+
+  @Get('primemotive/sales-events')
+  @ApiOperation({
+    summary: 'List recorded external sale events for Primemotive listings',
+  })
+  async listPrimemotiveSalesEvents(
+    @Query() query: PublishedListingsQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId } = await this.permissions.resolveOrganization(
+      user.id,
+      query.organizationId,
+    );
+    return this.listings.listPrimemotiveSalesEvents(
+      organizationId,
+      user,
+      query,
+    );
+  }
+
+  @Get('primemotive/changes')
+  @RequirePermissions('published_listings.external_feed')
+  @ApiOperation({
+    summary: 'Read added, updated, and removed Primemotive listing changes',
+  })
+  async listPrimemotiveChanges(
+    @Query() query: PublishedListingsQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    const { organizationId } = await this.permissions.resolveOrganization(
+      user.id,
+      query.organizationId,
+    );
+    return this.primemotiveChanges.listChanges(organizationId, user, query);
+  }
+
+  @Post('primemotive/webhooks/sales')
+  @RequirePermissions('published_listings.sales.notify')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Record a sale reported by the external Primemotive listing app',
+  })
+  async recordPrimemotiveSale(
+    @Body() dto: PrimemotiveSaleWebhookDto,
+    @Query('organizationId') organizationId: string | undefined,
+    @Headers('x-primemotive-timestamp') timestamp: string | undefined,
+    @Headers('x-primemotive-signature') signature: string | undefined,
+    @Req() request: RawBodyRequest<Request>,
+    @CurrentUser() user: User,
+  ) {
+    const resolved = await this.permissions.resolveOrganization(
+      user.id,
+      organizationId,
+    );
+    return this.listings.recordPrimemotiveSaleEvent(
+      resolved.organizationId,
+      user,
+      dto,
+      request.rawBody ?? Buffer.alloc(0),
+      timestamp,
+      signature,
+    );
+  }
+
   @Get('export')
   @RequirePermissions('published_listings.export')
   @ApiOperation({ summary: 'Export published listings as CSV' })
@@ -75,9 +163,12 @@ export class PublishedListingsController {
     );
     const csv = await this.listings.exportCsv(organizationId, user, query);
     const dateStr = new Date().toISOString().slice(0, 10);
+    const page = query.page ?? 1;
     res.set({
       'Content-Type': 'text/csv',
-      'Content-Disposition': `attachment; filename="published-listings-export-${dateStr}.csv"`,
+      'Content-Disposition': `attachment; filename="published-listings-export-${dateStr}-page-${page}.csv"`,
+      'X-Export-Page': String(page),
+      'X-Export-Page-Size': '10000',
     });
     res.send(csv);
   }
@@ -240,11 +331,18 @@ export class PublishedListingsController {
   async getOne(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('organizationId') organizationId: string | undefined,
+    @Query('includeCatalogData', new ParseBoolPipe({ optional: true }))
+    includeCatalogData: boolean | undefined,
     @CurrentUser() user: User,
   ) {
     const { organizationId: orgId } =
       await this.permissions.resolveOrganization(user.id, organizationId);
-    return this.listings.getById(id, orgId, user);
+    return this.listings.getById(
+      id,
+      orgId,
+      user,
+      includeCatalogData === true,
+    );
   }
 
   @Get(':id/trading-enrichment')

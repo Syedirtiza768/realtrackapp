@@ -2,7 +2,11 @@
 
 ## Photos-first Add Item (2026-09-14)
 
-Fashion now reuses the existing draft, storage, vision, taxonomy, catalog, and eBay validate/publish stack for a photos-first garment workflow. Add Item is `/fashion/listings/new`. Identification is optional. Category-aware clothing/footwear/accessory attributes persist on `catalog_products.vertical_attributes`. See `docs/frontend/FASHION_EDITOR.md`. This session does not deploy, migrate production data, or publish live listings.
+Fashion now reuses the existing draft, storage, vision, taxonomy, catalog, and eBay validate/publish stack for a photos-first garment workflow. Add Item is `/fashion/listings/new`. Identification is optional. Category-aware clothing/footwear/accessory attributes persist on `catalog_products.vertical_attributes`. See `docs/frontend/FASHION_EDITOR.md`. Production overlay of commit `0de9437` was applied to backend/frontend on 2026-09-14 without a new database migration.
+
+## Quick capture (2026-09-28)
+
+Quick capture, intake history, measurement charts, size-chart images, photo slots, banners, warehouses and batch SKUs were added to close gaps against a competitor photo-to-listing flow. Adds migration `1791000000000-CreateFashionIntake` and the `fonts-dejavu-core` package in the backend image. Not deployed. See docs/architecture/FASHION_QUICK_CAPTURE.md.
 
 ## Corrected production baseline (2026-09-09, later verification)
 

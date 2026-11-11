@@ -76,7 +76,7 @@ export class EbayFitmentPublishService {
     }
 
     const marketplaceId = this.marketplaceIdFor(marketplace);
-    const targets = (await this.dataSource.query(
+    const targets = await this.dataSource.query(
       `
         SELECT
           elc.id AS "channelId",
@@ -101,7 +101,7 @@ export class EbayFitmentPublishService {
         ORDER BY elc.ebay_account_id, elc.listing_id
       `,
       [productId, marketplaceId],
-    )) as PublishedChannelTarget[];
+    );
 
     if (targets.length === 0) {
       return {

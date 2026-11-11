@@ -10,6 +10,20 @@
 | **PartsBazar360 search** (read) | Parts Search portal (`/parts-search`): proxies PartsBazar360 universal search. With the key, uses the internal endpoint (every offer, seller, source, stock); without it, the public buyer search | `backend/src/parts-search/` | `PARTSBAZAR360_API_URL` (shared with publishing), `PARTSBAZAR360_SEARCH_API_KEY` (must equal `REALTRACK_SEARCH_API_KEY` on PartsBazar360; separate from the publish key), `PARTS_SEARCH_TIMEOUT_MS` (8000), `PARTS_SEARCH_CACHE_TTL_SECONDS` (30) |
 
 | **Shopify** | Admin API scaffolding (`@shopify/shopify-api`) | `channels/` | — (Needs verification: not fully wired) |
+Catalog image rendering proxies only recognized first-party S3 bucket hosts and
+CloudFront URLs through `/api/storage/serve/:key`. S3 URLs from other buckets
+remain direct source URLs; this is required because the proxy reads only the
+bucket configured by `AWS_S3_BUCKET` and must not reinterpret an external key
+as a local object. Production stores objects only in the account-qualified
+bucket (`solarrisebackupbucket-<12-digit>`). The retired `solarrisebackupbucket`
+hostname is treated as an alias of that bucket: `StorageService` extracts the
+same object key and rewrites catalog/listing URLs onto the configured host
+instead of downloading from the dead alias. Apply historical rows with
+`scripts/repoint-s3-bucket-alias-urls.mjs`. The bucket-owning AWS account
+(`530142863136`) is not the app-server account (`976773964927`). The bucket
+policy must grant the app `bucketuser` `s3:GetObject`/`PutObject` on
+`mhn/catalog-images/*` as well as `mhn/business-industrial/*`; a B&I-only
+policy returns AccessDenied and `/api/storage/serve` maps that to HTTP 404.
 
 > eBay is the primary, most fully implemented integration. Shopify/Amazon/Walmart
 > appear in channel abstractions but are partial — verify before relying on them.
@@ -24,12 +38,23 @@
   continue through the Inventory API for in-place changes, and multi-SKU
   variation-family publishing is paused and fails closed until it can create
   Trading API listings.
+- Business & Industrial image intake resolves categories through the live US
+  eBay Taxonomy API. It tries the AI category query first and, for industrial
+  inventory where a manufacturer/model query is too narrow, retries with
+  deliberate combinations of manufacturer, model, part type, B&I family label,
+  and source part name. Each accepted result must be a verified leaf and has
+  its item aspects persisted with the intake group; the fallback does not
+  invent or substitute a category ID.
 - OAuth: `ebay-integrations-oauth.service.ts`; callback route is `@Public()`
   (frontend `/channels/ebay/callback`).
 - Tokens encrypted/stored in `EbayOauthToken` / `ConnectedEbayAccount`;
   refresh handled by `ebay-account-token.service.ts`.
 - Multi-store: `ebay-multi-store-listing.service.ts`, `InternalStore`,
   `ListingStoreOverride`, `EbayAccountMarketplace`.
+- The Auto Parts catalog's durable bulk-publish dialog scopes its store choices
+  to the active workspace's connected eBay accounts and sends that same
+  `organizationId` with the job. The API validates membership and checks that
+  every selected primary store belongs to an active account in that workspace.
 - API audit/error logging: `EbayApiAuditLog`, `EbayApiError`.
 - Listing images are uploaded to eBay Picture Services through
   `EbayMediaApiService` before either the direct Inventory API or SellerPundit
@@ -43,25 +68,99 @@
   Transient EPS errors are retried; one rejected source may be skipped when
   another image succeeds. Authentication and other unexpected errors fail the
   store publish, and no source URL is substituted for an EPS URL.
+  AWS S3 URLs remaining accessible. When a source image belongs to the
+  configured private S3 bucket, the service downloads the bytes server-side and
+  uploads them with eBay Media API `create_image_from_file`; the durable
+  unsigned URL remains the cache identity and is never sent to eBay. External
+  sources continue to use `create_image_from_url`. Transient EPS failures are retried with
+  bounded backoff; a source-specific invalid-image response is skipped when
+  other valid images remain, while authentication/configuration/database
+  failures still fail the store publish closed. Known PartsFinder rotating
+  image templates are converted to their stable primary details image; other
+  unresolved URL templates are discarded. The source URL is never used as a
+  fallback, and a listing with no usable images remains unpublished.
+- Business & Industrial eBay publish normally requires
+  `verticalValidationStatus=approved` and `manualReview=false`. For a temporary
+  operator-led publishing window, `BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH=true`
+  bypasses that B&I compliance gate and allows bulk policy/profile edits on
+  those records; it does not alter review records or
+  bypass RBAC, store authorization, eBay account/policy checks, image handling,
+  SKU ownership, or post-publish validation. The flag defaults to `false` and
+  should be removed after the window closes.
+- B&I condition handling preserves imported eBay condition ID 3000 as the
+  USED_EXCELLENT Inventory API condition. When a category policy does not
+  expose the preferred condition ID, publish validation selects a supported
+  condition from the same semantic family (new, used, refurbished, or parts)
+  before the request reaches SellerPundit or eBay.
+- The B&I catalog publication projection merges current channel rows with the
+  published-listings sync table, treating `published`, `active`, and
+  `out_of_stock` as live marketplace states. The catalog exposes Published,
+  Unpublished, and Blocked filters and derives a usable eBay item URL from the
+  stored listing ID when the source row has no URL. Its bulk policy editor loads
+  and merges every local and synced shipping, return, and payment profile from
+  all connected B&I eBay stores into select controls.
 - Durable publish targets retain the original `listing_records.id` in
   `result_payload.sourceListingId`. `CatalogPublishResolverService` therefore
   uses the exact reviewed listing row for title, description, price, quantity,
   category, condition, and image precedence even when several listing rows map
   to one canonical catalog product. A non-empty stored title is authoritative;
   structured title composition is used only when the stored title is empty.
+  The same source-listing precedence applies to the eBay SKU: a reviewed
+  listing's `customLabelSku` is sent to eBay when publishing by listing ID;
+  catalog-only publishes use `catalog_products.sku`. A mismatch is surfaced as
+  a resolver warning instead of silently sending the other SKU, which avoids
+  eBay ManageBySKU mismatches.
+- New fixed-price Trading API listings still send that value as `Item.SKU` for
+  eBay's Custom Label, but set `InventoryTrackingMethod=ItemID` so the seller
+  can edit the label after listing. eBay does not let a live ManageBySKU listing
+  switch tracking methods; listings created under the old SKU-tracking mode
+  must be relisted before their custom label can be changed.
 - eBay Motors publish validates the stored category against taxonomy before
   creating the inventory offer. A cached or live verified leaf is used when
   available; if taxonomy is unavailable, the service uses the known publishable
   fallback leaf `9886` (`Other Car & Truck Parts & Accessories`) instead of
   sending an unverified parent category. The resolved ID/name is persisted to
   `catalog_products`, the exact source listing, and SKU-linked sibling listing
-  rows. Recent deterministic failures can be repaired and requeued with
+  rows. A stale generic Engine category or transmission-fluid category is also
+  replaced with that fallback when the text does not describe a complete engine
+  or a genuine fluid product.
+  Deterministic part keywords are also applied at the final publish boundary for
+  legacy rows. For example, a BMW X5 coolant-hose title resolves to the live
+  Car & Truck Motors leaf `33601` (`Coolant Hoses`) rather than allowing a
+  valid-but-wrong motorcycle leaf such as `177983` (`Radiators`) to reach
+  compatibility validation; the corrected category is persisted to the
+  catalog and SKU-linked source rows.
+  If `getOffer` returns Inventory API error 25713 (This Offer is not available),
+  the publisher reads the channel's mapped listing through Trading API GetItem.
+  It only replaces an offer after eBay reports that listing as `Completed` or
+  `Ended`; active or unknown listings stop without creating another listing.
+  Recovery deletes only the stale offer and keeps the Inventory item/SKU. If
+  `createOffer` reports error 25002, the publisher fetches the exact offer ID (or
+  lists offers for the SKU), verifies SKU and marketplace, and reuses the offer.
+  A published offer's listing ID comes from `listing.listingId` when eBay nests
+  it in the response.
+  Recent deterministic failures can be repaired and requeued with
   `scripts/repair-ebay-publish-failures.mjs`; it is dry-run by default.
 - If a durable publish target points at a historical source-listing row that
   has since been removed, `ListingBuilderService` falls back to the target's
   canonical `catalog_product_id` so the listing can still be built. The
   `scripts/repair-ebay-publish-failures.mjs --retry-skus=... --apply --retry`
   mode supports an explicit, auditable requeue after this fallback is deployed.
+- eBay inventory SKUs are account-scoped. If the canonical SKU is already owned by another remote item, the publisher first reuses a previously persisted effective channel SKU when present; otherwise it checks a deterministic alternate namespace. The historical BLA-to-BLAP rule is preserved, and other valid imported SKU families use a bounded hash-suffixed alternate. Every alternate is still preflighted for ownership before any Inventory API write.
+- eBay merchant-location resolution is UAE-only for the account: `default`, `USA`, `US_77001`, Houston, and other legacy US placeholders are normalized to the required enabled Dubai location `AE_Dubai`; location-list selection accepts only enabled locations whose address country is AE/ARE/United Arab Emirates. If no UAE location can be verified or provisioned, publishing fails closed rather than submitting a US location.
+- eBay error 1276646 / SRM_HIS_WH_Location_Mismatch_Inventory_Block is a permanent seller-country policy block, not a transient revise outage. Publish and published-listing bulk-revise failures preserve the detailed reason and tell operators to use an enabled merchant location in the seller registered country or request forward-deployed inventory authorization. Physical warehouse country is never changed automatically to bypass eBay policy.
+- New listings default to Trading API `AddFixedPriceItem`, so their Custom Label remains editable in Seller Hub. `EBAY_LISTING_API_MODE=inventory` is an explicit override for new non-FEBEST listings. Existing listings created in eBay's Inventory API model cannot be revised through Seller Hub's standard editor or Trading API; operators can use the Published Listings detail page's Quick revise action, which writes through Inventory API. A publish request that matches a stored channel with an Inventory API `offerId` and SKU also stays on the Inventory API path, regardless of the new-listing mode: `PUBLISHED` offers are updated in place with `updateOffer`; `UNPUBLISHED` offers are updated and published again using the same offer ID; any other returned state stops before writing. This prevents Trading API `ReviseFixedPriceItem` errors `21919474` and `291` for Inventory-managed listings and avoids creating duplicates. A legacy Trading-only channel with a listing ID but no offer mapping is revised by that ID while active. If eBay returns error 291 because that legacy listing has ended, the publisher calls `RelistFixedPriceItem` with the current requested listing fields and persists eBay's new ItemID and URL. A relist rejection is returned to the operator; if the relist response or local mapping write is uncertain, the durable target is not automatically retried, to avoid creating duplicate listings. FEBEST also uses Trading API. Trading compatibility serialization sends unique Year/Make/Model rows first and retries without the compatibility block when eBay returns `21917122` / “All compatibilities are invalid”; fitment remains in the listing description and the item is not left unpublished because of stale optional Trim/Engine values. Trading failures expose eBay's specific `Message` and `ShortMessage` alongside the `LongMessage`; seller or category policy restrictions still require resolution with eBay.
+- Trading API error 240 handling includes the first `ErrorParameters.Value`
+  when eBay supplies a seller/content policy reason. If the response contains
+  only the generic rejection, the seller or listing policy must be resolved
+  with eBay before retrying; the publisher does not bypass that restriction.
+- The Trading default applies to the standard single-item publisher. The
+  separate variation-family item-group publisher still creates multi-SKU
+  listings through the Inventory API; existing Inventory offers also continue
+  through their owning Inventory API path for in-place changes.
+- eBay publish boundaries cap a listing's submitted available quantity at 10.
+  The queued channel record stores that capped amount; inventory and later
+  quantity-revision workflows remain separate from initial publication.
 - When a remote SKU exists but has no local channel and no published remote
   offer/listing, the publish boundary may reclaim that unpublished orphan for
   the current canonical catalog product. It never reclaims a locally-owned or
@@ -98,11 +197,23 @@
   `yearStart`/`yearEnd` ranges into deduplicated per-year compatibility rows.
   `EbayPublishService` applies this derivation to every publish entry point,
   including bulk `publish-by-listings`. For fitment-capable Motors categories,
-  publish fails closed when no validated Year/Make/Model rows exist. When rows
-  are present, SellerPundit-connected stores use the direct Inventory API path;
+  publish fails closed when no validated Year/Make/Model rows exist. Untagged
+  legacy fitment data is omitted until MVL validation marks it `valid`, while
+  explicitly validated `fitmentData` rows remain supported. When rows are
+  present, SellerPundit-connected stores use the direct Inventory API path;
   the service reads `product_compatibility` back and verifies all requested
   rows before publishing the offer. Description HTML is never treated as a
   substitute for eBay's structured compatibility section.
+- If eBay publish returns error `25002` stating that all compatibilities are
+  invalid even though Inventory API readback succeeded, the publisher retries
+  once with only the unique Make/Model/Year properties
+  (`toCoreCompatibilityPayload`). Optional Trim, Engine, Submodel, and notes
+  are omitted because the local MVL check does not validate those
+  marketplace-specific vocabularies. The offer projection and final
+  verification use the reduced payload. Production 2026-09-15 showed the
+  previous retry rewrote the same payload; the strip is now applied before
+  the second `publishOffer`. `fitmentDataToCompatibilityPayload` also omits
+  `Submodel`, which is not a US Motors Inventory API compatibility property.
 - Compatibility is fail-closed across the Inventory API representation: before
   a publish, Inventory API SKU compatibility is replaced or explicitly deleted
   and read back exactly; after an offer is reused or published, the Inventory
@@ -156,15 +267,17 @@
   for a single canary before applying the remaining target set.
 - New Add Part and warehouse-intake records with an omitted SKU now receive
   the `BLAP-<sequence>` prefix. Existing catalog/listing SKUs are not renamed;
-  the `BLA-<suffix>` → `BLAP-<suffix>` rule remains the deterministic fallback
-  for legacy BLA conflicts. A BLAP collision, or a collision in an unrelated
-  legacy SKU family, remains fail-closed until ownership is proven, so the
-  publisher never overwrites an active eBay item.
-- The normal publish boundary applies the same deterministic fallback when a
-  canonical `BLA-` SKU is occupied: it preflights `BLAP-` ownership, publishes
-  under the alternate only when unused, returns the effective Seller SKU, and
-  persists that value for new queue-created channel rows. If either SKU is
-  occupied by an unrelated remote item, publishing fails closed.
+  the `BLA-<suffix>` → `BLAP-<suffix>` rule remains the first deterministic
+  fallback for legacy BLA conflicts. If an alternate is occupied, the target
+  remains fail-closed until another candidate is proven unused, so the publisher
+  never overwrites an active eBay item.
+- The normal publish boundary applies deterministic fallback candidates when a
+  canonical SKU is occupied: it reuses a persisted effective SKU when present,
+  otherwise preflights up to four bounded candidates (preserving the historical
+  `BLA-` → `BLAP-` first candidate), publishes only under an unused candidate,
+  returns the effective Seller SKU, and persists it for new queue-created
+  channel rows. If all candidates are occupied by unrelated remote items,
+  publishing fails closed.
 - The compatibility repair utility only treats validated `fitment_data` or
   accepted `fitment_rows` as a source. Empty, rejected, or review-only catalog
   data therefore produces the exact correct zero-row compatibility set; title
@@ -238,6 +351,7 @@ Queue registrations and processors (`@Processor`) discovered in code:
 | `pipeline` | `ingestion/processors/pipeline.processor.ts` | 1 | Enrichment pipeline; enqueues `listing-optimization` |
 | `listing-optimization` | `listing-optimization/processors/…` | 1 | Listing optimization |
 | `catalog-import` | `catalog-import/processors/csv-import.processor.ts` | 1 | CSV/catalog import with persisted row checkpoints, idempotent resume, transient retries, and incomplete Fashion image repair with a 25 MB/25 MP source cap and 2048-pixel WebP quality-85 output (memory-heavy; needs large heap) |
+| `catalog-import` | `catalog-import/processors/csv-import.processor.ts` | 1 | CSV/catalog import; commits row checkpoints before Fashion image mirroring, resumes saved row outcomes and incomplete WebP copies, retries transient failures, and recovers stalled long-running jobs (memory-heavy; needs large heap) |
 | `fitment` | `fitment/processors/fitment-import.processor.ts` | 1 | Fitment import |
 | `inventory` | `inventory/processors/inventory-sync.processor.ts` | 1 | Inventory sync |
 | `orders` | `orders/processors/order-import.processor.ts` | 1 | Order import |

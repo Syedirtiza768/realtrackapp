@@ -110,6 +110,8 @@ export class OrdersService {
     const order = await this.orderRepo.findOneBy({ id });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
 
+    this.assertLifecycleOwner(order);
+
     if (!canTransition(order.status, newStatus)) {
       throw new BadRequestException(
         `Cannot transition from '${order.status}' to '${newStatus}'. ` +
@@ -165,6 +167,8 @@ export class OrdersService {
     const order = await this.orderRepo.findOneBy({ id });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
 
+    this.assertLifecycleOwner(order);
+
     order.trackingNumber = dto.trackingNumber;
     if (dto.trackingCarrier) order.trackingCarrier = dto.trackingCarrier;
     if (dto.shippingMethod) order.shippingMethod = dto.shippingMethod;
@@ -193,6 +197,8 @@ export class OrdersService {
   async processRefund(id: string, dto: RefundDto): Promise<Order> {
     const order = await this.orderRepo.findOneBy({ id });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+    this.assertLifecycleOwner(order);
 
     // Must be in a refundable state
     if (
@@ -227,6 +233,10 @@ export class OrdersService {
   }
 
   // ─── Import from marketplace ───
+
+  private assertLifecycleOwner(order: Order) {
+    if (order.channel === 'motoark') throw new BadRequestException('MotoArk orders must be updated through the signed MotoArk order-events contract');
+  }
 
   async importOrder(data: {
     channel: string;

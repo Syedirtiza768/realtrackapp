@@ -197,6 +197,14 @@ export const CATEGORY_KEYWORD_ROWS: Array<{
     name: 'Radiators',
   },
   {
+    // Coolant hoses have their own live Car & Truck Motors leaf. Keeping this
+    // ahead of the generic radiator keyword prevents a stale motorcycle
+    // Radiators category (177983) from surviving publish enrichment.
+    kw: ['coolant hose', 'coolant hoses', 'radiator hose', 'water hose'],
+    id: '33601',
+    name: 'Coolant Hoses',
+  },
+  {
     kw: ['fastener', 'hardware', 'bolt', 'screw', 'nut', 'clip', 'rivet'],
     id: '174907',
     name: 'Nuts, Bolts & Fasteners',

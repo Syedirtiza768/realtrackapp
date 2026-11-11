@@ -148,7 +148,7 @@ function JobActionsMenu({
               label="View in catalog"
               onClick={() => {
                 setOpen(false);
-                navigate(`/catalog?pipelineJobIds=${job.id}`);
+                navigate(`/auto-parts/catalog?pipelineJobIds=${job.id}`);
               }}
             />
           )}

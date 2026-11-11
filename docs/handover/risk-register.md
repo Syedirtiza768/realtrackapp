@@ -17,7 +17,7 @@ Likelihood/Impact: Low / Med / High. Re-verify status before acting.
 | R11 | Dual channel-mapping tables cause inconsistency | DB/Logic | Low | Med | Complete `channel_listings` deprecation |
 | R12 | Non-eBay channels are scaffolding presented as features | Product | Med | Med | Flag clearly or complete |
 | R13 | Uncommitted working tree could be lost | Process | Med | Med | Commit/triage modified files |
-| R14 | Branding inconsistency (RealTrackApp/ListingPro) | Product | High | Low | Standardize naming |
+| R14 | Legacy branding inconsistency | Product | High | Low | Resolved: standardize user-facing name on Omni Core |
 | R15 | Docs drift from code over time | Process | High | Med | Continuous Documentation Protocol enforced in CLAUDE.md/AGENTS.md |
 
 Sources: code inspection (2026-05-29), `docs/FULL_SYSTEM_AUDIT_AND_ROADMAP.md`,

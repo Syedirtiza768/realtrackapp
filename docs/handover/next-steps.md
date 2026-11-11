@@ -20,7 +20,7 @@ may already be in progress in the uncommitted working tree.
 
 ## Medium priority
 
-5. **Standardize branding** (RealTrackApp vs ListingPro) across login, shell, DB.
+5. **Branding complete** — user-facing surfaces use Omni Core; internal identifiers remain unchanged for compatibility.
 6. **Confirm DB hygiene** from prior audit: numeric price/quantity columns,
    missing FKs, channel-mapping table consolidation. Add migrations where needed.
 7. **Finish or clearly flag forgot-password** (add reset endpoint or hide UI).

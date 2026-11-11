@@ -144,7 +144,7 @@ export default function MotorsProductDetail() {
       <div className="text-center py-20">
         <XCircle className="w-8 h-8 mx-auto text-red-400 mb-2" />
         <p className="text-sm text-gray-500">Product not found</p>
-        <Link to="/motors" className="text-sm text-blue-600 hover:text-blue-700 mt-2 inline-block">
+        <Link to="/auto-parts/motors" className="text-sm text-blue-600 hover:text-blue-700 mt-2 inline-block">
           Back to Motors Dashboard
         </Link>
       </div>
@@ -167,7 +167,7 @@ export default function MotorsProductDetail() {
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
           <button
-            onClick={() => navigate('/motors')}
+            onClick={() => navigate('/auto-parts/motors')}
             className="mt-1 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             <ArrowLeft className="w-5 h-5" />

@@ -1,4 +1,6 @@
 import type { EbayPublishedListing } from './entities/ebay-published-listing.entity.js';
+import type { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { selectPublishFitmentSource } from '../fitment/fitment-mvl.util.js';
 import {
   isSingleImageBrand,
   preferLargeEbayImageUrl,
@@ -30,6 +32,42 @@ export interface SalvageDetails {
   testedStatus?: string | null;
 }
 
+/** Raw catalog source values; these are not canonical Partslink24 codes. */
+export interface PublishedListingCatalogData {
+  source: 'RealTrackApp.catalog_products';
+  identifiers: {
+    sku: string | null;
+    mpn: string | null;
+    mpnNormalized: string | null;
+    upc: string | null;
+    ean: string | null;
+    epid: string | null;
+    oemPartNumber: string | null;
+  };
+  product: {
+    title: string;
+    brand: string | null;
+    partType: string | null;
+    placement: string | null;
+    material: string | null;
+    features: string | null;
+    countryOfOrigin: string | null;
+  };
+  attributes: {
+    weight: number | string | null;
+    verticalAttributes: Record<string, unknown>;
+  };
+  category: {
+    id: string | null;
+    name: string | null;
+    source: 'RealTrackApp.catalog_products';
+  };
+  fitment: {
+    validation: 'mvl_validated' | 'none';
+    validatedRows: Record<string, unknown>[];
+  };
+}
+
 export interface PublishedListingApiResponse extends Omit<
   EbayPublishedListing,
   'description'
@@ -43,6 +81,7 @@ export interface PublishedListingApiResponse extends Omit<
   mpn: string | null;
   oeNumbers: string[];
   salvageDetails: SalvageDetails | null;
+  catalogData?: PublishedListingCatalogData | null;
 }
 
 const SPECIFIC_KEYS = {
@@ -196,9 +235,57 @@ export function extractSalvageDetails(
   return hasAny ? details : null;
 }
 
+export function toPublishedListingCatalogData(
+  product: CatalogProduct,
+): PublishedListingCatalogData {
+  const validatedFitmentRows =
+    selectPublishFitmentSource(product.fitmentData, product.fitmentRows, {
+      requireValidated: true,
+    }) ?? [];
+  return {
+    source: 'RealTrackApp.catalog_products',
+    identifiers: {
+      sku: product.sku ?? null,
+      mpn: product.mpn ?? null,
+      mpnNormalized: product.mpnNormalized ?? null,
+      upc: product.upc ?? null,
+      ean: product.ean ?? null,
+      epid: product.epid ?? null,
+      oemPartNumber: product.oemPartNumber ?? null,
+    },
+    product: {
+      title: product.title,
+      brand: product.brand ?? null,
+      partType: product.partType ?? null,
+      placement: product.placement ?? null,
+      material: product.material ?? null,
+      features: product.features ?? null,
+      countryOfOrigin: product.countryOfOrigin ?? null,
+    },
+    attributes: {
+      weight: product.weight ?? null,
+      verticalAttributes: product.verticalAttributes ?? {},
+    },
+    category: {
+      id: product.categoryId ?? null,
+      name: product.categoryName ?? null,
+      source: 'RealTrackApp.catalog_products',
+    },
+    fitment: {
+      validation:
+        validatedFitmentRows.length > 0 ? 'mvl_validated' : 'none',
+      validatedRows: validatedFitmentRows,
+    },
+  };
+}
+
 export function toPublishedListingApiResponse(
   listing: EbayPublishedListing,
-  options?: { storeSlug?: string | null },
+  options?: {
+    storeSlug?: string | null;
+    includeCatalogData?: boolean;
+    catalogData?: PublishedListingCatalogData | null;
+  },
 ): PublishedListingApiResponse {
   const descriptionHtml = listing.description?.trim()
     ? listing.description
@@ -229,5 +316,8 @@ export function toPublishedListingApiResponse(
     mpn: firstSpecific(specifics, SPECIFIC_KEYS.mpn),
     oeNumbers: allSpecifics(specifics, SPECIFIC_KEYS.oe),
     salvageDetails: extractSalvageDetails(specifics),
+    ...(options?.includeCatalogData
+      ? { catalogData: options.catalogData ?? null }
+      : {}),
   };
 }

@@ -149,7 +149,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
             )}
           </div>
           <button
-            onClick={() => navigate(`/catalog/products/${item.id}`)}
+            onClick={() => navigate(`/auto-parts/catalog/products/${item.id}`)}
             className="px-2 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1 transition-colors"
           >
             <Eye size={12} /> Details
@@ -159,7 +159,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
         {/* Edit / Publish / Delete actions */}
         <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex-wrap">
           <button
-            onClick={() => navigate(`/listings/${item.id}/edit`)}
+            onClick={() => navigate(`/auto-parts/listings/${item.id}/edit`)}
             className="flex-1 min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-400 transition-colors"
           >
             <Pencil size={11} /> Edit
@@ -181,7 +181,7 @@ export default function ListingCard({ item, onQuickView, onDelete, onPublish }: 
             </button>
           )}
           <Link
-            to={`/catalog/products/${item.id}/publish/ebay`}
+            to={`/auto-parts/catalog/products/${item.id}/publish/ebay`}
             className="w-full text-center text-[11px] text-[#E53238] hover:text-[#ff6b6f] py-1 rounded-md border border-slate-800 hover:border-red-900/50 transition-colors"
             title="Multi-store eBay publish wizard"
           >

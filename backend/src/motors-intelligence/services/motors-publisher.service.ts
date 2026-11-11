@@ -53,7 +53,11 @@ export class MotorsPublisherService {
       let listingId = product.listingId;
       if (!listingId) {
         // Create new listing record
-        const result = await this.listingsService.create(listingData as any);
+        const result = await this.listingsService.createForOrganization(
+          listingData as any,
+          product.organizationId,
+          product.createdBy,
+        );
         listingId = result.listing.id;
         product.listingId = listingId;
         await this.motorsProductRepo.save(product);

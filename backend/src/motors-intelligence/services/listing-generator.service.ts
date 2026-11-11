@@ -332,8 +332,8 @@ export class ListingGeneratorService {
         apiKey,
         baseURL,
         defaultHeaders: {
-          'HTTP-Referer': 'https://realtrackapp.com',
-          'X-Title': 'RealTrackApp',
+          'HTTP-Referer': 'https://app.omnicoreholding.com',
+          'X-Title': 'Omni Core',
         },
       });
     }

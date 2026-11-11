@@ -44,6 +44,7 @@ import { MobileFilterDrawer } from '../catalog/FilterSidebar';
 import TeamBadge from '../catalog/TeamBadge';
 import ImageZoom from '../ui/ImageZoom';
 import OptimizedImage from '../ui/OptimizedImage';
+import SortHeader, { type SortDirection } from '../ui/SortHeader';
 
 function StatusBadge({ status }: { status: InventoryListingItem['status'] }) {
   const config: Record<
@@ -92,11 +93,13 @@ function EnrichmentBadge({
   const label =
     status === 'failed' && failureClass === 'needs_data' ? 'Needs photo' : cfg.label;
   const title =
-    status === 'failed' && failureReason
-      ? failureClass === 'needs_data'
-        ? 'Missing a required photo — add the label close-up and overall shot, then it will auto-retry.'
-        : `Enrichment failed: ${failureReason}`
-      : undefined;
+    status === 'needs_review' && failureReason
+      ? `Uploaded photos did not verify the entered part number. Review the photos and number before retrying. ${failureReason}`
+      : status === 'failed' && failureReason
+        ? failureClass === 'needs_data'
+          ? 'Missing a required photo — add the label close-up and overall shot, then it will auto-retry.'
+          : `Enrichment failed: ${failureReason}`
+        : undefined;
   return (
     <Badge variant={cfg.variant} className={cfg.pulse ? 'animate-pulse' : ''} title={title}>
       {label}
@@ -128,6 +131,8 @@ export default function InventoryManager() {
     maxPrice: '',
     minWeight: '',
     maxWeight: '',
+    hasPrice: false as boolean,
+    sort: '',
     status: '',
     missing: false as boolean,
     make: '',
@@ -150,6 +155,7 @@ export default function InventoryManager() {
     maxPrice: urlState.maxPrice,
     minWeight: urlState.minWeight,
     maxWeight: urlState.maxWeight,
+    hasPrice: urlState.hasPrice,
     status: urlState.status,
     missingImages: urlState.missing,
     make: urlState.make,
@@ -174,6 +180,7 @@ export default function InventoryManager() {
       maxPrice: newFilters.maxPrice,
       minWeight: newFilters.minWeight,
       maxWeight: newFilters.maxWeight,
+      hasPrice: newFilters.hasPrice,
       status: newFilters.status,
       missing: newFilters.missingImages,
       make: newFilters.make,
@@ -203,10 +210,13 @@ export default function InventoryManager() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const sort = urlState.sort;
   const apiParams = useMemo(
-    () => inventoryFiltersToParams(filters, debouncedSearch, page, limit),
-    [filters, debouncedSearch, page, limit],
+    () => inventoryFiltersToParams(filters, debouncedSearch, page, limit, sort),
+    [filters, debouncedSearch, page, limit, sort],
   );
+  // Facet counts don't depend on row order — keep them out of the sort refetch.
+  const facetParams = useMemo(() => ({ ...apiParams, sort: undefined }), [apiParams]);
 
   const {
     data,
@@ -216,7 +226,7 @@ export default function InventoryManager() {
     refetch,
   } = useInventoryListings(apiParams);
 
-  const { data: facets, isLoading: facetsLoading } = useInventoryFacets(apiParams);
+  const { data: facets, isLoading: facetsLoading } = useInventoryFacets(facetParams);
 
   const sendToCatalogMutation = useSendToCatalog();
   const deleteMutation = useDeleteInventoryListing();
@@ -309,6 +319,22 @@ export default function InventoryManager() {
   };
 
   const filterCount = countInventoryActiveFilters(filters);
+
+  // Sorting: `sort` is `<column>_<asc|desc>`; empty = newest first (server default).
+  const sortColumn = sort.replace(/_(asc|desc)$/, '');
+  const sortDir: SortDirection | null = sort.endsWith('_desc')
+    ? 'desc'
+    : sort.endsWith('_asc')
+      ? 'asc'
+      : null;
+  const sortHeader = (column: string, firstDir: SortDirection = 'asc') => ({
+    direction: sortColumn === column ? sortDir : null,
+    onClick: () => {
+      const next: SortDirection =
+        sortColumn === column ? (sortDir === 'asc' ? 'desc' : 'asc') : firstDir;
+      setUrlState({ sort: `${column}_${next}`, page: 1 });
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -453,20 +479,26 @@ export default function InventoryManager() {
                         className="rounded border-slate-300 dark:border-slate-600 bg-slate-800 text-blue-500"
                       />
                     </th>
-                    <th className="pb-3 pr-3 w-16">Image</th>
-                    <th className="pb-3 pr-3">SKU / Title</th>
-                    <th className="pb-3 pr-3">Brand</th>
-                    <th className="pb-3 pr-3">Storage Location</th>
-                    <th className="pb-3 pr-3">Team</th>
+                    <th className="pb-3 pr-3 w-16"><SortHeader label="Image" {...sortHeader('image', 'desc')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="SKU / Title" {...sortHeader('sku')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="Brand" {...sortHeader('brand')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="Storage Location" {...sortHeader('location')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="Team" {...sortHeader('team')} /></th>
                     <th className="pb-3 pr-3">
-                      <span className="flex items-center gap-1">
-                        <Car className="h-3 w-3" /> Fitments
-                      </span>
+                      <SortHeader
+                        label={
+                          <span className="flex items-center gap-1">
+                            <Car className="h-3 w-3" /> Fitments
+                          </span>
+                        }
+                        {...sortHeader('fitments', 'desc')}
+                      />
                     </th>
-                    <th className="pb-3 pr-3">Validation</th>
-                    <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3 pr-3">Enrichment</th>
-                    <th className="pb-3 pr-3">Catalog</th>
+                    <th className="pb-3 pr-3"><SortHeader label="Validation" {...sortHeader('validation', 'desc')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="Price" {...sortHeader('price', 'desc')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="Status" {...sortHeader('status')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="Enrichment" {...sortHeader('enrichment')} /></th>
+                    <th className="pb-3 pr-3"><SortHeader label="Catalog" {...sortHeader('catalog', 'desc')} /></th>
                     {canDeleteInventory && <th className="pb-3 w-10"> </th>}
                   </tr>
                 </thead>
@@ -628,6 +660,13 @@ export default function InventoryManager() {
                           </div>
                         )}
                       </td>
+                      <td className="py-3 pr-3 whitespace-nowrap tabular-nums text-slate-600 dark:text-slate-200">
+                        {item.price > 0 ? (
+                          `$${item.price.toFixed(2)}`
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="py-3 pr-3">
                         <StatusBadge status={item.status} />
                       </td>
@@ -716,7 +755,7 @@ export default function InventoryManager() {
             <p className="text-slate-500 dark:text-slate-400 text-sm">No parts match your filters.</p>
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
               Use{' '}
-              <Link to="/listings/new" className="text-blue-400 hover:underline">
+              <Link to="/auto-parts/listings/new" className="text-blue-400 hover:underline">
                 Add Part
               </Link>{' '}
               for warehouse intake, then upload 2 photos to auto-enrich.
